@@ -1,0 +1,67 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configure x64 Linux",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-Bbuild/x64/linux",
+                "-G\"\"Ninja Multi-Config\"\"",
+                "-DVCPKG_TARGET_TRIPLET=x64-linux",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build x64 Linux Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux --config Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Build x64 Linux RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux --config RelWithDebInfo",
+            "group": "build"
+        },
+        {
+            "label": "Build x64 Linux Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux --config Release",
+            "group": "build"
+        },
+        {
+            "label": "Package x64 Linux Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux  --config Debug --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Linux Debug"
+            ]
+        },
+        {
+            "label": "Package x64 Linux RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux  --config RelWithDebInfo --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Linux RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package x64 Linux Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/linux  --config Release --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Linux Release"
+            ]
+        }
+    ]
+}

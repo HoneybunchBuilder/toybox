@@ -1,0 +1,43 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0bdb7088..5bece033 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -19,6 +19,8 @@ include(CTest)
+ include(GNUInstallDirs)
+ include(CMakeDependentOption)
+ 
++find_package(zstd CONFIG REQUIRED)
++
+ include(cmake/mkvk.cmake)
+ include(cmake/xcode.cmake)
+ 
+@@ -39,7 +41,8 @@ option( KTX_FEATURE_STATIC_LIBRARY "Create static libraries (shared otherwise)"
+ option( KTX_FEATURE_TESTS "Create unit tests" ON )
+ 
+ set_target_processor_type(CPU_ARCHITECTURE)
+-if(CPU_ARCHITECTURE STREQUAL x86_64 OR CPU_ARCHITECTURE STREQUAL x86)
++message("CPU Arch: ${CMAKE_SYSTEM_PROCESSOR}")
++if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL x86)
+     option( BASISU_SUPPORT_SSE "Compile with SSE support so applications can choose to use it" ON )
+ endif()
+ 
+@@ -121,7 +124,7 @@ set(KTX_MAIN_SRC
+     lib/basisu/transcoder/basisu_transcoder.cpp
+     lib/basisu/transcoder/basisu_transcoder.h
+     lib/basisu/transcoder/basisu.h
+-    lib/basisu/zstd/zstd.c
++    #lib/basisu/zstd/zstd.c
+     lib/checkheader.c
+     lib/dfdutils/createdfd.c
+     lib/dfdutils/colourspaces.c
+@@ -266,6 +269,10 @@ macro(commom_lib_settings lib write)
+     # - BASISD_SUPPORT_FXT1
+     # - BASISD_SUPPORT_PVRTC2
+ 
++    target_link_libraries(${lib} 
++        PRIVATE 
++        $<IF:$<TARGET_EXISTS:zstd::libzstd_shared>,zstd::libzstd_shared,zstd::libzstd_static>)
++
+     if(WIN32)
+         target_compile_definitions(
+             ${lib}

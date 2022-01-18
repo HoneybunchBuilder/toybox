@@ -1,0 +1,4 @@
+---
+Checks:          '*,-abseil-*,-boost-use-to-string,-cert-*,-bugprone-argument-comment,-cppcoreguidelines-*,cppcoreguidelines-pro-type-union-access,-darwin-*,-fuchsia-*,fuchsia-multiple-inheritance,fuchsia-statically-constructed-objects,fuchsia-trailing-return,fuchsia-virtual-inheritance,-google-*,google-runtime-int,google-runtime-operator,google-runtime-reference,-hicpp-*,hicpp-multiway-paths-covered,-llvm-*,llvm-namepsace-comment,-misc-uniqueptr-reset-release,-modernize-*,modenize-concat-nexted-namepsaces,modernize-use-emplace,modernize-use-override,modernize-use-using,-mpi-*m-open-mp*,-portability-simd-intrinsics,-readability-*,-zircon-temporary-objects,-fuchsia-statically-constructed-objects,-cppcoreguidelines-pro-type-union-access,-clang-analyzer-security.insecureAPI.*,-llvmlibc*'
+WarningsAsErrors:  '*'
+HeaderFilterRegex: '.*,-*vulkan*'

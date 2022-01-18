@@ -1,0 +1,10 @@
+[Bb]uild*/*
+[Ii]nstall/*
+
+.vscode/tasks.json
+.vscode/launch.json
+
+vcpkg/buildtrees/*
+vcpkg/downloads/*
+vcpkg/installed/*
+vcpkg/packages/*
