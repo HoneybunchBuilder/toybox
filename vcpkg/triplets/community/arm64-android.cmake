@@ -1,0 +1,5 @@
+set(VCPKG_TARGET_ARCHITECTURE arm64)
+set(VCPKG_CRT_LINKAGE dynamic)
+set(VCPKG_LIBRARY_LINKAGE dynamic)
+set(VCPKG_CMAKE_SYSTEM_VERSION 23) # Sets the *native* api level
+set(VCPKG_CMAKE_SYSTEM_NAME Android)

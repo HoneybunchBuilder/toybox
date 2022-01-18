@@ -1,0 +1,7 @@
+{
+  "name": "tool-gltfpack",
+  "version-string": "0.17",
+  "port-version": 1,
+  "description": "gltfpack is a tool that can automatically optimize glTF files to reduce the download size and improve loading and rendering speed.",
+  "homepage": "https://github.com/zeux/meshoptimizer"
+}

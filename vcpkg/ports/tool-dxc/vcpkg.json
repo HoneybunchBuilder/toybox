@@ -1,0 +1,7 @@
+{
+  "name": "tool-dxc",
+  "version-string": "1.6.2106",
+  "port-version": 1,
+  "description": "The DirectX Shader Compiler project includes a compiler and related tools used to compile High-Level Shader Language (HLSL) programs into DirectX Intermediate Language (DXIL) representation.",
+  "homepage": "https://github.com/microsoft/DirectXShaderCompiler"
+}

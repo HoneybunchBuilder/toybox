@@ -1,0 +1,21 @@
+diff --git a/lib/basisu/encoder/basisu_kernels_sse.cpp b/lib/basisu/encoder/basisu_kernels_sse.cpp
+index 12d2321f..3465d343 100644
+--- a/lib/basisu/encoder/basisu_kernels_sse.cpp
++++ b/lib/basisu/encoder/basisu_kernels_sse.cpp
+@@ -32,8 +32,14 @@
+ 			#error SSE4.1/SSE3/SSE4.2/SSSE3 cannot be enabled to use this file
+ 		#endif
+ 	#else
+-		#if !__SSE4_1__ || !__SSE3__ || __SSE4_2__ || !__SSSE3__
+-			#error Please check your compiler options
++		#if __ANDROID__
++			#if !__SSE4_1__ || !__SSE3__ || !__SSSE3__
++				#error Please check your compiler options
++			#endif
++		#else
++			#if !__SSE4_1__ || !__SSE3__ || __SSE4_2__ || !__SSSE3__
++				#error Please check your compiler options
++			#endif
+ 		#endif
+ 	#endif
+ #endif

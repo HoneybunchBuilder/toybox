@@ -1,0 +1,5 @@
+The package tracy provides CMake targets:
+
+    find_package(tracy CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE Tracy::TracyClient)
+    target_compile_definitions(main PRIVATE TRACY_ENABLE)

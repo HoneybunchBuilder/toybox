@@ -1,0 +1,41 @@
+{
+	"name": "tracy",
+	"version-string": "0.7.8",
+	"description": "C++ frame profiler",
+	"homepage": "https://github.com/wolfpld/tracy",
+	"features": {
+		"on-demand": {
+			"description": "On-demand profiling"
+		},
+		"callstack": {
+			"description": "Collect call stacks"
+		},
+		"only-localhost": {
+			"description": "Only listen on the localhost interface"
+		},
+		"no-broadcast": {
+			"description": "Disable client discovery by broadcast to local network"
+		},
+		"no-code-transfer": {
+			"description": "Disable collection of source code"
+		},
+		"no-context-switch": {
+			"description": "Disable capture of context switches"
+		},
+		"no-exit": {
+			"description": "Client executable does not exit until all profile data is sent to server"
+		},
+		"no-frame-image": {
+			"description": "Disable capture of frame images"
+		},
+		"no-sampling": {
+			"description": "Disable call stack sampling"
+		},
+		"no-verify": {
+			"description": "Disable zone validation for C API"
+		},
+		"no-vsync-capture": {
+			"description": "Disable capture of hardware Vsync events"
+		}
+	}
+}

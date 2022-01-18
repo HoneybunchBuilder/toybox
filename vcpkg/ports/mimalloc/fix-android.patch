@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b56953c..9af6a41 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -194,7 +194,7 @@ endif()
+ if(WIN32)
+   list(APPEND mi_libraries psapi shell32 user32 advapi32 bcrypt)
+ else()
+-  if(NOT ${CMAKE_C_COMPILER} MATCHES "android")
++  if(NOT ANDROID)
+     list(APPEND mi_libraries pthread)
+     find_library(LIBRT rt)
+     if(LIBRT)
