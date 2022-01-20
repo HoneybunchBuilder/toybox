@@ -85,7 +85,7 @@ void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
   };
 }
 
-void reset_arena(ArenaAllocator a, bool allow_grow) {
+ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   if (allow_grow && a.grow) {
@@ -101,6 +101,7 @@ void reset_arena(ArenaAllocator a, bool allow_grow) {
 
   assert(a.data);
   TracyCZoneEnd(ctx);
+  return a;
 }
 
 void destroy_arena_allocator(ArenaAllocator a) {

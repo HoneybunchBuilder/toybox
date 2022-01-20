@@ -765,7 +765,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     demo_render_frame(&d, &vp, &sky_vp);
 
     // Reset the arena allocator
-    reset_arena(arena, true); // Just allow it to grow for now
+    arena = reset_arena(arena, true); // Just allow it to grow for now
 
     TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Frame");
