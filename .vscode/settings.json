@@ -60,7 +60,7 @@
         "optick_capi.h": "c",
         "shadercommon.h": "c",
         "cimgui.h": "c",
-        "*.hlsli": "c",
+        "*.hlsli": "hlsl",
         "*.in": "cpp",
         "bitset": "c",
         "queue": "c",
@@ -78,7 +78,10 @@
         "compare": "cpp",
         "xlocinfo": "cpp",
         "ostream": "c",
-        "format": "c"
+        "format": "c",
+        "ratio": "c",
+        "utility": "c",
+        "xtr1common": "c"
     },
     "cmake.configureOnOpen": false
 }

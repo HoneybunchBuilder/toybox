@@ -1556,7 +1556,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       SDL_TriggerBreakpoint();
       return false;
     }
-
     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append floor to main scene");
@@ -1570,6 +1569,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       SDL_TriggerBreakpoint();
       return false;
     }
+    /*
+     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
+       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                    "Failed to append bistro to main scene");
+       SDL_TriggerBreakpoint();
+       return false;
+     }
+     */
   }
 
   // Create resources for screenshots
@@ -2259,8 +2266,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     TracyCZoneN(demo_manage_descriptor_sets,
                 "demo_render_frame manage descriptor sets", true);
     uint32_t max_obj_count = d->main_scene->entity_count;
-    uint32_t max_mat_count =
-        d->main_scene->texture_count; // TODO : Do materials instead
+    uint32_t max_mat_count = d->main_scene->material_count;
 
     uint32_t total_set_count = max_obj_count + max_mat_count;
 
@@ -2404,13 +2410,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       for (uint32_t i = 0; i < max_mat_count; ++i) {
         set_layouts[set_idx++] = d->gltf_material_set_layout;
 
-        set_writes[write_idx++] =
-            (VkWriteDescriptorSet){
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstBinding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &buffer_info[i]},
+        set_writes[write_idx++] = (VkWriteDescriptorSet){
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &buffer_info[i]};
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

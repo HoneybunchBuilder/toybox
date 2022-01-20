@@ -164,9 +164,20 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
 
     size_t index_size = indices->buffer_view->size;
     size_t geom_size = 0;
+    // Only allow certain attributes for now
+    uint32_t attrib_count = 0;
     for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-      cgltf_accessor *attr = prim->attributes[i].data;
-      geom_size += attr->buffer_view->size;
+      cgltf_attribute_type type = prim->attributes[i].type;
+      int32_t index = prim->attributes[i].index;
+      if ((type == cgltf_attribute_type_position ||
+           type == cgltf_attribute_type_normal ||
+           type == cgltf_attribute_type_texcoord) &&
+          index == 0) {
+        cgltf_accessor *attr = prim->attributes[i].data;
+        geom_size += attr->buffer_view->size;
+
+        attrib_count++;
+      }
     }
 
     size_t size = index_size + geom_size;
@@ -203,21 +214,24 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
 
       // Reorder attributes
       uint32_t *attr_order =
-          hb_alloc(tmp_alloc, sizeof(uint32_t) * prim->attributes_count);
+          hb_alloc(tmp_alloc, sizeof(uint32_t) * attrib_count);
       for (uint32_t i = 0; i < prim->attributes_count; ++i) {
         cgltf_attribute_type attr_type = prim->attributes[i].type;
+        int32_t attr_idx = prim->attributes[i].index;
         if (attr_type == cgltf_attribute_type_position) {
           attr_order[0] = i;
         } else if (attr_type == cgltf_attribute_type_normal) {
           attr_order[1] = i;
-        } else if (attr_type == cgltf_attribute_type_tangent) {
-          attr_order[3] = i;
-        } else if (attr_type == cgltf_attribute_type_texcoord) {
+          //} else if (attr_type == cgltf_attribute_type_tangent) {
+          // TODO: Properly support tangents
+          // attr_order[3] = i;
+        } else if (attr_type == cgltf_attribute_type_texcoord &&
+                   attr_idx == 0) {
           attr_order[2] = i;
         }
       }
 
-      for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+      for (uint32_t i = 0; i < attrib_count; ++i) {
         uint32_t attr_idx = attr_order[i];
         cgltf_attribute *attr = &prim->attributes[attr_idx];
         cgltf_accessor *accessor = attr->data;
@@ -225,6 +239,15 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
 
         size_t attr_offset = view->offset + accessor->offset;
         size_t attr_size = accessor->stride * accessor->count;
+
+        // TODO: Figure out how to handle when an object can't use the expected
+        // pipeline
+        if (SDL_strcmp(attr->name, "NORMAL") == 0) {
+          cgltf_attribute *next = &prim->attributes[attr_order[i + 1]];
+          if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
+            SDL_TriggerBreakpoint();
+          }
+        }
 
         void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
         memcpy(data + offset, attr_data, attr_size);
