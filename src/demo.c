@@ -198,6 +198,10 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
     TracyCZoneEnd(mat_up_ctx);
   }
 
+  // Bind per-view data - TODO: we should do this somewhere else
+  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, 1,
+                          &view_set, 0, NULL);
+
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
@@ -248,32 +252,38 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
       cmd_begin_label(cmd, "demo_render_scene", (float4){0.5, 0.1, 0.1, 1.0});
 
-      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                              1, &material_sets[material_idx], 0, NULL);
-
+      // Bind per-object data
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
                               1, &object_sets[i], 0, NULL);
 
-      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
-                              1, &view_set, 0, NULL);
-
       const GPUMesh *mesh = &s->meshes[static_mesh_idx];
-      uint32_t idx_count = mesh->idx_count;
-      uint32_t vtx_count = mesh->vtx_count;
-      VkBuffer buffer = mesh->gpu.buffer;
 
-      vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
-      VkDeviceSize offset = mesh->idx_size;
+      // Draw mesh surfaces
+      for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
 
-      vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
-      offset += vtx_count * sizeof(float) * 3;
+        // TODO: Bind per-surface material
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                                1, &material_sets[material_idx], 0, NULL);
 
-      vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
-      offset += vtx_count * sizeof(float) * 3;
+        const GPUSurface *surface = &mesh->surfaces[ii];
 
-      vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+        uint32_t idx_count = surface->idx_count;
+        uint32_t vtx_count = surface->vtx_count;
+        VkBuffer buffer = surface->gpu.buffer;
 
-      vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+        vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
+        VkDeviceSize offset = surface->idx_size;
+
+        vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+        offset += vtx_count * sizeof(float) * 3;
+
+        vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
+        offset += vtx_count * sizeof(float) * 3;
+
+        vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+
+        vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+      }
 
       cmd_end_label(cmd);
     }
@@ -2501,9 +2511,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
             GPUMesh mesh = d->mesh_upload_queue[i];
-            region = (VkBufferCopy){0, 0, mesh.size};
-            vkCmdCopyBuffer(upload_buffer, mesh.host.buffer, mesh.gpu.buffer, 1,
-                            &region);
+            // Copy surfaces
+            for (uint32_t ii = 0; ii < mesh.surface_count; ++ii) {
+              const GPUSurface *surface = &mesh.surfaces[ii];
+              region = (VkBufferCopy){0, 0, surface->size};
+              vkCmdCopyBuffer(upload_buffer, surface->host.buffer,
+                              surface->gpu.buffer, 1, &region);
+            }
           }
           d->mesh_upload_count = 0;
           cmd_end_label(upload_buffer);
@@ -2790,7 +2804,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                sizeof(SkyPushConstants),
                                (const void *)&sky_consts);
 
-            uint32_t idx_count = d->skydome_gpu.idx_count;
+            uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
 
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               d->skydome_pipeline);
@@ -2805,10 +2819,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                     d->skydome_pipe_layout, 1, 1,
                                     &d->hosek_descriptor_set, 0, NULL);
 
-            VkBuffer b = d->skydome_gpu.gpu.buffer;
+            VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
 
-            size_t idx_size =
-                idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
+            size_t idx_size = idx_count * sizeof(uint16_t) >>
+                              d->skydome_gpu.surfaces[0].idx_type;
 
             VkBuffer buffers[1] = {b};
             VkDeviceSize offsets[1] = {idx_size};
@@ -2913,14 +2927,16 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 } else {
                   // Map existing gpu mesh and copy data
                   uint8_t *data = NULL;
-                  vmaMapMemory(d->vma_alloc, d->imgui_gpu[frame_idx].host.alloc,
+                  vmaMapMemory(d->vma_alloc,
+                               d->imgui_gpu[frame_idx].surfaces[0].host.alloc,
                                (void **)&data);
 
                   // Copy Data
                   memcpy(data, idx_dst, imgui_size);
 
-                  vmaUnmapMemory(d->vma_alloc,
-                                 d->imgui_gpu[frame_idx].host.alloc);
+                  vmaUnmapMemory(
+                      d->vma_alloc,
+                      d->imgui_gpu[frame_idx].surfaces[0].host.alloc);
                 }
 
                 // Copy to gpu
@@ -2928,11 +2944,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                   VkBufferCopy region = {
                       .srcOffset = 0,
                       .dstOffset = 0,
-                      .size = d->imgui_gpu[frame_idx].size,
+                      .size = d->imgui_gpu[frame_idx].surfaces[0].size,
                   };
                   vkCmdCopyBuffer(
-                      graphics_buffer, d->imgui_gpu[frame_idx].host.buffer,
-                      d->imgui_gpu[frame_idx].gpu.buffer, 1, &region);
+                      graphics_buffer,
+                      d->imgui_gpu[frame_idx].surfaces[0].host.buffer,
+                      d->imgui_gpu[frame_idx].surfaces[0].gpu.buffer, 1,
+                      &region);
                 }
               }
 
@@ -3017,10 +3035,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                   TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true);
                   TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
 
-                  vkCmdBindIndexBuffer(graphics_buffer, imgui_mesh->gpu.buffer,
-                                       0, (VkIndexType)imgui_mesh->idx_type);
+                  vkCmdBindIndexBuffer(
+                      graphics_buffer, imgui_mesh->surfaces[0].gpu.buffer, 0,
+                      (VkIndexType)imgui_mesh->surfaces[0].idx_type);
                   vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
-                                         &imgui_mesh->gpu.buffer,
+                                         &imgui_mesh->surfaces[0].gpu.buffer,
                                          &vtx_buffer_offset);
 
                   for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {

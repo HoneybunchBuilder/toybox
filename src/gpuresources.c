@@ -99,7 +99,7 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
   vkDestroySemaphore(device, cb.updated, vk_alloc);
 }
 
-int32_t create_gpumesh(VmaAllocator allocator, const CPUMesh *src_mesh,
+int32_t create_gpumesh(VmaAllocator vma_alloc, const CPUMesh *src_mesh,
                        GPUMesh *dst_mesh) {
   TracyCZoneN(prof_e, "create_gpumesh", true);
   VkResult err = VK_SUCCESS;
@@ -110,62 +110,8 @@ int32_t create_gpumesh(VmaAllocator allocator, const CPUMesh *src_mesh,
   size_t size = index_size + geom_size;
 
   GPUBuffer host_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+  err = create_gpubuffer(vma_alloc, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
-  assert(err == VK_SUCCESS);
-
-  GPUBuffer device_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
-                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                         &device_buffer);
-  assert(err == VK_SUCCESS);
-
-  // Actually copy cube data to cpu local buffer
-  {
-    uint8_t *data = NULL;
-    vmaMapMemory(allocator, host_buffer.alloc, (void **)&data);
-
-    // Copy Data
-    memcpy(data, src_mesh->indices, size);
-
-    vmaUnmapMemory(allocator, host_buffer.alloc);
-  }
-
-  *dst_mesh = (GPUMesh){src_mesh->index_count, src_mesh->vertex_count,
-                        VK_INDEX_TYPE_UINT16,  size,
-                        src_mesh->index_size,  src_mesh->geom_size,
-                        host_buffer,           device_buffer};
-
-  TracyCZoneEnd(prof_e);
-  return err;
-}
-
-int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
-                             const cgltf_mesh *src_mesh, GPUMesh *dst_mesh) {
-  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true);
-  assert(src_mesh->primitives_count == 1);
-  cgltf_primitive *prim = &src_mesh->primitives[0];
-
-  cgltf_accessor *indices = prim->indices;
-
-  uint32_t index_count = indices->count;
-  uint32_t vertex_count = prim->attributes[0].data->count;
-
-  size_t index_size = indices->buffer_view->size;
-  size_t geom_size = 0;
-  for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-    cgltf_accessor *attr = prim->attributes[i].data;
-    geom_size += attr->buffer_view->size;
-  }
-
-  size_t size = index_size + geom_size;
-
-  GPUBuffer host_buffer = {0};
-  VkResult err =
-      create_gpubuffer(vma_alloc, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
-                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
   assert(err == VK_SUCCESS);
 
   GPUBuffer device_buffer = {0};
@@ -181,62 +127,128 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
     uint8_t *data = NULL;
     vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
-    size_t offset = 0;
-    // Copy Index Data
-    {
-      cgltf_buffer_view *view = indices->buffer_view;
-      size_t index_offset = indices->offset + view->offset;
-      size_t index_size = view->size;
-
-      void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
-      memcpy(data, index_data, index_size);
-      offset += index_size;
-    }
-
-    // Reorder attributes
-    uint32_t *attr_order =
-        hb_alloc(tmp_alloc, sizeof(uint32_t) * prim->attributes_count);
-    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-      cgltf_attribute_type attr_type = prim->attributes[i].type;
-      if (attr_type == cgltf_attribute_type_position) {
-        attr_order[0] = i;
-      } else if (attr_type == cgltf_attribute_type_normal) {
-        attr_order[1] = i;
-      } else if (attr_type == cgltf_attribute_type_tangent) {
-        attr_order[3] = i;
-      } else if (attr_type == cgltf_attribute_type_texcoord) {
-        attr_order[2] = i;
-      }
-    }
-
-    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-      uint32_t attr_idx = attr_order[i];
-      cgltf_attribute *attr = &prim->attributes[attr_idx];
-      cgltf_accessor *accessor = attr->data;
-      cgltf_buffer_view *view = accessor->buffer_view;
-
-      size_t attr_offset = view->offset + accessor->offset;
-      size_t attr_size = accessor->stride * accessor->count;
-
-      void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
-      memcpy(data + offset, attr_data, attr_size);
-      offset += attr_size;
-    }
-    hb_free(tmp_alloc, attr_order);
+    // Copy Data
+    memcpy(data, src_mesh->indices, size);
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
 
-  *dst_mesh =
-      (GPUMesh){index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
-                index_size,  geom_size,    host_buffer,          device_buffer};
+  dst_mesh->surface_count = 1;
+  dst_mesh->surfaces[0] =
+      (GPUSurface){src_mesh->index_count, src_mesh->vertex_count,
+                   VK_INDEX_TYPE_UINT16,  size,
+                   src_mesh->index_size,  src_mesh->geom_size,
+                   host_buffer,           device_buffer};
+
   TracyCZoneEnd(prof_e);
   return err;
 }
 
-void destroy_gpumesh(VmaAllocator allocator, const GPUMesh *mesh) {
-  destroy_gpubuffer(allocator, &mesh->host);
-  destroy_gpubuffer(allocator, &mesh->gpu);
+int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
+                             const cgltf_mesh *src_mesh, GPUMesh *dst_mesh) {
+  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true);
+  assert(src_mesh->primitives_count < MAX_SURFACE_COUNT);
+  uint32_t surface_count = src_mesh->primitives_count;
+  if (surface_count > MAX_SURFACE_COUNT) {
+    surface_count = MAX_SURFACE_COUNT;
+  }
+
+  VkResult err = VK_SUCCESS;
+
+  for (uint32_t i = 0; i < surface_count; ++i) {
+    cgltf_primitive *prim = &src_mesh->primitives[0];
+    cgltf_accessor *indices = prim->indices;
+
+    uint32_t index_count = indices->count;
+    uint32_t vertex_count = prim->attributes[0].data->count;
+
+    size_t index_size = indices->buffer_view->size;
+    size_t geom_size = 0;
+    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+      cgltf_accessor *attr = prim->attributes[i].data;
+      geom_size += attr->buffer_view->size;
+    }
+
+    size_t size = index_size + geom_size;
+
+    GPUBuffer host_buffer = {0};
+    err = create_gpubuffer(vma_alloc, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+    assert(err == VK_SUCCESS);
+
+    GPUBuffer device_buffer = {0};
+    err = create_gpubuffer(vma_alloc, size, VMA_MEMORY_USAGE_GPU_ONLY,
+                           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                               VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           &device_buffer);
+    assert(err == VK_SUCCESS);
+
+    // Actually copy cube data to cpu local buffer
+    {
+      uint8_t *data = NULL;
+      vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
+
+      size_t offset = 0;
+      // Copy Index Data
+      {
+        cgltf_buffer_view *view = indices->buffer_view;
+        size_t index_offset = indices->offset + view->offset;
+        size_t index_size = view->size;
+
+        void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
+        memcpy(data, index_data, index_size);
+        offset += index_size;
+      }
+
+      // Reorder attributes
+      uint32_t *attr_order =
+          hb_alloc(tmp_alloc, sizeof(uint32_t) * prim->attributes_count);
+      for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+        cgltf_attribute_type attr_type = prim->attributes[i].type;
+        if (attr_type == cgltf_attribute_type_position) {
+          attr_order[0] = i;
+        } else if (attr_type == cgltf_attribute_type_normal) {
+          attr_order[1] = i;
+        } else if (attr_type == cgltf_attribute_type_tangent) {
+          attr_order[3] = i;
+        } else if (attr_type == cgltf_attribute_type_texcoord) {
+          attr_order[2] = i;
+        }
+      }
+
+      for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+        uint32_t attr_idx = attr_order[i];
+        cgltf_attribute *attr = &prim->attributes[attr_idx];
+        cgltf_accessor *accessor = attr->data;
+        cgltf_buffer_view *view = accessor->buffer_view;
+
+        size_t attr_offset = view->offset + accessor->offset;
+        size_t attr_size = accessor->stride * accessor->count;
+
+        void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
+        memcpy(data + offset, attr_data, attr_size);
+        offset += attr_size;
+      }
+    }
+
+    dst_mesh->surfaces[i] = (GPUSurface){
+        index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
+        index_size,  geom_size,    host_buffer,          device_buffer};
+
+    vmaUnmapMemory(vma_alloc, host_buffer.alloc);
+  }
+  dst_mesh->surface_count = surface_count;
+
+  TracyCZoneEnd(prof_e);
+  return err;
+}
+
+void destroy_gpumesh(VmaAllocator vma_alloc, const GPUMesh *mesh) {
+  for (uint32_t i = 0; i < mesh->surface_count; ++i) {
+    destroy_gpubuffer(vma_alloc, &mesh->surfaces[i].host);
+    destroy_gpubuffer(vma_alloc, &mesh->surfaces[i].gpu);
+  }
 }
 
 int32_t create_gpuimage(VmaAllocator vma_alloc,
