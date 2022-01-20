@@ -17,9 +17,9 @@
 #else
 #define FRAME_LATENCY 3
 #endif
-#define CONST_BUFFER_UPLOAD_QUEUE_SIZE 16
-#define MESH_UPLOAD_QUEUE_SIZE 16
-#define TEXTURE_UPLOAD_QUEUE_SIZE 16
+#define CONST_BUFFER_UPLOAD_QUEUE_SIZE 2048
+#define MESH_UPLOAD_QUEUE_SIZE 2048
+#define TEXTURE_UPLOAD_QUEUE_SIZE 2048
 
 typedef union SDL_Event SDL_Event;
 typedef struct SDL_Window SDL_Window;
@@ -158,13 +158,13 @@ typedef struct Demo {
   VkDescriptorSet imgui_descriptor_sets[FRAME_LATENCY];
 
   uint32_t const_buffer_upload_count;
-  GPUConstBuffer const_buffer_upload_queue[CONST_BUFFER_UPLOAD_QUEUE_SIZE];
+  GPUConstBuffer *const_buffer_upload_queue;
 
   uint32_t mesh_upload_count;
-  GPUMesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
+  GPUMesh *mesh_upload_queue;
 
   uint32_t texture_upload_count;
-  GPUTexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
+  GPUTexture *texture_upload_queue;
 
   ImGuiContext *ig_ctx;
   ImGuiIO *ig_io;

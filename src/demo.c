@@ -202,7 +202,9 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, 1,
                           &view_set, 0, NULL);
 
+  VkDescriptorSet last_mat_set = VK_NULL_HANDLE;
   for (uint32_t i = 0; i < s->entity_count; ++i) {
+    TracyCZoneN(entity_e, "render entity", true);
     uint64_t components = s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
     uint32_t static_mesh_idx = s->static_mesh_refs[i];
@@ -260,10 +262,13 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
       // Draw mesh surfaces
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
-
+        TracyCZoneN(surface_e, "draw surface", true);
         // TODO: Bind per-surface material
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                                1, &material_sets[material_idx], 0, NULL);
+        if (last_mat_set != material_sets[material_idx]) {
+          vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                                  0, 1, &material_sets[material_idx], 0, NULL);
+          last_mat_set = material_sets[material_idx];
+        }
 
         const GPUSurface *surface = &mesh->surfaces[ii];
 
@@ -283,10 +288,13 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
 
         vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+        TracyCZoneEnd(surface_e);
       }
 
       cmd_end_label(cmd);
     }
+
+    TracyCZoneEnd(entity_e);
   }
   TracyCZoneEnd(ctx);
 }
@@ -1651,6 +1659,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
 
+  // Allocate space for upload queues
+  d->const_buffer_upload_queue =
+      hb_alloc_nm_tp(std_alloc, CONST_BUFFER_UPLOAD_QUEUE_SIZE, GPUConstBuffer);
+  d->mesh_upload_queue =
+      hb_alloc_nm_tp(std_alloc, MESH_UPLOAD_QUEUE_SIZE, GPUMesh);
+  d->texture_upload_queue =
+      hb_alloc_nm_tp(std_alloc, TEXTURE_UPLOAD_QUEUE_SIZE, GPUTexture);
+
   // Setup data for hosek buffer
   {
     TracyCZoneN(hosek_ctx, "Update Hosek Data", true);
@@ -1937,6 +1953,11 @@ void demo_destroy(Demo *d) {
     }
   }
 
+  // Clean up queues
+  hb_free(d->std_alloc, d->const_buffer_upload_queue);
+  hb_free(d->std_alloc, d->mesh_upload_queue);
+  hb_free(d->std_alloc, d->texture_upload_queue);
+
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     TracyCVkContextDestroy(d->tracy_gpu_contexts[i]);
 
@@ -2025,21 +2046,21 @@ void demo_destroy(Demo *d) {
 
 void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer) {
   uint32_t buffer_idx = d->const_buffer_upload_count;
-  assert(d->const_buffer_upload_count + 1 < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
+  assert(d->const_buffer_upload_count < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
   d->const_buffer_upload_queue[buffer_idx] = *buffer;
   d->const_buffer_upload_count++;
 }
 
 void demo_upload_mesh(Demo *d, const GPUMesh *mesh) {
   uint32_t mesh_idx = d->mesh_upload_count;
-  assert(d->mesh_upload_count + 1 < MESH_UPLOAD_QUEUE_SIZE);
+  assert(d->mesh_upload_count < MESH_UPLOAD_QUEUE_SIZE);
   d->mesh_upload_queue[mesh_idx] = *mesh;
   d->mesh_upload_count++;
 }
 
 void demo_upload_texture(Demo *d, const GPUTexture *tex) {
   uint32_t tex_idx = d->texture_upload_count;
-  assert(d->texture_upload_count + 1 < TEXTURE_UPLOAD_QUEUE_SIZE);
+  assert(d->texture_upload_count < TEXTURE_UPLOAD_QUEUE_SIZE);
   d->texture_upload_queue[tex_idx] = *tex;
   d->texture_upload_count++;
 }
@@ -2491,6 +2512,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
         // Issue const buffer uploads
         if (d->const_buffer_upload_count > 0) {
+          TracyCZoneN(cb_up_event,
+                      "demo_render_frame record const buffer uploads", true);
           cmd_begin_label(upload_buffer, "upload const buffers",
                           (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
@@ -2502,10 +2525,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           }
           d->const_buffer_upload_count = 0;
           cmd_end_label(upload_buffer);
+          TracyCZoneEnd(cb_up_event);
         }
 
         // Issue mesh uploads
         if (d->mesh_upload_count > 0) {
+          TracyCZoneN(mesh_up_event, "demo_render_frame record mesh uploads",
+                      true);
           cmd_begin_label(upload_buffer, "upload meshes",
                           (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
@@ -2521,10 +2547,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           }
           d->mesh_upload_count = 0;
           cmd_end_label(upload_buffer);
+          TracyCZoneEnd(mesh_up_event);
         }
 
         // Issue texture uploads
         if (d->texture_upload_count > 0) {
+          TracyCZoneN(tex_up_event, "demo_render_frame record texture uploads",
+                      true);
           cmd_begin_label(upload_buffer, "upload textures",
                           (float4){0.1, 0.4, 0.1, 1.0});
           VkImageMemoryBarrier barrier = {0};
@@ -2653,6 +2682,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           }
           d->texture_upload_count = 0;
           cmd_end_label(upload_buffer);
+          TracyCZoneEnd(tex_up_event);
         }
 
         // Issue Const Data Updates
@@ -2701,6 +2731,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
       // Transition Swapchain Image
       {
+        TracyCZoneN(swap_trans_e, "transition swapchain", true);
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -2722,10 +2753,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
+        TracyCZoneEnd(swap_trans_e);
       }
 
       // Render main geometry pass
       {
+        TracyCZoneN(main_pass_e, "render main pass", true);
         VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
 
         // Main Geometry Pass
@@ -3080,6 +3113,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
           TracyCVkZoneEnd(imgui_scope);
         }
+
+        TracyCZoneEnd(main_pass_e);
       }
 
       TracyCVkZoneEnd(frame_scope);

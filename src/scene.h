@@ -20,7 +20,7 @@ enum ComponentType {
   COMPONENT_TYPE_MATERIAL = 0x00000004,
 };
 
-#define MAX_CHILD_COUNT 256
+#define MAX_CHILD_COUNT 2048
 typedef struct SceneTransform {
   Transform t;
   uint32_t child_count;
