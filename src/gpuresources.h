@@ -34,7 +34,7 @@ typedef struct GPUConstBuffer {
   VkSemaphore updated;
 } GPUConstBuffer;
 
-typedef struct GPUMesh {
+typedef struct GPUSurface {
   size_t idx_count;
   size_t vtx_count;
   int32_t idx_type;
@@ -43,6 +43,13 @@ typedef struct GPUMesh {
   size_t vtx_size;
   GPUBuffer host;
   GPUBuffer gpu;
+} GPUSurface;
+
+#define MAX_SURFACE_COUNT 8
+
+typedef struct GPUMesh {
+  uint32_t surface_count;
+  GPUSurface surfaces[MAX_SURFACE_COUNT];
 } GPUMesh;
 
 typedef struct GPUImage {
@@ -106,11 +113,11 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
                             const VkAllocationCallbacks *vk_alloc,
                             GPUConstBuffer cb);
 
-int32_t create_gpumesh(VmaAllocator allocator, const CPUMesh *src_mesh,
+int32_t create_gpumesh(VmaAllocator vma_alloc, const CPUMesh *src_mesh,
                        GPUMesh *dst_mesh);
 int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
                              const cgltf_mesh *src_mesh, GPUMesh *dst_mesh);
-void destroy_gpumesh(VmaAllocator allocator, const GPUMesh *mesh);
+void destroy_gpumesh(VmaAllocator vma_alloc, const GPUMesh *mesh);
 
 int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
