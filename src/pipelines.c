@@ -4,8 +4,10 @@
 #include "color_mesh_vert.h"
 #include "fractal_frag.h"
 #include "fractal_vert.h"
-#include "gltf_frag.h"
-#include "gltf_vert.h"
+#include "gltf_P3N3U2_frag.h"
+#include "gltf_P3N3U2_vert.h"
+#include "gltf_P3N3_frag.h"
+#include "gltf_P3N3_vert.h"
 #include "gpuresources.h"
 #include "imgui_frag.h"
 #include "imgui_vert.h"
@@ -719,25 +721,71 @@ uint32_t create_gltf_pipeline(VkDevice device,
                               GPUPipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
-  VkVertexInputBindingDescription vert_bindings[3] = {
+  // We know how many input permutations we want
+  uint32_t input_perm_count = 2;
+  // Perm 1: Position & Normal - P3N3
+  // Perm 2: Position & Normal & Texcoord0 - P3N3U2
+  // Perm 3: Position & Normal & Texcoord0 & Texcoord1 - P3N3U2U2 (NOT NOW)
+
+  VkVertexInputBindingDescription vert_bindings_P3N3[2] = {
+      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+
+  VkVertexInputBindingDescription vert_bindings_P3N3U2[3] = {
       {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
       {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
       {2, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
   };
 
-  VkVertexInputAttributeDescription vert_attrs[3] = {
+  VkVertexInputBindingDescription vert_bindings_P3N3U2U2[4] = {
+      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {2, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {3, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+
+  VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
+      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+  };
+
+  VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
       {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
       {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
       {2, 2, VK_FORMAT_R32G32_SFLOAT, 0},
   };
 
-  VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
-  vert_input_state.sType =
+  VkVertexInputAttributeDescription vert_attrs_P3N3U2U2[4] = {
+      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {2, 2, VK_FORMAT_R32G32_SFLOAT, 0},
+      {3, 3, VK_FORMAT_R32G32_SFLOAT, 0},
+  };
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3 = {0};
+  vert_input_state_P3N3.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vert_input_state.vertexBindingDescriptionCount = 3;
-  vert_input_state.pVertexBindingDescriptions = vert_bindings;
-  vert_input_state.vertexAttributeDescriptionCount = 3;
-  vert_input_state.pVertexAttributeDescriptions = vert_attrs;
+  vert_input_state_P3N3.vertexBindingDescriptionCount = 2;
+  vert_input_state_P3N3.pVertexBindingDescriptions = vert_bindings_P3N3;
+  vert_input_state_P3N3.vertexAttributeDescriptionCount = 2;
+  vert_input_state_P3N3.pVertexAttributeDescriptions = vert_attrs_P3N3;
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3U2 = {0};
+  vert_input_state_P3N3U2.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vert_input_state_P3N3U2.vertexBindingDescriptionCount = 3;
+  vert_input_state_P3N3U2.pVertexBindingDescriptions = vert_bindings_P3N3U2;
+  vert_input_state_P3N3U2.vertexAttributeDescriptionCount = 3;
+  vert_input_state_P3N3U2.pVertexAttributeDescriptions = vert_attrs_P3N3U2;
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3U2U2 = {0};
+  vert_input_state_P3N3U2U2.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vert_input_state_P3N3U2U2.vertexBindingDescriptionCount = 4;
+  vert_input_state_P3N3U2U2.pVertexBindingDescriptions = vert_bindings_P3N3U2U2;
+  vert_input_state_P3N3U2U2.vertexAttributeDescriptionCount = 4;
+  vert_input_state_P3N3U2U2.pVertexAttributeDescriptions = vert_attrs_P3N3U2U2;
 
   VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {0};
   input_assembly_state.sType =
@@ -790,64 +838,108 @@ uint32_t create_gltf_pipeline(VkDevice device,
   dynamic_state.pDynamicStates = dyn_states;
 
   // Load Shader Modules
-  VkShaderModule vert_mod = VK_NULL_HANDLE;
-  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  VkShaderModule vert_mod_P3N3 = VK_NULL_HANDLE;
+  VkShaderModule frag_mod_P3N3 = VK_NULL_HANDLE;
+  VkShaderModule vert_mod_P3N3U2 = VK_NULL_HANDLE;
+  VkShaderModule frag_mod_P3N3U2 = VK_NULL_HANDLE;
+  // VkShaderModule vert_mod_P3N3U2U2 = VK_NULL_HANDLE;
+  // VkShaderModule frag_mod_P3N3U2U2 = VK_NULL_HANDLE;
 
   VkShaderModuleCreateInfo shader_mod_create_info = {0};
   shader_mod_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  shader_mod_create_info.codeSize = sizeof(gltf_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_vert;
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
   err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod);
+                             &vert_mod_P3N3);
   assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_frag;
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
   err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod);
+                             &frag_mod_P3N3);
   assert(err == VK_SUCCESS);
 
-  VkPipelineShaderStageCreateInfo vert_stage = {0};
-  vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-  vert_stage.module = vert_mod;
-  vert_stage.pName = "vert";
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &vert_mod_P3N3U2);
+  assert(err == VK_SUCCESS);
 
-  VkPipelineShaderStageCreateInfo frag_stage = {0};
-  frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  frag_stage.module = frag_mod;
-  frag_stage.pName = "frag";
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &frag_mod_P3N3U2);
+  assert(err == VK_SUCCESS);
 
-  VkPipelineShaderStageCreateInfo stages[2] = {vert_stage, frag_stage};
+  VkPipelineShaderStageCreateInfo vert_stage_P3N3 = {0};
+  vert_stage_P3N3.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  vert_stage_P3N3.stage = VK_SHADER_STAGE_VERTEX_BIT;
+  vert_stage_P3N3.module = vert_mod_P3N3;
+  vert_stage_P3N3.pName = "vert";
 
-  VkGraphicsPipelineCreateInfo create_info_base = {0};
-  create_info_base.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-  create_info_base.stageCount = 2;
-  create_info_base.pStages = stages;
-  create_info_base.pVertexInputState = &vert_input_state;
-  create_info_base.pInputAssemblyState = &input_assembly_state;
-  create_info_base.pViewportState = &viewport_state;
-  create_info_base.pRasterizationState = &raster_state;
-  create_info_base.pMultisampleState = &multisample_state;
-  create_info_base.pDepthStencilState = &depth_state;
-  create_info_base.pColorBlendState = &color_blend_state;
-  create_info_base.pDynamicState = &dynamic_state;
-  create_info_base.layout = layout;
-  create_info_base.renderPass = pass;
+  VkPipelineShaderStageCreateInfo frag_stage_P3N3 = {0};
+  frag_stage_P3N3.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  frag_stage_P3N3.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  frag_stage_P3N3.module = frag_mod_P3N3;
+  frag_stage_P3N3.pName = "frag";
+
+  VkPipelineShaderStageCreateInfo vert_stage_P3N3U2 = {0};
+  vert_stage_P3N3U2.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  vert_stage_P3N3U2.stage = VK_SHADER_STAGE_VERTEX_BIT;
+  vert_stage_P3N3U2.module = vert_mod_P3N3U2;
+  vert_stage_P3N3U2.pName = "vert";
+
+  VkPipelineShaderStageCreateInfo frag_stage_P3N3U2 = {0};
+  frag_stage_P3N3U2.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  frag_stage_P3N3U2.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  frag_stage_P3N3U2.module = frag_mod_P3N3U2;
+  frag_stage_P3N3U2.pName = "frag";
+
+  VkPipelineShaderStageCreateInfo stages_P3N3[2] = {vert_stage_P3N3,
+                                                    frag_stage_P3N3};
+
+  VkPipelineShaderStageCreateInfo stages_P3N3U2[2] = {vert_stage_P3N3U2,
+                                                      frag_stage_P3N3U2};
+
+  VkGraphicsPipelineCreateInfo create_info_bases[3] = {0};
+  create_info_bases[0].sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  create_info_bases[0].stageCount = 2;
+  create_info_bases[0].pStages = stages_P3N3;
+  create_info_bases[0].pVertexInputState = &vert_input_state_P3N3;
+  create_info_bases[0].pInputAssemblyState = &input_assembly_state;
+  create_info_bases[0].pViewportState = &viewport_state;
+  create_info_bases[0].pRasterizationState = &raster_state;
+  create_info_bases[0].pMultisampleState = &multisample_state;
+  create_info_bases[0].pDepthStencilState = &depth_state;
+  create_info_bases[0].pColorBlendState = &color_blend_state;
+  create_info_bases[0].pDynamicState = &dynamic_state;
+  create_info_bases[0].layout = layout;
+  create_info_bases[0].renderPass = pass;
+  create_info_bases[1] = create_info_bases[0];
+  create_info_bases[1].pStages = stages_P3N3U2;
+  create_info_bases[1].pVertexInputState = &vert_input_state_P3N3U2;
+  // create_info_bases[2] = create_info_bases[0];
+  // create_info_bases[2].pStages = stages_P3N3;
+  // create_info_bases[2].pVertexInputState = &vert_input_state_P3N3;
 
   // Calculate number of permuatations
-  uint32_t perm_count = 1 << GLTF_PERM_FLAG_COUNT;
+  uint32_t feature_perm_count = 1 << GLTF_PERM_FLAG_COUNT;
+
+  GPUPipelineDesc desc = {
+      device, vk_alloc,           tmp_alloc,        std_alloc,
+      cache,  feature_perm_count, input_perm_count, create_info_bases};
 
   GPUPipeline *p = NULL;
-
-  err = (VkResult)create_gfx_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
-                                      cache, perm_count, &create_info_base, &p);
+  err = (VkResult)create_gfx_pipeline(&desc, &p);
   assert(err == VK_SUCCESS);
 
   // Can destroy shader moduless
-  vkDestroyShaderModule(device, vert_mod, vk_alloc);
-  vkDestroyShaderModule(device, frag_mod, vk_alloc);
+  vkDestroyShaderModule(device, vert_mod_P3N3, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod_P3N3, vk_alloc);
+  vkDestroyShaderModule(device, vert_mod_P3N3U2, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod_P3N3U2, vk_alloc);
+  // vkDestroyShaderModule(device, vert_mod_P3N3U2U2, vk_alloc);
+  // vkDestroyShaderModule(device, frag_mod_P3N3U2U2, vk_alloc);
 
   *pipe = p;
 

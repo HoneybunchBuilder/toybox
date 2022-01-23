@@ -81,7 +81,8 @@
         "format": "c",
         "ratio": "c",
         "utility": "c",
-        "xtr1common": "c"
+        "xtr1common": "c",
+        "fractal_vert.h": "c"
     },
     "cmake.configureOnOpen": false
 }

@@ -4,6 +4,7 @@
 #include "cpuresources.h"
 #include "profiling.h"
 
+#include "common.hlsli"
 #include "gltf.hlsli"
 
 #include <SDL2/SDL_image.h>
@@ -99,8 +100,8 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
   vkDestroySemaphore(device, cb.updated, vk_alloc);
 }
 
-int32_t create_gpumesh(VmaAllocator vma_alloc, const CPUMesh *src_mesh,
-                       GPUMesh *dst_mesh) {
+int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
+                       const CPUMesh *src_mesh, GPUMesh *dst_mesh) {
   TracyCZoneN(prof_e, "create_gpumesh", true);
   VkResult err = VK_SUCCESS;
 
@@ -134,11 +135,15 @@ int32_t create_gpumesh(VmaAllocator vma_alloc, const CPUMesh *src_mesh,
   }
 
   dst_mesh->surface_count = 1;
-  dst_mesh->surfaces[0] =
-      (GPUSurface){src_mesh->index_count, src_mesh->vertex_count,
-                   VK_INDEX_TYPE_UINT16,  size,
-                   src_mesh->index_size,  src_mesh->geom_size,
-                   host_buffer,           device_buffer};
+  dst_mesh->surfaces[0] = (GPUSurface){input_perm,
+                                       src_mesh->index_count,
+                                       src_mesh->vertex_count,
+                                       VK_INDEX_TYPE_UINT16,
+                                       size,
+                                       src_mesh->index_size,
+                                       src_mesh->geom_size,
+                                       host_buffer,
+                                       device_buffer};
 
   TracyCZoneEnd(prof_e);
   return err;
@@ -164,6 +169,7 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
 
     size_t index_size = indices->buffer_view->size;
     size_t geom_size = 0;
+    uint64_t input_perm = 0;
     // Only allow certain attributes for now
     uint32_t attrib_count = 0;
     for (uint32_t i = 0; i < prim->attributes_count; ++i) {
@@ -175,6 +181,14 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
           index == 0) {
         cgltf_accessor *attr = prim->attributes[i].data;
         geom_size += attr->buffer_view->size;
+
+        if (type == cgltf_attribute_type_position) {
+          input_perm |= VA_INPUT_PERM_POSITION;
+        } else if (type == cgltf_attribute_type_normal) {
+          input_perm |= VA_INPUT_PERM_NORMAL;
+        } else if (type == cgltf_attribute_type_texcoord) {
+          input_perm |= VA_INPUT_PERM_TEXCOORD0;
+        }
 
         attrib_count++;
       }
@@ -256,8 +270,8 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
     }
 
     dst_mesh->surfaces[i] = (GPUSurface){
-        index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
-        index_size,  geom_size,    host_buffer,          device_buffer};
+        input_perm, index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
+        index_size, geom_size,   host_buffer,  device_buffer};
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
@@ -884,9 +898,11 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
 
 static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
   size_t pipe_handles_size = sizeof(VkPipeline) * perm_count;
-  size_t flags_size = sizeof(uint32_t) * perm_count;
+  size_t feature_flags_size = sizeof(uint64_t) * perm_count;
+  size_t input_flags_size = sizeof(uint64_t) * perm_count;
   size_t pipeline_size = sizeof(GPUPipeline);
-  size_t alloc_size = pipeline_size + pipe_handles_size + flags_size;
+  size_t alloc_size =
+      pipeline_size + pipe_handles_size + feature_flags_size + input_flags_size;
   GPUPipeline *p = (GPUPipeline *)hb_alloc(alloc, alloc_size);
   uint8_t *mem = (uint8_t *)p;
   assert(p);
@@ -894,8 +910,11 @@ static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
 
   size_t offset = pipeline_size;
 
-  p->pipeline_flags = (uint32_t *)(mem + offset);
-  offset += flags_size;
+  p->pipeline_flags = (uint64_t *)(mem + offset);
+  offset += feature_flags_size;
+
+  p->input_flags = (uint64_t *)(mem + offset);
+  offset += input_flags_size;
 
   p->pipelines = (VkPipeline *)(mem + offset);
   offset += pipe_handles_size;
@@ -903,65 +922,98 @@ static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
   return p;
 }
 
-int32_t create_gfx_pipeline(VkDevice device,
-                            const VkAllocationCallbacks *vk_alloc,
-                            Allocator tmp_alloc, Allocator std_alloc,
-                            VkPipelineCache cache, uint32_t perm_count,
-                            VkGraphicsPipelineCreateInfo *create_info_base,
-                            GPUPipeline **p) {
+int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
   TracyCZoneN(prof_e, "create_gfx_pipeline", true);
-  GPUPipeline *pipe = alloc_gpupipeline(std_alloc, perm_count);
+
+  uint64_t total_perm_count = desc->feature_perm_count * desc->input_perm_count;
+
+  GPUPipeline *pipe = alloc_gpupipeline(desc->std_alloc, total_perm_count);
   VkResult err = VK_SUCCESS;
 
-  VkGraphicsPipelineCreateInfo *pipe_create_info =
-      hb_alloc_nm_tp(tmp_alloc, perm_count, VkGraphicsPipelineCreateInfo);
+  VkGraphicsPipelineCreateInfo *pipe_create_info = hb_alloc_nm_tp(
+      desc->tmp_alloc, total_perm_count, VkGraphicsPipelineCreateInfo);
   assert(pipe_create_info);
 
-  uint32_t stage_count = create_info_base->stageCount;
-  uint32_t perm_stage_count = perm_count * stage_count;
+  uint32_t perm_idx = 0;
 
-  // Every shader stage needs its own create info
-  VkPipelineShaderStageCreateInfo *pipe_stage_info = hb_alloc_nm_tp(
-      tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
+  for (uint32_t i = 0; i < desc->input_perm_count; ++i) {
+    const VkGraphicsPipelineCreateInfo *info_base = &desc->create_info_bases[i];
 
-  VkSpecializationMapEntry map_entries[1] = {
-      {0, 0, sizeof(uint32_t)},
-  };
+    // Calculate this base's input permutation
+    uint64_t input_perm = 0;
+    for (uint32_t ii = 0;
+         ii < info_base->pVertexInputState->vertexAttributeDescriptionCount;
+         ++ii) {
+      const VkVertexInputAttributeDescription attr_desc =
+          info_base->pVertexInputState->pVertexAttributeDescriptions[ii];
+      if (attr_desc.binding == 0 &&
+          attr_desc.format == VK_FORMAT_R32G32B32_SFLOAT) {
+        input_perm |= VA_INPUT_PERM_POSITION;
+      } else if (attr_desc.binding == 1 &&
+                 attr_desc.format == VK_FORMAT_R32G32B32_SFLOAT) {
+        input_perm |= VA_INPUT_PERM_NORMAL;
+      } else if (attr_desc.binding == 2 &&
+                 attr_desc.format == VK_FORMAT_R32G32_SFLOAT) {
+        input_perm |= VA_INPUT_PERM_TEXCOORD0;
+      } else if (attr_desc.binding == 3 &&
+                 attr_desc.format == VK_FORMAT_R32G32_SFLOAT) {
+        input_perm |= VA_INPUT_PERM_TEXCOORD1;
+      } else {
+        SDL_assert(false);
+      }
+      pipe->input_flags[i] = input_perm;
+    }
 
-  VkSpecializationInfo *spec_info =
-      hb_alloc_nm_tp(tmp_alloc, perm_count, VkSpecializationInfo);
+    uint32_t stage_count = info_base->stageCount;
+    uint32_t perm_stage_count = desc->feature_perm_count * stage_count;
 
-  uint32_t *flags = hb_alloc_nm_tp(tmp_alloc, perm_count, uint32_t);
+    // Every shader stage needs its own create info
+    VkPipelineShaderStageCreateInfo *pipe_stage_info = hb_alloc_nm_tp(
+        desc->tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
 
-  // Insert specialization info to every shader stage
-  for (uint32_t i = 0; i < perm_count; ++i) {
-    pipe_create_info[i] = *create_info_base;
-
-    flags[i] = i;
-    spec_info[i] = (VkSpecializationInfo){
-        1,
-        map_entries,
-        sizeof(uint32_t),
-        &flags[i],
+    VkSpecializationMapEntry map_entries[1] = {
+        {0, 0, sizeof(uint32_t)},
     };
 
-    uint32_t stage_idx = i * stage_count;
-    for (uint32_t ii = 0; ii < stage_count; ++ii) {
-      VkPipelineShaderStageCreateInfo *stage = &pipe_stage_info[stage_idx + ii];
-      *stage = create_info_base->pStages[ii];
-      stage->pSpecializationInfo = &spec_info[i];
+    VkSpecializationInfo *spec_info = hb_alloc_nm_tp(
+        desc->tmp_alloc, desc->feature_perm_count, VkSpecializationInfo);
+
+    uint32_t *flags =
+        hb_alloc_nm_tp(desc->tmp_alloc, desc->feature_perm_count, uint32_t);
+
+    // Insert specialization info to every shader stage
+    for (uint32_t ii = 0; ii < desc->feature_perm_count; ++ii) {
+
+      pipe_create_info[perm_idx] = *info_base;
+
+      flags[ii] = ii;
+      spec_info[ii] = (VkSpecializationInfo){
+          1,
+          map_entries,
+          sizeof(uint32_t),
+          &flags[ii],
+      };
+
+      uint32_t stage_idx = ii * stage_count;
+      for (uint32_t iii = 0; iii < stage_count; ++iii) {
+        VkPipelineShaderStageCreateInfo *stage =
+            &pipe_stage_info[stage_idx + iii];
+        *stage = info_base->pStages[iii];
+        stage->pSpecializationInfo = &spec_info[ii];
+      }
+      pipe_create_info[perm_idx].pStages = &pipe_stage_info[stage_idx];
+
+      // Set permutation tracking values
+      pipe->input_flags[perm_idx] = input_perm;
+      pipe->pipeline_flags[perm_idx] = ii;
+      perm_idx++;
     }
-    pipe_create_info[i].pStages = &pipe_stage_info[stage_idx];
   }
 
-  err = vkCreateGraphicsPipelines(device, cache, perm_count, pipe_create_info,
-                                  vk_alloc, pipe->pipelines);
+  err = vkCreateGraphicsPipelines(desc->device, desc->cache, total_perm_count,
+                                  pipe_create_info, desc->vk_alloc,
+                                  pipe->pipelines);
   assert(err == VK_SUCCESS);
-
-  hb_free(tmp_alloc, pipe_create_info);
-  hb_free(tmp_alloc, pipe_stage_info);
-  hb_free(tmp_alloc, spec_info);
-  hb_free(tmp_alloc, flags);
 
   *p = pipe;
   TracyCZoneEnd(prof_e);
@@ -1216,7 +1268,7 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
   VkResult err = VK_SUCCESS;
 
   // Convert from cgltf structs to our struct
-  uint32_t perm = 0;
+  uint64_t feat_perm = 0;
   GLTFMaterialData mat_data = {0};
   {
     memcpy(mat_data.pbr_metallic_roughness.base_color_factor,
@@ -1255,36 +1307,36 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
     mat_data.volume.attenuation_distance = gltf->volume.attenuation_distance;
   }
 
-  // Determine material permutation
+  // Determine feature permutation
   if (gltf->has_pbr_metallic_roughness) {
-    perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
+    feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
   }
   if (gltf->has_pbr_specular_glossiness) {
-    perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
+    feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
   }
   if (gltf->has_clearcoat) {
-    perm |= GLTF_PERM_CLEARCOAT;
+    feat_perm |= GLTF_PERM_CLEARCOAT;
   }
   if (gltf->has_transmission) {
-    perm |= GLTF_PERM_TRANSMISSION;
+    feat_perm |= GLTF_PERM_TRANSMISSION;
   }
   if (gltf->has_volume) {
-    perm |= GLTF_PERM_VOLUME;
+    feat_perm |= GLTF_PERM_VOLUME;
   }
   if (gltf->has_ior) {
-    perm |= GLTF_PERM_IOR;
+    feat_perm |= GLTF_PERM_IOR;
   }
   if (gltf->has_specular) {
-    perm |= GLTF_PERM_SPECULAR;
+    feat_perm |= GLTF_PERM_SPECULAR;
   }
   if (gltf->has_sheen) {
-    perm |= GLTF_PERM_SHEEN;
+    feat_perm |= GLTF_PERM_SHEEN;
   }
   if (gltf->unlit) {
-    perm |= GLTF_PERM_UNLIT;
+    feat_perm |= GLTF_PERM_UNLIT;
   }
 
-  m->permutation = perm;
+  m->feature_perm = feat_perm;
   m->texture_count = tex_count;
   memcpy(m->texture_refs, tex_refs, sizeof(uint32_t) * tex_count);
 

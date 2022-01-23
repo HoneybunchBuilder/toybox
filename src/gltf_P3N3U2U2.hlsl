@@ -4,6 +4,10 @@
 
 // Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
+Texture2D albedo_map : register(t1, space0); // Fragment Stage Only
+Texture2D normal_map : register(t2, space0); // Fragment Stage Only
+Texture2D roughness_map : register(t3, space0); // Fragment Stage Only
+sampler static_sampler : register(s4, space0); // Immutable sampler
 
 // Per-object data - Vertex Stage Only
 ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
@@ -11,6 +15,7 @@ ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonCameraData> camera_data: register(b0, space2);
 ConstantBuffer<CommonLightData> light_data : register(b1, space2);
+Texture2D lightmap : register(t2, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -19,6 +24,7 @@ struct VertexIn
     float3 local_pos : SV_POSITION;
     float3 normal : NORMAL0;
     float2 uv: TEXCOORD0;
+    float2 uv1 : TEXCOORD1;
 };
 
 struct Interpolators
@@ -46,10 +52,15 @@ Interpolators vert(VertexIn i)
 
 float4 frag(Interpolators i) : SV_TARGET
 {
-    // TODO: Get material albedo color some other way
-    float3 albedo = float3(0.5, 0.5, 0.5);
+    // Sample textures up-front
+    float3 albedo = albedo_map.Sample(static_sampler, i.uv).rgb;
 
     float3 N = normalize(i.normal);
+    if(PermutationFlags & GLTF_PERM_NORMAL_MAP)
+    {
+        N = normal_map.Sample(static_sampler, i.uv).xyz;
+        N = normalize(N * 2 - 1); // Must unpack normal
+    }
 
     float3 L = normalize(light_data.light_dir);
     float3 V = normalize(camera_data.view_pos - i.world_pos);
@@ -62,6 +73,9 @@ float4 frag(Interpolators i) : SV_TARGET
         float metallic = material_data.pbr_metallic_roughness.metallic_factor;
         float roughness = material_data.pbr_metallic_roughness.roughness_factor;
 
+        // TODO: If has roughness map
+        // roughness = roughness_map.Sample(static_sampler, i.uv).x;
+
         float3 F0 = float3(0.04, 0.04, 0.04);
         F0 = lerp(F0, albedo, metallic);
 
@@ -71,7 +85,7 @@ float4 frag(Interpolators i) : SV_TARGET
         {
             float3 light_color = float3(1, 1, 1);
 
-            Lo += pbr_metal_rough_light(F0, albedo, light_color, metallic, roughness, N, L, H);
+            Lo += pbr_metal_rough_light(F0, albedo, light_color, metallic, roughness, N, L, V, H);
         }
 
         float3 ambient = float3(0.03, 0.03, 0.03) * albedo;
@@ -82,12 +96,12 @@ float4 frag(Interpolators i) : SV_TARGET
     }
     else // Phong fallback
     {
-        float gloss = 0.5f;
+        float gloss = 0.5;
 
         // for each light
         {
             float3 light_color = float3(1, 1, 1);
-            color += phong_light(albedo, light_color, gloss, N, L, H);
+            color += phong_light(albedo, light_color, gloss, N, L, V, H);
         }
     }
 
