@@ -35,6 +35,7 @@ typedef struct GPUConstBuffer {
 } GPUConstBuffer;
 
 typedef struct GPUSurface {
+  uint64_t input_perm;
   size_t idx_count;
   size_t vtx_count;
   int32_t idx_type;
@@ -73,10 +74,25 @@ typedef struct GPUTexture {
   VkBufferImageCopy regions[MAX_REGION_COUNT];
 } GPUTexture;
 
+typedef struct GPUPipelineDesc {
+  VkDevice device;
+  const VkAllocationCallbacks *vk_alloc;
+  Allocator tmp_alloc;
+  Allocator std_alloc;
+  VkPipelineCache cache;
+
+  uint32_t feature_perm_count;
+  uint32_t input_perm_count;
+  // One info struct per input permutation
+  VkGraphicsPipelineCreateInfo *create_info_bases;
+} GPUPipelineDesc;
+
 typedef struct GPUPipeline {
   uint32_t pipeline_id;
   uint32_t pipeline_count;
-  uint32_t *pipeline_flags;
+  uint64_t *input_flags;
+  uint64_t *pipeline_flags;
+  // Collection of pipelines per vertex input and per featureset
   VkPipeline *pipelines;
 } GPUPipeline;
 
@@ -89,7 +105,7 @@ typedef struct GPUPipeline {
   other resource bindings.
 */
 typedef struct GPUMaterial {
-  uint32_t permutation;
+  uint64_t feature_perm;
   // All material parameters go into one uniform buffer
   // The uniform buffer takes up location 0
   GPUConstBuffer const_buffer;
@@ -113,8 +129,8 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
                             const VkAllocationCallbacks *vk_alloc,
                             GPUConstBuffer cb);
 
-int32_t create_gpumesh(VmaAllocator vma_alloc, const CPUMesh *src_mesh,
-                       GPUMesh *dst_mesh);
+int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
+                       const CPUMesh *src_mesh, GPUMesh *dst_mesh);
 int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
                              const cgltf_mesh *src_mesh, GPUMesh *dst_mesh);
 void destroy_gpumesh(VmaAllocator vma_alloc, const GPUMesh *mesh);
@@ -149,12 +165,7 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const GPUTexture *t);
 
-int32_t create_gfx_pipeline(VkDevice device,
-                            const VkAllocationCallbacks *vk_alloc,
-                            Allocator tmp_alloc, Allocator std_alloc,
-                            VkPipelineCache cache, uint32_t perm_count,
-                            VkGraphicsPipelineCreateInfo *create_info_base,
-                            GPUPipeline **p);
+int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p);
 int32_t create_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc, Allocator tmp_alloc,
     Allocator std_alloc, VkPipelineCache cache,

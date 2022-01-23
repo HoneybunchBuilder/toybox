@@ -202,6 +202,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2, 1,
                           &view_set, 0, NULL);
 
+  VkPipeline last_mat_pipe = VK_NULL_HANDLE;
   VkDescriptorSet last_mat_set = VK_NULL_HANDLE;
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     TracyCZoneN(entity_e, "render entity", true);
@@ -263,14 +264,39 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
       // Draw mesh surfaces
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
         TracyCZoneN(surface_e, "draw surface", true);
+
+        const GPUSurface *surface = &mesh->surfaces[ii];
+
+        // TODO: Sort by pipelines in the first place so we don't thrash the GPU
+        // pipeline
+        {
+          const GPUMaterial *material = &s->materials[material_idx];
+          // find permutation index
+          uint64_t perm_index = 0xFFFFFFFFFFFFFFFF;
+          for (uint32_t iii = 0; iii < d->gltf_pipeline->pipeline_count;
+               ++iii) {
+            if (d->gltf_pipeline->pipeline_flags[iii] ==
+                    material->feature_perm &&
+                d->gltf_pipeline->input_flags[iii] == surface->input_perm) {
+              perm_index = iii;
+            }
+          }
+          SDL_assert(perm_index != 0xFFFFFFFFFFFFFFF);
+
+          VkPipeline pipe = d->gltf_pipeline->pipelines[perm_index];
+          if (pipe != last_mat_pipe) {
+
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+            last_mat_pipe = pipe;
+          }
+        }
+
         // TODO: Bind per-surface material
         if (last_mat_set != material_sets[material_idx]) {
           vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                                   0, 1, &material_sets[material_idx], 0, NULL);
           last_mat_set = material_sets[material_idx];
         }
-
-        const GPUSurface *surface = &mesh->surfaces[ii];
 
         uint32_t idx_count = surface->idx_count;
         uint32_t vtx_count = surface->vtx_count;
@@ -326,7 +352,8 @@ static void demo_imgui_update(Demo *d) {
   SDL_Window *hovered_window =
       SDL_HAS_MOUSE_FOCUS_CLICKTHROUGH
           ? SDL_GetMouseFocus()
-          : NULL; // This is better but is only reliably useful with SDL 2.0.5+
+          : NULL; // This is better but is only reliably useful with
+SDL 2.0.5+
                   // and SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH.
 
   if (hovered_window && bd->Window == hovered_window)
@@ -334,7 +361,8 @@ static void demo_imgui_update(Demo *d) {
   else if (focused_window && bd->Window == focused_window)
     mouse_window = focused_window;
 
-  // SDL_CaptureMouse() let the OS know e.g. that our imgui drag outside the SDL
+  // SDL_CaptureMouse() let the OS know e.g. that our imgui drag outside the
+SDL
   // window boundaries shouldn't e.g. trigger other operations outside
   SDL_CaptureMouse(ImGui::IsAnyMouseDown() ? SDL_TRUE : SDL_FALSE);
 #else
@@ -348,18 +376,19 @@ static void demo_imgui_update(Demo *d) {
   // if (mouse_window == NULL)
   //  return;
 
-  // Set OS mouse position from Dear ImGui if requested (rarely used, only when
-  // ImGuiConfigFlags_NavEnableSetMousePos is enabled by user)
-  // if (io->WantSetMousePos)
+  // Set OS mouse position from Dear ImGui if requested (rarely used, only
+  // when ImGuiConfigFlags_NavEnableSetMousePos is enabled by user) if
+  // (io->WantSetMousePos)
   //  SDL_WarpMouseInWindow(bd->Window, (int32_t)mouse_pos_prev.x,
   //                        (int32_t)mouse_pos_prev.y);
 
-  // Set Dear ImGui mouse position from OS position + get buttons. (this is the
-  // common behavior)
+  // Set Dear ImGui mouse position from OS position + get buttons. (this is
+  // the common behavior)
   /*
   if (bd->MouseCanUseGlobalState) {
     // Single-viewport mode: mouse position in client window coordinates
-    // (io->MousePos is (0,0) when the mouse is on the upper-left corner of the
+    // (io->MousePos is (0,0) when the mouse is on the upper-left corner of
+  the
     // app window) Unlike local position obtained earlier this will be valid
     // when straying out of bounds.
     int32_t mouse_x_global, mouse_y_global;
@@ -1513,7 +1542,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   {
     CPUMesh *skydome_cpu = create_skydome(&tmp_alloc);
 
-    err = create_gpumesh(vma_alloc, skydome_cpu, &skydome);
+    uint64_t input_perm = VA_INPUT_PERM_POSITION;
+    err = create_gpumesh(vma_alloc, input_perm, skydome_cpu, &skydome);
     assert(err == VK_SUCCESS);
   }
 
@@ -1570,11 +1600,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       return false;
     }
     /*
-     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
-       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                    "Failed to append bistro to main scene");
-       SDL_TriggerBreakpoint();
-       return false;
+     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0)
+     { SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to append bistro to
+     main scene"); SDL_TriggerBreakpoint(); return false;
      }
      */
   }
@@ -2808,13 +2836,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
           // Draw Scene
           {
-            // HACK: Known desired permutations
-            uint32_t perm = GLTF_PERM_NONE;
             VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
-            VkPipeline pipe = d->gltf_pipeline->pipelines[perm];
-
-            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              pipe);
 
             TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, graphics_buffer,
                               "Draw Scene", 3, true);
@@ -2960,7 +2982,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                        .vertex_count = draw_data->TotalVtxCount,
                                        .vertices = vtx_dst};
 
-                  create_gpumesh(d->vma_alloc, &imgui_cpu,
+                  uint64_t input_perm = VA_INPUT_PERM_POSITION |
+                                        VA_INPUT_PERM_TEXCOORD0 |
+                                        VA_INPUT_PERM_COLOR;
+                  create_gpumesh(d->vma_alloc, input_perm, &imgui_cpu,
                                  &d->imgui_gpu[frame_idx]);
                 } else {
                   // Map existing gpu mesh and copy data
