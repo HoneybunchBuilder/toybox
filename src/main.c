@@ -629,24 +629,38 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
               SceneTransform *transform = &d.main_scene->transforms[i];
               igPushID_Ptr(transform);
               if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
-                float3 *position = &transform->t.position;
-                // float3 *rotation = &transform->t.rotation;
-                // float3 *scale = &transform->t.scale;
+                {
+                  float3 *position = &transform->t.position;
+                  float x = (*position)[0];
+                  float y = (*position)[1];
+                  float z = (*position)[2];
 
-                float x = (*position)[0];
-                float y = (*position)[1];
-                float z = (*position)[2];
+                  igText("%s", "Position");
+                  igSliderFloat("X", &x, -100.0f, 100.0f, "%.3f", 0);
+                  if (x != (*position)[0]) {
+                    (*position)[0] = x;
+                  }
+                  if (igSliderFloat("Y", &y, -100.0f, 100.0f, "%.3f", 0)) {
+                    (*position)[1] = y;
+                  }
+                  if (igSliderFloat("Z", &z, -100.0f, 100.0f, "%.3f", 0)) {
+                    (*position)[2] = z;
+                  }
+                }
 
-                igText("%s", "Position");
-                igSliderFloat("X", &x, -100.0f, 100.0f, "%.3f", 0);
-                if (x != (*position)[0]) {
-                  (*position)[0] = x;
-                }
-                if (igSliderFloat("Y", &y, -100.0f, 100.0f, "%.3f", 0)) {
-                  (*position)[1] = y;
-                }
-                if (igSliderFloat("Z", &z, -100.0f, 100.0f, "%.3f", 0)) {
-                  (*position)[2] = z;
+                igSeparator();
+
+                {
+                  float3 *scale = &transform->t.scale;
+                  float x = (*scale)[0];
+
+                  igText("%s", "Uniform Scale");
+                  igSliderFloat("scale", &x, 0.1f, 10.0f, "%.3f", 0);
+                  if (x != (*scale)[0]) {
+                    (*scale)[0] = x;
+                    (*scale)[1] = x;
+                    (*scale)[2] = x;
+                  }
                 }
 
                 igTreePop();
