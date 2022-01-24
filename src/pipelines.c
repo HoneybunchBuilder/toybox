@@ -26,6 +26,7 @@
 #include <stdlib.h>
 
 #include "vkdbg.h"
+#include <SDL_stdinc.h>
 #include <volk.h>
 
 uint32_t create_fractal_pipeline(VkDevice device,
@@ -932,6 +933,22 @@ uint32_t create_gltf_pipeline(VkDevice device,
   GPUPipeline *p = NULL;
   err = (VkResult)create_gfx_pipeline(&desc, &p);
   assert(err == VK_SUCCESS);
+
+  // Set some debug names
+  {
+    uint32_t pipe_idx = 0;
+    for (uint32_t i = 0; i < desc.input_perm_count; ++i) {
+      for (uint32_t ii = 0; ii < desc.feature_perm_count; ++ii) {
+        static const uint32_t max_name_size = 128;
+        char *pipe_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+        SDL_snprintf(pipe_name, max_name_size, "gltf - input: %d, feature: %d",
+                     i, ii);
+        set_vk_name(device, (uint64_t)p->pipelines[pipe_idx],
+                    VK_OBJECT_TYPE_PIPELINE, pipe_name);
+        pipe_idx++;
+      }
+    }
+  }
 
   // Can destroy shader moduless
   vkDestroyShaderModule(device, vert_mod_P3N3, vk_alloc);

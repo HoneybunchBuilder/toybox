@@ -214,10 +214,10 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
     if (components & COMPONENT_TYPE_STATIC_MESH) {
       Transform *t = &scene_transform->t;
 
-      // Hack to fuck with the scale of the object
-      // t->scale = (float3){0.01f, -0.01f, 0.01f};
-      // t->scale = (float3){100.0f, -100.0f, 100.0f};
-      t->scale = (float3){1.0f, -1.0f, 1.0f};
+      // Hack to correct the scale of the object
+      if (t->scale[1] > 0) {
+        t->scale[1] = -t->scale[1];
+      }
 
       CommonObjectData object_data = {0};
 
@@ -302,16 +302,20 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         uint32_t vtx_count = surface->vtx_count;
         VkBuffer buffer = surface->gpu.buffer;
 
-        vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(cmd, buffer, 0, surface->idx_type);
         VkDeviceSize offset = surface->idx_size;
 
+        // Always bind positions and normals
         vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
         offset += vtx_count * sizeof(float) * 3;
 
         vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
         offset += vtx_count * sizeof(float) * 3;
 
-        vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+        // Hack to determine whether or not to bind tex coords
+        if (surface->input_perm & VA_INPUT_PERM_TEXCOORD0) {
+          vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+        }
 
         vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
         TracyCZoneEnd(surface_e);
@@ -1586,9 +1590,19 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       SDL_TriggerBreakpoint();
       return false;
     }
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb") != 0) {
+
+    /*
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append floor to main scene");
+                   "Failed to append bistro to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+    */
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/BoomBox.glb") != 0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append BoomBox to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -1599,12 +1613,28 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       SDL_TriggerBreakpoint();
       return false;
     }
-    /*
-     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0)
-     { SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to append bistro to
-     main scene"); SDL_TriggerBreakpoint(); return false;
-     }
-     */
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb") != 0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append Floor to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Lantern.glb") != 0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append Lantern to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/WaterBottle.glb") !=
+        0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append WaterBottle to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
   }
 
   // Create resources for screenshots
@@ -2426,16 +2456,23 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         buffer_info[i].range = d->main_scene->materials[i].const_buffer.size;
       }
 
-      VkDescriptorImageInfo *tex_info =
-          hb_alloc_nm_tp(d->tmp_alloc, max_mat_count, VkDescriptorImageInfo);
+      uint32_t total_tex_info_count = max_mat_count * MAX_MATERIAL_TEXTURES;
+      VkDescriptorImageInfo *tex_info = hb_alloc_nm_tp(
+          d->tmp_alloc, total_tex_info_count, VkDescriptorImageInfo);
       for (uint32_t i = 0; i < max_mat_count; ++i) {
-        uint32_t tex_ref = d->main_scene->materials[i].texture_refs[0];
-        const GPUTexture *texture = &d->main_scene->textures[tex_ref];
-        tex_info[i] = (VkDescriptorImageInfo){
-            NULL, texture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        const GPUMaterial *mat = &d->main_scene->materials[i];
+
+        uint32_t tex_base_idx = i * MAX_MATERIAL_TEXTURES;
+        for (uint32_t ii = 0; ii < mat->texture_count; ++ii) {
+          uint32_t tex_ref = mat->texture_refs[ii];
+          const GPUTexture *texture = &d->main_scene->textures[tex_ref];
+          tex_info[tex_base_idx + ii] = (VkDescriptorImageInfo){
+              NULL, texture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        }
       }
 
       for (uint32_t i = 0; i < max_mat_count; ++i) {
+        const GPUMaterial *mat = &d->main_scene->materials[i];
         set_layouts[set_idx++] = d->gltf_material_set_layout;
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
@@ -2445,28 +2482,38 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &buffer_info[i]};
 
+        uint32_t tex_idx = i * MAX_MATERIAL_TEXTURES;
+
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[i],
+            .pImageInfo = &tex_info[tex_idx],
         };
+
+        if (mat->texture_count > 1) {
+          tex_idx++;
+        }
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[i],
+            .pImageInfo = &tex_info[tex_idx],
         };
+
+        if (mat->texture_count > 2) {
+          tex_idx++;
+        }
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[i],
+            .pImageInfo = &tex_info[tex_idx],
         };
       }
     }

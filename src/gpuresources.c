@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "cpuresources.h"
 #include "profiling.h"
+#include "vkdbg.h"
 
 #include "common.hlsli"
 #include "gltf.hlsli"
@@ -149,8 +150,9 @@ int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
   return err;
 }
 
-int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
-                             const cgltf_mesh *src_mesh, GPUMesh *dst_mesh) {
+int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                             Allocator tmp_alloc, const cgltf_mesh *src_mesh,
+                             GPUMesh *dst_mesh) {
   TracyCZoneN(prof_e, "create_gpumesh_cgltf", true);
   assert(src_mesh->primitives_count < MAX_SURFACE_COUNT);
   uint32_t surface_count = src_mesh->primitives_count;
@@ -167,6 +169,11 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
     uint32_t index_count = indices->count;
     uint32_t vertex_count = prim->attributes[0].data->count;
 
+    int32_t index_type = VK_INDEX_TYPE_UINT16;
+    if (indices->stride > 2) {
+      index_type = VK_INDEX_TYPE_UINT32;
+    }
+
     size_t index_size = indices->buffer_view->size;
     size_t geom_size = 0;
     uint64_t input_perm = 0;
@@ -180,7 +187,7 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
            type == cgltf_attribute_type_texcoord) &&
           index == 0) {
         cgltf_accessor *attr = prim->attributes[i].data;
-        geom_size += attr->buffer_view->size;
+        geom_size += attr->count * attr->stride;
 
         if (type == cgltf_attribute_type_position) {
           input_perm |= VA_INPUT_PERM_POSITION;
@@ -257,9 +264,11 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
         // TODO: Figure out how to handle when an object can't use the expected
         // pipeline
         if (SDL_strcmp(attr->name, "NORMAL") == 0) {
-          cgltf_attribute *next = &prim->attributes[attr_order[i + 1]];
-          if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
-            SDL_TriggerBreakpoint();
+          if (i + 1 < prim->attributes_count) {
+            cgltf_attribute *next = &prim->attributes[attr_order[i + 1]];
+            if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
+              SDL_TriggerBreakpoint();
+            }
           }
         }
 
@@ -267,11 +276,29 @@ int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, Allocator tmp_alloc,
         memcpy(data + offset, attr_data, attr_size);
         offset += attr_size;
       }
+
+      SDL_assert(offset == size);
     }
 
-    dst_mesh->surfaces[i] = (GPUSurface){
-        input_perm, index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
-        index_size, geom_size,   host_buffer,  device_buffer};
+    dst_mesh->surfaces[i] =
+        (GPUSurface){input_perm, index_count, vertex_count, index_type,   size,
+                     index_size, geom_size,   host_buffer,  device_buffer};
+
+    // Set some debug names on the vulkan primitives
+    {
+      static const uint32_t max_name_size = 128;
+      char *host_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+      SDL_snprintf(host_name, max_name_size, "%s surface %d @host",
+                   src_mesh->name, i);
+      set_vk_name(device, (uint64_t)host_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
+                  host_name);
+
+      char *device_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+      SDL_snprintf(device_name, max_name_size, "%s surface %d @device",
+                   src_mesh->name, i);
+      set_vk_name(device, (uint64_t)device_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
+                  device_name);
+    }
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
@@ -1100,25 +1127,26 @@ uint32_t collect_material_textures(uint32_t tex_count,
                                    uint32_t tex_idx_start,
                                    uint32_t *mat_tex_refs) {
   uint32_t tex_idx = 0;
+  uint32_t tex_ref_count = 0;
   for (uint32_t i = 0; i < tex_count; ++i) {
     const cgltf_texture *tex = &gltf_textures[i];
     // Standard textures
     if (material->normal_texture.texture != NULL) {
       if (tex == material->normal_texture.texture) {
-        mat_tex_refs[tex_idx++] = tex_idx_start + i;
-        SDL_assert(tex_idx <= tex_count);
+        mat_tex_refs[1] = tex_idx_start + i;
+        tex_ref_count++;
       }
     }
     if (material->emissive_texture.texture != NULL) {
       if (tex == material->emissive_texture.texture) {
-        mat_tex_refs[tex_idx++] = tex_idx_start + i;
-        SDL_assert(tex_idx <= tex_count);
+        mat_tex_refs[4] = tex_idx_start + i;
+        tex_ref_count++;
       }
     }
     if (material->occlusion_texture.texture != NULL) {
       if (tex == material->occlusion_texture.texture) {
-        mat_tex_refs[tex_idx++] = tex_idx_start + i;
-        SDL_assert(tex_idx <= tex_count);
+        mat_tex_refs[5] = tex_idx_start + i;
+        tex_ref_count++;
       }
     }
 
@@ -1127,8 +1155,8 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->pbr_metallic_roughness.base_color_texture.texture != NULL) {
         if (tex ==
             material->pbr_metallic_roughness.base_color_texture.texture) {
-          mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          mat_tex_refs[0] = tex_idx_start + i;
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Metallic Roughness but no base color texture "
@@ -1138,8 +1166,8 @@ uint32_t collect_material_textures(uint32_t tex_count,
           NULL) {
         if (tex == material->pbr_metallic_roughness.metallic_roughness_texture
                        .texture) {
-          mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          mat_tex_refs[2] = tex_idx_start + i;
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Metallic Roughness but no metallic roughness "
@@ -1149,8 +1177,8 @@ uint32_t collect_material_textures(uint32_t tex_count,
     if (material->has_pbr_specular_glossiness) {
       if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
         if (tex == material->pbr_specular_glossiness.diffuse_texture.texture) {
-          mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          mat_tex_refs[0] = tex_idx_start + i;
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Specular Glossiness but no diffuse texture "
@@ -1161,7 +1189,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
         if (tex == material->pbr_specular_glossiness.specular_glossiness_texture
                        .texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Specular Glossiness but no specular "
@@ -1172,7 +1200,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->clearcoat.clearcoat_texture.texture != NULL) {
         if (tex == material->clearcoat.clearcoat_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert(
@@ -1181,7 +1209,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->clearcoat.clearcoat_roughness_texture.texture != NULL) {
         if (tex == material->clearcoat.clearcoat_roughness_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert(
@@ -1190,7 +1218,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->clearcoat.clearcoat_normal_texture.texture != NULL) {
         if (tex == material->clearcoat.clearcoat_normal_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Clearcoat but no normal texture was provided");
@@ -1200,7 +1228,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->transmission.transmission_texture.texture != NULL) {
         if (tex == material->transmission.transmission_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Transmission but no transmission texture was "
@@ -1211,7 +1239,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->volume.thickness_texture.texture != NULL) {
         if (tex == material->volume.thickness_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Volume but no thickness texture was provided");
@@ -1221,7 +1249,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->specular.specular_texture.texture != NULL) {
         if (tex == material->specular.specular_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert(
@@ -1230,7 +1258,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->specular.specular_color_texture.texture != NULL) {
         if (tex == material->specular.specular_color_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Specular but no color texture was provided");
@@ -1240,7 +1268,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->sheen.sheen_color_texture.texture != NULL) {
         if (tex == material->sheen.sheen_color_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Sheen but no color texture was provided");
@@ -1248,7 +1276,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
       if (material->sheen.sheen_roughness_texture.texture != NULL) {
         if (tex == material->sheen.sheen_roughness_texture.texture) {
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
-          SDL_assert(tex_idx <= tex_count);
+          tex_ref_count++;
         }
       } else {
         SDL_assert("Material has Sheen but no roughness texture was provided");
@@ -1257,7 +1285,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
 
     // TODO: Extensions
   }
-  return tex_idx;
+  return tex_count;
 }
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
@@ -1310,6 +1338,10 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
   // Determine feature permutation
   if (gltf->has_pbr_metallic_roughness) {
     feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
+    if (gltf->pbr_metallic_roughness.metallic_roughness_texture.texture !=
+        NULL) {
+      feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
+    }
   }
   if (gltf->has_pbr_specular_glossiness) {
     feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
@@ -1334,6 +1366,9 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
   }
   if (gltf->unlit) {
     feat_perm |= GLTF_PERM_UNLIT;
+  }
+  if (gltf->normal_texture.texture != NULL) {
+    feat_perm |= GLTF_PERM_NORMAL_MAP;
   }
 
   m->feature_perm = feat_perm;

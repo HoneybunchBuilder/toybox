@@ -6,7 +6,7 @@
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
 Texture2D albedo_map : register(t1, space0); // Fragment Stage Only
 Texture2D normal_map : register(t2, space0); // Fragment Stage Only
-Texture2D roughness_map : register(t3, space0); // Fragment Stage Only
+Texture2D metal_rough_map : register(t3, space0); // Fragment Stage Only
 sampler static_sampler : register(s4, space0); // Immutable sampler
 
 // Per-object data - Vertex Stage Only
@@ -71,8 +71,13 @@ float4 frag(Interpolators i) : SV_TARGET
         float metallic = material_data.pbr_metallic_roughness.metallic_factor;
         float roughness = material_data.pbr_metallic_roughness.roughness_factor;
 
-        // TODO: If has roughness map
-        // roughness = roughness_map.Sample(static_sampler, i.uv).x;
+        if(PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX)
+        {
+            // The red channel of this texture *may* store occlusion.
+            // TODO: Check the perm for occlusion
+            metallic = metal_rough_map.Sample(static_sampler, i.uv).b;
+            roughness = metal_rough_map.Sample(static_sampler, i.uv).g;
+        }
 
         float3 F0 = float3(0.04, 0.04, 0.04);
         F0 = lerp(F0, albedo, metallic);
@@ -101,6 +106,9 @@ float4 frag(Interpolators i) : SV_TARGET
             float3 light_color = float3(1, 1, 1);
             color += phong_light(albedo, light_color, gloss, N, L, V, H);
         }
+
+        float3 ambient = float3(0.03, 0.03, 0.03) * albedo;
+        color += ambient;
     }
 
     return float4(color, 1.0);

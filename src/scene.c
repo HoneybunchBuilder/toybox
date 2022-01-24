@@ -198,8 +198,8 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     // TODO: Determine a good way to do mesh de-duplication
     for (uint32_t i = old_mesh_count; i < new_mesh_count; ++i) {
       cgltf_mesh *mesh = &data->meshes[i - old_mesh_count];
-      if (create_gpumesh_cgltf(vma_alloc, tmp_alloc, mesh, &s->meshes[i]) !=
-          0) {
+      if (create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh,
+                               &s->meshes[i]) != 0) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                      "Failed to to create gpumesh");
         SDL_TriggerBreakpoint();
@@ -292,8 +292,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
         for (uint32_t ii = 0; ii < data->materials_count; ++ii) {
           // TODO: Iterate over primitives
           if (node->mesh->primitives[0].material == &data->materials[ii]) {
-            // FIX: old_tex_count
-            s->material_refs[i] = old_tex_count + ii;
+            s->material_refs[i] = old_mat_count + ii;
           }
         }
       }

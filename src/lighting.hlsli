@@ -30,9 +30,6 @@ float3 pbr_metal_rough_light(float3 F0, float3 albedo, float3 light_color, float
 
 float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N, float3 L, float3 V, float3 H)
 {
-  // Calc ambient light
-  float3 ambient = float3(0.03, 0.03, 0.03) * albedo;
-
   // Calc diffuse Light
   float lambert = saturate(dot(N, L));
   float3 diffuse = light_color * lambert * albedo;
@@ -43,6 +40,6 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N, flo
   specular = pow(specular, specular_exponent) * gloss;
   specular *= light_color;
 
-  float3 color = ambient + diffuse + specular;
+  float3 color = diffuse + specular;
   return color;
 }
