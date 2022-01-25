@@ -28,6 +28,38 @@ float3 pbr_metal_rough_light(float3 F0, float3 albedo, float3 light_color, float
   return color;
 }
 
+float3 pbr_light(float3 F0, float3 light_color, float3 albedo, float metallic, float roughness, float3 N, float3 L, float3 V, float cosLo)
+{
+  float3 Lh = normalize(L + V);
+  
+  // Calculate angles between surface normal and various light vectors.
+  float cosLi = max(0.0, dot(N, L));
+  float cosLh = max(0.0, dot(N, Lh));
+
+  // Calculate Fresnel term for direct lighting. 
+  float3 F  = fresnelSchlick(max(0.0, dot(Lh, V)), F0);
+  // Calculate normal distribution for specular BRDF.
+  float D = ndfGGX(cosLh, roughness);
+  // Calculate geometric attenuation for specular BRDF.
+  float G = gaSchlickGGX(cosLi, cosLo, roughness);
+
+  // Diffuse scattering happens due to light being refracted multiple times by a dielectric medium.
+  // Metals on the other hand either reflect or absorb energy, so diffuse contribution is always zero.
+  // To be energy conserving we must scale diffuse BRDF contribution based on Fresnel factor & metalness.
+  float3 kd = lerp(float3(1, 1, 1) - F, float3(0, 0, 0), metallic);
+
+  // Lambert diffuse BRDF.
+  // We don't scale by 1/PI for lighting & material units to be more convenient.
+  // See: https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
+  float3 diffuseBRDF = kd * albedo;
+
+  // Cook-Torrance specular microfacet BRDF.
+  float3 specularBRDF = (F * D * G) / max(Epsilon, 4.0 * cosLi * cosLo);
+
+  // Total contribution for this light.
+  return (diffuseBRDF + specularBRDF) * light_color * cosLi;
+}
+
 float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N, float3 L, float3 V, float3 H)
 {
   // Calc diffuse Light
