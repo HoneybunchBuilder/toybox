@@ -163,7 +163,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
   VkResult err = VK_SUCCESS;
 
   for (uint32_t i = 0; i < surface_count; ++i) {
-    cgltf_primitive *prim = &src_mesh->primitives[0];
+    cgltf_primitive *prim = &src_mesh->primitives[i];
     cgltf_accessor *indices = prim->indices;
 
     uint32_t index_count = indices->count;
@@ -204,7 +204,14 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
       }
     }
 
-    size_t size = index_size + geom_size;
+    // Calculate the necessary padding between the index and vertex contents
+    // of the buffer.
+    // Otherwise we'll get a validation error.
+    // The vertex content needs to start that the correct attribAddress
+    // which must be a multiple of the size of the first attribute
+    size_t idx_padding = index_size % (sizeof(float) * 3);
+
+    size_t size = index_size + idx_padding + geom_size;
 
     GPUBuffer host_buffer = {0};
     err = create_gpubuffer(vma_alloc, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -229,11 +236,11 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
       {
         cgltf_buffer_view *view = indices->buffer_view;
         size_t index_offset = indices->offset + view->offset;
-        size_t index_size = view->size;
 
         void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
         memcpy(data, index_data, index_size);
         offset += index_size;
+        offset += idx_padding;
       }
 
       // Reorder attributes

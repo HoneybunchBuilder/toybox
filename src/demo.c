@@ -267,10 +267,12 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
         const GPUSurface *surface = &mesh->surfaces[ii];
 
+        uint32_t surface_mat_idx = material_idx + ii;
+
         // TODO: Sort by pipelines in the first place so we don't thrash the GPU
         // pipeline
         {
-          const GPUMaterial *material = &s->materials[material_idx];
+          const GPUMaterial *material = &s->materials[surface_mat_idx];
           // find permutation index
           uint64_t perm_index = 0xFFFFFFFFFFFFFFFF;
           for (uint32_t iii = 0; iii < d->gltf_pipeline->pipeline_count;
@@ -285,17 +287,16 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
           VkPipeline pipe = d->gltf_pipeline->pipelines[perm_index];
           if (pipe != last_mat_pipe) {
-
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
             last_mat_pipe = pipe;
           }
         }
 
-        // TODO: Bind per-surface material
-        if (last_mat_set != material_sets[material_idx]) {
+        if (last_mat_set != material_sets[surface_mat_idx]) {
           vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                                  0, 1, &material_sets[material_idx], 0, NULL);
-          last_mat_set = material_sets[material_idx];
+                                  0, 1, &material_sets[surface_mat_idx], 0,
+                                  NULL);
+          last_mat_set = material_sets[surface_mat_idx];
         }
 
         uint32_t idx_count = surface->idx_count;
@@ -303,7 +304,11 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         VkBuffer buffer = surface->gpu.buffer;
 
         vkCmdBindIndexBuffer(cmd, buffer, 0, surface->idx_type);
-        VkDeviceSize offset = surface->idx_size;
+        // Make sure to calculate the necessary padding between the
+        // vertex and index contents of the buffer
+        static const size_t pos_attr_size = sizeof(float) * 3;
+        VkDeviceSize offset =
+            surface->idx_size + (surface->idx_size % pos_attr_size);
 
         // Always bind positions and normals
         vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
@@ -1646,10 +1651,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/TestScene.glb") !=
-        0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append TestScene to main scene");
+                   "Failed to append Bistro to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }

@@ -46,7 +46,7 @@ typedef struct GPUSurface {
   GPUBuffer gpu;
 } GPUSurface;
 
-#define MAX_SURFACE_COUNT 8
+#define MAX_SURFACE_COUNT 32
 
 typedef struct GPUMesh {
   uint32_t surface_count;
