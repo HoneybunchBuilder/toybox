@@ -1,0 +1,6 @@
+#pragma once
+
+#define PI 3.141592653589793f
+#define TAU 6.283185307179586f
+#define PI_2 1.570796326794897f
+#define PI_4 0.785398163397448f

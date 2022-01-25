@@ -12,7 +12,6 @@
 #include "vk_mem_alloc.h"
 
 #include "cpuresources.h"
-#include "hosek.h"
 #include "pipelines.h"
 #include "shadercommon.h"
 #include "simd.h"
@@ -1400,37 +1399,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "skydome set layout");
   }
 
-  // Create Descriptor Set for Hosek coeff data
-  VkDescriptorSetLayout hosek_set_layout = VK_NULL_HANDLE;
-  {
-    VkDescriptorSetLayoutBinding bindings[1] = {
-        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         NULL},
-    };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 1;
-    create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &hosek_set_layout);
-    assert(err == VK_SUCCESS);
-
-    set_vk_name(device, (uint64_t)hosek_set_layout,
-                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "hosek set layout");
-  }
-
   // Create Skydome Pipeline Layout
   VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayout layouts[] = {
         skydome_set_layout,
-        hosek_set_layout,
     };
 
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 2;
+    create_info.setLayoutCount = 1;
     create_info.pSetLayouts = layouts;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &sky_const_range;
@@ -1567,10 +1545,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Uniform buffer for sky data
   GPUConstBuffer sky_const_buffer =
       create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(SkyData));
-
-  // Create Storage buffer for hosek data
-  GPUConstBuffer hosek_const_buffer = create_gpustoragebuffer(
-      device, vma_alloc, vk_alloc, sizeof(SkyHosekData));
 
   // Create Uniform buffer for camera data
   GPUConstBuffer camera_const_buffer = create_gpuconstbuffer(
@@ -1720,11 +1694,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->pipeline_cache = pipeline_cache;
   d->sampler = sampler;
   d->skydome_layout = skydome_set_layout;
-  d->hosek_layout = hosek_set_layout;
   d->skydome_pipe_layout = skydome_pipe_layout;
   d->skydome_pipeline = skydome_pipeline;
   d->sky_const_buffer = sky_const_buffer;
-  d->hosek_const_buffer = hosek_const_buffer;
   d->camera_const_buffer = camera_const_buffer;
   d->light_const_buffer = light_const_buffer;
   d->gltf_material_set_layout = gltf_material_set_layout;
@@ -1753,28 +1725,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       hb_alloc_nm_tp(std_alloc, MESH_UPLOAD_QUEUE_SIZE, GPUMesh);
   d->texture_upload_queue =
       hb_alloc_nm_tp(std_alloc, TEXTURE_UPLOAD_QUEUE_SIZE, GPUTexture);
-
-  // Setup data for hosek buffer
-  {
-    TracyCZoneN(hosek_ctx, "Update Hosek Data", true);
-
-    VmaAllocation hosek_host_alloc = d->hosek_const_buffer.host.alloc;
-
-    uint8_t *data = NULL;
-    err = vmaMapMemory(vma_alloc, hosek_host_alloc, (void **)&data);
-    if (err != VK_SUCCESS) {
-      assert(0);
-      return false;
-    }
-    SkyHosekData hosek_data = {0};
-    init_hosek_data(&hosek_data);
-
-    SDL_memcpy(data, &hosek_data, sizeof(SkyHosekData));
-    vmaUnmapMemory(vma_alloc, hosek_host_alloc);
-
-    demo_upload_const_buffer(d, &d->hosek_const_buffer);
-    TracyCZoneEnd(hosek_ctx);
-  }
 
   demo_upload_mesh(d, &d->skydome_gpu);
   demo_upload_scene(d, d->main_scene);
@@ -1889,15 +1839,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       assert(err == VK_SUCCESS);
     }
 
-    // Only need one descriptor set for the hosek data
-    alloc_info.pSetLayouts = &hosek_set_layout;
-    {
-      alloc_info.descriptorPool = d->descriptor_pools[0];
-      err = vkAllocateDescriptorSets(device, &alloc_info,
-                                     &d->hosek_descriptor_set);
-      assert(err == VK_SUCCESS);
-    }
-
     alloc_info.pSetLayouts = &gltf_view_set_layout;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
@@ -1975,21 +1916,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
       vkUpdateDescriptorSets(device, 4, writes, 0, NULL);
     }
-  }
-
-  // Write Hosek descriptor set seperately
-  {
-    VkDescriptorBufferInfo hosek_info = {hosek_const_buffer.gpu.buffer, 0,
-                                         hosek_const_buffer.size};
-    VkWriteDescriptorSet write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .pBufferInfo = &hosek_info,
-        .dstSet = d->hosek_descriptor_set,
-    };
-    vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
   }
 
   // Create Fences
@@ -2070,7 +1996,6 @@ void demo_destroy(Demo *d) {
   destroy_scene(d->main_scene);
   hb_free(d->std_alloc, d->main_scene);
 
-  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->hosek_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
@@ -2097,7 +2022,6 @@ void demo_destroy(Demo *d) {
   hb_free(d->std_alloc, d->queue_props);
   vkDestroySampler(device, d->sampler, vk_alloc);
 
-  vkDestroyDescriptorSetLayout(device, d->hosek_layout, vk_alloc);
   vkDestroyDescriptorSetLayout(device, d->skydome_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->skydome_pipe_layout, vk_alloc);
   vkDestroyPipeline(device, d->skydome_pipeline, vk_alloc);
@@ -2942,11 +2866,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 d->skydome_pipe_layout, 0, 1,
                 &d->skydome_descriptor_sets[frame_idx], 0, NULL);
-
-            vkCmdBindDescriptorSets(graphics_buffer,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    d->skydome_pipe_layout, 1, 1,
-                                    &d->hosek_descriptor_set, 0, NULL);
 
             VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
 

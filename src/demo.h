@@ -80,11 +80,9 @@ typedef struct Demo {
   VkSampler sampler;
 
   VkDescriptorSetLayout skydome_layout;
-  VkDescriptorSetLayout hosek_layout;
   VkPipelineLayout skydome_pipe_layout;
   VkPipeline skydome_pipeline;
   GPUConstBuffer sky_const_buffer;
-  GPUConstBuffer hosek_const_buffer;
   GPUConstBuffer camera_const_buffer;
   GPUConstBuffer light_const_buffer;
 
@@ -153,7 +151,6 @@ typedef struct Demo {
   VkDescriptorPool dyn_desc_pools[FRAME_LATENCY];
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
-  VkDescriptorSet hosek_descriptor_set;
   VkDescriptorSet gltf_view_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet imgui_descriptor_sets[FRAME_LATENCY];
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "pi.h"
+
 // Push Constants Data for a fullscreen pass
 typedef struct FullscreenPushConstants {
   float4 time;
@@ -27,9 +29,6 @@ typedef struct CommonObjectData {
   float4x4 mvp;
   float4x4 m;
 } CommonObjectData;
-
-#define PI 3.141592653589793
-#define TAU 6.283185307179586
 
 // Common input layout info and permutation settings
 #define VA_INPUT_PERM_NONE 0x00000000

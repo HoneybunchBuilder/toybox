@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL_events.h>
 
+#include "pi.h"
 #include "profiling.h"
 
 #include <stdbool.h>
