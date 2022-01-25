@@ -26,6 +26,7 @@
 #include "config.h"
 
 #include "demo.h"
+#include "pi.h"
 #include "profiling.h"
 #include "settings.h"
 #include "shadercommon.h"
@@ -41,9 +42,7 @@
 #define WIDTH 1600
 #define HEIGHT 900
 
-#define _PI 3.14159265358f
-#define _2PI _PI * 2.0f
-
+#ifdef VALIDATION
 static bool check_layer(const char *check_name, uint32_t layer_count,
                         VkLayerProperties *layers) {
   bool found = false;
@@ -56,7 +55,6 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
   return found;
 }
 
-#ifdef VALIDATION
 #ifndef __ANDROID__
 static VkBool32
 vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -331,7 +329,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .sun_dir = {0, -1, 0},
   };
 
-  CommonCameraData camera_data = {0};
+  CommonCameraData camera_data = (CommonCameraData){0};
 
   // Query SDL for available display modes
   int32_t display_count = SDL_GetNumVideoDisplays();
@@ -395,9 +393,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   // Controlled by ImGui and fed to the sky system
-  float time_of_day = _PI;
-  float sun_y = cosf(_PI + time_of_day);
-  float sun_x = sinf(_PI + time_of_day);
+  float time_of_day = PI;
+  float sun_y = cosf(PI + time_of_day);
+  float sun_x = sinf(PI + time_of_day);
 
   while (running) {
     TracyCFrameMarkStart("Frame");
@@ -490,9 +488,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
 
       if (showSkyWindow && igBegin("Sky Control", &showSkyWindow, 0)) {
-        if (igSliderFloat("Time of Day", &time_of_day, 0.0f, _2PI, "%.3f", 0)) {
-          sun_y = cosf(_PI + time_of_day);
-          sun_x = sinf(_PI + time_of_day);
+        if (igSliderFloat("Time of Day", &time_of_day, 0.0f, TAU, "%.3f", 0)) {
+          sun_y = cosf(PI + time_of_day);
+          sun_x = sinf(PI + time_of_day);
         }
         igSliderFloat("Cirrus", &sky_data.cirrus, 0.0f, 1.0f, "%.3f", 0);
         igSliderFloat("Cumulus", &sky_data.cumulus, 0.0f, 1.0f, "%.3f", 0);
