@@ -5,7 +5,7 @@
 // Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
 Texture2D albedo_map : register(t1, space0); // Fragment Stage Only
-Texture2D normal_map : register(t2, space0); // (unusable without per-vertex tangents) Fragment Stage Only
+Texture2D normal_map : register(t2, space0); // Fragment Stage Only
 Texture2D metal_rough_map : register(t3, space0); // Fragment Stage Only
 //Texture2D emissive_map : register(t4, space0); // Fragment Stage Only
 sampler static_sampler : register(s4, space0); // Immutable sampler
@@ -23,6 +23,7 @@ struct VertexIn
 {
     float3 local_pos : SV_POSITION;
     float3 normal : NORMAL0;
+    float4 tangent: TANGENT0;
     float2 uv: TEXCOORD0;
 };
 
@@ -31,6 +32,8 @@ struct Interpolators
     float4 clip_pos : SV_POSITION;
     float3 world_pos: POSITION0;
     float3 normal : NORMAL0;
+    float3 tangent : TANGENT0;
+    float3 binormal : BINORMAL0;
     float2 uv: TEXCOORD0;
 };
 
@@ -46,8 +49,11 @@ Interpolators vert(VertexIn i)
     Interpolators o;
     o.clip_pos = clip_pos;
     o.world_pos = world_pos;
-    o.normal = mul(i.normal, orientation); // convert to world-space normal
+    o.normal = normalize(mul(i.normal, orientation)); // convert to world-space normal
+    o.tangent = normalize(mul(orientation, i.tangent.xyz));
+    o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
     o.uv = i.uv;
+
     return o;
 }
 
@@ -56,7 +62,19 @@ float4 frag(Interpolators i) : SV_TARGET
     // Sample textures up-front
     float3 albedo = albedo_map.Sample(static_sampler, i.uv).rgb;
 
+    // World-space normal
     float3 N = normalize(i.normal);
+    if(PermutationFlags & GLTF_PERM_NORMAL_MAP)
+    {
+        // Construct TBN
+        float3x3 tbn = float3x3(i.tangent, i.binormal, i.normal);
+
+        // Convert from tangent space to world space
+        float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
+        tangentSpaceNormal = normalize(tangentSpaceNormal * 2 - 1); // Must unpack normal
+        N = normalize(mul(tangentSpaceNormal, tbn));
+    }
+
     float3 L = normalize(light_data.light_dir);
     float3 V = normalize(camera_data.view_pos - i.world_pos);
     float3 H = normalize(V + L);
@@ -76,14 +94,20 @@ float4 frag(Interpolators i) : SV_TARGET
             roughness = metal_rough_map.Sample(static_sampler, i.uv).g;
         }
 
-        float3 F0 = float3(0.04, 0.04, 0.04);
-        F0 = lerp(F0, albedo, metallic);
+        // Angle between surface normal and outgoing light direction.
+        float cosLo = max(0.0, dot(N, V));
+            
+        // Specular reflection vector.
+        float3 Lr = 2.0 * cosLo * N - V; // Used later for ambient lighting
+
+        // Fresnel reflectance at normal incidence (for metals use albedo color).
+        float3 F0 = lerp(Fdielectric, albedo, metallic);
 
         //for each light
         {
             float3 light_color = float3(2, 2, 2);
 
-            color += pbr_metal_rough_light(F0, albedo, light_color, metallic, roughness, N, L, V, H);
+            color += pbr_light(F0, light_color, albedo, metallic, roughness, N, L, V, cosLo);
         }
 
         // TODO: Ambient IBL

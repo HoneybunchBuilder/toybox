@@ -313,7 +313,15 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         offset += vtx_count * sizeof(float) * 3;
 
         // Hack to determine whether or not to bind tex coords
-        if (surface->input_perm & VA_INPUT_PERM_TEXCOORD0) {
+        if (surface->input_perm & VA_INPUT_PERM_TANGENT) {
+          vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+          offset += vtx_count * sizeof(float) * 4;
+
+          if (surface->input_perm & VA_INPUT_PERM_TEXCOORD0) {
+            vkCmdBindVertexBuffers(cmd, 3, 1, &buffer, &offset);
+          }
+
+        } else if (surface->input_perm & VA_INPUT_PERM_TEXCOORD0) {
           vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
         }
 
@@ -1600,6 +1608,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
+    /*
     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/BoomBox.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append BoomBox to main scene");
@@ -1632,6 +1641,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append WaterBottle to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+    */
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/TestScene.glb") !=
+        0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append TestScene to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }

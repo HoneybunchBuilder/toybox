@@ -184,6 +184,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
       int32_t index = prim->attributes[i].index;
       if ((type == cgltf_attribute_type_position ||
            type == cgltf_attribute_type_normal ||
+           type == cgltf_attribute_type_tangent ||
            type == cgltf_attribute_type_texcoord) &&
           index == 0) {
         cgltf_accessor *attr = prim->attributes[i].data;
@@ -193,6 +194,8 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
           input_perm |= VA_INPUT_PERM_POSITION;
         } else if (type == cgltf_attribute_type_normal) {
           input_perm |= VA_INPUT_PERM_NORMAL;
+        } else if (type == cgltf_attribute_type_tangent) {
+          input_perm |= VA_INPUT_PERM_TANGENT;
         } else if (type == cgltf_attribute_type_texcoord) {
           input_perm |= VA_INPUT_PERM_TEXCOORD0;
         }
@@ -243,12 +246,15 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
           attr_order[0] = i;
         } else if (attr_type == cgltf_attribute_type_normal) {
           attr_order[1] = i;
-          //} else if (attr_type == cgltf_attribute_type_tangent) {
-          // TODO: Properly support tangents
-          // attr_order[3] = i;
+        } else if (attr_type == cgltf_attribute_type_tangent) {
+          attr_order[2] = i;
         } else if (attr_type == cgltf_attribute_type_texcoord &&
                    attr_idx == 0) {
-          attr_order[2] = i;
+          if (input_perm & VA_INPUT_PERM_TANGENT) {
+            attr_order[3] = i;
+          } else {
+            attr_order[2] = i;
+          }
         }
       }
 
@@ -266,8 +272,14 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
         if (SDL_strcmp(attr->name, "NORMAL") == 0) {
           if (i + 1 < prim->attributes_count) {
             cgltf_attribute *next = &prim->attributes[attr_order[i + 1]];
-            if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
-              SDL_TriggerBreakpoint();
+            if (input_perm & VA_INPUT_PERM_TANGENT) {
+              if (SDL_strcmp(next->name, "TANGENT") != 0) {
+                SDL_TriggerBreakpoint();
+              }
+            } else {
+              if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
+                SDL_TriggerBreakpoint();
+              }
             }
           }
         }
@@ -689,7 +701,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
     VkImageCreateInfo img_info = {0};
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     img_info.imageType = VK_IMAGE_TYPE_2D; // Assuming for now
-    img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     img_info.extent = (VkExtent3D){img_width, img_height, 1};
     img_info.mipLevels = mip_levels;
     img_info.arrayLayers = 1;
@@ -720,7 +732,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = device_image.image;
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, 1};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
@@ -729,7 +741,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 
   t->host = host_buffer;
   t->device = device_image;
-  t->format = VK_FORMAT_R8G8B8A8_SRGB;
+  t->format = VK_FORMAT_R8G8B8A8_UNORM;
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = mip_levels;
@@ -848,7 +860,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     img_info.flags = 0;
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     img_info.imageType = VK_IMAGE_TYPE_2D;
-    img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     img_info.extent = (VkExtent3D){img_width, img_height, 1};
     img_info.mipLevels = desired_mip_levels;
     img_info.arrayLayers = layer_count;
@@ -869,7 +881,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = device_image.image;
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
@@ -889,7 +901,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
 
   t->host = host_buffer;
   t->device = device_image;
-  t->format = VK_FORMAT_R8G8B8A8_SRGB;
+  t->format = VK_FORMAT_R8G8B8A8_UNORM;
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = desired_mip_levels;
@@ -980,7 +992,12 @@ int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
                  attr_desc.format == VK_FORMAT_R32G32B32_SFLOAT) {
         input_perm |= VA_INPUT_PERM_NORMAL;
       } else if (attr_desc.binding == 2 &&
-                 attr_desc.format == VK_FORMAT_R32G32_SFLOAT) {
+                 attr_desc.format == VK_FORMAT_R32G32B32A32_SFLOAT) {
+        input_perm |= VA_INPUT_PERM_TANGENT;
+      } else if ((attr_desc.binding == 2 &&
+                  attr_desc.format == VK_FORMAT_R32G32_SFLOAT) ||
+                 (attr_desc.binding == 3 &&
+                  attr_desc.format == VK_FORMAT_R32G32_SFLOAT)) {
         input_perm |= VA_INPUT_PERM_TEXCOORD0;
       } else if (attr_desc.binding == 3 &&
                  attr_desc.format == VK_FORMAT_R32G32_SFLOAT) {
@@ -1285,7 +1302,7 @@ uint32_t collect_material_textures(uint32_t tex_count,
 
     // TODO: Extensions
   }
-  return tex_count;
+  return tex_ref_count;
 }
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,

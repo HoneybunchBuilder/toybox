@@ -1,6 +1,8 @@
 [Bb]uild*/*
 [Ii]nstall/*
 
+*.blend1
+
 .vscode/tasks.json
 .vscode/launch.json
 
