@@ -17,3 +17,6 @@ void set_vk_name(VkDevice device, uint64_t object, uint32_t type,
                  const char *name);
 void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
                 uint64_t tag_id, uint64_t tag_size, const void *tag);
+
+#define SET_VK_NAME(device, object, type, name)                                \
+  set_vk_name(device, (uint64_t)object, type, name)

@@ -184,6 +184,73 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
   return surface_formats[0];
 }
 
+static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
+                                      VkPipelineLayout layout,
+                                      const float4x4 *vp, Demo *d) {
+  TracyCZoneN(ctx, "demo_render_scene_shadows", true);
+  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+
+  for (uint32_t i = 0; i < s->entity_count; ++i) {
+    TracyCZoneN(entity_e, "render entity", true);
+    uint64_t components = s->components[i];
+    SceneTransform *scene_transform = &s->transforms[i];
+    uint32_t static_mesh_idx = s->static_mesh_refs[i];
+
+    if (components & COMPONENT_TYPE_STATIC_MESH) {
+      Transform *t = &scene_transform->t;
+
+      // Hack to correct the scale of the object
+      if (t->scale[1] > 0) {
+        t->scale[1] = -t->scale[1];
+      }
+
+      // We're not going to upload this to a const buffer, instead just
+      // use mvp as a push constant
+      CommonObjectData object_data = {0};
+      transform_to_matrix(&object_data.m, t);
+      mulmf44(vp, &object_data.m, &object_data.mvp);
+
+      cmd_begin_label(cmd, "demo_render_scene_shadows",
+                      (float4){0.1, 0.5, 0.5, 1.0});
+
+      vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                         sizeof(ShadowPushConstants), &object_data.mvp);
+
+      const GPUMesh *mesh = &s->meshes[static_mesh_idx];
+
+      // Draw mesh surfaces
+      for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
+        TracyCZoneN(surface_e, "draw surface", true);
+
+        const GPUSurface *surface = &mesh->surfaces[ii];
+
+        uint32_t idx_count = surface->idx_count;
+        uint32_t vtx_count = surface->vtx_count;
+        VkBuffer buffer = surface->gpu.buffer;
+
+        vkCmdBindIndexBuffer(cmd, buffer, 0, surface->idx_type);
+        // Make sure to calculate the necessary padding between the
+        // vertex and index contents of the buffer
+        static const size_t pos_attr_size = sizeof(float) * 3;
+        VkDeviceSize offset =
+            surface->idx_size + (surface->idx_size % pos_attr_size);
+
+        // Only need positions
+        vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+        offset += vtx_count * sizeof(float) * 3;
+
+        vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+        TracyCZoneEnd(surface_e);
+      }
+
+      cmd_end_label(cmd);
+    }
+
+    TracyCZoneEnd(entity_e);
+  }
+  TracyCZoneEnd(ctx);
+}
+
 static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               VkPipelineLayout layout, VkDescriptorSet view_set,
                               VkDescriptorSet *object_sets,
@@ -802,8 +869,8 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
 
   // Setup interaction with SDL
   {
-    io->BackendPlatformName = "HB SDL Test";
-    io->BackendRendererName = "HB Vulkan Renderer";
+    io->BackendPlatformName = "Toybox";
+    io->BackendRendererName = "Toybox Vulkan Renderer";
     io->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
     io->BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
@@ -1060,7 +1127,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   VkRenderPass shadow_pass = VK_NULL_HANDLE;
   {
     VkAttachmentDescription attachment = {
-        .format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+        .format = VK_FORMAT_D32_SFLOAT,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -1114,8 +1181,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &shadow_pass);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)shadow_pass, VK_OBJECT_TYPE_RENDER_PASS,
-                "shadow pass");
+    SET_VK_NAME(device, shadow_pass, VK_OBJECT_TYPE_RENDER_PASS, "shadow pass");
   }
 
   // Create Main Render Pass
@@ -1176,7 +1242,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &main_pass);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)main_pass, VK_OBJECT_TYPE_RENDER_PASS,
+    SET_VK_NAME(device, main_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "main render pass");
   }
 
@@ -1222,7 +1288,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &imgui_pass);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)imgui_pass, VK_OBJECT_TYPE_RENDER_PASS,
+    SET_VK_NAME(device, imgui_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "imgui render pass");
   }
 
@@ -1253,7 +1319,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
+    SET_VK_NAME(device, pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
                 "pipeline cache");
 
     if (data) {
@@ -1292,8 +1358,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)sampler, VK_OBJECT_TYPE_SAMPLER,
-                "immutable sampler");
+    SET_VK_NAME(device, sampler, VK_OBJECT_TYPE_SAMPLER, "immutable sampler");
   }
 
   // Create Common Object DescriptorSet Layout
@@ -1316,7 +1381,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_object_set_layout);
     assert(err == VK_SUCCESS);
-    set_vk_name(device, (uint64_t)gltf_object_set_layout,
+    SET_VK_NAME(device, gltf_object_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf object set layout");
   }
 
@@ -1348,37 +1413,37 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                       &gltf_view_set_layout);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)gltf_view_set_layout,
+    SET_VK_NAME(device, gltf_view_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf view set layout");
   }
 
   // Create Shadow Pipeline Layout
   VkPipelineLayout shadow_pipe_layout = VK_NULL_HANDLE;
   {
-    VkDescriptorSetLayout layouts[] = {
-        gltf_object_set_layout,
-        gltf_view_set_layout,
-    };
-    const uint32_t layout_count =
-        sizeof(layouts) / sizeof(VkDescriptorSetLayout);
+    VkPushConstantRange ranges[] = {{
+        .offset = 0,
+        .size = sizeof(ShadowPushConstants),
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+    }};
+    const uint32_t range_count = sizeof(ranges) / sizeof(VkPushConstantRange);
 
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = layout_count;
-    create_info.pSetLayouts = layouts;
+    create_info.pushConstantRangeCount = range_count;
+    create_info.pPushConstantRanges = ranges;
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &shadow_pipe_layout);
-    set_vk_name(device, (uint64_t)shadow_pipe_layout,
-                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "shadow pipeline layout");
+    SET_VK_NAME(device, shadow_pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                "shadow pipeline layout");
     assert(err == VK_SUCCESS);
   }
 
   // Create Shadow Pipeline
   VkPipeline shadow_pipe = VK_NULL_HANDLE;
-  err = create_shadow_pipeline(
-      device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache, shadow_pass,
-      SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, shadow_pipe_layout, &shadow_pipe);
+  err = create_shadow_pipeline(device, vk_alloc, pipeline_cache, shadow_pass,
+                               SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT,
+                               shadow_pipe_layout, &shadow_pipe);
   assert(err == VK_SUCCESS);
 
   // Create GLTF Descriptor Set Layout
@@ -1405,7 +1470,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                       &gltf_material_set_layout);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)gltf_material_set_layout,
+    SET_VK_NAME(device, gltf_material_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
                 "gltf material set layout");
   }
@@ -1428,8 +1493,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &gltf_pipe_layout);
-    set_vk_name(device, (uint64_t)gltf_pipe_layout,
-                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "gltf pipeline layout");
+    SET_VK_NAME(device, gltf_pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                "gltf pipeline layout");
     assert(err == VK_SUCCESS);
   }
 
@@ -1490,7 +1555,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                       &skydome_set_layout);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)skydome_set_layout,
+    SET_VK_NAME(device, skydome_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "skydome set layout");
   }
 
@@ -1512,8 +1577,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                  &skydome_pipe_layout);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)skydome_pipe_layout,
-                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "skydome pipeline layout");
+    SET_VK_NAME(device, skydome_pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                "skydome pipeline layout");
   }
 
   // Create Skydome Pipeline
@@ -1702,15 +1767,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
 
     /*
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append bistro to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-    */
-
-    /*
     if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/BoomBox.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append BoomBox to main scene");
@@ -1748,9 +1804,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Bistro to main scene");
+                   "Failed to append Sponza to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -1823,6 +1879,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->sky_const_buffer = sky_const_buffer;
   d->camera_const_buffer = camera_const_buffer;
   d->light_const_buffer = light_const_buffer;
+  d->shadow_pipe_layout = shadow_pipe_layout;
+  d->shadow_pipe = shadow_pipe;
   d->gltf_material_set_layout = gltf_material_set_layout;
   d->gltf_object_set_layout = gltf_object_set_layout;
   d->gltf_view_set_layout = gltf_view_set_layout;
@@ -1859,6 +1917,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     VkSemaphoreCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &d->shadow_complete_sems[i]);
+      assert(err == VK_SUCCESS);
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->upload_complete_sems[i]);
       assert(err == VK_SUCCESS);
@@ -1919,36 +1980,66 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     return false;
   }
 
+  // Create Shadow Map Framebuffers
+  {
+    VkFramebufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = d->shadow_pass,
+        .attachmentCount = 1,
+        .width = SHADOW_MAP_WIDTH,
+        .height = SHADOW_MAP_HEIGHT,
+        .layers = 1,
+    };
+
+    // Create shadow pass framebuffers
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.pAttachments = &d->shadow_map_views[i];
+      err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
+                                &d->shadow_pass_framebuffers[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
   // Create Command Pools
   {
-    VkCommandPoolCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    create_info.queueFamilyIndex = graphics_queue_family_index;
-    create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    VkCommandPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .queueFamilyIndex = graphics_queue_family_index,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    };
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateCommandPool(device, &create_info, vk_alloc,
                                 &d->command_pools[i]);
-      set_vk_name(device, (uint64_t)d->command_pools[i],
-                  VK_OBJECT_TYPE_COMMAND_POOL, "command pool");
+      SET_VK_NAME(device, d->command_pools[i], VK_OBJECT_TYPE_COMMAND_POOL,
+                  "command pool");
       assert(err == VK_SUCCESS);
     }
   }
 
   // Allocate Command Buffers
   {
-    VkCommandBufferAllocateInfo alloc_info = {0};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
+    VkCommandBufferAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.commandPool = d->command_pools[i];
-      err = vkAllocateCommandBuffers(device, &alloc_info,
-                                     &d->graphics_buffers[i]);
+      err =
+          vkAllocateCommandBuffers(device, &alloc_info, &d->shadow_buffers[i]);
       assert(err == VK_SUCCESS);
+
       err =
           vkAllocateCommandBuffers(device, &alloc_info, &d->upload_buffers[i]);
+      assert(err == VK_SUCCESS);
+
+      err = vkAllocateCommandBuffers(device, &alloc_info,
+                                     &d->graphics_buffers[i]);
       assert(err == VK_SUCCESS);
       err = vkAllocateCommandBuffers(device, &alloc_info,
                                      &d->screenshot_buffers[i]);
@@ -2138,11 +2229,13 @@ void demo_destroy(Demo *d) {
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
+    vkDestroySemaphore(device, d->shadow_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->upload_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->render_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->swapchain_image_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->img_acquired_sems[i], vk_alloc);
     vkDestroyImageView(device, d->swapchain_image_views[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->shadow_pass_framebuffers[i], vk_alloc);
     vkDestroyFramebuffer(device, d->main_pass_framebuffers[i], vk_alloc);
     vkDestroyFramebuffer(device, d->ui_pass_framebuffers[i], vk_alloc);
     vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
@@ -2201,6 +2294,9 @@ void demo_destroy(Demo *d) {
   vkDestroyDescriptorSetLayout(device, d->imgui_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->imgui_pipe_layout, vk_alloc);
   vkDestroyPipeline(device, d->imgui_pipeline, vk_alloc);
+
+  vkDestroyPipelineLayout(device, d->shadow_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->shadow_pipe, vk_alloc);
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
@@ -2332,7 +2428,8 @@ void demo_resize(Demo *d) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
+void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
+                       const float4x4 *sun_vp) {
   TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
 
   VkResult err = VK_SUCCESS;
@@ -2658,26 +2755,132 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     vkUpdateDescriptorSets(d->device, write_count, set_writes, 0, NULL);
   }
 
-  // Render
+  // Reset Command Pool
+  {
+    VkCommandPool command_pool = d->command_pools[frame_idx];
+    vkResetCommandPool(device, command_pool, 0);
+  }
+
+  TracyCGPUContext *gpu_gfx_ctx = d->tracy_gpu_contexts[frame_idx];
+
+  VkSemaphore shadow_sem = VK_NULL_HANDLE;
+
+  // Render Shadow Maps
+  {
+    TracyCZoneN(demo_render_frame_shadows_event, "demo_render_frame shadows",
+                true);
+
+    VkCommandBuffer shadow_buffer = d->shadow_buffers[frame_idx];
+    shadow_sem = d->shadow_complete_sems[frame_idx];
+
+    // Record
+    {
+      TracyCZoneN(record_shadows_e, "record shadows", true);
+
+      SET_VK_NAME(device, shadow_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                  "shadow command buffer");
+      {
+        VkCommandBufferBeginInfo begin_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        };
+
+        err = vkBeginCommandBuffer(shadow_buffer, &begin_info);
+        assert(err == VK_SUCCESS);
+      }
+
+      TracyCVkNamedZone(gpu_gfx_ctx, shadow_scope, shadow_buffer, "Shadows", 1,
+                        true);
+
+      cmd_begin_label(shadow_buffer, "shadows", (float4){0.1, 0.5, 0.5, 1.0});
+
+      {
+        VkFramebuffer framebuffer = d->shadow_pass_framebuffers[frame_idx];
+
+        VkClearValue clear_values[1] = {
+            {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+        };
+
+        VkRenderPassBeginInfo pass_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = d->shadow_pass,
+            .framebuffer = framebuffer,
+            .renderArea =
+                (VkRect2D){{0, 0}, {SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT}},
+            .clearValueCount = 1,
+            .pClearValues = clear_values,
+        };
+        vkCmdBeginRenderPass(shadow_buffer, &pass_info,
+                             VK_SUBPASS_CONTENTS_INLINE);
+      }
+
+      VkViewport viewport = {
+          0, SHADOW_MAP_HEIGHT, SHADOW_MAP_WIDTH, -SHADOW_MAP_HEIGHT, 0, 1};
+      VkRect2D scissor = {{0, 0}, {SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT}};
+      vkCmdSetViewport(shadow_buffer, 0, 1, &viewport);
+      vkCmdSetScissor(shadow_buffer, 0, 1, &scissor);
+
+      // Draw Scene Shadows
+      {
+
+        TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, shadow_buffer,
+                          "Draw Scene Shadows", 3, true);
+
+        vkCmdBindPipeline(shadow_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          d->shadow_pipe);
+
+        demo_render_scene_shadows(d->main_scene, shadow_buffer,
+                                  d->shadow_pipe_layout, sun_vp, d);
+
+        TracyCVkZoneEnd(scene_scope);
+      }
+
+      vkCmdEndRenderPass(shadow_buffer);
+
+      cmd_end_label(shadow_buffer);
+
+      TracyCVkZoneEnd(shadow_scope);
+
+      err = vkEndCommandBuffer(shadow_buffer);
+      assert(err == VK_SUCCESS);
+      TracyCZoneEnd(record_shadows_e);
+    }
+
+    // Submit
+    {
+      TracyCZoneN(submit_shadows_e, "submit shadows", true);
+      VkSubmitInfo submit_info = {
+          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+          .commandBufferCount = 1,
+          .pCommandBuffers = &shadow_buffer,
+          .signalSemaphoreCount = 1,
+          .pSignalSemaphores = &shadow_sem,
+      };
+      queue_begin_label(graphics_queue, "shadows",
+                        (float4){0.1, 1.0, 1.0, 1.0});
+      err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
+      queue_end_label(graphics_queue);
+      assert(err == VK_SUCCESS);
+      TracyCZoneEnd(submit_shadows_e);
+    }
+
+    TracyCZoneEnd(demo_render_frame_shadows_event);
+  }
+
+  // Render Main Scene & UI
   {
     TracyCZoneN(demo_render_frame_render_event, "demo_render_frame render",
                 true);
-
-    VkCommandPool command_pool = d->command_pools[frame_idx];
-    vkResetCommandPool(device, command_pool, 0);
 
     VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
     VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
 
     // Set names after resetting the parent pool
     {
-      set_vk_name(device, (uint64_t)upload_buffer,
-                  VK_OBJECT_TYPE_COMMAND_BUFFER, "upload command buffer");
-      set_vk_name(device, (uint64_t)graphics_buffer,
-                  VK_OBJECT_TYPE_COMMAND_BUFFER, "graphics command buffer");
+      SET_VK_NAME(device, upload_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                  "upload command buffer");
+      SET_VK_NAME(device, graphics_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                  "graphics command buffer");
     }
-
-    TracyCGPUContext *gpu_gfx_ctx = d->tracy_gpu_contexts[frame_idx];
 
     VkSemaphore upload_sem = VK_NULL_HANDLE;
 
@@ -2891,12 +3094,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
         // Submit upload
         {
-          VkSubmitInfo submit_info = {0};
-          submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-          submit_info.commandBufferCount = 1;
-          submit_info.pCommandBuffers = &upload_buffer;
-          submit_info.signalSemaphoreCount = 1;
-          submit_info.pSignalSemaphores = &upload_sem;
+          VkSubmitInfo submit_info = {
+              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+              .commandBufferCount = 1,
+              .pCommandBuffers = &upload_buffer,
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &upload_sem,
+          };
 
           queue_begin_label(d->graphics_queue, "upload",
                             (float4){0.1, 1.0, 0.1, 1.0});
@@ -2910,7 +3114,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       }
 
       VkCommandBufferBeginInfo begin_info = {
-          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      };
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
@@ -2945,10 +3150,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         TracyCZoneEnd(swap_trans_e);
       }
 
+      // Transition Shadow Map
+      {
+        TracyCZoneN(shadow_trans_e, "transition shadow map", true);
+        TracyCZoneEnd(shadow_trans_e);
+      }
+
       // Render main geometry pass
       {
         TracyCZoneN(main_pass_e, "render main pass", true);
-        VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
 
         // Main Geometry Pass
         {
@@ -2962,18 +3172,21 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
           // Set Render Pass
           {
+            VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
+
             VkClearValue clear_values[2] = {
                 {.color = {.float32 = {0, 1, 1, 1}}},
                 {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
             };
 
-            VkRenderPassBeginInfo pass_info = {0};
-            pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            pass_info.renderPass = d->main_pass;
-            pass_info.framebuffer = framebuffer;
-            pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
-            pass_info.clearValueCount = 2;
-            pass_info.pClearValues = clear_values;
+            VkRenderPassBeginInfo pass_info = {
+                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                .renderPass = d->main_pass,
+                .framebuffer = framebuffer,
+                .renderArea = (VkRect2D){{0, 0}, {width, height}},
+                .clearValueCount = 2,
+                .pClearValues = clear_values,
+            };
 
             vkCmdBeginRenderPass(graphics_buffer, &pass_info,
                                  VK_SUBPASS_CONTENTS_INLINE);
@@ -3323,6 +3536,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       if (upload_sem != VK_NULL_HANDLE) {
         wait_sems[wait_sem_count] = upload_sem;
         wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      }
+      if (shadow_sem != VK_NULL_HANDLE) {
+        wait_sems[wait_sem_count] = shadow_sem;
+        wait_stage_flags[wait_sem_count++] =
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       }
 
       {

@@ -1,11 +1,8 @@
 #include "common.hlsli"
+#include "shadow.hlsli"
 
-// Per-object data - Vertex Stage Only
-ConstantBuffer<CommonObjectData> object_data: register(b0, space0);
-
-// Per-view data - Fragment Stage Only
-ConstantBuffer<CommonCameraData> camera_data: register(b0, space1);
-ConstantBuffer<CommonLightData> light_data : register(b1, space1);
+[[vk::push_constant]]
+ConstantBuffer<ShadowPushConstants> consts : register(b0);
 
 struct VertexIn
 {
@@ -20,7 +17,7 @@ struct Interpolators
 Interpolators vert(VertexIn i)
 {
     Interpolators o;
-    o.clip_pos = mul(float4(i.local_pos, 1.0), object_data.mvp);
+    o.clip_pos = mul(float4(i.local_pos, 1.0), consts.mvp);
     return o;
 }
 

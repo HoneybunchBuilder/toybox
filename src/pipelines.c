@@ -285,7 +285,7 @@ uint32_t create_color_mesh_pipeline(VkDevice device,
                                     &color_mesh_pipeline);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)color_mesh_pipeline, VK_OBJECT_TYPE_PIPELINE,
+    SET_VK_NAME(device, color_mesh_pipeline, VK_OBJECT_TYPE_PIPELINE,
                 "color mesh pipeline");
 
     // Can destroy shaders
@@ -562,8 +562,7 @@ uint32_t create_skydome_pipeline(VkDevice device,
                                     &pipeline);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)pipeline, VK_OBJECT_TYPE_PIPELINE,
-                "skydome pipeline");
+    SET_VK_NAME(device, pipeline, VK_OBJECT_TYPE_PIPELINE, "skydome pipeline");
 
     // Can destroy shaders
     vkDestroyShaderModule(device, vert_mod, vk_alloc);
@@ -720,7 +719,6 @@ uint32_t create_imgui_pipeline(VkDevice device,
 
 uint32_t create_shadow_pipeline(VkDevice device,
                                 const VkAllocationCallbacks *vk_alloc,
-                                Allocator tmp_alloc, Allocator std_alloc,
                                 VkPipelineCache cache, VkRenderPass pass,
                                 uint32_t w, uint32_t h, VkPipelineLayout layout,
                                 VkPipeline *pipe) {
@@ -794,21 +792,24 @@ uint32_t create_shadow_pipeline(VkDevice device,
     raster_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_state.cullMode = VK_CULL_MODE_NONE;
+    raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
     raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};
     multisample_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkPipelineDepthStencilStateCreateInfo depth_state = {0};
+    depth_state.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthWriteEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
+    depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendStateCreateInfo color_blend_state = {0};
     color_blend_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-
-    VkPipelineDepthStencilStateCreateInfo depth_state = {0};
-    depth_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 
     VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                    VK_DYNAMIC_STATE_SCISSOR};
@@ -1104,8 +1105,8 @@ uint32_t create_gltf_pipeline(VkDevice device,
         char *pipe_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
         SDL_snprintf(pipe_name, max_name_size, "gltf - input: %d, feature: %d",
                      i, ii);
-        set_vk_name(device, (uint64_t)p->pipelines[pipe_idx],
-                    VK_OBJECT_TYPE_PIPELINE, pipe_name);
+        SET_VK_NAME(device, p->pipelines[pipe_idx], VK_OBJECT_TYPE_PIPELINE,
+                    pipe_name);
         pipe_idx++;
       }
     }

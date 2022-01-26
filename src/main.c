@@ -214,9 +214,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
-  SDL_Window *window = SDL_CreateWindow(
-      "SDL Test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
-      SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+  SDL_Window *window =
+      SDL_CreateWindow("Toybox", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                       WIDTH, HEIGHT, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     const char *msg = SDL_GetError();
     SDL_Log("Failed to open window with error: %s", msg);
@@ -277,7 +277,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     VkApplicationInfo app_info = {0};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "SDL Test";
+    app_info.pApplicationName = "Toybox";
     app_info.applicationVersion = VK_MAKE_VERSION(
         HB_GAME_VERSION_MAJOR, HB_GAME_VERSION_MINOR, HB_GAME_VERSION_PATCH);
     app_info.pEngineName = HB_ENGINE_NAME;
@@ -703,8 +703,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     mulmf44(&proj, &sky_view, &sky_vp);
 
     // Change sun position
-    sky_data.sun_dir = (float3){sun_x, sun_y, 0};
+    sky_data.sun_dir = normf3((float3){sun_x, sun_y, 0});
     sky_data.time = time_seconds;
+
+    // Calculate sun view proj matrix for shadow mapping
+    float4x4 sun_vp = {.row0 = {0}};
+    {
+      float3 sun_pos = sky_data.sun_dir;
+
+      float4x4 sun_view = {.row0 = {0}};
+      look_at(&sun_view, sun_pos, (float3){0}, (float3){0, 1, 0});
+
+      float4x4 sun_proj = {.row0 = {0}};
+      perspective(&sun_proj, PI_4, 1.0f, 1.0f, 100.0f);
+
+      mulmf44(&sun_proj, &sun_view, &sun_vp);
+    }
 
     // Update view camera constant buffer
     {
@@ -737,6 +751,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       CommonLightData light_data = {
           .light_dir = -sky_data.sun_dir,
+          .light_vp = sun_vp,
       };
 
       VmaAllocator vma_alloc = d.vma_alloc;
@@ -777,7 +792,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCZoneEnd(trcy_sky_ctx);
     }
 
-    demo_render_frame(&d, &vp, &sky_vp);
+    demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
 
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
