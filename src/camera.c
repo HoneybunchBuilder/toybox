@@ -12,7 +12,7 @@ void camera_projection(const Camera *c, float4x4 *p) {
 }
 
 void camera_view(const Camera *c, float4x4 *v) {
-  float4x4 model_matrix = {0};
+  float4x4 model_matrix = {.row0 = {0}};
   transform_to_matrix(&model_matrix, &c->transform);
 
   float3 forward = f4tof3(model_matrix.row2);
@@ -21,7 +21,7 @@ void camera_view(const Camera *c, float4x4 *v) {
 }
 
 void camera_sky_view(const Camera *c, float4x4 *v) {
-  float4x4 model_matrix = {0};
+  float4x4 model_matrix = {.row0 = {0}};
   transform_to_matrix(&model_matrix, &c->transform);
 
   float3 forward = f4tof3(model_matrix.row2);
@@ -30,10 +30,10 @@ void camera_sky_view(const Camera *c, float4x4 *v) {
 }
 
 void camera_view_projection(const Camera *c, float4x4 *vp) {
-  float4x4 view = {0};
+  float4x4 view = {.row0 = {0}};
   camera_view(c, &view);
 
-  float4x4 proj = {0};
+  float4x4 proj = {.row0 = {0}};
   camera_projection(c, &proj);
 
   mulmf44(&proj, &view, vp);
@@ -109,7 +109,7 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   }
 
   if (state) {
-    float4x4 mat = {0};
+    float4x4 mat = {.row0 = {0}};
     transform_to_matrix(&mat, &cam->transform);
 
     float3 right = f4tof3(mat.row0);
