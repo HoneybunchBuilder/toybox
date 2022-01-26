@@ -22,6 +22,7 @@ typedef struct CommonCameraData {
 // Constant per-view Light Data
 typedef struct CommonLightData {
   float3 light_dir;
+  float4x4 light_vp;
 } CommonLightData;
 
 // Constant per-object Object Data for common objects

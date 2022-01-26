@@ -90,6 +90,9 @@ typedef struct Demo {
   uint32_t obj_const_buffer_block_count;
   GPUConstBuffer **obj_const_buffer_blocks;
 
+  VkPipelineLayout shadow_pipe_layout;
+  VkPipeline shadow_pipe;
+
   VkDescriptorSetLayout gltf_material_set_layout;
   VkDescriptorSetLayout gltf_object_set_layout;
   VkDescriptorSetLayout gltf_view_set_layout;
@@ -119,6 +122,7 @@ typedef struct Demo {
   VkImageView depth_buffer_views[FRAME_LATENCY];
 
   VkCommandPool command_pools[FRAME_LATENCY];
+  VkCommandBuffer shadow_buffers[FRAME_LATENCY];
   VkCommandBuffer upload_buffers[FRAME_LATENCY];
   VkCommandBuffer graphics_buffers[FRAME_LATENCY];
   VkCommandBuffer screenshot_buffers[FRAME_LATENCY];
@@ -127,6 +131,7 @@ typedef struct Demo {
 
   // For allowing the currently processed frame to access
   // resources being uploaded this frame
+  VkSemaphore shadow_complete_sems[FRAME_LATENCY];
   VkSemaphore upload_complete_sems[FRAME_LATENCY];
   VkSemaphore img_acquired_sems[FRAME_LATENCY];
   VkSemaphore swapchain_image_sems[FRAME_LATENCY];
@@ -184,7 +189,8 @@ void demo_upload_texture(Demo *d, const GPUTexture *tex);
 void demo_upload_scene(Demo *d, const Scene *s);
 
 void demo_process_event(Demo *d, const SDL_Event *e);
-void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp);
+void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
+                       const float4x4 *sun_vp);
 
 bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size);
