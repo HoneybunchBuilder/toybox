@@ -591,7 +591,7 @@ static bool demo_init_image_views(Demo *d) {
     }
   }
 
-  // Create Image Views
+  // Create Depth Buffer Views
   {
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       if (d->depth_buffer_views[i]) {
@@ -1649,6 +1649,34 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   GPUConstBuffer light_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
 
+  // Create Shadow Maps
+  GPUImage shadow_maps = {0};
+  {
+    VkImageCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.imageType = VK_IMAGE_TYPE_2D;
+    create_info.format = VK_FORMAT_D32_SFLOAT;
+    create_info.extent = (VkExtent3D){SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 1};
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = FRAME_LATENCY;
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pUserData = (void *)("Shadow Map Memory");
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info, &shadow_maps);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Shadow Map Image Views
+  {}
+
   // Composite main scene
   Scene *main_scene = NULL;
   {
@@ -1809,6 +1837,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->skydome_gpu = skydome;
+  d->shadow_maps = shadow_maps;
   d->main_scene = main_scene;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
@@ -1848,6 +1877,41 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   if (!demo_init_image_views(d)) {
     assert(false);
     return false;
+  }
+
+  // Create Shadow Map Views
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = d->shadow_maps.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            (VkImageSubresourceRange){
+                VK_IMAGE_ASPECT_DEPTH_BIT,
+                0,
+                1,
+                0,
+                1,
+            },
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.subresourceRange.baseArrayLayer = i;
+      err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
+                              &d->shadow_map_views[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
   }
 
   if (!demo_init_framebuffers(d)) {
@@ -2070,6 +2134,7 @@ void demo_destroy(Demo *d) {
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     TracyCVkContextDestroy(d->tracy_gpu_contexts[i]);
 
+    vkDestroyImageView(device, d->shadow_map_views[i], vk_alloc);
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
@@ -2086,6 +2151,7 @@ void demo_destroy(Demo *d) {
   }
 
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
+  destroy_gpuimage(vma_alloc, &d->shadow_maps);
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
