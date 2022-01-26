@@ -26,6 +26,10 @@
 #define ASSET_PREFIX "./assets/"
 #endif
 
+// TODO: Make more adjustable
+#define SHADOW_MAP_WIDTH 2048
+#define SHADOW_MAP_HEIGHT 2048
+
 #define MAX_EXT_COUNT 16
 
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
@@ -708,7 +712,7 @@ static bool demo_init_framebuffers(Demo *d) {
 
   VkFramebufferCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  create_info.renderPass = d->render_pass;
+  create_info.renderPass = d->main_pass;
   create_info.attachmentCount = 2;
   create_info.width = d->swap_info.width;
   create_info.height = d->swap_info.height;
@@ -1052,8 +1056,70 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   SwapchainInfo swap_info = init_swapchain(window, device, gpu, surface,
                                            &swapchain, vk_alloc, tmp_alloc);
 
-  // Create Render Pass
-  VkRenderPass render_pass = VK_NULL_HANDLE;
+  // Create Shadow Render Pass
+  VkRenderPass shadow_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription attachment = {
+        .format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference reference = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 0,
+        .pDepthStencilAttachment = &reference,
+    };
+
+    // Use subpass dependencies to handle transitions
+    VkSubpassDependency dependencies[2] = {
+        {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+        {
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+    };
+
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &attachment,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 2,
+        .pDependencies = dependencies,
+    };
+
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &shadow_pass);
+    assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)shadow_pass, VK_OBJECT_TYPE_RENDER_PASS,
+                "shadow pass");
+  }
+
+  // Create Main Render Pass
+  VkRenderPass main_pass = VK_NULL_HANDLE;
   {
     VkAttachmentDescription color_attachment = {0};
     color_attachment.format = swap_info.format;
@@ -1107,10 +1173,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     create_info.subpassCount = 1;
     create_info.pSubpasses = &subpass;
     create_info.pDependencies = &subpass_dep;
-    err = vkCreateRenderPass(device, &create_info, vk_alloc, &render_pass);
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &main_pass);
     assert(err == VK_SUCCESS);
 
-    set_vk_name(device, (uint64_t)render_pass, VK_OBJECT_TYPE_RENDER_PASS,
+    set_vk_name(device, (uint64_t)main_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "main render pass");
   }
 
@@ -1286,6 +1352,35 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf view set layout");
   }
 
+  // Create Shadow Pipeline Layout
+  VkPipelineLayout shadow_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayout layouts[] = {
+        gltf_object_set_layout,
+        gltf_view_set_layout,
+    };
+    const uint32_t layout_count =
+        sizeof(layouts) / sizeof(VkDescriptorSetLayout);
+
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = layout_count;
+    create_info.pSetLayouts = layouts;
+
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &shadow_pipe_layout);
+    set_vk_name(device, (uint64_t)shadow_pipe_layout,
+                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "shadow pipeline layout");
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Shadow Pipeline
+  VkPipeline shadow_pipe = VK_NULL_HANDLE;
+  err = create_shadow_pipeline(
+      device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache, shadow_pass,
+      SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, shadow_pipe_layout, &shadow_pipe);
+  assert(err == VK_SUCCESS);
+
   // Create GLTF Descriptor Set Layout
   VkDescriptorSetLayout gltf_material_set_layout = VK_NULL_HANDLE;
   {
@@ -1341,7 +1436,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create GLTF Pipeline
   GPUPipeline *gltf_pipeline = NULL;
   err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
-                             pipeline_cache, render_pass, width, height,
+                             pipeline_cache, main_pass, width, height,
                              gltf_pipe_layout, &gltf_pipeline);
   assert(err == VK_SUCCESS);
 
@@ -1423,7 +1518,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Skydome Pipeline
   VkPipeline skydome_pipeline = VK_NULL_HANDLE;
-  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, main_pass,
                                 width, height, skydome_pipe_layout,
                                 &skydome_pipeline);
   assert(err == VK_SUCCESS);
@@ -1437,7 +1532,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // gpupipeline *gltf_rt_pipeline = NULL;
   // err = create_gltf_rt_pipeline(
   //    device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache,
-  //    vkCreateRayTracingPipelinesKHR, render_pass, width, height,
+  //    vkCreateRayTracingPipelinesKHR, main_pass, width, height,
   //    gltf_rt_pipe_layout, &gltf_rt_pipeline);
   // assert(err == VK_SUCCESS);
 
@@ -1689,7 +1784,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->graphics_queue = graphics_queue;
   d->swap_info = swap_info;
   d->swapchain = swapchain;
-  d->render_pass = render_pass;
+  d->shadow_pass = shadow_pass;
+  d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
   d->sampler = sampler;
@@ -2041,7 +2137,8 @@ void demo_destroy(Demo *d) {
   vkDestroyPipeline(device, d->imgui_pipeline, vk_alloc);
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
-  vkDestroyRenderPass(device, d->render_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->main_pass, vk_alloc);
   vkDestroyRenderPass(device, d->imgui_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
   vkDestroySurfaceKHR(d->instance, d->surface,
@@ -2806,7 +2903,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
             VkRenderPassBeginInfo pass_info = {0};
             pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            pass_info.renderPass = d->render_pass;
+            pass_info.renderPass = d->main_pass;
             pass_info.framebuffer = framebuffer;
             pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
             pass_info.clearValueCount = 2;
