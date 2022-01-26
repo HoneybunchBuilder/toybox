@@ -186,7 +186,7 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
 
 static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
                                       VkPipelineLayout layout,
-                                      const float4x4 *vp, Demo *d) {
+                                      const float4x4 *vp) {
   TracyCZoneN(ctx, "demo_render_scene_shadows", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
@@ -206,7 +206,7 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
 
       // We're not going to upload this to a const buffer, instead just
       // use mvp as a push constant
-      CommonObjectData object_data = {0};
+      CommonObjectData object_data = {.m = {.row0 = {0}}};
       transform_to_matrix(&object_data.m, t);
       mulmf44(vp, &object_data.m, &object_data.mvp);
 
@@ -289,8 +289,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         t->scale[1] = -t->scale[1];
       }
 
-      CommonObjectData object_data = {0};
-
+      CommonObjectData object_data = {.m = {.row0 = {0}}};
       transform_to_matrix(&object_data.m, t);
       mulmf44(vp, &object_data.m, &object_data.mvp);
 
@@ -2829,7 +2828,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                           d->shadow_pipe);
 
         demo_render_scene_shadows(d->main_scene, shadow_buffer,
-                                  d->shadow_pipe_layout, sun_vp, d);
+                                  d->shadow_pipe_layout, sun_vp);
 
         TracyCVkZoneEnd(scene_scope);
       }
