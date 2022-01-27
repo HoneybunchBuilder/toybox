@@ -81,8 +81,9 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N, flo
 float texture_proj(float4 shadow_coord, float ambient, Texture2D shadow_map, sampler samp)
 {
   float3 proj_coords = shadow_coord.xyz / shadow_coord.w;
-  proj_coords = proj_coords * 0.5 + 0.5;
+  proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+  proj_coords.y = -proj_coords.y;
   float closest_depth = shadow_map.Sample( samp, proj_coords.xy ).r;
-  float current_depth = (shadow_coord.z / shadow_coord.w) + 0.000001f;
+  float current_depth = proj_coords.z + 0.000001f;
   return closest_depth < current_depth ? 1.0 : ambient;
 }
