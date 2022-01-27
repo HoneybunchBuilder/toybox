@@ -85,8 +85,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient, Texture2D 
   float4 proj_coord = shadow_coord;
   
   proj_coord = proj_coord / proj_coord.w;
-  proj_coord.x = proj_coord.x * 0.5 + 0.5;
-  proj_coord.y = -proj_coord.y * 0.5 + 0.5;
+  proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
   
   float sampled_depth = shadow_map.Sample(samp, proj_coord.xy + offset).r;
   if(sampled_depth < proj_coord.z - 0.005)
