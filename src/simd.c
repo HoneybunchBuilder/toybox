@@ -246,8 +246,8 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
   assert(m);
 
   forward = normf3(forward);
-  float3 right = crossf3(normf3(up), forward);
-  up = crossf3(forward, right);
+  float3 right = normf3(crossf3(normf3(up), forward));
+  up = normf3(crossf3(forward, right));
 
   *m = (float4x4){
       (float4){right[0], right[1], right[2], -dotf3(right, pos)},

@@ -709,7 +709,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Calculate sun view proj matrix for shadow mapping
     float4x4 sun_vp = {.row0 = {0}};
     {
-      float3 sun_pos = sky_data.sun_dir;
+      float3 sun_pos = sky_data.sun_dir * -50.0f;
 
       float4x4 sun_view = {.row0 = {0}};
       look_at(&sun_view, sun_pos, (float3){0}, (float3){0, 1, 0});
