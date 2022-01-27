@@ -64,7 +64,7 @@ Interpolators vert(VertexIn i)
     o.tangent = normalize(mul(orientation, i.tangent.xyz));
     o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
     o.uv = i.uv;
-    o.shadowcoord = mul(mul(world_pos, light_data.light_vp), biasMat);
+    o.shadowcoord = mul(world_pos, light_data.light_vp);
 
     return o;
 }
@@ -140,7 +140,7 @@ float4 frag(Interpolators i) : SV_TARGET
         color += ambient;
     }
 
-    float shadow = texture_proj(i.shadowcoord, float2(0.0, 0.0), AMBIENT, shadow_map, static_sampler);
+    float shadow = texture_proj(i.shadowcoord, AMBIENT, shadow_map, static_sampler);
     color *= shadow;
 
     return float4(color, 1);

@@ -119,6 +119,8 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   uint32_t old_mesh_count = s->mesh_count;
   uint32_t old_node_count = s->entity_count;
 
+  uint32_t new_mat_count = old_mat_count + (uint32_t)data->materials_count;
+
   // Append textures to scene
   {
     uint32_t new_tex_count = old_tex_count + (uint32_t)data->textures_count;
@@ -135,8 +137,32 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     // TODO: Determine a good way to do texture de-duplication
     for (uint32_t i = old_tex_count; i < new_tex_count; ++i) {
       cgltf_texture *tex = &data->textures[i - old_tex_count];
+
+      /*
+        Awful hack; we don't know what color space these textures want
+        Normal maps need UNORM while Color textures need SRGB. So the only
+        way for us to get this info is to see if it's used as a color
+        texture by any material.
+
+        Textures *could* be created during material discovery instead but that's
+        already messy.
+      */
+      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+      for (uint32_t ii = old_mat_count; ii < new_mat_count; ++ii) {
+        cgltf_material *mat = &data->materials[ii - old_mat_count];
+
+        if ((mat->has_pbr_metallic_roughness &&
+             mat->pbr_metallic_roughness.base_color_texture.texture == tex) ||
+            (mat->has_pbr_specular_glossiness &&
+             mat->pbr_specular_glossiness.diffuse_texture.texture == tex)) {
+          format = VK_FORMAT_R8G8B8A8_SRGB;
+          break;
+        }
+      }
+
       if (create_gputexture_cgltf(device, vma_alloc, vk_alloc, tex, data->bin,
-                                  up_pool, tex_pool, &s->textures[i]) != 0) {
+                                  up_pool, tex_pool, format,
+                                  &s->textures[i]) != 0) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                      "Failed to to create gputexture");
         SDL_TriggerBreakpoint();
@@ -149,8 +175,6 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
 
   // Append materials to scene
   {
-    uint32_t new_mat_count = old_mat_count + (uint32_t)data->materials_count;
-
     s->materials =
         hb_realloc_nm_tp(std_alloc, s->materials, new_mat_count, GPUMaterial);
     if (s->materials == NULL) {
