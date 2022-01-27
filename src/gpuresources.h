@@ -156,12 +156,12 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const CPUTexture *tex, VmaPool up_pool, VmaPool tex_pool,
-                       GPUTexture *t, bool gen_mips);
+                       VkFormat format, GPUTexture *t, bool gen_mips);
 int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const VkAllocationCallbacks *vk_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
-                                GPUTexture *t);
+                                VkFormat format, GPUTexture *t);
 void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const GPUTexture *t);

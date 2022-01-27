@@ -780,7 +780,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const VkAllocationCallbacks *vk_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
-                                GPUTexture *t) {
+                                VkFormat format, GPUTexture *t) {
   TracyCZoneN(prof_e, "create_gputexture_cgltf", true);
   cgltf_buffer_view *image_view = gltf->image->buffer_view;
   cgltf_buffer *image_data = image_view->buffer;
@@ -815,7 +815,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
       1, 1, &layer, image_size, image_pixels,
   };
   int32_t err = create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
-                               tex_pool, t, true);
+                               tex_pool, format, t, true);
   TracyCZoneEnd(prof_e);
   return err;
 }
@@ -823,7 +823,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const CPUTexture *tex, VmaPool up_pool, VmaPool tex_pool,
-                       GPUTexture *t, bool gen_mips) {
+                       VkFormat format, GPUTexture *t, bool gen_mips) {
   TracyCZoneN(prof_e, "create_texture", true);
   VkResult err = VK_SUCCESS;
 
@@ -866,7 +866,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     img_info.flags = 0;
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     img_info.imageType = VK_IMAGE_TYPE_2D;
-    img_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    img_info.format = format;
     img_info.extent = (VkExtent3D){img_width, img_height, 1};
     img_info.mipLevels = desired_mip_levels;
     img_info.arrayLayers = layer_count;
@@ -887,7 +887,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = device_image.image;
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    create_info.format = format;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
@@ -907,7 +907,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
 
   t->host = host_buffer;
   t->device = device_image;
-  t->format = VK_FORMAT_R8G8B8A8_UNORM;
+  t->format = format;
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = desired_mip_levels;

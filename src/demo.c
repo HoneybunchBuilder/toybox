@@ -859,7 +859,7 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
 
     VkResult err = (VkResult)create_texture(
         d->device, d->vma_alloc, d->vk_alloc, &cpu_atlas, d->upload_mem_pool,
-        d->texture_mem_pool, &imgui_atlas, false);
+        d->texture_mem_pool, VK_FORMAT_R8G8B8A8_SRGB, &imgui_atlas, false);
     assert(err == VK_SUCCESS);
     (void)err;
 
@@ -2845,6 +2845,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, shadow_buffer,
                           "Draw Scene Shadows", 3, true);
+
+        // Required to avoid shadow mapping artifacts
+        static const float depth_bias = 1.25f;
+        static const float depth_bias_slope = 1.75f;
+        vkCmdSetDepthBias(shadow_buffer, depth_bias, 0.0f, depth_bias_slope);
 
         vkCmdBindPipeline(shadow_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->shadow_pipe);
