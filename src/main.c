@@ -715,7 +715,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       look_at(&sun_view, sun_pos, (float3){0}, (float3){0, 1, 0});
 
       float4x4 sun_proj = {.row0 = {0}};
-      perspective(&sun_proj, PI_4, 1.0f, 1.0f, 100.0f);
+      orthographic(&sun_proj, 128, 128, 0.1f, 100.0f);
 
       mulmf44(&sun_proj, &sun_view, &sun_vp);
     }

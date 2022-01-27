@@ -90,3 +90,4 @@ void transform_to_matrix(float4x4 *m, const Transform *t);
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf);
+void orthographic(float4x4 *m, float width, float height, float zn, float zf);

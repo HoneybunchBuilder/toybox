@@ -116,6 +116,7 @@ typedef struct Demo {
   GPUImage shadow_maps; // Implemented as an image array; one image for each
                         // latency frame
   VkImageView shadow_map_views[FRAME_LATENCY];
+  VkSampler shadow_sampler;
 
   GPUImage depth_buffers; // Implemented as an image array; one image for each
                           // latency frame

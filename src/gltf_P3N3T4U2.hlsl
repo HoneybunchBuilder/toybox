@@ -17,6 +17,7 @@ ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 ConstantBuffer<CommonCameraData> camera_data: register(b0, space2); // Frag Only
 ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
 Texture2D shadow_map : register(t2, space2); // Frag Only
+SamplerState shadow_sampler : register(s2, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -40,13 +41,6 @@ struct Interpolators
 };
 
 #define AMBIENT 0.1
-
-static const float4x4 biasMat = float4x4(
-    0.5, 0.0, 0.0, 0.5,
-    0.0, 0.5, 0.0, 0.5,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0 
-);
 
 Interpolators vert(VertexIn i)
 {
@@ -79,7 +73,11 @@ float4 frag(Interpolators i) : SV_TARGET
     if(PermutationFlags & GLTF_PERM_NORMAL_MAP)
     {
         // Construct TBN
-        float3x3 tbn = float3x3(i.tangent, i.binormal, i.normal);
+        float3x3 tbn = float3x3(
+            normalize(i.tangent),
+            normalize(i.binormal),
+            normalize(i.normal)
+        );
 
         // Convert from tangent space to world space
         float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
@@ -94,7 +92,7 @@ float4 frag(Interpolators i) : SV_TARGET
     float3 color = float3(0.0, 0.0, 0.0);
 
     if(PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS)
-    {
+    { 
         float metallic = material_data.pbr_metallic_roughness.metallic_factor;
         float roughness = material_data.pbr_metallic_roughness.roughness_factor;
 
@@ -108,8 +106,8 @@ float4 frag(Interpolators i) : SV_TARGET
 
         // Angle between surface normal and outgoing light direction.
         float cosLo = max(0.0, dot(N, V));
-            
-        // Specular reflection vector.
+
+        // Specular reflection vector
         float3 Lr = 2.0 * cosLo * N - V; // Used later for ambient lighting
 
         // Fresnel reflectance at normal incidence (for metals use albedo color).
@@ -117,7 +115,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
         //for each light
         {
-            float3 light_color = float3(2, 2, 2);
+            float3 light_color = float3(1, 1, 1);
 
             color += pbr_light(F0, light_color, albedo, metallic, roughness, N, L, V, cosLo);
         }
@@ -140,7 +138,10 @@ float4 frag(Interpolators i) : SV_TARGET
         color += ambient;
     }
 
-    float shadow = texture_proj(i.shadowcoord, AMBIENT, shadow_map, static_sampler);
+    // Gamma correct
+    color = pow(color, float3(0.4545, 0.4545, 0.4545));
+
+    float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler);
     color *= shadow;
 
     return float4(color, 1);
