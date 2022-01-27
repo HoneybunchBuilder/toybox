@@ -13,9 +13,10 @@ sampler static_sampler : register(s4, space0); // Immutable sampler
 // Per-object data - Vertex Stage Only
 ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
-// Per-view data - Fragment Stage Only
-ConstantBuffer<CommonCameraData> camera_data: register(b0, space2);
-ConstantBuffer<CommonLightData> light_data : register(b1, space2);
+// Per-view data
+ConstantBuffer<CommonCameraData> camera_data: register(b0, space2); // Frag Only
+ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
+Texture2D shadow_map : register(t2, space2); // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -35,24 +36,35 @@ struct Interpolators
     float3 tangent : TANGENT0;
     float3 binormal : BINORMAL0;
     float2 uv: TEXCOORD0;
+    float4 shadowcoord : TEXCOORD1;
 };
+
+#define AMBIENT 0.1
+
+static const float4x4 biasMat = float4x4(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0 
+);
 
 Interpolators vert(VertexIn i)
 {
     // Apply displacement map
     float3 pos = i.local_pos;
     float4 clip_pos = mul(float4(pos, 1.0), object_data.mvp);
-    float3 world_pos = mul(float4(pos, 1.0), object_data.m).xyz;
+    float4 world_pos = mul(float4(pos, 1.0), object_data.m);
 
     float3x3 orientation = (float3x3)object_data.m;
 
     Interpolators o;
     o.clip_pos = clip_pos;
-    o.world_pos = world_pos;
+    o.world_pos = world_pos.xyz;
     o.normal = normalize(mul(i.normal, orientation)); // convert to world-space normal
     o.tangent = normalize(mul(orientation, i.tangent.xyz));
     o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
     o.uv = i.uv;
+    o.shadowcoord = mul(mul(world_pos, light_data.light_vp), biasMat);
 
     return o;
 }
@@ -111,7 +123,7 @@ float4 frag(Interpolators i) : SV_TARGET
         }
 
         // TODO: Ambient IBL
-        float3 ambient = float3(0.1, 0.1, 0.1) * albedo;
+        float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * albedo;
         color += ambient;
     }
     else // Phong fallback
@@ -124,9 +136,12 @@ float4 frag(Interpolators i) : SV_TARGET
             color += phong_light(albedo, light_color, gloss, N, L, V, H);
         }
 
-        float3 ambient = float3(0.03, 0.03, 0.03) * albedo;
+        float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * albedo;
         color += ambient;
     }
 
-    return float4(color, 1.0);
+    float shadow = texture_proj(i.shadowcoord, float2(0.0, 0.0), AMBIENT, shadow_map, static_sampler);
+    color *= shadow;
+
+    return float4(color, 1);
 }
