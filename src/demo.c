@@ -1129,7 +1129,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .format = VK_FORMAT_D32_SFLOAT,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1387,7 +1387,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Common Per-View DescriptorSet Layout
   VkDescriptorSetLayout gltf_view_set_layout = VK_NULL_HANDLE;
   {
-    VkDescriptorSetLayoutBinding bindings[2] = {
+    VkDescriptorSetLayoutBinding bindings[3] = {
         {
             0,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1399,6 +1399,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             1,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             1,
+            VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+            NULL,
+        },
+        {
+            2,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            1,
             VK_SHADER_STAGE_FRAGMENT_BIT,
             NULL,
         },
@@ -1406,7 +1413,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 2;
+    create_info.bindingCount = 3;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_view_set_layout);
@@ -1725,7 +1732,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     create_info.arrayLayers = FRAME_LATENCY;
     create_info.samples = VK_SAMPLE_COUNT_1_BIT;
     create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                        VK_IMAGE_USAGE_SAMPLED_BIT;
 
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
@@ -2123,7 +2131,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                           camera_const_buffer.size};
     VkDescriptorBufferInfo light_info = {light_const_buffer.gpu.buffer, 0,
                                          light_const_buffer.size};
-    VkWriteDescriptorSet writes[4] = {
+    VkWriteDescriptorSet writes[5] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
@@ -2152,8 +2160,19 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &light_info,
         },
-    };
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        }};
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      VkDescriptorImageInfo shadow_map_info = {
+          .sampler = VK_NULL_HANDLE,
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = d->shadow_map_views[i],
+      };
+
       VkDescriptorSet gltf_view_set = d->gltf_view_descriptor_sets[i];
       VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
       VkDescriptorSet imgui_set = d->imgui_descriptor_sets[i];
@@ -2164,7 +2183,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       writes[2].dstSet = gltf_view_set;
       writes[3].dstSet = gltf_view_set;
 
-      vkUpdateDescriptorSets(device, 4, writes, 0, NULL);
+      writes[4].pImageInfo = &shadow_map_info;
+      writes[4].dstSet = gltf_view_set;
+
+      vkUpdateDescriptorSets(device, 5, writes, 0, NULL);
     }
   }
 
@@ -3152,6 +3174,25 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       // Transition Shadow Map
       {
         TracyCZoneN(shadow_trans_e, "transition shadow map", true);
+
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.image = d->shadow_maps.image;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.subresourceRange.baseArrayLayer = frame_idx;
+        vkCmdPipelineBarrier(graphics_buffer,
+                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL,
+                             0, NULL, 1, &barrier);
+
         TracyCZoneEnd(shadow_trans_e);
       }
 
