@@ -2859,8 +2859,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                              VK_SUBPASS_CONTENTS_INLINE);
       }
 
-      VkViewport viewport = {
-          0, SHADOW_MAP_HEIGHT, SHADOW_MAP_WIDTH, -SHADOW_MAP_HEIGHT, 0, 1};
+      VkViewport viewport = {0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 0, 1};
       VkRect2D scissor = {{0, 0}, {SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT}};
       vkCmdSetViewport(shadow_buffer, 0, 1, &viewport);
       vkCmdSetScissor(shadow_buffer, 0, 1, &scissor);

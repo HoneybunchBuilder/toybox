@@ -778,7 +778,7 @@ uint32_t create_shadow_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, 0, w, h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
