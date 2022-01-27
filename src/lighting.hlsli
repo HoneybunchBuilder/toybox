@@ -78,12 +78,48 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N, flo
 
 // Shadowing
 
-float texture_proj(float4 shadow_coord, float ambient, Texture2D shadow_map, sampler samp)
+float texture_proj(float4 shadow_coord, float2 offset, float ambient, Texture2D shadow_map, sampler samp)
 {
-  float3 proj_coords = shadow_coord.xyz / shadow_coord.w;
-  proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
-  proj_coords.y = -proj_coords.y;
-  float closest_depth = shadow_map.Sample( samp, proj_coords.xy ).r;
-  float current_depth = proj_coords.z + 0.000001f;
-  return closest_depth < current_depth ? 1.0 : ambient;
+  float shadow = 1.0;
+
+  float4 proj_coord = shadow_coord;
+  
+  proj_coord = proj_coord / proj_coord.w;
+  proj_coord.x = proj_coord.x * 0.5 + 0.5;
+  proj_coord.y = -proj_coord.y * 0.5 + 0.5;
+  
+  float sampled_depth = shadow_map.Sample(samp, proj_coord.xy + offset).r;
+  if(sampled_depth < proj_coord.z - 0.005)
+  {
+    shadow = ambient;
+  }
+
+  return shadow;
+}
+
+float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map, sampler samp)
+{
+  uint2 tex_dim;
+  shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
+
+  float scale = 1.5;
+  float dx = scale * (1.0 / float(tex_dim.x));
+  float dy = scale * (1.0 / float(tex_dim.y));
+
+  float shadow_factor = 0.0;
+
+  uint count = 0;
+  int range = 1;
+
+  for(int x = -range; x <= range; ++x)
+  {
+    for(int y = -range; y <= range; ++y)
+    {
+      float2 offset = float2(dx * x, dy * y);
+      shadow_factor += texture_proj(shadow_coord, offset, ambient, shadow_map, samp);
+      count++;
+    }
+  }
+
+  return shadow_factor / count;
 }

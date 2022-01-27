@@ -1404,7 +1404,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         },
         {
             2,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             1,
             VK_SHADER_STAGE_FRAGMENT_BIT,
             NULL,
@@ -1746,8 +1746,30 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
-  // Create Shadow Map Image Views
-  {}
+  // Create shadow map sampler
+  VkSampler shadow_sampler;
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .mipLodBias = 0.0f,
+        .maxAnisotropy = 1.0f,
+        .minLod = 0.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+
+    err = vkCreateSampler(device, &create_info, vk_alloc, &shadow_sampler);
+    assert(err == VK_SUCCESS);
+
+    SET_VK_NAME(device, shadow_sampler, VK_OBJECT_TYPE_SAMPLER,
+                "shadow sampler");
+  }
 
   // Composite main scene
   Scene *main_scene = NULL;
@@ -1811,9 +1833,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/TestScene.glb") !=
+        0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Sponza to main scene");
+                   "Failed to append TestScene to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -1888,6 +1911,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->light_const_buffer = light_const_buffer;
   d->shadow_pipe_layout = shadow_pipe_layout;
   d->shadow_pipe = shadow_pipe;
+  d->shadow_sampler = shadow_sampler;
   d->gltf_material_set_layout = gltf_material_set_layout;
   d->gltf_object_set_layout = gltf_object_set_layout;
   d->gltf_view_set_layout = gltf_view_set_layout;
@@ -2164,11 +2188,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 2,
             .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         }};
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       VkDescriptorImageInfo shadow_map_info = {
-          .sampler = VK_NULL_HANDLE,
+          .sampler = shadow_sampler,
           .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
           .imageView = d->shadow_map_views[i],
       };
@@ -2297,6 +2321,7 @@ void demo_destroy(Demo *d) {
 
   hb_free(d->std_alloc, d->queue_props);
   vkDestroySampler(device, d->sampler, vk_alloc);
+  vkDestroySampler(device, d->shadow_sampler, vk_alloc);
 
   vkDestroyDescriptorSetLayout(device, d->skydome_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->skydome_pipe_layout, vk_alloc);
@@ -2818,7 +2843,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         VkFramebuffer framebuffer = d->shadow_pass_framebuffers[frame_idx];
 
         VkClearValue clear_values[1] = {
-            {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+            {.depthStencil = {.depth = 1.0f, .stencil = 0.0f}},
         };
 
         VkRenderPassBeginInfo pass_info = {
