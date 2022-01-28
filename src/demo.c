@@ -1751,8 +1751,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   {
     VkSamplerCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_NEAREST,
-        .minFilter = VK_FILTER_NEAREST,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
         .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
@@ -2869,11 +2869,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, shadow_buffer,
                           "Draw Scene Shadows", 3, true);
-
-        // Required to avoid shadow mapping artifacts
-        static const float depth_bias = 1.25f;
-        static const float depth_bias_slope = 1.75f;
-        vkCmdSetDepthBias(shadow_buffer, depth_bias, 0.0f, depth_bias_slope);
 
         vkCmdBindPipeline(shadow_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->shadow_pipe);
