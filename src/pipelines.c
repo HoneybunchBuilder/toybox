@@ -793,9 +793,8 @@ uint32_t create_shadow_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
     raster_state.cullMode = VK_CULL_MODE_NONE;
-    raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
-    raster_state.depthBiasEnable = VK_TRUE;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};
     multisample_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -813,8 +812,7 @@ uint32_t create_shadow_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 
     VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                   VK_DYNAMIC_STATE_SCISSOR,
-                                   VK_DYNAMIC_STATE_DEPTH_BIAS};
+                                   VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic_state = {0};
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_state.dynamicStateCount =
