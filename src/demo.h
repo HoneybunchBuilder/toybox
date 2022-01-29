@@ -72,6 +72,7 @@ typedef struct Demo {
   SwapchainInfo swap_info;
   VkSwapchainKHR swapchain;
 
+  VkRenderPass env_map_pass;
   VkRenderPass shadow_pass;
   VkRenderPass main_pass;
   VkRenderPass imgui_pass;
@@ -117,6 +118,12 @@ typedef struct Demo {
                         // latency frame
   VkImageView shadow_map_views[FRAME_LATENCY];
   VkSampler shadow_sampler;
+
+  GPUImage env_cubemap;
+  VkImageView env_cubemap_view;
+
+  GPUImage irradiance_cubemap;
+  VkImageView irradiance_cubemap_views[FRAME_LATENCY];
 
   GPUImage depth_buffers; // Implemented as an image array; one image for each
                           // latency frame

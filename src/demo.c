@@ -30,6 +30,10 @@
 #define SHADOW_MAP_WIDTH 2048
 #define SHADOW_MAP_HEIGHT 2048
 
+// TODO: Make more adjustable
+#define ENV_CUBEMAP_DIM 512
+#define IRRADIANCE_CUBEMAP_DIM 64
+
 #define MAX_EXT_COUNT 16
 
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
@@ -1771,6 +1775,150 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                 "shadow sampler");
   }
 
+  // Create Environment Cubemap
+  GPUImage env_cubemap = {0};
+  {
+    VkImageCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    create_info.imageType = VK_IMAGE_TYPE_2D;
+    create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    create_info.extent = (VkExtent3D){ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, 1};
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = 6;
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    create_info.usage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pUserData = (void *)("Environment Map Memory");
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info, &env_cubemap);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Environment Cubemap View
+  VkImageView env_cubemap_view = VK_NULL_HANDLE;
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = env_cubemap.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            (VkImageSubresourceRange){
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                1,
+                0,
+                6,
+            },
+    };
+    err = vkCreateImageView(device, &create_info, vk_alloc, &env_cubemap_view);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Map Render Pass
+  VkRenderPass env_map_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription color_attachment = {
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    VkAttachmentDescription attachments[1] = {color_attachment};
+
+    VkAttachmentReference color_attachment_ref = {
+        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
+    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
+
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+    };
+
+    VkSubpassDependency dependencies[2] = {
+        {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+        {
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+
+        },
+    };
+
+    // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
+    uint32_t view_mask = 0x0000003F; // 0b00111111
+    uint32_t correlation_mask = 0;
+
+    VkRenderPassMultiviewCreateInfo multiview_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
+        .subpassCount = 1,
+        .pViewMasks = &view_mask,
+        .correlationMaskCount = 1,
+        .pCorrelationMasks = &correlation_mask,
+    };
+
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext = &multiview_info,
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 2,
+        .pDependencies = dependencies,
+    };
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &env_map_pass);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Irradiance Cubemaps
+  {
+    // TODO:
+  }
+
   // Composite main scene
   Scene *main_scene = NULL;
   {
@@ -1897,6 +2045,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->graphics_queue = graphics_queue;
   d->swap_info = swap_info;
   d->swapchain = swapchain;
+  d->env_map_pass = env_map_pass;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -1926,6 +2075,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->texture_mem_pool = texture_mem_pool;
   d->skydome_gpu = skydome;
   d->shadow_maps = shadow_maps;
+  d->env_cubemap = env_cubemap;
+  d->env_cubemap_view = env_cubemap_view;
   d->main_scene = main_scene;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
@@ -2289,6 +2440,8 @@ void demo_destroy(Demo *d) {
 
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
   destroy_gpuimage(vma_alloc, &d->shadow_maps);
+  destroy_gpuimage(vma_alloc, &d->env_cubemap);
+  vkDestroyImageView(device, d->env_cubemap_view, vk_alloc);
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
@@ -2345,6 +2498,7 @@ void demo_destroy(Demo *d) {
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->env_map_pass, vk_alloc);
   vkDestroyRenderPass(device, d->main_pass, vk_alloc);
   vkDestroyRenderPass(device, d->imgui_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
