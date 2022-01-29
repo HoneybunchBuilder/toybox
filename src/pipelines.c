@@ -485,13 +485,13 @@ uint32_t create_skydome_pipeline(VkDevice device,
         {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
     };
 
-    VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
-    vert_input_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_input_state.vertexBindingDescriptionCount = 1;
-    vert_input_state.pVertexBindingDescriptions = vert_bindings;
-    vert_input_state.vertexAttributeDescriptionCount = 1;
-    vert_input_state.pVertexAttributeDescriptions = vert_attrs;
+    VkPipelineVertexInputStateCreateInfo vert_input_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = vert_bindings,
+        .vertexAttributeDescriptionCount = 1,
+        .pVertexAttributeDescriptions = vert_attrs,
+    };
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {0};
     input_assembly_state.sType =
@@ -889,9 +889,21 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
 
-    VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
-    vert_input_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    VkVertexInputBindingDescription vert_bindings[1] = {
+        {0, sizeof(float3), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+
+    VkVertexInputAttributeDescription vert_attrs[1] = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+    };
+
+    VkPipelineVertexInputStateCreateInfo vert_input_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = vert_bindings,
+        .vertexAttributeDescriptionCount = 1,
+        .pVertexAttributeDescriptions = vert_attrs,
+    };
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {0};
     input_assembly_state.sType =
@@ -913,7 +925,7 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
     raster_state.cullMode = VK_CULL_MODE_FRONT_BIT;
-    raster_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};
     multisample_state.sType =
@@ -924,7 +936,7 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_state.depthTestEnable = VK_FALSE;
     depth_state.depthWriteEnable = VK_FALSE;
-    depth_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_state.depthCompareOp = VK_COMPARE_OP_EQUAL; // Equal to 0
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};

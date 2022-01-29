@@ -130,8 +130,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)argc;
   (void)argv;
   SDL_Log("%s", "Entered SDL_main");
-  static const float qtr_pi = 0.7853981625f;
-
   {
     const char *app_info = HB_APP_INFO_STR;
     size_t app_info_len = strlen(app_info);
@@ -180,7 +178,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
               .scale = {1, 1, 1},
           },
       .aspect = (float)WIDTH / (float)HEIGHT,
-      .fov = qtr_pi * 2,
+      .fov = PI_2,
       .near = 0.01f,
       .far = 1000.0f,
   };
