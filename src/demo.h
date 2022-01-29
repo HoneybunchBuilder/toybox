@@ -110,6 +110,7 @@ typedef struct Demo {
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
+  VkFramebuffer env_cube_framebuffer;
   VkFramebuffer shadow_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer main_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer ui_pass_framebuffers[FRAME_LATENCY];
@@ -121,6 +122,8 @@ typedef struct Demo {
 
   GPUImage env_cubemap;
   VkImageView env_cubemap_view;
+  VkPipelineLayout sky_cube_layout;
+  VkPipeline sky_cube_pipeline;
 
   GPUImage irradiance_cubemap;
   VkImageView irradiance_cubemap_views[FRAME_LATENCY];
@@ -131,6 +134,7 @@ typedef struct Demo {
 
   VkCommandPool command_pools[FRAME_LATENCY];
   VkCommandBuffer shadow_buffers[FRAME_LATENCY];
+  VkCommandBuffer env_cube_buffers[FRAME_LATENCY];
   VkCommandBuffer upload_buffers[FRAME_LATENCY];
   VkCommandBuffer graphics_buffers[FRAME_LATENCY];
   VkCommandBuffer screenshot_buffers[FRAME_LATENCY];
@@ -140,6 +144,7 @@ typedef struct Demo {
   // For allowing the currently processed frame to access
   // resources being uploaded this frame
   VkSemaphore shadow_complete_sems[FRAME_LATENCY];
+  VkSemaphore env_complete_sems[FRAME_LATENCY];
   VkSemaphore upload_complete_sems[FRAME_LATENCY];
   VkSemaphore img_acquired_sems[FRAME_LATENCY];
   VkSemaphore swapchain_image_sems[FRAME_LATENCY];

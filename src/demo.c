@@ -74,10 +74,16 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
+  VkPhysicalDeviceVulkan11Features vk_11_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .multiview = VK_TRUE,
+  };
+
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
       .sType =
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
       .rayTracingPipeline = VK_TRUE,
+      .pNext = &vk_11_features,
   };
 
   VkDeviceCreateInfo create_info = {0};
@@ -1553,7 +1559,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   VkDescriptorSetLayout skydome_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          NULL},
     };
 
@@ -1851,7 +1857,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     VkAttachmentDescription attachments[1] = {color_attachment};
 
     VkAttachmentReference color_attachment_ref = {
-        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
 
     VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
 
@@ -1913,6 +1921,53 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       return false;
     }
   }
+
+  // Create Env Cube Framebuffer
+  VkFramebuffer env_cube_framebuffer = VK_NULL_HANDLE;
+  {
+    VkFramebufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = env_map_pass,
+        .attachmentCount = 1,
+        .pAttachments = &env_cubemap_view,
+        .width = ENV_CUBEMAP_DIM,
+        .height = ENV_CUBEMAP_DIM,
+        // Viewing a cubemap but layers is still 1 because of multi-view
+        .layers = 1,
+    };
+    err = vkCreateFramebuffer(device, &create_info, vk_alloc,
+                              &env_cube_framebuffer);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Map Pipeline Layout
+  VkPipelineLayout sky_cube_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &skydome_set_layout,
+    };
+
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &sky_cube_layout);
+    SET_VK_NAME(device, sky_cube_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                "Sky Cube Pipeline Layout");
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Map Pipeline
+  VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
+  err = create_sky_cube_pipeline(device, vk_alloc, pipeline_cache, env_map_pass,
+                                 ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM,
+                                 sky_cube_layout, &sky_cube_pipeline);
+  assert(err == VK_SUCCESS);
 
   // Create Irradiance Cubemaps
   {
@@ -2046,6 +2101,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->swap_info = swap_info;
   d->swapchain = swapchain;
   d->env_map_pass = env_map_pass;
+  d->env_cube_framebuffer = env_cube_framebuffer;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -2060,6 +2116,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->shadow_pipe_layout = shadow_pipe_layout;
   d->shadow_pipe = shadow_pipe;
   d->shadow_sampler = shadow_sampler;
+  d->sky_cube_layout = sky_cube_layout;
+  d->sky_cube_pipeline = sky_cube_pipeline;
   d->gltf_material_set_layout = gltf_material_set_layout;
   d->gltf_object_set_layout = gltf_object_set_layout;
   d->gltf_view_set_layout = gltf_view_set_layout;
@@ -2100,6 +2158,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->shadow_complete_sems[i]);
+      assert(err == VK_SUCCESS);
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &d->env_complete_sems[i]);
       assert(err == VK_SUCCESS);
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->upload_complete_sems[i]);
@@ -2215,6 +2276,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
           vkAllocateCommandBuffers(device, &alloc_info, &d->shadow_buffers[i]);
       assert(err == VK_SUCCESS);
 
+      err = vkAllocateCommandBuffers(device, &alloc_info,
+                                     &d->env_cube_buffers[i]);
+      assert(err == VK_SUCCESS);
+
       err =
           vkAllocateCommandBuffers(device, &alloc_info, &d->upload_buffers[i]);
       assert(err == VK_SUCCESS);
@@ -2308,7 +2373,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     VkWriteDescriptorSet writes[5] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstBinding = 1,
+            .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &skydome_info,
@@ -2425,6 +2490,7 @@ void demo_destroy(Demo *d) {
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
     vkDestroySemaphore(device, d->shadow_complete_sems[i], vk_alloc);
+    vkDestroySemaphore(device, d->env_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->upload_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->render_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->swapchain_image_sems[i], vk_alloc);
@@ -2442,6 +2508,7 @@ void demo_destroy(Demo *d) {
   destroy_gpuimage(vma_alloc, &d->shadow_maps);
   destroy_gpuimage(vma_alloc, &d->env_cubemap);
   vkDestroyImageView(device, d->env_cubemap_view, vk_alloc);
+  vkDestroyFramebuffer(device, d->env_cube_framebuffer, vk_alloc);
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
@@ -2495,6 +2562,9 @@ void demo_destroy(Demo *d) {
 
   vkDestroyPipelineLayout(device, d->shadow_pipe_layout, vk_alloc);
   vkDestroyPipeline(device, d->shadow_pipe, vk_alloc);
+
+  vkDestroyPipelineLayout(device, d->sky_cube_layout, vk_alloc);
+  vkDestroyPipeline(device, d->sky_cube_pipeline, vk_alloc);
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
@@ -2974,6 +3044,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   TracyCGPUContext *gpu_gfx_ctx = d->tracy_gpu_contexts[frame_idx];
 
   VkSemaphore shadow_sem = VK_NULL_HANDLE;
+  VkSemaphore env_cube_sem = VK_NULL_HANDLE;
 
   // Render Shadow Maps
   {
@@ -3074,6 +3145,102 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
     TracyCZoneEnd(demo_render_frame_shadows_event);
   }
+
+  // Render Env Cube Map
+  /*
+  {
+    TracyCZoneN(trcy_e, "demo_render_frame env cube render", true);
+
+    VkCommandBuffer env_cube_buffer = d->env_cube_buffers[frame_idx];
+    env_cube_sem = d->env_complete_sems[frame_idx];
+
+    // Record
+    {
+      TracyCZoneN(record_env_e, "record env cube", true);
+
+      SET_VK_NAME(device, env_cube_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                  "env cube command buffer");
+      {
+        VkCommandBufferBeginInfo begin_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        };
+
+        err = vkBeginCommandBuffer(env_cube_buffer, &begin_info);
+        assert(err == VK_SUCCESS);
+      }
+
+      TracyCVkNamedZone(gpu_gfx_ctx, shadow_scope, env_cube_buffer,
+                        "Env Cube Map", 1, true);
+
+      cmd_begin_label(env_cube_buffer, "env cube",
+                      (float4){0.5, 0.5, 0.1, 1.0});
+
+      {
+        VkClearValue clear_values[1] = {
+            {.color = {.float32 = {0}}},
+        };
+
+        VkRenderPassBeginInfo pass_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = d->env_map_pass,
+            .framebuffer = d->env_cube_framebuffer,
+            .renderArea =
+                (VkRect2D){{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}},
+            .clearValueCount = 1,
+            .pClearValues = clear_values,
+        };
+        vkCmdBeginRenderPass(env_cube_buffer, &pass_info,
+                             VK_SUBPASS_CONTENTS_INLINE);
+      }
+
+      VkViewport viewport = {0, 0, ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, 0, 1};
+      VkRect2D scissor = {{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}};
+      vkCmdSetViewport(env_cube_buffer, 0, 1, &viewport);
+      vkCmdSetScissor(env_cube_buffer, 0, 1, &scissor);
+
+      // Render Sky to cubemap
+      {
+        TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, env_cube_buffer,
+                          "Draw Env Cube Map", 3, true);
+
+        vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          d->sky_cube_pipeline);
+
+        TracyCVkZoneEnd(scene_scope);
+      }
+
+      vkCmdEndRenderPass(env_cube_buffer);
+
+      cmd_end_label(env_cube_buffer);
+
+      TracyCVkZoneEnd(shadow_scope);
+
+      err = vkEndCommandBuffer(env_cube_buffer);
+      assert(err == VK_SUCCESS);
+      TracyCZoneEnd(record_env_e);
+    }
+
+    // Submit
+    {
+      TracyCZoneN(submit_shadows_e, "submit env cube", true);
+      VkSubmitInfo submit_info = {
+          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+          .commandBufferCount = 1,
+          .pCommandBuffers = &env_cube_buffer,
+          .signalSemaphoreCount = 1,
+          .pSignalSemaphores = &env_cube_sem,
+      };
+      queue_begin_label(graphics_queue, "env cube",
+                        (float4){1.0, 1.0, 0.1, 1.0});
+      err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
+      queue_end_label(graphics_queue);
+      assert(err == VK_SUCCESS);
+      TracyCZoneEnd(submit_shadows_e);
+    }
+
+    TracyCZoneEnd(trcy_e);
+  }
+  */
 
   // Render Main Scene & UI
   {
@@ -3357,31 +3524,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
         TracyCZoneEnd(swap_trans_e);
-      }
-
-      // Transition Shadow Map
-      {
-        TracyCZoneN(shadow_trans_e, "transition shadow map", true);
-
-        VkImageMemoryBarrier barrier = {0};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.image = d->shadow_maps.image;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.subresourceRange.baseArrayLayer = frame_idx;
-        vkCmdPipelineBarrier(graphics_buffer,
-                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL,
-                             0, NULL, 1, &barrier);
-
-        TracyCZoneEnd(shadow_trans_e);
       }
 
       // Render main geometry pass
