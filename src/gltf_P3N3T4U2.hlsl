@@ -141,8 +141,8 @@ float4 frag(Interpolators i) : SV_TARGET
     // Gamma correct
     color = pow(color, float3(0.4545, 0.4545, 0.4545));
 
-    float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler);
-    color *= shadow;
+    //float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler);
+    //color *= shadow;
 
     return float4(color, 1);
 }
