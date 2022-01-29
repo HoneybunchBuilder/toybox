@@ -71,6 +71,8 @@ float3 normf3(float3 v) {
   return (float3){v[0] * invSum, v[1] * invSum, v[2] * invSum};
 }
 
+float lenf3(float3 v) { return sqrt(dotf3(v, v)); }
+
 void mf33_identity(float3x3 *m) {
   assert(m);
   *m = (float3x3){
@@ -119,15 +121,19 @@ void mulf34(float3x4 *m, float4 v) {
   }
 }
 
-void mulf44(float4x4 *m, float4 v) {
-  assert(m);
+// UNTESTED
+float4 mulf44(float4x4 m, float4 v) {
+  float4 out = {0};
+
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
-    float s = v[i];
-    m->row0[i] *= s;
-    m->row1[i] *= s;
-    m->row2[i] *= s;
-    m->row3[i] *= s;
+    float sum = 0.0f;
+    unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
+      sum += m.rows[ii][i] * v[ii];
+    }
+    out[i] = sum;
   }
+
+  return out;
 }
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
@@ -166,6 +172,70 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
   TracyCZoneEnd(ctx);
 }
 
+// UNTESTED
+float4x4 inv_mf44(float4x4 m) {
+  TracyCZoneN(ctx, "mulmf44", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
+
+  float coef00 = m.row2[2] * m.row3[3] - m.row3[2] * m.row2[3];
+  float coef02 = m.row1[2] * m.row3[3] - m.row3[2] * m.row1[3];
+  float coef03 = m.row1[2] * m.row2[3] - m.row2[2] * m.row1[3];
+  float coef04 = m.row2[1] * m.row3[3] - m.row3[1] * m.row2[3];
+  float coef06 = m.row1[1] * m.row3[3] - m.row3[1] * m.row1[3];
+  float coef07 = m.row1[1] * m.row2[3] - m.row2[1] * m.row1[3];
+  float coef08 = m.row2[1] * m.row3[2] - m.row3[1] * m.row2[2];
+  float coef10 = m.row1[1] * m.row3[2] - m.row3[1] * m.row1[2];
+  float coef11 = m.row1[1] * m.row2[2] - m.row2[1] * m.row1[2];
+  float coef12 = m.row2[0] * m.row3[3] - m.row3[0] * m.row2[3];
+  float coef14 = m.row1[0] * m.row3[3] - m.row3[0] * m.row1[3];
+  float coef15 = m.row1[0] * m.row2[3] - m.row2[0] * m.row1[3];
+  float coef16 = m.row2[0] * m.row3[2] - m.row3[0] * m.row2[2];
+  float coef18 = m.row1[0] * m.row3[2] - m.row3[0] * m.row1[2];
+  float coef19 = m.row1[0] * m.row2[2] - m.row2[0] * m.row1[2];
+  float coef20 = m.row2[0] * m.row3[1] - m.row3[0] * m.row2[1];
+  float coef22 = m.row1[0] * m.row3[1] - m.row3[0] * m.row1[1];
+  float coef23 = m.row1[0] * m.row2[1] - m.row2[0] * m.row1[1];
+
+  float4 fac0 = {coef00, coef00, coef02, coef03};
+  float4 fac1 = {coef04, coef04, coef06, coef07};
+  float4 fac2 = {coef08, coef08, coef10, coef11};
+  float4 fac3 = {coef12, coef12, coef14, coef15};
+  float4 fac4 = {coef16, coef16, coef18, coef19};
+  float4 fac5 = {coef20, coef20, coef22, coef23};
+
+  float4 vec0 = {m.row1[0], m.row0[0], m.row0[0], m.row0[0]};
+  float4 vec1 = {m.row1[1], m.row0[1], m.row0[1], m.row0[1]};
+  float4 vec2 = {m.row1[2], m.row0[2], m.row0[2], m.row0[2]};
+  float4 vec3 = {m.row1[3], m.row0[3], m.row0[3], m.row0[3]};
+
+  float4 inv0 = vec1 * fac0 - vec2 * fac1 + vec3 * fac2;
+  float4 inv1 = vec0 * fac0 - vec2 * fac3 + vec3 * fac4;
+  float4 inv2 = vec0 * fac1 - vec1 * fac3 + vec3 * fac5;
+  float4 inv3 = vec0 * fac2 - vec1 * fac4 + vec2 * fac5;
+
+  float4 sign_a = {+1, -1, +1, -1};
+  float4 sign_b = {-1, +1, -1, +1};
+  float4x4 inv = {inv0 * sign_a, inv1 * sign_b, inv2 * sign_a, inv3 * sign_b};
+
+  float4 Row0 = {inv.row0[0], inv.row1[0], inv.row2[0], inv.row3[0]};
+
+  float4 dot0 = m.row0 * Row0;
+  float dot1 = (dot0[0] + dot0[1]) + (dot0[2] + dot0[3]);
+
+  float OneOverDeterminant = 1.0f / dot1;
+
+  float4x4 out = {
+      inv.row0 * OneOverDeterminant,
+      inv.row1 * OneOverDeterminant,
+      inv.row2 * OneOverDeterminant,
+      inv.row3 * OneOverDeterminant,
+  };
+
+  TracyCZoneEnd(ctx);
+
+  return out;
+}
+
 void translate(Transform *t, float3 p) {
   assert(t);
   t->position += p;
@@ -194,7 +264,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   };
 
   // Rotation matrix from euler angles
-  float4x4 r = {0};
+  float4x4 r = {.row0 = {0}};
   {
     float x_angle = t->rotation[0];
     float y_angle = t->rotation[1];
@@ -219,7 +289,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
         (float4){0, 0, 1, 0},
         (float4){0, 0, 0, 1},
     };
-    float4x4 temp = {0};
+    float4x4 temp = {.row0 = {0}};
     mulmf44(&rx, &ry, &temp);
     mulmf44(&temp, &rz, &r);
   }
@@ -233,7 +303,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   };
 
   // Transformation matrix = r * p * s;
-  float4x4 temp = {0};
+  float4x4 temp = {.row0 = {0}};
   mulmf44(&p, &r, &temp);
   mulmf44(&s, &temp, m);
 

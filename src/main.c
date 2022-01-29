@@ -182,7 +182,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .aspect = (float)WIDTH / (float)HEIGHT,
       .fov = qtr_pi * 2,
       .near = 0.01f,
-      .far = 100.0f,
+      .far = 1000.0f,
   };
 
   SDL_Log("%s", "Initializing Volk");
@@ -709,13 +709,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Calculate sun view proj matrix for shadow mapping
     float4x4 sun_vp = {.row0 = {0}};
     {
-      float3 sun_pos = sky_data.sun_dir * -50.0f;
+      float3 sun_pos = sky_data.sun_dir * -128.0f;
 
       float4x4 sun_view = {.row0 = {0}};
       look_at(&sun_view, sun_pos, (float3){0}, (float3){0, 1, 0});
 
       float4x4 sun_proj = {.row0 = {0}};
-      orthographic(&sun_proj, 128, 128, 0.1f, 100.0f);
+      orthographic(&sun_proj, 256, 256, 0.1f, 256.0f);
 
       mulmf44(&sun_proj, &sun_view, &sun_vp);
     }

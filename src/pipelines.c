@@ -792,7 +792,7 @@ uint32_t create_shadow_pipeline(VkDevice device,
     raster_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_state.cullMode = VK_CULL_MODE_NONE;
+    raster_state.cullMode = VK_CULL_MODE_FRONT_BIT;
     raster_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};
