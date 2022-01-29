@@ -1816,7 +1816,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .image = env_cubemap.image,
         .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
-
         .components =
             (VkComponentMapping){
                 VK_COMPONENT_SWIZZLE_R,
@@ -1846,11 +1845,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     VkAttachmentDescription color_attachment = {
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
@@ -3101,9 +3100,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
       // Draw Scene Shadows
       {
-
         TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, shadow_buffer,
-                          "Draw Scene Shadows", 3, true);
+                          "Draw Scene Shadows", 2, true);
 
         vkCmdBindPipeline(shadow_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->shadow_pipe);
@@ -3147,7 +3145,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   }
 
   // Render Env Cube Map
-  /*
   {
     TracyCZoneN(trcy_e, "demo_render_frame env cube render", true);
 
@@ -3169,7 +3166,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         assert(err == VK_SUCCESS);
       }
 
-      TracyCVkNamedZone(gpu_gfx_ctx, shadow_scope, env_cube_buffer,
+      TracyCVkNamedZone(gpu_gfx_ctx, env_cube_scope, env_cube_buffer,
                         "Env Cube Map", 1, true);
 
       cmd_begin_label(env_cube_buffer, "env cube",
@@ -3193,27 +3190,49 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                              VK_SUBPASS_CONTENTS_INLINE);
       }
 
-      VkViewport viewport = {0, 0, ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, 0, 1};
+      VkViewport viewport = {
+          0, ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, -ENV_CUBEMAP_DIM, 0, 1};
       VkRect2D scissor = {{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}};
       vkCmdSetViewport(env_cube_buffer, 0, 1, &viewport);
       vkCmdSetScissor(env_cube_buffer, 0, 1, &scissor);
 
       // Render Sky to cubemap
+      // Here we're using the Vulkan Multiview extension to draw to each face
+      // of the cubemap at once
       {
-        TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, env_cube_buffer,
-                          "Draw Env Cube Map", 3, true);
+        TracyCVkNamedZone(gpu_gfx_ctx, env_cube_draw, env_cube_buffer,
+                          "Draw Env Cube Map", 2, true);
 
         vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->sky_cube_pipeline);
 
-        TracyCVkZoneEnd(scene_scope);
+        vkCmdBindDescriptorSets(
+            env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            d->sky_cube_layout, 0, 1, &d->skydome_descriptor_sets[frame_idx], 0,
+            NULL);
+
+        // Draw the skydome
+        VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
+
+        uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
+        size_t idx_size =
+            idx_count * sizeof(uint16_t) >> d->skydome_gpu.surfaces[0].idx_type;
+
+        VkBuffer buffers[1] = {b};
+        VkDeviceSize offsets[1] = {idx_size};
+
+        vkCmdBindIndexBuffer(env_cube_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindVertexBuffers(env_cube_buffer, 0, 1, buffers, offsets);
+        vkCmdDrawIndexed(env_cube_buffer, idx_count, 1, 0, 0, 0);
+
+        TracyCVkZoneEnd(env_cube_draw);
       }
 
       vkCmdEndRenderPass(env_cube_buffer);
 
       cmd_end_label(env_cube_buffer);
 
-      TracyCVkZoneEnd(shadow_scope);
+      TracyCVkZoneEnd(env_cube_scope);
 
       err = vkEndCommandBuffer(env_cube_buffer);
       assert(err == VK_SUCCESS);
@@ -3240,7 +3259,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
     TracyCZoneEnd(trcy_e);
   }
-  */
 
   // Render Main Scene & UI
   {
@@ -3909,6 +3927,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       }
       if (shadow_sem != VK_NULL_HANDLE) {
         wait_sems[wait_sem_count] = shadow_sem;
+        wait_stage_flags[wait_sem_count++] =
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+      }
+      if (env_cube_sem != VK_NULL_HANDLE) {
+        wait_sems[wait_sem_count] = env_cube_sem;
         wait_stage_flags[wait_sem_count++] =
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       }

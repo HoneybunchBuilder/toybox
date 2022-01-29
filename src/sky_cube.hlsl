@@ -5,7 +5,7 @@ ConstantBuffer<SkyData> sky_data : register(b0, space0); // Fragment Stage Only
 
 struct VertexIn
 {
-    uint vert_idx : SV_VertexID;
+    float3 local_pos : SV_POSITION;
     uint view_idx : SV_ViewID;
 };
 
@@ -15,11 +15,50 @@ struct Interpolators
     float3 view_pos : TEXCOORD0;
 };
 
+// Per view matrix look up table
+// So that each view is pointing at the right face of the cubemap
+// Generated manually by doing the math on the CPU and writing the values here
+static const float4x4 view_proj_lut[6] = {
+    // X+
+    {0.00000000, 0.00000000, 0.00001, -1.00000000,
+     0.00000000, -0.811820984, 0.00000000, 0.00000000,
+     -0.811820984, 0.00000000, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, 0.0100000994, 0.00000000,},
+    // X-
+    {0.00000000, 0.00000000, 0.00001, 1.00000000,
+     0.00000000, -0.811820984, 0.00000000, 0.00000000,
+     0.811820984, 0.00000000, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, 0.0100000994, 0.00000000,},
+    // Y+
+    {-0.811820984, 0.00000000, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, 0.00001, -1.0,
+     0.00000000, -0.811820984, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, 0.01, 0.00000000,},
+    // Y-
+    {0.811820984, 0.00000000, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, -0.00001, 1.0,
+     0.00000000, -0.811820984, 0.00000000, 0.00000000,
+     0.00000000, 0.00000000, 0.01, 0.00000000,},
+    // Z+
+    {-0.81182, 0.000000, 0.00000, 0.00,
+     0.00000, -0.81182, 0.00000, 0.00,
+     0.00000, 0.000000, -0.00001, 1.0000,
+     0.00000, 0.000000, 0.01, 0.00,},
+    // Z-
+    {0.81182, 0.000000, 0.00000, 0.00,
+     0.00000, -0.81182, 0.00000, 0.00,
+     0.00000, 0.000000, 0.00001, -1.0000,
+     0.00000, 0.000000, 0.01, 0.00,},
+};
+
 Interpolators vert(VertexIn i)
 {
+    float4x4 vp = view_proj_lut[i.view_idx];
+
     Interpolators o;
-    o.view_pos = float3((i.vert_idx << 1) & 2, i.vert_idx & 2, i.view_idx);
-    o.clip_pos = float4(o.view_pos.xy * 2.0f + -1.0f, 0.5f, 1.0f);
+    o.view_pos = i.local_pos;
+    o.view_pos.xy *= -1.0;
+    o.clip_pos = mul(float4(i.local_pos, 1.0), vp);
     return o;
 }
 
