@@ -2714,11 +2714,22 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         const GPUMaterial *mat = &d->main_scene->materials[i];
 
         uint32_t tex_base_idx = i * MAX_MATERIAL_TEXTURES;
-        for (uint32_t ii = 0; ii < mat->texture_count; ++ii) {
-          uint32_t tex_ref = mat->texture_refs[ii];
+        uint32_t last_tex_ref = 0xFFFFFFFF;
+        uint32_t tex_ref_idx = 0;
+        for (uint32_t ii = 0; ii < mat->texture_count;) {
+
+          // There may be gaps in between texture references
+          uint32_t tex_ref = mat->texture_refs[tex_ref_idx++];
+          if (tex_ref != last_tex_ref) {
+            last_tex_ref = tex_ref;
+          } else {
+            continue;
+          }
+
           const GPUTexture *texture = &d->main_scene->textures[tex_ref];
           tex_info[tex_base_idx + ii] = (VkDescriptorImageInfo){
               NULL, texture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+          ii++;
         }
       }
 
@@ -2743,7 +2754,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
             .pImageInfo = &tex_info[tex_idx],
         };
 
-        if (mat->texture_count > 1) {
+        if (mat->feature_perm & GLTF_PERM_NORMAL_MAP) {
           tex_idx++;
         }
 
@@ -2755,7 +2766,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
             .pImageInfo = &tex_info[tex_idx],
         };
 
-        if (mat->texture_count > 2) {
+        if (mat->feature_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
           tex_idx++;
         }
 

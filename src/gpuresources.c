@@ -1396,7 +1396,7 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
 
   m->feature_perm = feat_perm;
   m->texture_count = tex_count;
-  memcpy(m->texture_refs, tex_refs, sizeof(uint32_t) * tex_count);
+  memcpy(m->texture_refs, tex_refs, sizeof(uint32_t) * MAX_MATERIAL_TEXTURES);
 
   // Create host buffer for material data
   m->const_buffer = create_gpuconstbuffer(device, vma_alloc, vk_alloc,
