@@ -1833,10 +1833,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/TestScene.glb") !=
-        0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/PBRTest.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append TestScene to main scene");
+                   "Failed to append PBRTest to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
