@@ -2035,9 +2035,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Bistro to main scene");
+                   "Failed to append Sponza to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
