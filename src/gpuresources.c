@@ -6,6 +6,7 @@
 #include "vkdbg.h"
 
 #include "common.hlsli"
+#define ON_CPU
 #include "gltf.hlsli"
 
 #include <SDL2/SDL_image.h>
@@ -1322,16 +1323,16 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
   uint64_t feat_perm = 0;
   GLTFMaterialData mat_data = {0};
   {
-    memcpy(mat_data.pbr_metallic_roughness.base_color_factor,
+    memcpy(&mat_data.pbr_metallic_roughness.base_color_factor,
            gltf->pbr_metallic_roughness.base_color_factor, sizeof(float) * 4);
     mat_data.pbr_metallic_roughness.metallic_factor =
         gltf->pbr_metallic_roughness.metallic_factor;
     mat_data.pbr_metallic_roughness.roughness_factor =
         gltf->pbr_metallic_roughness.roughness_factor;
 
-    memcpy(mat_data.pbr_specular_glossiness.diffuse_factor,
+    memcpy(&mat_data.pbr_specular_glossiness.diffuse_factor,
            gltf->pbr_specular_glossiness.diffuse_factor, sizeof(float) * 4);
-    memcpy(mat_data.pbr_specular_glossiness.specular_factor,
+    memcpy(&mat_data.pbr_specular_glossiness.specular_factor,
            gltf->pbr_specular_glossiness.specular_factor, sizeof(float) * 3);
     mat_data.pbr_specular_glossiness.glossiness_factor =
         gltf->pbr_specular_glossiness.glossiness_factor;
@@ -1342,18 +1343,18 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
 
     mat_data.ior = gltf->ior.ior;
 
-    memcpy(mat_data.specular.color_factor, gltf->specular.specular_color_factor,
-           sizeof(float) * 3);
+    memcpy(&mat_data.specular.color_factor,
+           gltf->specular.specular_color_factor, sizeof(float) * 3);
     mat_data.specular.specular_factor = gltf->specular.specular_factor;
 
-    memcpy(mat_data.sheen.color_factor, gltf->sheen.sheen_color_factor,
+    memcpy(&mat_data.sheen.color_factor, gltf->sheen.sheen_color_factor,
            sizeof(float) * 3);
     mat_data.sheen.roughness_factor = gltf->sheen.sheen_roughness_factor;
 
     mat_data.transmission_factor = gltf->transmission.transmission_factor;
 
     mat_data.volume.thickness_factor = gltf->volume.thickness_factor;
-    memcpy(mat_data.volume.attenuation_color, gltf->volume.attenuation_color,
+    memcpy(&mat_data.volume.attenuation_color, gltf->volume.attenuation_color,
            sizeof(float) * 3);
     mat_data.volume.attenuation_distance = gltf->volume.attenuation_distance;
   }

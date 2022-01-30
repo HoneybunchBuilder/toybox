@@ -4,7 +4,7 @@
 
 // Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
-Texture2D albedo_map : register(t1, space0); // Fragment Stage Only
+Texture2D base_color_map : register(t1, space0); // Fragment Stage Only
 Texture2D normal_map : register(t2, space0); // Fragment Stage Only
 Texture2D metal_rough_map : register(t3, space0); // Fragment Stage Only
 //Texture2D emissive_map : register(t4, space0); // Fragment Stage Only
@@ -40,8 +40,6 @@ struct Interpolators
     float4 shadowcoord : TEXCOORD1;
 };
 
-#define AMBIENT 0.1
-
 Interpolators vert(VertexIn i)
 {
     // Apply displacement map
@@ -66,7 +64,7 @@ Interpolators vert(VertexIn i)
 float4 frag(Interpolators i) : SV_TARGET
 {
     // Sample textures up-front
-    float3 albedo = albedo_map.Sample(static_sampler, i.uv).rgb;
+    float3 base_color = float3(0.5, 0.5, 0.5);
 
     // World-space normal
     float3 N = normalize(i.normal);
@@ -85,44 +83,73 @@ float4 frag(Interpolators i) : SV_TARGET
         N = normalize(mul(tangentSpaceNormal, tbn));
     }
 
-    float3 L = normalize(light_data.light_dir);
+    // Per view calcs
     float3 V = normalize(camera_data.view_pos - i.world_pos);
-    float3 H = normalize(V + L);
+    float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+    float3 reflection = -normalize(reflect(V, N));
+    reflection.y *= -1.0;
 
-    float3 color = float3(0.0, 0.0, 0.0);
+    float3 out_color = float3(0.0, 0.0, 0.0);
 
     if(PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS)
     { 
         float metallic = material_data.pbr_metallic_roughness.metallic_factor;
         float roughness = material_data.pbr_metallic_roughness.roughness_factor;
 
+        // TODO: Handle alpha masking
+        {
+            float4 pbr_color_factor =  material_data.pbr_metallic_roughness.base_color_factor;
+            float4 pbr_base_color = base_color_map.Sample(static_sampler, i.uv) * pbr_color_factor;
+            base_color = pbr_base_color.rgb;
+        }
+
         if(PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX)
         {
             // The red channel of this texture *may* store occlusion.
             // TODO: Check the perm for occlusion
-            metallic = metal_rough_map.Sample(static_sampler, i.uv).b;
-            roughness = metal_rough_map.Sample(static_sampler, i.uv).g;
+            float4 mr_sample = metal_rough_map.Sample(static_sampler, i.uv);
+            roughness = mr_sample.g * roughness;
+            metallic = mr_sample.b * metallic;
         }
 
-        // Angle between surface normal and outgoing light direction.
-        float cosLo = max(0.0, dot(N, V));
+        float alpha_roughness = roughness * roughness;
 
-        // Specular reflection vector
-        float3 Lr = 2.0 * cosLo * N - V; // Used later for ambient lighting
+        float3 f0 = float3(0.4, 0.4, 0.4);
 
-        // Fresnel reflectance at normal incidence (for metals use albedo color).
-        float3 F0 = lerp(Fdielectric, albedo, metallic);
+        float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
+        diffuse_color *= 1.0 - metallic;
+
+        float3 specular_color = lerp(f0, base_color, metallic);
+        float reflectance = max(max(specular_color.r, specular_color.g), specular_color.b);
+
+        // For typical incident reflectance range (between 4% to 100%) set the grazing reflectance to 100% for typical fresnel effect.
+        // For very low reflectance range on highly diffuse objects (below 4%), incrementally reduce grazing reflecance to 0%.
+        float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
+        float3 specular_environment_R0 = specular_color;
+        float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
         //for each light
         {
             float3 light_color = float3(1, 1, 1);
+            float3 L = normalize(light_data.light_dir);
 
-            color += pbr_light(F0, light_color, albedo, metallic, roughness, N, L, V, cosLo);
+            PBRLight light = {
+                light_color,
+                L,
+                specular_environment_R0,
+                specular_environment_R90,
+                alpha_roughness,
+                diffuse_color,
+            };
+
+            out_color += pbr_lighting(light, N, V, NdotV);
         }
 
         // TODO: Ambient IBL
-        float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * albedo;
-        color += ambient;
+
+        // TODO: Ambient Occlusion
+
+        // TODO: Emissive Texture
     }
     else // Phong fallback
     {
@@ -130,19 +157,27 @@ float4 frag(Interpolators i) : SV_TARGET
 
         // for each light
         {
+            float3 L = normalize(light_data.light_dir);
+            float3 H = normalize(V + L);
+            
             float3 light_color = float3(1, 1, 1);
-            color += phong_light(albedo, light_color, gloss, N, L, V, H);
+            out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
         }
-
-        float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * albedo;
-        color += ambient;
     }
 
     // Gamma correct
-    color = pow(color, float3(0.4545, 0.4545, 0.4545));
+    out_color = pow(out_color, float3(0.4545, 0.4545, 0.4545));
 
-    //float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler);
-    //color *= shadow;
+    // Shadow hack
+    float3 L = normalize(light_data.light_dir);
+    float NdotL = clamp(dot(N, L), 0.001, 1.0);
 
-    return float4(color, 1);
+    float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler, NdotL);
+    out_color *= shadow;
+
+    // Want to add ambient term after shadowing
+    float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
+    out_color += ambient;
+
+    return float4(out_color, 1);
 }

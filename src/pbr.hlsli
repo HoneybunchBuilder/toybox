@@ -6,62 +6,32 @@
 static const float3 Fdielectric = 0.04;
 static const float Epsilon = 0.00001;
 
-float distributionGGX(float3 N, float3 H, float roughness) {
-  float a = roughness * roughness;
-  float a2 = a * a;
-  float NdotH = max(dot(N, H), 0.0);
-  float NdotH2 = NdotH * NdotH;
-
-  float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-  denom = PI * denom * denom;
-
-  return a2 / denom;
+// Basic Lambertian diffuse
+// Implementation from Lambert's Photometria https://archive.org/details/lambertsphotome00lambgoog
+float3 diffuse(float3 color) {
+  return color / PI;
 }
 
-float geometrySchlickGGX(float NdotV, float roughness) {
-  float r = roughness + 1.0;
-  float k = (r * r) / 8.0;
-
-  float denom = NdotV * (1.0 - k) + k;
-
-  return NdotV / denom;
+// The following equation models the Fresnel reflectance term of the spec equation (aka F())
+float3 specularReflection(float3 reflectance_0, float3 reflectance_90, float VdotH) {
+  return reflectance_0 + (reflectance_90, - reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
 }
 
-float geometrySmith(float3 N, float3 V, float3 L, float roughness) {
-  float NdotV = max(dot(N, V), 0.0);
-  float NdotL = max(dot(N, L), 0.0);
-  float ggx2 = geometrySchlickGGX(NdotV, roughness);
-  float ggx1 = geometrySchlickGGX(NdotL, roughness);
-
-  return ggx1 * ggx2;
-}
-
-// GGX/Towbridge-Reitz normal distribution function.
-// Uses Disney's reparametrization of alpha = roughness^2.
-float ndfGGX(float cosLh, float roughness)
+// This calculates the specular geometric attenuation (aka G()),
+// where rougher material will reflect less light back to the viewer.
+float geometricOcclusion(float NdotL, float NdotV, float alpha_roughness)
 {
-  float alpha   = roughness * roughness;
-  float alphaSq = alpha * alpha;
-
-  float denom = (cosLh * cosLh) * (alphaSq - 1.0) + 1.0;
-  return alphaSq / (PI * denom * denom);
+  float r = alpha_roughness;
+  float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
+  float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
+  return attenuationL * attenuationV;
 }
 
-// Single term for separable Schlick-GGX below.
-float gaSchlickG1(float cosTheta, float k)
+// The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
+// Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
+float microfacetDistribution(float alpha_roughness, float NdotH)
 {
-  return cosTheta / (cosTheta * (1.0 - k) + k);
-}
-
-// Schlick-GGX approximation of geometric attenuation function using Smith's method.
-float gaSchlickGGX(float cosLi, float cosLo, float roughness)
-{
-  float r = roughness + 1.0;
-  float k = (r * r) / 8.0; // Epic suggests using this roughness remapping for analytic lights.
-  return gaSchlickG1(cosLi, k) * gaSchlickG1(cosLo, k);
-}
-
-
-float3 fresnelSchlick(float cosTheta, float3 F0) {
-  return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+  float roughnessSq = alpha_roughness * alpha_roughness;
+  float f = (NdotH * roughnessSq - NdotH) * NdotH + 1.0;
+  return roughnessSq / (PI * f * f);
 }
