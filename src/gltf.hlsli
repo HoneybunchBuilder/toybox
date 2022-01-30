@@ -13,31 +13,31 @@
 #define GLTF_PERM_UNLIT 0x00000400
 
 typedef struct PBRMetallicRoughness {
-  float base_color_factor[4];
+  float4 base_color_factor;
   float metallic_factor;
   float roughness_factor;
 } PBRMetallicRoughness;
 
 typedef struct PBRSpecularGlossiness {
-  float diffuse_factor[4];
-  float specular_factor[3];
+  float4 diffuse_factor;
+  float3 specular_factor;
   float glossiness_factor;
 } PBRSpecularGlossiness;
 
 typedef struct Specular {
-  float color_factor[3];
+  float3 color_factor;
   float specular_factor;
 } Specular;
 
 typedef struct Sheen {
-  float color_factor[3];
+  float3 color_factor;
   float roughness_factor;
 } Sheen;
 
 typedef struct Volume {
-  float thickness_factor;
-  float attenuation_color[3];
+  float3 attenuation_color;
   float attenuation_distance;
+  float thickness_factor;
 } Volume;
 
 typedef struct GLTFMaterialData {
