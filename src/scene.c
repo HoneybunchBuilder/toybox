@@ -190,6 +190,8 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       // Need to determine which textures the material uses
       // Worst-case the material uses 8 textures
       uint32_t mat_tex_refs[MAX_MATERIAL_TEXTURES] = {0};
+      memset(mat_tex_refs, 0xFFFFFFFF,
+             sizeof(uint32_t) * MAX_MATERIAL_TEXTURES);
       uint32_t mat_tex_count =
           collect_material_textures(data->textures_count, data->textures, mat,
                                     old_tex_count, mat_tex_refs);

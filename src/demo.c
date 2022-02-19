@@ -2035,9 +2035,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Sponza to main scene");
+                   "Failed to append Bistro to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -2487,6 +2487,7 @@ void demo_destroy(Demo *d) {
     vkDestroyImageView(device, d->shadow_map_views[i], vk_alloc);
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
+    vkDestroyDescriptorPool(d->device, d->dyn_desc_pools[i], d->vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
     vkDestroySemaphore(device, d->shadow_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->env_complete_sems[i], vk_alloc);
@@ -2943,7 +2944,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
           // There may be gaps in between texture references
           uint32_t tex_ref = mat->texture_refs[tex_ref_idx++];
-          if (tex_ref != last_tex_ref) {
+          if (tex_ref != 0xFFFFFFFF && tex_ref != last_tex_ref) {
             last_tex_ref = tex_ref;
           } else {
             continue;
@@ -2969,36 +2970,57 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         uint32_t tex_idx = i * MAX_MATERIAL_TEXTURES;
 
+        // Collect texture info indices
+        uint32_t first_valid_tex_idx = 0xFFFFFFFF;
+        for (uint32_t i = 0; i < 3; ++i) {
+          if (tex_info[i].imageView != VK_NULL_HANDLE) {
+            first_valid_tex_idx = i;
+            break;
+          }
+        }
+        if (first_valid_tex_idx == 0xFFFFFFFF) {
+          // TODO: Fall back to some default image
+          SDL_TriggerBreakpoint();
+        }
+
+        uint32_t tex_info_indices[3] = {0};
+        memset(tex_info_indices, first_valid_tex_idx, sizeof(uint32_t) * 3);
+
+        uint32_t tex_info_idx = first_valid_tex_idx;
+        if (mat->feature_perm & GLTF_PERM_BASE_COLOR_MAP) {
+          tex_info_indices[0] = tex_info_idx++;
+        }
+
+        if (mat->feature_perm & GLTF_PERM_NORMAL_MAP) {
+          tex_info_indices[1] = tex_info_idx++;
+        }
+
+        if (mat->feature_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
+          tex_info_indices[2] = tex_info_idx++;
+        }
+
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[tex_idx],
+            .pImageInfo = &tex_info[tex_idx + tex_info_indices[0]],
         };
-
-        if (mat->feature_perm & GLTF_PERM_NORMAL_MAP) {
-          tex_idx++;
-        }
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[tex_idx],
+            .pImageInfo = &tex_info[tex_idx + tex_info_indices[1]],
         };
-
-        if (mat->feature_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
-          tex_idx++;
-        }
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &tex_info[tex_idx],
+            .pImageInfo = &tex_info[tex_idx + tex_info_indices[2]],
         };
       }
     }

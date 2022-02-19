@@ -98,8 +98,12 @@ float4 frag(Interpolators i) : SV_TARGET
 
         // TODO: Handle alpha masking
         {
-            float4 pbr_color_factor =  material_data.pbr_metallic_roughness.base_color_factor;
-            float4 pbr_base_color = base_color_map.Sample(static_sampler, i.uv) * pbr_color_factor;
+            float4 pbr_base_color = material_data.pbr_metallic_roughness.base_color_factor;
+            if(PermutationFlags & GLTF_PERM_BASE_COLOR_MAP)
+            {
+                pbr_base_color *= base_color_map.Sample(static_sampler, i.uv);
+            }
+
             base_color = pbr_base_color.rgb;
         }
 
