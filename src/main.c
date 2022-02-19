@@ -707,7 +707,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Calculate sun view proj matrix for shadow mapping
     float4x4 sun_vp = {.row0 = {0}};
     {
-      float radius = 30.0f;
+      float radius = 80.0f;
       float3 sun_pos = sky_data.sun_dir * (-radius * 0.5f);
 
       float4x4 sun_view = {.row0 = {0}};
@@ -815,9 +815,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SDL_DestroyWindow(window);
   window = NULL;
 
-  IMG_Quit();
-  SDL_Quit();
-
   demo_destroy(&d);
 
 #ifdef VALIDATION
@@ -830,6 +827,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   vkDestroyInstance(instance, vk_alloc_ptr);
   instance = VK_NULL_HANDLE;
+
+  IMG_Quit();
+  SDL_Quit();
 
   destroy_arena_allocator(arena);
   destroy_standard_allocator(std_alloc);

@@ -1366,9 +1366,15 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
         NULL) {
       feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
     }
+    if (gltf->pbr_metallic_roughness.base_color_texture.texture != NULL) {
+      feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
+    }
   }
   if (gltf->has_pbr_specular_glossiness) {
     feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
+    if (gltf->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
+      feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
+    }
   }
   if (gltf->has_clearcoat) {
     feat_perm |= GLTF_PERM_CLEARCOAT;
