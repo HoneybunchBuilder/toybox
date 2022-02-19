@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #define TRACY_ENABLE
+//#define TRACY_VK_C_ENABLE
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
@@ -13,7 +14,7 @@
 #define TracyCategoryColorMemory 0xff8c69
 #define TracyCategoryColorWait 0xff0000
 
-#ifdef TRACY_ENABLE
+#ifdef TRACY_VK_C_ENABLE
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
