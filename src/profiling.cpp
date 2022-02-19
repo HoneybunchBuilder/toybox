@@ -1,6 +1,6 @@
 #include "profiling.h"
 
-#ifdef TRACY_ENABLE
+#ifdef TRACY_VK_C_ENABLE
 
 #include "Tracy.hpp"
 #include "client/TracyCallstack.hpp"

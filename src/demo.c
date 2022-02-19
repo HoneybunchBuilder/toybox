@@ -3114,9 +3114,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
       vkCmdEndRenderPass(shadow_buffer);
 
-      cmd_end_label(shadow_buffer);
-
       TracyCVkZoneEnd(shadow_scope);
+      TracyCVkCollect(gpu_gfx_ctx, shadow_buffer);
+
+      cmd_end_label(shadow_buffer);
 
       err = vkEndCommandBuffer(shadow_buffer);
       assert(err == VK_SUCCESS);
@@ -3230,9 +3231,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
       vkCmdEndRenderPass(env_cube_buffer);
 
-      cmd_end_label(env_cube_buffer);
-
       TracyCVkZoneEnd(env_cube_scope);
+      TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer);
+
+      cmd_end_label(env_cube_buffer);
 
       err = vkEndCommandBuffer(env_cube_buffer);
       assert(err == VK_SUCCESS);
