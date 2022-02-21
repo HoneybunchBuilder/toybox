@@ -1,6 +1,7 @@
 // Adapted from: https://github.com/shff/opengl_sky
 #include "common.hlsli"
 #include "sky_common.hlsli"
+#include "pbr.hlsli"
 
 ConstantBuffer<SkyData> sky_data : register(b0, space0); // Fragment Stage Only
 
@@ -37,6 +38,15 @@ FragmentOut frag(Interpolators i) {
   float3 view_pos = i.view_pos;
   
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);
+
+  // Tonemap
+  float exposure = 4.5f; // TODO: pass in as a parameter
+  color = tonemap(color * exposure);
+  color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
+
+  // Gamma correction
+  float gamma = 2.2f; // TODO: pass in as a parameter
+  color = pow(color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
 
   FragmentOut o;
   o.color = float4(color, 1.0);

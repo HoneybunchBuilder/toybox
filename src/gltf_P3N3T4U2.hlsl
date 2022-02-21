@@ -169,8 +169,14 @@ float4 frag(Interpolators i) : SV_TARGET
         }
     }
 
-    // Gamma correct
-    out_color = pow(out_color, float3(0.4545, 0.4545, 0.4545));
+    // Tonemap
+    float exposure = 4.5f; // TODO: pass in as a parameter
+    out_color = tonemap(out_color * exposure);
+    out_color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
+
+    // Gamma correction
+    float gamma = 2.2f; // TODO: pass in as a parameter
+    out_color = pow(out_color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
 
     // Shadow hack
     float3 L = normalize(light_data.light_dir);
