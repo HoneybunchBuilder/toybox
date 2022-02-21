@@ -51,6 +51,12 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
                                   uint32_t w, uint32_t h,
                                   VkPipelineLayout layout, VkPipeline *pipe);
 
+uint32_t create_brdf_pipeline(VkDevice device,
+                              const VkAllocationCallbacks *vk_alloc,
+                              VkPipelineCache cache, VkRenderPass pass,
+                              uint32_t w, uint32_t h, VkPipelineLayout layout,
+                              VkPipeline *pipe);
+
 enum GLTF_PERMUTATIONS {
   GLTF_PERM_NONE = 0x00000000,
   GLTF_PERM_BASE_COLOR_MAP = 0x00000001,

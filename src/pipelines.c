@@ -1,5 +1,7 @@
 #include "pipelines.h"
 
+#include "brdf_lut_frag.h"
+#include "brdf_lut_vert.h"
 #include "color_mesh_frag.h"
 #include "color_mesh_vert.h"
 #include "depth_frag.h"
@@ -980,6 +982,128 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
     vkDestroyShaderModule(device, vert_mod, vk_alloc);
     vkDestroyShaderModule(device, frag_mod, vk_alloc);
   }
+
+  *pipe = pipeline;
+  return err;
+}
+
+uint32_t create_brdf_pipeline(VkDevice device,
+                              const VkAllocationCallbacks *vk_alloc,
+                              VkPipelineCache cache, VkRenderPass pass,
+                              uint32_t w, uint32_t h, VkPipelineLayout layout,
+                              VkPipeline *pipe) {
+  VkResult err = VK_SUCCESS;
+
+  // Load Shaders
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(brdf_lut_vert),
+        .pCode = (const uint32_t *)brdf_lut_vert,
+    };
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
+    assert(err == VK_SUCCESS);
+
+    create_info = (VkShaderModuleCreateInfo){
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(brdf_lut_frag),
+        .pCode = (const uint32_t *)brdf_lut_frag,
+    };
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
+    assert(err == VK_SUCCESS);
+  }
+
+  VkPipelineShaderStageCreateInfo vert_stage = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = vert_mod,
+      .pName = "vert",
+  };
+
+  VkPipelineShaderStageCreateInfo frag_stage = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = frag_mod,
+      .pName = "frag",
+  };
+
+  VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+  VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+  };
+
+  VkViewport viewport = {0, 0, w, h, 0, 1};
+  VkRect2D scissor = {{0, 0}, {w, h}};
+
+  VkPipelineViewportStateCreateInfo viewport_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+      .viewportCount = 1,
+      .pViewports = &viewport,
+      .scissorCount = 1,
+      .pScissors = &scissor,
+  };
+  VkPipelineRasterizationStateCreateInfo raster_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .polygonMode = VK_POLYGON_MODE_FILL,
+      .cullMode = VK_CULL_MODE_BACK_BIT,
+      .frontFace = VK_FRONT_FACE_CLOCKWISE,
+      .lineWidth = 1.0f,
+  };
+  VkPipelineMultisampleStateCreateInfo multisample_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+  };
+  VkPipelineDepthStencilStateCreateInfo depth_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      .maxDepthBounds = 1.0f,
+  };
+  VkPipelineColorBlendAttachmentState attachment_state = {
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+  VkPipelineColorBlendStateCreateInfo color_blend_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      .attachmentCount = 1,
+      .pAttachments = &attachment_state,
+  };
+
+  VkPipelineDynamicStateCreateInfo dynamic_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+  };
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount =
+          sizeof(shader_stages) / sizeof(VkPipelineShaderStageCreateInfo),
+      .pStages = shader_stages,
+      .pVertexInputState = &vert_input_state,
+      .pInputAssemblyState = &input_assembly_state,
+      .pViewportState = &viewport_state,
+      .pRasterizationState = &raster_state,
+      .pMultisampleState = &multisample_state,
+      .pDepthStencilState = &depth_state,
+      .pColorBlendState = &color_blend_state,
+      .pDynamicState = &dynamic_state,
+      .layout = layout,
+      .renderPass = pass,
+  };
+
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
+                                  &pipeline);
+  if (err != VK_SUCCESS) {
+    assert(false);
+    return err;
+  }
+
+  vkDestroyShaderModule(device, vert_mod, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod, vk_alloc);
 
   *pipe = pipeline;
   return err;
