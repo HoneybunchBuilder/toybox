@@ -27,8 +27,8 @@
 #endif
 
 // TODO: Make more adjustable
-#define SHADOW_MAP_WIDTH 2048
-#define SHADOW_MAP_HEIGHT 2048
+#define SHADOW_MAP_WIDTH 4096
+#define SHADOW_MAP_HEIGHT 4096
 
 // TODO: Make more adjustable
 #define ENV_CUBEMAP_DIM 512
@@ -2035,9 +2035,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Bistro.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/PBRTest.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Bistro to main scene");
+                   "Failed to append PBRTest to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }

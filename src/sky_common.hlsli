@@ -39,9 +39,21 @@ float fbm(float3 p)
 
 float3 sky(float time, float cirrus, float cumulus, float3 sun_dir, float3 view_pos)
 {
+  /* alternate settings
+  // Original
   const float Br = 0.0025;
   const float Bm = 0.0003;
   const float g = 0.9800;
+
+  // Softer
+  const float Br = 0.0005;
+  const float Bm = 0.0003;
+  const float g = 0.9200;
+  */
+
+  const float Br = 0.0020;
+  const float Bm = 0.0009;
+  const float g = 0.9200;
 
   const float3 nitrogen = float3(0.650, 0.570, 0.475);
   const float3 Kr = Br / pow(nitrogen, float3(4.0, 4.0, 4.0));
