@@ -1239,21 +1239,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     subpass.pColorAttachments = attachment_refs;
     subpass.pDepthStencilAttachment = &depth_attachment_ref;
 
-    VkSubpassDependency subpass_dep = {0};
-    subpass_dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    subpass_dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    subpass_dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
     VkRenderPassCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     create_info.attachmentCount = 2;
     create_info.pAttachments = attachments;
     create_info.subpassCount = 1;
     create_info.pSubpasses = &subpass;
-    create_info.pDependencies = &subpass_dep;
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &main_pass);
     assert(err == VK_SUCCESS);
 
@@ -2367,6 +2358,201 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         vkGetCalibratedTimestampsEXT);
   }
 
+  // Calculate BRDF LUT
+  VkRenderPass brdf_lut_pass = VK_NULL_HANDLE;
+  VkFramebuffer brdf_lut_framebuffer = VK_NULL_HANDLE;
+  VkPipelineLayout brdf_lut_pipe_layout = VK_NULL_HANDLE;
+  VkPipeline brdf_lut_pipe = VK_NULL_HANDLE;
+  VkFence brdf_lut_fence = VK_NULL_HANDLE;
+  {
+    (void)brdf_lut_pass; // Must have some line of code here for auto formatting
+
+    // Create Render Pass
+    {
+      VkAttachmentDescription color_attachment = {
+          .format = VK_FORMAT_R16G16_SFLOAT,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+          .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+          .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+          .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      };
+
+      VkAttachmentDescription attachments[1] = {color_attachment};
+
+      VkAttachmentReference color_attachment_ref = {
+          0,
+          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      };
+
+      VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
+
+      VkSubpassDescription subpass = {
+          .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+          .colorAttachmentCount = 1,
+          .pColorAttachments = attachment_refs,
+      };
+
+      VkSubpassDependency subpass_deps[2] = {
+          {
+              .srcSubpass = VK_SUBPASS_EXTERNAL,
+              .dstSubpass = 0,
+              .srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+              .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+          },
+          {
+              .srcSubpass = 0,
+              .dstSubpass = VK_SUBPASS_EXTERNAL,
+              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+              .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+              .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+          },
+      };
+
+      VkRenderPassCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+          .attachmentCount = 1,
+          .pAttachments = attachments,
+          .subpassCount = 1,
+          .pSubpasses = &subpass,
+          .dependencyCount = 2,
+          .pDependencies = subpass_deps,
+      };
+
+      err = vkCreateRenderPass(device, &create_info, vk_alloc, &brdf_lut_pass);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Create Framebuffer
+    {
+      VkFramebufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .attachmentCount = 1,
+          .pAttachments = &d->brdf_lut_view,
+          .renderPass = brdf_lut_pass,
+          .width = BRDF_LUT_DIM,
+          .height = BRDF_LUT_DIM,
+          .layers = 1,
+      };
+
+      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
+                                &brdf_lut_framebuffer);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Create Pipeline Layout
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      };
+      err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                   &brdf_lut_pipe_layout);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Create Pipeline
+    {
+      err = create_brdf_pipeline(device, vk_alloc, pipeline_cache,
+                                 brdf_lut_pass, BRDF_LUT_DIM, BRDF_LUT_DIM,
+                                 brdf_lut_pipe_layout, &brdf_lut_pipe);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Create Fence
+    {
+      VkFenceCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+      };
+      err = vkCreateFence(device, &create_info, vk_alloc, &brdf_lut_fence);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Use the first graphics buffer
+    VkCommandBuffer cmd = d->graphics_buffers[0];
+
+    // Record Commands
+    {
+      VkClearValue clear_value = {
+          .color = {.float32 = {0.0f, 0.0f, 0.0f, 1.0f}}};
+
+      VkRenderPassBeginInfo pass_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+          .renderPass = brdf_lut_pass,
+          .renderArea = {.extent = {.width = BRDF_LUT_DIM,
+                                    .height = BRDF_LUT_DIM}},
+          .clearValueCount = 1,
+          .pClearValues = &clear_value,
+          .framebuffer = brdf_lut_framebuffer,
+      };
+
+      VkCommandBufferBeginInfo begin_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      };
+
+      err = vkBeginCommandBuffer(cmd, &begin_info);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+
+      cmd_begin_label(cmd, "brdf lut", (float4){0.5, 0.1, 0.5, 1.0});
+
+      vkCmdBeginRenderPass(cmd, &pass_info, VK_SUBPASS_CONTENTS_INLINE);
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, brdf_lut_pipe);
+      vkCmdDraw(cmd, 3, 1, 0, 0);
+      vkCmdEndRenderPass(cmd);
+
+      cmd_end_label(cmd);
+
+      err = vkEndCommandBuffer(cmd);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+
+    // Submit Commands
+    {
+      VkSubmitInfo submit_info = {
+          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+          .commandBufferCount = 1,
+          .pCommandBuffers = &cmd,
+      };
+      queue_begin_label(d->graphics_queue, "brdf lut",
+                        (float4){1.0, 0.1, 1.0, 1.0});
+      err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, brdf_lut_fence);
+      queue_end_label(d->graphics_queue);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
   // Create Descriptor Set Pools
   {
     VkDescriptorPoolSize pool_sizes[] = {
@@ -2506,6 +2692,21 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       err = vkCreateFence(device, &create_info, vk_alloc, &d->fences[i]);
       assert(err == VK_SUCCESS);
     }
+  }
+
+  // Wait for BRDF LUT to calculate
+  {
+    vkQueueWaitIdle(d->graphics_queue);
+
+    // Reset the command pool now that we're done with that command buffer
+    vkResetCommandPool(device, d->command_pools[0], 0);
+
+    // Clean up
+    vkDestroyFence(device, brdf_lut_fence, vk_alloc);
+    vkDestroyPipeline(device, brdf_lut_pipe, vk_alloc);
+    vkDestroyPipelineLayout(device, brdf_lut_pipe_layout, vk_alloc);
+    vkDestroyFramebuffer(device, brdf_lut_framebuffer, vk_alloc);
+    vkDestroyRenderPass(device, brdf_lut_pass, vk_alloc);
   }
 
   TracyCZoneEnd(ctx);

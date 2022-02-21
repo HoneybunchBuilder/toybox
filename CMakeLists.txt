@@ -119,11 +119,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # Compile Shaders
-set(shader_includes
-    "${CMAKE_CURRENT_LIST_DIR}/src/common.hlsli"
-    "${CMAKE_CURRENT_LIST_DIR}/src/fullscreenvert.hlsli"
-    "${CMAKE_CURRENT_LIST_DIR}/src/healthbar.hlsli")
-
+file(GLOB shader_includes "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsli")
 file(GLOB shaders "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl")
 
 foreach(shader ${shaders})
