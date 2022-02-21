@@ -34,6 +34,8 @@
 #define ENV_CUBEMAP_DIM 512
 #define IRRADIANCE_CUBEMAP_DIM 64
 
+#define BRDF_LUT_DIM 512
+
 #define MAX_EXT_COUNT 16
 
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
@@ -706,22 +708,24 @@ static bool demo_init_image_views(Demo *d) {
       destroy_gpuimage(d->vma_alloc, &d->depth_buffers);
     }
 
-    VkImageCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    create_info.imageType = VK_IMAGE_TYPE_2D;
-    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    create_info.extent =
-        (VkExtent3D){d->swap_info.width, d->swap_info.height, 1};
-    create_info.mipLevels = 1;
-    create_info.arrayLayers = FRAME_LATENCY;
-    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+        .extent = (VkExtent3D){d->swap_info.width, d->swap_info.height, 1},
+        .mipLevels = 1,
+        .arrayLayers = FRAME_LATENCY,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    };
 
-    VmaAllocationCreateInfo alloc_info = {0};
-    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
-    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    alloc_info.pUserData = (void *)("Depth Buffer Memory");
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .pUserData = (void *)("Depth Buffer Memory"),
+    };
+
     err = create_gpuimage(d->vma_alloc, &create_info, &alloc_info,
                           &d->depth_buffers);
     if (err != VK_SUCCESS) {
@@ -1105,14 +1109,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         NULL,
     };
 
-    VmaAllocatorCreateInfo create_info = {0};
-    create_info.physicalDevice = gpu;
-    create_info.device = device;
-    create_info.pVulkanFunctions = &volk_functions;
-    create_info.instance = instance;
-    create_info.vulkanApiVersion = VK_API_VERSION_1_0;
-    create_info.pAllocationCallbacks = vk_alloc;
-    create_info.pDeviceMemoryCallbacks = &vma_callbacks;
+    VmaAllocatorCreateInfo create_info = {
+        .physicalDevice = gpu,
+        .device = device,
+        .pVulkanFunctions = &volk_functions,
+        .instance = instance,
+        .vulkanApiVersion = VK_API_VERSION_1_0,
+        .pAllocationCallbacks = vk_alloc,
+        .pDeviceMemoryCallbacks = &vma_callbacks,
+    };
+
     err = vmaCreateAllocator(&create_info, &vma_alloc);
     assert(err == VK_SUCCESS);
   }
@@ -2216,6 +2222,67 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
+  // Create BRDF LUT
+  {
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R16G16_SFLOAT,
+        .extent = (VkExtent3D){BRDF_LUT_DIM, BRDF_LUT_DIM, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .pUserData = (void *)("BRDF LUT"),
+    };
+
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info, &d->brdf_lut);
+
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create BRDF LUT View
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = d->brdf_lut.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R16G16_SFLOAT,
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            (VkImageSubresourceRange){
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                1,
+                0,
+                1,
+            },
+    };
+
+    err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
+                            &d->brdf_lut_view);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
   if (!demo_init_framebuffers(d)) {
     assert(false);
     return false;
@@ -2480,6 +2547,9 @@ void demo_destroy(Demo *d) {
   hb_free(d->std_alloc, d->const_buffer_upload_queue);
   hb_free(d->std_alloc, d->mesh_upload_queue);
   hb_free(d->std_alloc, d->texture_upload_queue);
+
+  vkDestroyImageView(device, d->brdf_lut_view, vk_alloc);
+  destroy_gpuimage(vma_alloc, &d->brdf_lut);
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     TracyCVkContextDestroy(d->tracy_gpu_contexts[i]);

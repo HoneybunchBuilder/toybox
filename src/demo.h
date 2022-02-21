@@ -120,6 +120,9 @@ typedef struct Demo {
   VkImageView shadow_map_views[FRAME_LATENCY];
   VkSampler shadow_sampler;
 
+  GPUImage brdf_lut;
+  VkImageView brdf_lut_view;
+
   GPUImage env_cubemap;
   VkImageView env_cubemap_view;
   VkPipelineLayout sky_cube_layout;
