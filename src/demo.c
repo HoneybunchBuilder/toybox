@@ -1349,18 +1349,19 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Immutable Sampler
   VkSampler sampler = VK_NULL_HANDLE;
   {
-    VkSamplerCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    create_info.magFilter = VK_FILTER_LINEAR;
-    create_info.minFilter = VK_FILTER_LINEAR;
-    create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    create_info.anisotropyEnable = VK_FALSE;
-    create_info.maxAnisotropy = 1.0f;
-    create_info.maxLod = 14.0f; // Hack; known number of mips for 8k textures
-    create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 14.0f, // Hack; known number of mips for 8k textures
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
 
@@ -1624,10 +1625,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
          &sampler},
     };
 
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 2;
-    create_info.pBindings = bindings;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = bindings,
+    };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &imgui_set_layout);
     assert(err == VK_SUCCESS);
@@ -1958,6 +1960,132 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
+  uint32_t env_filtered_mip_count =
+      (uint32_t)SDL_floor(log2(ENV_CUBEMAP_DIM)) + 1;
+
+  // Create Filtered Env Map
+  GPUImage env_filtered_cubemap = {0};
+  {
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent = (VkExtent3D){ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, 1},
+        .mipLevels = env_filtered_mip_count,
+        .arrayLayers = 6,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .pUserData = (void *)("Filtered Environment Map Memory"),
+    };
+
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info,
+                          &env_filtered_cubemap);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Filtered Env Map Image View
+  VkImageView env_filtered_cubemap_view = VK_NULL_HANDLE;
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = env_filtered_cubemap.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            (VkImageSubresourceRange){
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                env_filtered_mip_count,
+                0,
+                6,
+            },
+    };
+    err = vkCreateImageView(device, &create_info, vk_alloc,
+                            &env_filtered_cubemap_view);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Filtered Sampler
+  VkSampler env_filtered_cubemap_sampler = VK_NULL_HANDLE;
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .maxLod = (float)env_filtered_mip_count,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    err = vkCreateSampler(device, &create_info, vk_alloc,
+                          &env_filtered_cubemap_sampler);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Filtered Set Layout
+  VkDescriptorSetLayout env_filtered_set_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &env_filtered_cubemap_sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = bindings,
+    };
+
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &env_filtered_set_layout);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Filtered Pipeline Layout
+  VkPipelineLayout env_filtered_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    };
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &env_filtered_layout);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
   err = create_sky_cube_pipeline(device, vk_alloc, pipeline_cache, env_map_pass,
@@ -2032,9 +2160,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
     */
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/PBRTest.glb") != 0) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append PBRTest to main scene");
+                   "Failed to append Sponza to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -2098,6 +2226,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->swapchain = swapchain;
   d->env_map_pass = env_map_pass;
   d->env_cube_framebuffer = env_cube_framebuffer;
+  d->env_filtered_mip_count = env_filtered_mip_count;
+  d->env_filtered_cubemap = env_filtered_cubemap;
+  d->env_filtered_cubemap_view = env_filtered_cubemap_view;
+  d->env_filtered_set_layout = env_filtered_set_layout;
+  d->env_filtered_layout = env_filtered_layout;
+  d->env_filtered_cubemap_sampler = env_filtered_cubemap_sampler;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -2779,6 +2913,11 @@ void demo_destroy(Demo *d) {
   destroy_gpuimage(vma_alloc, &d->shadow_maps);
   destroy_gpuimage(vma_alloc, &d->env_cubemap);
   vkDestroyImageView(device, d->env_cubemap_view, vk_alloc);
+  destroy_gpuimage(vma_alloc, &d->env_filtered_cubemap);
+  vkDestroyImageView(device, d->env_filtered_cubemap_view, vk_alloc);
+  vkDestroyDescriptorSetLayout(device, d->env_filtered_set_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->env_filtered_layout, vk_alloc);
+  vkDestroySampler(device, d->env_filtered_cubemap_sampler, vk_alloc);
   vkDestroyFramebuffer(device, d->env_cube_framebuffer, vk_alloc);
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
@@ -3467,9 +3606,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                       (float4){0.5, 0.5, 0.1, 1.0});
 
       {
-        VkClearValue clear_values[1] = {
-            {.color = {.float32 = {0}}},
-        };
+        VkClearValue clear_values[1] = {0};
 
         VkRenderPassBeginInfo pass_info = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -3521,6 +3658,78 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         TracyCVkZoneEnd(env_cube_draw);
       }
+
+      /*
+      // Filter Env Cubemap
+      {
+        TracyCVkNamedZone(gpu_gfx_ctx, env_cube_filter, env_cube_buffer,
+                          "Filter Env Cube Map", 3, true);
+
+        vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          d->env_filtered_pipeline);
+
+        vkCmdBindDescriptorSets(
+            env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            d->env_filtered_layout, 0, 1,
+            &d->env_filtered_descriptor_sets[frame_idx], 0, NULL);
+
+        const uint32_t mip_count = d->env_filtered_mip_count;
+
+        VkClearValue clear_values[1] = {0};
+        VkRenderPassBeginInfo pass_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = d->env_filtered_pass,
+            .renderArea =
+                (VkRect2D){{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}},
+            .clearValueCount = 1,
+            .pClearValues = clear_values,
+        };
+
+        EnvFilterConstants filter_consts = {.sample_count = 32};
+        for (uint32_t i = 0; i < mip_count; ++i) {
+          filter_consts.roughness = (float)i / (float)(mip_count - 1);
+
+          pass_info.framebuffer = d->env_filtered_framebuffers[i];
+
+          float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
+          VkViewport viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1};
+          VkRect2D scissor = {{0, 0}, {mip_dim, mip_dim}};
+          vkCmdSetViewport(env_cube_buffer, 0, 1, &viewport);
+          vkCmdSetScissor(env_cube_buffer, 0, 1, &scissor);
+
+          vkCmdBeginRenderPass(env_cube_buffer, &pass_info,
+                               VK_SUBPASS_CONTENTS_INLINE);
+
+          vkCmdPushConstants(env_cube_buffer, d->env_filtered_layout,
+                             VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                             sizeof(EnvFilterConstants), &filter_consts);
+          vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->env_filtered_pipeline);
+          vkCmdBindDescriptorSets(
+              env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+              d->env_filtered_layout, 0, 1,
+              &d->env_filtered_descriptor_sets[frame_idx], 0, NULL);
+
+          // Draw the skydome
+          VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
+
+          uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
+          size_t idx_size = idx_count * sizeof(uint16_t) >>
+                            d->skydome_gpu.surfaces[0].idx_type;
+
+          VkBuffer buffers[1] = {b};
+          VkDeviceSize offsets[1] = {idx_size};
+
+          vkCmdBindIndexBuffer(env_cube_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+          vkCmdBindVertexBuffers(env_cube_buffer, 0, 1, buffers, offsets);
+          vkCmdDrawIndexed(env_cube_buffer, idx_count, 1, 0, 0, 0);
+
+          vkCmdEndRenderPass(env_cube_buffer);
+        }
+
+        TracyCVkZoneEnd(env_cube_filter);
+      }
+      */
 
       vkCmdEndRenderPass(env_cube_buffer);
 
