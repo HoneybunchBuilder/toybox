@@ -128,6 +128,17 @@ typedef struct Demo {
   VkPipelineLayout sky_cube_layout;
   VkPipeline sky_cube_pipeline;
 
+  GPUImage env_filtered_cubemap;
+  VkImageView env_filtered_cubemap_view;
+  VkDescriptorSetLayout env_filtered_set_layout;
+  VkPipelineLayout env_filtered_layout;
+  VkSampler env_filtered_cubemap_sampler;
+  VkPipeline env_filtered_pipeline;
+  uint32_t env_filtered_mip_count;
+  VkFramebuffer *env_filtered_framebuffers;
+  VkRenderPass env_filtered_pass;
+  VkDescriptorSet env_filtered_descriptor_sets[FRAME_LATENCY];
+
   GPUImage irradiance_cubemap;
   VkImageView irradiance_cubemap_views[FRAME_LATENCY];
 

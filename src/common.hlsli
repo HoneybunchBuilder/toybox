@@ -12,6 +12,11 @@ typedef struct SkyPushConstants {
   float4x4 vp;
 } SkyPushConstants;
 
+typedef struct EnvFilterConstants{
+  float roughness;
+  uint32_t sample_count;
+}EnvFilterConstants;
+
 // Constant per-view Camera Data
 typedef struct CommonCameraData {
   float4x4 vp;
