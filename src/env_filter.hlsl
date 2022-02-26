@@ -1,10 +1,12 @@
 #include "common.hlsli"
 
-[[vk::push_constant]]
-ConstantBuffer<EnvFilterConstants> consts : register(b0, space0); // Fragment Stage Only
+#include "cube_view_lut.hlsli"
 
-TextureCube env_texture : register(t0, space1);
-SamplerState env_sampler : register(s0, space1);
+TextureCube env_texture : register(t0, space0); // Fragment Stage Only
+SamplerState env_sampler : register(s0, space0); // Fragment Stage Only
+
+[[vk::push_constant]]
+ConstantBuffer<EnvFilterConstants> consts : register(b1, space0); // Fragment Stage Only
 
 struct VertexIn
 {
@@ -93,23 +95,23 @@ float3 prefilter_env_map(float3 R, float roughness)
         float2 Xi = hammersley_2d(i, consts.sample_count);
         float3 H = importance_sample_ggx(Xi, roughness, N);
         float3 L = 2.0 * dot(V, H) * H - V;
-        float dotNL = clamp(dot(N, L), 0.0, 1.0);
-        if(dotNL > 0.0) {
+        float dot_NL = clamp(dot(N, L), 0.0, 1.0);
+        if(dot_NL > 0.0) {
             // Filtering based on https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 
             float dot_NH = clamp(dot(N, H), 0.0, 1.0);
             float dot_VH = clamp(dot(V, H), 0.0, 1.0);
 
             // Probability Distribution Function
-            float pdf = d_ggx(dot_NH, roughness) * dot_VH / (4.0 * dotVH) + 0.0001;
+            float pdf = d_ggx(dot_NH, roughness) * dot_VH / (4.0 * dot_VH) + 0.0001;
             // Slid angle of current smple
             float omega_s = 1.0 / (float(consts.sample_count) * pdf);
             // Solid angle of 1 pixel across all cube faces
             float omega_p = 4.0 * PI / (6.0 * env_map_dim * env_map_dim);
             // Biased (+1.0) mip level for better result
             float mip_level = roughness == 0.0 ? 0.0 : max(0.5 * log2(omega_s / omega_p) + 1.0, 0.0f);
-            color += env_texture.SampleLevel(env_sampler, L, mip_level).rgb * dotNL;
-            total_weight += dotNL;
+            color += env_texture.SampleLevel(env_sampler, L, mip_level).rgb * dot_NL;
+            total_weight += dot_NL;
 
         }
     }
