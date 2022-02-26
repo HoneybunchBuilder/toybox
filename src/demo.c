@@ -2051,16 +2051,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Env Filtered Set Layout
   VkDescriptorSetLayout env_filtered_set_layout = VK_NULL_HANDLE;
   {
-    VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         NULL},
-        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         &env_filtered_cubemap_sampler},
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+         VK_SHADER_STAGE_FRAGMENT_BIT, &env_filtered_cubemap_sampler},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 2,
+        .bindingCount = 1,
         .pBindings = bindings,
     };
 
@@ -2166,7 +2164,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   }
 
   // Create Env Filtered Pipeline
-  {}
+  VkPipeline env_filtered_pipeline = VK_NULL_HANDLE;
+  {
+    err = create_env_filter_pipeline(
+        device, vk_alloc, pipeline_cache, env_filtered_pass, ENV_CUBEMAP_DIM,
+        ENV_CUBEMAP_DIM, env_filtered_layout, &env_filtered_pipeline);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
 
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
@@ -2315,6 +2322,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->env_filtered_layout = env_filtered_layout;
   d->env_filtered_cubemap_sampler = env_filtered_cubemap_sampler;
   d->env_filtered_pass = env_filtered_pass;
+  d->env_filtered_pipeline = env_filtered_pipeline;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -3059,8 +3067,6 @@ void demo_destroy(Demo *d) {
   vkDestroyImageView(device, d->env_cubemap_view, vk_alloc);
   destroy_gpuimage(vma_alloc, &d->env_filtered_cubemap);
   vkDestroyImageView(device, d->env_filtered_cubemap_view, vk_alloc);
-  vkDestroyDescriptorSetLayout(device, d->env_filtered_set_layout, vk_alloc);
-  vkDestroyPipelineLayout(device, d->env_filtered_layout, vk_alloc);
   vkDestroySampler(device, d->env_filtered_cubemap_sampler, vk_alloc);
   vkDestroyFramebuffer(device, d->env_cube_framebuffer, vk_alloc);
 
@@ -3126,6 +3132,10 @@ void demo_destroy(Demo *d) {
 
   vkDestroyPipelineLayout(device, d->sky_cube_layout, vk_alloc);
   vkDestroyPipeline(device, d->sky_cube_pipeline, vk_alloc);
+
+  vkDestroyDescriptorSetLayout(device, d->env_filtered_set_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->env_filtered_layout, vk_alloc);
+  vkDestroyPipeline(device, d->env_filtered_pipeline, vk_alloc);
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
