@@ -135,8 +135,9 @@ typedef struct Demo {
   VkSampler env_filtered_cubemap_sampler;
   VkPipeline env_filtered_pipeline;
   uint32_t env_filtered_mip_count;
-  VkFramebuffer *env_filtered_framebuffers;
   VkRenderPass env_filtered_pass;
+  VkImageView *env_filtered_face_views;
+  VkFramebuffer *env_filtered_framebuffers;
   VkDescriptorSet env_filtered_descriptor_sets[FRAME_LATENCY];
 
   GPUImage irradiance_cubemap;

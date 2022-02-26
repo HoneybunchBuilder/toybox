@@ -2075,8 +2075,17 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Env Filtered Pipeline Layout
   VkPipelineLayout env_filtered_layout = VK_NULL_HANDLE;
   {
+    VkPushConstantRange push_consts = {
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(EnvFilterConstants),
+    };
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_consts,
+        .setLayoutCount = 1,
+        .pSetLayouts = &env_filtered_set_layout,
     };
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &env_filtered_layout);
@@ -2085,6 +2094,79 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       return false;
     }
   }
+
+  // Create Env Filtered Render Pass
+  VkRenderPass env_filtered_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription color_attachment = {
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    VkAttachmentDescription attachments[1] = {color_attachment};
+
+    VkAttachmentReference color_attachment_ref = {
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
+
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+    };
+
+    VkSubpassDependency subpass_deps[2] = {
+        {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+        {
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+    };
+
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 2,
+        .pDependencies = subpass_deps,
+    };
+
+    err =
+        vkCreateRenderPass(device, &create_info, vk_alloc, &env_filtered_pass);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Env Filtered Pipeline
+  {}
 
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
@@ -2232,6 +2314,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->env_filtered_set_layout = env_filtered_set_layout;
   d->env_filtered_layout = env_filtered_layout;
   d->env_filtered_cubemap_sampler = env_filtered_cubemap_sampler;
+  d->env_filtered_pass = env_filtered_pass;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -2484,6 +2567,67 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
+  // Create Env Filtered Face Views
+  {
+    d->env_filtered_face_views =
+        hb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkImageView);
+    for (uint32_t i = 0; i < env_filtered_mip_count; ++i) {
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .image = env_filtered_cubemap.image,
+          .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .components =
+              (VkComponentMapping){
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              (VkImageSubresourceRange){
+                  VK_IMAGE_ASPECT_COLOR_BIT,
+                  i,
+                  1,
+                  0,
+                  6,
+              },
+      };
+      err = vkCreateImageView(device, &create_info, vk_alloc,
+                              &d->env_filtered_face_views[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
+  // Create Env Filtered Framebuffers
+  {
+    d->env_filtered_framebuffers =
+        hb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkFramebuffer);
+    for (uint32_t i = 0; i < env_filtered_mip_count; ++i) {
+      const float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
+
+      VkFramebufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .attachmentCount = 1,
+          .pAttachments = &d->env_filtered_face_views[i],
+          .renderPass = env_filtered_pass,
+          .width = mip_dim,
+          .height = mip_dim,
+          .layers = 1,
+      };
+
+      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
+                                &d->env_filtered_framebuffers[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
   // Create profiling contexts
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     d->tracy_gpu_contexts[i] = TracyCVkContextExt(
@@ -2569,7 +2713,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       }
     }
 
-    // Create Framebuffer
+    // Create BRDF LUT Framebuffer
     {
       VkFramebufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -2920,6 +3064,13 @@ void demo_destroy(Demo *d) {
   vkDestroySampler(device, d->env_filtered_cubemap_sampler, vk_alloc);
   vkDestroyFramebuffer(device, d->env_cube_framebuffer, vk_alloc);
 
+  for (uint32_t i = 0; i < d->env_filtered_mip_count; ++i) {
+    vkDestroyImageView(device, d->env_filtered_face_views[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->env_filtered_framebuffers[i], vk_alloc);
+  }
+  hb_free(d->std_alloc, d->env_filtered_face_views);
+  hb_free(d->std_alloc, d->env_filtered_framebuffers);
+
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
   destroy_scene(d->main_scene);
@@ -2981,6 +3132,7 @@ void demo_destroy(Demo *d) {
   vkDestroyRenderPass(device, d->env_map_pass, vk_alloc);
   vkDestroyRenderPass(device, d->main_pass, vk_alloc);
   vkDestroyRenderPass(device, d->imgui_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->env_filtered_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
   vkDestroySurfaceKHR(d->instance, d->surface,
                       NULL); // Surface is created by SDL
