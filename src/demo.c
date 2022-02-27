@@ -2145,8 +2145,20 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         },
     };
 
+    uint32_t view_mask = 0x0000003F; // 0b00111111
+    uint32_t correlation_mask = 0;
+
+    VkRenderPassMultiviewCreateInfo multiview_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
+        .subpassCount = 1,
+        .pViewMasks = &view_mask,
+        .correlationMaskCount = 1,
+        .pCorrelationMasks = &correlation_mask,
+    };
+
     VkRenderPassCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext = &multiview_info,
         .attachmentCount = 1,
         .pAttachments = attachments,
         .subpassCount = 1,
@@ -2843,13 +2855,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   {
     VkDescriptorPoolSize pool_sizes[] = {
         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4}};
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
     const uint32_t pool_sizes_count =
         sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize);
 
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 7;
+    create_info.maxSets = 8;
     create_info.poolSizeCount = pool_sizes_count;
     create_info.pPoolSizes = pool_sizes;
 
@@ -2889,6 +2902,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                      &d->imgui_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
+
+    alloc_info.pSetLayouts = &env_filtered_set_layout;
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->env_filtered_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
   }
 
   // Must do this before descriptor set writes so we can be sure to create the
@@ -2908,7 +2929,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                           camera_const_buffer.size};
     VkDescriptorBufferInfo light_info = {light_const_buffer.gpu.buffer, 0,
                                          light_const_buffer.size};
-    VkWriteDescriptorSet writes[5] = {
+    VkDescriptorImageInfo env_filtered_info = {
+        NULL, d->env_cubemap_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet writes[6] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 0,
@@ -2942,7 +2965,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        }};
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &env_filtered_info,
+        },
+    };
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       VkDescriptorImageInfo shadow_map_info = {
           .sampler = shadow_sampler,
@@ -2953,6 +2984,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       VkDescriptorSet gltf_view_set = d->gltf_view_descriptor_sets[i];
       VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
       VkDescriptorSet imgui_set = d->imgui_descriptor_sets[i];
+      VkDescriptorSet env_filtered_set = d->env_filtered_descriptor_sets[i];
 
       writes[0].dstSet = skydome_set;
       writes[1].dstSet = imgui_set;
@@ -2963,7 +2995,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       writes[4].pImageInfo = &shadow_map_info;
       writes[4].dstSet = gltf_view_set;
 
-      vkUpdateDescriptorSets(device, 5, writes, 0, NULL);
+      writes[5].dstSet = env_filtered_set;
+
+      vkUpdateDescriptorSets(device, 6, writes, 0, NULL);
     }
   }
 
@@ -3764,25 +3798,6 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       TracyCVkNamedZone(gpu_gfx_ctx, env_cube_scope, env_cube_buffer,
                         "Env Cube Map", 1, true);
 
-      cmd_begin_label(env_cube_buffer, "env cube",
-                      (float4){0.5, 0.5, 0.1, 1.0});
-
-      {
-        VkClearValue clear_values[1] = {0};
-
-        VkRenderPassBeginInfo pass_info = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass = d->env_map_pass,
-            .framebuffer = d->env_cube_framebuffer,
-            .renderArea =
-                (VkRect2D){{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}},
-            .clearValueCount = 1,
-            .pClearValues = clear_values,
-        };
-        vkCmdBeginRenderPass(env_cube_buffer, &pass_info,
-                             VK_SUBPASS_CONTENTS_INLINE);
-      }
-
       VkViewport viewport = {
           0, ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM, -ENV_CUBEMAP_DIM, 0, 1};
       VkRect2D scissor = {{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}};
@@ -3795,6 +3810,25 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       {
         TracyCVkNamedZone(gpu_gfx_ctx, env_cube_draw, env_cube_buffer,
                           "Draw Env Cube Map", 2, true);
+
+        cmd_begin_label(env_cube_buffer, "env cube",
+                        (float4){0.5, 0.5, 0.1, 1.0});
+
+        {
+          VkClearValue clear_values[1] = {0};
+
+          VkRenderPassBeginInfo pass_info = {
+              .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+              .renderPass = d->env_map_pass,
+              .framebuffer = d->env_cube_framebuffer,
+              .renderArea =
+                  (VkRect2D){{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}},
+              .clearValueCount = 1,
+              .pClearValues = clear_values,
+          };
+          vkCmdBeginRenderPass(env_cube_buffer, &pass_info,
+                               VK_SUBPASS_CONTENTS_INLINE);
+        }
 
         vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->sky_cube_pipeline);
@@ -3818,14 +3852,19 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         vkCmdBindVertexBuffers(env_cube_buffer, 0, 1, buffers, offsets);
         vkCmdDrawIndexed(env_cube_buffer, idx_count, 1, 0, 0, 0);
 
+        vkCmdEndRenderPass(env_cube_buffer);
+
         TracyCVkZoneEnd(env_cube_draw);
+        cmd_end_label(env_cube_buffer);
       }
 
-      /*
       // Filter Env Cubemap
       {
         TracyCVkNamedZone(gpu_gfx_ctx, env_cube_filter, env_cube_buffer,
                           "Filter Env Cube Map", 3, true);
+
+        cmd_begin_label(env_cube_buffer, "env cube filtering",
+                        (float4){0.5, 0.5, 0.1, 1.0});
 
         vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->env_filtered_pipeline);
@@ -3841,8 +3880,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         VkRenderPassBeginInfo pass_info = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .renderPass = d->env_filtered_pass,
-            .renderArea =
-                (VkRect2D){{0, 0}, {ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM}},
+
             .clearValueCount = 1,
             .pClearValues = clear_values,
         };
@@ -3851,9 +3889,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         for (uint32_t i = 0; i < mip_count; ++i) {
           filter_consts.roughness = (float)i / (float)(mip_count - 1);
 
+          float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
+          pass_info.renderArea = (VkRect2D){{0, 0}, {mip_dim, mip_dim}},
           pass_info.framebuffer = d->env_filtered_framebuffers[i];
 
-          float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
           VkViewport viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1};
           VkRect2D scissor = {{0, 0}, {mip_dim, mip_dim}};
           vkCmdSetViewport(env_cube_buffer, 0, 1, &viewport);
@@ -3890,15 +3929,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         }
 
         TracyCVkZoneEnd(env_cube_filter);
+        cmd_end_label(env_cube_buffer);
       }
-      */
-
-      vkCmdEndRenderPass(env_cube_buffer);
 
       TracyCVkZoneEnd(env_cube_scope);
       TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer);
-
-      cmd_end_label(env_cube_buffer);
 
       err = vkEndCommandBuffer(env_cube_buffer);
       assert(err == VK_SUCCESS);

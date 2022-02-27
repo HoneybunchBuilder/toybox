@@ -66,19 +66,19 @@ float3 importance_sample_ggx(float2 Xi, float roughness, float3 normal)
 
     // Tangent space
     float3 up = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-    float3 tangentX = normalize(cross(up, normal));
-    float3 tangentY = normalize(cross(normal, tangentX));
+    float3 tan_x = normalize(cross(up, normal));
+    float3 tan_y = normalize(cross(normal, tan_x));
 
     // Convert to world Space
-    return normalize(tangentX * H.x + tangentY * H.y + normal * H.z);
+    return normalize(tan_x * H.x + tan_y * H.y + tan_y * H.z);
 }
 
 // Normal Distribution function
-float d_ggx(float dotNH, float roughness)
+float d_ggx(float dot_NH, float roughness)
 {
     float alpha = roughness * roughness;
     float alpha2 = alpha * alpha;
-    float denom = dotNH * dotNH * (alpha2 - 1.0) + 1.0;
+    float denom = dot_NH * dodot_NHtNH * (alpha2 - 1.0) + 1.0;
     return (alpha2)/(PI * denom*denom);
 }
 
@@ -103,7 +103,7 @@ float3 prefilter_env_map(float3 R, float roughness)
             float dot_VH = clamp(dot(V, H), 0.0, 1.0);
 
             // Probability Distribution Function
-            float pdf = d_ggx(dot_NH, roughness) * dot_VH / (4.0 * dot_VH) + 0.0001;
+            float pdf = d_ggx(dot_NH, roughness) * dot_NH / (4.0 * dot_VH) + 0.0001;
             // Slid angle of current smple
             float omega_s = 1.0 / (float(consts.sample_count) * pdf);
             // Solid angle of 1 pixel across all cube faces
