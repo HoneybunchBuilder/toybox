@@ -78,8 +78,8 @@ float d_ggx(float dot_NH, float roughness)
 {
     float alpha = roughness * roughness;
     float alpha2 = alpha * alpha;
-    float denom = dot_NH * dodot_NHtNH * (alpha2 - 1.0) + 1.0;
-    return (alpha2)/(PI * denom*denom);
+    float denom = dot_NH * dot_NH * (alpha2 - 1.0) + 1.0;
+    return (alpha2)/(PI * denom * denom);
 }
 
 float3 prefilter_env_map(float3 R, float roughness)

@@ -2195,8 +2195,38 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   assert(err == VK_SUCCESS);
 
   // Create Irradiance Cubemaps
+  const uint32_t irradiance_mip_count =
+      (uint32_t)SDL_floor(log2(IRRADIANCE_CUBEMAP_DIM)) + 1;
+
+  GPUImage irradiance_cubemap = {0};
   {
-    // TODO:
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent =
+            (VkExtent3D){IRRADIANCE_CUBEMAP_DIM, IRRADIANCE_CUBEMAP_DIM, 1},
+        .mipLevels = irradiance_mip_count,
+        .arrayLayers = 6 * FRAME_LATENCY, // One cube map per frame
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .pUserData = (void *)("Irradiance Cubemap"),
+    };
+
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info,
+                          &irradiance_cubemap);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
   }
 
   // Composite main scene
@@ -2335,6 +2365,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->env_filtered_cubemap_sampler = env_filtered_cubemap_sampler;
   d->env_filtered_pass = env_filtered_pass;
   d->env_filtered_pipeline = env_filtered_pipeline;
+  d->irradiance_cubemap = irradiance_cubemap;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
   d->imgui_pass = imgui_pass;
@@ -2641,6 +2672,40 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
       err = vkCreateFramebuffer(device, &create_info, vk_alloc,
                                 &d->env_filtered_framebuffers[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
+  // Create Irradiance Cubemap Views
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = irradiance_cubemap.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            (VkImageSubresourceRange){
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                irradiance_mip_count,
+                0,
+                6,
+            },
+    };
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.subresourceRange.baseArrayLayer = i * 6;
+      err = vkCreateImageView(device, &create_info, vk_alloc,
+                              &d->irradiance_cubemap_views[i]);
       if (err != VK_SUCCESS) {
         assert(false);
         return false;
@@ -3077,6 +3142,7 @@ void demo_destroy(Demo *d) {
 
     vkDestroyImageView(device, d->shadow_map_views[i], vk_alloc);
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
+    vkDestroyImageView(device, d->irradiance_cubemap_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
     vkDestroyDescriptorPool(d->device, d->dyn_desc_pools[i], d->vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
@@ -3103,6 +3169,7 @@ void demo_destroy(Demo *d) {
   vkDestroyImageView(device, d->env_filtered_cubemap_view, vk_alloc);
   vkDestroySampler(device, d->env_filtered_cubemap_sampler, vk_alloc);
   vkDestroyFramebuffer(device, d->env_cube_framebuffer, vk_alloc);
+  destroy_gpuimage(vma_alloc, &d->irradiance_cubemap);
 
   for (uint32_t i = 0; i < d->env_filtered_mip_count; ++i) {
     vkDestroyImageView(device, d->env_filtered_face_views[i], vk_alloc);
