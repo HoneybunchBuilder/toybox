@@ -110,6 +110,7 @@ typedef struct Demo {
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
+
   VkFramebuffer env_cube_framebuffer;
   VkFramebuffer shadow_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer main_pass_framebuffers[FRAME_LATENCY];
@@ -142,6 +143,13 @@ typedef struct Demo {
 
   GPUImage irradiance_cubemap;
   VkImageView irradiance_cubemap_views[FRAME_LATENCY];
+  VkDescriptorSetLayout irradiance_set_layout;
+  VkPipelineLayout irradiance_layout;
+  uint32_t irradiance_mip_count;
+  VkRenderPass irradiance_pass;
+  VkImageView *irradiance_face_views;
+  VkFramebuffer *irradiance_framebuffers;
+  VkDescriptorSet irradiance_descriptor_sets[FRAME_LATENCY];
 
   GPUImage depth_buffers; // Implemented as an image array; one image for each
                           // latency frame
