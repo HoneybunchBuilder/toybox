@@ -4,19 +4,6 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Configure arm64 Switch",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "-Bbuild/arm64/switch",
-                "-G\"\"Ninja Multi-Config\"\"",
-                "-DVCPKG_TARGET_TRIPLET=arm64-switch",
-                "'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=\"\"${workspaceFolder}/vcpkg/scripts/toolchains/switch.cmake\"\"'",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-            ],
-            "problemMatcher": []
-        },
-        {
             "label": "Configure arm64 Android",
             "type": "shell",
             "command": "cmake",
@@ -288,35 +275,6 @@
                 "fileLocation": [
                     "relative",
                     "${workspaceRoot}/build/x64/android"
-                ]
-            }
-        },
-        {
-            "label": "Build arm64 Switch Debug",
-            "type": "shell",
-            "command": "cmake --build build/arm64/switch --config Debug",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": {
-                "base": "$gcc",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}/build/arm64/switch"
-                ]
-            }
-        },
-        {
-            "label": "Package arm64 Switch Debug",
-            "type": "shell",
-            "command": "cmake --build build/arm64/switch --config Debug --target package",
-            "group": "build",
-            "problemMatcher": {
-                "base": "$gcc",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}/build/arm64/switch"
                 ]
             }
         },

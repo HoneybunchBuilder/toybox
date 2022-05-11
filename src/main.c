@@ -3,17 +3,7 @@
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 
-#ifdef __SWITCH__
-#define mi_heap_t int
-#define mi_heap_new() 0
-#define mi_heap_delete(...)
-
-#define mi_heap_malloc_aligned(heap, size, alignment) malloc(size)
-#define mi_heap_realloc_aligned(heap, ptr, size, alignment) realloc(ptr, size)
-#define mi_free(ptr) free(ptr)
-#else
 #include <mimalloc.h>
-#endif
 
 #include <stdbool.h>
 #include <stdint.h>
