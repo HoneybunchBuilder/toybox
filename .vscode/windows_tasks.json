@@ -14,7 +14,7 @@
                 "-DANDROID_ABI=arm64-v8a",
                 "-DVCPKG_TARGET_TRIPLET=arm64-android",
                 "'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=\"\"${workspaceFolder}/vcpkg/scripts/toolchains/android.cmake\"\"'",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
             ],
             "problemMatcher": []
         },
@@ -29,21 +29,7 @@
                 "-DANDROID_ABI=x86_64",
                 "-DVCPKG_TARGET_TRIPLET=x64-android",
                 "'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=\"\"${env:ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake\"\"'",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-            ],
-            "problemMatcher": []
-        },
-        {
-            "label": "Configure x64 Windows GCC",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "-Bbuild/x64/windows-gcc",
-                "-DCMAKE_C_COMPILER=gcc",
-                "-DCMAKE_CXX_COMPILER=g++",
-                "-G\"\"Ninja Multi-Config\"\"",
-                "-DVCPKG_TARGET_TRIPLET=x64-windows",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
             ],
             "problemMatcher": []
         },
@@ -55,7 +41,7 @@
                 "-Bbuild/x64/windows",
                 "-G\"\"Ninja Multi-Config\"\"",
                 "-DVCPKG_TARGET_TRIPLET=x64-windows",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
             ],
             "problemMatcher": []
         },
@@ -67,7 +53,21 @@
                 "-Bbuild/x64/windows-static",
                 "-G\"\"Ninja Multi-Config\"\"",
                 "-DVCPKG_TARGET_TRIPLET=x64-windows-static",
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Configure x64 Mingw",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-Bbuild/x64/mingw",
+                "-DCMAKE_C_COMPILER=gcc",
+                "-DCMAKE_CXX_COMPILER=g++",
+                "-G\"\"Ninja Multi-Config\"\"",
+                "-DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
             ],
             "problemMatcher": []
         },
@@ -80,11 +80,7 @@
                 "isDefault": true
             },
             "problemMatcher": {
-                "base": "$gcc",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}/build/x64/windows"
-                ]
+                "base": "$gcc"
             }
         },
         {
@@ -152,6 +148,44 @@
                 "fileLocation": [
                     "relative",
                     "${workspaceRoot}/build/x64/windows-static"
+                ]
+            }
+        },
+        {
+            "label": "Build x64 Mingw Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "base": "$gcc"
+            }
+        },
+        {
+            "label": "Build x64 Mingw RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config RelWithDebInfo",
+            "group": "build",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/build/x64/mingw"
+                ]
+            }
+        },
+        {
+            "label": "Build x64 Mingw Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config Release",
+            "group": "build",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/build/x64/mingw"
                 ]
             }
         },
@@ -400,6 +434,6 @@
             "dependsOn": [
                 "Build x64 Windows Static Release"
             ]
-        },
+        }
     ]
 }

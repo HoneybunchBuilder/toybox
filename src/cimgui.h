@@ -3,8 +3,10 @@
 // Dear ImGui https://github.com/ocornut/imgui with imgui_internal.h api
 
 // clang-format off
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#endif
 
 #ifndef CIMGUI_INCLUDED
 #define CIMGUI_INCLUDED
@@ -3797,5 +3799,7 @@ CIMGUI_API void ImVector_ImWchar_UnInit(ImVector_ImWchar* p);
 
 #endif //CIMGUI_INCLUDED
 
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 // clang-format on
