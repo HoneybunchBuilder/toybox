@@ -53,19 +53,6 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/x64/windows-static/Release/",
             "environment": []
-        },
-        {
-            "name": "arm64 Switch Debug",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${env:devkitpro}/tools/bin/nxlink.exe",
-            "args": [
-                "-s",
-                "${workspaceFolder}/build/arm64/switch/Debug/toybox.nro"
-            ],
-            "stopAtEntry": false,
-            "cwd": "${env:localappdata}/yuzu/yuzu-windows-msvc",
-            "environment": []
         }
     ]
 }

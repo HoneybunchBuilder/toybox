@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.19)
 
-set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake
+# Find where vcpkg is on the path
+find_program(VCPKG_DIR vcpkg REQUIRED)
+get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
+
+set(CMAKE_TOOLCHAIN_FILE ${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake
   CACHE STRING "Vcpkg toolchain file")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
@@ -10,6 +14,8 @@ project(toybox
         VERSION 0.1.0
         DESCRIPTION "A personal game engine toybox project"
         LANGUAGES C CXX)
+
+option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 
 set(GAME_NAME "toybox")
 set(GAME_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
@@ -40,8 +46,6 @@ elseif(ANDROID)
   set(platform "android")
 elseif(UNIX)
   set(platform "linux")
-elseif(SWITCH)
-  set(platform "switch")
 else()
   message(FATAL_ERROR "Unknown platform")
 endif()
@@ -86,7 +90,7 @@ if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
   message(FATAL_ERROR "${CMAKE_CXX_COMPILER_ID} Unsupported - Clang & GNU only")
 endif()
 
-if(${VCPKG_TARGET_TRIPLET} MATCHES static OR SWITCH)
+if(${VCPKG_TARGET_TRIPLET} MATCHES static)
   set(STATIC ON)
 endif()
 
@@ -94,11 +98,13 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
-find_package(mimalloc 1.6 CONFIG REQUIRED)
+find_package(mimalloc CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Tracy CONFIG REQUIRED)
+if(PROFILE_TRACY)
+  find_package(Tracy CONFIG REQUIRED)
+endif()
 if(UNIX)
   find_package(Threads REQUIRED)
   if(NOT ANDROID)
@@ -108,14 +114,9 @@ endif()
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
-find_program(DXC dxc 
-  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/dxc
-  REQUIRED)
+find_program(DXC dxc REQUIRED)
 find_program(TOKTX toktx 
   PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/ktx
-  REQUIRED)
-find_program(GLTFPACK gltfpack
-  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/gltfpack
   REQUIRED)
 
 # Compile Shaders
@@ -192,9 +193,6 @@ if(WIN32)
   endif()
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
-elseif(SWITCH)
-  file(GLOB_RECURSE switch_source CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/switch/src/*.c")
-  add_executable(toybox ${source} ${switch_source})
 elseif(UNIX)
   if(APPLE)
     if(IOS)
@@ -216,9 +214,13 @@ else()
 endif()
 #set_property(TARGET toybox PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx")
 
 target_link_libraries(toybox PRIVATE ${library_list})
+
+if(PROFILE_TRACY)
+  target_link_libraries(toybox PRIVATE "Tracy::TracyClient")
+endif()
 
 # Get the latest abbreviated commit hash of the working branch
 execute_process(COMMAND git log -1 --format=%h
@@ -340,35 +342,6 @@ if(ANDROID)
   add_subdirectory(android)
 elseif(IOS)
   # TODO: custom iOS build steps
-elseif(SWITCH)
-  set(APP_AUTHOR "Honeybunch")
-  set(APP_TITLEID "")
-
-  if(WIN32)
-    set(nro ${DEVKITPRO}/tools/bin/elf2nro.exe)
-    set(nacptool ${DEVKITPRO}/tools/bin/nacptool.exe)
-  else()
-    set(nro ${DEVKITPRO}/tools/bin/elf2nro)
-    set(nacptool ${DEVKITPRO}/tools/bin/nacptool)
-  endif()
-
-  if(APP_TITLEID)
-    set(NACPFLAGS "--titleid=${APP_TITLEID}")
-  endif()
-
-  set(nacp_out ${CMAKE_CFG_INTDIR}/toybox.nacp)
-  set(nacp_out_str "\"${nacp_out}\"")
-  set(nro_out ${CMAKE_CFG_INTDIR}/toybox.nro)
-
-  add_custom_command(
-  OUTPUT ${nro_out}
-    COMMAND ${nacptool} --create ${CMAKE_PROJECT_NAME} ${APP_AUTHOR} ${CMAKE_PROJECT_VERSION} ${nacp_out_str} ${NACPFLAGS}
-    COMMAND ${nro} $<TARGET_FILE:toybox> ${nro_out} --nacp=${nacp_out}
-    COMMAND ${CMAKE_COMMAND} -E rm -rf ${nacp_out}
-    DEPENDS $<TARGET_FILE:toybox>
-  )
-
-  add_custom_target(package DEPENDS ${nro_out})
 else()
   # CPack Packaging
   set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})

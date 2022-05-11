@@ -2,7 +2,6 @@
 
 #include <stdbool.h>
 
-#define TRACY_ENABLE
 //#define TRACY_VK_C_ENABLE
 #include <TracyC.h>
 
