@@ -323,6 +323,7 @@ foreach(scene ${scenes})
 
   list(APPEND packed_scenes ${packed_scene})
 endforeach()
+add_custom_target(scenes ALL DEPENDS ${packed_scenes})
 
 # Add assets to bundle
 if(APPLE)
