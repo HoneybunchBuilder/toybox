@@ -55,12 +55,12 @@ if(CMAKE_HOST_WIN32)
   set(host "windows")
 elseif(CMAKE_HOST_UNIX)
   if(CMAKE_HOST_APPLE)
-    set(host "macos")
+    set(host "osx")
   else()
     set(host "linux")
   endif()
 else()
-  message(FATAL_ERROR "Unknown host")
+message(FATAL_ERROR "Unknown host")
 endif()
 
 if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "AMD64")
@@ -116,7 +116,7 @@ find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
 find_program(DXC dxc REQUIRED)
 find_program(TOKTX toktx 
-  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/ktx
+  PATHS ${VCPKG_DIR}/installed/${host_triple}/tools/ktx
   REQUIRED)
 
 # Compile Shaders
@@ -200,18 +200,14 @@ elseif(ANDROID)
 elseif(UNIX)
   if(APPLE)
     if(IOS)
-    # iOS
+      # iOS
+      find_library(IMAGEIO ImageIO REQUIRED)
+      find_library(CORESERVICES CoreServices REQUIRED)
+      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
+      target_link_libraries(toybox PRIVATE ${IMAGEIO} ${CORESERVICES})
     else()
       # macOS
-      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")        
-      set_target_properties(toybox PROPERTIES
-          BUNDLE True
-          MACOSX_BUNDLE_GUI_IDENTIFIER com.honeybunch.toybox
-          MACOSX_BUNDLE_BUNDLE_NAME Toybox
-          MACOSX_BUNDLE_BUNDLE_VERSION "0.1"
-          MACOSX_BUNDLE_SHORT_VERSION_STRING "0.1"
-          MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/macos/template.plist.in
-      )
+      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")  
     endif()
   else()
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
@@ -257,10 +253,7 @@ endif()
 
 target_compile_features(toybox PRIVATE c_std_11)
 
-# Turn on Warnings
-# On Clang, enable warnings as errors
-# Don't do this on GCC as there are some warnings (in generated shader headers)
-# that we can't ignore
+# Turn on warnings
 target_compile_options(toybox PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic> 
@@ -272,6 +265,11 @@ if(ANDROID)
   install(TARGETS toybox
           RUNTIME DESTINATION "$<CONFIG>/lib/${arch}"
           LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
+elseif(APPLE AND NOT IOS)
+  # Have to do this or else it won't be placed in the right part of the app package
+  install(TARGETS toybox 
+    RUNTIME DESTINATION "./../MacOS/"
+    BUNDLE DESTINATION "./../MacOS/")
 else()
   install(TARGETS toybox
           RUNTIME DESTINATION "."
@@ -296,21 +294,50 @@ foreach(texture ${textures})
   set(ktx_texture ${CMAKE_CFG_INTDIR}/assets/textures/${filename}.ktx2)
 
   add_custom_command(
-        OUTPUT ${ktx_texture}
-        COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-        COMMAND ${TOKTX} --t2 --genmipmap --resize ${resize} --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
-        MAIN_DEPENDENCY ${texture}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
-    )
+    OUTPUT ${ktx_texture}
+    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+    COMMAND ${TOKTX} --t2 --genmipmap --resize ${resize} --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
+    MAIN_DEPENDENCY ${texture}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+  )
 
   list(APPEND ktx_textures ${ktx_texture})
 endforeach()
 add_custom_target(textures ALL DEPENDS ${ktx_textures})
 
-# Copy assets to build output dir
-add_custom_command(TARGET toybox POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
+# TODO: Cook scenes
+file(GLOB_RECURSE scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
+foreach(scene ${scenes})
+  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${scene})
+  get_filename_component(relpath ${relpath} DIRECTORY)
+  get_filename_component(filename ${scene} NAME_WE)
+  set(packed_scene ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes/${filename}.glb)
 
+  add_custom_command(
+    OUTPUT ${packed_scene}
+    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+    COMMAND ${CMAKE_COMMAND} -E copy ${scene} ${packed_scene}
+    MAIN_DEPENDENCY ${scene}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+  )
+
+  list(APPEND packed_scenes ${packed_scene})
+endforeach()
+
+# Add assets to bundle
+if(APPLE)
+  foreach(scene ${packed_scenes})
+    message(${scene})
+    set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
+    target_sources(toybox PRIVATE ${scene})
+  endforeach()
+  foreach(texture ${ktx_textures})
+    set_source_files_properties(${texture} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/textures")
+    target_sources(toybox PRIVATE ${texture})
+  endforeach()
+endif()
+
+# Install cooked assets
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
                    DESTINATION ${assets_dest})
 
@@ -371,7 +398,7 @@ else()
   set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.ico) # TODO: Move to a better folder
   set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_LIST_DIR}/license.txt)
   set(CPACK_RESOURCE_FILE_README ${CMAKE_CURRENT_LIST_DIR}/readme.md)
-  set(CPACK_PACKAGE_EXECUTABLES toybox "SDLTest")
+  set(CPACK_PACKAGE_EXECUTABLES toybox "Toybox")
   set(CPACK_PACKAGE_INSTALL_DIRECTORY "toybox")
 
   # Desktop OSes
@@ -389,7 +416,8 @@ else()
 
     set(CPACK_BUNDLE_NAME ${CMAKE_PROJECT_NAME})
     set(CPACK_BUNDLE_PLIST ${CMAKE_CURRENT_LIST_DIR}/macos/Info.plist)
-    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.ico)
+    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_LIST_DIR}/macos/toybox.icns)
+    # TODO: Signing for the app so it can be distributed
     set(CPACK_BUNDLE_APPLE_CERT_APP "")
     set(CPACK_BUNDLE_APPLE_ENTITLEMENTS "")
   elseif(UNIX)

@@ -27,6 +27,6 @@
             "program": "${workspaceFolder}/build/arm64/macos/Release/toybox",
             "args": [],
             "cwd": "${workspaceFolder}/build/arm64/macos/Release"
-        },
+        }
     ]
 }
