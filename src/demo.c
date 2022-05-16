@@ -1065,7 +1065,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Check for portability layer and enable that extension
   bool portability = false;
   {
-    #define MAX_PROPS 128
+#define MAX_PROPS 256
     VkExtensionProperties props[MAX_PROPS];
 
     uint32_t prop_count = 0;
@@ -1077,20 +1077,18 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, props);
     assert(err == VK_SUCCESS);
 
-    for(uint32_t i = 0; i < prop_count; ++i)
-    {
-      VkExtensionProperties* prop = &props[i];
-      if(SDL_strcmp(prop->extensionName, "VK_KHR_portability_subset") != 0)
-      {
+    for (uint32_t i = 0; i < prop_count; ++i) {
+      VkExtensionProperties *prop = &props[i];
+      if (SDL_strcmp(prop->extensionName, "VK_KHR_portability_subset") == 0) {
         portability = true;
         break;
       }
     }
 
-    #undef MAX_PROPS
+#undef MAX_PROPS
   }
 
-  if(portability){
+  if (portability) {
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
     device_ext_names[device_ext_count++] = "VK_KHR_portability_subset";
   }
@@ -2954,7 +2952,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16},
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16},
-        {VK_DESCRIPTOR_TYPE_SAMPLER, 16},};
+        {VK_DESCRIPTOR_TYPE_SAMPLER, 16},
+    };
     const uint32_t pool_sizes_count =
         sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize);
 
