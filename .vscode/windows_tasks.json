@@ -413,7 +413,7 @@
         {
             "label": "Package arm64 Android Debug",
             "type": "shell",
-            "command": "cmake --build build/arm64/android  --config Debug --target package",
+            "command": "cmake --build build/arm64/android --config Debug --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Install arm64 Android Debug"
@@ -422,7 +422,7 @@
         {
             "label": "Package arm64 Android RelWithDebInfo",
             "type": "shell",
-            "command": "cmake --build build/arm64/android  --config RelWithDebInfo --target package",
+            "command": "cmake --build build/arm64/android --config RelWithDebInfo --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Install arm64 Android RelWithDebInfo"
@@ -431,7 +431,7 @@
         {
             "label": "Package arm64 Android Release",
             "type": "shell",
-            "command": "cmake --build build/arm64/android  --config Release --target package",
+            "command": "cmake --build build/arm64/android --config Release --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Install arm64 Android Release"
@@ -440,7 +440,7 @@
         {
             "label": "Package x64 Windows Debug",
             "type": "shell",
-            "command": "cmake --build build/x64/windows  --config Debug --target package",
+            "command": "cmake --build build/x64/windows --config Debug --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows Debug"
@@ -449,7 +449,7 @@
         {
             "label": "Package x64 Windows RelWithDebInfo",
             "type": "shell",
-            "command": "cmake --build build/x64/windows  --config RelWithDebInfo --target package",
+            "command": "cmake --build build/x64/windows --config RelWithDebInfo --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows RelWithDebInfo"
@@ -458,7 +458,7 @@
         {
             "label": "Package x64 Windows Release",
             "type": "shell",
-            "command": "cmake --build build/x64/windows  --config Release --target package",
+            "command": "cmake --build build/x64/windows --config Release --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows Release"
@@ -467,7 +467,7 @@
         {
             "label": "Package x64 Windows Static Debug",
             "type": "shell",
-            "command": "cmake --build build/x64/windows-static  --config Debug --target package",
+            "command": "cmake --build build/x64/windows-static --config Debug --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows Static Debug"
@@ -476,7 +476,7 @@
         {
             "label": "Package x64 Windows Static RelWithDebInfo",
             "type": "shell",
-            "command": "cmake --build build/x64/windows-static  --config RelWithDebInfo --target package",
+            "command": "cmake --build build/x64/windows-static --config RelWithDebInfo --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows Static RelWithDebInfo"
@@ -485,11 +485,65 @@
         {
             "label": "Package x64 Windows Static Release",
             "type": "shell",
-            "command": "cmake --build build/x64/windows-static  --config Release --target package",
+            "command": "cmake --build build/x64/windows-static --config Release --target package",
             "problemMatcher": [],
             "dependsOn": [
                 "Build x64 Windows Static Release"
             ]
-        }
+        },
+        {
+            "label": "Package x64 Mingw Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config Debug --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw Debug"
+            ]
+        },
+        {
+            "label": "Package x64 Mingw RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config RelWithDebInfo --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package x64 Mingw Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw --config Release --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw Release"
+            ]
+        },
+        {
+            "label": "Package x64 Mingw Static Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config Debug --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw Static Debug"
+            ]
+        },
+        {
+            "label": "Package x64 Mingw Static RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config RelWithDebInfo --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw Static RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package x64 Mingw Static Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config Release --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Mingw Static Release"
+            ]
+        },
     ]
 }
