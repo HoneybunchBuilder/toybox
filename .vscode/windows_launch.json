@@ -84,5 +84,35 @@
             "cwd": "${workspaceFolder}/build/x64/mingw/Release/",
             "environment": []
         },
+        {
+            "name": "x64 Mingw Static Debug",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/mingw-static/Debug/toybox.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/mingw-static/Debug/",
+            "environment": []
+        },
+        {
+            "name": "x64 Mingw Static RelWithDebInfo",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/mingw-static/RelWithDebInfo/toybox.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/mingw-static/RelWithDebInfo/",
+            "environment": []
+        },
+        {
+            "name": "x64 Mingw Static Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/mingw-static/Release/toybox.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/mingw-static/Release/",
+            "environment": []
+        },
     ]
 }
