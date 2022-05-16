@@ -49,7 +49,7 @@ void arena_free(void *user_data, void *ptr) {
 void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
-  void *data = mi_heap_calloc(heap, 1, max_size);
+  void *data = mi_heap_recalloc(heap, NULL, 1, max_size);
   TracyCAllocN(data, max_size, "Arena");
   assert(data);
 
@@ -98,7 +98,7 @@ void *standard_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   StandardAllocator *alloc = (StandardAllocator *)user_data;
-  void *ptr = mi_heap_calloc(alloc->heap, 1, size);
+  void *ptr = mi_heap_recalloc(alloc->heap, NULL, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
   TracyCZoneEnd(ctx);
   return ptr;

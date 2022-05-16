@@ -202,7 +202,16 @@ elseif(UNIX)
     if(IOS)
     # iOS
     else()
-    # macOS
+      # macOS
+      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")        
+      set_target_properties(toybox PROPERTIES
+          BUNDLE True
+          MACOSX_BUNDLE_GUI_IDENTIFIER com.honeybunch.toybox
+          MACOSX_BUNDLE_BUNDLE_NAME Toybox
+          MACOSX_BUNDLE_BUNDLE_VERSION "0.1"
+          MACOSX_BUNDLE_SHORT_VERSION_STRING "0.1"
+          MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_LIST_DIR}/macos/template.plist.in
+      )
     endif()
   else()
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
@@ -266,6 +275,7 @@ if(ANDROID)
 else()
   install(TARGETS toybox
           RUNTIME DESTINATION "."
+          BUNDLE DESTINATION "."
           LIBRARY DESTINATION ".")
 endif()
 
@@ -379,7 +389,7 @@ else()
 
     set(CPACK_BUNDLE_NAME ${CMAKE_PROJECT_NAME})
     set(CPACK_BUNDLE_PLIST ${CMAKE_CURRENT_LIST_DIR}/macos/Info.plist)
-    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_LIST_DIR}/macos/icon.ico)
+    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.ico)
     set(CPACK_BUNDLE_APPLE_CERT_APP "")
     set(CPACK_BUNDLE_APPLE_ENTITLEMENTS "")
   elseif(UNIX)
