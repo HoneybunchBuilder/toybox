@@ -72,6 +72,20 @@
             "problemMatcher": []
         },
         {
+            "label": "Configure x64 Mingw Static",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-Bbuild/x64/mingw-static",
+                "-DCMAKE_C_COMPILER=gcc",
+                "-DCMAKE_CXX_COMPILER=g++",
+                "-G\"\"Ninja Multi-Config\"\"",
+                "-DVCPKG_TARGET_TRIPLET=x64-mingw-static",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "Build x64 Windows Debug",
             "type": "shell",
             "command": "cmake --build build/x64/windows --config Debug",
@@ -186,6 +200,48 @@
                 "fileLocation": [
                     "relative",
                     "${workspaceRoot}/build/x64/mingw"
+                ]
+            }
+        },
+        {
+            "label": "Build x64 Mingw Static Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/build/x64/mingw-static"
+                ]
+            }
+        },
+        {
+            "label": "Build x64 Mingw Static RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config RelWithDebInfo",
+            "group": "build",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/build/x64/mingw-static"
+                ]
+            }
+        },
+        {
+            "label": "Build x64 Mingw Static Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/mingw-static --config Release",
+            "group": "build",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/build/x64/mingw-static"
                 ]
             }
         },
