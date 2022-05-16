@@ -64,6 +64,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               const VkAllocationCallbacks *vk_alloc,
                               const char *const *ext_names) {
   TracyCZoneN(ctx, "create_device", true);
+  VkResult err = VK_SUCCESS;
 
   float queue_priorities[1] = {0.0};
   VkDeviceQueueCreateInfo queues[2];
@@ -105,7 +106,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   }
 
   VkDevice device = VK_NULL_HANDLE;
-  VkResult err = vkCreateDevice(gpu, &create_info, vk_alloc, &device);
+  err = vkCreateDevice(gpu, &create_info, vk_alloc, &device);
   assert(err == VK_SUCCESS);
   (void)err;
 
@@ -1018,7 +1019,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   }
 
 #ifdef TRACY_ENABLE
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(__APPLE__)
   // Enable calibrated timestamps
   {
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
@@ -1060,6 +1061,39 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
   }
   */
+
+  // Check for portability layer and enable that extension
+  bool portability = false;
+  {
+    #define MAX_PROPS 128
+    VkExtensionProperties props[MAX_PROPS];
+
+    uint32_t prop_count = 0;
+    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, NULL);
+    assert(err == VK_SUCCESS);
+
+    assert(prop_count < MAX_PROPS);
+
+    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, props);
+    assert(err == VK_SUCCESS);
+
+    for(uint32_t i = 0; i < prop_count; ++i)
+    {
+      VkExtensionProperties* prop = &props[i];
+      if(SDL_strcmp(prop->extensionName, "VK_KHR_portability_subset") != 0)
+      {
+        portability = true;
+        break;
+      }
+    }
+
+    #undef MAX_PROPS
+  }
+
+  if(portability){
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] = "VK_KHR_portability_subset";
+  }
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
                                   present_queue_family_index, device_ext_count,
@@ -2917,15 +2951,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Descriptor Set Pools
   {
     VkDescriptorPoolSize pool_sizes[] = {
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16},
+        {VK_DESCRIPTOR_TYPE_SAMPLER, 16},};
     const uint32_t pool_sizes_count =
         sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize);
 
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 8;
+    create_info.maxSets = 16;
     create_info.poolSizeCount = pool_sizes_count;
     create_info.pPoolSizes = pool_sizes;
 
@@ -3500,7 +3535,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         uint32_t pool_type_count = 0;
         pool_type_count += (ub_count > 0);
-        pool_type_count += (img_count > 0);
+        pool_type_count += (img_count > 0) * 2; // Images & Samplers
 
         VkDescriptorPoolSize *pool_sizes =
             hb_alloc_nm_tp(d->tmp_alloc, pool_type_count, VkDescriptorPoolSize);
@@ -3515,6 +3550,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         if (img_count > 0) {
           pool_sizes[pool_type_idx++] = (VkDescriptorPoolSize){
               .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .descriptorCount = img_count,
+          };
+          pool_sizes[pool_type_idx++] = (VkDescriptorPoolSize){
+              .type = VK_DESCRIPTOR_TYPE_SAMPLER,
               .descriptorCount = img_count,
           };
         }

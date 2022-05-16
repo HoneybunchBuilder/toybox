@@ -263,6 +263,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #endif
 #endif
 
+// Add portability for apple devices
+#ifdef __APPLE__
+  {
+    assert(ext_count + 1 < MAX_EXT_COUNT);
+    ext_names[ext_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+  }
+#endif
+
     VkApplicationInfo app_info = {0};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "Toybox";
@@ -276,6 +284,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
     create_info.pApplicationInfo = &app_info;
     create_info.enabledLayerCount = layer_count;
     create_info.ppEnabledLayerNames = layer_names;

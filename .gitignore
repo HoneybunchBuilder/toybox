@@ -10,3 +10,5 @@ vcpkg/buildtrees/*
 vcpkg/downloads/*
 vcpkg/installed/*
 vcpkg/packages/*
+
+.DS_Store

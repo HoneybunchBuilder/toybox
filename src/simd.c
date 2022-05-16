@@ -18,7 +18,7 @@
 #define unroll_loop_4 _Pragma("clang loop unroll_count(4)")
 #endif
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__)
 #define unroll_loop_3 _Pragma("GCC unroll 3")
 #define unroll_loop_4 _Pragma("GCC unroll 4")
 #endif

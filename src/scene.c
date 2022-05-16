@@ -7,7 +7,11 @@
 #include <SDL2/SDL_rwops.h>
 
 #include <assert.h>
-#include <malloc.h>
+#ifdef __APPLE__
+  #include <malloc/malloc.h>
+#else
+  #include <malloc.h>
+#endif
 #include <stdbool.h>
 #include <stdlib.h>
 
