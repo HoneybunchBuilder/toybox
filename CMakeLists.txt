@@ -36,6 +36,9 @@ target_architecture(arch)
 # Platform detection
 if(WIN32)
   set(platform "windows")
+  if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+    set(mingw ON)
+  endif()
 elseif(APPLE)
   if(IOS)
     set(platform "ios")
@@ -187,13 +190,13 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp"
            "${CMAKE_CURRENT_LIST_DIR}/src/vkdbg.c")
 if(WIN32)
-  if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-    add_executable(toybox WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
-    target_link_options(toybox PRIVATE -Wl,/subsystem:windows)
-  else()
+  if(mingw)
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
     target_link_libraries(toybox PRIVATE mingw32)
     target_link_options(toybox PRIVATE -mwindows)
+  else()
+    add_executable(toybox WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
+    target_link_options(toybox PRIVATE -Wl,/subsystem:windows)
   endif()
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
@@ -354,10 +357,17 @@ if(NOT STATIC AND WIN32)
         DESTINATION .)
   install(FILES $<TARGET_FILE_DIR:toybox>/mimalloc-redirect.dll
         DESTINATION .)
-  install(FILES $<TARGET_FILE_DIR:toybox>/zlib$<$<CONFIG:Debug>:d>1.dll
-        DESTINATION .)
-  install(FILES $<TARGET_FILE_DIR:toybox>/zstd$<$<CONFIG:Debug>:d>.dll
-        DESTINATION .)
+  if(mingw)
+    install(FILES $<TARGET_FILE_DIR:toybox>/libzlib$<$<CONFIG:Debug>:d>1.dll
+      DESTINATION .)
+    install(FILES $<TARGET_FILE_DIR:toybox>/libzstd.dll
+      DESTINATION .)
+  else()
+    install(FILES $<TARGET_FILE_DIR:toybox>/zlib$<$<CONFIG:Debug>:d>1.dll
+          DESTINATION .)
+    install(FILES $<TARGET_FILE_DIR:toybox>/zstd$<$<CONFIG:Debug>:d>.dll
+          DESTINATION .)
+  endif()
 
   foreach(one_trg ${library_list})
     get_target_property(one_trg_type ${one_trg} TYPE)
