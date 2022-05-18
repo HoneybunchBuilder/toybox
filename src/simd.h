@@ -67,7 +67,9 @@ float dotf4(float4 x, float4 y);
 float3 crossf3(float3 x, float3 y);
 
 float magf3(float3 v);
+float magf4(float4 v);
 float magsqf3(float3 v);
+float magsqf4(float4 v);
 float3 normf3(float3 v);
 
 float lenf3(float3 v);
@@ -76,6 +78,8 @@ void mf33_identity(float3x3 *m);
 void mf34_identity(float3x4 *m);
 void mf44_identity(float4x4 *m);
 
+void mulf33(float3x3 *m, float3 v);
+void mulf34(float3x4 *m, float4 v);
 float4 mulf44(float4x4 m, float4 v);
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);

@@ -1,6 +1,3 @@
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 
 #include <mimalloc.h>
@@ -21,6 +18,7 @@
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tbsdl.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -74,36 +72,36 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   (void)scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
   void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan");
-  TracyCZoneEnd(ctx);
+  TracyCAllocN(ptr, size, "Vulkan")
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
 static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
                            size_t alignment, VkSystemAllocationScope scope) {
   (void)scope;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   mi_heap_t *heap = (mi_heap_t *)pUserData;
-  TracyCFreeN(pOriginal, "Vulkan");
+  TracyCFreeN(pOriginal, "Vulkan")
   void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan");
-  TracyCZoneEnd(ctx);
+  TracyCAllocN(ptr, size, "Vulkan")
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
 static void vk_free_fn(void *pUserData, void *pMemory) {
   (void)pUserData;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  TracyCFreeN(pMemory, "Vulkan");
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
+  TracyCFreeN(pMemory, "Vulkan")
   mi_free(pMemory);
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
@@ -123,7 +121,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   {
     const char *app_info = HB_APP_INFO_STR;
     size_t app_info_len = strlen(app_info);
-    TracyCAppInfo(app_info, app_info_len);
+    TracyCAppInfo(app_info, app_info_len)
     (void)app_info_len;
   }
 
@@ -324,15 +322,15 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)success;
 
   SkyData sky_data = {
-      .cirrus = 0.4,
-      .cumulus = 0.8,
+      .cirrus = 0.4f,
+      .cumulus = 0.8f,
       .sun_dir = {0, -1, 0},
   };
 
   CommonCameraData camera_data = (CommonCameraData){0};
 
   // Query SDL for available display modes
-  int32_t display_count = SDL_GetNumVideoDisplays();
+  uint32_t display_count = (uint32_t)SDL_GetNumVideoDisplays();
   if (display_count < 1) {
     const char *msg = SDL_GetError();
     SDL_Log("Failed to enumerate displays with error: %s", msg);
@@ -347,15 +345,15 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   char ***mode_names = hb_alloc_nm_tp(std_alloc.alloc, display_count, char **);
 
-  for (int32_t i = 0; i < display_count; ++i) {
-    int32_t display_mode_count = SDL_GetNumDisplayModes(i);
+  for (uint32_t i = 0; i < display_count; ++i) {
+    uint32_t display_mode_count = (uint32_t)SDL_GetNumDisplayModes((int32_t)i);
 
     modes_per_display[i] =
         hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, SDL_DisplayMode);
     mode_names[i] = hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, char *);
-    for (int32_t ii = 0; ii < display_mode_count; ++ii) {
+    for (uint32_t ii = 0; ii < display_mode_count; ++ii) {
       SDL_DisplayMode mode = {0};
-      if (SDL_GetDisplayMode(i, ii, &mode) != 0) {
+      if (SDL_GetDisplayMode((int32_t)i, (int32_t)ii, &mode) != 0) {
         const char *msg = SDL_GetError();
         SDL_Log("Failed to get display mode with error: %s", msg);
         SDL_TriggerBreakpoint();
@@ -371,7 +369,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                    mode.h, mode.refresh_rate);
     }
 
-    display_names[i] = SDL_GetDisplayName(i);
+    display_names[i] = SDL_GetDisplayName((int32_t)i);
   }
 
   // Main loop
@@ -398,17 +396,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float sun_x = sinf(PI + time_of_day);
 
   while (running) {
-    TracyCFrameMarkStart("Frame");
-    TracyCZoneN(trcy_ctx, "Frame", true);
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+    TracyCFrameMarkStart("Frame")
+    TracyCZoneN(trcy_ctx, "Frame", true)
+    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore)
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter() - start_time;
     delta_time = time - last_time;
     delta_time_seconds =
-        (float)((double)delta_time / (double)SDL_GetPerformanceFrequency());
+        (float)((double)delta_time / (double)(SDL_GetPerformanceFrequency()));
     time_seconds =
-        (float)((double)time / (double)SDL_GetPerformanceFrequency());
+        (float)((double)time / (double)(SDL_GetPerformanceFrequency()));
     delta_time_ms = delta_time_seconds * 1000.0f;
     last_time = time;
 
@@ -421,18 +419,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // while (SDL_PollEvent(&e))
     {
-      TracyCZoneN(ctx, "Handle Events", true);
-      TracyCZoneColor(ctx, TracyCategoryColorInput);
+      TracyCZoneN(ctx, "Handle Events", true)
+      TracyCZoneColor(ctx, TracyCategoryColorInput)
 
       SDL_Event e = {0};
       {
-        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true);
+        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true)
         SDL_PollEvent(&e);
-        TracyCZoneEnd(sdl_ctx);
+        TracyCZoneEnd(sdl_ctx)
       }
       if (e.type == SDL_QUIT) {
         running = false;
-        TracyCZoneEnd(ctx);
+        TracyCZoneEnd(ctx)
         break;
       }
       demo_process_event(&d, &e);
@@ -447,12 +445,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         }
       }
 
-      TracyCZoneEnd(ctx);
+      TracyCZoneEnd(ctx)
     }
 
     ImVec2 display_size;
-    display_size.x = d.swap_info.width;
-    display_size.y = d.swap_info.height;
+    display_size.x = (float)d.swap_info.width;
+    display_size.y = (float)d.swap_info.height;
     d.ig_io->DisplaySize = display_size;
     d.ig_io->DeltaTime = delta_time_ms;
     igNewFrame();
@@ -460,8 +458,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // ImGui Test
 
     if (showImGui) {
-      TracyCZoneN(ctx, "UI Test", true);
-      TracyCZoneColor(ctx, TracyCategoryColorUI);
+      TracyCZoneN(ctx, "UI Test", true)
+      TracyCZoneColor(ctx, TracyCategoryColorUI)
 
       if (igBeginMainMenuBar()) {
         if (igBeginMenu("Sky", true)) {
@@ -500,15 +498,15 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       if (showSettingsWindow &&
           igBegin("Toybox Settings", &showSettingsWindow, 0)) {
 
-        igLabelText("Frame Time (ms)", "%f", delta_time_ms);
-        igLabelText("Framerate (fps)", "%f", (1000.0f / delta_time_ms));
+        igLabelText("Frame Time (ms)", "%f", (double)delta_time_ms);
+        igLabelText("Framerate (fps)", "%f", (double)(1000.0f / delta_time_ms));
 
         // WindowMode Combo Box
         {
           static int32_t window_sel = -1;
           if (window_sel == -1) {
             // Get current window mode selection
-            for (uint32_t i = 0; i < TBWindowMode_Count; ++i) {
+            for (int32_t i = 0; i < TBWindowMode_Count; ++i) {
               if (settings.windowing_mode == TBWindowModes[i]) {
                 window_sel = i;
                 break;
@@ -529,7 +527,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           }
           // Display Combo Box
           if (igCombo_Str_arr("Display", &settings.display_index, display_names,
-                              display_count, 0)) {
+                              (int32_t)display_count, 0)) {
             // TODO: Display has changed!
             display_changed = true;
           }
@@ -576,7 +574,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           static int32_t vsync_sel = -1;
           if (vsync_sel == -1) {
             // Get current vsync selection
-            for (uint32_t i = 0; i < TBVsync_Count; ++i) {
+            for (int32_t i = 0; i < TBVsync_Count; ++i) {
               if (settings.vsync_mode == TBVsyncModes[i]) {
                 vsync_sel = i;
                 break;
@@ -594,7 +592,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           static int32_t msaa_sel = -1;
           if (msaa_sel == -1) {
             // Get current msaa selection
-            for (uint32_t i = 0; i < TBMSAAOptionCount; ++i) {
+            for (int32_t i = 0; i < TBMSAAOptionCount; ++i) {
               if (settings.msaa == TBMSAAOptions[i]) {
                 msaa_sel = i;
                 break;
@@ -627,6 +625,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
               SceneTransform *transform = &d.main_scene->transforms[i];
               igPushID_Ptr(transform);
               if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
                 {
                   float3 *position = &transform->t.position;
                   float x = (*position)[0];
@@ -662,6 +664,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                 }
 
                 igTreePop();
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
               }
               igPopID();
             }
@@ -681,7 +688,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         igEnd();
       }
 
-      TracyCZoneEnd(ctx);
+      TracyCZoneEnd(ctx)
     }
 
     float4x4 view = {.row0 = {0}};
@@ -720,7 +727,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update view camera constant buffer
     {
-      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true);
+      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true)
       camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
@@ -740,12 +747,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.camera_const_buffer);
 
-      TracyCZoneEnd(trcy_camera_ctx);
+      TracyCZoneEnd(trcy_camera_ctx)
     }
 
     // Update view light constant buffer
     {
-      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true);
+      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true)
 
       CommonLightData light_data = {
           .light_dir = -sky_data.sun_dir,
@@ -767,12 +774,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.light_const_buffer);
 
-      TracyCZoneEnd(trcy_light_ctx);
+      TracyCZoneEnd(trcy_light_ctx)
     }
 
     // Update sky constant buffer
     {
-      TracyCZoneN(trcy_sky_ctx, "Update Sky", true);
+      TracyCZoneN(trcy_sky_ctx, "Update Sky", true)
 
       VmaAllocator vma_alloc = d.vma_alloc;
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
@@ -787,7 +794,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
-      TracyCZoneEnd(trcy_sky_ctx);
+      TracyCZoneEnd(trcy_sky_ctx)
     }
 
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
@@ -795,12 +802,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx);
-    TracyCFrameMarkEnd("Frame");
+    TracyCZoneEnd(trcy_ctx)
+    TracyCFrameMarkEnd("Frame")
   }
 
   // Cleanup display modes
-  for (int32_t i = 0; i < display_count; ++i) {
+  for (int32_t i = 0; i < (int32_t)display_count; ++i) {
     int32_t mode_count = SDL_GetNumDisplayModes(i);
     hb_free(std_alloc.alloc, modes_per_display[i]);
     for (int32_t ii = 0; ii < mode_count; ++ii) {

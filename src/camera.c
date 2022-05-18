@@ -1,9 +1,8 @@
 #include "camera.h"
 
-#include <SDL2/SDL_events.h>
-
 #include "pi.h"
 #include "profiling.h"
+#include "tbsdl.h"
 
 #include <stdbool.h>
 
@@ -41,14 +40,14 @@ void camera_view_projection(const Camera *c, float4x4 *vp) {
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
                            EditorCameraController *editor, Camera *cam) {
-  TracyCZoneN(ctx, "editor_camera_control", true);
+  TracyCZoneN(ctx, "editor_camera_control", true)
 
   uint32_t event_type = event->type;
 
   EditorCameraState state = editor->state;
 
   // Must always clear out some state
-  state &= ~EDITOR_CAMERA_LOOKING;
+  state &= (EditorCameraState)~EDITOR_CAMERA_LOOKING;
 
   // Some useful state for this function between the switch and the
   // movement calculations
@@ -137,11 +136,11 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
       float delta_look_speed = editor->look_speed * delta_time_seconds;
       if (state & EDITOR_CAMERA_LOOKING_RIGHT ||
           state & EDITOR_CAMERA_LOOKING_LEFT) {
-        angular_velocity[1] += mouse_x_delta * delta_look_speed;
+        angular_velocity[1] += (float)mouse_x_delta * delta_look_speed;
       }
       if (state & EDITOR_CAMERA_LOOKING_DOWN ||
           state & EDITOR_CAMERA_LOOKING_UP) {
-        angular_velocity[0] -= mouse_y_delta * delta_look_speed;
+        angular_velocity[0] -= (float)mouse_y_delta * delta_look_speed;
       }
     }
 
@@ -150,5 +149,5 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   }
 
   editor->state = state;
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }

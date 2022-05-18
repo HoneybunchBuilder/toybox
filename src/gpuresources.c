@@ -4,24 +4,22 @@
 #include "cpuresources.h"
 #include "profiling.h"
 #include "vkdbg.h"
+#include "tbgltf.h"
+#include "tbvma.h"
+#include "tbsdl.h"
+#include "tbktx.h"
 
 #include "common.hlsli"
-#define ON_CPU
 #include "gltf.hlsli"
 
-#include <SDL2/SDL_image.h>
-#include <cgltf.h>
-#include <ktx.h>
 #include <volk.h>
-
-#include <vk_mem_alloc.h>
 
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
-                         int32_t mem_usage, int32_t buf_usage, GPUBuffer *out) {
+                         int32_t mem_usage, uint32_t buf_usage, GPUBuffer *out) {
   VkResult err = VK_SUCCESS;
   VkBuffer buffer = {0};
   VmaAllocation alloc = {0};
@@ -46,7 +44,7 @@ void destroy_gpubuffer(VmaAllocator allocator, const GPUBuffer *buffer) {
   vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
 }
 
-GPUConstBuffer create_gpushaderbuffer(VkDevice device, VmaAllocator allocator,
+static GPUConstBuffer create_gpushaderbuffer(VkDevice device, VmaAllocator allocator,
                                       const VkAllocationCallbacks *vk_alloc,
                                       uint64_t size, VkBufferUsageFlags usage) {
   GPUBuffer host_buffer = {0};
@@ -104,7 +102,7 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
 
 int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
                        const CPUMesh *src_mesh, GPUMesh *dst_mesh) {
-  TracyCZoneN(prof_e, "create_gpumesh", true);
+  TracyCZoneN(prof_e, "create_gpumesh", true)
   VkResult err = VK_SUCCESS;
 
   size_t index_size = src_mesh->index_size;
@@ -147,48 +145,48 @@ int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
                                        host_buffer,
                                        device_buffer};
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
 int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
                              Allocator tmp_alloc, const cgltf_mesh *src_mesh,
                              GPUMesh *dst_mesh) {
-  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true);
+  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true)
   assert(src_mesh->primitives_count < MAX_SURFACE_COUNT);
-  uint32_t surface_count = src_mesh->primitives_count;
+  cgltf_size surface_count = src_mesh->primitives_count;
   if (surface_count > MAX_SURFACE_COUNT) {
     surface_count = MAX_SURFACE_COUNT;
   }
 
   VkResult err = VK_SUCCESS;
 
-  for (uint32_t i = 0; i < surface_count; ++i) {
+  for (cgltf_size i = 0; i < surface_count; ++i) {
     cgltf_primitive *prim = &src_mesh->primitives[i];
     cgltf_accessor *indices = prim->indices;
 
-    uint32_t index_count = indices->count;
-    uint32_t vertex_count = prim->attributes[0].data->count;
+    cgltf_size index_count = indices->count;
+    cgltf_size vertex_count = prim->attributes[0].data->count;
 
     int32_t index_type = VK_INDEX_TYPE_UINT16;
     if (indices->stride > 2) {
       index_type = VK_INDEX_TYPE_UINT32;
     }
 
-    size_t index_size = indices->buffer_view->size;
-    size_t geom_size = 0;
+    cgltf_size index_size = indices->buffer_view->size;
+    cgltf_size geom_size = 0;
     uint64_t input_perm = 0;
     // Only allow certain attributes for now
     uint32_t attrib_count = 0;
-    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-      cgltf_attribute_type type = prim->attributes[i].type;
-      int32_t index = prim->attributes[i].index;
+    for (cgltf_size ii = 0; ii < prim->attributes_count; ++ii) {
+      cgltf_attribute_type type = prim->attributes[ii].type;
+      int32_t index = prim->attributes[ii].index;
       if ((type == cgltf_attribute_type_position ||
            type == cgltf_attribute_type_normal ||
            type == cgltf_attribute_type_tangent ||
            type == cgltf_attribute_type_texcoord) &&
           index == 0) {
-        cgltf_accessor *attr = prim->attributes[i].data;
+        cgltf_accessor *attr = prim->attributes[ii].data;
         geom_size += attr->count * attr->stride;
 
         if (type == cgltf_attribute_type_position) {
@@ -247,27 +245,27 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
       // Reorder attributes
       uint32_t *attr_order =
           hb_alloc(tmp_alloc, sizeof(uint32_t) * attrib_count);
-      for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-        cgltf_attribute_type attr_type = prim->attributes[i].type;
-        int32_t attr_idx = prim->attributes[i].index;
+      for (uint32_t ii = 0; ii < (uint32_t)prim->attributes_count; ++ii) {
+        cgltf_attribute_type attr_type = prim->attributes[ii].type;
+        int32_t attr_idx = prim->attributes[ii].index;
         if (attr_type == cgltf_attribute_type_position) {
-          attr_order[0] = i;
+          attr_order[0] = ii;
         } else if (attr_type == cgltf_attribute_type_normal) {
-          attr_order[1] = i;
+          attr_order[1] = ii;
         } else if (attr_type == cgltf_attribute_type_tangent) {
-          attr_order[2] = i;
+          attr_order[2] = ii;
         } else if (attr_type == cgltf_attribute_type_texcoord &&
                    attr_idx == 0) {
           if (input_perm & VA_INPUT_PERM_TANGENT) {
-            attr_order[3] = i;
+            attr_order[3] = ii;
           } else {
-            attr_order[2] = i;
+            attr_order[2] = ii;
           }
         }
       }
 
-      for (uint32_t i = 0; i < attrib_count; ++i) {
-        uint32_t attr_idx = attr_order[i];
+      for (cgltf_size ii = 0; ii < attrib_count; ++ii) {
+        uint32_t attr_idx = attr_order[ii];
         cgltf_attribute *attr = &prim->attributes[attr_idx];
         cgltf_accessor *accessor = attr->data;
         cgltf_buffer_view *view = accessor->buffer_view;
@@ -278,8 +276,8 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
         // TODO: Figure out how to handle when an object can't use the expected
         // pipeline
         if (SDL_strcmp(attr->name, "NORMAL") == 0) {
-          if (i + 1 < prim->attributes_count) {
-            cgltf_attribute *next = &prim->attributes[attr_order[i + 1]];
+          if (ii + 1 < prim->attributes_count) {
+            cgltf_attribute *next = &prim->attributes[attr_order[ii + 1]];
             if (input_perm & VA_INPUT_PERM_TANGENT) {
               if (SDL_strcmp(next->name, "TANGENT") != 0) {
                 SDL_TriggerBreakpoint();
@@ -321,9 +319,9 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
-  dst_mesh->surface_count = surface_count;
+  dst_mesh->surface_count = (uint32_t)surface_count;
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
@@ -338,7 +336,7 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
                         GPUImage *i) {
-  TracyCZoneN(prof_e, "create_gpuimage", true);
+  TracyCZoneN(prof_e, "create_gpuimage", true)
   VkResult err = VK_SUCCESS;
   GPUImage img = {0};
 
@@ -350,7 +348,7 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
   if (err == VK_SUCCESS) {
     *i = img;
   }
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
@@ -358,8 +356,8 @@ void destroy_gpuimage(VmaAllocator allocator, const GPUImage *image) {
   vmaDestroyImage(allocator, image->image, image->alloc);
 }
 
-SDL_Surface *load_and_transform_image(const char *filename) {
-  TracyCZoneN(prof_e, "load_and_transform_image", true);
+static SDL_Surface *load_and_transform_image(const char *filename) {
+  TracyCZoneN(prof_e, "load_and_transform_image", true)
   SDL_Surface *img = IMG_Load(filename);
   assert(img);
 
@@ -368,12 +366,16 @@ SDL_Surface *load_and_transform_image(const char *filename) {
   SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
   SDL_FreeSurface(img);
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return opt_img;
 }
 
-SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
-  SDL_RWops *ops = SDL_RWFromMem((void *)data, size);
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+static SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
+  SDL_RWops *ops = SDL_RWFromMem((void *)data, (int32_t)size);
   SDL_Surface *img = IMG_Load_RW(ops, 0);
   if (!img) {
     const char *err = IMG_GetError();
@@ -389,6 +391,9 @@ SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
 
   return opt_img;
 }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 static VkImageType get_ktx2_image_type(const ktxTexture2 *t) {
   return (VkImageType)(t->numDimensions - 1);
@@ -446,15 +451,15 @@ static ktx_error_code_e ktx2_optimal_tiling_callback(
   ud->region->bufferRowLength = 0;
   ud->region->bufferImageHeight = 0;
   ud->region->imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ud->region->imageSubresource.mipLevel = mip_level;
-  ud->region->imageSubresource.baseArrayLayer = face;
+  ud->region->imageSubresource.mipLevel = (uint32_t)mip_level;
+  ud->region->imageSubresource.baseArrayLayer = (uint32_t)face;
   ud->region->imageSubresource.layerCount = ud->num_layers * ud->num_faces;
   ud->region->imageOffset.x = 0;
   ud->region->imageOffset.y = 0;
   ud->region->imageOffset.z = 0;
-  ud->region->imageExtent.width = width;
-  ud->region->imageExtent.height = height;
-  ud->region->imageExtent.depth = depth;
+  ud->region->imageExtent.width = (uint32_t)width;
+  ud->region->imageExtent.height = (uint32_t)height;
+  ud->region->imageExtent.depth = (uint32_t)depth;
 
   ud->region += 1;
 
@@ -466,7 +471,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                              const VkAllocationCallbacks *vk_alloc,
                              const char *file_path, VmaPool up_pool,
                              VmaPool tex_pool) {
-  TracyCZoneN(prof_e, "load_ktx2_texture", true);
+  TracyCZoneN(prof_e, "load_ktx2_texture", true)
   GPUTexture t = {0};
 
   uint8_t *mem = NULL;
@@ -475,7 +480,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     SDL_RWops *file = SDL_RWFromFile(file_path, "rb");
     if (file == NULL) {
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
 
@@ -487,7 +492,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     if (file->read(file, mem, size, 1) == 0) {
       file->close(file);
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
     file->close(file);
@@ -496,12 +501,12 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
   ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
   ktxTexture2 *ktx = NULL;
   {
-    TracyCZoneN(ktx_transcode_e, "load_ktx2_texture transcode", true);
+    TracyCZoneN(ktx_transcode_e, "load_ktx2_texture transcode", true)
     ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
     if (err != KTX_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(ktx_transcode_e);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(ktx_transcode_e)
+      TracyCZoneEnd(prof_e)
       return t;
     }
 
@@ -511,12 +516,12 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
       err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
       if (err != KTX_SUCCESS) {
         assert(0);
-        TracyCZoneEnd(ktx_transcode_e);
-        TracyCZoneEnd(prof_e);
+        TracyCZoneEnd(ktx_transcode_e)
+        TracyCZoneEnd(prof_e)
         return t;
       }
     }
-    TracyCZoneEnd(ktx_transcode_e);
+    TracyCZoneEnd(ktx_transcode_e)
   }
 
   VkResult err = VK_SUCCESS;
@@ -544,7 +549,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
   }
@@ -576,7 +581,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
   }
@@ -587,7 +592,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
 
@@ -609,10 +614,10 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e);
+      TracyCZoneEnd(prof_e)
       return t;
     }
-  };
+  }
 
   uint32_t region_count = mip_levels;
   if (gen_mips) {
@@ -622,7 +627,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 
   t.host = host_buffer;
   t.device = device_image;
-  t.format = format;
+  t.format = (uint32_t)format;
   t.width = width;
   t.height = height;
   t.mip_levels = mip_levels;
@@ -656,7 +661,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 #endif
   }
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return t;
 }
 
@@ -664,7 +669,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const char *filename, VmaPool up_pool, VmaPool tex_pool,
                      GPUTexture *t) {
-  TracyCZoneN(prof_e, "load_texture", true);
+  TracyCZoneN(prof_e, "load_texture", true)
   assert(filename);
   assert(t);
 
@@ -672,10 +677,10 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 
   VkResult err = VK_SUCCESS;
 
-  uint32_t img_width = img->w;
-  uint32_t img_height = img->h;
+  uint32_t img_width = (uint32_t)img->w;
+  uint32_t img_height = (uint32_t)img->h;
 
-  size_t host_buffer_size = img->pitch * img_height;
+  size_t host_buffer_size = (uint32_t)img->pitch * img_height;
 
   GPUBuffer host_buffer = {0};
   {
@@ -692,7 +697,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
     assert(err == VK_SUCCESS);
   }
 
-  uint32_t mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
+  uint32_t mip_levels = (uint32_t)(floorf(log2f((float)(SDL_max(img_width, img_height))))) + 1;
 
   GPUImage device_image = {0};
   {
@@ -744,7 +749,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
         VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, 1};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     assert(err == VK_SUCCESS);
-  };
+  }
 
   t->host = host_buffer;
   t->device = device_image;
@@ -772,7 +777,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 
   SDL_FreeSurface(img);
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
 
   return err;
 }
@@ -782,7 +787,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 VkFormat format, GPUTexture *t) {
-  TracyCZoneN(prof_e, "create_gputexture_cgltf", true);
+  TracyCZoneN(prof_e, "create_gputexture_cgltf", true)
   cgltf_buffer_view *image_view = gltf->image->buffer_view;
   cgltf_buffer *image_data = image_view->buffer;
   const uint8_t *data = (uint8_t *)(image_view->buffer) + image_view->offset;
@@ -794,10 +799,10 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
   size_t size = image_view->size;
 
   SDL_Surface *image = parse_and_transform_image(data, size);
-  uint32_t image_width = image->w;
-  uint32_t image_height = image->h;
+  uint32_t image_width = (uint32_t)image->w;
+  uint32_t image_height = (uint32_t)image->h;
   uint8_t *image_pixels = image->pixels;
-  size_t image_size = image->pitch * image_height;
+  size_t image_size = (uint32_t)image->pitch * image_height;
 
   TextureMip mip = {
       image_width,
@@ -817,7 +822,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
   };
   int32_t err = create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
                                tex_pool, format, t, true);
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
@@ -825,7 +830,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const CPUTexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        VkFormat format, GPUTexture *t, bool gen_mips) {
-  TracyCZoneN(prof_e, "create_texture", true);
+  TracyCZoneN(prof_e, "create_texture", true)
   VkResult err = VK_SUCCESS;
 
   VkDeviceSize host_buffer_size = tex->data_size;
@@ -853,7 +858,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
 
   uint32_t desired_mip_levels = mip_count;
   if (gen_mips) {
-    desired_mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
+    desired_mip_levels = (uint32_t)(floorf(log2f((float)(SDL_max(img_width, img_height))))) + 1;
   }
 
   // Allocate device image
@@ -893,7 +898,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
         VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     assert(err == VK_SUCCESS);
-  };
+  }
 
   // Copy data to host buffer
   {
@@ -908,7 +913,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
 
   t->host = host_buffer;
   t->device = device_image;
-  t->format = format;
+  t->format = (uint32_t)format;
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = desired_mip_levels;
@@ -930,7 +935,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
           },
   };
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
@@ -942,6 +947,10 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
   vkDestroyImageView(device, t->view, vk_alloc);
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
 static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
   size_t pipe_handles_size = sizeof(VkPipeline) * perm_count;
   size_t feature_flags_size = sizeof(uint64_t) * perm_count;
@@ -963,15 +972,18 @@ static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
   offset += input_flags_size;
 
   p->pipelines = (VkPipeline *)(mem + offset);
-  offset += pipe_handles_size;
+  // unnecessary write - offset += pipe_handles_size;
 
   return p;
 }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
-  TracyCZoneN(prof_e, "create_gfx_pipeline", true);
+  TracyCZoneN(prof_e, "create_gfx_pipeline", true)
 
-  uint64_t total_perm_count = desc->feature_perm_count * desc->input_perm_count;
+  uint32_t total_perm_count = desc->feature_perm_count * desc->input_perm_count;
 
   GPUPipeline *pipe = alloc_gpupipeline(desc->std_alloc, total_perm_count);
   VkResult err = VK_SUCCESS;
@@ -1067,7 +1079,7 @@ int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
   assert(err == VK_SUCCESS);
 
   *p = pipe;
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
@@ -1077,7 +1089,7 @@ int32_t create_rt_pipeline(
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     GPUPipeline **p) {
-  TracyCZoneN(prof_e, "create_rt_pipeline", true);
+  TracyCZoneN(prof_e, "create_rt_pipeline", true)
   GPUPipeline *pipe = alloc_gpupipeline(std_alloc, perm_count);
   VkResult err = VK_SUCCESS;
 
@@ -1131,10 +1143,14 @@ int32_t create_rt_pipeline(
   hb_free(tmp_alloc, flags);
 
   *p = pipe;
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
 void destroy_gpupipeline(VkDevice device, Allocator alloc,
                          const VkAllocationCallbacks *vk_alloc,
                          const GPUPipeline *p) {
@@ -1144,6 +1160,9 @@ void destroy_gpupipeline(VkDevice device, Allocator alloc,
 
   hb_free(alloc, (void *)p);
 }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 uint32_t collect_material_textures(uint32_t tex_count,
                                    const cgltf_texture *gltf_textures,
@@ -1183,8 +1202,10 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Metallic Roughness but no base color texture "
-                   "was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Metallic Roughness but no base color texture "
+            "was provided");
+        SDL_assert(false);
       }
       if (material->pbr_metallic_roughness.metallic_roughness_texture.texture !=
           NULL) {
@@ -1194,8 +1215,10 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Metallic Roughness but no metallic roughness "
-                   "texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Metallic Roughness but no metallic roughness "
+            "texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_pbr_specular_glossiness) {
@@ -1205,8 +1228,10 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Specular Glossiness but no diffuse texture "
-                   "was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Specular Glossiness but no diffuse texture "
+            "was provided");
+        SDL_assert(false);
       }
       if (material->pbr_specular_glossiness.specular_glossiness_texture
               .texture != NULL) {
@@ -1216,8 +1241,10 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Specular Glossiness but no specular "
-                   "glossiness texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+                     "Material has Specular Glossiness but no specular "
+                     "glossiness texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_clearcoat) {
@@ -1227,8 +1254,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert(
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
             "Material has Clearcoat but no clearcoat texture was provided");
+        SDL_assert(false);
       }
       if (material->clearcoat.clearcoat_roughness_texture.texture != NULL) {
         if (tex == material->clearcoat.clearcoat_roughness_texture.texture) {
@@ -1236,8 +1264,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert(
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
             "Material has Clearcoat but no roughness texture was provided");
+        SDL_assert(false);
       }
       if (material->clearcoat.clearcoat_normal_texture.texture != NULL) {
         if (tex == material->clearcoat.clearcoat_normal_texture.texture) {
@@ -1245,7 +1274,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Clearcoat but no normal texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Clearcoat but no normal texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_transmission) {
@@ -1255,8 +1286,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Transmission but no transmission texture was "
-                   "provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Clearcoat but no normal texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_volume) {
@@ -1266,7 +1298,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Volume but no thickness texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Clearcoat but no normal texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_specular) {
@@ -1276,8 +1310,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert(
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
             "Material has Specular but no specular texture was provided");
+        SDL_assert(false);
       }
       if (material->specular.specular_color_texture.texture != NULL) {
         if (tex == material->specular.specular_color_texture.texture) {
@@ -1285,7 +1320,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Specular but no color texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Specular but no color texture was provided");
+        SDL_assert(false);
       }
     }
     if (material->has_sheen) {
@@ -1295,7 +1332,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Sheen but no color texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Sheen but no color texture was provided");
+        SDL_assert(false);
       }
       if (material->sheen.sheen_roughness_texture.texture != NULL) {
         if (tex == material->sheen.sheen_roughness_texture.texture) {
@@ -1303,7 +1342,9 @@ uint32_t collect_material_textures(uint32_t tex_count,
           tex_ref_count++;
         }
       } else {
-        SDL_assert("Material has Sheen but no roughness texture was provided");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
+            "Material has Sheen but no roughness texture was provided");
+        SDL_assert(false);
       }
     }
 
@@ -1316,7 +1357,7 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                  const VkAllocationCallbacks *vk_alloc,
                                  const cgltf_material *gltf, uint32_t tex_count,
                                  uint32_t *tex_refs, GPUMaterial *m) {
-  TracyCZoneN(prof_e, "create_gpumaterial_cgltf", true);
+  TracyCZoneN(prof_e, "create_gpumaterial_cgltf", true)
   VkResult err = VK_SUCCESS;
 
   // Convert from cgltf structs to our struct
@@ -1419,7 +1460,7 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
     vmaUnmapMemory(vma_alloc, alloc);
   }
 
-  TracyCZoneEnd(prof_e);
+  TracyCZoneEnd(prof_e)
   return err;
 }
 void destroy_material(VkDevice device, VmaAllocator vma_alloc,

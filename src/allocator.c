@@ -7,9 +7,9 @@
 
 #include "profiling.h"
 
-void *arena_alloc(void *user_data, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+static void *arena_alloc(void *user_data, size_t size) {
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   ArenaAllocator *arena = (ArenaAllocator *)user_data;
   size_t cur_size = arena->size;
   if (cur_size + size >= arena->max_size) {
@@ -20,18 +20,18 @@ void *arena_alloc(void *user_data, size_t size) {
   }
   void *ptr = &arena->data[cur_size];
   arena->size += size;
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
-void *arena_realloc(void *user_data, void *original, size_t size) {
+static void *arena_realloc(void *user_data, void *original, size_t size) {
   // In the arena allocator we're not going to bother to really implement
   // realloc for now...
   (void)original;
   return arena_alloc(user_data, size);
 }
 
-void *arena_realloc_aligned(void *user_data, void *original, size_t size,
+static void *arena_realloc_aligned(void *user_data, void *original, size_t size,
                             size_t alignment) {
   // In the arena allocator we're not going to bother to really implement
   // realloc for now...
@@ -40,7 +40,7 @@ void *arena_realloc_aligned(void *user_data, void *original, size_t size,
   return arena_alloc(user_data, size);
 }
 
-void arena_free(void *user_data, void *ptr) {
+static void arena_free(void *user_data, void *ptr) {
   // Do nothing, the arena will reset
   (void)user_data;
   (void)ptr;
@@ -50,7 +50,7 @@ void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
   void *data = mi_heap_recalloc(heap, NULL, 1, max_size);
-  TracyCAllocN(data, max_size, "Arena");
+  TracyCAllocN(data, max_size, "Arena")
   assert(data);
 
   (*a) = (ArenaAllocator){
@@ -70,72 +70,73 @@ void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
 }
 
 ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   if (allow_grow && a.grow) {
     a.max_size *= 2;
 
     a.grow = false;
-    TracyCFreeN(a.data, "Arena");
+    TracyCFreeN(a.data, "Arena")
     a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
-    TracyCAllocN(a.data, a.max_size, "Arena");
+    TracyCAllocN(a.data, a.max_size, "Arena")
   }
 
   a.size = 0;
 
   assert(a.data);
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
   return a;
 }
 
 void destroy_arena_allocator(ArenaAllocator a) {
-  TracyCFreeN(a.data, "Arena");
+  TracyCFreeN(a.data, "Arena")
   mi_free(a.data);
   mi_heap_destroy(a.heap);
 }
 
-void *standard_alloc(void *user_data, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+static void *standard_alloc(void *user_data, size_t size) {
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   StandardAllocator *alloc = (StandardAllocator *)user_data;
   void *ptr = mi_heap_recalloc(alloc->heap, NULL, 1, size);
-  TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
+  TracyCAllocN(ptr, size, alloc->name)
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
-void *standard_realloc(void *user_data, void *original, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+static void *standard_realloc(void *user_data, void *original, size_t size) {
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   StandardAllocator *alloc = (StandardAllocator *)user_data;
-  TracyCFreeN(original, alloc->name);
+  TracyCFreeN(original, alloc->name)
   void *ptr = mi_heap_recalloc(alloc->heap, original, 1, size);
-  TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
+  TracyCAllocN(ptr, size, alloc->name)
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
-void *standard_realloc_aligned(void *user_data, void *original, size_t size,
+static void *standard_realloc_aligned(void *user_data, void *original,
+                                      size_t size,
                                size_t alignment) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   StandardAllocator *alloc = (StandardAllocator *)user_data;
-  TracyCFreeN(original, alloc->name);
+  TracyCFreeN(original, alloc->name)
   void *ptr =
       mi_heap_recalloc_aligned(alloc->heap, original, 1, size, alignment);
-  TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
+  TracyCAllocN(ptr, size, alloc->name)
+  TracyCZoneEnd(ctx)
   return ptr;
 }
 
-void standard_free(void *user_data, void *ptr) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+static void standard_free(void *user_data, void *ptr) {
+  TracyCZone(ctx, true)
+  TracyCZoneColor(ctx, TracyCategoryColorMemory)
   StandardAllocator *alloc = (StandardAllocator *)user_data;
   (void)alloc;
-  TracyCFreeN(ptr, alloc->name);
+  TracyCFreeN(ptr, alloc->name)
   mi_free(ptr);
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 void create_standard_allocator(StandardAllocator *a, const char *name) {

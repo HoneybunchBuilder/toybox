@@ -3,6 +3,11 @@
 // Dear ImGui https://github.com/ocornut/imgui with imgui_internal.h api
 
 // clang-format off
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
 
 #ifdef IMGUI_ENABLE_FREETYPE
 #ifndef CIMGUI_FREETYPE
@@ -4811,3 +4816,6 @@ CIMGUI_API void ImGuiPlatformIO_Set_Platform_GetWindowSize(ImGuiPlatformIO* plat
 #endif
 
 // clang-format on
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

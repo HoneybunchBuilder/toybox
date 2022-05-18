@@ -366,6 +366,13 @@ static const size_t skydome_index_count =
 static const size_t skydome_vertex_count =
     sizeof(skydome_positions) / sizeof(float3);
 
+// There is technically a const cast but I'm forgiving it for now
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+
 CPUMesh *create_skydome(Allocator *a) {
   size_t size = sizeof(CPUMesh) + skydome_geom_size + skydome_index_size;
   CPUMesh *skydome = (CPUMesh *)a->alloc(a->user_data, size);
@@ -394,3 +401,7 @@ CPUMesh *create_skydome(Allocator *a) {
 
   return skydome;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

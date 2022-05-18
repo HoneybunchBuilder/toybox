@@ -36,7 +36,7 @@ target_architecture(arch)
 # Platform detection
 if(WIN32)
   set(platform "windows")
-  if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+  if(${CMAKE_C_COMPILER_ID} MATCHES "GNU")
     set(mingw ON)
   endif()
 elseif(APPLE)
@@ -87,10 +87,10 @@ else()
 endif()
 
 # Clang & GNU only for now
-if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
-   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang" AND
-   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-  message(FATAL_ERROR "${CMAKE_CXX_COMPILER_ID} Unsupported - Clang & GNU only")
+if(NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang" AND
+   NOT ${CMAKE_C_COMPILER_ID} MATCHES "AppleClang" AND
+   NOT ${CMAKE_C_COMPILER_ID} MATCHES "GNU")
+  message(FATAL_ERROR "${CMAKE_C_COMPILER_ID} Unsupported - Clang & GNU only")
 endif()
 
 if(${VCPKG_TARGET_TRIPLET} MATCHES static)
@@ -117,7 +117,9 @@ endif()
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
-find_program(DXC dxc REQUIRED)
+# If in a windows development env we don't want to use the default DXC
+# as it does not ship with SPIRV support
+find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/Bin NO_DEFAULT_PATH REQUIRED)
 find_program(TOKTX toktx 
   PATHS ${VCPKG_DIR}/installed/${host_triple}/tools/ktx
   REQUIRED)
@@ -175,14 +177,11 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/cgltf.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/cimgui.cpp"
-           "${CMAKE_CURRENT_LIST_DIR}/src/cube.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/demo.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/gpuresources.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/material.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/pattern.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/pipelines.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/profiling.cpp"
            "${CMAKE_CURRENT_LIST_DIR}/src/scene.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
@@ -196,8 +195,22 @@ if(WIN32)
     target_link_options(toybox PRIVATE -mwindows)
   else()
     add_executable(toybox WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
-    target_link_options(toybox PRIVATE -Wl,/subsystem:windows)
+    if(NOT MSVC)
+      target_link_options(toybox PRIVATE -Wl,/subsystem:windows)
+    endif()
   endif()
+
+  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT toybox)
+  set_property(TARGET toybox PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+
+  # This really only matters for clang-cl
+  # ${CMAKE_C_COMPILER_ID} being MSVC would fail the above check
+  # So thing of this more as if(MSVC-style-compiler)
+  if(MSVC)
+    target_compile_options(toybox PRIVATE -Wno-reserved-id-macro)
+    target_compile_options(toybox PRIVATE -Wno-documentation)
+  endif()
+
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
 elseif(UNIX)

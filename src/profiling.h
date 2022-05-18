@@ -2,6 +2,11 @@
 
 #include <stdbool.h>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
+
 //#define TRACY_VK_C_ENABLE
 #include <TracyC.h>
 
@@ -65,4 +70,8 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
 
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif

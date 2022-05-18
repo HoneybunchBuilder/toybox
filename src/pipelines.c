@@ -1,5 +1,11 @@
 #include "pipelines.h"
 
+// Ignore some warnings for the generated headers
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+
 #include "brdf_lut_frag.h"
 #include "brdf_lut_vert.h"
 #include "color_mesh_frag.h"
@@ -31,12 +37,16 @@
 #include "gltf_miss.h"
 #include "gltf_raygen.h"
 
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
 #include "vkdbg.h"
-#include <SDL_stdinc.h>
+#include "tbsdl.h"
 #include <volk.h>
 
 uint32_t create_fractal_pipeline(VkDevice device,
@@ -87,7 +97,7 @@ uint32_t create_fractal_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -157,7 +167,7 @@ uint32_t create_fractal_pipeline(VkDevice device,
 
   *pipe = fractal_pipeline;
 
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_color_mesh_pipeline(VkDevice device,
@@ -225,7 +235,7 @@ uint32_t create_color_mesh_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -300,7 +310,7 @@ uint32_t create_color_mesh_pipeline(VkDevice device,
   }
 
   *pipe = color_mesh_pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_uv_mesh_pipeline(VkDevice device,
@@ -366,7 +376,7 @@ uint32_t create_uv_mesh_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -438,7 +448,7 @@ uint32_t create_uv_mesh_pipeline(VkDevice device,
   }
 
   *pipe = uv_mesh_pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_skydome_pipeline(VkDevice device,
@@ -502,7 +512,7 @@ uint32_t create_skydome_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -576,7 +586,7 @@ uint32_t create_skydome_pipeline(VkDevice device,
   }
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_imgui_pipeline(VkDevice device,
@@ -643,7 +653,7 @@ uint32_t create_imgui_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -720,7 +730,7 @@ uint32_t create_imgui_pipeline(VkDevice device,
   }
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_shadow_pipeline(VkDevice device,
@@ -784,7 +794,7 @@ uint32_t create_shadow_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, 0, w, h, 0, 1};
+    VkViewport viewport = {0, 0, (float)w, (float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -850,7 +860,7 @@ uint32_t create_shadow_pipeline(VkDevice device,
   }
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_sky_cube_pipeline(VkDevice device,
@@ -914,7 +924,7 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -986,7 +996,7 @@ uint32_t create_sky_cube_pipeline(VkDevice device,
   }
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_env_filter_pipeline(VkDevice device,
@@ -1050,7 +1060,7 @@ uint32_t create_env_filter_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+    VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
     VkRect2D scissor = {{0, 0}, {w, h}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -1122,7 +1132,7 @@ uint32_t create_env_filter_pipeline(VkDevice device,
   }
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_brdf_pipeline(VkDevice device,
@@ -1176,7 +1186,7 @@ uint32_t create_brdf_pipeline(VkDevice device,
       .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
   };
 
-  VkViewport viewport = {0, 0, w, h, 0, 1};
+  VkViewport viewport = {0, 0, (float)w, (float)h, 0, 1};
   VkRect2D scissor = {{0, 0}, {w, h}};
 
   VkPipelineViewportStateCreateInfo viewport_state = {
@@ -1237,14 +1247,14 @@ uint32_t create_brdf_pipeline(VkDevice device,
                                   &pipeline);
   if (err != VK_SUCCESS) {
     assert(false);
-    return err;
+    return (uint32_t)err;
   }
 
   vkDestroyShaderModule(device, vert_mod, vk_alloc);
   vkDestroyShaderModule(device, frag_mod, vk_alloc);
 
   *pipe = pipeline;
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_gltf_pipeline(VkDevice device,
@@ -1326,7 +1336,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-  VkViewport viewport = {0, h, w, -(float)h, 0, 1};
+  VkViewport viewport = {0, (float)h, (float)w, -(float)h, 0, 1};
   VkRect2D scissor = {{0, 0}, {w, h}};
 
   VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -1493,7 +1503,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
       cache,  feature_perm_count, input_perm_count, create_info_bases};
 
   GPUPipeline *p = NULL;
-  err = (VkResult)create_gfx_pipeline(&desc, &p);
+  err = (VkResult)(create_gfx_pipeline(&desc, &p));
   assert(err == VK_SUCCESS);
 
   // Set some debug names
@@ -1522,7 +1532,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
 
   *pipe = p;
 
-  return err;
+  return (uint32_t)err;
 }
 
 uint32_t create_gltf_rt_pipeline(
@@ -1633,9 +1643,9 @@ uint32_t create_gltf_rt_pipeline(
   create_info.maxPipelineRayRecursionDepth = 1;
   create_info.layout = layout;
 
-  err = (VkResult)create_rt_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
+  err = (VkResult)(create_rt_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
                                      cache, vkCreateRayTracingPipelines, 1,
-                                     &create_info, pipe);
+                                     &create_info, pipe));
   assert(err == VK_SUCCESS);
 
   // Cleanup modules
