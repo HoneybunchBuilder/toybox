@@ -45,8 +45,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "vkdbg.h"
 #include "tbsdl.h"
+#include "vkdbg.h"
 #include <volk.h>
 
 uint32_t create_fractal_pipeline(VkDevice device,
@@ -1644,8 +1644,8 @@ uint32_t create_gltf_rt_pipeline(
   create_info.layout = layout;
 
   err = (VkResult)(create_rt_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
-                                     cache, vkCreateRayTracingPipelines, 1,
-                                     &create_info, pipe));
+                                      cache, vkCreateRayTracingPipelines, 1,
+                                      &create_info, pipe));
   assert(err == VK_SUCCESS);
 
   // Cleanup modules
