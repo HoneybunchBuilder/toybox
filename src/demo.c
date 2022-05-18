@@ -1,8 +1,5 @@
 #include "demo.h"
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 #include <float.h>
 #include <stddef.h>
@@ -17,6 +14,7 @@
 #include "simd.h"
 #include "skydome.h"
 #include "vkdbg.h"
+#include "tbsdl.h"
 
 #ifdef __ANDROID__
 #define ASSET_PREFIX
@@ -44,7 +42,7 @@ static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCAllocN((void *)memory, size, "VMA");
+  TracyCAllocN((void *)memory, size, "VMA")
 }
 static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
                         VkDeviceMemory memory, VkDeviceSize size,
@@ -54,7 +52,7 @@ static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCFreeN((void *)memory, "VMA");
+  TracyCFreeN((void *)memory, "VMA")
 }
 
 static VkDevice create_device(VkPhysicalDevice gpu,
@@ -63,7 +61,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t ext_count,
                               const VkAllocationCallbacks *vk_alloc,
                               const char *const *ext_names) {
-  TracyCZoneN(ctx, "create_device", true);
+  TracyCZoneN(ctx, "create_device", true)
   VkResult err = VK_SUCCESS;
 
   float queue_priorities[1] = {0.0};
@@ -88,7 +86,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   };
 
   VkDeviceCreateInfo create_info = {0};
-  create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+  create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   create_info.pNext = (const void *)&rt_pipe_feature;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = queues;
@@ -110,13 +108,13 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   assert(err == VK_SUCCESS);
   (void)err;
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 
   return device;
 }
 
 static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
-  TracyCZoneN(ctx, "select_gpu", true);
+  TracyCZoneN(ctx, "select_gpu", true)
 
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
@@ -161,7 +159,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
       vkGetPhysicalDeviceProperties(physical_devices[i],
                                     &physicalDeviceProperties);
       if (physicalDeviceProperties.deviceType == search_for_device_type) {
-        gpu_idx = i;
+        gpu_idx = (int32_t)i;
         break;
       }
     }
@@ -170,7 +168,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   VkPhysicalDevice gpu = physical_devices[gpu_idx];
   hb_free(tmp_alloc, physical_devices);
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 
   return gpu;
 }
@@ -198,11 +196,11 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
 static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
                                       VkPipelineLayout layout,
                                       const float4x4 *vp) {
-  TracyCZoneN(ctx, "demo_render_scene_shadows", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+  TracyCZoneN(ctx, "demo_render_scene_shadows", true)
+  TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
   for (uint32_t i = 0; i < s->entity_count; ++i) {
-    TracyCZoneN(entity_e, "render entity", true);
+    TracyCZoneN(entity_e, "render entity", true)
     uint64_t components = s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
     uint32_t static_mesh_idx = s->static_mesh_refs[i];
@@ -222,7 +220,7 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
       mulmf44(vp, &object_data.m, &object_data.mvp);
 
       cmd_begin_label(cmd, "demo_render_scene_shadows",
-                      (float4){0.1, 0.5, 0.5, 1.0});
+                      (float4){0.1f, 0.5f, 0.5f, 1.0f});
 
       vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(ShadowPushConstants), &object_data.mvp);
@@ -231,12 +229,12 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
 
       // Draw mesh surfaces
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
-        TracyCZoneN(surface_e, "draw surface", true);
+        TracyCZoneN(surface_e, "draw surface", true)
 
         const GPUSurface *surface = &mesh->surfaces[ii];
 
-        uint32_t idx_count = surface->idx_count;
-        uint32_t vtx_count = surface->vtx_count;
+        uint32_t idx_count = (uint32_t)surface->idx_count;
+        uint32_t vtx_count = (uint32_t)surface->vtx_count;
         VkBuffer buffer = surface->gpu.buffer;
 
         vkCmdBindIndexBuffer(cmd, buffer, 0, surface->idx_type);
@@ -251,15 +249,15 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
         offset += vtx_count * sizeof(float) * 3;
 
         vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
-        TracyCZoneEnd(surface_e);
+        TracyCZoneEnd(surface_e)
       }
 
       cmd_end_label(cmd);
     }
 
-    TracyCZoneEnd(entity_e);
+    TracyCZoneEnd(entity_e)
   }
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
@@ -267,16 +265,16 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               VkDescriptorSet *object_sets,
                               VkDescriptorSet *material_sets,
                               const float4x4 *vp, Demo *d) {
-  TracyCZoneN(ctx, "demo_render_scene", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+  TracyCZoneN(ctx, "demo_render_scene", true)
+  TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
   // HACK: Upload all material const buffers every frame
   {
-    TracyCZoneN(mat_up_ctx, "material data upload", true);
+    TracyCZoneN(mat_up_ctx, "material data upload", true)
     for (uint32_t i = 0; i < s->material_count; ++i) {
       demo_upload_const_buffer(d, &s->materials[i].const_buffer);
     }
-    TracyCZoneEnd(mat_up_ctx);
+    TracyCZoneEnd(mat_up_ctx)
   }
 
   // Bind per-view data - TODO: we should do this somewhere else
@@ -286,7 +284,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
   VkPipeline last_mat_pipe = VK_NULL_HANDLE;
   VkDescriptorSet last_mat_set = VK_NULL_HANDLE;
   for (uint32_t i = 0; i < s->entity_count; ++i) {
-    TracyCZoneN(entity_e, "render entity", true);
+    TracyCZoneN(entity_e, "render entity", true)
     uint64_t components = s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
     uint32_t static_mesh_idx = s->static_mesh_refs[i];
@@ -306,8 +304,8 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
       // HACK: Update object's constant buffer here
       {
-        TracyCZoneN(update_object_ctx, "Update Object Const Buffer", true);
-        TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering);
+        TracyCZoneN(update_object_ctx, "Update Object Const Buffer", true)
+        TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering)
 
         uint32_t block_idx = i / CONST_BUFFER_BLOCK_SIZE;
         uint32_t item_idx = i % CONST_BUFFER_BLOCK_SIZE;
@@ -330,10 +328,10 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
         demo_upload_const_buffer(d, obj_const_buffer);
 
-        TracyCZoneEnd(update_object_ctx);
+        TracyCZoneEnd(update_object_ctx)
       }
 
-      cmd_begin_label(cmd, "demo_render_scene", (float4){0.5, 0.1, 0.1, 1.0});
+      cmd_begin_label(cmd, "demo_render_scene", (float4){0.5f, 0.1f, 0.1f, 1.0f});
 
       // Bind per-object data
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
@@ -343,7 +341,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
       // Draw mesh surfaces
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
-        TracyCZoneN(surface_e, "draw surface", true);
+        TracyCZoneN(surface_e, "draw surface", true)
 
         const GPUSurface *surface = &mesh->surfaces[ii];
 
@@ -379,8 +377,8 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
           last_mat_set = material_sets[surface_mat_idx];
         }
 
-        uint32_t idx_count = surface->idx_count;
-        uint32_t vtx_count = surface->vtx_count;
+        uint32_t idx_count = (uint32_t)surface->idx_count;
+        uint32_t vtx_count = (uint32_t)surface->vtx_count;
         VkBuffer buffer = surface->gpu.buffer;
 
         vkCmdBindIndexBuffer(cmd, buffer, 0, surface->idx_type);
@@ -411,15 +409,15 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         }
 
         vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
-        TracyCZoneEnd(surface_e);
+        TracyCZoneEnd(surface_e)
       }
 
       cmd_end_label(cmd);
     }
 
-    TracyCZoneEnd(entity_e);
+    TracyCZoneEnd(entity_e)
   }
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 static void demo_imgui_update(Demo *d) {
@@ -548,7 +546,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
   VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
   VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
   if (present_mode != swapchain_present_mode) {
-    for (size_t i = 0; i < present_mode_count; ++i) {
+    for (uint32_t i = 0; i < present_mode_count; ++i) {
       if (present_modes[i] == present_mode) {
         swapchain_present_mode = present_mode;
         break;
@@ -577,7 +575,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
     image_count = surf_caps.maxImageCount;
   }
 
-  VkSurfaceTransformFlagsKHR pre_transform;
+  VkSurfaceTransformFlagBitsKHR pre_transform;
   if (surf_caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
     pre_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
   } else {
@@ -595,7 +593,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
       VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
   };
   for (uint32_t i = 0; i < 4; i++) {
-    if (surf_caps.supportedCompositeAlpha & composite_alpha_flags[i]) {
+    if (surf_caps.supportedCompositeAlpha & (VkCompositeAlphaFlagsKHR)composite_alpha_flags[i]) {
       composite_alpha = composite_alpha_flags[i];
       break;
     }
@@ -844,21 +842,21 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
   int32_t bytes_pp = 0;
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
-  size_t size = tex_w * tex_h * bytes_pp;
+  size_t size = (size_t)tex_w * (size_t)tex_h * (size_t)bytes_pp;
 
   // Create and upload imgui atlas texture
   GPUTexture imgui_atlas = {0};
   {
     // Describe cpu-side texture
     TextureMip mip = {
-        .width = tex_w,
-        .height = tex_h,
+        .width = (uint32_t)tex_w,
+        .height = (uint32_t)tex_h,
         .depth = 1,
         .data = pixels,
     };
     TextureLayer layer = {
-        .width = tex_w,
-        .height = tex_h,
+        .width = (uint32_t)tex_w,
+        .height = (uint32_t)tex_h,
         .depth = 1,
         .mips = &mip,
     };
@@ -870,9 +868,9 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
         .mip_count = 1,
     };
 
-    VkResult err = (VkResult)create_texture(
+    VkResult err = (VkResult)(create_texture(
         d->device, d->vma_alloc, d->vk_alloc, &cpu_atlas, d->upload_mem_pool,
-        d->texture_mem_pool, VK_FORMAT_R8G8B8A8_SRGB, &imgui_atlas, false);
+        d->texture_mem_pool, VK_FORMAT_R8G8B8A8_SRGB, &imgui_atlas, false));
     assert(err == VK_SUCCESS);
     (void)err;
 
@@ -928,7 +926,7 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
 bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                Allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                Demo *d) {
-  TracyCZoneN(ctx, "demo_init", true);
+  TracyCZoneN(ctx, "demo_init", true)
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
@@ -1331,7 +1329,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
-    TracyCZoneN(pipe_cache_ctx, "init pipeline cache", true);
+    TracyCZoneN(pipe_cache_ctx, "init pipeline cache", true)
     size_t data_size = 0;
     void *data = NULL;
 
@@ -1361,7 +1359,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     if (data) {
       hb_free(std_alloc, data);
     }
-    TracyCZoneEnd(pipe_cache_ctx);
+    TracyCZoneEnd(pipe_cache_ctx)
   }
 
   VkPushConstantRange sky_const_range = {
@@ -1485,9 +1483,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Shadow Pipeline
   VkPipeline shadow_pipe = VK_NULL_HANDLE;
-  err = create_shadow_pipeline(device, vk_alloc, pipeline_cache, shadow_pass,
+  err = (VkResult)(create_shadow_pipeline(device, vk_alloc, pipeline_cache, shadow_pass,
                                SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT,
-                               shadow_pipe_layout, &shadow_pipe);
+                               shadow_pipe_layout, &shadow_pipe));
   assert(err == VK_SUCCESS);
 
   // Create GLTF Descriptor Set Layout
@@ -1544,9 +1542,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create GLTF Pipeline
   GPUPipeline *gltf_pipeline = NULL;
-  err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
+  err = (VkResult)(create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
                              pipeline_cache, main_pass, width, height,
-                             gltf_pipe_layout, &gltf_pipeline);
+                             gltf_pipe_layout, &gltf_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create GLTF RT Pipeline Layout
@@ -1627,9 +1625,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Skydome Pipeline
   VkPipeline skydome_pipeline = VK_NULL_HANDLE;
-  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, main_pass,
+  err = (VkResult)(create_skydome_pipeline(device, vk_alloc, pipeline_cache, main_pass,
                                 width, height, skydome_pipe_layout,
-                                &skydome_pipeline);
+                                &skydome_pipeline));
   assert(err == VK_SUCCESS);
 
   // HACK: Get this function here...
@@ -1683,14 +1681,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create ImGui pipeline
   VkPipeline imgui_pipeline = VK_NULL_HANDLE;
   err =
-      create_imgui_pipeline(device, vk_alloc, pipeline_cache, imgui_pass, width,
-                            height, imgui_pipe_layout, &imgui_pipeline);
+      (VkResult)(create_imgui_pipeline(device, vk_alloc, pipeline_cache, imgui_pass, width,
+                            height, imgui_pipe_layout, &imgui_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
-    TracyCZoneN(vma_pool_ctx, "init vma upload pool", true);
+    TracyCZoneN(vma_pool_ctx, "init vma upload pool", true)
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1707,13 +1705,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vmaCreatePool(vma_alloc, &create_info, &upload_mem_pool);
     assert(err == VK_SUCCESS);
 
-    TracyCZoneEnd(vma_pool_ctx);
+    TracyCZoneEnd(vma_pool_ctx)
   }
 
   // Create a pool for texture memory
   VmaPool texture_mem_pool = VK_NULL_HANDLE;
   {
-    TracyCZoneN(vma_pool_e, "init vma texture pool", true);
+    TracyCZoneN(vma_pool_e, "init vma texture pool", true)
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1734,7 +1732,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     create_info.minBlockCount = 10;
     err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
-    TracyCZoneEnd(vma_pool_e);
+    TracyCZoneEnd(vma_pool_e)
   }
 
   // Create Skydome Mesh
@@ -1991,7 +1989,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   }
 
   uint32_t env_filtered_mip_count =
-      (uint32_t)SDL_floor(log2(ENV_CUBEMAP_DIM)) + 1;
+      (uint32_t)(SDL_floorf(log2f(ENV_CUBEMAP_DIM)) + 1);
 
   // Create Filtered Env Map
   GPUImage env_filtered_cubemap = {0};
@@ -2208,9 +2206,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Env Filtered Pipeline
   VkPipeline env_filtered_pipeline = VK_NULL_HANDLE;
   {
-    err = create_env_filter_pipeline(
+    err = (VkResult)(create_env_filter_pipeline(
         device, vk_alloc, pipeline_cache, env_filtered_pass, ENV_CUBEMAP_DIM,
-        ENV_CUBEMAP_DIM, env_filtered_layout, &env_filtered_pipeline);
+        ENV_CUBEMAP_DIM, env_filtered_layout, &env_filtered_pipeline));
     if (err != VK_SUCCESS) {
       assert(false);
       return false;
@@ -2219,14 +2217,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
-  err = create_sky_cube_pipeline(device, vk_alloc, pipeline_cache, env_map_pass,
+  err = (VkResult)(create_sky_cube_pipeline(device, vk_alloc, pipeline_cache, env_map_pass,
                                  ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM,
-                                 sky_cube_layout, &sky_cube_pipeline);
+                                 sky_cube_layout, &sky_cube_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create Irradiance Cubemaps
   const uint32_t irradiance_mip_count =
-      (uint32_t)SDL_floor(log2(IRRADIANCE_CUBEMAP_DIM)) + 1;
+      (uint32_t)(SDL_floorf(log2f(IRRADIANCE_CUBEMAP_DIM)) + 1);
 
   GPUImage irradiance_cubemap = {0};
   {
@@ -2268,7 +2266,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       SDL_TriggerBreakpoint();
       return false;
     }
-    DemoAllocContext ctx = {
+    DemoAllocContext scene_ctx = {
         .device = device,
         .std_alloc = std_alloc,
         .tmp_alloc = tmp_alloc,
@@ -2277,7 +2275,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .up_pool = upload_mem_pool,
         .tex_pool = texture_mem_pool,
     };
-    if (create_scene(ctx, main_scene) != 0) {
+    if (create_scene(scene_ctx, main_scene) != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to load main scene");
       SDL_TriggerBreakpoint();
       return false;
@@ -2688,15 +2686,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     d->env_filtered_framebuffers =
         hb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkFramebuffer);
     for (uint32_t i = 0; i < env_filtered_mip_count; ++i) {
-      const float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
+      const float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, (float)i);
 
       VkFramebufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
           .attachmentCount = 1,
           .pAttachments = &d->env_filtered_face_views[i],
           .renderPass = env_filtered_pass,
-          .width = mip_dim,
-          .height = mip_dim,
+          .width = (uint32_t)mip_dim,
+          .height = (uint32_t)mip_dim,
           .layers = 1,
       };
 
@@ -2863,9 +2861,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
     // Create Pipeline
     {
-      err = create_brdf_pipeline(device, vk_alloc, pipeline_cache,
+      err = (VkResult)(create_brdf_pipeline(device, vk_alloc, pipeline_cache,
                                  brdf_lut_pass, BRDF_LUT_DIM, BRDF_LUT_DIM,
-                                 brdf_lut_pipe_layout, &brdf_lut_pipe);
+                                 brdf_lut_pipe_layout, &brdf_lut_pipe));
       if (err != VK_SUCCESS) {
         assert(false);
         return false;
@@ -2912,7 +2910,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         return false;
       }
 
-      cmd_begin_label(cmd, "brdf lut", (float4){0.5, 0.1, 0.5, 1.0});
+      cmd_begin_label(cmd, "brdf lut", (float4){0.5f, 0.1f, 0.5f, 1.0f});
 
       vkCmdBeginRenderPass(cmd, &pass_info, VK_SUBPASS_CONTENTS_INLINE);
       vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, brdf_lut_pipe);
@@ -2936,7 +2934,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
           .pCommandBuffers = &cmd,
       };
       queue_begin_label(d->graphics_queue, "brdf lut",
-                        (float4){1.0, 0.1, 1.0, 1.0});
+                        (float4){1.0f, 0.1f, 1.0f, 1.0f});
       err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, brdf_lut_fence);
       queue_end_label(d->graphics_queue);
       if (err != VK_SUCCESS) {
@@ -3012,7 +3010,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Must do this before descriptor set writes so we can be sure to create the
   // imgui resources on time
   if (!demo_init_imgui(d, window)) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     return false;
   }
 
@@ -3126,13 +3124,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     vkDestroyRenderPass(device, brdf_lut_pass, vk_alloc);
   }
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 
   return true;
 }
 
 void demo_destroy(Demo *d) {
-  TracyCZoneN(ctx, "demo_destroy", true);
+  TracyCZoneN(ctx, "demo_destroy", true)
 
   VkDevice device = d->device;
   VmaAllocator vma_alloc = d->vma_alloc;
@@ -3285,7 +3283,7 @@ void demo_destroy(Demo *d) {
 
   igDestroyContext(d->ig_ctx);
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer) {
@@ -3320,8 +3318,8 @@ void demo_upload_scene(Demo *d, const Scene *s) {
 }
 
 void demo_process_event(Demo *d, const SDL_Event *e) {
-  TracyCZoneN(ctx, "demo_process_event", true);
-  TracyCZoneColor(ctx, TracyCategoryColorInput);
+  TracyCZoneN(ctx, "demo_process_event", true)
+  TracyCZoneColor(ctx, TracyCategoryColorInput)
   ImGuiIO *io = d->ig_io;
 
   switch (e->type) {
@@ -3357,7 +3355,7 @@ void demo_process_event(Demo *d, const SDL_Event *e) {
   }
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
-    uint64_t key = e->key.keysym.scancode;
+    uint64_t key = (uint64_t)e->key.keysym.scancode;
     assert(key < sizeof(io->KeysDown));
     io->KeysDown[key] = (e->type == SDL_KEYDOWN);
     // io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
@@ -3380,11 +3378,11 @@ void demo_process_event(Demo *d, const SDL_Event *e) {
   }
   }
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
-void demo_resize(Demo *d) {
-  TracyCZoneN(ctx, "demo_resize", true);
+static void demo_resize(Demo *d) {
+  TracyCZoneN(ctx, "demo_resize", true)
   VkResult err = vkDeviceWaitIdle(d->device);
   (void)err;
 
@@ -3399,12 +3397,12 @@ void demo_resize(Demo *d) {
   // swapchain images need to be transitioned again
   d->frame_idx = 0;
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
 }
 
 void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                        const float4x4 *sun_vp) {
-  TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
+  TracyCZoneN(demo_render_frame_event, "demo_render_frame", true)
 
   VkResult err = VK_SUCCESS;
 
@@ -3422,17 +3420,17 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
   // Ensure no more than FRAME_LATENCY renderings are outstanding
   {
-    TracyCZoneN(fence_ctx, "demo_render_frame wait for fence", true);
-    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
+    TracyCZoneN(fence_ctx, "demo_render_frame wait for fence", true)
+    TracyCZoneColor(fence_ctx, TracyCategoryColorWait)
     vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
-    TracyCZoneEnd(fence_ctx);
+    TracyCZoneEnd(fence_ctx)
 
     vkResetFences(device, 1, &fences[frame_idx]);
   }
 
   // Acquire Image
   {
-    TracyCZoneN(ctx, "demo_render_frame acquire next image", true);
+    TracyCZoneN(ctx, "demo_render_frame acquire next image", true)
     do {
       err =
           vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
@@ -3454,7 +3452,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         assert(err == VK_SUCCESS);
       }
     } while (err != VK_SUCCESS);
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
   }
 
   uint32_t swap_img_idx = d->swap_img_idx;
@@ -3502,7 +3500,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   VkDescriptorSet *main_scene_material_sets = NULL;
   {
     TracyCZoneN(demo_manage_descriptor_sets,
-                "demo_render_frame manage descriptor sets", true);
+                "demo_render_frame manage descriptor sets", true)
     uint32_t max_obj_count = d->main_scene->entity_count;
     uint32_t max_mat_count = d->main_scene->material_count;
 
@@ -3519,7 +3517,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           img_count >
               pool_state->pool_sizes[VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE] ||
           total_set_count > pool_state->max_set_count) {
-        TracyCZoneN(demo_resize_pool, "demo_render_frame resize pool", true);
+        TracyCZoneN(demo_resize_pool, "demo_render_frame resize pool", true)
 
         // Set the new state
         pool_state->pool_sizes[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER] = ub_count;
@@ -3570,17 +3568,17 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         d->dyn_desc_pools[frame_idx] = dyn_pool;
 
-        TracyCZoneEnd(demo_resize_pool);
+        TracyCZoneEnd(demo_resize_pool)
       } else {
-        TracyCZoneN(demo_reset_pool, "demo_render_frame reset pool", true);
+        TracyCZoneN(demo_reset_pool, "demo_render_frame reset pool", true)
 
         // If we didn't need to re-create the pool, we can just reset it
         err = vkResetDescriptorPool(d->device, d->dyn_desc_pools[frame_idx], 0);
         assert(err == VK_SUCCESS);
 
-        TracyCZoneEnd(demo_reset_pool);
+        TracyCZoneEnd(demo_reset_pool)
       }
-      TracyCZoneEnd(demo_manage_descriptor_sets);
+      TracyCZoneEnd(demo_manage_descriptor_sets)
     }
 
     VkDescriptorSetLayout *set_layouts =
@@ -3681,9 +3679,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         // Collect texture info indices
         uint32_t first_valid_tex_idx = 0xFFFFFFFF;
-        for (uint32_t i = 0; i < 3; ++i) {
-          if (tex_info[i].imageView != VK_NULL_HANDLE) {
-            first_valid_tex_idx = i;
+        for (uint32_t ii = 0; ii < 3; ++ii) {
+          if (tex_info[ii].imageView != VK_NULL_HANDLE) {
+            first_valid_tex_idx = ii;
             break;
           }
         }
@@ -3693,7 +3691,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         }
 
         uint32_t tex_info_indices[3] = {0};
-        memset(tex_info_indices, first_valid_tex_idx, sizeof(uint32_t) * 3);
+        memset(tex_info_indices, (int32_t)first_valid_tex_idx, sizeof(uint32_t) * 3);
 
         uint32_t tex_info_idx = first_valid_tex_idx;
         if (mat->feature_perm & GLTF_PERM_BASE_COLOR_MAP) {
@@ -3736,7 +3734,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
     // Allocate Sets
     {
-      TracyCZoneN(demo_allocate_sets, "demo_render_frame allocate sets", true);
+      TracyCZoneN(demo_allocate_sets, "demo_render_frame allocate sets", true)
 
       main_scene_object_sets =
           hb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSet);
@@ -3746,7 +3744,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                                      main_scene_object_sets);
       assert(err == VK_SUCCESS);
 
-      TracyCZoneEnd(demo_allocate_sets);
+      TracyCZoneEnd(demo_allocate_sets)
     }
 
     // Assign sets to writes
@@ -3779,14 +3777,14 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   // Render Shadow Maps
   {
     TracyCZoneN(demo_render_frame_shadows_event, "demo_render_frame shadows",
-                true);
+                true)
 
     VkCommandBuffer shadow_buffer = d->shadow_buffers[frame_idx];
     shadow_sem = d->shadow_complete_sems[frame_idx];
 
     // Record
     {
-      TracyCZoneN(record_shadows_e, "record shadows", true);
+      TracyCZoneN(record_shadows_e, "record shadows", true)
 
       SET_VK_NAME(device, shadow_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
                   "shadow command buffer");
@@ -3800,15 +3798,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       }
 
       TracyCVkNamedZone(gpu_gfx_ctx, shadow_scope, shadow_buffer, "Shadows", 1,
-                        true);
+                        true)
 
-      cmd_begin_label(shadow_buffer, "shadows", (float4){0.1, 0.5, 0.5, 1.0});
+      cmd_begin_label(shadow_buffer, "shadows", (float4){0.1f, 0.5f, 0.5f, 1.0f});
 
       {
         VkFramebuffer framebuffer = d->shadow_pass_framebuffers[frame_idx];
 
         VkClearValue clear_values[1] = {
-            {.depthStencil = {.depth = 1.0f, .stencil = 0.0f}},
+            {.depthStencil = {.depth = 1.0f, .stencil = 0}},
         };
 
         VkRenderPassBeginInfo pass_info = {
@@ -3852,12 +3850,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
       err = vkEndCommandBuffer(shadow_buffer);
       assert(err == VK_SUCCESS);
-      TracyCZoneEnd(record_shadows_e);
+      TracyCZoneEnd(record_shadows_e)
     }
 
     // Submit
     {
-      TracyCZoneN(submit_shadows_e, "submit shadows", true);
+      TracyCZoneN(submit_shadows_e, "submit shadows", true)
       VkSubmitInfo submit_info = {
           .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
           .commandBufferCount = 1,
@@ -3866,26 +3864,26 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           .pSignalSemaphores = &shadow_sem,
       };
       queue_begin_label(graphics_queue, "shadows",
-                        (float4){0.1, 1.0, 1.0, 1.0});
+                        (float4){0.1f, 1.0f, 1.0f, 1.0f});
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
       queue_end_label(graphics_queue);
       assert(err == VK_SUCCESS);
-      TracyCZoneEnd(submit_shadows_e);
+      TracyCZoneEnd(submit_shadows_e)
     }
 
-    TracyCZoneEnd(demo_render_frame_shadows_event);
+    TracyCZoneEnd(demo_render_frame_shadows_event)
   }
 
   // Render Env Cube Map
   {
-    TracyCZoneN(trcy_e, "demo_render_frame env cube render", true);
+    TracyCZoneN(trcy_e, "demo_render_frame env cube render", true)
 
     VkCommandBuffer env_cube_buffer = d->env_cube_buffers[frame_idx];
     env_cube_sem = d->env_complete_sems[frame_idx];
 
     // Record
     {
-      TracyCZoneN(record_env_e, "record env cube", true);
+      TracyCZoneN(record_env_e, "record env cube", true)
 
       SET_VK_NAME(device, env_cube_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
                   "env cube command buffer");
@@ -3915,7 +3913,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                           "Draw Env Cube Map", 2, true);
 
         cmd_begin_label(env_cube_buffer, "env cube",
-                        (float4){0.5, 0.5, 0.1, 1.0});
+                        (float4){0.5f, 0.5f, 0.1f, 1.0f});
 
         {
           VkClearValue clear_values[1] = {0};
@@ -3944,7 +3942,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         // Draw the skydome
         VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
 
-        uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
+        uint32_t idx_count = (uint32_t)d->skydome_gpu.surfaces[0].idx_count;
         size_t idx_size =
             idx_count * sizeof(uint16_t) >> d->skydome_gpu.surfaces[0].idx_type;
 
@@ -3957,17 +3955,17 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         vkCmdEndRenderPass(env_cube_buffer);
 
-        TracyCVkZoneEnd(env_cube_draw);
+        TracyCVkZoneEnd(env_cube_draw)
         cmd_end_label(env_cube_buffer);
       }
 
       // Filter Env Cubemap
       {
         TracyCVkNamedZone(gpu_gfx_ctx, env_cube_filter, env_cube_buffer,
-                          "Filter Env Cube Map", 3, true);
+                          "Filter Env Cube Map", 3, true)
 
         cmd_begin_label(env_cube_buffer, "env cube filtering",
-                        (float4){0.5, 0.5, 0.1, 1.0});
+                        (float4){0.5f, 0.5f, 0.1f, 1.0f});
 
         vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->env_filtered_pipeline);
@@ -3992,14 +3990,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         for (uint32_t i = 0; i < mip_count; ++i) {
           filter_consts.roughness = (float)i / (float)(mip_count - 1);
 
-          float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, i);
-          pass_info.renderArea = (VkRect2D){{0, 0}, {mip_dim, mip_dim}},
+          float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, (float)i);
+          pass_info.renderArea =
+              (VkRect2D){{0, 0}, {(uint32_t)mip_dim, (uint32_t)mip_dim}};
           pass_info.framebuffer = d->env_filtered_framebuffers[i];
 
-          VkViewport viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1};
-          VkRect2D scissor = {{0, 0}, {mip_dim, mip_dim}};
-          vkCmdSetViewport(env_cube_buffer, 0, 1, &viewport);
-          vkCmdSetScissor(env_cube_buffer, 0, 1, &scissor);
+          VkViewport mip_view = {0, mip_dim, mip_dim, -mip_dim, 0, 1};
+          VkRect2D mip_scissor = {{0, 0}, {(uint32_t)mip_dim, (uint32_t)mip_dim}};
+          vkCmdSetViewport(env_cube_buffer, 0, 1, &mip_view);
+          vkCmdSetScissor(env_cube_buffer, 0, 1, &mip_scissor);
 
           vkCmdBeginRenderPass(env_cube_buffer, &pass_info,
                                VK_SUBPASS_CONTENTS_INLINE);
@@ -4017,7 +4016,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           // Draw the skydome
           VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
 
-          uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
+          uint32_t idx_count = (uint32_t)d->skydome_gpu.surfaces[0].idx_count;
           size_t idx_size = idx_count * sizeof(uint16_t) >>
                             d->skydome_gpu.surfaces[0].idx_type;
 
@@ -4031,21 +4030,21 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           vkCmdEndRenderPass(env_cube_buffer);
         }
 
-        TracyCVkZoneEnd(env_cube_filter);
+        TracyCVkZoneEnd(env_cube_filter)
         cmd_end_label(env_cube_buffer);
       }
 
-      TracyCVkZoneEnd(env_cube_scope);
-      TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer);
+      TracyCVkZoneEnd(env_cube_scope)
+      TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer)
 
       err = vkEndCommandBuffer(env_cube_buffer);
       assert(err == VK_SUCCESS);
-      TracyCZoneEnd(record_env_e);
+      TracyCZoneEnd(record_env_e)
     }
 
     // Submit
     {
-      TracyCZoneN(submit_shadows_e, "submit env cube", true);
+      TracyCZoneN(submit_shadows_e, "submit env cube", true)
       VkSubmitInfo submit_info = {
           .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
           .commandBufferCount = 1,
@@ -4054,20 +4053,20 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           .pSignalSemaphores = &env_cube_sem,
       };
       queue_begin_label(graphics_queue, "env cube",
-                        (float4){1.0, 1.0, 0.1, 1.0});
+                        (float4){1.0f, 1.0f, 0.1f, 1.0f});
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
       queue_end_label(graphics_queue);
       assert(err == VK_SUCCESS);
-      TracyCZoneEnd(submit_shadows_e);
+      TracyCZoneEnd(submit_shadows_e)
     }
 
-    TracyCZoneEnd(trcy_e);
+    TracyCZoneEnd(trcy_e)
   }
 
   // Render Main Scene & UI
   {
     TracyCZoneN(demo_render_frame_render_event, "demo_render_frame render",
-                true);
+                true)
 
     VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
     VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
@@ -4085,8 +4084,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     // Record
     {
       TracyCZoneN(record_upload_event,
-                  "demo_render_frame record upload commands", true);
-      TracyCZoneColor(record_upload_event, TracyCategoryColorRendering);
+                  "demo_render_frame record upload commands", true)
+      TracyCZoneColor(record_upload_event, TracyCategoryColorRendering)
 
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
@@ -4098,14 +4097,14 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         TracyCVkNamedZone(gpu_gfx_ctx, upload_scope, upload_buffer, "Upload", 1,
                           true);
-        cmd_begin_label(upload_buffer, "upload", (float4){0.1, 0.5, 0.1, 1.0});
+        cmd_begin_label(upload_buffer, "upload", (float4){0.1f, 0.5f, 0.1f, 1.0f});
 
         // Issue const buffer uploads
         if (d->const_buffer_upload_count > 0) {
           TracyCZoneN(cb_up_event,
-                      "demo_render_frame record const buffer uploads", true);
+                      "demo_render_frame record const buffer uploads", true)
           cmd_begin_label(upload_buffer, "upload const buffers",
-                          (float4){0.1, 0.4, 0.1, 1.0});
+                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->const_buffer_upload_count; ++i) {
             GPUConstBuffer constbuffer = d->const_buffer_upload_queue[i];
@@ -4115,15 +4114,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           }
           d->const_buffer_upload_count = 0;
           cmd_end_label(upload_buffer);
-          TracyCZoneEnd(cb_up_event);
+          TracyCZoneEnd(cb_up_event)
         }
 
         // Issue mesh uploads
         if (d->mesh_upload_count > 0) {
           TracyCZoneN(mesh_up_event, "demo_render_frame record mesh uploads",
-                      true);
+                      true)
           cmd_begin_label(upload_buffer, "upload meshes",
-                          (float4){0.1, 0.4, 0.1, 1.0});
+                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
             GPUMesh mesh = d->mesh_upload_queue[i];
@@ -4137,15 +4136,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           }
           d->mesh_upload_count = 0;
           cmd_end_label(upload_buffer);
-          TracyCZoneEnd(mesh_up_event);
+          TracyCZoneEnd(mesh_up_event)
         }
 
         // Issue texture uploads
         if (d->texture_upload_count > 0) {
           TracyCZoneN(tex_up_event, "demo_render_frame record texture uploads",
-                      true);
+                      true)
           cmd_begin_label(upload_buffer, "upload textures",
-                          (float4){0.1, 0.4, 0.1, 1.0});
+                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkImageMemoryBarrier barrier = {0};
           barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
           barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -4193,10 +4192,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
               uint32_t mip_width = img_width;
               uint32_t mip_height = img_height;
 
-              for (uint32_t i = 1; i < mip_levels; ++i) {
+              for (uint32_t ii = 1; ii < mip_levels; ++ii) {
                 // Transition previous mip level to be transfer src
                 {
-                  barrier.subresourceRange.baseMipLevel = i - 1;
+                  barrier.subresourceRange.baseMipLevel = ii - 1;
                   barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
                   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
                   barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -4211,9 +4210,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                 // Copy to next mip
                 VkImageBlit blit = {0};
                 blit.srcOffsets[0] = (VkOffset3D){0, 0, 0};
-                blit.srcOffsets[1] = (VkOffset3D){mip_width, mip_height, 1};
+                blit.srcOffsets[1] =
+                    (VkOffset3D){(int32_t)mip_width, (int32_t)mip_height, 1};
                 blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                blit.srcSubresource.mipLevel = i - 1;
+                blit.srcSubresource.mipLevel = ii - 1;
                 blit.srcSubresource.baseArrayLayer = 0;
                 blit.srcSubresource.layerCount = layer_count;
                 blit.dstOffsets[0] = (VkOffset3D){0, 0, 0};
@@ -4221,7 +4221,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                     (VkOffset3D){mip_width > 1 ? mip_width / 2 : 1,
                                  mip_height > 1 ? mip_height / 2 : 1, 1};
                 blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                blit.dstSubresource.mipLevel = i;
+                blit.dstSubresource.mipLevel = ii;
                 blit.dstSubresource.baseArrayLayer = 0;
                 blit.dstSubresource.layerCount = layer_count;
 
@@ -4272,7 +4272,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           }
           d->texture_upload_count = 0;
           cmd_end_label(upload_buffer);
-          TracyCZoneEnd(tex_up_event);
+          TracyCZoneEnd(tex_up_event)
         }
 
         // Issue Const Data Updates
@@ -4301,14 +4301,14 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           };
 
           queue_begin_label(d->graphics_queue, "upload",
-                            (float4){0.1, 1.0, 0.1, 1.0});
+                            (float4){0.1f, 1.0f, 0.1f, 1.0f});
           err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
           queue_end_label(d->graphics_queue);
 
           assert(err == VK_SUCCESS);
         }
 
-        TracyCZoneEnd(record_upload_event);
+        TracyCZoneEnd(record_upload_event)
       }
 
       VkCommandBufferBeginInfo begin_info = {
@@ -4323,7 +4323,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
       // Transition Swapchain Image
       {
-        TracyCZoneN(swap_trans_e, "transition swapchain", true);
+        TracyCZoneN(swap_trans_e, "transition swapchain", true)
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -4345,12 +4345,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
-        TracyCZoneEnd(swap_trans_e);
+        TracyCZoneEnd(swap_trans_e)
       }
 
       // Transition Shadow Map
       {
-        TracyCZoneN(shadow_trans_e, "transition shadow map", true);
+        TracyCZoneN(shadow_trans_e, "transition shadow map", true)
 
         VkImageMemoryBarrier barrier = {0};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -4370,22 +4370,22 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL,
                              0, NULL, 1, &barrier);
 
-        TracyCZoneEnd(shadow_trans_e);
+        TracyCZoneEnd(shadow_trans_e)
       }
 
       // Render main geometry pass
       {
-        TracyCZoneN(main_pass_e, "render main pass", true);
+        TracyCZoneN(main_pass_e, "render main pass", true)
 
         // Main Geometry Pass
         {
           TracyCVkNamedZone(gpu_gfx_ctx, main_scope, graphics_buffer,
                             "Main Pass", 2, true);
-          const float width = d->swap_info.width;
-          const float height = d->swap_info.height;
+          const float width = (float)d->swap_info.width;
+          const float height = (float)d->swap_info.height;
 
           cmd_begin_label(graphics_buffer, "main pass",
-                          (float4){0.5, 0.1, 0.1, 1.0});
+                          (float4){0.5f, 0.1f, 0.1f, 1.0f});
 
           // Set Render Pass
           {
@@ -4393,14 +4393,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
             VkClearValue clear_values[2] = {
                 {.color = {.float32 = {0, 1, 1, 1}}},
-                {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+                {.depthStencil = {.depth = 0.0f, .stencil = 0}},
             };
 
             VkRenderPassBeginInfo pass_info = {
                 .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                 .renderPass = d->main_pass,
                 .framebuffer = framebuffer,
-                .renderArea = (VkRect2D){{0, 0}, {width, height}},
+                .renderArea =
+                    (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}},
                 .clearValueCount = 2,
                 .pClearValues = clear_values,
             };
@@ -4410,7 +4411,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           }
 
           VkViewport viewport = {0, height, width, -height, 0, 1};
-          VkRect2D scissor = {{0, 0}, {width, height}};
+          VkRect2D scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}};
           vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
           vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
@@ -4441,7 +4442,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                               "Draw Skydome", 3, true);
 
             cmd_begin_label(graphics_buffer, "skydome",
-                            (float4){0.4, 0.1, 0.1, 1.0});
+                            (float4){0.4f, 0.1f, 0.1f, 1.0f});
             // Another hack to fiddle with the matrix we send to the shader
             // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
@@ -4450,7 +4451,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                                sizeof(SkyPushConstants),
                                (const void *)&sky_consts);
 
-            uint32_t idx_count = d->skydome_gpu.surfaces[0].idx_count;
+            uint32_t idx_count = (uint32_t)d->skydome_gpu.surfaces[0].idx_count;
 
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               d->skydome_pipeline);
@@ -4489,30 +4490,30 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                             2, true);
           // ImGui Internal Render
           {
-            TracyCZoneN(ctx, "ImGui Internal", true);
-            TracyCZoneColor(ctx, TracyCategoryColorUI);
+            TracyCZoneN(ctx, "ImGui Internal", true)
+            TracyCZoneColor(ctx, TracyCategoryColorUI)
             demo_imgui_update(d);
             igRender();
-            TracyCZoneEnd(ctx);
+            TracyCZoneEnd(ctx)
           }
 
           const ImDrawData *draw_data = igGetDrawData();
           if (draw_data->Valid) {
             // (Re)Create and upload ImGui geometry buffer
             {
-              TracyCZoneN(ctx, "ImGui Mesh Creation", true);
-              TracyCZoneColor(ctx, TracyCategoryColorRendering);
+              TracyCZoneN(ctx, "ImGui Mesh Creation", true)
+              TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
               bool realloc = false;
 
-              uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-              uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+              size_t idx_size = (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+              size_t vtx_size = (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
               // We know to use 8 for the alignment because the vertex
               // attribute layout starts with a float2
-              const uint32_t alignment = 8;
-              uint32_t align_padding = idx_size % alignment;
+              const size_t alignment = 8;
+              size_t align_padding = idx_size % alignment;
 
-              uint32_t imgui_size = idx_size + align_padding + vtx_size;
+              size_t imgui_size = idx_size + align_padding + vtx_size;
 
               if (imgui_size > 0) {
 
@@ -4536,9 +4537,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                   const ImDrawList *cmd_list = draw_data->CmdLists[i];
 
                   size_t idx_byte_count =
-                      cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+                      (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
                   size_t vtx_byte_count =
-                      cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+                      (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
 
                   test_size += idx_byte_count;
                   test_size += vtx_byte_count;
@@ -4556,12 +4557,19 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                 (void)test_size;
 
                 if (realloc) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
                   CPUMesh imgui_cpu = {.geom_size = vtx_size,
-                                       .index_count = draw_data->TotalIdxCount,
+                                       .index_count = (uint32_t)draw_data->TotalIdxCount,
                                        .index_size = idx_size,
                                        .indices = (uint16_t *)idx_dst,
-                                       .vertex_count = draw_data->TotalVtxCount,
+                                       .vertex_count = (uint32_t)draw_data->TotalVtxCount,
                                        .vertices = vtx_dst};
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
                   uint64_t input_perm = VA_INPUT_PERM_POSITION |
                                         VA_INPUT_PERM_TEXCOORD0 |
@@ -4598,16 +4606,16 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                 }
               }
 
-              TracyCZoneEnd(ctx);
-            };
+              TracyCZoneEnd(ctx)
+            }
 
             // Record ImGui render commands
             {
-              TracyCZoneN(ctx, "Record ImGui Commands", true);
-              TracyCZoneColor(ctx, TracyCategoryColorRendering);
+              TracyCZoneN(ctx, "Record ImGui Commands", true)
+              TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
               cmd_begin_label(graphics_buffer, "imgui",
-                              (float4){0.1, 0.1, 0.5, 1.0});
+                              (float4){0.1f, 0.1f, 0.5f, 1.0f});
 
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
@@ -4628,7 +4636,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                 pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
                 pass_info.renderPass = d->imgui_pass;
                 pass_info.framebuffer = framebuffer;
-                pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
+                pass_info.renderArea =
+                    (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}};
                 pass_info.clearValueCount = 1;
                 pass_info.pClearValues = clear_values;
 
@@ -4649,7 +4658,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                     &d->imgui_descriptor_sets[frame_idx], 0, NULL);
 
                 VkViewport viewport = {0, 0, width, height, 0, 1};
-                VkRect2D scissor = {{0, 0}, {width, height}};
+                VkRect2D scissor = {{0, 0},
+                                    {(uint32_t)width, (uint32_t)height}};
                 vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
                 vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
@@ -4672,12 +4682,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                 uint32_t vtx_offset = 0;
 
                 VkDeviceSize vtx_buffer_offset =
-                    draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+                    (VkDeviceSize)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
                 vtx_buffer_offset += vtx_buffer_offset % alignment;
 
                 {
-                  TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true);
-                  TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+                  TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true)
+                  TracyCZoneColor(draw_ctx, TracyCategoryColorRendering)
 
                   vkCmdBindIndexBuffer(
                       graphics_buffer, imgui_mesh->surfaces[0].gpu.buffer, 0,
@@ -4702,15 +4712,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                       // Issue the draw
                       vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
                                        draw_cmd->IdxOffset + idx_offset,
-                                       draw_cmd->VtxOffset + vtx_offset, 0);
+                                       (int32_t)(draw_cmd->VtxOffset + vtx_offset), 0);
                     }
 
                     // Adjust offsets
-                    idx_offset += draw_list->IdxBuffer.Size;
-                    vtx_offset += draw_list->VtxBuffer.Size;
+                    idx_offset += (uint32_t)draw_list->IdxBuffer.Size;
+                    vtx_offset += (uint32_t)draw_list->VtxBuffer.Size;
                   }
 
-                  TracyCZoneEnd(draw_ctx);
+                  TracyCZoneEnd(draw_ctx)
                 }
               }
 
@@ -4718,14 +4728,14 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
               cmd_end_label(graphics_buffer);
 
-              TracyCZoneEnd(ctx);
+              TracyCZoneEnd(ctx)
             }
           }
 
           TracyCVkZoneEnd(imgui_scope);
         }
 
-        TracyCZoneEnd(main_pass_e);
+        TracyCZoneEnd(main_pass_e)
       }
 
       TracyCVkZoneEnd(frame_scope);
@@ -4739,9 +4749,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     // Submit
     {
       TracyCZoneN(demo_render_frame_submit_event, "demo_render_frame submit",
-                  true);
+                  true)
       TracyCZoneColor(demo_render_frame_submit_event,
-                      TracyCategoryColorRendering);
+                      TracyCategoryColorRendering)
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -4776,24 +4786,24 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &render_complete_sem;
         queue_begin_label(graphics_queue, "raster",
-                          (float4){1.0, 0.1, 0.1, 1.0});
+                          (float4){1.0f, 0.1f, 0.1f, 1.0f});
         err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
         queue_end_label(graphics_queue);
         assert(err == VK_SUCCESS);
       }
 
-      TracyCZoneEnd(demo_render_frame_submit_event);
+      TracyCZoneEnd(demo_render_frame_submit_event)
     }
 
-    TracyCZoneEnd(demo_render_frame_render_event);
+    TracyCZoneEnd(demo_render_frame_render_event)
   }
 
   // Present
   {
     TracyCZoneN(demo_render_frame_present_event, "demo_render_frame present",
-                true);
+                true)
     TracyCZoneColor(demo_render_frame_present_event,
-                    TracyCategoryColorRendering);
+                    TracyCategoryColorRendering)
 
     VkSemaphore wait_sem = render_complete_sem;
     if (d->separate_present_queue) {
@@ -4842,15 +4852,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       assert(err == VK_SUCCESS);
     }
 
-    TracyCZoneEnd(demo_render_frame_present_event);
+    TracyCZoneEnd(demo_render_frame_present_event)
   }
 
-  TracyCZoneEnd(demo_render_frame_event);
+  TracyCZoneEnd(demo_render_frame_event)
 }
 
 bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size) {
-  TracyCZoneN(ctx, "demo_screenshot", true);
+  TracyCZoneN(ctx, "demo_screenshot", true)
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -4872,12 +4882,12 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   */
   VkResult status = vkGetFenceStatus(device, swap_fence);
   if (status == VK_NOT_READY) {
-    TracyCZoneN(fence_ctx, "Wait for swap fence", true);
-    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
+    TracyCZoneN(fence_ctx, "Wait for swap fence", true)
+    TracyCZoneColor(fence_ctx, TracyCategoryColorWait)
     err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
-    TracyCZoneEnd(fence_ctx);
+    TracyCZoneEnd(fence_ctx)
     if (err != VK_SUCCESS) {
-      TracyCZoneEnd(ctx);
+      TracyCZoneEnd(ctx)
       assert(0);
       return false;
     }
@@ -4887,7 +4897,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   err = vkBeginCommandBuffer(screenshot_cmd, &begin_info);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     assert(0);
     return false;
   }
@@ -4925,7 +4935,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
     // Transition screenshot image from General (or Undefined) to Transfer Dst
     barrier.oldLayout = old_layout;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.srcAccessMask = src_access;
+    barrier.srcAccessMask = (VkAccessFlags)src_access;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.image = screenshot_image.image;
 
@@ -4976,7 +4986,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkEndCommandBuffer(screenshot_cmd);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     assert(0);
     return false;
   }
@@ -4988,7 +4998,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   };
   err = vkQueueSubmit(queue, 1, &submit_info, screenshot_fence);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     assert(0);
     return false;
   }
@@ -4997,7 +5007,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   // command to finish
   err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     assert(0);
     return false;
   }
@@ -5014,7 +5024,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   err =
       vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(ctx)
     assert(0);
     return false;
   }
@@ -5025,7 +5035,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   if (alloc_info.size > (*screenshot_size)) {
     (*screenshot_bytes) =
         hb_realloc(std_alloc, (*screenshot_bytes), alloc_info.size);
-    (*screenshot_size) = alloc_info.size;
+    (*screenshot_size) = (uint32_t)alloc_info.size;
   }
 
   // Use SDL to transform raw bytes into a png bytestream
@@ -5044,14 +5054,14 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 #endif
     // Note ^ We're assuming that the swapchain is BGR
 
-    int32_t pitch = d->swap_info.width * 4;
+    int32_t pitch = (int32_t)(d->swap_info.width * 4);
     SDL_Surface *img = SDL_CreateRGBSurfaceFrom(
-        (screenshot_mem + sub_resource_layout.offset), d->swap_info.width,
-        d->swap_info.height, 32, pitch, rmask, gmask, bmask, amask);
+        (screenshot_mem + sub_resource_layout.offset), (int32_t)d->swap_info.width,
+        (int32_t)d->swap_info.height, 32, pitch, rmask, gmask, bmask, amask);
     assert(img);
 
     SDL_RWops *ops =
-        SDL_RWFromMem((void *)(*screenshot_bytes), sub_resource_layout.size);
+        SDL_RWFromMem((void *)(*screenshot_bytes), (int32_t)sub_resource_layout.size);
     IMG_SavePNG_RW(img, ops, 0);
 
     SDL_FreeSurface(img);
@@ -5059,6 +5069,6 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
   vmaUnmapMemory(vma_alloc, screenshot_image.alloc);
 
-  TracyCZoneEnd(ctx);
+  TracyCZoneEnd(ctx)
   return true;
 }

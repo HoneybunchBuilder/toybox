@@ -41,7 +41,7 @@ void set_vk_name(VkDevice device, uint64_t object, uint32_t type,
   if (vkSetDebugUtilsObjectNameEXT) {
     VkDebugUtilsObjectNameInfoEXT info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType = type,
+        .objectType = (VkObjectType)type,
         .objectHandle = object,
         .pObjectName = name,
     };
@@ -54,7 +54,7 @@ void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
   if (vkSetDebugUtilsObjectTagEXT) {
     VkDebugUtilsObjectTagInfoEXT info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT,
-        .objectType = type,
+        .objectType = (VkObjectType)type,
         .objectHandle = object,
         .tagName = tag_id,
         .tagSize = tag_size,

@@ -116,7 +116,7 @@ typedef struct GPUMaterial {
 } GPUMaterial;
 
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
-                         int32_t mem_usage, int32_t buf_usage, GPUBuffer *out);
+                         int32_t mem_usage, uint32_t buf_usage, GPUBuffer *out);
 void destroy_gpubuffer(VmaAllocator allocator, const GPUBuffer *buffer);
 
 GPUConstBuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,

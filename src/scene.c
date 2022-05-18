@@ -1,10 +1,7 @@
 #include "scene.h"
 #include "cpuresources.h"
 #include "gpuresources.h"
-
-#include <SDL2/SDL_assert.h>
-#include <SDL2/SDL_log.h>
-#include <SDL2/SDL_rwops.h>
+#include "tbsdl.h"
 
 #include <assert.h>
 #ifdef __APPLE__
@@ -15,13 +12,13 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <cgltf.h>
+#include "tbgltf.h"
 
-cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
+static cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
                            const struct cgltf_file_options *file_options,
                            const char *path, cgltf_size *size, void **data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
-  cgltf_size file_size = SDL_RWsize(file);
+  cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
   (void)path;
 
   void *mem = memory_options->alloc(memory_options->user_data, file_size);
@@ -40,7 +37,7 @@ cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
   return cgltf_result_success;
 }
 
-void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
+static void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
                       const struct cgltf_file_options *file_options,
                       void *data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
@@ -118,16 +115,16 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   }
 
   // Collect some pre-append counts so that we can do math later
-  uint32_t old_tex_count = s->texture_count;
-  uint32_t old_mat_count = s->material_count;
-  uint32_t old_mesh_count = s->mesh_count;
-  uint32_t old_node_count = s->entity_count;
+  cgltf_size old_tex_count = s->texture_count;
+  cgltf_size old_mat_count = s->material_count;
+  cgltf_size old_mesh_count = s->mesh_count;
+  cgltf_size old_node_count = s->entity_count;
 
-  uint32_t new_mat_count = old_mat_count + (uint32_t)data->materials_count;
+  cgltf_size new_mat_count = old_mat_count + data->materials_count;
 
   // Append textures to scene
   {
-    uint32_t new_tex_count = old_tex_count + (uint32_t)data->textures_count;
+    cgltf_size new_tex_count = old_tex_count + data->textures_count;
 
     s->textures =
         hb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, GPUTexture);
@@ -139,7 +136,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     }
 
     // TODO: Determine a good way to do texture de-duplication
-    for (uint32_t i = old_tex_count; i < new_tex_count; ++i) {
+    for (cgltf_size i = old_tex_count; i < new_tex_count; ++i) {
       cgltf_texture *tex = &data->textures[i - old_tex_count];
 
       /*
@@ -152,7 +149,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
         already messy.
       */
       VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-      for (uint32_t ii = old_mat_count; ii < new_mat_count; ++ii) {
+      for (cgltf_size ii = old_mat_count; ii < new_mat_count; ++ii) {
         cgltf_material *mat = &data->materials[ii - old_mat_count];
 
         if ((mat->has_pbr_metallic_roughness &&
@@ -174,7 +171,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       }
     }
 
-    s->texture_count = new_tex_count;
+    s->texture_count = (uint32_t)new_tex_count;
   }
 
   // Append materials to scene
@@ -188,17 +185,17 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       return -4;
     }
 
-    for (uint32_t i = old_mat_count; i < new_mat_count; ++i) {
+    for (cgltf_size i = old_mat_count; i < new_mat_count; ++i) {
       cgltf_material *mat = &data->materials[i - old_mat_count];
 
       // Need to determine which textures the material uses
       // Worst-case the material uses 8 textures
       uint32_t mat_tex_refs[MAX_MATERIAL_TEXTURES] = {0};
-      memset(mat_tex_refs, 0xFFFFFFFF,
+      memset(mat_tex_refs, (int32_t)0xFFFFFFFF,
              sizeof(uint32_t) * MAX_MATERIAL_TEXTURES);
       uint32_t mat_tex_count =
-          collect_material_textures(data->textures_count, data->textures, mat,
-                                    old_tex_count, mat_tex_refs);
+          collect_material_textures((uint32_t)data->textures_count, data->textures, mat,
+                                    (uint32_t)old_tex_count, mat_tex_refs);
 
       if (create_gpumaterial_cgltf(device, vma_alloc, vk_alloc, mat,
                                    mat_tex_count, mat_tex_refs,
@@ -210,12 +207,12 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       }
     }
 
-    s->material_count = new_mat_count;
+    s->material_count = (uint32_t)new_mat_count;
   }
 
   // Append meshes to scene
   {
-    uint32_t new_mesh_count = old_mesh_count + (uint32_t)data->meshes_count;
+    cgltf_size new_mesh_count = old_mesh_count + data->meshes_count;
 
     s->meshes = hb_realloc_nm_tp(std_alloc, s->meshes, new_mesh_count, GPUMesh);
     if (s->meshes == NULL) {
@@ -226,7 +223,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     }
 
     // TODO: Determine a good way to do mesh de-duplication
-    for (uint32_t i = old_mesh_count; i < new_mesh_count; ++i) {
+    for (cgltf_size i = old_mesh_count; i < new_mesh_count; ++i) {
       cgltf_mesh *mesh = &data->meshes[i - old_mesh_count];
       if (create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh,
                                &s->meshes[i]) != 0) {
@@ -237,12 +234,12 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       }
     }
 
-    s->mesh_count = new_mesh_count;
+    s->mesh_count = (uint32_t)new_mesh_count;
   }
 
   // Append nodes to scene
   {
-    uint32_t new_node_count = old_node_count + (uint32_t)data->nodes_count;
+    cgltf_size new_node_count = old_node_count + data->nodes_count;
 
     // Alloc entity component rows
     s->components =
@@ -254,7 +251,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     s->transforms = hb_realloc_nm_tp(std_alloc, s->transforms, new_node_count,
                                      SceneTransform);
 
-    for (uint32_t i = old_node_count; i < new_node_count; ++i) {
+    for (cgltf_size i = old_node_count; i < new_node_count; ++i) {
       cgltf_node *node = &data->nodes[i - old_node_count];
 
       // For now, all nodes have transforms
@@ -281,7 +278,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
         // Appending a gltf to an existing scene means there should be no
         // references between scenes. We should be safe to a just create
         // children.
-        s->transforms[i].child_count = node->children_count;
+        s->transforms[i].child_count = (uint32_t)node->children_count;
 
         if (node->children_count >= MAX_CHILD_COUNT) {
           SDL_LogError(
@@ -296,10 +293,10 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
         // We want to find the index of the child, relative to the gltf node
         // From there we can determine the index of the child relative to the
         // scene node
-        for (uint32_t ii = 0; ii < node->children_count; ++ii) {
-          for (uint32_t iii = 0; iii < data->nodes_count; ++iii) {
+        for (cgltf_size ii = 0; ii < node->children_count; ++ii) {
+          for (cgltf_size iii = 0; iii < data->nodes_count; ++iii) {
             if (&data->nodes[iii] == node->children[ii]) {
-              s->transforms[i].children[ii] = old_node_count + iii;
+              s->transforms[i].children[ii] = (uint32_t)(old_node_count + iii);
               break;
             }
           }
@@ -312,17 +309,17 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
         s->components[i] |= COMPONENT_TYPE_STATIC_MESH;
 
         // Find the index of the mesh that matches what this node wants
-        for (uint32_t ii = 0; ii < data->meshes_count; ++ii) {
+        for (cgltf_size ii = 0; ii < data->meshes_count; ++ii) {
           if (node->mesh == &data->meshes[ii]) {
-            s->static_mesh_refs[i] = old_mesh_count + ii;
+            s->static_mesh_refs[i] = (uint32_t)(old_mesh_count + ii);
             break;
           }
         }
         // Find the index of the material that matches what this node wants
-        for (uint32_t ii = 0; ii < data->materials_count; ++ii) {
+        for (cgltf_size ii = 0; ii < data->materials_count; ++ii) {
           // TODO: Iterate over primitives
           if (node->mesh->primitives[0].material == &data->materials[ii]) {
-            s->material_refs[i] = old_mat_count + ii;
+            s->material_refs[i] = (uint32_t)(old_mat_count + ii);
           }
         }
       }
@@ -330,7 +327,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       // TODO: Lights, cameras, (action!)
     }
 
-    s->entity_count = new_node_count;
+    s->entity_count = (uint32_t)new_node_count;
   }
 
   cgltf_free(data);

@@ -5,7 +5,7 @@
 
 #include <assert.h>
 
-SubMaterialSelection phong_blinn_submaterial_select(materialoptionflags options,
+static SubMaterialSelection phong_blinn_submaterial_select(materialoptionflags options,
                                                     const void *material) {
   const PhongBlinnMaterial *mat = (const PhongBlinnMaterial *)material;
 
