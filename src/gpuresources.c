@@ -307,12 +307,12 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
       static const uint32_t max_name_size = 128;
       char *host_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
       SDL_snprintf(host_name, max_name_size, "%s surface %lld @host",
-                   src_mesh->name, i);
+                   src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, host_buffer.buffer, VK_OBJECT_TYPE_BUFFER, host_name);
 
       char *device_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
       SDL_snprintf(device_name, max_name_size, "%s surface %lld @device",
-                   src_mesh->name, i);
+                   src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, device_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
                   device_name);
     }

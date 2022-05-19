@@ -35,14 +35,6 @@ set(cfg_expr $<$<CONFIG:Debug>:$<LOWER_CASE:$<CONFIG>>>)
 # hidapi relies on c++ 
 set(libcppshared_path ${CMAKE_ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/${arch}/libc++_shared.so)
 add_custom_target(copy_so ALL
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libhidapi.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libktx.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libmimalloc$<$<CONFIG:Debug>:-$<LOWER_CASE:$<CONFIG>>>.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2_image.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libz.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libTracyClient.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libzstd$<$<CONFIG:Debug>:d>.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
 # Bring along the validation layers
 if(NOT FINAL)
@@ -59,14 +51,6 @@ if(NOT FINAL)
 endif()
 
 install(FILES 
-        ${sdl_build_path}/libhidapi.so
-        ${sdl_build_path}/libktx.so
-        ${sdl_build_path}/libmimalloc$<$<CONFIG:Debug>:-$<LOWER_CASE:$<CONFIG>>>.so
-        ${sdl_build_path}/libSDL2.so
-        ${sdl_build_path}/libSDL2_image.so
-        ${sdl_build_path}/libz.so
-        ${sdl_build_path}/libTracyClient.so
-        ${sdl_build_path}/libzstd$<$<CONFIG:Debug>:d>.so
         ${sdl_build_path}/libc++_shared.so
         DESTINATION $<CONFIG>/lib/${arch})
 
@@ -89,15 +73,6 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory bin
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/SDLTest.jar
     COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -A ${asset_path} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libhidapi.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libktx.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libmimalloc$<$<CONFIG:Debug>:-$<LOWER_CASE:$<CONFIG>>>.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2_image.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libz.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libTracyClient.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libzstd$<$<CONFIG:Debug>:d>.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libc++_shared.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libtoybox.so
 )
 
