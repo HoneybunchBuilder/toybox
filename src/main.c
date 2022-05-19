@@ -72,35 +72,27 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
-  TracyCZone(ctx, true)
-  TracyCZoneColor(ctx, TracyCategoryColorMemory)
-  (void)scope;
+  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)(void)
+      scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
   void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan")
-  TracyCZoneEnd(ctx)
-  return ptr;
+  TracyCAllocN(ptr, size, "Vulkan") TracyCZoneEnd(ctx) return ptr;
 }
 
 static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
                            size_t alignment, VkSystemAllocationScope scope) {
   (void)scope;
-  TracyCZone(ctx, true)
-  TracyCZoneColor(ctx, TracyCategoryColorMemory)
-  mi_heap_t *heap = (mi_heap_t *)pUserData;
-  TracyCFreeN(pOriginal, "Vulkan")
-  void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan")
-  TracyCZoneEnd(ctx)
-  return ptr;
+  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)
+      mi_heap_t *heap = (mi_heap_t *)pUserData;
+  TracyCFreeN(pOriginal, "Vulkan") void *ptr =
+      mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
+  TracyCAllocN(ptr, size, "Vulkan") TracyCZoneEnd(ctx) return ptr;
 }
 
 static void vk_free_fn(void *pUserData, void *pMemory) {
   (void)pUserData;
-  TracyCZone(ctx, true)
-  TracyCZoneColor(ctx, TracyCategoryColorMemory)
-  TracyCFreeN(pMemory, "Vulkan")
-  mi_free(pMemory);
+  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)
+      TracyCFreeN(pMemory, "Vulkan") mi_free(pMemory);
   TracyCZoneEnd(ctx)
 }
 
@@ -121,8 +113,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   {
     const char *app_info = HB_APP_INFO_STR;
     size_t app_info_len = strlen(app_info);
-    TracyCAppInfo(app_info, app_info_len)
-    (void)app_info_len;
+    TracyCAppInfo(app_info, app_info_len)(void) app_info_len;
   }
 
   // Create Temporary Arena Allocator
@@ -263,10 +254,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 // Add portability for apple devices
 #ifdef __APPLE__
-  {
-    assert(ext_count + 1 < MAX_EXT_COUNT);
-    ext_names[ext_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
-  }
+    {
+      assert(ext_count + 1 < MAX_EXT_COUNT);
+      ext_names[ext_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+    }
 #endif
 
     VkApplicationInfo app_info = {0};
@@ -282,7 +273,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    // Android only supports Vulkan 1.1 which is older than the portability
+    // subsystem API
+#ifndef __ANDROID__
     create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     create_info.pApplicationInfo = &app_info;
     create_info.enabledLayerCount = layer_count;
     create_info.ppEnabledLayerNames = layer_names;
@@ -294,10 +289,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     volkLoadInstance(instance);
   }
 
-#ifdef VALIDATION
-  VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
 // Load debug callback
+#ifdef VALIDATION
 #ifndef __ANDROID__
+  VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
   {
     VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
     ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -396,12 +391,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float sun_x = sinf(PI + time_of_day);
 
   while (running) {
-    TracyCFrameMarkStart("Frame")
-    TracyCZoneN(trcy_ctx, "Frame", true)
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore)
+    TracyCFrameMarkStart("Frame") TracyCZoneN(trcy_ctx, "Frame", true)
+        TracyCZoneColor(trcy_ctx, TracyCategoryColorCore)
 
-    // Use SDL High Performance Counter to get timing info
-    time = SDL_GetPerformanceCounter() - start_time;
+        // Use SDL High Performance Counter to get timing info
+        time = SDL_GetPerformanceCounter() - start_time;
     delta_time = time - last_time;
     delta_time_seconds =
         (float)((double)delta_time / (double)(SDL_GetPerformanceFrequency()));
@@ -420,18 +414,16 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // while (SDL_PollEvent(&e))
     {
       TracyCZoneN(ctx, "Handle Events", true)
-      TracyCZoneColor(ctx, TracyCategoryColorInput)
+          TracyCZoneColor(ctx, TracyCategoryColorInput)
 
-      SDL_Event e = {0};
+              SDL_Event e = {0};
       {
-        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true)
-        SDL_PollEvent(&e);
+        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true) SDL_PollEvent(&e);
         TracyCZoneEnd(sdl_ctx)
       }
       if (e.type == SDL_QUIT) {
         running = false;
-        TracyCZoneEnd(ctx)
-        break;
+        TracyCZoneEnd(ctx) break;
       }
       demo_process_event(&d, &e);
 
@@ -459,9 +451,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     if (showImGui) {
       TracyCZoneN(ctx, "UI Test", true)
-      TracyCZoneColor(ctx, TracyCategoryColorUI)
+          TracyCZoneColor(ctx, TracyCategoryColorUI)
 
-      if (igBeginMainMenuBar()) {
+              if (igBeginMainMenuBar()) {
         if (igBeginMenu("Sky", true)) {
           showSkyWindow = !showSkyWindow;
           igEndMenu();
@@ -668,7 +660,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-
               }
               igPopID();
             }
@@ -728,7 +719,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Update view camera constant buffer
     {
       TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true)
-      camera_data.vp = vp;
+          camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
 
@@ -754,10 +745,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     {
       TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true)
 
-      CommonLightData light_data = {
-          .light_dir = -sky_data.sun_dir,
-          .light_vp = sun_vp,
-      };
+          CommonLightData light_data = {
+              .light_dir = -sky_data.sun_dir,
+              .light_vp = sun_vp,
+          };
 
       VmaAllocator vma_alloc = d.vma_alloc;
       VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
@@ -781,7 +772,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     {
       TracyCZoneN(trcy_sky_ctx, "Update Sky", true)
 
-      VmaAllocator vma_alloc = d.vma_alloc;
+          VmaAllocator vma_alloc = d.vma_alloc;
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
 
       uint8_t *data = NULL;
@@ -802,8 +793,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx)
-    TracyCFrameMarkEnd("Frame")
+    TracyCZoneEnd(trcy_ctx) TracyCFrameMarkEnd("Frame")
   }
 
   // Cleanup display modes
