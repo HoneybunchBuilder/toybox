@@ -5,15 +5,29 @@ include(UseJava)
 get_filename_component(JAVA_HOME ${Java_JAVA_EXECUTABLE} DIRECTORY)
 file(REAL_PATH "${JAVA_HOME}/../" JAVA_HOME)
 
-set(ANDROID_VERSION 29)
-
 file(TO_CMAKE_PATH $ENV{ANDROID_HOME} ANDROID_HOME)
 
-set(dx_path ${ANDROID_HOME}/build-tools/29.0.3/dx.bat)
-set(aapt_path ${ANDROID_HOME}/build-tools/29.0.3/aapt.exe)
-set(zipalign_path ${ANDROID_HOME}/build-tools/29.0.3/zipalign.exe)
-set(apksigner_path ${ANDROID_HOME}/build-tools/29.0.3/apksigner.bat)
-set(android_path ${ANDROID_HOME}/platforms/android-${ANDROID_VERSION}/android.jar)
+set(BUILD_TOOLS_DIR "${ANDROID_HOME}/build-tools")
+if(NOT BUILD_TOOLS_VERSION)
+    # Find build tools version
+    file(GLOB version_dir RELATIVE ${BUILD_TOOLS_DIR} ${BUILD_TOOLS_DIR}/*)
+    set(dirlist "")
+    foreach(child ${version_dir})
+    if(IS_DIRECTORY ${BUILD_TOOLS_DIR}/${child})
+        list(APPEND dirlist ${child})
+    endif()
+    endforeach()
+
+    list(GET dirlist -1 BUILD_TOOLS_VERSION)
+endif()
+
+set(BUILD_TOOLS_DIR ${BUILD_TOOLS_DIR}/${BUILD_TOOLS_VERSION})
+
+set(dx_path ${BUILD_TOOLS_DIR}/dx.bat)
+set(aapt_path ${BUILD_TOOLS_DIR}/aapt.exe)
+set(zipalign_path ${BUILD_TOOLS_DIR}/zipalign.exe)
+set(apksigner_path ${BUILD_TOOLS_DIR}/apksigner.bat)
+set(android_path ${ANDROID_HOME}/platforms/${ANDROID_PLATFORM}/android.jar)
 
 set(android_main ${CMAKE_CURRENT_LIST_DIR}/src/main)
 set(resource_folder ${android_main}/res)
