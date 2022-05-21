@@ -41,7 +41,7 @@ file(GLOB sdl_java "${android_main}/java/org/libsdl/app/*.java")
 add_jar(SDL ${sdl_java} INCLUDE_JARS ${android_path})
 
 file(GLOB toybox_java "${android_main}/java/com/honeybunch/toybox/*.java")
-add_jar(SDLTest ${toybox_java} INCLUDE_JARS ${android_path} SDL)
+add_jar(toybox_jar ${toybox_java} INCLUDE_JARS ${android_path} SDL)
 
 # HACK - Copy SDL sos from vcpkg to our build directory manually
 set(sdl_build_path ${CMAKE_CURRENT_BINARY_DIR}/../$<CONFIG>)
@@ -85,7 +85,7 @@ add_custom_command(
     OUTPUT ${unaligned_apk_name}
     WORKING_DIRECTORY ${packaging_working_dir}
     COMMAND ${CMAKE_COMMAND} -E make_directory bin
-    COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/SDLTest.jar
+    COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/toybox_jar.jar
     COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -A ${asset_path} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libtoybox.so
 )
