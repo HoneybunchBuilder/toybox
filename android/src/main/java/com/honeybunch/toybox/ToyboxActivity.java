@@ -2,7 +2,7 @@ package com.honeybunch.toybox;
 
 import org.libsdl.app.SDLActivity;
 
-public class SDLTestActivity extends SDLActivity {
+public class ToyboxActivity extends SDLActivity {
     private static final String TAG = "Toybox";
 
     /**
