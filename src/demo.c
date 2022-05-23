@@ -13,8 +13,8 @@
 #include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"
-#include "vkdbg.h"
 #include "tbsdl.h"
+#include "vkdbg.h"
 
 #ifdef __ANDROID__
 #define ASSET_PREFIX
@@ -61,8 +61,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t ext_count,
                               const VkAllocationCallbacks *vk_alloc,
                               const char *const *ext_names) {
-  TracyCZoneN(ctx, "create_device", true)
-  VkResult err = VK_SUCCESS;
+  TracyCZoneN(ctx, "create_device", true) VkResult err = VK_SUCCESS;
 
   float queue_priorities[1] = {0.0};
   VkDeviceQueueCreateInfo queues[2];
@@ -110,13 +109,13 @@ static VkDevice create_device(VkPhysicalDevice gpu,
 
   TracyCZoneEnd(ctx)
 
-  return device;
+      return device;
 }
 
 static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   TracyCZoneN(ctx, "select_gpu", true)
 
-  uint32_t gpu_count = 0;
+      uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   assert(err == VK_SUCCESS);
   (void)err;
@@ -170,7 +169,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
 
   TracyCZoneEnd(ctx)
 
-  return gpu;
+      return gpu;
 }
 
 static VkSurfaceFormatKHR
@@ -197,11 +196,11 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
                                       VkPipelineLayout layout,
                                       const float4x4 *vp) {
   TracyCZoneN(ctx, "demo_render_scene_shadows", true)
-  TracyCZoneColor(ctx, TracyCategoryColorRendering)
+      TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
-  for (uint32_t i = 0; i < s->entity_count; ++i) {
-    TracyCZoneN(entity_e, "render entity", true)
-    uint64_t components = s->components[i];
+          for (uint32_t i = 0; i < s->entity_count; ++i) {
+    TracyCZoneN(entity_e, "render entity", true) uint64_t components =
+        s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
     uint32_t static_mesh_idx = s->static_mesh_refs[i];
 
@@ -231,7 +230,7 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
         TracyCZoneN(surface_e, "draw surface", true)
 
-        const GPUSurface *surface = &mesh->surfaces[ii];
+            const GPUSurface *surface = &mesh->surfaces[ii];
 
         uint32_t idx_count = (uint32_t)surface->idx_count;
         uint32_t vtx_count = (uint32_t)surface->vtx_count;
@@ -266,12 +265,12 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               VkDescriptorSet *material_sets,
                               const float4x4 *vp, Demo *d) {
   TracyCZoneN(ctx, "demo_render_scene", true)
-  TracyCZoneColor(ctx, TracyCategoryColorRendering)
+      TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
   // HACK: Upload all material const buffers every frame
   {
-    TracyCZoneN(mat_up_ctx, "material data upload", true)
-    for (uint32_t i = 0; i < s->material_count; ++i) {
+    TracyCZoneN(mat_up_ctx, "material data upload",
+                true) for (uint32_t i = 0; i < s->material_count; ++i) {
       demo_upload_const_buffer(d, &s->materials[i].const_buffer);
     }
     TracyCZoneEnd(mat_up_ctx)
@@ -284,8 +283,8 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
   VkPipeline last_mat_pipe = VK_NULL_HANDLE;
   VkDescriptorSet last_mat_set = VK_NULL_HANDLE;
   for (uint32_t i = 0; i < s->entity_count; ++i) {
-    TracyCZoneN(entity_e, "render entity", true)
-    uint64_t components = s->components[i];
+    TracyCZoneN(entity_e, "render entity", true) uint64_t components =
+        s->components[i];
     SceneTransform *scene_transform = &s->transforms[i];
     uint32_t static_mesh_idx = s->static_mesh_refs[i];
     uint32_t material_idx = s->material_refs[i];
@@ -305,9 +304,9 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
       // HACK: Update object's constant buffer here
       {
         TracyCZoneN(update_object_ctx, "Update Object Const Buffer", true)
-        TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering)
+            TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering)
 
-        uint32_t block_idx = i / CONST_BUFFER_BLOCK_SIZE;
+                uint32_t block_idx = i / CONST_BUFFER_BLOCK_SIZE;
         uint32_t item_idx = i % CONST_BUFFER_BLOCK_SIZE;
 
         GPUConstBuffer *obj_const_buffer =
@@ -331,7 +330,8 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
         TracyCZoneEnd(update_object_ctx)
       }
 
-      cmd_begin_label(cmd, "demo_render_scene", (float4){0.5f, 0.1f, 0.1f, 1.0f});
+      cmd_begin_label(cmd, "demo_render_scene",
+                      (float4){0.5f, 0.1f, 0.1f, 1.0f});
 
       // Bind per-object data
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
@@ -343,7 +343,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
       for (uint32_t ii = 0; ii < mesh->surface_count; ++ii) {
         TracyCZoneN(surface_e, "draw surface", true)
 
-        const GPUSurface *surface = &mesh->surfaces[ii];
+            const GPUSurface *surface = &mesh->surfaces[ii];
 
         uint32_t surface_mat_idx = material_idx + ii;
 
@@ -593,7 +593,8 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
       VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
   };
   for (uint32_t i = 0; i < 4; i++) {
-    if (surf_caps.supportedCompositeAlpha & (VkCompositeAlphaFlagsKHR)composite_alpha_flags[i]) {
+    if (surf_caps.supportedCompositeAlpha &
+        (VkCompositeAlphaFlagsKHR)composite_alpha_flags[i]) {
       composite_alpha = composite_alpha_flags[i];
       break;
     }
@@ -926,8 +927,7 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
 bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                Allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                Demo *d) {
-  TracyCZoneN(ctx, "demo_init", true)
-  VkResult err = VK_SUCCESS;
+  TracyCZoneN(ctx, "demo_init", true) VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
   VkPhysicalDevice gpu = select_gpu(instance, tmp_alloc);
@@ -1062,6 +1062,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Check for portability layer and enable that extension
   bool portability = false;
+#if !defined(__ANDROID__) // Don't bother with portability on Android
   {
 #define MAX_PROPS 256
     VkExtensionProperties props[MAX_PROPS];
@@ -1085,6 +1086,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
 #undef MAX_PROPS
   }
+#endif
 
   if (portability) {
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
@@ -1329,8 +1331,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
-    TracyCZoneN(pipe_cache_ctx, "init pipeline cache", true)
-    size_t data_size = 0;
+    TracyCZoneN(pipe_cache_ctx, "init pipeline cache", true) size_t data_size =
+        0;
     void *data = NULL;
 
     // If an existing pipeline cache exists, load it
@@ -1483,9 +1485,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Shadow Pipeline
   VkPipeline shadow_pipe = VK_NULL_HANDLE;
-  err = (VkResult)(create_shadow_pipeline(device, vk_alloc, pipeline_cache, shadow_pass,
-                               SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT,
-                               shadow_pipe_layout, &shadow_pipe));
+  err = (VkResult)(create_shadow_pipeline(
+      device, vk_alloc, pipeline_cache, shadow_pass, SHADOW_MAP_WIDTH,
+      SHADOW_MAP_HEIGHT, shadow_pipe_layout, &shadow_pipe));
   assert(err == VK_SUCCESS);
 
   // Create GLTF Descriptor Set Layout
@@ -1542,9 +1544,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create GLTF Pipeline
   GPUPipeline *gltf_pipeline = NULL;
-  err = (VkResult)(create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
-                             pipeline_cache, main_pass, width, height,
-                             gltf_pipe_layout, &gltf_pipeline));
+  err = (VkResult)(create_gltf_pipeline(
+      device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache, main_pass, width,
+      height, gltf_pipe_layout, &gltf_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create GLTF RT Pipeline Layout
@@ -1625,9 +1627,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Skydome Pipeline
   VkPipeline skydome_pipeline = VK_NULL_HANDLE;
-  err = (VkResult)(create_skydome_pipeline(device, vk_alloc, pipeline_cache, main_pass,
-                                width, height, skydome_pipe_layout,
-                                &skydome_pipeline));
+  err = (VkResult)(create_skydome_pipeline(
+      device, vk_alloc, pipeline_cache, main_pass, width, height,
+      skydome_pipe_layout, &skydome_pipeline));
   assert(err == VK_SUCCESS);
 
   // HACK: Get this function here...
@@ -1680,16 +1682,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create ImGui pipeline
   VkPipeline imgui_pipeline = VK_NULL_HANDLE;
-  err =
-      (VkResult)(create_imgui_pipeline(device, vk_alloc, pipeline_cache, imgui_pass, width,
-                            height, imgui_pipe_layout, &imgui_pipeline));
+  err = (VkResult)(create_imgui_pipeline(device, vk_alloc, pipeline_cache,
+                                         imgui_pass, width, height,
+                                         imgui_pipe_layout, &imgui_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
     TracyCZoneN(vma_pool_ctx, "init vma upload pool", true)
-    uint32_t mem_type_idx = 0xFFFFFFFF;
+        uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
       VkMemoryType type = gpu_mem_props.memoryTypes[i];
@@ -1712,7 +1714,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   VmaPool texture_mem_pool = VK_NULL_HANDLE;
   {
     TracyCZoneN(vma_pool_e, "init vma texture pool", true)
-    uint32_t mem_type_idx = 0xFFFFFFFF;
+        uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
       VkMemoryType type = gpu_mem_props.memoryTypes[i];
@@ -2217,9 +2219,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
-  err = (VkResult)(create_sky_cube_pipeline(device, vk_alloc, pipeline_cache, env_map_pass,
-                                 ENV_CUBEMAP_DIM, ENV_CUBEMAP_DIM,
-                                 sky_cube_layout, &sky_cube_pipeline));
+  err = (VkResult)(create_sky_cube_pipeline(
+      device, vk_alloc, pipeline_cache, env_map_pass, ENV_CUBEMAP_DIM,
+      ENV_CUBEMAP_DIM, sky_cube_layout, &sky_cube_pipeline));
   assert(err == VK_SUCCESS);
 
   // Create Irradiance Cubemaps
@@ -2861,9 +2863,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
     // Create Pipeline
     {
-      err = (VkResult)(create_brdf_pipeline(device, vk_alloc, pipeline_cache,
-                                 brdf_lut_pass, BRDF_LUT_DIM, BRDF_LUT_DIM,
-                                 brdf_lut_pipe_layout, &brdf_lut_pipe));
+      err = (VkResult)(create_brdf_pipeline(
+          device, vk_alloc, pipeline_cache, brdf_lut_pass, BRDF_LUT_DIM,
+          BRDF_LUT_DIM, brdf_lut_pipe_layout, &brdf_lut_pipe));
       if (err != VK_SUCCESS) {
         assert(false);
         return false;
@@ -3010,8 +3012,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Must do this before descriptor set writes so we can be sure to create the
   // imgui resources on time
   if (!demo_init_imgui(d, window)) {
-    TracyCZoneEnd(ctx)
-    return false;
+    TracyCZoneEnd(ctx) return false;
   }
 
   // Write textures to descriptor set
@@ -3126,13 +3127,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   TracyCZoneEnd(ctx)
 
-  return true;
+      return true;
 }
 
 void demo_destroy(Demo *d) {
   TracyCZoneN(ctx, "demo_destroy", true)
 
-  VkDevice device = d->device;
+      VkDevice device = d->device;
   VmaAllocator vma_alloc = d->vma_alloc;
   const VkAllocationCallbacks *vk_alloc = d->vk_alloc;
 
@@ -3319,8 +3320,7 @@ void demo_upload_scene(Demo *d, const Scene *s) {
 
 void demo_process_event(Demo *d, const SDL_Event *e) {
   TracyCZoneN(ctx, "demo_process_event", true)
-  TracyCZoneColor(ctx, TracyCategoryColorInput)
-  ImGuiIO *io = d->ig_io;
+      TracyCZoneColor(ctx, TracyCategoryColorInput) ImGuiIO *io = d->ig_io;
 
   switch (e->type) {
   case SDL_MOUSEWHEEL: {
@@ -3382,8 +3382,8 @@ void demo_process_event(Demo *d, const SDL_Event *e) {
 }
 
 static void demo_resize(Demo *d) {
-  TracyCZoneN(ctx, "demo_resize", true)
-  VkResult err = vkDeviceWaitIdle(d->device);
+  TracyCZoneN(ctx, "demo_resize", true) VkResult err =
+      vkDeviceWaitIdle(d->device);
   (void)err;
 
   d->swap_info = init_swapchain(d->window, d->device, d->gpu, d->surface,
@@ -3404,7 +3404,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
                        const float4x4 *sun_vp) {
   TracyCZoneN(demo_render_frame_event, "demo_render_frame", true)
 
-  VkResult err = VK_SUCCESS;
+      VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
   VkSwapchainKHR swapchain = d->swapchain;
@@ -3421,17 +3421,16 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   // Ensure no more than FRAME_LATENCY renderings are outstanding
   {
     TracyCZoneN(fence_ctx, "demo_render_frame wait for fence", true)
-    TracyCZoneColor(fence_ctx, TracyCategoryColorWait)
-    vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
+        TracyCZoneColor(fence_ctx, TracyCategoryColorWait)
+            vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
     TracyCZoneEnd(fence_ctx)
 
-    vkResetFences(device, 1, &fences[frame_idx]);
+        vkResetFences(device, 1, &fences[frame_idx]);
   }
 
   // Acquire Image
   {
-    TracyCZoneN(ctx, "demo_render_frame acquire next image", true)
-    do {
+    TracyCZoneN(ctx, "demo_render_frame acquire next image", true) do {
       err =
           vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
                                 VK_NULL_HANDLE, &d->swap_img_idx);
@@ -3451,7 +3450,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       } else {
         assert(err == VK_SUCCESS);
       }
-    } while (err != VK_SUCCESS);
+    }
+    while (err != VK_SUCCESS)
+      ;
     TracyCZoneEnd(ctx)
   }
 
@@ -3501,7 +3502,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   {
     TracyCZoneN(demo_manage_descriptor_sets,
                 "demo_render_frame manage descriptor sets", true)
-    uint32_t max_obj_count = d->main_scene->entity_count;
+        uint32_t max_obj_count = d->main_scene->entity_count;
     uint32_t max_mat_count = d->main_scene->material_count;
 
     uint32_t total_set_count = max_obj_count + max_mat_count;
@@ -3519,8 +3520,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           total_set_count > pool_state->max_set_count) {
         TracyCZoneN(demo_resize_pool, "demo_render_frame resize pool", true)
 
-        // Set the new state
-        pool_state->pool_sizes[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER] = ub_count;
+            // Set the new state
+            pool_state->pool_sizes[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER] =
+            ub_count;
         pool_state->pool_sizes[VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE] = img_count;
         pool_state->max_set_count = total_set_count;
 
@@ -3572,8 +3574,9 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       } else {
         TracyCZoneN(demo_reset_pool, "demo_render_frame reset pool", true)
 
-        // If we didn't need to re-create the pool, we can just reset it
-        err = vkResetDescriptorPool(d->device, d->dyn_desc_pools[frame_idx], 0);
+            // If we didn't need to re-create the pool, we can just reset it
+            err = vkResetDescriptorPool(d->device, d->dyn_desc_pools[frame_idx],
+                                        0);
         assert(err == VK_SUCCESS);
 
         TracyCZoneEnd(demo_reset_pool)
@@ -3691,7 +3694,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         }
 
         uint32_t tex_info_indices[3] = {0};
-        memset(tex_info_indices, (int32_t)first_valid_tex_idx, sizeof(uint32_t) * 3);
+        memset(tex_info_indices, (int32_t)first_valid_tex_idx,
+               sizeof(uint32_t) * 3);
 
         uint32_t tex_info_idx = first_valid_tex_idx;
         if (mat->feature_perm & GLTF_PERM_BASE_COLOR_MAP) {
@@ -3736,8 +3740,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     {
       TracyCZoneN(demo_allocate_sets, "demo_render_frame allocate sets", true)
 
-      main_scene_object_sets =
-          hb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSet);
+          main_scene_object_sets =
+              hb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSet);
       main_scene_material_sets = &main_scene_object_sets[max_obj_count];
 
       err = vkAllocateDescriptorSets(d->device, &set_allocs,
@@ -3779,15 +3783,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     TracyCZoneN(demo_render_frame_shadows_event, "demo_render_frame shadows",
                 true)
 
-    VkCommandBuffer shadow_buffer = d->shadow_buffers[frame_idx];
+        VkCommandBuffer shadow_buffer = d->shadow_buffers[frame_idx];
     shadow_sem = d->shadow_complete_sems[frame_idx];
 
     // Record
     {
       TracyCZoneN(record_shadows_e, "record shadows", true)
 
-      SET_VK_NAME(device, shadow_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                  "shadow command buffer");
+          SET_VK_NAME(device, shadow_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                      "shadow command buffer");
       {
         VkCommandBufferBeginInfo begin_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -3800,7 +3804,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       TracyCVkNamedZone(gpu_gfx_ctx, shadow_scope, shadow_buffer, "Shadows", 1,
                         true)
 
-      cmd_begin_label(shadow_buffer, "shadows", (float4){0.1f, 0.5f, 0.5f, 1.0f});
+          cmd_begin_label(shadow_buffer, "shadows",
+                          (float4){0.1f, 0.5f, 0.5f, 1.0f});
 
       {
         VkFramebuffer framebuffer = d->shadow_pass_framebuffers[frame_idx];
@@ -3856,13 +3861,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     // Submit
     {
       TracyCZoneN(submit_shadows_e, "submit shadows", true)
-      VkSubmitInfo submit_info = {
-          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-          .commandBufferCount = 1,
-          .pCommandBuffers = &shadow_buffer,
-          .signalSemaphoreCount = 1,
-          .pSignalSemaphores = &shadow_sem,
-      };
+          VkSubmitInfo submit_info = {
+              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+              .commandBufferCount = 1,
+              .pCommandBuffers = &shadow_buffer,
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &shadow_sem,
+          };
       queue_begin_label(graphics_queue, "shadows",
                         (float4){0.1f, 1.0f, 1.0f, 1.0f});
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
@@ -3878,15 +3883,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   {
     TracyCZoneN(trcy_e, "demo_render_frame env cube render", true)
 
-    VkCommandBuffer env_cube_buffer = d->env_cube_buffers[frame_idx];
+        VkCommandBuffer env_cube_buffer = d->env_cube_buffers[frame_idx];
     env_cube_sem = d->env_complete_sems[frame_idx];
 
     // Record
     {
       TracyCZoneN(record_env_e, "record env cube", true)
 
-      SET_VK_NAME(device, env_cube_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                  "env cube command buffer");
+          SET_VK_NAME(device, env_cube_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                      "env cube command buffer");
       {
         VkCommandBufferBeginInfo begin_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -3955,8 +3960,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         vkCmdEndRenderPass(env_cube_buffer);
 
-        TracyCVkZoneEnd(env_cube_draw)
-        cmd_end_label(env_cube_buffer);
+        TracyCVkZoneEnd(env_cube_draw) cmd_end_label(env_cube_buffer);
       }
 
       // Filter Env Cubemap
@@ -3964,8 +3968,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         TracyCVkNamedZone(gpu_gfx_ctx, env_cube_filter, env_cube_buffer,
                           "Filter Env Cube Map", 3, true)
 
-        cmd_begin_label(env_cube_buffer, "env cube filtering",
-                        (float4){0.5f, 0.5f, 0.1f, 1.0f});
+            cmd_begin_label(env_cube_buffer, "env cube filtering",
+                            (float4){0.5f, 0.5f, 0.1f, 1.0f});
 
         vkCmdBindPipeline(env_cube_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->env_filtered_pipeline);
@@ -3996,7 +4000,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           pass_info.framebuffer = d->env_filtered_framebuffers[i];
 
           VkViewport mip_view = {0, mip_dim, mip_dim, -mip_dim, 0, 1};
-          VkRect2D mip_scissor = {{0, 0}, {(uint32_t)mip_dim, (uint32_t)mip_dim}};
+          VkRect2D mip_scissor = {{0, 0},
+                                  {(uint32_t)mip_dim, (uint32_t)mip_dim}};
           vkCmdSetViewport(env_cube_buffer, 0, 1, &mip_view);
           vkCmdSetScissor(env_cube_buffer, 0, 1, &mip_scissor);
 
@@ -4030,14 +4035,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           vkCmdEndRenderPass(env_cube_buffer);
         }
 
-        TracyCVkZoneEnd(env_cube_filter)
-        cmd_end_label(env_cube_buffer);
+        TracyCVkZoneEnd(env_cube_filter) cmd_end_label(env_cube_buffer);
       }
 
       TracyCVkZoneEnd(env_cube_scope)
-      TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer)
+          TracyCVkCollect(gpu_gfx_ctx, env_cube_buffer)
 
-      err = vkEndCommandBuffer(env_cube_buffer);
+              err = vkEndCommandBuffer(env_cube_buffer);
       assert(err == VK_SUCCESS);
       TracyCZoneEnd(record_env_e)
     }
@@ -4045,13 +4049,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     // Submit
     {
       TracyCZoneN(submit_shadows_e, "submit env cube", true)
-      VkSubmitInfo submit_info = {
-          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-          .commandBufferCount = 1,
-          .pCommandBuffers = &env_cube_buffer,
-          .signalSemaphoreCount = 1,
-          .pSignalSemaphores = &env_cube_sem,
-      };
+          VkSubmitInfo submit_info = {
+              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+              .commandBufferCount = 1,
+              .pCommandBuffers = &env_cube_buffer,
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &env_cube_sem,
+          };
       queue_begin_label(graphics_queue, "env cube",
                         (float4){1.0f, 1.0f, 0.1f, 1.0f});
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, NULL);
@@ -4068,7 +4072,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     TracyCZoneN(demo_render_frame_render_event, "demo_render_frame render",
                 true)
 
-    VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
+        VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
     VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
 
     // Set names after resetting the parent pool
@@ -4085,11 +4089,11 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     {
       TracyCZoneN(record_upload_event,
                   "demo_render_frame record upload commands", true)
-      TracyCZoneColor(record_upload_event, TracyCategoryColorRendering)
+          TracyCZoneColor(record_upload_event, TracyCategoryColorRendering)
 
-      // Upload
-      if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
-          d->texture_upload_count > 0) {
+          // Upload
+          if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
+              d->texture_upload_count > 0) {
         VkCommandBufferBeginInfo begin_info = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         err = vkBeginCommandBuffer(upload_buffer, &begin_info);
@@ -4097,14 +4101,15 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         TracyCVkNamedZone(gpu_gfx_ctx, upload_scope, upload_buffer, "Upload", 1,
                           true);
-        cmd_begin_label(upload_buffer, "upload", (float4){0.1f, 0.5f, 0.1f, 1.0f});
+        cmd_begin_label(upload_buffer, "upload",
+                        (float4){0.1f, 0.5f, 0.1f, 1.0f});
 
         // Issue const buffer uploads
         if (d->const_buffer_upload_count > 0) {
           TracyCZoneN(cb_up_event,
                       "demo_render_frame record const buffer uploads", true)
-          cmd_begin_label(upload_buffer, "upload const buffers",
-                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
+              cmd_begin_label(upload_buffer, "upload const buffers",
+                              (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->const_buffer_upload_count; ++i) {
             GPUConstBuffer constbuffer = d->const_buffer_upload_queue[i];
@@ -4120,9 +4125,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         // Issue mesh uploads
         if (d->mesh_upload_count > 0) {
           TracyCZoneN(mesh_up_event, "demo_render_frame record mesh uploads",
-                      true)
-          cmd_begin_label(upload_buffer, "upload meshes",
-                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
+                      true) cmd_begin_label(upload_buffer, "upload meshes",
+                                            (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
             GPUMesh mesh = d->mesh_upload_queue[i];
@@ -4142,9 +4146,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         // Issue texture uploads
         if (d->texture_upload_count > 0) {
           TracyCZoneN(tex_up_event, "demo_render_frame record texture uploads",
-                      true)
-          cmd_begin_label(upload_buffer, "upload textures",
-                          (float4){0.1f, 0.4f, 0.1f, 1.0f});
+                      true) cmd_begin_label(upload_buffer, "upload textures",
+                                            (float4){0.1f, 0.4f, 0.1f, 1.0f});
           VkImageMemoryBarrier barrier = {0};
           barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
           barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -4324,7 +4327,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       // Transition Swapchain Image
       {
         TracyCZoneN(swap_trans_e, "transition swapchain", true)
-        VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
@@ -4352,7 +4355,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       {
         TracyCZoneN(shadow_trans_e, "transition shadow map", true)
 
-        VkImageMemoryBarrier barrier = {0};
+            VkImageMemoryBarrier barrier = {0};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -4374,494 +4377,484 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       }
 
       // Render main geometry pass
+      {TracyCZoneN(main_pass_e, "render main pass", true)
+
+       // Main Geometry Pass
+       {TracyCVkNamedZone(gpu_gfx_ctx, main_scope, graphics_buffer, "Main Pass",
+                          2, true);
+      const float width = (float)d->swap_info.width;
+      const float height = (float)d->swap_info.height;
+
+      cmd_begin_label(graphics_buffer, "main pass",
+                      (float4){0.5f, 0.1f, 0.1f, 1.0f});
+
+      // Set Render Pass
       {
-        TracyCZoneN(main_pass_e, "render main pass", true)
+        VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
 
-        // Main Geometry Pass
+        VkClearValue clear_values[2] = {
+            {.color = {.float32 = {0, 1, 1, 1}}},
+            {.depthStencil = {.depth = 0.0f, .stencil = 0}},
+        };
+
+        VkRenderPassBeginInfo pass_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = d->main_pass,
+            .framebuffer = framebuffer,
+            .renderArea =
+                (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}},
+            .clearValueCount = 2,
+            .pClearValues = clear_values,
+        };
+
+        vkCmdBeginRenderPass(graphics_buffer, &pass_info,
+                             VK_SUBPASS_CONTENTS_INLINE);
+      }
+
+      VkViewport viewport = {0, height, width, -height, 0, 1};
+      VkRect2D scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}};
+      vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+      vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
+      // Draw Fullscreen Fractal
+      // vkCmdBindPipeline(graphics_buffer,
+      // VK_PIPELINE_BIND_POINT_GRAPHICS,
+      //                    d->fractal_pipeline);
+      // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
+
+      // Draw Scene
+      {
+        VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
+
+        TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, graphics_buffer,
+                          "Draw Scene", 3, true);
+
+        demo_render_scene(d->main_scene, graphics_buffer, pipe_layout,
+                          d->gltf_view_descriptor_sets[frame_idx],
+                          main_scene_object_sets, main_scene_material_sets, vp,
+                          d);
+
+        TracyCVkZoneEnd(scene_scope);
+      }
+
+      // Draw Skydome
+      {
+        TracyCVkNamedZone(gpu_gfx_ctx, skydome_scope, graphics_buffer,
+                          "Draw Skydome", 3, true);
+
+        cmd_begin_label(graphics_buffer, "skydome",
+                        (float4){0.4f, 0.1f, 0.1f, 1.0f});
+        // Another hack to fiddle with the matrix we send to the shader
+        // for the skydome
+        SkyPushConstants sky_consts = {.vp = *sky_vp};
+        vkCmdPushConstants(graphics_buffer, d->skydome_pipe_layout,
+                           VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                           sizeof(SkyPushConstants), (const void *)&sky_consts);
+
+        uint32_t idx_count = (uint32_t)d->skydome_gpu.surfaces[0].idx_count;
+
+        vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          d->skydome_pipeline);
+
+        vkCmdBindDescriptorSets(
+            graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            d->skydome_pipe_layout, 0, 1,
+            &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+
+        VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
+
+        size_t idx_size =
+            idx_count * sizeof(uint16_t) >> d->skydome_gpu.surfaces[0].idx_type;
+
+        VkBuffer buffers[1] = {b};
+        VkDeviceSize offsets[1] = {idx_size};
+
+        vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
+        vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+
+        cmd_end_label(graphics_buffer);
+        TracyCVkZoneEnd(skydome_scope);
+      }
+
+      vkCmdEndRenderPass(graphics_buffer);
+
+      cmd_end_label(graphics_buffer);
+
+      TracyCVkZoneEnd(main_scope);
+    }
+
+    // ImGui Render Pass
+    {
+      TracyCVkNamedZone(gpu_gfx_ctx, imgui_scope, graphics_buffer, "ImGui", 2,
+                        true);
+      // ImGui Internal Render
+      {
+        TracyCZoneN(ctx, "ImGui Internal", true)
+            TracyCZoneColor(ctx, TracyCategoryColorUI) demo_imgui_update(d);
+        igRender();
+        TracyCZoneEnd(ctx)
+      }
+
+      const ImDrawData *draw_data = igGetDrawData();
+      if (draw_data->Valid) {
+        // (Re)Create and upload ImGui geometry buffer
         {
-          TracyCVkNamedZone(gpu_gfx_ctx, main_scope, graphics_buffer,
-                            "Main Pass", 2, true);
-          const float width = (float)d->swap_info.width;
-          const float height = (float)d->swap_info.height;
+          TracyCZoneN(ctx, "ImGui Mesh Creation", true)
+              TracyCZoneColor(ctx, TracyCategoryColorRendering)
 
-          cmd_begin_label(graphics_buffer, "main pass",
-                          (float4){0.5f, 0.1f, 0.1f, 1.0f});
+                  bool realloc = false;
+
+          size_t idx_size =
+              (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+          size_t vtx_size =
+              (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
+          // We know to use 8 for the alignment because the vertex
+          // attribute layout starts with a float2
+          const size_t alignment = 8;
+          size_t align_padding = idx_size % alignment;
+
+          size_t imgui_size = idx_size + align_padding + vtx_size;
+
+          if (imgui_size > 0) {
+
+            if (imgui_size > d->imgui_mesh_data_size[frame_idx]) {
+              destroy_gpumesh(d->vma_alloc, &d->imgui_gpu[frame_idx]);
+
+              d->imgui_mesh_data =
+                  hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
+              d->imgui_mesh_data_size[frame_idx] = imgui_size;
+
+              realloc = true;
+            }
+
+            uint8_t *idx_dst = d->imgui_mesh_data;
+            uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
+
+            size_t test_size = 0;
+
+            // Organize all mesh data into a single cpu-side buffer
+            for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+              const ImDrawList *cmd_list = draw_data->CmdLists[i];
+
+              size_t idx_byte_count =
+                  (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+              size_t vtx_byte_count =
+                  (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+
+              test_size += idx_byte_count;
+              test_size += vtx_byte_count;
+
+              memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
+              memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
+
+              idx_dst += idx_byte_count;
+              vtx_dst += vtx_byte_count;
+            }
+            idx_dst = d->imgui_mesh_data;
+            vtx_dst = idx_dst + idx_size + align_padding;
+
+            assert(test_size + align_padding == imgui_size);
+            (void)test_size;
+
+            if (realloc) {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-align"
+#endif
+              CPUMesh imgui_cpu = {
+                  .geom_size = vtx_size,
+                  .index_count = (uint32_t)draw_data->TotalIdxCount,
+                  .index_size = idx_size,
+                  .indices = (uint16_t *)idx_dst,
+                  .vertex_count = (uint32_t)draw_data->TotalVtxCount,
+                  .vertices = vtx_dst};
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+              uint64_t input_perm = VA_INPUT_PERM_POSITION |
+                                    VA_INPUT_PERM_TEXCOORD0 |
+                                    VA_INPUT_PERM_COLOR;
+              create_gpumesh(d->vma_alloc, input_perm, &imgui_cpu,
+                             &d->imgui_gpu[frame_idx]);
+            } else {
+              // Map existing gpu mesh and copy data
+              uint8_t *data = NULL;
+              vmaMapMemory(d->vma_alloc,
+                           d->imgui_gpu[frame_idx].surfaces[0].host.alloc,
+                           (void **)&data);
+
+              // Copy Data
+              memcpy(data, idx_dst, imgui_size);
+
+              vmaUnmapMemory(d->vma_alloc,
+                             d->imgui_gpu[frame_idx].surfaces[0].host.alloc);
+            }
+
+            // Copy to gpu
+            {
+              VkBufferCopy region = {
+                  .srcOffset = 0,
+                  .dstOffset = 0,
+                  .size = d->imgui_gpu[frame_idx].surfaces[0].size,
+              };
+              vkCmdCopyBuffer(graphics_buffer,
+                              d->imgui_gpu[frame_idx].surfaces[0].host.buffer,
+                              d->imgui_gpu[frame_idx].surfaces[0].gpu.buffer, 1,
+                              &region);
+            }
+          }
+
+          TracyCZoneEnd(ctx)
+        }
+
+        // Record ImGui render commands
+        {
+          TracyCZoneN(ctx, "Record ImGui Commands", true)
+              TracyCZoneColor(ctx, TracyCategoryColorRendering)
+
+                  cmd_begin_label(graphics_buffer, "imgui",
+                                  (float4){0.1f, 0.1f, 0.5f, 1.0f});
+
+          const float width = d->ig_io->DisplaySize.x;
+          const float height = d->ig_io->DisplaySize.y;
+
+          // We know to use 8 for the alignment because the vertex
+          // attribute layout starts with a float2
+          const uint32_t alignment = 8;
 
           // Set Render Pass
           {
-            VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
+            VkFramebuffer framebuffer = d->ui_pass_framebuffers[frame_idx];
 
-            VkClearValue clear_values[2] = {
-                {.color = {.float32 = {0, 1, 1, 1}}},
-                {.depthStencil = {.depth = 0.0f, .stencil = 0}},
+            VkClearValue clear_values[1] = {
+                {.color = {.float32 = {0, 0, 0, 0}}},
             };
 
-            VkRenderPassBeginInfo pass_info = {
-                .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                .renderPass = d->main_pass,
-                .framebuffer = framebuffer,
-                .renderArea =
-                    (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}},
-                .clearValueCount = 2,
-                .pClearValues = clear_values,
-            };
+            VkRenderPassBeginInfo pass_info = {0};
+            pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            pass_info.renderPass = d->imgui_pass;
+            pass_info.framebuffer = framebuffer;
+            pass_info.renderArea =
+                (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}};
+            pass_info.clearValueCount = 1;
+            pass_info.pClearValues = clear_values;
 
             vkCmdBeginRenderPass(graphics_buffer, &pass_info,
                                  VK_SUBPASS_CONTENTS_INLINE);
           }
 
-          VkViewport viewport = {0, height, width, -height, 0, 1};
-          VkRect2D scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}};
-          vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
-          vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
-
-          // Draw Fullscreen Fractal
-          // vkCmdBindPipeline(graphics_buffer,
-          // VK_PIPELINE_BIND_POINT_GRAPHICS,
-          //                    d->fractal_pipeline);
-          // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
-
-          // Draw Scene
+          // Draw ImGui
           {
-            VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
-
-            TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, graphics_buffer,
-                              "Draw Scene", 3, true);
-
-            demo_render_scene(d->main_scene, graphics_buffer, pipe_layout,
-                              d->gltf_view_descriptor_sets[frame_idx],
-                              main_scene_object_sets, main_scene_material_sets,
-                              vp, d);
-
-            TracyCVkZoneEnd(scene_scope);
-          }
-
-          // Draw Skydome
-          {
-            TracyCVkNamedZone(gpu_gfx_ctx, skydome_scope, graphics_buffer,
-                              "Draw Skydome", 3, true);
-
-            cmd_begin_label(graphics_buffer, "skydome",
-                            (float4){0.4f, 0.1f, 0.1f, 1.0f});
-            // Another hack to fiddle with the matrix we send to the shader
-            // for the skydome
-            SkyPushConstants sky_consts = {.vp = *sky_vp};
-            vkCmdPushConstants(graphics_buffer, d->skydome_pipe_layout,
-                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                               sizeof(SkyPushConstants),
-                               (const void *)&sky_consts);
-
-            uint32_t idx_count = (uint32_t)d->skydome_gpu.surfaces[0].idx_count;
-
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              d->skydome_pipeline);
+                              d->imgui_pipeline);
 
+            // Bind the imgui atlas
             vkCmdBindDescriptorSets(
                 graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                d->skydome_pipe_layout, 0, 1,
-                &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+                d->imgui_pipe_layout, 0, 1,
+                &d->imgui_descriptor_sets[frame_idx], 0, NULL);
 
-            VkBuffer b = d->skydome_gpu.surfaces[0].gpu.buffer;
+            VkViewport viewport = {0, 0, width, height, 0, 1};
+            VkRect2D scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}};
+            vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+            vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-            size_t idx_size = idx_count * sizeof(uint16_t) >>
-                              d->skydome_gpu.surfaces[0].idx_type;
+            float scale_x = 2.0f / draw_data->DisplaySize.x;
+            float scale_y = 2.0f / draw_data->DisplaySize.y;
 
-            VkBuffer buffers[1] = {b};
-            VkDeviceSize offsets[1] = {idx_size};
+            ImGuiPushConstants push_constants = {
+                .scale = {scale_x, scale_y},
+                .translation = {-1.0f - draw_data->DisplayPos.x * scale_x,
+                                -1.0f - draw_data->DisplayPos.y * scale_y},
+            };
+            vkCmdPushConstants(graphics_buffer, d->imgui_pipe_layout,
+                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                               sizeof(ImGuiPushConstants),
+                               (const void *)&push_constants);
 
-            vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
-            vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
-            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+            GPUMesh *imgui_mesh = &d->imgui_gpu[frame_idx];
 
-            cmd_end_label(graphics_buffer);
-            TracyCVkZoneEnd(skydome_scope);
+            uint32_t idx_offset = 0;
+            uint32_t vtx_offset = 0;
+
+            VkDeviceSize vtx_buffer_offset =
+                (VkDeviceSize)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+            vtx_buffer_offset += vtx_buffer_offset % alignment;
+
+            {
+              TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true)
+                  TracyCZoneColor(draw_ctx, TracyCategoryColorRendering)
+
+                      vkCmdBindIndexBuffer(
+                          graphics_buffer, imgui_mesh->surfaces[0].gpu.buffer,
+                          0, (VkIndexType)imgui_mesh->surfaces[0].idx_type);
+              vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
+                                     &imgui_mesh->surfaces[0].gpu.buffer,
+                                     &vtx_buffer_offset);
+
+              for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+                const ImDrawList *draw_list = draw_data->CmdLists[i];
+
+                for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
+                  const ImDrawCmd *draw_cmd = &draw_list->CmdBuffer.Data[ii];
+                  // Set the scissor
+                  ImVec4 clip_rect = draw_cmd->ClipRect;
+                  scissor = (VkRect2D){
+                      {(int32_t)clip_rect.x, (int32_t)clip_rect.y},
+                      {(uint32_t)clip_rect.z, (uint32_t)clip_rect.w}};
+                  vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
+                  // Issue the draw
+                  vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
+                                   draw_cmd->IdxOffset + idx_offset,
+                                   (int32_t)(draw_cmd->VtxOffset + vtx_offset),
+                                   0);
+                }
+
+                // Adjust offsets
+                idx_offset += (uint32_t)draw_list->IdxBuffer.Size;
+                vtx_offset += (uint32_t)draw_list->VtxBuffer.Size;
+              }
+
+              TracyCZoneEnd(draw_ctx)
+            }
           }
 
           vkCmdEndRenderPass(graphics_buffer);
 
           cmd_end_label(graphics_buffer);
 
-          TracyCVkZoneEnd(main_scope);
+          TracyCZoneEnd(ctx)
         }
-
-        // ImGui Render Pass
-        {
-          TracyCVkNamedZone(gpu_gfx_ctx, imgui_scope, graphics_buffer, "ImGui",
-                            2, true);
-          // ImGui Internal Render
-          {
-            TracyCZoneN(ctx, "ImGui Internal", true)
-            TracyCZoneColor(ctx, TracyCategoryColorUI)
-            demo_imgui_update(d);
-            igRender();
-            TracyCZoneEnd(ctx)
-          }
-
-          const ImDrawData *draw_data = igGetDrawData();
-          if (draw_data->Valid) {
-            // (Re)Create and upload ImGui geometry buffer
-            {
-              TracyCZoneN(ctx, "ImGui Mesh Creation", true)
-              TracyCZoneColor(ctx, TracyCategoryColorRendering)
-
-              bool realloc = false;
-
-              size_t idx_size = (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-              size_t vtx_size = (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
-              // We know to use 8 for the alignment because the vertex
-              // attribute layout starts with a float2
-              const size_t alignment = 8;
-              size_t align_padding = idx_size % alignment;
-
-              size_t imgui_size = idx_size + align_padding + vtx_size;
-
-              if (imgui_size > 0) {
-
-                if (imgui_size > d->imgui_mesh_data_size[frame_idx]) {
-                  destroy_gpumesh(d->vma_alloc, &d->imgui_gpu[frame_idx]);
-
-                  d->imgui_mesh_data =
-                      hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
-                  d->imgui_mesh_data_size[frame_idx] = imgui_size;
-
-                  realloc = true;
-                }
-
-                uint8_t *idx_dst = d->imgui_mesh_data;
-                uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
-
-                size_t test_size = 0;
-
-                // Organize all mesh data into a single cpu-side buffer
-                for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
-                  const ImDrawList *cmd_list = draw_data->CmdLists[i];
-
-                  size_t idx_byte_count =
-                      (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
-                  size_t vtx_byte_count =
-                      (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
-
-                  test_size += idx_byte_count;
-                  test_size += vtx_byte_count;
-
-                  memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
-                  memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
-
-                  idx_dst += idx_byte_count;
-                  vtx_dst += vtx_byte_count;
-                }
-                idx_dst = d->imgui_mesh_data;
-                vtx_dst = idx_dst + idx_size + align_padding;
-
-                assert(test_size + align_padding == imgui_size);
-                (void)test_size;
-
-                if (realloc) {
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-align"
-#endif
-                  CPUMesh imgui_cpu = {.geom_size = vtx_size,
-                                       .index_count = (uint32_t)draw_data->TotalIdxCount,
-                                       .index_size = idx_size,
-                                       .indices = (uint16_t *)idx_dst,
-                                       .vertex_count = (uint32_t)draw_data->TotalVtxCount,
-                                       .vertices = vtx_dst};
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-                  uint64_t input_perm = VA_INPUT_PERM_POSITION |
-                                        VA_INPUT_PERM_TEXCOORD0 |
-                                        VA_INPUT_PERM_COLOR;
-                  create_gpumesh(d->vma_alloc, input_perm, &imgui_cpu,
-                                 &d->imgui_gpu[frame_idx]);
-                } else {
-                  // Map existing gpu mesh and copy data
-                  uint8_t *data = NULL;
-                  vmaMapMemory(d->vma_alloc,
-                               d->imgui_gpu[frame_idx].surfaces[0].host.alloc,
-                               (void **)&data);
-
-                  // Copy Data
-                  memcpy(data, idx_dst, imgui_size);
-
-                  vmaUnmapMemory(
-                      d->vma_alloc,
-                      d->imgui_gpu[frame_idx].surfaces[0].host.alloc);
-                }
-
-                // Copy to gpu
-                {
-                  VkBufferCopy region = {
-                      .srcOffset = 0,
-                      .dstOffset = 0,
-                      .size = d->imgui_gpu[frame_idx].surfaces[0].size,
-                  };
-                  vkCmdCopyBuffer(
-                      graphics_buffer,
-                      d->imgui_gpu[frame_idx].surfaces[0].host.buffer,
-                      d->imgui_gpu[frame_idx].surfaces[0].gpu.buffer, 1,
-                      &region);
-                }
-              }
-
-              TracyCZoneEnd(ctx)
-            }
-
-            // Record ImGui render commands
-            {
-              TracyCZoneN(ctx, "Record ImGui Commands", true)
-              TracyCZoneColor(ctx, TracyCategoryColorRendering)
-
-              cmd_begin_label(graphics_buffer, "imgui",
-                              (float4){0.1f, 0.1f, 0.5f, 1.0f});
-
-              const float width = d->ig_io->DisplaySize.x;
-              const float height = d->ig_io->DisplaySize.y;
-
-              // We know to use 8 for the alignment because the vertex
-              // attribute layout starts with a float2
-              const uint32_t alignment = 8;
-
-              // Set Render Pass
-              {
-                VkFramebuffer framebuffer = d->ui_pass_framebuffers[frame_idx];
-
-                VkClearValue clear_values[1] = {
-                    {.color = {.float32 = {0, 0, 0, 0}}},
-                };
-
-                VkRenderPassBeginInfo pass_info = {0};
-                pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                pass_info.renderPass = d->imgui_pass;
-                pass_info.framebuffer = framebuffer;
-                pass_info.renderArea =
-                    (VkRect2D){{0, 0}, {(uint32_t)width, (uint32_t)height}};
-                pass_info.clearValueCount = 1;
-                pass_info.pClearValues = clear_values;
-
-                vkCmdBeginRenderPass(graphics_buffer, &pass_info,
-                                     VK_SUBPASS_CONTENTS_INLINE);
-              }
-
-              // Draw ImGui
-              {
-                vkCmdBindPipeline(graphics_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  d->imgui_pipeline);
-
-                // Bind the imgui atlas
-                vkCmdBindDescriptorSets(
-                    graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    d->imgui_pipe_layout, 0, 1,
-                    &d->imgui_descriptor_sets[frame_idx], 0, NULL);
-
-                VkViewport viewport = {0, 0, width, height, 0, 1};
-                VkRect2D scissor = {{0, 0},
-                                    {(uint32_t)width, (uint32_t)height}};
-                vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
-                vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
-
-                float scale_x = 2.0f / draw_data->DisplaySize.x;
-                float scale_y = 2.0f / draw_data->DisplaySize.y;
-
-                ImGuiPushConstants push_constants = {
-                    .scale = {scale_x, scale_y},
-                    .translation = {-1.0f - draw_data->DisplayPos.x * scale_x,
-                                    -1.0f - draw_data->DisplayPos.y * scale_y},
-                };
-                vkCmdPushConstants(graphics_buffer, d->imgui_pipe_layout,
-                                   VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                                   sizeof(ImGuiPushConstants),
-                                   (const void *)&push_constants);
-
-                GPUMesh *imgui_mesh = &d->imgui_gpu[frame_idx];
-
-                uint32_t idx_offset = 0;
-                uint32_t vtx_offset = 0;
-
-                VkDeviceSize vtx_buffer_offset =
-                    (VkDeviceSize)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-                vtx_buffer_offset += vtx_buffer_offset % alignment;
-
-                {
-                  TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true)
-                  TracyCZoneColor(draw_ctx, TracyCategoryColorRendering)
-
-                  vkCmdBindIndexBuffer(
-                      graphics_buffer, imgui_mesh->surfaces[0].gpu.buffer, 0,
-                      (VkIndexType)imgui_mesh->surfaces[0].idx_type);
-                  vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
-                                         &imgui_mesh->surfaces[0].gpu.buffer,
-                                         &vtx_buffer_offset);
-
-                  for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
-                    const ImDrawList *draw_list = draw_data->CmdLists[i];
-
-                    for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
-                      const ImDrawCmd *draw_cmd =
-                          &draw_list->CmdBuffer.Data[ii];
-                      // Set the scissor
-                      ImVec4 clip_rect = draw_cmd->ClipRect;
-                      scissor = (VkRect2D){
-                          {(int32_t)clip_rect.x, (int32_t)clip_rect.y},
-                          {(uint32_t)clip_rect.z, (uint32_t)clip_rect.w}};
-                      vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
-
-                      // Issue the draw
-                      vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
-                                       draw_cmd->IdxOffset + idx_offset,
-                                       (int32_t)(draw_cmd->VtxOffset + vtx_offset), 0);
-                    }
-
-                    // Adjust offsets
-                    idx_offset += (uint32_t)draw_list->IdxBuffer.Size;
-                    vtx_offset += (uint32_t)draw_list->VtxBuffer.Size;
-                  }
-
-                  TracyCZoneEnd(draw_ctx)
-                }
-              }
-
-              vkCmdEndRenderPass(graphics_buffer);
-
-              cmd_end_label(graphics_buffer);
-
-              TracyCZoneEnd(ctx)
-            }
-          }
-
-          TracyCVkZoneEnd(imgui_scope);
-        }
-
-        TracyCZoneEnd(main_pass_e)
       }
 
-      TracyCVkZoneEnd(frame_scope);
-
-      TracyCVkCollect(gpu_gfx_ctx, graphics_buffer);
-
-      err = vkEndCommandBuffer(graphics_buffer);
-      assert(err == VK_SUCCESS);
+      TracyCVkZoneEnd(imgui_scope);
     }
 
-    // Submit
-    {
-      TracyCZoneN(demo_render_frame_submit_event, "demo_render_frame submit",
-                  true)
+    TracyCZoneEnd(main_pass_e)
+  }
+
+  TracyCVkZoneEnd(frame_scope);
+
+  TracyCVkCollect(gpu_gfx_ctx, graphics_buffer);
+
+  err = vkEndCommandBuffer(graphics_buffer);
+  assert(err == VK_SUCCESS);
+}
+
+// Submit
+{
+  TracyCZoneN(demo_render_frame_submit_event, "demo_render_frame submit", true)
       TracyCZoneColor(demo_render_frame_submit_event,
                       TracyCategoryColorRendering)
 
-      uint32_t wait_sem_count = 0;
-      VkSemaphore wait_sems[16] = {0};
-      VkPipelineStageFlags wait_stage_flags[16] = {0};
+          uint32_t wait_sem_count = 0;
+  VkSemaphore wait_sems[16] = {0};
+  VkPipelineStageFlags wait_stage_flags[16] = {0};
 
-      wait_sems[wait_sem_count] = img_acquired_sem;
-      wait_stage_flags[wait_sem_count++] =
-          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      if (upload_sem != VK_NULL_HANDLE) {
-        wait_sems[wait_sem_count] = upload_sem;
-        wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      }
-      if (shadow_sem != VK_NULL_HANDLE) {
-        wait_sems[wait_sem_count] = shadow_sem;
-        wait_stage_flags[wait_sem_count++] =
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-      }
-      if (env_cube_sem != VK_NULL_HANDLE) {
-        wait_sems[wait_sem_count] = env_cube_sem;
-        wait_stage_flags[wait_sem_count++] =
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-      }
-
-      {
-        VkSubmitInfo submit_info = {0};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.waitSemaphoreCount = wait_sem_count;
-        submit_info.pWaitSemaphores = wait_sems;
-        submit_info.pWaitDstStageMask = wait_stage_flags;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &graphics_buffer;
-        submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &render_complete_sem;
-        queue_begin_label(graphics_queue, "raster",
-                          (float4){1.0f, 0.1f, 0.1f, 1.0f});
-        err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
-        queue_end_label(graphics_queue);
-        assert(err == VK_SUCCESS);
-      }
-
-      TracyCZoneEnd(demo_render_frame_submit_event)
-    }
-
-    TracyCZoneEnd(demo_render_frame_render_event)
+  wait_sems[wait_sem_count] = img_acquired_sem;
+  wait_stage_flags[wait_sem_count++] =
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  if (upload_sem != VK_NULL_HANDLE) {
+    wait_sems[wait_sem_count] = upload_sem;
+    wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_TRANSFER_BIT;
+  }
+  if (shadow_sem != VK_NULL_HANDLE) {
+    wait_sems[wait_sem_count] = shadow_sem;
+    wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  }
+  if (env_cube_sem != VK_NULL_HANDLE) {
+    wait_sems[wait_sem_count] = env_cube_sem;
+    wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
   }
 
-  // Present
   {
-    TracyCZoneN(demo_render_frame_present_event, "demo_render_frame present",
-                true)
-    TracyCZoneColor(demo_render_frame_present_event,
-                    TracyCategoryColorRendering)
-
-    VkSemaphore wait_sem = render_complete_sem;
-    if (d->separate_present_queue) {
-      VkSemaphore swapchain_sem = d->swapchain_image_sems[frame_idx];
-      // If we are using separate queues, change image ownership to the
-      // present queue before presenting, waiting for the draw complete
-      // semaphore and signalling the ownership released semaphore when
-      // finished
-      VkSubmitInfo submit_info = {0};
-      submit_info.waitSemaphoreCount = 1;
-      submit_info.pWaitSemaphores = &d->render_complete_sems[frame_idx];
-      submit_info.commandBufferCount = 1;
-      // submit_info.pCommandBuffers =
-      //    &d->swapchain_images[swap_img_idx].graphics_to_present_cmd;
-      submit_info.signalSemaphoreCount = 1;
-      submit_info.pSignalSemaphores = &swapchain_sem;
-      err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
-      assert(err == VK_SUCCESS);
-
-      wait_sem = swapchain_sem;
-    }
-
-    VkPresentInfoKHR present_info = {0};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &wait_sem;
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &swapchain;
-    present_info.pImageIndices = &swap_img_idx;
-    err = vkQueuePresentKHR(present_queue, &present_info);
-
-    d->frame_idx = (frame_idx + 1) % FRAME_LATENCY;
-
-    if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-      // demo->swapchain is out of date (e.g. the window was resized) and
-      // must be recreated:
-      demo_resize(d);
-    } else if (err == VK_SUBOPTIMAL_KHR) {
-      // demo->swapchain is not as optimal as it could be, but the platform's
-      // presentation engine will still present the image correctly.
-    } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
-      // If the surface was lost we could re-create it.
-      // But the surface is owned by SDL2
-      assert(err == VK_SUCCESS);
-    } else {
-      assert(err == VK_SUCCESS);
-    }
-
-    TracyCZoneEnd(demo_render_frame_present_event)
+    VkSubmitInfo submit_info = {0};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.waitSemaphoreCount = wait_sem_count;
+    submit_info.pWaitSemaphores = wait_sems;
+    submit_info.pWaitDstStageMask = wait_stage_flags;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &graphics_buffer;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &render_complete_sem;
+    queue_begin_label(graphics_queue, "raster",
+                      (float4){1.0f, 0.1f, 0.1f, 1.0f});
+    err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
+    queue_end_label(graphics_queue);
+    assert(err == VK_SUCCESS);
   }
 
-  TracyCZoneEnd(demo_render_frame_event)
+  TracyCZoneEnd(demo_render_frame_submit_event)
+}
+
+TracyCZoneEnd(demo_render_frame_render_event)
+}
+
+// Present
+{
+  TracyCZoneN(demo_render_frame_present_event, "demo_render_frame present",
+              true) TracyCZoneColor(demo_render_frame_present_event,
+                                    TracyCategoryColorRendering)
+
+      VkSemaphore wait_sem = render_complete_sem;
+  if (d->separate_present_queue) {
+    VkSemaphore swapchain_sem = d->swapchain_image_sems[frame_idx];
+    // If we are using separate queues, change image ownership to the
+    // present queue before presenting, waiting for the draw complete
+    // semaphore and signalling the ownership released semaphore when
+    // finished
+    VkSubmitInfo submit_info = {0};
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &d->render_complete_sems[frame_idx];
+    submit_info.commandBufferCount = 1;
+    // submit_info.pCommandBuffers =
+    //    &d->swapchain_images[swap_img_idx].graphics_to_present_cmd;
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = &swapchain_sem;
+    err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
+    assert(err == VK_SUCCESS);
+
+    wait_sem = swapchain_sem;
+  }
+
+  VkPresentInfoKHR present_info = {0};
+  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  present_info.waitSemaphoreCount = 1;
+  present_info.pWaitSemaphores = &wait_sem;
+  present_info.swapchainCount = 1;
+  present_info.pSwapchains = &swapchain;
+  present_info.pImageIndices = &swap_img_idx;
+  err = vkQueuePresentKHR(present_queue, &present_info);
+
+  d->frame_idx = (frame_idx + 1) % FRAME_LATENCY;
+
+  if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+    // demo->swapchain is out of date (e.g. the window was resized) and
+    // must be recreated:
+    demo_resize(d);
+  } else if (err == VK_SUBOPTIMAL_KHR) {
+    // demo->swapchain is not as optimal as it could be, but the platform's
+    // presentation engine will still present the image correctly.
+  } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+    // If the surface was lost we could re-create it.
+    // But the surface is owned by SDL2
+    assert(err == VK_SUCCESS);
+  } else {
+    assert(err == VK_SUCCESS);
+  }
+
+  TracyCZoneEnd(demo_render_frame_present_event)
+}
+
+TracyCZoneEnd(demo_render_frame_event)
 }
 
 bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size) {
-  TracyCZoneN(ctx, "demo_screenshot", true)
-  VkResult err = VK_SUCCESS;
+  TracyCZoneN(ctx, "demo_screenshot", true) VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
   uint32_t frame_idx = d->frame_idx;
@@ -4883,12 +4876,10 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   VkResult status = vkGetFenceStatus(device, swap_fence);
   if (status == VK_NOT_READY) {
     TracyCZoneN(fence_ctx, "Wait for swap fence", true)
-    TracyCZoneColor(fence_ctx, TracyCategoryColorWait)
-    err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
-    TracyCZoneEnd(fence_ctx)
-    if (err != VK_SUCCESS) {
-      TracyCZoneEnd(ctx)
-      assert(0);
+        TracyCZoneColor(fence_ctx, TracyCategoryColorWait) err =
+            vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
+    TracyCZoneEnd(fence_ctx) if (err != VK_SUCCESS) {
+      TracyCZoneEnd(ctx) assert(0);
       return false;
     }
   }
@@ -4897,8 +4888,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   err = vkBeginCommandBuffer(screenshot_cmd, &begin_info);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx)
-    assert(0);
+    TracyCZoneEnd(ctx) assert(0);
     return false;
   }
 
@@ -4986,8 +4976,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkEndCommandBuffer(screenshot_cmd);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx)
-    assert(0);
+    TracyCZoneEnd(ctx) assert(0);
     return false;
   }
 
@@ -4998,8 +4987,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   };
   err = vkQueueSubmit(queue, 1, &submit_info, screenshot_fence);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx)
-    assert(0);
+    TracyCZoneEnd(ctx) assert(0);
     return false;
   }
 
@@ -5007,8 +4995,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   // command to finish
   err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx)
-    assert(0);
+    TracyCZoneEnd(ctx) assert(0);
     return false;
   }
   vkResetFences(device, 1, &screenshot_fence);
@@ -5024,8 +5011,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
   err =
       vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
   if (err != VK_SUCCESS) {
-    TracyCZoneEnd(ctx)
-    assert(0);
+    TracyCZoneEnd(ctx) assert(0);
     return false;
   }
 
@@ -5056,12 +5042,13 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
     int32_t pitch = (int32_t)(d->swap_info.width * 4);
     SDL_Surface *img = SDL_CreateRGBSurfaceFrom(
-        (screenshot_mem + sub_resource_layout.offset), (int32_t)d->swap_info.width,
-        (int32_t)d->swap_info.height, 32, pitch, rmask, gmask, bmask, amask);
+        (screenshot_mem + sub_resource_layout.offset),
+        (int32_t)d->swap_info.width, (int32_t)d->swap_info.height, 32, pitch,
+        rmask, gmask, bmask, amask);
     assert(img);
 
-    SDL_RWops *ops =
-        SDL_RWFromMem((void *)(*screenshot_bytes), (int32_t)sub_resource_layout.size);
+    SDL_RWops *ops = SDL_RWFromMem((void *)(*screenshot_bytes),
+                                   (int32_t)sub_resource_layout.size);
     IMG_SavePNG_RW(img, ops, 0);
 
     SDL_FreeSurface(img);
@@ -5069,6 +5056,5 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
   vmaUnmapMemory(vma_alloc, screenshot_image.alloc);
 
-  TracyCZoneEnd(ctx)
-  return true;
+  TracyCZoneEnd(ctx) return true;
 }

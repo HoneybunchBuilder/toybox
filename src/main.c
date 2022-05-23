@@ -23,7 +23,7 @@
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
 
-#ifndef FINAL
+#if !defined(FINAL) && !defined(__ANDROID__)
 #define VALIDATION
 #endif
 
@@ -43,7 +43,6 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
   return found;
 }
 
-#ifndef __ANDROID__
 static VkBool32
 vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                   VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -67,7 +66,6 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   return false;
 }
-#endif
 #endif
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
@@ -244,12 +242,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 // Add debug ext
 #ifdef VALIDATION
-#ifndef __ANDROID__
     {
       assert(ext_count + 1 < MAX_EXT_COUNT);
       ext_names[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     }
-#endif
 #endif
 
 // Add portability for apple devices
@@ -291,7 +287,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 // Load debug callback
 #ifdef VALIDATION
-#ifndef __ANDROID__
   VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
   {
     VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
@@ -307,7 +302,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                                          &debug_utils_messenger);
     assert(err == VK_SUCCESS);
   }
-#endif
 #endif
 
   Demo d = {0};
@@ -814,11 +808,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   demo_destroy(&d);
 
 #ifdef VALIDATION
-#ifndef __ANDROID__
   vkDestroyDebugUtilsMessengerEXT(instance, debug_utils_messenger,
                                   vk_alloc_ptr);
   debug_utils_messenger = VK_NULL_HANDLE;
-#endif
 #endif
 
   vkDestroyInstance(instance, vk_alloc_ptr);

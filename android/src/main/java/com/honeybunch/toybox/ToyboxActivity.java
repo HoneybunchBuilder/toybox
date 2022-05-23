@@ -24,10 +24,7 @@ public class ToyboxActivity extends SDLActivity {
      */
     protected String[] getLibraries() {
         return new String[] {
-                "hidapi",
-                "SDL2",
-                "TracyClient",
-                "toybox",
+            "toybox",
         };
     }
 }

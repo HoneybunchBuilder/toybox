@@ -21,8 +21,13 @@ if(NOT BUILD_TOOLS_VERSION)
     list(GET dirlist -1 BUILD_TOOLS_VERSION)
 endif()
 
+# get build tools major version
+string(REPLACE "." ";" BUILD_TOOLS_VERSION_LIST ${BUILD_TOOLS_VERSION})
+list(GET BUILD_TOOLS_VERSION_LIST 0 BUILD_TOOLS_MAJOR)
+
 set(BUILD_TOOLS_DIR ${BUILD_TOOLS_DIR}/${BUILD_TOOLS_VERSION})
 
+set(d8_path ${BUILD_TOOLS_DIR}/d8.bat)
 set(dx_path ${BUILD_TOOLS_DIR}/dx.bat)
 set(aapt_path ${BUILD_TOOLS_DIR}/aapt.exe)
 set(zipalign_path ${BUILD_TOOLS_DIR}/zipalign.exe)
@@ -51,6 +56,8 @@ set(libcppshared_path ${CMAKE_ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/${ar
 add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
 # Bring along the validation layers
+# TODO: Fix this; the validation layers are no longer provided by the ndk
+# They are canonically at: https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases
 if(NOT FINAL)
     file(GLOB vk_validation_layers "${CMAKE_ANDROID_NDK}/sources/third_party/vulkan/src/build-android/jniLibs/${arch}/*.so")
     foreach(layer ${vk_validation_layers})
@@ -81,6 +88,9 @@ set(unaligned_apk_path ${packaging_working_dir}/toybox-unaligned.apk)
 set(apk_path ${packaging_working_dir}/toybox.apk)
 
 # Package apk
+
+if(${BUILD_TOOLS_MAJOR} LESS 31)
+# older dx packaging for build tools versions less that 31.0.0
 add_custom_command(
     OUTPUT ${unaligned_apk_name}
     WORKING_DIRECTORY ${packaging_working_dir}
@@ -89,6 +99,18 @@ add_custom_command(
     COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -A ${asset_path} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libtoybox.so
 )
+else()
+
+# newer d8 based packaging
+add_custom_command(
+    OUTPUT ${unaligned_apk_name}
+    WORKING_DIRECTORY ${packaging_working_dir}
+    COMMAND ${CMAKE_COMMAND} -E make_directory bin
+    COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${d8_path} ARGS ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/toybox_jar.jar --output bin
+    COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -A ${asset_path} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
+    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libtoybox.so
+)
+endif()
 
 if(NOT FINAL)
     set(idx 0)
