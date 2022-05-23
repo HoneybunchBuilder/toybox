@@ -210,6 +210,7 @@ if(WIN32)
 
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
+  target_link_libraries(toybox PRIVATE KTX::astcenc-neon-static)
 elseif(UNIX)
   if(APPLE)
     if(IOS)
