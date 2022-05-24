@@ -116,7 +116,11 @@ find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
 # If in a windows development env we don't want to use the default DXC
 # as it does not ship with SPIRV support
-find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/Bin NO_DEFAULT_PATH REQUIRED)
+set(VULKAN_BIN_PATH "bin")
+if(platform MATCHES "windows")
+  set(VULKAN_BIN_PATH "Bin")
+endif()
+find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH} NO_DEFAULT_PATH REQUIRED)
 find_program(TOKTX toktx 
   PATHS ${VCPKG_DIR}/installed/${host_triple}/tools/ktx
   REQUIRED)
