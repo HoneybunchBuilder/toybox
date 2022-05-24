@@ -5,61 +5,52 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "x64 Linux Debug",
-            "type": "cppdbg",
+            "name": "x64 Linux GCC Debug",
+            "type": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/x64/linux/Debug/toybox",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/x64/linux/Debug",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
+            "target": "${workspaceFolder}/build/x64/linux-gcc/Debug/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-gcc/Debug",
+            "valuesFormatting": "parseText"
         },
         {
-            "name": "x64 Linux RelWithDebInfo",
-            "type": "cppdbg",
+            "name": "x64 Linux GCC RelWithDebInfo",
+            "type": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/x64/linux/RelWithDebInfo/toybox",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/x64/linux/RelWithDebInfo",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
+            "target": "${workspaceFolder}/build/x64/linux-gcc/RelWithDebInfo/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-gcc/RelWithDebInfo",
+            "valuesFormatting": "parseText"
         },
         {
-            "name": "x64 Linux Release",
-            "type": "cppdbg",
+            "name": "x64 Linux GCC Release",
+            "type": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/x64/linux/Release/toybox",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/x64/linux/Release",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        }
+            "target": "${workspaceFolder}/build/x64/linux-gcc/Release/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-gcc/Release",
+            "valuesFormatting": "parseText"
+        },
+        {
+            "name": "x64 Linux LLVM Debug",
+            "type": "gdb",
+            "request": "launch",
+            "target": "${workspaceFolder}/build/x64/linux-llvm/Debug/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-llvm/Debug",
+            "valuesFormatting": "parseText"
+        },
+        {
+            "name": "x64 Linux LLVM RelWithDebInfo",
+            "type": "gdb",
+            "request": "launch",
+            "target": "${workspaceFolder}/build/x64/linux-llvm/RelWithDebInfo/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-llvm/RelWithDebInfo",
+            "valuesFormatting": "parseText"
+        },
+        {
+            "name": "x64 Linux LLVM Release",
+            "type": "gdb",
+            "request": "launch",
+            "target": "${workspaceFolder}/build/x64/linux-llvm/Release/toybox",
+            "cwd": "${workspaceFolder}/build/x64/linux-llvm/Release",
+            "valuesFormatting": "parseText"
+        },
     ]
 }
