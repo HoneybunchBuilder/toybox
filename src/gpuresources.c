@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
                          int32_t mem_usage, uint32_t buf_usage,
@@ -306,12 +307,12 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
     {
       static const uint32_t max_name_size = 128;
       char *host_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
-      SDL_snprintf(host_name, max_name_size, "%s surface %lld @host",
+      SDL_snprintf(host_name, max_name_size, "%s surface %"PRIu64" @host",
                    src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, host_buffer.buffer, VK_OBJECT_TYPE_BUFFER, host_name);
 
       char *device_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
-      SDL_snprintf(device_name, max_name_size, "%s surface %lld @device",
+      SDL_snprintf(device_name, max_name_size, "%s surface %"PRIu64" @device",
                    src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, device_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
                   device_name);
