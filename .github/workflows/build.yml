@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
-  
+
 jobs:
   x64-windows-ninja-llvm:
     runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v3
-    
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+
     - name: Install Dependencies
       run: ./install_deps_windows.bat
 
@@ -26,12 +29,15 @@ jobs:
       run: cmake --build build --config RelWithDebInfo
     - name: Build Release
       run: cmake --build build --config Release
-      
+
   x64-windows-vs2022-llvm:
     runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
 
     - name: Install Dependencies
       run: ./install_deps_windows.bat
@@ -51,7 +57,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+
     - name: Install Dependencies
       run: ./install_deps_mingw.bat
 
