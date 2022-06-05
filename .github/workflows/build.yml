@@ -22,8 +22,8 @@ jobs:
           {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, plat: windows, extra: "-DVCPKG_CRT_LINKAGE=static -Ax64 -TClangCL"},
           {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, plat: android, extra: "-DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/android.cmake"},
           {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-android, plat: android, extra: "-DANDROID_PLATFORM=android-29 -DANDROID_ABI=x86_64 -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/android.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-linux, plat: linux, extra: ""}
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, plat: linux, extra: ""}
+          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-linux, plat: linux, extra: ""},
+          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, plat: linux, extra: ""},
         ]
 
     runs-on: ${{matrix.toolsets.host}}
