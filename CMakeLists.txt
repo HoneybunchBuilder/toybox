@@ -90,7 +90,7 @@ if(NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang" AND
   message(FATAL_ERROR "${CMAKE_C_COMPILER_ID} Unsupported - Clang & GNU only")
 endif()
 
-if(${VCPKG_TARGET_TRIPLET} MATCHES static)
+if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES android)
   set(STATIC ON)
 endif()
 
@@ -214,7 +214,11 @@ if(WIN32)
 
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
-  target_link_libraries(toybox PRIVATE KTX::astcenc-neon-static)
+  if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
+    target_link_libraries(toybox PRIVATE KTX::astcenc-neon-static)
+  elseif(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "x86")
+    target_link_libraries(toybox PRIVATE KTX::astcenc-avx2-static)
+  endif()
 elseif(UNIX)
   if(APPLE)
     if(IOS)
