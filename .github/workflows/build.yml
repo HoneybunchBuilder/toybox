@@ -9,19 +9,22 @@ on:
 
 jobs:
 
-  x64-windows:
-    runs-on: windows-latest
-
+  build:
     strategy:
+      fail-fast: false
       matrix:
         toolsets: [
-          {gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows, plat: windows, extra: ""}, 
-          {gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows-static, plat: windows, extra: ""}, 
-          {gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-dynamic, plat: mingw, extra: ""},
-          {gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-static, plat: mingw, extra: ""},
-          {gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows, plat: windows, extra: "-Ax64 -TClangCL"},
-          {gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, plat: windows, extra: "-Ax64 -TClangCL"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows, plat: windows, extra: ""}, 
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows-static, plat: windows, extra: ""}, 
+          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-dynamic, plat: mingw, extra: ""},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-static, plat: mingw, extra: ""},
+          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows, plat: windows, extra: "-Ax64 -TClangCL"},
+          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, plat: windows, extra: "-Ax64 -TClangCL"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, plat: android, extra: "-DANDROID_PLATFORM=29"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-android, plat: android, extra: "-DANDROID_PLATFORM=29"},
         ]
+
+    runs-on: ${{matrix.toolsets.host}}
 
     env:
       CMAKE_GENERATOR: ${{matrix.toolsets.gen}}
@@ -38,7 +41,7 @@ jobs:
       run: ./install_deps_${{matrix.toolsets.plat}}.bat
 
     - name: Configure CMake
-      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}
+      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}} -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/${{matrix.toolsets.plat}}.cmake
 
     - name: Build Debug
       run: cmake --build build --config Debug
