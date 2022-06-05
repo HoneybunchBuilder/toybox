@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  x64-windows-ninja-llvm:
+
+  x64-windows-ninja-llvm-dynamic:
     runs-on: windows-latest
 
     steps:
@@ -21,7 +22,7 @@ jobs:
       run: ./install_deps_windows.bat
 
     - name: Configure CMake
-      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=x64-windows
 
     - name: Build Debug
       run: cmake --build build --config Debug
@@ -30,7 +31,7 @@ jobs:
     - name: Build Release
       run: cmake --build build --config Release
 
-  x64-windows-vs2022-llvm:
+  x64-windows-ninja-llvm-static:
     runs-on: windows-latest
 
     steps:
@@ -43,7 +44,7 @@ jobs:
       run: ./install_deps_windows.bat
 
     - name: Configure CMake
-      run: cmake -B build -G "Visual Studio 17 2022" -Ax64 -TClangCL
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
     - name: Build Debug
       run: cmake --build build --config Debug
@@ -52,7 +53,51 @@ jobs:
     - name: Build Release
       run: cmake --build build --config Release
 
-  x64-mingw-ninja-gnu:
+  x64-windows-vs2022-llvm-dynamic:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+
+    - name: Install Dependencies
+      run: ./install_deps_windows.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -Ax64 -TClangCL -DVCPKG_TARGET_TRIPLET=x64-windows
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
+
+  x64-windows-vs2022-llvm-static:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+
+    - name: Install Dependencies
+      run: ./install_deps_windows.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -Ax64 -TClangCL -DVCPKG_TARGET_TRIPLET=x64-windows-static
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
+
+  x64-mingw-ninja-gnu-dynamic:
     runs-on: windows-latest
 
     steps:
@@ -65,7 +110,29 @@ jobs:
       run: ./install_deps_mingw.bat
 
     - name: Configure CMake
-      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DVCPKG_TARGET_TRIPLET=x64-mingw-dynamic
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
+
+  x64-mingw-ninja-gnu-static:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+
+    - name: Install Dependencies
+      run: ./install_deps_mingw.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DVCPKG_TARGET_TRIPLET=x64-mingw-static
 
     - name: Build Debug
       run: cmake --build build --config Debug
