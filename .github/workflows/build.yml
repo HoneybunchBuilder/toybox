@@ -1,0 +1,66 @@
+name: CMake
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  
+jobs:
+  x64-windows-ninja-llvm:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Dependencies
+      run: ./install_deps_windows.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
+      
+  x64-windows-vs2022-llvm:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: ./install_deps_windows.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -Ax64 -TClangCL
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
+
+  x64-mingw-ninja-gnu:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Dependencies
+      run: ./install_deps_mingw.bat
+
+    - name: Configure CMake
+      run: cmake -B build -G "Ninja Multi-Config" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+
+    - name: Build Debug
+      run: cmake --build build --config Debug
+    - name: Build RelWithDebInfo
+      run: cmake --build build --config RelWithDebInfo
+    - name: Build Release
+      run: cmake --build build --config Release
