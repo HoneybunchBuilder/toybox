@@ -45,7 +45,7 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
     - name: Install Dependencies
-      run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.}}
+      run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.dep}}
 
     - name: Configure CMake
       run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}
