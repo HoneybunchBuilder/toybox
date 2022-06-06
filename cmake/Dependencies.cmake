@@ -48,7 +48,7 @@ else()
 endif()
 
 set(host_packages "ktx[vulkan,tools]")
-set(packages "meshoptimizer;cgltf;imgui;ktx[vulkan];mimalloc;sdl2[vulkan];sdl2-image;volk;vulkan-memory-allocator")
+set(packages "meshoptimizer;cgltf;imgui;ktx[vulkan];mimalloc;sdl2[vulkan];sdl2-image;volk;vulkan-memory-allocator;tracy")
 
 # Determine host packages
 foreach(package ${host_packages})
