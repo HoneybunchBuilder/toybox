@@ -23,7 +23,7 @@ elseif(${target} MATCHES "android")
 endif()
 
 cmake_host_system_information(RESULT host_plat QUERY OS_PLATFORM)
-if(host_plat MATCHES "AMD64" OR host_plat MATCHES "x64")
+if(host_plat MATCHES "AMD64" OR host_plat MATCHES "x86_64")
     set(host_arch "x64")
 elseif(host_plat MATCHES "arm")
     set(host_arch "arm64")
