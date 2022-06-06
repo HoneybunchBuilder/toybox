@@ -48,7 +48,7 @@ jobs:
       run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.dep}}
 
     - name: Configure CMake
-      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}
+      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}} -DCMAKE_TOOLCHAIN_FILE=${{env.VCPKG_INSTALLATION_ROOT}}/scripts/buildsystems/vcpkg.cmake
 
     - name: Build Debug
       run: cmake --build build --config Debug
