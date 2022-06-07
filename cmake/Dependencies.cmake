@@ -52,7 +52,7 @@ set(packages "meshoptimizer;cgltf;imgui;ktx[vulkan];mimalloc;sdl2[vulkan];sdl2-i
 
 # Determine host packages
 foreach(package ${host_packages})
-    list(APPEND host_install_list "${package}:${host-triplet}")
+    list(APPEND install_list "${package}:${host-triplet}")
 endforeach()
 
 # Determine runtime packages
