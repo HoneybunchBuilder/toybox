@@ -26,6 +26,7 @@ jobs:
           {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, dep: "x64-linux dynamic", plat: linux, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
         ]
 
+    name: ${{matrix.toolsets.plat}} ${{matrix.toolsets.cc}} ${{matrix.toolsets.dep}}
     runs-on: ${{matrix.toolsets.host}}
 
     env:
