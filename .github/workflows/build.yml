@@ -52,7 +52,7 @@ jobs:
         cache-name: cache-vcpkg-deps
       with:
         path: ${{env.VCPKG_INSTALLATION_ROOT}}
-        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles(./cmake/Dependencies.cmake)}}
+        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
         restore-keys: ${{matrix.toolsets.vcpkg}}-
 
     - name: Install Dependencies
