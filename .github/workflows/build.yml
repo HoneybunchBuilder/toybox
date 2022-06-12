@@ -45,6 +45,16 @@ jobs:
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
+    - name: Cache vcpkg Dependencies
+      id: cache-vcpkg
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-vcpkg-deps
+      with:
+        path: ${{env.VCPKG_INSTALLATION_ROOT}}
+        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles(./cmake/Dependencies.cmake)}}
+        restore-keys: ${{matrix.toolsets.vcpkg}}-
+
     - name: Install Dependencies
       run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.dep}}
 
