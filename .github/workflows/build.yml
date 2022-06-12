@@ -45,13 +45,25 @@ jobs:
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
-    - name: Cache vcpkg Dependencies
+    - name: Cache vcpkg Dependencies Windows
       id: cache-vcpkg
       uses: actions/cache@v3
+      if: matrxi.toolsets.host == 'windows-2022'
       env:
         cache-name: cache-vcpkg-deps
       with:
-        path: ${{env.VCPKG_INSTALLATION_ROOT}}
+        path: C:/vcpkg
+        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
+        restore-keys: ${{matrix.toolsets.vcpkg}}-
+
+    - name: Cache vcpkg Dependencies *nix
+      id: cache-vcpkg
+      uses: actions/cache@v3
+      if: matrxi.toolsets.host != 'windows-2022'
+      env:
+        cache-name: cache-vcpkg-deps
+      with:
+        path: /usr/local/share/vcpkg
         key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
         restore-keys: ${{matrix.toolsets.vcpkg}}-
 
