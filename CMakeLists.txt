@@ -239,6 +239,11 @@ elseif(UNIX)
   endif()
 endif()
 
+# Disable clang warning
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(toybox PRIVATE -Wno-reserved-identifier)
+endif()
+
 add_dependencies(toybox shaders)
 
 if(isMultiConfig)
