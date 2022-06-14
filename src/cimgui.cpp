@@ -7,6 +7,9 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#if __has_warning("-Wreserved-identifier")
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#endif
 #endif
 
 #ifdef IMGUI_ENABLE_FREETYPE

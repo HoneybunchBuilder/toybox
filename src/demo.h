@@ -9,8 +9,7 @@
 #include "profiling.h"
 #include "scene.h"
 
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include <cimgui.h>
+#include "tbimgui.h"
 
 #ifdef __ANDROID__
 #define FRAME_LATENCY 4
