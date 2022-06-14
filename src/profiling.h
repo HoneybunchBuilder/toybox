@@ -2,12 +2,9 @@
 
 #include <stdbool.h>
 
-#ifdef __clang__
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
-#if __has_warning("-Wreserved-identifier")
-#pragma clang diagnostic ignored "-Wreserved-identifier"
-#endif
 #endif
 
 //#define TRACY_VK_C_ENABLE
