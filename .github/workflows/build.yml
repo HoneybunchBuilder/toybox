@@ -14,21 +14,21 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows, dep: "x64-windows dynamic", extra: "-DVCPKG_CRT_LINKAGE=dynamic"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows-static, dep: "x64-windows static", extra: "-DVCPKG_CRT_LINKAGE=static"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-dynamic, dep: "x64-mingw dynamic", extra: ""},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-static, dep: "x64-mingw static", extra: ""},
-          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows, dep: "x64-windows dynamic", extra: "-DVCPKG_CRT_LINKAGE=dynamic -Ax64 -TClangCL"},
-          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, dep: "x64-windows static", extra: "-DVCPKG_CRT_LINKAGE=static -Ax64 -TClangCL"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, dep: "arm64-android static", extra: "-DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/android.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-linux, dep: "x64-linux dynamic", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, dep: "x64-linux dynamic", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, dep: "arm64-android static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: x64-osx, dep: "x64-osx static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: gcc, cxx: g++, vcpkg: x64-osx, dep: "x64-osx static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-osx, dep: "arm64-osx static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-ios, dep: "arm64-ios static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, dep: "arm64-android static", extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows, extra: "-DVCPKG_CRT_LINKAGE=dynamic"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows-static, extra: "-DVCPKG_CRT_LINKAGE=static"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-dynamic, extra: ""},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-static, extra: ""},
+          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows, extra: "-DVCPKG_CRT_LINKAGE=dynamic -Ax64 -TClangCL"},
+          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, extra: "-DVCPKG_CRT_LINKAGE=static -Ax64 -TClangCL"},
+          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/android.cmake"},
+          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-linux, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
+          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: x64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: macos-12, gen: "Ninja Multi-Config", cc: gcc, cxx: g++, vcpkg: x64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-ios, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
+          {host: macos-12, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
         ]
 
     name: ${{matrix.toolsets.host}} ${{matrix.toolsets.cc}} ${{matrix.toolsets.vcpkg}}
@@ -73,7 +73,7 @@ jobs:
         restore-keys: ${{matrix.toolsets.vcpkg}}-
 
     - name: Install Dependencies
-      run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.dep}}
+      run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.vcpkg}}
 
     - name: Configure CMake
       run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}

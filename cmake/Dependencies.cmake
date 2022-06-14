@@ -1,26 +1,10 @@
 
 find_program(VCPKG vcpkg REQUIRED)
 
-set(target ${CMAKE_ARGV3})
-set(linkage ${CMAKE_ARGV4})
+set(triplet ${CMAKE_ARGV3})
 
-if(NOT target)
-    message(FATAL_ERROR "Target not specified")
-endif()
-
-# Android and iOS builds are always static
-if(target MATCHES "android" OR target MATCHES "ios")
-    set(linkage "static")
-elseif(NOT linkage)
-    message(FATAL_ERROR "Linkage not specified")
-endif()
-
-set(triplet ${target})
-if(${target} MATCHES "x64-windows" AND ${linkage} MATCHES "static")
-    set(triplet ${target}-static)
-endif()
-if(${target} MATCHES "x64-mingw")
-    set(triplet ${target}-${linkage})
+if(NOT triplet)
+    message(FATAL_ERROR "Triplet not specified")
 endif()
 
 cmake_host_system_information(RESULT host_plat QUERY OS_PLATFORM)
