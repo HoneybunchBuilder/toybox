@@ -52,12 +52,12 @@ jobs:
 
     - name: Update vcpkg Windows
       run: git pull
-        working-directory: $env:VCPKG_INSTALLATION_ROOT
+      working-directory: $env:VCPKG_INSTALLATION_ROOT
       if: runner.os == 'Windows'
 
     - name: Update vcpkg *nix
       run: git pull
-        working-directory: $VCPKG_INSTALLATION_ROOT
+      working-directory: $VCPKG_INSTALLATION_ROOT
       if: runner.os != 'Windows'
 
     - name: Cache vcpkg Dependencies Windows
