@@ -51,8 +51,7 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
     - name: Update vcpkg Windows
-      shell: cmd
-      run: cd %VCPKG_INSTALLATION_ROOT% && dir && git reset --hard && git pull
+      run: cd $env:VCPKG_INSTALLATION_ROOT; git reset --hard; git pull
       if: runner.os == 'Windows'
 
     - name: Update vcpkg *nix
