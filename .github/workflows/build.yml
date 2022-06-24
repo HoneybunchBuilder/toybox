@@ -52,11 +52,11 @@ jobs:
 
     - name: Update vcpkg Windows
       shell: cmd
-      run: cd %VCPKG_INSTALLATION_ROOT% && git pull
+      run: cd %VCPKG_INSTALLATION_ROOT% && dir && git reset --hard && git pull
       if: runner.os == 'Windows'
 
     - name: Update vcpkg *nix
-      run: cd $VCPKG_INSTALLATION_ROOT && git pull
+      run: cd $VCPKG_INSTALLATION_ROOT && git reset --hard && git pull
       if: runner.os != 'Windows'
 
     - name: Cache vcpkg Dependencies Windows
