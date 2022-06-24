@@ -50,15 +50,9 @@ jobs:
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
-    - name: Update vcpkg Windows
+    - name: Update vcpkg
       run: git pull
-      working-directory: $env:VCPKG_INSTALLATION_ROOT
-      if: runner.os == 'Windows'
-
-    - name: Update vcpkg *nix
-      run: git pull
-      working-directory: $VCPKG_INSTALLATION_ROOT
-      if: runner.os != 'Windows'
+      working-directory: ${{env.VCPKG_INSTALLATION_ROOT}}
 
     - name: Cache vcpkg Dependencies Windows
       id: cache-vcpkg-win
