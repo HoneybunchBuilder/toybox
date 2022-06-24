@@ -88,7 +88,7 @@ jobs:
       if: matrix.toolsets.host == 'ubuntu-22.04'
 
     - name: Configure CMake
-      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}
+      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}} -DPROFILE_TRACY=OFF
 
     - name: Build Debug
       run: cmake --build build --config Debug
