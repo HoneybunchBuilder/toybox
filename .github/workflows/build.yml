@@ -83,6 +83,10 @@ jobs:
     - name: Install Dependencies
       run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.vcpkg}}
 
+    - name: Install Ubuntu Deps
+      run: sudo apt install -y libncurses5
+      if: matrix.toolssets.host == 'ubuntu-22.04'
+
     - name: Configure CMake
       run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}}
 
