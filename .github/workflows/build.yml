@@ -58,16 +58,16 @@ jobs:
       uses: lukka/run-cmake@v10
       with:
         configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'Debug'
+        buildPreset: 'debug-${{matrix.toolsets.preset}}'
 
     - name: Build RelWithDebInfo
       uses: lukka/run-cmake@v10
       with:
         configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'RelWithDebInfo'
+        buildPreset: 'relwithdebinfo-${{matrix.toolsets.preset}}'
 
     - name: Build Release
       uses: lukka/run-cmake@v10
       with:
         configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'Release'
+        buildPreset: 'release-${{matrix.toolsets.preset}}'
