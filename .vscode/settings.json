@@ -84,5 +84,6 @@
         "xtr1common": "c",
         "fractal_vert.h": "c"
     },
-    "cmake.configureOnOpen": false
+    "cmake.configureOnOpen": false,
+    "cmake.useCMakePresets": "auto"
 }

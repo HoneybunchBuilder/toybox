@@ -130,9 +130,9 @@ find_program(TOKTX toktx
 
 # Compile Shaders
 file(GLOB shader_includes "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsli")
-file(GLOB shaders "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl")
+file(GLOB shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl")
 
-foreach(shader ${shaders})
+foreach(shader ${shader_files})
   get_filename_component(filename ${shader} NAME_WLE)
   set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
 
@@ -151,8 +151,8 @@ foreach(shader ${shaders})
   list(APPEND shader_headers ${out_paths})
 endforeach()
 
-file(GLOB rt_shaders "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.rt")
-foreach(shader ${rt_shaders})
+file(GLOB rt_shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.rt")
+foreach(shader ${rt_shader_files})
   get_filename_component(filename ${shader} NAME_WLE)
   get_filename_component(filename ${filename} NAME_WLE)
   set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
@@ -177,21 +177,8 @@ endforeach()
 add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
-set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/cgltf.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/cimgui.cpp"
-           "${CMAKE_CURRENT_LIST_DIR}/src/demo.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/gpuresources.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/material.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/pipelines.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/profiling.cpp"
-           "${CMAKE_CURRENT_LIST_DIR}/src/scene.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/skydome.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp"
-           "${CMAKE_CURRENT_LIST_DIR}/src/vkdbg.c")
+file(GLOB source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
+
 if(WIN32)
   if(MINGW)
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
@@ -245,6 +232,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 add_dependencies(toybox shaders)
+
+target_sources(toybox PRIVATE ${rt_shader_files} ${shader_files} ${shader_headers})
 
 if(isMultiConfig)
     get_filename_component(CMAKE_CFG_INTDIR_ABS "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>" ABSOLUTE)
@@ -354,6 +343,9 @@ foreach(scene ${scenes})
   list(APPEND packed_scenes ${packed_scene})
 endforeach()
 add_custom_target(scenes ALL DEPENDS ${packed_scenes})
+
+# Toybox needs assets cooked
+add_dependencies(toybox scenes textures)
 
 # Add assets to bundle
 if(APPLE)

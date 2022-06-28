@@ -1,0 +1,530 @@
+{
+    "version": 5,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "x64-windows-ninja-llvm",
+            "displayName": "x64 Windows Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/windows",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "x64-windows-static-ninja-llvm",
+            "displayName": "x64 Windows Static Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/windows-static",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "x64-mingw-ninja-gcc",
+            "displayName": "x64 Mingw Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/mingw",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "x64-mingw-static-ninja-gcc",
+            "displayName": "x64 Mingw Static Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/mingw-static",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "x64-windows-vs2022-llvm",
+            "displayName": "x64 Windows VS2022 LLVM",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/x64/windows-clangcl",
+            "toolset": {
+                "value": "ClangCL",
+                "strategy": "set"
+            },
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "x64-windows-static-vs2022-llvm",
+            "displayName": "x64 Windows Static VS2022 LLVM",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/x64/windows-static-clangcl",
+            "toolset": {
+                "value": "ClangCL",
+                "strategy": "set"
+            },
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "arm64-android-ninja-llvm",
+            "displayName": "arm64 Android Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/android",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-android",
+                "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+                "ANDROID_PLATFORM": "android-29",
+                "ANDROID_ABI": "arm64-v8a",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "x64-linux-ninja-llvm",
+            "displayName": "x64 Linux Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/linux-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-linux",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "x64-linux-ninja-gcc",
+            "displayName": "x64 Linux Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/linux-gcc",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-linux",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "x64-macos-ninja-llvm",
+            "displayName": "x64 macOS Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/macos-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-osx",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "x64-macos-ninja-gcc",
+            "displayName": "x64 macOS Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/x64/macos-gcc",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-osx",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "arm64-macos-ninja-llvm",
+            "displayName": "arm64 macOS Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/macos-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-osx",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "arm64-ios-ninja-llvm",
+            "displayName": "arm64 iOS Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/iOS-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-ios",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug-x64-windows-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-windows-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-windows-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-windows-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-windows-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-windows-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-windows-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-windows-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-windows-static-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-windows-static-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-windows-static-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-windows-static-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-windows-static-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-windows-static-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-windows-static-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-windows-static-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-windows-vs2022-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-windows-vs2022-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-windows-vs2022-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-windows-vs2022-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-windows-vs2022-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-windows-vs2022-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-windows-vs2022-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-windows-vs2022-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-windows-static-vs2022-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-windows-static-vs2022-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-windows-static-vs2022-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-windows-static-vs2022-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-windows-static-vs2022-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-windows-static-vs2022-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-windows-static-vs2022-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-windows-static-vs2022-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-android-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-android-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-android-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-android-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-android-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-android-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-android-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-android-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-linux-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-linux-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-linux-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-linux-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-linux-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-linux-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-linux-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-linux-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-linux-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "x64-linux-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-linux-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-linux-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-linux-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "x64-linux-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-linux-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-linux-ninja-gcc",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-macos-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-macos-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-macos-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-macos-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-macos-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-macos-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-macos-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-macos-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-macos-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "x64-macos-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-macos-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-macos-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-macos-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "x64-macos-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-macos-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-macos-ninja-gcc",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-macos-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-macos-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-macos-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-macos-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-macos-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-macos-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-macos-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-macos-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-ios-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-ios-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-ios-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-ios-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-ios-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-ios-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-ios-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-ios-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        }
+    ]
+}
