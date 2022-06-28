@@ -1,0 +1,75 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+    "name": "toybox",
+    "version": "0.1.0",
+    "builtin-baseline": "9ba75e6e174b30b97afc5c8c3170c5d25c548b32",
+    "dependencies": [
+        "cgltf",
+        "imgui",
+        {
+            "name": "ktx",
+            "features": [
+                "vulkan"
+            ]
+        },
+        "meshoptimizer",
+        "mimalloc",
+        {
+            "name": "sdl2",
+            "features": [
+                "vulkan"
+            ]
+        },
+        "sdl2-image",
+        "tracy",
+        "volk",
+        "vulkan-memory-allocator",
+        {
+            "name": "ktx",
+            "host": true,
+            "features": [
+                "vulkan",
+                "tools"
+            ]
+        }
+    ],
+    "overrides": [
+        {
+            "name": "cgltf",
+            "version": "1.11"
+        },
+        {
+            "name": "imgui",
+            "version": "1.87"
+        },
+        {
+            "name": "ktx",
+            "version": "4.1.0-rc2"
+        },
+        {
+            "name": "meshoptimizer",
+            "version": "0.16"
+        },
+        {
+            "name": "mimalloc",
+            "version": "2.0.6"
+        },
+        {
+            "name": "sdl2",
+            "version": "2.0.22"
+        },
+        {
+            "name": "sdl2-image",
+            "version": "2.0.5",
+            "port-version": 6
+        },
+        {
+            "name": "tracy",
+            "version": "0.8.1"
+        },
+        {
+            "name": "volk",
+            "version": "2019-09-26"
+        }
+    ]
+}

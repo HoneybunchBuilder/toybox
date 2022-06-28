@@ -80,9 +80,6 @@ jobs:
         key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
         restore-keys: ${{matrix.toolsets.vcpkg}}-
 
-    - name: Install Dependencies
-      run: cmake -P ./cmake/Dependencies.cmake ${{matrix.toolsets.vcpkg}}
-
     - name: Install Ubuntu Deps
       run: sudo apt install -y libncurses5
       if: matrix.toolsets.host == 'ubuntu-22.04'
