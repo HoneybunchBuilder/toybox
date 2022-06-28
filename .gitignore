@@ -6,9 +6,6 @@
 .vscode/tasks.json
 .vscode/launch.json
 
-vcpkg/buildtrees/*
-vcpkg/downloads/*
-vcpkg/installed/*
-vcpkg/packages/*
-
 .DS_Store
+
+CMakeUserPresets.json
