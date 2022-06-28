@@ -1,10 +1,12 @@
 [Bb]uild*/*
 [Ii]nstall/*
+out/*
 
 *.blend1
 
 .vscode/tasks.json
 .vscode/launch.json
+.vs/
 
 .DS_Store
 
