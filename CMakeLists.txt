@@ -2,7 +2,12 @@ cmake_minimum_required(VERSION 3.19)
 
 # Find where vcpkg is on the path
 find_program(VCPKG_DIR vcpkg REQUIRED)
-get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
+# Github actions has VCPKG_INSTALLATION_ROOT defined which we should prefer
+if(DEFINED ENV{VCPKG_INSTALLATION_ROOT})
+  set(VCPKG_DIR $ENV{VCPKG_INSTALLATION_ROOT})
+else()
+  get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
+endif()
 
 if(NOT CMAKE_TOOLCHAIN_FILE)
   set(CMAKE_TOOLCHAIN_FILE ${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake
@@ -12,6 +17,8 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+
+# TODO: Determine version from the vcpkg json manifest
 
 project(toybox
         VERSION 0.1.0
