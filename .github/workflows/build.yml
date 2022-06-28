@@ -14,30 +14,25 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows, extra: "-DVCPKG_CRT_LINKAGE=dynamic"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-windows-static, extra: "-DVCPKG_CRT_LINKAGE=static"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-dynamic, extra: ""},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-mingw-static, extra: ""},
-          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows, extra: "-DVCPKG_CRT_LINKAGE=dynamic -Ax64 -TClangCL"},
-          {host: windows-2022, gen: Visual Studio 17 2022, cc: clang-cl, cxx: clang-cl, vcpkg: x64-windows-static, extra: "-DVCPKG_CRT_LINKAGE=static -Ax64 -TClangCL"},
-          {host: windows-2022, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=C:/vcpkg/scripts/toolchains/android.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: x64-linux, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: gcc, cxx: g++, vcpkg: x64-linux, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: ubuntu-22.04, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: x64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: gcc, cxx: g++, vcpkg: x64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-osx, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: "Ninja Multi-Config", cc: clang, cxx: clang++, vcpkg: arm64-ios, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake"},
-          {host: macos-12, gen: Ninja Multi-Config, cc: clang, cxx: clang++, vcpkg: arm64-android, extra: "-DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/toolchains/android.cmake"},
+          {host: windows-2022, preset: x64-windows-ninja-llvm},
+          {host: windows-2022, preset: x64-windows-ninja-static-llvm},
+          {host: windows-2022, preset: x64-mingw-ninja-gcc},
+          {host: windows-2022, preset: x64-mingw-static-ninja-gcc},
+          {host: windows-2022, preset: x64-windows-vs2022-llvm},
+          {host: windows-2022, preset: x64-windows-static-vs2022-llvm},
+          {host: windows-2022, preset: arm64-android-ninja-llvm},
+          {host: ubuntu-22.04, preset: x64-linux-ninja-llvm},
+          {host: ubuntu-22.04, preset: x64-linux-ninja-llvm},
+          {host: ubuntu-22.04, preset: arm64-android-ninja-llvm},
+          {host: macos-12, preset: x64-macos-ninja-llvm},
+          {host: macos-12, preset: x64-macos-ninja-gcc},
+          {host: macos-12, preset: arm64-macos-ninja-llvm},
+          {host: macos-12, preset: arm64-ios-ninja-llvm},
+          {host: macos-12, preset: arm64-android-ninja-llvm},
         ]
 
-    name: ${{matrix.toolsets.host}} ${{matrix.toolsets.cc}} ${{matrix.toolsets.vcpkg}}
+    name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host}}
     runs-on: ${{matrix.toolsets.host}}
-
-    env:
-      CMAKE_GENERATOR: ${{matrix.toolsets.gen}}
-      CC: ${{matrix.toolsets.cc}}
-      CXX: ${{matrix.toolsets.cxx}}
 
     steps:
     - uses: actions/checkout@v3
@@ -50,46 +45,27 @@ jobs:
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
 
-    - name: Update vcpkg Windows
-      run: cd $env:VCPKG_INSTALLATION_ROOT; git reset --hard; git pull
-      if: runner.os == 'Windows'
-
-    - name: Update vcpkg *nix
-      run: cd $VCPKG_INSTALLATION_ROOT && git reset --hard && git pull
-      if: runner.os != 'Windows'
-
-    - name: Cache vcpkg Dependencies Windows
-      id: cache-vcpkg-win
-      uses: actions/cache@v3
-      if: matrix.toolsets.host == 'windows-2022'
-      env:
-        cache-name: cache-vcpkg-deps-win
-      with:
-        path: C:/vcpkg
-        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
-        restore-keys: ${{matrix.toolsets.vcpkg}}-
-
-    - name: Cache vcpkg Dependencies *nix
-      id: cache-vcpkg-nix
-      uses: actions/cache@v3
-      if: matrix.toolsets.host != 'windows-2022'
-      env:
-        cache-name: cache-vcpkg-deps-nix
-      with:
-        path: /usr/local/share/vcpkg
-        key: ${{matrix.toolsets.vcpkg}}-${{hashFiles('./cmake/Dependencies.cmake')}}
-        restore-keys: ${{matrix.toolsets.vcpkg}}-
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v10
 
     - name: Install Ubuntu Deps
       run: sudo apt install -y libncurses5
       if: matrix.toolsets.host == 'ubuntu-22.04'
 
-    - name: Configure CMake
-      run: cmake -B build ${{matrix.toolsets.extra}} -DVCPKG_TARGET_TRIPLET=${{matrix.toolsets.vcpkg}} -DPROFILE_TRACY=OFF
-
     - name: Build Debug
-      run: cmake --build build --config Debug
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'Debug'
+
     - name: Build RelWithDebInfo
-      run: cmake --build build --config RelWithDebInfo
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'RelWithDebInfo'
+
     - name: Build Release
-      run: cmake --build build --config Release
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'Release'
