@@ -292,6 +292,60 @@
             ]
         },
         {
+            "name": "debug-x64-mingw-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "x64-mingw-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-mingw-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-mingw-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-mingw-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "x64-mingw-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-mingw-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-mingw-ninja-gcc",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-x64-mingw-static-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "x64-mingw-static-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-mingw-static-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-mingw-static-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-mingw-static-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "x64-mingw-static-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-mingw-static-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-mingw-static-ninja-gcc",
+            "targets": [
+                "package"
+            ]
+        },
+        {
             "name": "debug-x64-windows-vs2022-llvm",
             "displayName": "Debug",
             "configurePreset": "x64-windows-vs2022-llvm",
