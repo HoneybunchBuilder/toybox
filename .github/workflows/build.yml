@@ -47,7 +47,8 @@ jobs:
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v10
-      vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
+      with:
+        vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
 
     - name: Install Ubuntu Deps
       run: sudo apt install -y libncurses5
