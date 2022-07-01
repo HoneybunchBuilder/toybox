@@ -1,17 +1,14 @@
 cmake_minimum_required(VERSION 3.19)
 
-# Find where vcpkg is on the path
-# Using a Github Action on CI that places vcpkg in the project dir
-find_program(VCPKG_DIR vcpkg
-  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg
-  REQUIRED)
+if(NOT DEFINED ENV{VCPKG_ROOT})
+  message(FATAL_ERROR "Need VCPKG_ROOT environment variable defined")
+endif()
+set(VCPKG_ROOT $ENV{VCPKG_ROOT})
 
-get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
-
-message(STATUS "Using vcpkg dir ${VCPKG_DIR}")
+message(STATUS "Using vcpkg root ${VCPKG_ROOT}")
 
 if(NOT CMAKE_TOOLCHAIN_FILE)
-  set(CMAKE_TOOLCHAIN_FILE ${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake
+  set(CMAKE_TOOLCHAIN_FILE ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
     CACHE STRING "Vcpkg toolchain file")
 endif()
 
@@ -134,7 +131,6 @@ if(platform MATCHES "windows")
   set(VULKAN_BIN_PATH "Bin")
 endif()
 find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH} NO_DEFAULT_PATH REQUIRED)
-message(STATUS "Looking for toktx tool in \"${CMAKE_CURRENT_BUILD_DIR}/vcpkg_installed/${host_triple}/tools/ktx\"")
 find_program(TOKTX toktx 
   PATHS ${CMAKE_CURRENT_BUILD_DIR}/vcpkg_installed/${host_triple}/tools/ktx
   REQUIRED)
