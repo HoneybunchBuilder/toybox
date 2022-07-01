@@ -43,6 +43,8 @@ set(config $<CONFIG>)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TargetArch.cmake)
 target_architecture(arch)
 
+message(STATUS "arch: ${arch} vs cmake arch: ${CMAKE_C_COMPILER_ARCHITECTURE_ID}")
+
 # Platform detection
 if(WIN32)
   set(platform "windows")
@@ -131,9 +133,9 @@ if(platform MATCHES "windows")
   set(VULKAN_BIN_PATH "Bin")
 endif()
 find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH} NO_DEFAULT_PATH REQUIRED)
-message(STATUS "Looking for toktx tool in \"${VCPKG_DIR}/installed/${host_triple}/tools/ktx\"")
+message(STATUS "Looking for toktx tool in \"${CMAKE_CURRENT_BUILD_DIR}/vcpkg_installed/${host_triple}/tools/ktx\"")
 find_program(TOKTX toktx 
-  PATHS ${VCPKG_DIR}/installed/${host_triple}/tools/ktx
+  PATHS ${CMAKE_CURRENT_BUILD_DIR}/vcpkg_installed/${host_triple}/tools/ktx
   REQUIRED)
 
 # Compile Shaders
