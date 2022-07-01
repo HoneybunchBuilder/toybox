@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.19)
 
 # Find where vcpkg is on the path
-find_program(VCPKG_DIR vcpkg REQUIRED)
-# Github actions has VCPKG_INSTALLATION_ROOT defined which we should prefer
-if(DEFINED ENV{VCPKG_INSTALLATION_ROOT})
-  set(VCPKG_DIR $ENV{VCPKG_INSTALLATION_ROOT})
-else()
-  get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
-endif()
+# Using a Github Action on CI that places vcpkg in the project dir
+find_program(VCPKG_DIR vcpkg
+  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg
+  REQUIRED)
+
+get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
 
 if(NOT CMAKE_TOOLCHAIN_FILE)
   set(CMAKE_TOOLCHAIN_FILE ${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake
