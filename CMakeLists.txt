@@ -132,7 +132,7 @@ if(platform MATCHES "windows")
 endif()
 find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH} NO_DEFAULT_PATH REQUIRED)
 find_program(TOKTX toktx 
-  PATHS ${CMAKE_CURRENT_BUILD_DIR}/vcpkg_installed/${host_triple}/tools/ktx
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
   REQUIRED)
 
 # Compile Shaders
