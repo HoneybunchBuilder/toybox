@@ -8,6 +8,8 @@ find_program(VCPKG_DIR vcpkg
 
 get_filename_component(VCPKG_DIR ${VCPKG_DIR} DIRECTORY)
 
+message(STATUS "Using vcpkg dir ${VCPKG_DIR}")
+
 if(NOT CMAKE_TOOLCHAIN_FILE)
   set(CMAKE_TOOLCHAIN_FILE ${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake
     CACHE STRING "Vcpkg toolchain file")
