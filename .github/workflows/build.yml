@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: windows-2022, preset: x64-windows-ninja-llvm},
-          {host: windows-2022, preset: x64-windows-static-ninja-llvm},
+          #{host: windows-2022, preset: x64-windows-ninja-llvm},
+          #{host: windows-2022, preset: x64-windows-static-ninja-llvm},
           {host: windows-2022, preset: x64-mingw-ninja-gcc},
           {host: windows-2022, preset: x64-mingw-static-ninja-gcc},
           {host: windows-2022, preset: x64-windows-vs2022-llvm},
