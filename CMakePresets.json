@@ -229,6 +229,7 @@
             "cacheVariables": {
                 "VCPKG_TARGET_TRIPLET": "arm64-ios",
                 "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_SYSTEM_NAME": "iOS",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
