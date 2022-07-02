@@ -41,8 +41,6 @@ set(config $<CONFIG>)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TargetArch.cmake)
 target_architecture(arch)
 
-message(STATUS "arch: ${arch} vs cmake arch: ${CMAKE_C_COMPILER_ARCHITECTURE_ID}")
-
 # Platform detection
 if(WIN32)
   set(platform "windows")
