@@ -168,6 +168,40 @@
             }
         },
         {
+            "name": "arm64-linux-ninja-llvm",
+            "displayName": "arm64 Linux Ninja LLVM",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/linux-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-linux",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "arm64-linux-ninja-gcc",
+            "displayName": "arm64 Linux Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/linux-gcc",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-linux",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
             "name": "x64-macos-ninja-llvm",
             "displayName": "x64 macOS Ninja LLVM",
             "generator": "Ninja Multi-Config",
@@ -481,6 +515,60 @@
             "displayName": "Package",
             "configuration": "Release",
             "configurePreset": "x64-linux-ninja-gcc",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-linux-ninja-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-linux-ninja-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-linux-ninja-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-linux-ninja-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-linux-ninja-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-linux-ninja-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-linux-ninja-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-linux-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-linux-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "arm64-linux-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-linux-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-linux-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-linux-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "arm64-linux-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-linux-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-linux-ninja-gcc",
             "targets": [
                 "package"
             ]
