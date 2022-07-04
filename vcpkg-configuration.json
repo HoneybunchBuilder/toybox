@@ -11,7 +11,8 @@
             "baseline": "8eb76645c009c2a2e778e03bcbfb9b5e1be3aa40",
             "packages": [
                 "mimalloc",
-                "tracy"
+                "tracy",
+                "volk"
             ]
         }
     ]
