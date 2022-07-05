@@ -130,7 +130,9 @@ set(VULKAN_BIN_PATH "bin")
 if(platform MATCHES "windows")
   set(VULKAN_BIN_PATH "Bin")
 endif()
-find_program(DXC dxc PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH} NO_DEFAULT_PATH REQUIRED)
+find_program(DXC dxc 
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/dxc
+  NO_DEFAULT_PATH REQUIRED)
 find_program(TOKTX toktx 
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
   REQUIRED)
