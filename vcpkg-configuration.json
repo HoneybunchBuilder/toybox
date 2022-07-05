@@ -12,8 +12,7 @@
             "packages": [
                 "mimalloc",
                 "tracy",
-                "volk",
-                "dxc"
+                "volk"
             ]
         }
     ]

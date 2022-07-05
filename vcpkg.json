@@ -31,20 +31,12 @@
                 "vulkan",
                 "tools"
             ]
-        },
-        {
-            "name": "dxc",
-            "host": true
         }
     ],
     "overrides": [
         {
             "name": "cgltf",
             "version": "1.11"
-        },
-        {
-            "name": "dxc",
-            "version": "1.6.2112"
         },
         {
             "name": "imgui",
