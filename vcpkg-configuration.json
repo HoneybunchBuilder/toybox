@@ -8,7 +8,7 @@
         {
             "kind": "git",
             "repository": "https://github.com/Honeybunch/vcpkg",
-            "baseline": "adf999fd5f0e32c2871b09abc6b516600f830685",
+            "baseline": "57da30f4937f8649fadf2166e70db194cb75ecdb",
             "packages": [
                 "mimalloc",
                 "tracy",
