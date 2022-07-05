@@ -8,11 +8,12 @@
         {
             "kind": "git",
             "repository": "https://github.com/Honeybunch/vcpkg",
-            "baseline": "ae10353d592b5da0d472bcd7280c34d4a1893b32",
+            "baseline": "adf999fd5f0e32c2871b09abc6b516600f830685",
             "packages": [
                 "mimalloc",
                 "tracy",
-                "volk"
+                "volk",
+                "vulkan-headers"
             ]
         }
     ]
