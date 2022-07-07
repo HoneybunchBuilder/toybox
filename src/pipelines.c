@@ -46,8 +46,8 @@
 #include <stdlib.h>
 
 #include "tbsdl.h"
+#include "tbvk.h"
 #include "vkdbg.h"
-#include <volk.h>
 
 uint32_t create_fractal_pipeline(VkDevice device,
                                  const VkAllocationCallbacks *vk_alloc,

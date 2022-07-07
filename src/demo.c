@@ -4,16 +4,14 @@
 #include <float.h>
 #include <stddef.h>
 
-#include <volk.h>
-
-#include "vk_mem_alloc.h"
-
 #include "cpuresources.h"
 #include "pipelines.h"
 #include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"
 #include "tbsdl.h"
+#include "tbvk.h"
+#include "tbvma.h"
 #include "vkdbg.h"
 
 #ifdef __ANDROID__
@@ -53,6 +51,52 @@ static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
   (void)size;
   (void)pUserData;
   TracyCFreeN((void *)memory, "VMA")
+}
+
+static bool device_supports_ext(const VkExtensionProperties *props,
+                                uint32_t prop_count, const char *ext_name) {
+  for (uint32_t i = 0; i < prop_count; ++i) {
+    const VkExtensionProperties *prop = &props[i];
+    if (SDL_strcmp(prop->extensionName, ext_name) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static void required_device_ext(const char **out_ext_names,
+                                uint32_t *out_ext_count,
+                                const VkExtensionProperties *props,
+                                uint32_t prop_count, const char *ext_name) {
+  if (device_supports_ext(props, prop_count, ext_name)) {
+    assert((*out_ext_count + 1) < MAX_EXT_COUNT);
+    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading required extension: %s",
+                ext_name);
+    out_ext_names[(*out_ext_count)++] = ext_name;
+    return;
+  }
+
+  SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Missing required extension: %s",
+               ext_name);
+  SDL_TriggerBreakpoint();
+}
+
+static bool optional_device_ext(const char **out_ext_names,
+                                uint32_t *out_ext_count,
+                                const VkExtensionProperties *props,
+                                uint32_t prop_count, const char *ext_name) {
+  if (device_supports_ext(props, prop_count, ext_name)) {
+    assert((*out_ext_count + 1) < MAX_EXT_COUNT);
+    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading optional extension: %s",
+                ext_name);
+    out_ext_names[(*out_ext_count)++] = ext_name;
+    return true;
+  }
+
+  SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "Optional extension not supported: %s",
+              ext_name);
+  return false;
 }
 
 static VkDevice create_device(VkPhysicalDevice gpu,
@@ -1010,59 +1054,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   uint32_t device_ext_count = 0;
   const char *device_ext_names[MAX_EXT_COUNT] = {0};
 
-  // Need a swapchain
-  {
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-  }
-
-#ifdef TRACY_ENABLE
-#if !defined(__ANDROID__) && !defined(__APPLE__)
-  // Enable calibrated timestamps
-  {
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
-  }
-#endif
-#endif
-
-  // TODO: Check for Raytracing Support
-  /*
-  {
-    // Required for Spirv 1.4
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME;
-
-    // Required for VK_KHR_ray_tracing_pipeline
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] = VK_KHR_SPIRV_1_4_EXTENSION_NAME;
-
-    // Required for VK_KHR_acceleration_structure
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME;
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME;
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
-
-    // Required for raytracing
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME;
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] =
-        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
-  }
-  */
-
-  // Check for portability layer and enable that extension
-  bool portability = false;
-#if !defined(__ANDROID__) // Don't bother with portability on Android
+  // Check for and enable device extensions
+  DemoExtensionSupport ext_support = {0};
   {
 #define MAX_PROPS 256
     VkExtensionProperties props[MAX_PROPS];
@@ -1076,21 +1069,63 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, props);
     assert(err == VK_SUCCESS);
 
-    for (uint32_t i = 0; i < prop_count; ++i) {
-      VkExtensionProperties *prop = &props[i];
-      if (SDL_strcmp(prop->extensionName, "VK_KHR_portability_subset") == 0) {
-        portability = true;
-        break;
-      }
-    }
-
-#undef MAX_PROPS
-  }
+    // Only need portability on macos / ios
+#if (defined(VK_USE_PLATFORM_MACOS_MVK) ||                                     \
+     defined(VK_USE_PLATFORM_IOS_MVK)) &&                                      \
+    (VK_HEADER_VERSION >= 216)
+    ext_support.portability = optional_device_ext(
+        &device_ext_names, &device_ext_count, props, prop_count,
+        VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
 
-  if (portability) {
-    assert(device_ext_count + 1 < MAX_EXT_COUNT);
-    device_ext_names[device_ext_count++] = "VK_KHR_portability_subset";
+    // Need a swapchain
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+// Raytracing is optional
+#if defined(VK_KHR_ray_tracing_pipeline)
+    if (optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                            props, prop_count,
+                            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)) {
+      ext_support.raytracing = true;
+
+      // Required for Spirv 1.4
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+
+      // Required for VK_KHR_ray_tracing_pipeline
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+
+      // Required for VK_KHR_acceleration_structure
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+
+      // Required for raytracing
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+    }
+#endif
+
+#ifdef TRACY_ENABLE
+    // Enable calibrated timestamps if we can when profiling with tracy
+    {
+      ext_support.calibrated_timestamps = optional_device_ext(
+          (const char **)&device_ext_names, &device_ext_count, props,
+          prop_count, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+    }
+#endif
+
+#undef MAX_PROPS
   }
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
