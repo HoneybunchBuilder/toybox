@@ -124,15 +124,17 @@ endif()
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
-# If in a windows development env we don't want to use the default DXC
-# as it does not ship with SPIRV support
 set(VULKAN_BIN_PATH "bin")
 if(platform MATCHES "windows")
   set(VULKAN_BIN_PATH "Bin")
 endif()
+# Prefer whatever dxc is in the vulkan SDK
+# If this picks up a windows kit dxc it may not have spirv support
+# but on linux a dxc on the default path will probably have spirv codegen 
+# so *shrug*
 find_program(DXC dxc
   PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}
-  NO_DEFAULT_PATH REQUIRED)
+  REQUIRED)
 find_program(TOKTX toktx
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
   REQUIRED)

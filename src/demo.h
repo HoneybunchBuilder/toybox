@@ -41,6 +41,12 @@ typedef struct DynPoolState {
 
 #define CONST_BUFFER_BLOCK_SIZE 8
 
+typedef struct DemoExtensionSupport {
+  bool portability;
+  bool raytracing;
+  bool calibrated_timestamps;
+} DemoExtensionSupport;
+
 typedef struct Demo {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -63,6 +69,8 @@ typedef struct Demo {
   uint32_t graphics_queue_family_index;
   uint32_t present_queue_family_index;
   bool separate_present_queue;
+
+  DemoExtensionSupport ext_support;
 
   VkDevice device;
   VkQueue present_queue;

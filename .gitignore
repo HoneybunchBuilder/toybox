@@ -4,8 +4,7 @@ out/*
 
 *.blend1
 
-.vscode/tasks.json
-.vscode/launch.json
+.vscode/
 .vs/
 
 .DS_Store

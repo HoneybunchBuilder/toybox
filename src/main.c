@@ -1,17 +1,12 @@
 #include <assert.h>
-
-#include <mimalloc.h>
-
 #include <stdbool.h>
 #include <stdint.h>
-#include <volk.h>
 
-#include "vk_mem_alloc.h"
+#include <mimalloc.h>
 
 #include "allocator.h"
 #include "camera.h"
 #include "config.h"
-
 #include "demo.h"
 #include "pi.h"
 #include "profiling.h"
@@ -19,6 +14,8 @@
 #include "shadercommon.h"
 #include "simd.h"
 #include "tbsdl.h"
+#include "tbvk.h"
+#include "tbvma.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -269,9 +266,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    // Android only supports Vulkan 1.1 which is older than the portability
-    // subsystem API
-#ifndef __ANDROID__
+    // Only use this portability bit when necessary. Some older system
+    // header versions of vulkan may not support it.
+#if defined(VK_USE_PLATFORM_MACOS_MVK) && (VK_HEADER_VERSION >= 216)
     create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
     create_info.pApplicationInfo = &app_info;
