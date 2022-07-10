@@ -21,7 +21,7 @@ jobs:
           {host: [self-hosted, Windows, X64], preset: x64-windows-vs2022-llvm, self-hosted: yes},
           {host: [self-hosted, Windows, X64], preset: x64-windows-static-vs2022-llvm, self-hosted: yes},
           {host: [self-hosted, Windows, X64], preset: arm64-android-ninja-llvm, self-hosted: yes},
-          {host: [self-hosted, Winux, X64], preset: x64-linux-ninja-llvm, self-hosted: yes},
+          {host: [self-hosted, Linux, X64], preset: x64-linux-ninja-llvm, self-hosted: yes},
           {host: [self-hosted, Linux, X64], preset: x64-linux-ninja-llvm, self-hosted: yes},
           {host: [self-hosted, Linux, X64], preset: arm64-android-ninja-llvm, self-hosted: yes},
           {host: macos-12, preset: x64-macos-ninja-llvm, self-hosted: no},
@@ -41,11 +41,11 @@ jobs:
 
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
-      if: ${{matrix.toolsets.self-hosted}} == 'no'
+      if: matrix.toolsets.self-hosted != 'yes'
 
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
-      if: ${{matrix.toolsets.self-hosted}} == 'no'
+      if: matrix.toolsets.self-hosted != 'yes'
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v10
