@@ -222,6 +222,24 @@
             }
         },
         {
+            "name": "x64-macos-xcode-llvm",
+            "displayName": "x64 macOS Xcode LLVM",
+            "generator": "Xcode",
+            "binaryDir": "${sourceDir}/build/x64/macos-xcode-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-osx",
+                "CMAKE_OSX_ARCHITECTURES": "x86_64",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "x64-macos-ninja-gcc",
             "displayName": "x64 macOS Ninja GCC",
             "generator": "Ninja Multi-Config",
@@ -262,6 +280,25 @@
             "displayName": "arm64 iOS Ninja LLVM",
             "generator": "Ninja Multi-Config",
             "binaryDir": "${sourceDir}/build/arm64/iOS-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-ios",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "arm64-ios-xcode-llvm",
+            "displayName": "arm64 iOS Xcode LLVM",
+            "generator": "Xcode",
+            "binaryDir": "${sourceDir}/build/arm64/iOS-xcode-llvm",
             "cacheVariables": {
                 "VCPKG_TARGET_TRIPLET": "arm64-ios",
                 "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -630,6 +667,33 @@
             ]
         },
         {
+            "name": "debug-x64-macos-xcode-llvm",
+            "displayName": "Debug",
+            "configurePreset": "x64-macos-xcode-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-x64-macos-xcode-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "x64-macos-xcode-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-x64-macos-xcode-llvm",
+            "displayName": "Release",
+            "configurePreset": "x64-macos-xcode-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-x64-macos-xcode-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "x64-macos-xcode-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
             "name": "debug-arm64-macos-ninja-llvm",
             "displayName": "Debug",
             "configurePreset": "arm64-macos-ninja-llvm",
@@ -679,6 +743,33 @@
             "displayName": "Package",
             "configuration": "Release",
             "configurePreset": "arm64-ios-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-ios-xcode-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-ios-xcode-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-ios-xcode-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-ios-xcode-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-ios-xcode-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-ios-xcode-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-ios-xcode-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-ios-xcode-llvm",
             "targets": [
                 "package"
             ]
