@@ -51,7 +51,6 @@ jobs:
       uses: lukka/run-vcpkg@v10
       with:
         vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
-      if: matrix.toolsets.self-hosted != 'yes'
 
     - name: Build Debug
       uses: lukka/run-cmake@v10
@@ -59,11 +58,11 @@ jobs:
         configurePreset: '${{matrix.toolsets.preset}}'
         buildPreset: 'debug-${{matrix.toolsets.preset}}'
 
-    - name: Build RelWithDebInfo
-      uses: lukka/run-cmake@v10
-      with:
-        configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'relwithdebinfo-${{matrix.toolsets.preset}}'
+    #- name: Build RelWithDebInfo
+    #  uses: lukka/run-cmake@v10
+    #  with:
+    #    configurePreset: '${{matrix.toolsets.preset}}'
+    #    buildPreset: 'relwithdebinfo-${{matrix.toolsets.preset}}'
 
     - name: Build Release
       uses: lukka/run-cmake@v10
