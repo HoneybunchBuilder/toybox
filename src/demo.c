@@ -2404,6 +2404,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->vk_alloc = vk_alloc;
   d->instance = instance;
   d->gpu = gpu;
+  d->ext_support = ext_support;
   d->vma_alloc = vma_alloc;
   d->gpu_props = gpu_props;
   d->gpu_mem_props = gpu_mem_props;
