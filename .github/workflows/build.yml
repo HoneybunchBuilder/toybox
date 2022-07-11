@@ -25,11 +25,11 @@ jobs:
           {host: [Linux, X64, self-hosted], preset: x64-linux-ninja-gcc, self-hosted: yes},
           {host: [Linux, X64, self-hosted], preset: arm64-android-ninja-llvm, self-hosted: yes},
           {host: [macos-12], preset: x64-macos-ninja-llvm, self-hosted: no},
-          {host: [macos-12], preset: x64-macos-xcode-llvm, self-hosted: no},
+          #{host: [macos-12], preset: x64-macos-xcode-llvm, self-hosted: no},
           {host: [macos-12], preset: x64-macos-ninja-gcc, self-hosted: no},
           {host: [macos-12], preset: arm64-macos-ninja-llvm, self-hosted: no},
           {host: [macos-12], preset: arm64-ios-ninja-llvm, self-hosted: no},
-          {host: [macos-12], preset: arm64-ios-xcode-llvm, self-hosted: no},
+          #{host: [macos-12], preset: arm64-ios-xcode-llvm, self-hosted: no},
           {host: [macos-12], preset: arm64-android-ninja-llvm, self-hosted: no},
         ]
 
