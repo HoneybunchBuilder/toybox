@@ -308,7 +308,7 @@ else()
 endif()
 
 # Compress Textures
-file(GLOB_RECURSE textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
+file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
 
 if(platform STREQUAL "android")
   set(resize "1024x1024")
@@ -317,7 +317,7 @@ else()
 endif()
 
 set(UASTC_LEVEL $<$<CONFIG:Debug>:0>$<$<NOT:$<CONFIG:Debug>>:3>)
-foreach(texture ${textures})
+foreach(texture ${source_textures})
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
   get_filename_component(relpath ${relpath} DIRECTORY)
   get_filename_component(filename ${texture} NAME_WE)
@@ -336,8 +336,8 @@ endforeach()
 add_custom_target(textures ALL DEPENDS ${ktx_textures})
 
 # TODO: Cook scenes
-file(GLOB_RECURSE scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
-foreach(scene ${scenes})
+file(GLOB_RECURSE source_scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
+foreach(scene ${source_scenes})
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${scene})
   get_filename_component(relpath ${relpath} DIRECTORY)
   get_filename_component(filename ${scene} NAME_WE)
