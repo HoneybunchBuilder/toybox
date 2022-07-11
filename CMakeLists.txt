@@ -359,9 +359,10 @@ add_custom_target(scenes ALL DEPENDS ${packed_scenes})
 add_dependencies(toybox scenes textures)
 
 # Add assets to bundle
+#[[ TODO: Figure out how to get this to work with xcode
+          It currently fails because ${scene} resolves to a path with a generator expression
 if(APPLE)
   foreach(scene ${packed_scenes})
-    message(${scene})
     set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
     target_sources(toybox PRIVATE ${scene})
   endforeach()
@@ -370,6 +371,7 @@ if(APPLE)
     target_sources(toybox PRIVATE ${texture})
   endforeach()
 endif()
+#]]
 
 # Install cooked assets
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
