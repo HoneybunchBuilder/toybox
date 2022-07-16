@@ -1184,12 +1184,6 @@ uint32_t collect_material_textures(uint32_t tex_count,
           mat_tex_refs[0] = tex_idx_start + i;
           tex_ref_count++;
         }
-      } else {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION, "%s",
-            "Material has Metallic Roughness but no base color texture "
-            "was provided");
-        SDL_assert(false);
       }
       if (material->pbr_metallic_roughness.metallic_roughness_texture.texture !=
           NULL) {
@@ -1198,12 +1192,6 @@ uint32_t collect_material_textures(uint32_t tex_count,
           mat_tex_refs[2] = tex_idx_start + i;
           tex_ref_count++;
         }
-      } else {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION, "%s",
-            "Material has Metallic Roughness but no metallic roughness "
-            "texture was provided");
-        SDL_assert(false);
       }
     }
     if (material->has_pbr_specular_glossiness) {
@@ -1212,11 +1200,6 @@ uint32_t collect_material_textures(uint32_t tex_count,
           mat_tex_refs[0] = tex_idx_start + i;
           tex_ref_count++;
         }
-      } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
-                     "Material has Specular Glossiness but no diffuse texture "
-                     "was provided");
-        SDL_assert(false);
       }
       if (material->pbr_specular_glossiness.specular_glossiness_texture
               .texture != NULL) {
@@ -1225,11 +1208,6 @@ uint32_t collect_material_textures(uint32_t tex_count,
           mat_tex_refs[tex_idx++] = tex_idx_start + i;
           tex_ref_count++;
         }
-      } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s",
-                     "Material has Specular Glossiness but no specular "
-                     "glossiness texture was provided");
-        SDL_assert(false);
       }
     }
     if (material->has_clearcoat) {
