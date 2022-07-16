@@ -13,7 +13,9 @@
 #pragma clang diagnostic ignored "-Wdocumentation-unknown-command"
 #pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #pragma clang diagnostic ignored "-Wc++98-compat"
+#if __has_warning("-Wsuggest-override")
 #pragma clang diagnostic ignored "-Wsuggest-override"
+#endif
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #pragma clang diagnostic ignored "-Wdocumentation"
 #pragma clang diagnostic ignored "-Wcast-align"
@@ -21,7 +23,9 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wswitch-enum"
 #pragma clang diagnostic ignored "-Wundef"
+#if __has_warning("-Wsuggest-destructor-override")
 #pragma clang diagnostic ignored "-Wsuggest-destructor-override"
+#endif
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wimplicit-fallthrough"
