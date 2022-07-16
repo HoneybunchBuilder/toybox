@@ -274,7 +274,9 @@ execute_process(COMMAND git log -1 --format=%h
 set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
 configure_file(src/config.h.in ${config_include_dir}/config.h @ONLY)
 
-target_include_directories(toybox PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
+target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
+# Mingw generates warnings from generated shader headers. Include as a system directory to ignore
+target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PRIVATE "-DHB_CONFIG=\"$<CONFIG>\"")
 
 if(STATIC)
