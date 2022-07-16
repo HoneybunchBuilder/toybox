@@ -1,1 +1,2 @@
 IDI_ICON1 ICON DISCARDABLE "toybox.ico"
+1 RT_MANIFEST "toybox.exe.manifest"
