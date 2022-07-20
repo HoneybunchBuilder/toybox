@@ -588,6 +588,162 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           }
         }
 
+        // Device Details
+        if (igTreeNode_StrStr("DeviceDetails", "Device Details")) {
+          {
+            const uint32_t major = VK_API_VERSION_MAJOR(d.gpu_props.apiVersion);
+            const uint32_t minor = VK_API_VERSION_MINOR(d.gpu_props.apiVersion);
+            const uint32_t patch = VK_API_VERSION_PATCH(d.gpu_props.apiVersion);
+            const uint32_t variant =
+                VK_API_VERSION_VARIANT(d.gpu_props.apiVersion);
+
+            igText("API Version:\t   %" SDL_PRIu32 ".%" SDL_PRIu32
+                   ".%" SDL_PRIu32 ".%" SDL_PRIu32,
+                   major, minor, patch, variant);
+          }
+          igText("Driver Version:\t%" SDL_PRIx32, d.gpu_props.driverVersion);
+
+          // According to
+          // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+          // The low 16 bits of the vendor id is a pcie vendor id.
+          // If the vendor id is outside this range, it's a KHR specified
+          // vendor id found in VkVendorId;
+          if (d.gpu_props.vendorID <= 0x0000FFFF) {
+            const uint32_t pcie_vendor_id = d.gpu_props.vendorID & 0x0000FFFF;
+            igText("Vendor ID:\t\t PCIe(%" SDL_PRIx32 ")", pcie_vendor_id);
+          } else {
+            switch (d.gpu_props.vendorID) {
+            case VK_VENDOR_ID_VIV:
+              igText("Vendor ID:\t\t %s", "VIV");
+              break;
+            case VK_VENDOR_ID_VSI:
+              igText("Vendor ID:\t\t %s", "VSI");
+              break;
+            case VK_VENDOR_ID_KAZAN:
+              igText("Vendor ID:\t\t %s", "Kazan");
+              break;
+            case VK_VENDOR_ID_CODEPLAY:
+              igText("Vendor ID:\t\t %s", "Codeplay");
+              break;
+            case VK_VENDOR_ID_MESA:
+              igText("Vendor ID:\t\t %s", "Mesa");
+              break;
+            case VK_VENDOR_ID_POCL:
+              igText("Vendor ID:\t\t %s", "POCL");
+              break;
+            default:
+              igText("Vendor ID:\t\t %s", "Unknown");
+              break;
+            }
+          }
+
+          igText("Device ID:\t\t %" SDL_PRIx32, d.gpu_props.deviceID);
+
+          switch (d.gpu_props.deviceType) {
+          case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+            igText("Device Type:\t   %s", "Other");
+            break;
+          case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            igText("Device Type:\t   %s", "Integrated GPU");
+            break;
+          case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+            igText("Device Type:\t   %s", "Discrete GPU");
+            break;
+          case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            igText("Device Type:\t   %s", "Virtual GPU");
+            break;
+          case VK_PHYSICAL_DEVICE_TYPE_CPU:
+            igText("Device Type:\t   %s", "CPU");
+            break;
+          default:
+            igText("Device Type:\t   %s", "Unknown");
+            break;
+          }
+          igText("Device Name:\t   %s", d.gpu_props.deviceName);
+
+          igTreePop();
+        }
+
+        // Driver Details
+        if (igTreeNode_StrStr("DriverDetails", "Driver Details")) {
+          switch (d.driver_props.driverID) {
+          case VK_DRIVER_ID_AMD_PROPRIETARY:
+            igText("Driver ID:\t  %s", "AMD Proprietary");
+            break;
+          case VK_DRIVER_ID_AMD_OPEN_SOURCE:
+            igText("Driver ID:\t  %s", "AMD Open Source");
+            break;
+          case VK_DRIVER_ID_MESA_RADV:
+            igText("Driver ID:\t  %s", "MESA RADV");
+            break;
+          case VK_DRIVER_ID_NVIDIA_PROPRIETARY:
+            igText("Driver ID:\t  %s", "NVIDIA Proprietary");
+            break;
+          case VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS:
+            igText("Driver ID:\t  %s", "Intel Proprietary Windows");
+            break;
+          case VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA:
+            igText("Driver ID:\t  %s", "Intel Open Source Mesa");
+            break;
+          case VK_DRIVER_ID_IMAGINATION_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Imagination Proprietary");
+            break;
+          case VK_DRIVER_ID_QUALCOMM_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Qualcomm Proprietary");
+            break;
+          case VK_DRIVER_ID_ARM_PROPRIETARY:
+            igText("Driver ID:\t  %s", "ARM Proprietary");
+            break;
+          case VK_DRIVER_ID_GOOGLE_SWIFTSHADER:
+            igText("Driver ID:\t  %s", "Google Swiftshader");
+            break;
+          case VK_DRIVER_ID_GGP_PROPRIETARY:
+            igText("Driver ID:\t  %s", "GGP Proprietary");
+            break;
+          case VK_DRIVER_ID_BROADCOM_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Broadcom Proprietary");
+            break;
+          case VK_DRIVER_ID_MESA_LLVMPIPE:
+            igText("Driver ID:\t  %s", "MESA LLVMPipe");
+            break;
+          case VK_DRIVER_ID_MOLTENVK:
+            igText("Driver ID:\t  %s", "MoltenVK Proprietary");
+            break;
+          case VK_DRIVER_ID_COREAVI_PROPRIETARY:
+            igText("Driver ID:\t  %s", "CoreAVI Proprietary");
+            break;
+          case VK_DRIVER_ID_JUICE_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Juice Proprietary");
+            break;
+          case VK_DRIVER_ID_VERISILICON_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Verisilicon Proprietary");
+            break;
+          case VK_DRIVER_ID_MESA_TURNIP:
+            igText("Driver ID:\t  %s", "MESA Turnip");
+            break;
+          case VK_DRIVER_ID_MESA_V3DV:
+            igText("Driver ID:\t  %s", "MESA V3DV");
+            break;
+          case VK_DRIVER_ID_MESA_PANVK:
+            igText("Driver ID:\t  %s", "MESA PanVK");
+            break;
+          case VK_DRIVER_ID_SAMSUNG_PROPRIETARY:
+            igText("Driver ID:\t  %s", "Samsung Proprietary");
+            break;
+          case VK_DRIVER_ID_MESA_VENUS:
+            igText("Driver ID:\t  %s", "MESA Venus");
+            break;
+          default:
+            igText("Driver ID:\t  %s", "Unknown");
+            break;
+          }
+
+          igText("Driver Name:\t%s", d.driver_props.driverName);
+          igText("Driver Info:\t%s", d.driver_props.driverInfo);
+
+          igTreePop();
+        }
+
         igEnd();
       }
 
