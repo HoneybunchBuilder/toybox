@@ -5,18 +5,19 @@
 
 #include <assert.h>
 #ifdef __APPLE__
-  #include <malloc/malloc.h>
+#include <malloc/malloc.h>
 #else
-  #include <malloc.h>
+#include <malloc.h>
 #endif
 #include <stdbool.h>
 #include <stdlib.h>
 
 #include "tbgltf.h"
 
-static cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
-                           const struct cgltf_file_options *file_options,
-                           const char *path, cgltf_size *size, void **data) {
+static cgltf_result
+sdl_read_gltf(const struct cgltf_memory_options *memory_options,
+              const struct cgltf_file_options *file_options, const char *path,
+              cgltf_size *size, void **data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
   cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
   (void)path;
@@ -38,8 +39,8 @@ static cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_opti
 }
 
 static void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
-                      const struct cgltf_file_options *file_options,
-                      void *data) {
+                             const struct cgltf_file_options *file_options,
+                             void *data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
 
   memory_options->free(memory_options->user_data, data);
@@ -127,7 +128,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
     cgltf_size new_tex_count = old_tex_count + data->textures_count;
 
     s->textures =
-        hb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, GPUTexture);
+        tb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, GPUTexture);
     if (s->textures == NULL) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to allocate textures for scene");
@@ -177,7 +178,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   // Append materials to scene
   {
     s->materials =
-        hb_realloc_nm_tp(std_alloc, s->materials, new_mat_count, GPUMaterial);
+        tb_realloc_nm_tp(std_alloc, s->materials, new_mat_count, GPUMaterial);
     if (s->materials == NULL) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to allocate textures for scene");
@@ -193,9 +194,9 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
       uint32_t mat_tex_refs[MAX_MATERIAL_TEXTURES] = {0};
       memset(mat_tex_refs, (int32_t)0xFFFFFFFF,
              sizeof(uint32_t) * MAX_MATERIAL_TEXTURES);
-      uint32_t mat_tex_count =
-          collect_material_textures((uint32_t)data->textures_count, data->textures, mat,
-                                    (uint32_t)old_tex_count, mat_tex_refs);
+      uint32_t mat_tex_count = collect_material_textures(
+          (uint32_t)data->textures_count, data->textures, mat,
+          (uint32_t)old_tex_count, mat_tex_refs);
 
       if (create_gpumaterial_cgltf(device, vma_alloc, vk_alloc, mat,
                                    mat_tex_count, mat_tex_refs,
@@ -214,7 +215,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   {
     cgltf_size new_mesh_count = old_mesh_count + data->meshes_count;
 
-    s->meshes = hb_realloc_nm_tp(std_alloc, s->meshes, new_mesh_count, GPUMesh);
+    s->meshes = tb_realloc_nm_tp(std_alloc, s->meshes, new_mesh_count, GPUMesh);
     if (s->meshes == NULL) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to allocate meshes for scene");
@@ -243,12 +244,12 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
 
     // Alloc entity component rows
     s->components =
-        hb_realloc_nm_tp(std_alloc, s->components, new_node_count, uint64_t);
-    s->static_mesh_refs = hb_realloc_nm_tp(std_alloc, s->static_mesh_refs,
+        tb_realloc_nm_tp(std_alloc, s->components, new_node_count, uint64_t);
+    s->static_mesh_refs = tb_realloc_nm_tp(std_alloc, s->static_mesh_refs,
                                            new_node_count, uint32_t);
     s->material_refs =
-        hb_realloc_nm_tp(std_alloc, s->material_refs, new_node_count, uint32_t);
-    s->transforms = hb_realloc_nm_tp(std_alloc, s->transforms, new_node_count,
+        tb_realloc_nm_tp(std_alloc, s->material_refs, new_node_count, uint32_t);
+    s->transforms = tb_realloc_nm_tp(std_alloc, s->transforms, new_node_count,
                                      SceneTransform);
 
     for (cgltf_size i = old_node_count; i < new_node_count; ++i) {
@@ -355,10 +356,10 @@ void destroy_scene(Scene *s) {
   }
 
   // Clean up CPU-side arrays
-  hb_free(std_alloc, s->materials);
-  hb_free(std_alloc, s->meshes);
-  hb_free(std_alloc, s->textures);
-  hb_free(std_alloc, s->components);
-  hb_free(std_alloc, s->static_mesh_refs);
-  hb_free(std_alloc, s->transforms);
+  tb_free(std_alloc, s->materials);
+  tb_free(std_alloc, s->meshes);
+  tb_free(std_alloc, s->textures);
+  tb_free(std_alloc, s->components);
+  tb_free(std_alloc, s->static_mesh_refs);
+  tb_free(std_alloc, s->transforms);
 }

@@ -170,7 +170,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   (void)err;
 
   VkPhysicalDevice *physical_devices =
-      hb_alloc_nm_tp(tmp_alloc, gpu_count, VkPhysicalDevice);
+      tb_alloc_nm_tp(tmp_alloc, gpu_count, VkPhysicalDevice);
   err = vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
   assert(err == VK_SUCCESS);
 
@@ -214,7 +214,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   }
   assert(gpu_idx >= 0);
   VkPhysicalDevice gpu = physical_devices[gpu_idx];
-  hb_free(tmp_alloc, physical_devices);
+  tb_free(tmp_alloc, physical_devices);
 
   TracyCZoneEnd(ctx);
 
@@ -563,7 +563,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
   assert(err == VK_SUCCESS);
   (void)err;
   VkSurfaceFormatKHR *surface_formats =
-      hb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
+      tb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
   err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
                                              surface_formats);
   assert(err == VK_SUCCESS);
@@ -579,7 +579,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
                                                   &present_mode_count, NULL);
   assert(err == VK_SUCCESS);
   VkPresentModeKHR *present_modes =
-      hb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
+      tb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
   assert(present_modes);
   err = vkGetPhysicalDeviceSurfacePresentModesKHR(
       gpu, surface, &present_mode_count, present_modes);
@@ -606,7 +606,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
     // The desired present mode was not found, just use the first one
     present_mode = present_modes[0];
   }
-  hb_free(tmp_alloc, present_modes);
+  tb_free(tmp_alloc, present_modes);
   present_modes = NULL;
 
   // Determine the number of VkImages to use in the swap chain.
@@ -683,7 +683,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
       .height = swapchain_extent.height,
   };
 
-  hb_free(tmp_alloc, surface_formats);
+  tb_free(tmp_alloc, surface_formats);
 
   return swap_info;
 }
@@ -996,7 +996,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, NULL);
 
   VkQueueFamilyProperties *queue_props =
-      hb_alloc_nm_tp(std_alloc, queue_family_count, VkQueueFamilyProperties);
+      tb_alloc_nm_tp(std_alloc, queue_family_count, VkQueueFamilyProperties);
   assert(queue_props);
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count,
                                            queue_props);
@@ -1018,7 +1018,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   {
     // Iterate over each queue to learn whether it supports presenting:
     VkBool32 *supports_present =
-        hb_alloc_nm_tp(tmp_alloc, queue_family_count, VkBool32);
+        tb_alloc_nm_tp(tmp_alloc, queue_family_count, VkBool32);
     for (uint32_t i = 0; i < queue_family_count; i++) {
       vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface,
                                            &supports_present[i]);
@@ -1050,7 +1050,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         }
       }
     }
-    hb_free(tmp_alloc, supports_present);
+    tb_free(tmp_alloc, supports_present);
 
     // Generate error if could not find both a graphics and a present queue
     if (graphics_queue_family_index == UINT32_MAX ||
@@ -1384,7 +1384,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     if (cache_file != NULL) {
       data_size = (size_t)SDL_RWsize(cache_file);
 
-      data = hb_alloc(std_alloc, data_size);
+      data = tb_alloc(std_alloc, data_size);
 
       SDL_RWread(cache_file, data, data_size, 1);
 
@@ -1403,7 +1403,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                 "pipeline cache");
 
     if (data) {
-      hb_free(std_alloc, data);
+      tb_free(std_alloc, data);
     }
     TracyCZoneEnd(pipe_cache_ctx)
   }
@@ -2313,7 +2313,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Composite main scene
   Scene *main_scene = NULL;
   {
-    main_scene = hb_alloc_tp(std_alloc, Scene);
+    main_scene = tb_alloc_tp(std_alloc, Scene);
     if (!main_scene) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to alloc main scene");
       SDL_TriggerBreakpoint();
@@ -2489,11 +2489,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Allocate space for upload queues
   d->const_buffer_upload_queue =
-      hb_alloc_nm_tp(std_alloc, CONST_BUFFER_UPLOAD_QUEUE_SIZE, GPUConstBuffer);
+      tb_alloc_nm_tp(std_alloc, CONST_BUFFER_UPLOAD_QUEUE_SIZE, GPUConstBuffer);
   d->mesh_upload_queue =
-      hb_alloc_nm_tp(std_alloc, MESH_UPLOAD_QUEUE_SIZE, GPUMesh);
+      tb_alloc_nm_tp(std_alloc, MESH_UPLOAD_QUEUE_SIZE, GPUMesh);
   d->texture_upload_queue =
-      hb_alloc_nm_tp(std_alloc, TEXTURE_UPLOAD_QUEUE_SIZE, GPUTexture);
+      tb_alloc_nm_tp(std_alloc, TEXTURE_UPLOAD_QUEUE_SIZE, GPUTexture);
 
   demo_upload_mesh(d, &d->skydome_gpu);
   demo_upload_scene(d, d->main_scene);
@@ -2704,7 +2704,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Env Filtered Face Views
   {
     d->env_filtered_face_views =
-        hb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkImageView);
+        tb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkImageView);
     for (uint32_t i = 0; i < env_filtered_mip_count; ++i) {
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2739,7 +2739,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Env Filtered Framebuffers
   {
     d->env_filtered_framebuffers =
-        hb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkFramebuffer);
+        tb_alloc_nm_tp(std_alloc, env_filtered_mip_count, VkFramebuffer);
     for (uint32_t i = 0; i < env_filtered_mip_count; ++i) {
       const float mip_dim = ENV_CUBEMAP_DIM * SDL_powf(0.5f, (float)i);
 
@@ -3199,7 +3199,7 @@ void demo_destroy(Demo *d) {
     size_t cache_size = 0;
     err = vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, NULL);
     if (err == VK_SUCCESS) {
-      void *cache = hb_alloc(d->tmp_alloc, cache_size);
+      void *cache = tb_alloc(d->tmp_alloc, cache_size);
       err =
           vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, cache);
       if (err == VK_SUCCESS) {
@@ -3214,9 +3214,9 @@ void demo_destroy(Demo *d) {
   }
 
   // Clean up queues
-  hb_free(d->std_alloc, d->const_buffer_upload_queue);
-  hb_free(d->std_alloc, d->mesh_upload_queue);
-  hb_free(d->std_alloc, d->texture_upload_queue);
+  tb_free(d->std_alloc, d->const_buffer_upload_queue);
+  tb_free(d->std_alloc, d->mesh_upload_queue);
+  tb_free(d->std_alloc, d->texture_upload_queue);
 
   vkDestroyImageView(device, d->brdf_lut_view, vk_alloc);
   destroy_gpuimage(vma_alloc, &d->brdf_lut);
@@ -3259,13 +3259,13 @@ void demo_destroy(Demo *d) {
     vkDestroyImageView(device, d->env_filtered_face_views[i], vk_alloc);
     vkDestroyFramebuffer(device, d->env_filtered_framebuffers[i], vk_alloc);
   }
-  hb_free(d->std_alloc, d->env_filtered_face_views);
-  hb_free(d->std_alloc, d->env_filtered_framebuffers);
+  tb_free(d->std_alloc, d->env_filtered_face_views);
+  tb_free(d->std_alloc, d->env_filtered_framebuffers);
 
-  hb_free(d->std_alloc, d->imgui_mesh_data);
+  tb_free(d->std_alloc, d->imgui_mesh_data);
 
   destroy_scene(d->main_scene);
-  hb_free(d->std_alloc, d->main_scene);
+  tb_free(d->std_alloc, d->main_scene);
 
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
@@ -3277,9 +3277,9 @@ void demo_destroy(Demo *d) {
     for (uint32_t ii = 0; ii < CONST_BUFFER_BLOCK_SIZE; ++ii) {
       destroy_gpuconstbuffer(d->device, d->vma_alloc, d->vk_alloc, block[ii]);
     }
-    hb_free(d->std_alloc, block);
+    tb_free(d->std_alloc, block);
   }
-  hb_free(d->std_alloc, d->obj_const_buffer_blocks);
+  tb_free(d->std_alloc, d->obj_const_buffer_blocks);
 
   destroy_gpumesh(vma_alloc, &d->skydome_gpu);
   destroy_texture(device, vma_alloc, vk_alloc, &d->imgui_atlas);
@@ -3290,7 +3290,7 @@ void demo_destroy(Demo *d) {
   vmaDestroyPool(vma_alloc, d->upload_mem_pool);
   vmaDestroyPool(vma_alloc, d->texture_mem_pool);
 
-  hb_free(d->std_alloc, d->queue_props);
+  tb_free(d->std_alloc, d->queue_props);
   vkDestroySampler(device, d->sampler, vk_alloc);
   vkDestroySampler(device, d->shadow_sampler, vk_alloc);
 
@@ -3531,13 +3531,13 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       uint32_t old_block_count = d->obj_const_buffer_block_count;
       d->obj_const_buffer_block_count += new_block_count;
       d->obj_const_buffer_blocks =
-          hb_realloc_nm_tp(d->std_alloc, d->obj_const_buffer_blocks,
+          tb_realloc_nm_tp(d->std_alloc, d->obj_const_buffer_blocks,
                            d->obj_const_buffer_block_count, GPUConstBuffer *);
 
       for (uint32_t i = 0; i < new_block_count; ++i) {
         // Allocate and instantiate new blocks
         uint32_t block_idx = old_block_count + i;
-        d->obj_const_buffer_blocks[block_idx] = hb_alloc_nm_tp(
+        d->obj_const_buffer_blocks[block_idx] = tb_alloc_nm_tp(
             d->std_alloc, CONST_BUFFER_BLOCK_SIZE, GPUConstBuffer);
 
         for (uint32_t ii = 0; ii < CONST_BUFFER_BLOCK_SIZE; ++ii) {
@@ -3590,7 +3590,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         pool_type_count += (img_count > 0) * 2; // Images & Samplers
 
         VkDescriptorPoolSize *pool_sizes =
-            hb_alloc_nm_tp(d->tmp_alloc, pool_type_count, VkDescriptorPoolSize);
+            tb_alloc_nm_tp(d->tmp_alloc, pool_type_count, VkDescriptorPoolSize);
 
         uint32_t pool_type_idx = 0;
         if (ub_count > 0) {
@@ -3638,7 +3638,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     }
 
     VkDescriptorSetLayout *set_layouts =
-        hb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSetLayout);
+        tb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSetLayout);
 
     VkDescriptorSetAllocateInfo set_allocs = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -3649,12 +3649,12 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     // TEMP: mat count * 4 due to material descriptor settings
     uint32_t write_count = max_obj_count + (max_mat_count * 4);
     VkWriteDescriptorSet *set_writes =
-        hb_alloc_nm_tp(d->tmp_alloc, write_count, VkWriteDescriptorSet);
+        tb_alloc_nm_tp(d->tmp_alloc, write_count, VkWriteDescriptorSet);
     uint32_t set_idx = 0;
     uint32_t write_idx = 0;
     {
       main_scene_object_sets =
-          hb_alloc_nm_tp(d->tmp_alloc, max_obj_count, VkDescriptorSet);
+          tb_alloc_nm_tp(d->tmp_alloc, max_obj_count, VkDescriptorSet);
 
       for (uint32_t i = 0; i < max_obj_count; ++i) {
         set_layouts[set_idx++] = d->gltf_object_set_layout;
@@ -3667,7 +3667,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
             &d->obj_const_buffer_blocks[block_idx][item_idx];
 
         VkDescriptorBufferInfo *object_info =
-            hb_alloc_tp(d->tmp_alloc, VkDescriptorBufferInfo);
+            tb_alloc_tp(d->tmp_alloc, VkDescriptorBufferInfo);
         *object_info = (VkDescriptorBufferInfo){obj_const_buffer->gpu.buffer, 0,
                                                 obj_const_buffer->size};
 
@@ -3683,10 +3683,10 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
     }
     {
       main_scene_material_sets =
-          hb_alloc_nm_tp(d->tmp_alloc, max_mat_count, VkDescriptorSet);
+          tb_alloc_nm_tp(d->tmp_alloc, max_mat_count, VkDescriptorSet);
 
       VkDescriptorBufferInfo *buffer_info =
-          hb_alloc_nm_tp(d->tmp_alloc, max_mat_count, VkDescriptorBufferInfo);
+          tb_alloc_nm_tp(d->tmp_alloc, max_mat_count, VkDescriptorBufferInfo);
       for (uint32_t i = 0; i < max_mat_count; ++i) {
         buffer_info[i].buffer =
             d->main_scene->materials[i].const_buffer.gpu.buffer;
@@ -3695,7 +3695,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       }
 
       uint32_t total_tex_info_count = max_mat_count * MAX_MATERIAL_TEXTURES;
-      VkDescriptorImageInfo *tex_info = hb_alloc_nm_tp(
+      VkDescriptorImageInfo *tex_info = tb_alloc_nm_tp(
           d->tmp_alloc, total_tex_info_count, VkDescriptorImageInfo);
       for (uint32_t i = 0; i < max_mat_count; ++i) {
         const GPUMaterial *mat = &d->main_scene->materials[i];
@@ -3794,7 +3794,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       TracyCZoneN(demo_allocate_sets, "demo_render_frame allocate sets", true)
 
           main_scene_object_sets =
-              hb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSet);
+              tb_alloc_nm_tp(d->tmp_alloc, total_set_count, VkDescriptorSet);
       main_scene_material_sets = &main_scene_object_sets[max_obj_count];
 
       err = vkAllocateDescriptorSets(d->device, &set_allocs,
@@ -4575,7 +4575,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
               destroy_gpumesh(d->vma_alloc, &d->imgui_gpu[frame_idx]);
 
               d->imgui_mesh_data =
-                  hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
+                  tb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
               d->imgui_mesh_data_size[frame_idx] = imgui_size;
 
               realloc = true;
@@ -5073,7 +5073,7 @@ bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
 
   if (alloc_info.size > (*screenshot_size)) {
     (*screenshot_bytes) =
-        hb_realloc(std_alloc, (*screenshot_bytes), alloc_info.size);
+        tb_realloc(std_alloc, (*screenshot_bytes), alloc_info.size);
     (*screenshot_size) = (uint32_t)alloc_info.size;
   }
 

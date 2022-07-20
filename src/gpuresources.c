@@ -244,7 +244,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
 
       // Reorder attributes
       uint32_t *attr_order =
-          hb_alloc(tmp_alloc, sizeof(uint32_t) * attrib_count);
+          tb_alloc(tmp_alloc, sizeof(uint32_t) * attrib_count);
       for (uint32_t ii = 0; ii < (uint32_t)prim->attributes_count; ++ii) {
         cgltf_attribute_type attr_type = prim->attributes[ii].type;
         int32_t attr_idx = prim->attributes[ii].index;
@@ -305,12 +305,12 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
     // Set some debug names on the vulkan primitives
     {
       static const uint32_t max_name_size = 128;
-      char *host_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+      char *host_name = tb_alloc_nm_tp(tmp_alloc, max_name_size, char);
       SDL_snprintf(host_name, max_name_size, "%s surface %" PRIu64 " @host",
                    src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, host_buffer.buffer, VK_OBJECT_TYPE_BUFFER, host_name);
 
-      char *device_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+      char *device_name = tb_alloc_nm_tp(tmp_alloc, max_name_size, char);
       SDL_snprintf(device_name, max_name_size, "%s surface %" PRIu64 " @device",
                    src_mesh->name, (uint64_t)i);
       SET_VK_NAME(device, device_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
@@ -480,7 +480,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     }
 
     size = (size_t)file->size(file);
-    mem = hb_alloc(*tmp_alloc, size);
+    mem = tb_alloc(*tmp_alloc, size);
     assert(mem);
 
     // Read file into memory
@@ -942,7 +942,7 @@ static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
   size_t pipeline_size = sizeof(GPUPipeline);
   size_t alloc_size =
       pipeline_size + pipe_handles_size + feature_flags_size + input_flags_size;
-  GPUPipeline *p = (GPUPipeline *)hb_alloc(alloc, alloc_size);
+  GPUPipeline *p = (GPUPipeline *)tb_alloc(alloc, alloc_size);
   uint8_t *mem = (uint8_t *)p;
   assert(p);
   p->pipeline_count = perm_count;
@@ -973,7 +973,7 @@ int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
   GPUPipeline *pipe = alloc_gpupipeline(desc->std_alloc, total_perm_count);
   VkResult err = VK_SUCCESS;
 
-  VkGraphicsPipelineCreateInfo *pipe_create_info = hb_alloc_nm_tp(
+  VkGraphicsPipelineCreateInfo *pipe_create_info = tb_alloc_nm_tp(
       desc->tmp_alloc, total_perm_count, VkGraphicsPipelineCreateInfo);
   assert(pipe_create_info);
 
@@ -1016,18 +1016,18 @@ int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
     uint32_t perm_stage_count = desc->feature_perm_count * stage_count;
 
     // Every shader stage needs its own create info
-    VkPipelineShaderStageCreateInfo *pipe_stage_info = hb_alloc_nm_tp(
+    VkPipelineShaderStageCreateInfo *pipe_stage_info = tb_alloc_nm_tp(
         desc->tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
 
     VkSpecializationMapEntry map_entries[1] = {
         {0, 0, sizeof(uint32_t)},
     };
 
-    VkSpecializationInfo *spec_info = hb_alloc_nm_tp(
+    VkSpecializationInfo *spec_info = tb_alloc_nm_tp(
         desc->tmp_alloc, desc->feature_perm_count, VkSpecializationInfo);
 
     uint32_t *flags =
-        hb_alloc_nm_tp(desc->tmp_alloc, desc->feature_perm_count, uint32_t);
+        tb_alloc_nm_tp(desc->tmp_alloc, desc->feature_perm_count, uint32_t);
 
     // Insert specialization info to every shader stage
     for (uint32_t ii = 0; ii < desc->feature_perm_count; ++ii) {
@@ -1078,22 +1078,22 @@ int32_t create_rt_pipeline(
   VkResult err = VK_SUCCESS;
 
   VkRayTracingPipelineCreateInfoKHR *pipe_create_info =
-      hb_alloc_nm_tp(tmp_alloc, perm_count, VkRayTracingPipelineCreateInfoKHR);
+      tb_alloc_nm_tp(tmp_alloc, perm_count, VkRayTracingPipelineCreateInfoKHR);
   assert(pipe_create_info);
 
   uint32_t stage_count = create_info_base->stageCount;
   uint32_t perm_stage_count = perm_count * stage_count;
 
   // Every shader stage needs its own create info
-  VkPipelineShaderStageCreateInfo *pipe_stage_info = hb_alloc_nm_tp(
+  VkPipelineShaderStageCreateInfo *pipe_stage_info = tb_alloc_nm_tp(
       tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
   VkSpecializationMapEntry map_entries[1] = {
       {0, 0, sizeof(uint32_t)},
   };
 
   VkSpecializationInfo *spec_info =
-      hb_alloc_nm_tp(tmp_alloc, perm_count, VkSpecializationInfo);
-  uint32_t *flags = hb_alloc_nm_tp(tmp_alloc, perm_count, uint32_t);
+      tb_alloc_nm_tp(tmp_alloc, perm_count, VkSpecializationInfo);
+  uint32_t *flags = tb_alloc_nm_tp(tmp_alloc, perm_count, uint32_t);
 
   // Insert specialization info to every shader stage
   for (uint32_t i = 0; i < perm_count; ++i) {
@@ -1121,10 +1121,10 @@ int32_t create_rt_pipeline(
                                   pipe_create_info, vk_alloc, pipe->pipelines);
   assert(err == VK_SUCCESS);
 
-  hb_free(tmp_alloc, pipe_create_info);
-  hb_free(tmp_alloc, pipe_stage_info);
-  hb_free(tmp_alloc, spec_info);
-  hb_free(tmp_alloc, flags);
+  tb_free(tmp_alloc, pipe_create_info);
+  tb_free(tmp_alloc, pipe_stage_info);
+  tb_free(tmp_alloc, spec_info);
+  tb_free(tmp_alloc, flags);
 
   *p = pipe;
   TracyCZoneEnd(prof_e) return err;
@@ -1141,7 +1141,7 @@ void destroy_gpupipeline(VkDevice device, Allocator alloc,
     vkDestroyPipeline(device, p->pipelines[i], vk_alloc);
   }
 
-  hb_free(alloc, (void *)p);
+  tb_free(alloc, (void *)p);
 }
 #ifdef __clang__
 #pragma clang diagnostic pop
