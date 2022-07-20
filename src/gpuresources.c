@@ -104,7 +104,8 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
 
 int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
                        const CPUMesh *src_mesh, GPUMesh *dst_mesh) {
-  TracyCZoneN(prof_e, "create_gpumesh", true) VkResult err = VK_SUCCESS;
+  TracyCZoneN(prof_e, "create_gpumesh", true);
+  VkResult err = VK_SUCCESS;
 
   size_t index_size = src_mesh->index_size;
   size_t geom_size = src_mesh->geom_size;
@@ -146,14 +147,15 @@ int32_t create_gpumesh(VmaAllocator vma_alloc, uint64_t input_perm,
                                        host_buffer,
                                        device_buffer};
 
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
                              Allocator tmp_alloc, const cgltf_mesh *src_mesh,
                              GPUMesh *dst_mesh) {
-  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true)
-      assert(src_mesh->primitives_count < MAX_SURFACE_COUNT);
+  TracyCZoneN(prof_e, "create_gpumesh_cgltf", true);
+  assert(src_mesh->primitives_count < MAX_SURFACE_COUNT);
   cgltf_size surface_count = src_mesh->primitives_count;
   if (surface_count > MAX_SURFACE_COUNT) {
     surface_count = MAX_SURFACE_COUNT;
@@ -321,7 +323,8 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
   }
   dst_mesh->surface_count = (uint32_t)surface_count;
 
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 void destroy_gpumesh(VmaAllocator vma_alloc, const GPUMesh *mesh) {
@@ -335,7 +338,8 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
                         GPUImage *i) {
-  TracyCZoneN(prof_e, "create_gpuimage", true) VkResult err = VK_SUCCESS;
+  TracyCZoneN(prof_e, "create_gpuimage", true);
+  VkResult err = VK_SUCCESS;
   GPUImage img = {0};
 
   VmaAllocationInfo alloc_info = {0};
@@ -346,7 +350,8 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
   if (err == VK_SUCCESS) {
     *i = img;
   }
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 void destroy_gpuimage(VmaAllocator allocator, const GPUImage *image) {
@@ -354,8 +359,8 @@ void destroy_gpuimage(VmaAllocator allocator, const GPUImage *image) {
 }
 
 static SDL_Surface *load_and_transform_image(const char *filename) {
-  TracyCZoneN(prof_e, "load_and_transform_image", true) SDL_Surface *img =
-      IMG_Load(filename);
+  TracyCZoneN(prof_e, "load_and_transform_image", true);
+  SDL_Surface *img = IMG_Load(filename);
   assert(img);
 
   SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
@@ -363,7 +368,8 @@ static SDL_Surface *load_and_transform_image(const char *filename) {
   SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
   SDL_FreeSurface(img);
 
-  TracyCZoneEnd(prof_e) return opt_img;
+  TracyCZoneEnd(prof_e);
+  return opt_img;
 }
 
 #ifdef __clang__
@@ -468,7 +474,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                              const VkAllocationCallbacks *vk_alloc,
                              const char *file_path, VmaPool up_pool,
                              VmaPool tex_pool) {
-  TracyCZoneN(prof_e, "load_ktx2_texture", true) GPUTexture t = {0};
+  TracyCZoneN(prof_e, "load_ktx2_texture", true);
+  GPUTexture t = {0};
 
   uint8_t *mem = NULL;
   size_t size = 0;
@@ -476,7 +483,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     SDL_RWops *file = SDL_RWFromFile(file_path, "rb");
     if (file == NULL) {
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
 
     size = (size_t)file->size(file);
@@ -487,7 +495,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     if (file->read(file, mem, size, 1) == 0) {
       file->close(file);
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
     file->close(file);
   }
@@ -495,12 +504,13 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
   ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
   ktxTexture2 *ktx = NULL;
   {
-    TracyCZoneN(ktx_transcode_e, "load_ktx2_texture transcode", true)
-        ktx_error_code_e err =
-            ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
+    TracyCZoneN(ktx_transcode_e, "load_ktx2_texture transcode", true);
+    ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
     if (err != KTX_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(ktx_transcode_e) TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(ktx_transcode_e);
+      TracyCZoneEnd(prof_e);
+      return t;
     }
 
     bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
@@ -509,10 +519,12 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
       err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
       if (err != KTX_SUCCESS) {
         assert(0);
-        TracyCZoneEnd(ktx_transcode_e) TracyCZoneEnd(prof_e) return t;
+        TracyCZoneEnd(ktx_transcode_e);
+        TracyCZoneEnd(prof_e);
+        return t;
       }
     }
-    TracyCZoneEnd(ktx_transcode_e)
+    TracyCZoneEnd(ktx_transcode_e);
   }
 
   VkResult err = VK_SUCCESS;
@@ -540,7 +552,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
   }
 
@@ -571,7 +584,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
   }
 
@@ -581,7 +595,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
 
     memcpy(data, ktx->pData, host_buffer_size);
@@ -602,7 +617,8 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     if (err != VK_SUCCESS) {
       assert(0);
-      TracyCZoneEnd(prof_e) return t;
+      TracyCZoneEnd(prof_e);
+      return t;
     }
   }
 
@@ -648,14 +664,16 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 #endif
   }
 
-  TracyCZoneEnd(prof_e) return t;
+  TracyCZoneEnd(prof_e);
+  return t;
 }
 
 int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const char *filename, VmaPool up_pool, VmaPool tex_pool,
                      GPUTexture *t) {
-  TracyCZoneN(prof_e, "load_texture", true) assert(filename);
+  TracyCZoneN(prof_e, "load_texture", true);
+  assert(filename);
   assert(t);
 
   SDL_Surface *img = load_and_transform_image(filename);
@@ -763,9 +781,9 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 
   SDL_FreeSurface(img);
 
-  TracyCZoneEnd(prof_e)
+  TracyCZoneEnd(prof_e);
 
-      return err;
+  return err;
 }
 
 int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
@@ -773,8 +791,8 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 VkFormat format, GPUTexture *t) {
-  TracyCZoneN(prof_e, "create_gputexture_cgltf", true)
-      cgltf_buffer_view *image_view = gltf->image->buffer_view;
+  TracyCZoneN(prof_e, "create_gputexture_cgltf", true);
+  cgltf_buffer_view *image_view = gltf->image->buffer_view;
   cgltf_buffer *image_data = image_view->buffer;
   const uint8_t *data = (uint8_t *)(image_view->buffer) + image_view->offset;
 
@@ -808,14 +826,16 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
   };
   int32_t err = create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
                                tex_pool, format, t, true);
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const CPUTexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        VkFormat format, GPUTexture *t, bool gen_mips) {
-  TracyCZoneN(prof_e, "create_texture", true) VkResult err = VK_SUCCESS;
+  TracyCZoneN(prof_e, "create_texture", true);
+  VkResult err = VK_SUCCESS;
 
   VkDeviceSize host_buffer_size = tex->data_size;
   uint32_t layer_count = tex->layer_count;
@@ -920,7 +940,8 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
           },
   };
 
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
@@ -965,10 +986,9 @@ static GPUPipeline *alloc_gpupipeline(Allocator alloc, uint32_t perm_count) {
 #endif
 
 int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
-  TracyCZoneN(prof_e, "create_gfx_pipeline", true)
+  TracyCZoneN(prof_e, "create_gfx_pipeline", true);
 
-      uint32_t total_perm_count =
-          desc->feature_perm_count * desc->input_perm_count;
+  uint32_t total_perm_count = desc->feature_perm_count * desc->input_perm_count;
 
   GPUPipeline *pipe = alloc_gpupipeline(desc->std_alloc, total_perm_count);
   VkResult err = VK_SUCCESS;
@@ -1064,7 +1084,8 @@ int32_t create_gfx_pipeline(const GPUPipelineDesc *desc, GPUPipeline **p) {
   assert(err == VK_SUCCESS);
 
   *p = pipe;
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 int32_t create_rt_pipeline(
@@ -1073,8 +1094,8 @@ int32_t create_rt_pipeline(
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     GPUPipeline **p) {
-  TracyCZoneN(prof_e, "create_rt_pipeline", true) GPUPipeline *pipe =
-      alloc_gpupipeline(std_alloc, perm_count);
+  TracyCZoneN(prof_e, "create_rt_pipeline", true);
+  GPUPipeline *pipe = alloc_gpupipeline(std_alloc, perm_count);
   VkResult err = VK_SUCCESS;
 
   VkRayTracingPipelineCreateInfoKHR *pipe_create_info =
@@ -1127,7 +1148,8 @@ int32_t create_rt_pipeline(
   tb_free(tmp_alloc, flags);
 
   *p = pipe;
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 
 #ifdef __clang__
@@ -1327,8 +1349,8 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                  const VkAllocationCallbacks *vk_alloc,
                                  const cgltf_material *gltf, uint32_t tex_count,
                                  uint32_t *tex_refs, GPUMaterial *m) {
-  TracyCZoneN(prof_e, "create_gpumaterial_cgltf", true) VkResult err =
-      VK_SUCCESS;
+  TracyCZoneN(prof_e, "create_gpumaterial_cgltf", true);
+  VkResult err = VK_SUCCESS;
 
   // Convert from cgltf structs to our struct
   uint64_t feat_perm = 0;
@@ -1430,7 +1452,8 @@ int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
     vmaUnmapMemory(vma_alloc, alloc);
   }
 
-  TracyCZoneEnd(prof_e) return err;
+  TracyCZoneEnd(prof_e);
+  return err;
 }
 void destroy_material(VkDevice device, VmaAllocator vma_alloc,
                       const VkAllocationCallbacks *vk_alloc,

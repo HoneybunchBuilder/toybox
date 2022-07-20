@@ -67,28 +67,35 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
-  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)(void)
-      scope;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  (void)scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
   void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan") TracyCZoneEnd(ctx) return ptr;
+  TracyCAllocN(ptr, size, "Vulkan");
+  TracyCZoneEnd(ctx);
+  return ptr;
 }
 
 static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
                            size_t alignment, VkSystemAllocationScope scope) {
   (void)scope;
-  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)
-      mi_heap_t *heap = (mi_heap_t *)pUserData;
-  TracyCFreeN(pOriginal, "Vulkan") void *ptr =
-      mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan") TracyCZoneEnd(ctx) return ptr;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  mi_heap_t *heap = (mi_heap_t *)pUserData;
+  TracyCFreeN(pOriginal, "Vulkan");
+  void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
+  TracyCAllocN(ptr, size, "Vulkan");
+  TracyCZoneEnd(ctx);
+  return ptr;
 }
 
 static void vk_free_fn(void *pUserData, void *pMemory) {
   (void)pUserData;
-  TracyCZone(ctx, true) TracyCZoneColor(ctx, TracyCategoryColorMemory)
-      TracyCFreeN(pMemory, "Vulkan") mi_free(pMemory);
-  TracyCZoneEnd(ctx)
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(pMemory, "Vulkan") mi_free(pMemory);
+  TracyCZoneEnd(ctx);
 }
 
 static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
@@ -382,11 +389,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float sun_x = sinf(PI + time_of_day);
 
   while (running) {
-    TracyCFrameMarkStart("Frame") TracyCZoneN(trcy_ctx, "Frame", true)
-        TracyCZoneColor(trcy_ctx, TracyCategoryColorCore)
+    TracyCFrameMarkStart("Frame");
+    TracyCZoneN(trcy_ctx, "Frame", true);
+    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
-        // Use SDL High Performance Counter to get timing info
-        time = SDL_GetPerformanceCounter() - start_time;
+    // Use SDL High Performance Counter to get timing info
+    time = SDL_GetPerformanceCounter() - start_time;
     delta_time = time - last_time;
     delta_time_seconds =
         (float)((double)delta_time / (double)(SDL_GetPerformanceFrequency()));
@@ -404,17 +412,19 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // while (SDL_PollEvent(&e))
     {
-      TracyCZoneN(ctx, "Handle Events", true)
-          TracyCZoneColor(ctx, TracyCategoryColorInput)
+      TracyCZoneN(ctx, "Handle Events", true);
+      TracyCZoneColor(ctx, TracyCategoryColorInput);
 
-              SDL_Event e = {0};
+      SDL_Event e = {0};
       {
-        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true) SDL_PollEvent(&e);
-        TracyCZoneEnd(sdl_ctx)
+        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true);
+        SDL_PollEvent(&e);
+        TracyCZoneEnd(sdl_ctx);
       }
       if (e.type == SDL_QUIT) {
         running = false;
-        TracyCZoneEnd(ctx) break;
+        TracyCZoneEnd(ctx);
+        break;
       }
       demo_process_event(&d, &e);
 
@@ -428,7 +438,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         }
       }
 
-      TracyCZoneEnd(ctx)
+      TracyCZoneEnd(ctx);
     }
 
     ImVec2 display_size;
@@ -441,10 +451,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // ImGui Test
 
     if (showImGui) {
-      TracyCZoneN(ctx, "UI Test", true)
-          TracyCZoneColor(ctx, TracyCategoryColorUI)
+      TracyCZoneN(ctx, "UI Test", true);
+      TracyCZoneColor(ctx, TracyCategoryColorUI);
 
-              if (igBeginMainMenuBar()) {
+      if (igBeginMainMenuBar()) {
         if (igBeginMenu("Sky", true)) {
           showSkyWindow = !showSkyWindow;
           igEndMenu();
@@ -826,7 +836,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         igEnd();
       }
 
-      TracyCZoneEnd(ctx)
+      TracyCZoneEnd(ctx);
     }
 
     float4x4 view = {.row0 = {0}};
@@ -865,8 +875,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update view camera constant buffer
     {
-      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true)
-          camera_data.vp = vp;
+      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true);
+      camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
 
@@ -885,17 +895,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.camera_const_buffer);
 
-      TracyCZoneEnd(trcy_camera_ctx)
+      TracyCZoneEnd(trcy_camera_ctx);
     }
 
     // Update view light constant buffer
     {
-      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true)
+      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true);
 
-          CommonLightData light_data = {
-              .light_dir = -sky_data.sun_dir,
-              .light_vp = sun_vp,
-          };
+      CommonLightData light_data = {
+          .light_dir = -sky_data.sun_dir,
+          .light_vp = sun_vp,
+      };
 
       VmaAllocator vma_alloc = d.vma_alloc;
       VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
@@ -912,14 +922,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.light_const_buffer);
 
-      TracyCZoneEnd(trcy_light_ctx)
+      TracyCZoneEnd(trcy_light_ctx);
     }
 
     // Update sky constant buffer
     {
-      TracyCZoneN(trcy_sky_ctx, "Update Sky", true)
+      TracyCZoneN(trcy_sky_ctx, "Update Sky", true);
 
-          VmaAllocator vma_alloc = d.vma_alloc;
+      VmaAllocator vma_alloc = d.vma_alloc;
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
 
       uint8_t *data = NULL;
@@ -932,7 +942,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
-      TracyCZoneEnd(trcy_sky_ctx)
+      TracyCZoneEnd(trcy_sky_ctx);
     }
 
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
@@ -940,7 +950,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx) TracyCFrameMarkEnd("Frame")
+    TracyCZoneEnd(trcy_ctx) TracyCFrameMarkEnd("Frame");
   }
 
   // Cleanup display modes

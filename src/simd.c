@@ -160,8 +160,8 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
 }
 
 void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
-  TracyCZoneN(ctx, "mulmf44", true)
-  TracyCZoneColor(ctx, TracyCategoryColorMath)
+  TracyCZoneN(ctx, "mulmf44", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(x);
   assert(y);
   assert(o);
@@ -174,13 +174,13 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
       o->rows[i][ii] = s;
     }
   }
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 }
 
 // UNTESTED
 float4x4 inv_mf44(float4x4 m) {
-  TracyCZoneN(ctx, "mulmf44", true)
-  TracyCZoneColor(ctx, TracyCategoryColorMath)
+  TracyCZoneN(ctx, "mulmf44", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
 
   float coef00 = m.row2[2] * m.row3[3] - m.row3[2] * m.row2[3];
   float coef02 = m.row1[2] * m.row3[3] - m.row3[2] * m.row1[3];
@@ -236,7 +236,7 @@ float4x4 inv_mf44(float4x4 m) {
       inv.row3 * OneOverDeterminant,
   };
 
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 
   return out;
 }
@@ -255,8 +255,8 @@ void rotate(Transform *t, float3 r) {
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
-  TracyCZoneN(ctx, "transform_to_matrix", true)
-  TracyCZoneColor(ctx, TracyCategoryColorMath)
+  TracyCZoneN(ctx, "transform_to_matrix", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(m);
   assert(t);
 
@@ -312,12 +312,12 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   mulmf44(&p, &r, &temp);
   mulmf44(&s, &temp, m);
 
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 }
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
-  TracyCZoneN(ctx, "look_forward", true)
-  TracyCZoneColor(ctx, TracyCategoryColorMath)
+  TracyCZoneN(ctx, "look_forward", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(m);
 
   forward = normf3(forward);
@@ -330,7 +330,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
       (float4){forward[0], forward[1], forward[2], -dotf3(forward, pos)},
       (float4){0, 0, 0, 1},
   };
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 }
 
 // Left-Handed
