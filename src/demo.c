@@ -104,7 +104,10 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t present_queue_family_index,
                               uint32_t ext_count,
                               const VkAllocationCallbacks *vk_alloc,
+                              const DemoExtensionSupport *ext_support,
                               const char *const *ext_names) {
+  assert(ext_support);
+
   TracyCZoneN(ctx, "create_device", true) VkResult err = VK_SUCCESS;
 
   float queue_priorities[1] = {0.0};
@@ -116,21 +119,23 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
-  VkPhysicalDeviceVulkan11Features vk_11_features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-      .multiview = VK_TRUE,
-  };
-
+#if defined(VK_KHR_ray_tracing_pipeline)
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
       .sType =
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
-      .rayTracingPipeline = VK_TRUE,
-      .pNext = &vk_11_features,
+      .rayTracingPipeline = ext_support->raytracing,
+  };
+#endif
+
+  VkPhysicalDeviceVulkan11Features vk_11_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .multiview = VK_TRUE,
+      .pNext = &rt_pipe_feature,
   };
 
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_info.pNext = (const void *)&rt_pipe_feature;
+  create_info.pNext = (const void *)&vk_11_features;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = queues;
   create_info.enabledExtensionCount = ext_count;
@@ -1130,7 +1135,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
                                   present_queue_family_index, device_ext_count,
-                                  vk_alloc, device_ext_names);
+                                  vk_alloc, &ext_support, device_ext_names);
 
   VkQueue graphics_queue = VK_NULL_HANDLE;
   vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
@@ -1587,36 +1592,40 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create GLTF RT Pipeline Layout
   // Create GLTF Descriptor Set Layout
   VkDescriptorSetLayout gltf_rt_layout = VK_NULL_HANDLE;
-  {
-    VkDescriptorSetLayoutBinding bindings[3] = {
-        {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
-         VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
-        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-         NULL},
-        {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-         VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
-    };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 3;
-    create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &gltf_rt_layout);
-    assert(err == VK_SUCCESS);
-  }
-
   VkPipelineLayout gltf_rt_pipe_layout = VK_NULL_HANDLE;
-  {
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &gltf_rt_layout;
+#if defined(VK_KHR_ray_tracing_pipeline)
+  if (ext_support.raytracing) {
+    {
+      VkDescriptorSetLayoutBinding bindings[3] = {
+          {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
+           VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
+          {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1,
+           VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
+          {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+           VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
+      };
 
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
-                                 &gltf_rt_pipe_layout);
-    assert(err == VK_SUCCESS);
+      VkDescriptorSetLayoutCreateInfo create_info = {0};
+      create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+      create_info.bindingCount = 3;
+      create_info.pBindings = bindings;
+      err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                        &gltf_rt_layout);
+      assert(err == VK_SUCCESS);
+    }
+
+    {
+      VkPipelineLayoutCreateInfo create_info = {0};
+      create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+      create_info.setLayoutCount = 1;
+      create_info.pSetLayouts = &gltf_rt_layout;
+
+      err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                   &gltf_rt_pipe_layout);
+      assert(err == VK_SUCCESS);
+    }
   }
+#endif
 
   // Create Skydome Descriptor Set Layout
   VkDescriptorSetLayout skydome_set_layout = VK_NULL_HANDLE;
@@ -1667,18 +1676,21 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       skydome_pipe_layout, &skydome_pipeline));
   assert(err == VK_SUCCESS);
 
-  // HACK: Get this function here...
-  // PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
-  //    (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(
-  //        device, "vkCreateRayTracingPipelinesKHR");
+// HACK: Get this function here...
+#if defined(VK_KHR_ray_tracing_pipeline)
+  if (ext_support.raytracing) {
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
+        (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(
+            device, "vkCreateRayTracingPipelinesKHR");
 
-  // Create GLTF Ray Tracing Pipeline
-  // gpupipeline *gltf_rt_pipeline = NULL;
-  // err = create_gltf_rt_pipeline(
-  //    device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache,
-  //    vkCreateRayTracingPipelinesKHR, main_pass, width, height,
-  //    gltf_rt_pipe_layout, &gltf_rt_pipeline);
-  // assert(err == VK_SUCCESS);
+    // Create GLTF Ray Tracing Pipeline
+    GPUPipeline *gltf_rt_pipeline = NULL;
+    err = create_gltf_rt_pipeline(
+        device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache,
+        vkCreateRayTracingPipelinesKHR, gltf_rt_pipe_layout, &gltf_rt_pipeline);
+    assert(err == VK_SUCCESS);
+  }
+#endif
 
   // Create ImGui Descriptor Set Layout
   VkDescriptorSetLayout imgui_set_layout = VK_NULL_HANDLE;
