@@ -2,6 +2,8 @@
 
 A simple test application in C for Windows, Linux, macOS, iOS and Android 
 
+[![CMake](https://github.com/Honeybunch/toybox/actions/workflows/build.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/build.yml)
+
 ## Building
 This project builds with CMake and relies heavily on a deep integration with [vcpkg](https://github.com/microsoft/vcpkg) for dependency management
 
