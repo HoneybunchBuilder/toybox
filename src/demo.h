@@ -42,9 +42,9 @@ typedef struct DynPoolState {
 #define CONST_BUFFER_BLOCK_SIZE 8
 
 typedef struct DemoExtensionSupport {
-  bool portability;
-  bool raytracing;
-  bool calibrated_timestamps;
+  bool portability : 1;
+  bool raytracing : 1;
+  bool calibrated_timestamps : 1;
 } DemoExtensionSupport;
 
 typedef struct Demo {
@@ -60,6 +60,7 @@ typedef struct Demo {
 
   VkPhysicalDevice gpu;
   VkPhysicalDeviceProperties gpu_props;
+  VkPhysicalDeviceDriverProperties driver_props;
   uint32_t queue_family_count;
   VkQueueFamilyProperties *queue_props;
   VkPhysicalDeviceFeatures gpu_features;

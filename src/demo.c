@@ -216,9 +216,9 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   VkPhysicalDevice gpu = physical_devices[gpu_idx];
   hb_free(tmp_alloc, physical_devices);
 
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 
-      return gpu;
+  return gpu;
 }
 
 static VkSurfaceFormatKHR
@@ -985,8 +985,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   }
 
   // Check physical device properties
-  VkPhysicalDeviceProperties gpu_props = {0};
-  vkGetPhysicalDeviceProperties(gpu, &gpu_props);
+  VkPhysicalDeviceDriverProperties driver_props = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+  VkPhysicalDeviceProperties2 gpu_props = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = &driver_props};
+  vkGetPhysicalDeviceProperties2(gpu, &gpu_props);
 
   uint32_t queue_family_count = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, NULL);
@@ -2418,7 +2422,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->gpu = gpu;
   d->ext_support = ext_support;
   d->vma_alloc = vma_alloc;
-  d->gpu_props = gpu_props;
+  d->gpu_props = gpu_props.properties;
+  d->driver_props = driver_props;
   d->gpu_mem_props = gpu_mem_props;
   d->queue_family_count = queue_family_count;
   d->queue_props = queue_props;
