@@ -12,17 +12,17 @@ typedef void *realloc_aligned_fn(void *user_data, void *original, size_t size,
                                  size_t alignment);
 typedef void free_fn(void *user_data, void *ptr);
 
-#define hb_alloc(a, size) (a).alloc((a).user_data, (size))
-#define hb_alloc_tp(a, T) (T *)(a).alloc((a).user_data, sizeof(T))
-#define hb_alloc_nm_tp(a, n, T) (T *)(a).alloc((a).user_data, n * sizeof(T))
-#define hb_realloc(a, orig, size) (a).realloc((a).user_data, (orig), (size))
-#define hb_realloc_tp(a, orig, T)                                              \
+#define tb_alloc(a, size) (a).alloc((a).user_data, (size))
+#define tb_alloc_tp(a, T) (T *)(a).alloc((a).user_data, sizeof(T))
+#define tb_alloc_nm_tp(a, n, T) (T *)(a).alloc((a).user_data, n * sizeof(T))
+#define tb_realloc(a, orig, size) (a).realloc((a).user_data, (orig), (size))
+#define tb_realloc_tp(a, orig, T)                                              \
   (T *)(a).realloc((a).user_data, (orig), sizeof(T))
-#define hb_realloc_nm_tp(a, orig, n, T)                                        \
+#define tb_realloc_nm_tp(a, orig, n, T)                                        \
   (T *)(a).realloc((a).user_data, (orig), (n) * sizeof(T))
-#define hb_realloc_aligned(a, orig, size, align)                               \
+#define tb_realloc_aligned(a, orig, size, align)                               \
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
-#define hb_free(a, ptr) a.free(a.user_data, (ptr))
+#define tb_free(a, ptr) a.free(a.user_data, (ptr))
 
 typedef struct Allocator {
   void *user_data;

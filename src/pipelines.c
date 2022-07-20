@@ -1512,7 +1512,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
     for (uint32_t i = 0; i < desc.input_perm_count; ++i) {
       for (uint32_t ii = 0; ii < desc.feature_perm_count; ++ii) {
         static const uint32_t max_name_size = 128;
-        char *pipe_name = hb_alloc_nm_tp(tmp_alloc, max_name_size, char);
+        char *pipe_name = tb_alloc_nm_tp(tmp_alloc, max_name_size, char);
         SDL_snprintf(pipe_name, max_name_size, "gltf - input: %d, feature: %d",
                      i, ii);
         SET_VK_NAME(device, p->pipelines[pipe_idx], VK_OBJECT_TYPE_PIPELINE,

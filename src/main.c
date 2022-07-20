@@ -106,7 +106,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)argv;
   SDL_Log("%s", "Entered SDL_main");
   {
-    const char *app_info = HB_APP_INFO_STR;
+    const char *app_info = TB_APP_INFO_STR;
     size_t app_info_len = strlen(app_info);
     TracyCAppInfo(app_info, app_info_len)(void) app_info_len;
   }
@@ -209,7 +209,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
       assert(err == VK_SUCCESS);
       if (instance_layer_count > 0) {
-        VkLayerProperties *instance_layers = hb_alloc_nm_tp(
+        VkLayerProperties *instance_layers = tb_alloc_nm_tp(
             arena.alloc, instance_layer_count, VkLayerProperties);
         err = vkEnumerateInstanceLayerProperties(&instance_layer_count,
                                                  instance_layers);
@@ -257,11 +257,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "Toybox";
     app_info.applicationVersion = VK_MAKE_VERSION(
-        HB_GAME_VERSION_MAJOR, HB_GAME_VERSION_MINOR, HB_GAME_VERSION_PATCH);
-    app_info.pEngineName = HB_ENGINE_NAME;
+        TB_GAME_VERSION_MAJOR, TB_GAME_VERSION_MINOR, TB_GAME_VERSION_PATCH);
+    app_info.pEngineName = TB_ENGINE_NAME;
     app_info.engineVersion =
-        VK_MAKE_VERSION(HB_ENGINE_VERSION_MAJOR, HB_ENGINE_VERSION_MINOR,
-                        HB_ENGINE_VERSION_PATCH);
+        VK_MAKE_VERSION(TB_ENGINE_VERSION_MAJOR, TB_ENGINE_VERSION_MINOR,
+                        TB_ENGINE_VERSION_PATCH);
     app_info.apiVersion = VK_API_VERSION_1_2;
 
     VkInstanceCreateInfo create_info = {0};
@@ -325,18 +325,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   SDL_DisplayMode **modes_per_display =
-      hb_alloc_nm_tp(std_alloc.alloc, display_count, SDL_DisplayMode *);
+      tb_alloc_nm_tp(std_alloc.alloc, display_count, SDL_DisplayMode *);
   char const **display_names =
-      hb_alloc_nm_tp(std_alloc.alloc, display_count, const char *);
+      tb_alloc_nm_tp(std_alloc.alloc, display_count, const char *);
 
-  char ***mode_names = hb_alloc_nm_tp(std_alloc.alloc, display_count, char **);
+  char ***mode_names = tb_alloc_nm_tp(std_alloc.alloc, display_count, char **);
 
   for (uint32_t i = 0; i < display_count; ++i) {
     uint32_t display_mode_count = (uint32_t)SDL_GetNumDisplayModes((int32_t)i);
 
     modes_per_display[i] =
-        hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, SDL_DisplayMode);
-    mode_names[i] = hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, char *);
+        tb_alloc_nm_tp(std_alloc.alloc, display_mode_count, SDL_DisplayMode);
+    mode_names[i] = tb_alloc_nm_tp(std_alloc.alloc, display_mode_count, char *);
     for (uint32_t ii = 0; ii < display_mode_count; ++ii) {
       SDL_DisplayMode mode = {0};
       if (SDL_GetDisplayMode((int32_t)i, (int32_t)ii, &mode) != 0) {
@@ -350,7 +350,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       // Create name for display mode name
       static const uint32_t max_name_size = 512;
-      mode_names[i][ii] = hb_alloc(std_alloc.alloc, max_name_size);
+      mode_names[i][ii] = tb_alloc(std_alloc.alloc, max_name_size);
       SDL_snprintf(mode_names[i][ii], max_name_size, "%dx%d @%dHz", mode.w,
                    mode.h, mode.refresh_rate);
     }
@@ -946,14 +946,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Cleanup display modes
   for (int32_t i = 0; i < (int32_t)display_count; ++i) {
     int32_t mode_count = SDL_GetNumDisplayModes(i);
-    hb_free(std_alloc.alloc, modes_per_display[i]);
+    tb_free(std_alloc.alloc, modes_per_display[i]);
     for (int32_t ii = 0; ii < mode_count; ++ii) {
-      hb_free(std_alloc.alloc, mode_names[i][ii]);
+      tb_free(std_alloc.alloc, mode_names[i][ii]);
     }
-    hb_free(std_alloc.alloc, mode_names[i]);
+    tb_free(std_alloc.alloc, mode_names[i]);
   }
-  hb_free(std_alloc.alloc, modes_per_display);
-  hb_free(std_alloc.alloc, display_names);
+  tb_free(std_alloc.alloc, modes_per_display);
+  tb_free(std_alloc.alloc, display_names);
 
   SDL_DestroyWindow(window);
   window = NULL;

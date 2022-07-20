@@ -277,7 +277,7 @@ configure_file(src/config.h.in ${config_include_dir}/config.h @ONLY)
 target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
-target_compile_definitions(toybox PRIVATE "-DHB_CONFIG=\"$<CONFIG>\"")
+target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
 
 if(STATIC)
   target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
