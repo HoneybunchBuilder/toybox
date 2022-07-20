@@ -40,7 +40,7 @@ void camera_view_projection(const Camera *c, float4x4 *vp) {
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
                            EditorCameraController *editor, Camera *cam) {
-  TracyCZoneN(ctx, "editor_camera_control", true)
+  TracyCZoneN(ctx, "editor_camera_control", true);
 
   uint32_t event_type = event->type;
 
@@ -149,5 +149,5 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   }
 
   editor->state = state;
-  TracyCZoneEnd(ctx)
+  TracyCZoneEnd(ctx);
 }
