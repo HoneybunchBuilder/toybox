@@ -8,6 +8,7 @@
 #include "gpuresources.h"
 #include "profiling.h"
 #include "scene.h"
+#include "shadercommon.h"
 
 #include "tbimgui.h"
 
@@ -227,10 +228,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                Demo *d);
 void demo_destroy(Demo *d);
 
-void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer);
-void demo_upload_mesh(Demo *d, const GPUMesh *mesh);
-void demo_upload_texture(Demo *d, const GPUTexture *tex);
-void demo_upload_scene(Demo *d, const Scene *s);
+void demo_set_camera(Demo *d, const CommonCameraData *camera);
+void demo_set_sun(Demo *d, const CommonLightData *sun);
+void demo_set_sky(Demo *d, const SkyData *sky);
+void demo_load_scene(Demo *d, const char *scene_path);
+void demo_unload_scene(Demo *d);
 
 void demo_process_event(Demo *d, const SDL_Event *e);
 void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,

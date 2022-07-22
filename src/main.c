@@ -875,75 +875,24 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update view camera constant buffer
     {
-      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true);
       camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
-
-      VmaAllocator vma_alloc = d.vma_alloc;
-      VmaAllocation camera_host_alloc = d.camera_const_buffer.host.alloc;
-
-      uint8_t *data = NULL;
-      err = vmaMapMemory(vma_alloc, camera_host_alloc, (void **)&data);
-      if (err != VK_SUCCESS) {
-        assert(0);
-        return false;
-      }
-
-      memcpy(data, &camera_data, sizeof(CommonCameraData));
-      vmaUnmapMemory(vma_alloc, camera_host_alloc);
-
-      demo_upload_const_buffer(&d, &d.camera_const_buffer);
-
-      TracyCZoneEnd(trcy_camera_ctx);
+      demo_set_camera(&d, &camera_data);
     }
 
     // Update view light constant buffer
     {
-      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true);
-
       CommonLightData light_data = {
           .light_dir = -sky_data.sun_dir,
           .light_vp = sun_vp,
       };
 
-      VmaAllocator vma_alloc = d.vma_alloc;
-      VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
-
-      uint8_t *data = NULL;
-      err = vmaMapMemory(vma_alloc, light_host_alloc, (void **)&data);
-      if (err != VK_SUCCESS) {
-        assert(0);
-        return false;
-      }
-      // HACK: just pluck the light direction from the push constants for now
-      memcpy(data, &light_data, sizeof(CommonLightData));
-      vmaUnmapMemory(vma_alloc, light_host_alloc);
-
-      demo_upload_const_buffer(&d, &d.light_const_buffer);
-
-      TracyCZoneEnd(trcy_light_ctx);
+      demo_set_sun(&d, &light_data);
     }
 
     // Update sky constant buffer
-    {
-      TracyCZoneN(trcy_sky_ctx, "Update Sky", true);
-
-      VmaAllocator vma_alloc = d.vma_alloc;
-      VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
-
-      uint8_t *data = NULL;
-      err = vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
-      if (err != VK_SUCCESS) {
-        assert(0);
-        return false;
-      }
-      memcpy(data, &sky_data, sizeof(SkyData));
-      vmaUnmapMemory(vma_alloc, sky_host_alloc);
-
-      demo_upload_const_buffer(&d, &d.sky_const_buffer);
-      TracyCZoneEnd(trcy_sky_ctx);
-    }
+    demo_set_sky(&d, &sky_data);
 
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
 
