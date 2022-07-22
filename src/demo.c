@@ -6,7 +6,6 @@
 
 #include "cpuresources.h"
 #include "pipelines.h"
-#include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"
 #include "tbsdl.h"
@@ -240,6 +239,37 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
 
   assert(format_count >= 1);
   return surface_formats[0];
+}
+
+static void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer) {
+  uint32_t buffer_idx = d->const_buffer_upload_count;
+  assert(d->const_buffer_upload_count < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
+  d->const_buffer_upload_queue[buffer_idx] = *buffer;
+  d->const_buffer_upload_count++;
+}
+
+static void demo_upload_mesh(Demo *d, const GPUMesh *mesh) {
+  uint32_t mesh_idx = d->mesh_upload_count;
+  assert(d->mesh_upload_count < MESH_UPLOAD_QUEUE_SIZE);
+  d->mesh_upload_queue[mesh_idx] = *mesh;
+  d->mesh_upload_count++;
+}
+
+static void demo_upload_texture(Demo *d, const GPUTexture *tex) {
+  uint32_t tex_idx = d->texture_upload_count;
+  assert(d->texture_upload_count < TEXTURE_UPLOAD_QUEUE_SIZE);
+  d->texture_upload_queue[tex_idx] = *tex;
+  d->texture_upload_count++;
+}
+
+static void demo_upload_scene(Demo *d, const Scene *s) {
+  for (uint32_t i = 0; i < s->mesh_count; ++i) {
+    demo_upload_mesh(d, &s->meshes[i]);
+  }
+
+  for (uint32_t i = 0; i < s->texture_count; ++i) {
+    demo_upload_texture(d, &s->textures[i]);
+  }
 }
 
 static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
@@ -3342,36 +3372,72 @@ void demo_destroy(Demo *d) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer) {
-  uint32_t buffer_idx = d->const_buffer_upload_count;
-  assert(d->const_buffer_upload_count < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
-  d->const_buffer_upload_queue[buffer_idx] = *buffer;
-  d->const_buffer_upload_count++;
-}
+void demo_set_camera(Demo *d, const CommonCameraData *camera) {
+  TracyCZoneN(ctx, "Update Camera Const Buffer", true);
 
-void demo_upload_mesh(Demo *d, const GPUMesh *mesh) {
-  uint32_t mesh_idx = d->mesh_upload_count;
-  assert(d->mesh_upload_count < MESH_UPLOAD_QUEUE_SIZE);
-  d->mesh_upload_queue[mesh_idx] = *mesh;
-  d->mesh_upload_count++;
-}
+  VmaAllocator vma_alloc = d->vma_alloc;
+  VmaAllocation camera_host_alloc = d->camera_const_buffer.host.alloc;
 
-void demo_upload_texture(Demo *d, const GPUTexture *tex) {
-  uint32_t tex_idx = d->texture_upload_count;
-  assert(d->texture_upload_count < TEXTURE_UPLOAD_QUEUE_SIZE);
-  d->texture_upload_queue[tex_idx] = *tex;
-  d->texture_upload_count++;
-}
-
-void demo_upload_scene(Demo *d, const Scene *s) {
-  for (uint32_t i = 0; i < s->mesh_count; ++i) {
-    demo_upload_mesh(d, &s->meshes[i]);
+  uint8_t *data = NULL;
+  VkResult err = vmaMapMemory(vma_alloc, camera_host_alloc, (void **)&data);
+  if (err != VK_SUCCESS) {
+    assert(0);
+    return;
   }
 
-  for (uint32_t i = 0; i < s->texture_count; ++i) {
-    demo_upload_texture(d, &s->textures[i]);
-  }
+  SDL_memcpy(data, camera, sizeof(CommonCameraData));
+  vmaUnmapMemory(vma_alloc, camera_host_alloc);
+
+  demo_upload_const_buffer(d, &d->camera_const_buffer);
+
+  TracyCZoneEnd(ctx);
 }
+
+void demo_set_sun(Demo *d, const CommonLightData *sun) {
+  TracyCZoneN(ctx, "Update Light Const Buffer", true);
+
+  VmaAllocator vma_alloc = d->vma_alloc;
+  VmaAllocation light_host_alloc = d->light_const_buffer.host.alloc;
+
+  uint8_t *data = NULL;
+  VkResult err = vmaMapMemory(vma_alloc, light_host_alloc, (void **)&data);
+  if (err != VK_SUCCESS) {
+    assert(0);
+    return;
+  }
+  // HACK: just pluck the light direction from the push constants for now
+  SDL_memcpy(data, sun, sizeof(CommonLightData));
+  vmaUnmapMemory(vma_alloc, light_host_alloc);
+
+  demo_upload_const_buffer(d, &d->light_const_buffer);
+  TracyCZoneEnd(ctx);
+}
+
+void demo_set_sky(Demo *d, const SkyData *sky) {
+  TracyCZoneN(ctx, "Update Sky Const Buffer", true);
+
+  VmaAllocator vma_alloc = d->vma_alloc;
+  VmaAllocation sky_host_alloc = d->sky_const_buffer.host.alloc;
+
+  uint8_t *data = NULL;
+  VkResult err = vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
+  if (err != VK_SUCCESS) {
+    assert(0);
+    return;
+  }
+  SDL_memcpy(data, sky, sizeof(SkyData));
+  vmaUnmapMemory(vma_alloc, sky_host_alloc);
+
+  demo_upload_const_buffer(d, &d->sky_const_buffer);
+  TracyCZoneEnd(ctx);
+}
+
+void demo_load_scene(Demo *d, const char *scene_path) {
+  (void)d;
+  (void)scene_path;
+}
+
+void demo_unload_scene(Demo *d) { (void)d; }
 
 void demo_process_event(Demo *d, const SDL_Event *e) {
   TracyCZoneN(ctx, "demo_process_event", true);
