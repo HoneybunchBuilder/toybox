@@ -332,6 +332,7 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   }
 
   cgltf_free(data);
+
   return 0;
 }
 
@@ -357,9 +358,21 @@ void destroy_scene(Scene *s) {
 
   // Clean up CPU-side arrays
   tb_free(std_alloc, s->materials);
+  s->materials = NULL;
+  s->material_count = 0;
   tb_free(std_alloc, s->meshes);
+  s->meshes = NULL;
+  s->mesh_count = 0;
   tb_free(std_alloc, s->textures);
+  s->textures = NULL;
+  s->texture_count = 0;
   tb_free(std_alloc, s->components);
+  s->components = NULL;
+  s->entity_count = 0;
   tb_free(std_alloc, s->static_mesh_refs);
+  s->static_mesh_refs = NULL;
+  tb_free(std_alloc, s->material_refs);
+  s->material_refs = NULL;
   tb_free(std_alloc, s->transforms);
+  s->transforms = NULL;
 }

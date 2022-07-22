@@ -38,9 +38,9 @@ typedef struct DemoAllocContext {
 } DemoAllocContext;
 
 typedef struct Scene {
+  bool loaded;
   DemoAllocContext alloc_ctx;
 
-  uint32_t max_entity_count;
   uint32_t entity_count;
   uint64_t *components;
 
@@ -48,15 +48,12 @@ typedef struct Scene {
   uint32_t *static_mesh_refs;
   uint32_t *material_refs;
 
-  uint32_t max_mesh_count;
   uint32_t mesh_count;
   GPUMesh *meshes;
 
-  uint32_t max_texture_count;
   uint32_t texture_count;
   GPUTexture *textures;
 
-  uint32_t max_material_count;
   uint32_t material_count;
   GPUMaterial *materials;
 } Scene;
