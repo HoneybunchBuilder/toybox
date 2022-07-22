@@ -14,7 +14,7 @@
 #include "vkdbg.h"
 
 #ifdef __ANDROID__
-#define ASSET_PREFIX
+#define ASSET_PREFIX ""
 #else
 #define ASSET_PREFIX "./assets/"
 #endif
@@ -278,6 +278,11 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
   TracyCZoneN(ctx, "demo_render_scene_shadows", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
+  if (s == NULL) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     TracyCZoneN(entity_e, "render entity", true);
     uint64_t components = s->components[i];
@@ -346,6 +351,11 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               const float4x4 *vp, Demo *d) {
   TracyCZoneN(ctx, "demo_render_scene", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
+
+  if (s == NULL) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
 
   // HACK: Upload all material const buffers every frame
   {
@@ -2342,7 +2352,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
-  // Composite main scene
+  // Create main scene
   Scene *main_scene = NULL;
   {
     main_scene = tb_alloc_tp(std_alloc, Scene);
@@ -2362,51 +2372,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
     if (create_scene(scene_ctx, main_scene) != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to load main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-
-    /*
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/BoomBox.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append BoomBox to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/duck.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append duck to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Floor to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Lantern.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Lantern to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/WaterBottle.glb") !=
-        0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append WaterBottle to main scene");
-      SDL_TriggerBreakpoint();
-      return false;
-    }
-    */
-
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Sponza.glb") != 0) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to append Sponza to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
@@ -2528,7 +2493,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       tb_alloc_nm_tp(std_alloc, TEXTURE_UPLOAD_QUEUE_SIZE, GPUTexture);
 
   demo_upload_mesh(d, &d->skydome_gpu);
-  demo_upload_scene(d, d->main_scene);
 
   // Create Semaphores
   {
@@ -3432,12 +3396,28 @@ void demo_set_sky(Demo *d, const SkyData *sky) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_load_scene(Demo *d, const char *scene_path) {
-  (void)d;
-  (void)scene_path;
+bool demo_load_scene(Demo *d, const char *scene_path) {
+  const uint32_t max_asset_len = 2048;
+  char *asset_path = tb_alloc(d->tmp_alloc, max_asset_len);
+  SDL_memset(asset_path, 0, max_asset_len);
+  SDL_snprintf(asset_path, max_asset_len, "%s%s", ASSET_PREFIX, scene_path);
+
+  if (scene_append_gltf(d->main_scene, asset_path) != 0) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to append scene: %s",
+                 asset_path);
+    SDL_TriggerBreakpoint();
+    return false;
+  }
+
+  demo_upload_scene(d, d->main_scene);
+  d->main_scene->loaded = true;
+  return true;
 }
 
-void demo_unload_scene(Demo *d) { (void)d; }
+void demo_unload_scene(Demo *d) {
+  destroy_scene(d->main_scene);
+  d->main_scene->loaded = false;
+}
 
 void demo_process_event(Demo *d, const SDL_Event *e) {
   TracyCZoneN(ctx, "demo_process_event", true);
@@ -3580,7 +3560,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
   uint32_t swap_img_idx = d->swap_img_idx;
 
   // Allocate per-object constant buffers
-  {
+  if (d->main_scene->loaded) {
     // Determine if we can fit the current number of needed obj const buffers
     // in the current allocated set of const buffer
     uint32_t obj_count = d->main_scene->entity_count;
@@ -3620,7 +3600,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
   VkDescriptorSet *main_scene_object_sets = NULL;
   VkDescriptorSet *main_scene_material_sets = NULL;
-  {
+  if (d->main_scene->loaded) {
     TracyCZoneN(demo_manage_descriptor_sets,
                 "demo_render_frame manage descriptor sets", true);
     uint32_t max_obj_count = d->main_scene->entity_count;

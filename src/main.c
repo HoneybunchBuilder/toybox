@@ -314,6 +314,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(success);
   (void)success;
 
+  // Load starter scene
+  static const uint32_t max_scene_name_len = 2048;
+  char *scene_path = tb_alloc(std_alloc.alloc, max_scene_name_len);
+  SDL_snprintf(scene_path, max_scene_name_len, "%s", "scenes/Sponza.glb");
+
+  demo_load_scene(&d, scene_path);
+
   SkyData sky_data = {
       .cirrus = 0.4f,
       .cumulus = 0.8f,
@@ -765,73 +772,98 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
 
       if (showSceneWindow && igBegin("Scene Explorer", &showSceneWindow, 0)) {
+        igText("Current Scene: ");
+        if (d.main_scene->loaded) {
+          igSameLine(0.0f, -1.0f);
+          igText("%s", scene_path);
+        }
 
-        if (igTreeNode_StrStr("Entities", "Entity Count: %d",
-                              d.main_scene->entity_count)) {
-          for (uint32_t i = 0; i < d.main_scene->entity_count; ++i) {
-            uint64_t components = d.main_scene->components[i];
-            if (components & COMPONENT_TYPE_TRANSFORM) {
-              SceneTransform *transform = &d.main_scene->transforms[i];
-              igPushID_Ptr(transform);
-              if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
+        // Button is disabled if we don't have a scene open
+        {
+          const float unload_button_alpha = d.main_scene->loaded ? 1.0f : 0.5f;
+
+          igPushItemFlag(ImGuiItemFlags_Disabled, !d.main_scene->loaded);
+          igPushStyleVar_Float(ImGuiStyleVar_Alpha, unload_button_alpha);
+
+          if (igButton("Unload Scene", (ImVec2){0})) {
+            demo_unload_scene(&d);
+          }
+          igPopStyleVar(1);
+          igPopItemFlag();
+        }
+
+        igSameLine(0.0f, -1.0f);
+        if (igButton("Load Scene", (ImVec2){0})) {
+        }
+
+        if (d.main_scene->loaded) {
+          if (igTreeNode_StrStr("Entities", "Entity Count: %d",
+                                d.main_scene->entity_count)) {
+            for (uint32_t i = 0; i < d.main_scene->entity_count; ++i) {
+              uint64_t components = d.main_scene->components[i];
+              if (components & COMPONENT_TYPE_TRANSFORM) {
+                SceneTransform *transform = &d.main_scene->transforms[i];
+                igPushID_Ptr(transform);
+                if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wfloat-equal"
 #endif
-                {
-                  float3 *position = &transform->t.position;
-                  float x = (*position)[0];
-                  float y = (*position)[1];
-                  float z = (*position)[2];
+                  {
+                    float3 *position = &transform->t.position;
+                    float x = (*position)[0];
+                    float y = (*position)[1];
+                    float z = (*position)[2];
 
-                  igText("%s", "Position");
-                  igSliderFloat("X", &x, -100.0f, 100.0f, "%.3f", 0);
-                  if (x != (*position)[0]) {
-                    (*position)[0] = x;
+                    igText("%s", "Position");
+                    igSliderFloat("X", &x, -100.0f, 100.0f, "%.3f", 0);
+                    if (x != (*position)[0]) {
+                      (*position)[0] = x;
+                    }
+                    if (igSliderFloat("Y", &y, -100.0f, 100.0f, "%.3f", 0)) {
+                      (*position)[1] = y;
+                    }
+                    if (igSliderFloat("Z", &z, -100.0f, 100.0f, "%.3f", 0)) {
+                      (*position)[2] = z;
+                    }
                   }
-                  if (igSliderFloat("Y", &y, -100.0f, 100.0f, "%.3f", 0)) {
-                    (*position)[1] = y;
+
+                  igSeparator();
+
+                  {
+                    float3 *scale = &transform->t.scale;
+                    float x = (*scale)[0];
+
+                    igText("%s", "Uniform Scale");
+                    igSliderFloat("scale", &x, 0.1f, 10.0f, "%.3f", 0);
+                    if (x != (*scale)[0]) {
+                      (*scale)[0] = x;
+                      (*scale)[1] = x;
+                      (*scale)[2] = x;
+                    }
                   }
-                  if (igSliderFloat("Z", &z, -100.0f, 100.0f, "%.3f", 0)) {
-                    (*position)[2] = z;
-                  }
-                }
 
-                igSeparator();
-
-                {
-                  float3 *scale = &transform->t.scale;
-                  float x = (*scale)[0];
-
-                  igText("%s", "Uniform Scale");
-                  igSliderFloat("scale", &x, 0.1f, 10.0f, "%.3f", 0);
-                  if (x != (*scale)[0]) {
-                    (*scale)[0] = x;
-                    (*scale)[1] = x;
-                    (*scale)[2] = x;
-                  }
-                }
-
-                igTreePop();
+                  igTreePop();
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+                }
+                igPopID();
               }
-              igPopID();
-            }
 
-            if (components & COMPONENT_TYPE_STATIC_MESH) {
-              igText("Static Mesh: %d", d.main_scene->static_mesh_refs[i]);
-            }
+              if (components & COMPONENT_TYPE_STATIC_MESH) {
+                igText("Static Mesh: %d", d.main_scene->static_mesh_refs[i]);
+              }
 
-            igSeparator();
+              igSeparator();
+            }
+            igTreePop();
           }
-          igTreePop();
+          igText("Mesh Count: %d", d.main_scene->mesh_count);
+          igText("Texture Count: %d", d.main_scene->texture_count);
+          igText("Material Count: %d", d.main_scene->material_count);
         }
-        igText("Mesh Count: %d", d.main_scene->mesh_count);
-        igText("Texture Count: %d", d.main_scene->texture_count);
-        igText("Material Count: %d", d.main_scene->material_count);
 
         igEnd();
       }
