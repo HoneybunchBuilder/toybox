@@ -5,6 +5,7 @@
 #include <mimalloc.h>
 
 #include "allocator.h"
+#include "assetmanifest.h"
 #include "camera.h"
 #include "config.h"
 #include "demo.h"
@@ -315,10 +316,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)success;
 
   // Load starter scene
-  static const uint32_t max_scene_name_len = 2048;
-  char *scene_path = tb_alloc(std_alloc.alloc, max_scene_name_len);
-  SDL_snprintf(scene_path, max_scene_name_len, "%s", "scenes/Sponza.glb");
-
+  const char *scene_path = tb_asset_database[10];
   demo_load_scene(&d, scene_path);
 
   SkyData sky_data = {
