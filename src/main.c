@@ -315,8 +315,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(success);
   (void)success;
 
+  // Get scene asset paths
+  const char **scene_asset_paths =
+      tb_alloc_nm_tp(d.tmp_alloc, tb_scene_database_num, const char *);
+  for (uint32_t i = 0; i < tb_scene_database_num; ++i) {
+    const uint32_t scene_idx = tb_scene_database[i];
+    SDL_assert(scene_idx < tb_asset_database_num);
+    scene_asset_paths[i] = tb_asset_database[scene_idx];
+  }
+
   // Load starter scene
-  const char *scene_path = tb_asset_database[10];
+  int32_t scene_idx = 4;
+  const char *scene_path = scene_asset_paths[scene_idx];
   demo_load_scene(&d, scene_path);
 
   SkyData sky_data = {
@@ -776,6 +786,34 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           igText("%s", scene_path);
         }
 
+        // Combo for scene selection
+        {
+          int32_t selected_scene_index = scene_idx;
+          const char *preview =
+              scene_idx < 0 ? "" : scene_asset_paths[scene_idx];
+          if (igBeginCombo("Scenes", preview, 0)) {
+            for (int32_t i = 0; i < (int32_t)tb_scene_database_num; ++i) {
+              const bool is_selected = (scene_idx == i);
+              if (igSelectable_Bool(scene_asset_paths[i], is_selected, 0,
+                                    (ImVec2){0})) {
+                selected_scene_index = i;
+              }
+
+              if (is_selected) {
+                igSetItemDefaultFocus();
+              }
+            }
+            igEndCombo();
+          }
+
+          if (selected_scene_index != scene_idx) {
+            scene_idx = selected_scene_index;
+            scene_path = scene_asset_paths[scene_idx];
+            demo_unload_scene(&d);
+            demo_load_scene(&d, scene_path);
+          }
+        }
+
         // Button is disabled if we don't have a scene open
         {
           const float unload_button_alpha = d.main_scene->loaded ? 1.0f : 0.5f;
@@ -784,14 +822,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           igPushStyleVar_Float(ImGuiStyleVar_Alpha, unload_button_alpha);
 
           if (igButton("Unload Scene", (ImVec2){0})) {
+            scene_idx = -1;
+            scene_path = "";
             demo_unload_scene(&d);
           }
           igPopStyleVar(1);
           igPopItemFlag();
-        }
-
-        igSameLine(0.0f, -1.0f);
-        if (igButton("Load Scene", (ImVec2){0})) {
         }
 
         if (d.main_scene->loaded) {
