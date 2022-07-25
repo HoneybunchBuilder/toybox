@@ -1,0 +1,60 @@
+name: iOS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolsets: [
+          {host: [macos-12], preset: arm64-ios-ninja-llvm, self-hosted: no},
+          # Not doing iOS xcode builds until we can figure out signing
+          #{host: [macos-12], preset: arm64-ios-xcode-llvm, self-hosted: no},
+        ]
+
+    name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
+    runs-on: ${{matrix.toolsets.host}}
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        lfs: 'true'
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+      if: matrix.toolsets.self-hosted != 'yes'
+
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      if: matrix.toolsets.self-hosted != 'yes'
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v10
+      with:
+        vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
+      if: matrix.toolsets.self-hosted != 'yes'
+
+    - name: Build Debug
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'debug-${{matrix.toolsets.preset}}'
+
+    - name: Build RelWithDebInfo
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'relwithdebinfo-${{matrix.toolsets.preset}}'
+
+    - name: Build Release
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: '${{matrix.toolsets.preset}}'
+        buildPreset: 'release-${{matrix.toolsets.preset}}'
