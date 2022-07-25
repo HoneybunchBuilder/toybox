@@ -396,7 +396,7 @@ file(GENERATE OUTPUT config/${generated_manifest} CONTENT "${manifest_contents}"
 add_custom_target(asset_manifest ALL DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
-add_dependencies(toybox scenes textures)
+add_dependencies(toybox scenes textures asset_manifest)
 
 # Add assets to bundle
 #[[ TODO: Figure out how to get this to work with xcode
