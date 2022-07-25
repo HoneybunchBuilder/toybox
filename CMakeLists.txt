@@ -362,37 +362,28 @@ add_custom_target(scenes ALL DEPENDS ${packed_scenes})
 
 # Generate asset database
 set(source_assets ${ktx_textures} ${packed_scenes})
-list(LENGTH source_assets source_assets_num)
-set(generated_manifest "assetmanifest.h")
-set(manifest_contents "#pragma once\n")
-string(APPEND manifest_contents "//This file is generated!\n")
-string(APPEND manifest_contents "#include <stdint.h>\n")
-# Add all assets to string table
+list(LENGTH source_assets ASSET_NUM)
+set(generated_manifest "${config_include_dir}/assetmanifest.h")
+# Add all assets to asset list
 # Also keep track of which assets are scenes
 math(EXPR asset_idx "0")
-string(APPEND manifest_contents "const uint32_t tb_asset_database_num = ${source_assets_num};\n")
-string(APPEND manifest_contents "const char *tb_asset_database[${source_assets_num}] = {\n")
 foreach(asset ${source_assets})
   get_filename_component(asset_ext ${asset} EXT BASE_DIR ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
   get_filename_component(asset_path ${asset} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>)
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets ${asset_path})
   if(asset_ext MATCHES ".glb")
-    list(APPEND manifest_scenes ${asset_idx})
+    list(APPEND scene_index_list ${asset_idx})
   endif()
-  string(APPEND manifest_contents "\"${relpath}\",\n")
+  string(APPEND ASSET_LIST "\"${relpath}\",")
   math(EXPR asset_idx "${asset_idx} + 1")
 endforeach()
-string(APPEND manifest_contents "};\n")
-# Generate scene table
-list(LENGTH manifest_scenes scene_database_num)
-string(APPEND manifest_contents "const uint32_t tb_scene_database_num = ${scene_database_num};\n")
-string(APPEND manifest_contents "const uint32_t tb_scene_database[${scene_database_num}] = {\n")
-foreach(scene_idx ${manifest_scenes})
-string(APPEND manifest_contents "${scene_idx},\n")
+# Add all scene indexes to the string that will be sent to the generated file
+list(LENGTH scene_index_list SCENE_NUM)
+foreach(idx ${scene_index_list})
+  string(APPEND SCENE_LIST "${idx},")
 endforeach()
-string(APPEND manifest_contents "};\n")
 
-file(GENERATE OUTPUT config/${generated_manifest} CONTENT "${manifest_contents}" TARGET toybox)
+configure_file(src/assetmanifest.h.in ${generated_manifest})
 add_custom_target(asset_manifest ALL DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked

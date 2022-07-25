@@ -1,0 +1,9 @@
+#pragma once
+
+#include <stdint.h>
+
+const uint32_t tb_asset_database_num = ${ASSET_NUM};
+const char *tb_asset_database[${ASSET_NUM}] = {${ASSET_LIST}};
+
+const uint32_t tb_scene_database_num = ${SCENE_NUM};
+const uint32_t tb_scene_database[${SCENE_NUM}] = {${SCENE_LIST}};
