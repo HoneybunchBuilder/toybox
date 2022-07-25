@@ -2,7 +2,13 @@
 
 A simple test application in C for Windows, Linux, macOS, iOS and Android 
 
-[![CMake](https://github.com/Honeybunch/toybox/actions/workflows/build.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/build.yml)
+#### Main Branch Build Status
+
+[![Windows](https://github.com/Honeybunch/toybox/actions/workflows/windows.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/windows.yml)
+[![Linux](https://github.com/Honeybunch/toybox/actions/workflows/linux.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/linux.yml)
+[![macOS](https://github.com/Honeybunch/toybox/actions/workflows/macos.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/macos.yml)
+[![Android](https://github.com/Honeybunch/toybox/actions/workflows/android.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/android.yml)
+[![iOS](https://github.com/Honeybunch/toybox/actions/workflows/ios.yml/badge.svg)](https://github.com/Honeybunch/toybox/actions/workflows/ios.yml)
 
 ## Building
 This project builds with CMake and relies heavily on a deep integration with [vcpkg](https://github.com/microsoft/vcpkg) for dependency management
