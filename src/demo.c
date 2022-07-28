@@ -120,10 +120,16 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   queues[0].flags = 0;
 
 #if defined(VK_KHR_ray_tracing_pipeline)
+  VkPhysicalDeviceRayQueryFeaturesKHR rt_query_feature = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
+      .rayQuery = ext_support->raytracing,
+  };
+
   VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
       .sType =
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
       .rayTracingPipeline = ext_support->raytracing,
+      .pNext = &rt_query_feature,
   };
 #endif
 
@@ -1164,6 +1170,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       optional_device_ext((const char **)&device_ext_names, &device_ext_count,
                           props, prop_count,
                           VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count, VK_KHR_RAY_QUERY_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
     }
 #endif
 
@@ -1722,7 +1733,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       skydome_pipe_layout, &skydome_pipeline));
   assert(err == VK_SUCCESS);
 
-// HACK: Get this function here...
+  GPUPipeline *gltf_rt_pipeline = NULL;
 #if defined(VK_KHR_ray_tracing_pipeline)
   if (ext_support.raytracing) {
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
@@ -1730,7 +1741,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             device, "vkCreateRayTracingPipelinesKHR");
 
     // Create GLTF Ray Tracing Pipeline
-    GPUPipeline *gltf_rt_pipeline = NULL;
     err = create_gltf_rt_pipeline(
         device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache,
         vkCreateRayTracingPipelinesKHR, gltf_rt_pipe_layout, &gltf_rt_pipeline);
@@ -2469,7 +2479,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->gltf_pipeline = gltf_pipeline;
   d->gltf_rt_layout = gltf_rt_layout;
   d->gltf_rt_pipe_layout = gltf_rt_pipe_layout;
-  // d->gltf_rt_pipeline = gltf_rt_pipeline;
+  d->gltf_rt_pipeline = gltf_rt_pipeline;
   d->imgui_layout = imgui_set_layout;
   d->imgui_pipe_layout = imgui_pipe_layout;
   d->imgui_pipeline = imgui_pipeline;
@@ -2560,6 +2570,69 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     }
   }
 
+  // Create Offscreen Targets
+  {
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent = (VkExtent3D){d->swap_info.width, d->swap_info.height, 1},
+        .mipLevels = 1,
+        .arrayLayers = FRAME_LATENCY,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage =
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+        .pUserData = (void *)("Offscreen Targets"),
+    };
+
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info,
+                          &d->offscreen_target);
+    if (err != VK_SUCCESS) {
+      SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                   "Failed to create offscreen target texture");
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Offscreen Target views
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = d->offscreen_target.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .components =
+            (VkComponentMapping){
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.subresourceRange =
+          (VkImageSubresourceRange){
+              VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, i, 1,
+          },
+      err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
+                              &d->offscreen_image_views[i]);
+      if (err != VK_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                     "Failed to create offscreen target view");
+        assert(false);
+        return false;
+      }
+    }
+  }
+
   // Create BRDF LUT
   {
     VkImageCreateInfo create_info = {
@@ -2584,6 +2657,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = create_gpuimage(vma_alloc, &create_info, &alloc_info, &d->brdf_lut);
 
     if (err != VK_SUCCESS) {
+      SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create BRDF LUT");
       assert(false);
       return false;
     }
@@ -2616,6 +2690,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
                             &d->brdf_lut_view);
     if (err != VK_SUCCESS) {
+      SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create BRDF LUT view");
       assert(false);
       return false;
     }
@@ -2643,6 +2718,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
                                 &d->shadow_pass_framebuffers[i]);
       if (err != VK_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                     "Failed to create shadow pass framebuffers");
         assert(false);
         return false;
       }
@@ -2662,7 +2739,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                                 &d->command_pools[i]);
       SET_VK_NAME(device, d->command_pools[i], VK_OBJECT_TYPE_COMMAND_POOL,
                   "command pool");
-      assert(err == VK_SUCCESS);
+      if (err != VK_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Failed to create command pool");
+        assert(false);
+        return false;
+      }
     }
   }
 
@@ -3220,6 +3301,7 @@ void demo_destroy(Demo *d) {
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     TracyCVkContextDestroy(d->tracy_gpu_contexts[i]);
 
+    vkDestroyImageView(device, d->offscreen_image_views[i], vk_alloc);
     vkDestroyImageView(device, d->shadow_map_views[i], vk_alloc);
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyImageView(device, d->irradiance_cubemap_views[i], vk_alloc);
@@ -3241,6 +3323,7 @@ void demo_destroy(Demo *d) {
     destroy_gpumesh(vma_alloc, &d->imgui_gpu[i]);
   }
 
+  destroy_gpuimage(vma_alloc, &d->offscreen_target);
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
   destroy_gpuimage(vma_alloc, &d->shadow_maps);
   destroy_gpuimage(vma_alloc, &d->env_cubemap);
@@ -3296,7 +3379,7 @@ void demo_destroy(Demo *d) {
 
   vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, vk_alloc);
-  // destroy_gpupipeline(device, vk_alloc, d->gltf_rt_pipeline);
+  destroy_gpupipeline(device, d->std_alloc, vk_alloc, d->gltf_rt_pipeline);
 
   vkDestroyDescriptorSetLayout(device, d->gltf_material_set_layout, vk_alloc);
   vkDestroyDescriptorSetLayout(device, d->gltf_object_set_layout, vk_alloc);
