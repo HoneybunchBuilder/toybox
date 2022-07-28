@@ -130,6 +130,10 @@ typedef struct Demo {
   VkImageView shadow_map_views[FRAME_LATENCY];
   VkSampler shadow_sampler;
 
+  // Images for rendering to an offscreen HDR target
+  GPUImage offscreen_target;
+  VkImageView offscreen_image_views[FRAME_LATENCY];
+
   GPUImage brdf_lut;
   VkImageView brdf_lut_view;
 
