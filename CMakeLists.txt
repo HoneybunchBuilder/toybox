@@ -475,8 +475,6 @@ else()
 
   # Desktop OSes
   if(WIN32)
-    find_package(WIX REQUIRED)
-
     set(CPACK_GENERATOR WIX)
 
     set(CPACK_WIX_PRODUCT_GUID "044b496e-773f-447d-90c9-2a0212e1ff2c")
