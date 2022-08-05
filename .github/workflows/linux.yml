@@ -23,8 +23,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        lfs: 'true'
 
     - name: Configure
       run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF
