@@ -2614,7 +2614,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
                 VK_COMPONENT_SWIZZLE_B,
                 VK_COMPONENT_SWIZZLE_A,
             },
-
+        .subresourceRange = {0},
     };
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
