@@ -14,12 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: [Windows, X64, self-hosted], preset: x64-windows-ninja-llvm, self-hosted: yes},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-static-ninja-llvm, self-hosted: yes},
-          {host: [Windows, X64, self-hosted], preset: x64-mingw-ninja-gcc, self-hosted: yes},
-          {host: [Windows, X64, self-hosted], preset: x64-mingw-static-ninja-gcc, self-hosted: yes},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-vs2022-llvm, self-hosted: yes},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-static-vs2022-llvm, self-hosted: yes},
+          {host: [Windows, X64, self-hosted], preset: x64-windows-ninja-llvm},
+          {host: [Windows, X64, self-hosted], preset: x64-windows-static-ninja-llvm},
+          {host: [Windows, X64, self-hosted], preset: x64-mingw-ninja-gcc},
+          {host: [Windows, X64, self-hosted], preset: x64-mingw-static-ninja-gcc},
+          {host: [Windows, X64, self-hosted], preset: x64-windows-vs2022-llvm},
+          {host: [Windows, X64, self-hosted], preset: x64-windows-static-vs2022-llvm},
         ]
 
     name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
@@ -29,20 +29,6 @@ jobs:
     - uses: actions/checkout@v3
       with:
         lfs: 'true'
-
-    - name: Install Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
-      if: matrix.toolsets.self-hosted != 'yes'
-
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-      if: matrix.toolsets.self-hosted != 'yes'
-
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v10
-      with:
-        vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
-      if: matrix.toolsets.self-hosted != 'yes'
 
     - name: Build Debug
       uses: lukka/run-cmake@v10

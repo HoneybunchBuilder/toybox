@@ -24,6 +24,7 @@ project(toybox
         LANGUAGES C CXX)
 
 option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
+option(COOK_ASSETS "Process assets for runtime loading" ON)
 
 set(GAME_NAME "toybox")
 set(GAME_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
@@ -338,7 +339,7 @@ foreach(texture ${source_textures})
 
   list(APPEND ktx_textures ${ktx_texture})
 endforeach()
-add_custom_target(textures ALL DEPENDS ${ktx_textures})
+add_custom_target(textures DEPENDS ${ktx_textures})
 
 # TODO: Cook scenes
 file(GLOB_RECURSE source_scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
@@ -358,7 +359,7 @@ foreach(scene ${source_scenes})
 
   list(APPEND packed_scenes ${packed_scene})
 endforeach()
-add_custom_target(scenes ALL DEPENDS ${packed_scenes})
+add_custom_target(scenes DEPENDS ${packed_scenes})
 
 # Generate asset database
 set(source_assets ${ktx_textures} ${packed_scenes})
@@ -384,33 +385,35 @@ foreach(idx ${scene_index_list})
 endforeach()
 
 configure_file(src/assetmanifest.h.in ${generated_manifest})
-add_custom_target(asset_manifest ALL DEPENDS ${generated_manifest})
+add_custom_target(asset_manifest DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
-add_dependencies(toybox scenes textures asset_manifest)
+if(COOK_ASSETS)
+  add_dependencies(toybox scenes textures asset_manifest)
 
-# Add assets to bundle
-#[[ TODO: Figure out how to get this to work with xcode
-          It currently fails because ${scene} resolves to a path with a generator expression
-if(APPLE)
-  foreach(scene ${packed_scenes})
-    set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
-    target_sources(toybox PRIVATE ${scene})
-  endforeach()
-  foreach(texture ${ktx_textures})
-    set_source_files_properties(${texture} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/textures")
-    target_sources(toybox PRIVATE ${texture})
-  endforeach()
+  # Add assets to bundle
+  #[[ TODO: Figure out how to get this to work with xcode
+            It currently fails because ${scene} resolves to a path with a generator expression
+  if(APPLE)
+    foreach(scene ${packed_scenes})
+      set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
+      target_sources(toybox PRIVATE ${scene})
+    endforeach()
+    foreach(texture ${ktx_textures})
+      set_source_files_properties(${texture} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/textures")
+      target_sources(toybox PRIVATE ${texture})
+    endforeach()
+  endif()
+  #]]
+
+  # Install cooked assets
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
+                    DESTINATION ${assets_dest})
+
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
+                    DESTINATION ${assets_dest}
+                    FILES_MATCHING PATTERN "*.ktx2")
 endif()
-#]]
-
-# Install cooked assets
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
-                   DESTINATION ${assets_dest})
-
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
-                  DESTINATION ${assets_dest}
-                  FILES_MATCHING PATTERN "*.ktx2")
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)
