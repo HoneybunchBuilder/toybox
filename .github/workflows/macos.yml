@@ -39,20 +39,14 @@ jobs:
       with:
         vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
 
+    - name: Configure
+      run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF
+
     - name: Build Debug
-      uses: lukka/run-cmake@v10
-      with:
-        configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'debug-${{matrix.toolsets.preset}}'
+      run: cmake --build --preset debug-${{matrix.toolsets.preset}}
 
     - name: Build RelWithDebInfo
-      uses: lukka/run-cmake@v10
-      with:
-        configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'relwithdebinfo-${{matrix.toolsets.preset}}'
+      run: cmake --build --preset relwithdebinfo-${{matrix.toolsets.preset}}
 
     - name: Build Release
-      uses: lukka/run-cmake@v10
-      with:
-        configurePreset: '${{matrix.toolsets.preset}}'
-        buildPreset: 'release-${{matrix.toolsets.preset}}'
+      run: cmake --build --preset release-${{matrix.toolsets.preset}}
