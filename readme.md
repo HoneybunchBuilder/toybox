@@ -35,6 +35,10 @@ For LLVM you will need the VS2022 build tools, a Windows 10/11 Kit install and L
 
 For Mingw you will just need a `gcc` install (tested with distributions from chocolatey and scoop)
 
+To build the dependency `ktx` you will need to have bash installed. The bash from git works just fine. If you have git installed from somewhere non-standard like `scoop` or `choco` you will also need it to be available from `C:\Program Files\Git` or else the `FindBash` module of `ktx` will not function properly in vcpkg's environment. I've tried passing bash through via `VCPKG_KEEP_ENV_VARS` to no avail.
+
+Packaging a .msi file requires the Wix Toolset. Its tools (candle, light, etc.) are expected to be available on your path.
+
 #### Android
 You will need the following installed from the android sdkmanager:
 * `build-tools;31.0.0` (anything 30+ works; try latest)
@@ -55,7 +59,7 @@ For DXC to work properly you may need libncurses5 installed. You can install tha
 Ubuntu with: `sudo apt install -y libncurses5`
 
 #### Macos / iOS
-You should only need the xcode developer command line tools installed.
+You should only need the xcode developer command line tools installed and the MoltenVK Vulkan SDK (primarily for `dxc`).
 
 These are somewhat untested. Builds for macOS do work and even package properly but iOS builds have not been setup to properly package .ipa files nor has it been tested on any devices.
 
