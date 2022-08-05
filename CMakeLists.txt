@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.20)
 
 if(NOT DEFINED ENV{VCPKG_ROOT})
   message(FATAL_ERROR "Need VCPKG_ROOT environment variable defined")
@@ -16,10 +16,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
-# TODO: Determine version from the vcpkg json manifest
+# Determine version from the vcpkg json manifest
+file(READ vcpkg.json VCPKG_MANIFEST)
+string(JSON VCPKG_VERSION GET ${VCPKG_MANIFEST} "version")
 
 project(toybox
-        VERSION 0.1.0
+        VERSION ${VCPKG_VERSION}
         DESCRIPTION "A personal game engine toybox project"
         LANGUAGES C CXX)
 

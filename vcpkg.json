@@ -2,7 +2,6 @@
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
     "name": "toybox",
     "version": "0.1.0",
-    "builtin-baseline": "9ba75e6e174b30b97afc5c8c3170c5d25c548b32",
     "dependencies": [
         "cgltf",
         "imgui",
