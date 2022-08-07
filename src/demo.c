@@ -3498,6 +3498,14 @@ bool demo_load_scene(Demo *d, const char *scene_path) {
 }
 
 void demo_unload_scene(Demo *d) {
+  // Wait for all frames to be complete
+  vkWaitForFences(d->device, FRAME_LATENCY, d->fences, VK_TRUE, UINT64_MAX);
+
+  // Clear all upload queues
+  d->texture_upload_count = 0;
+  d->mesh_upload_count = 0;
+  d->const_buffer_upload_count = 0;
+
   destroy_scene(d->main_scene);
   d->main_scene->loaded = false;
 }
