@@ -62,6 +62,11 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   }
 
+  // Helper for breaking when encountering a non-info message
+  if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+    SDL_TriggerBreakpoint();
+  }
+
   return false;
 }
 #endif

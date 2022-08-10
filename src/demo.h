@@ -123,6 +123,7 @@ typedef struct Demo {
   VkFramebuffer env_cube_framebuffer;
   VkFramebuffer shadow_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer main_pass_framebuffers[FRAME_LATENCY];
+  VkFramebuffer tonemap_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer ui_pass_framebuffers[FRAME_LATENCY];
 
   GPUImage shadow_maps; // Implemented as an image array; one image for each
@@ -132,7 +133,9 @@ typedef struct Demo {
 
   // Images for rendering to an offscreen HDR target
   GPUImage offscreen_target;
+  VkFormat offscreen_format;
   VkImageView offscreen_image_views[FRAME_LATENCY];
+  VkRenderPass tonemap_pass;
 
   GPUImage brdf_lut;
   VkImageView brdf_lut_view;

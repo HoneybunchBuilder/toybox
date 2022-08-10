@@ -31,6 +31,23 @@
 
 #define MAX_EXT_COUNT 16
 
+#define TB_VK_CHECK(err, message)                                              \
+  if ((err) != VK_SUCCESS) {                                                   \
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    assert(false);                                                             \
+  }
+#define TB_VK_ENSURE(err, message)                                             \
+  if ((err) != VK_SUCCESS) {                                                   \
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    SDL_TriggerBreakpoint();                                                   \
+  }
+#define TB_VK_ENSURE_RET(err, message, ret)                                    \
+  if ((err) != VK_SUCCESS) {                                                   \
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    SDL_TriggerBreakpoint();                                                   \
+    return (ret);                                                              \
+  }
+
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
                          VkDeviceMemory memory, VkDeviceSize size,
                          void *pUserData) {
@@ -696,29 +713,29 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
     }
   }
 
-  VkSwapchainCreateInfoKHR create_info = {0};
-  create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  create_info.surface = surface;
+  VkSwapchainCreateInfoKHR create_info = {
+      .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+      .surface = surface,
   // On Android, vkGetSwapchainImagesKHR is always returning 1 more image than
   // our min image count
 #ifdef __ANDROID__
-  create_info.minImageCount = image_count - 1;
+      .minImageCount = image_count - 1,
 #else
-  create_info.minImageCount = image_count;
+      .minImageCount = image_count,
 #endif
-  create_info.imageFormat = surface_format.format;
-  create_info.imageColorSpace = surface_format.colorSpace;
-  create_info.imageExtent = swapchain_extent;
-  create_info.imageArrayLayers = 1;
-  create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-  create_info.compositeAlpha = composite_alpha;
-  create_info.preTransform = pre_transform;
-  create_info.presentMode = present_mode;
-  create_info.surface = surface;
-  create_info.oldSwapchain = *swapchain;
+      .imageFormat = surface_format.format,
+      .imageColorSpace = surface_format.colorSpace,
+      .imageExtent = swapchain_extent,
+      .imageArrayLayers = 1,
+      .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+      .compositeAlpha = composite_alpha,
+      .preTransform = pre_transform,
+      .presentMode = present_mode,
+      .oldSwapchain = *swapchain,
+  };
 
   err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, swapchain);
-  assert(err == VK_SUCCESS);
+  TB_VK_ENSURE(err, "Failed to create swapchain");
 
   swap_info = (SwapchainInfo){
       .valid = true,
@@ -741,15 +758,14 @@ static bool demo_init_image_views(Demo *d) {
   {
     uint32_t img_count = 0;
     err = vkGetSwapchainImagesKHR(d->device, d->swapchain, &img_count, NULL);
-    if (err != VK_SUCCESS) {
-      assert(false);
-      return false;
-    }
+    TB_VK_ENSURE_RET(err, "Failed to retrieve swapchain image count", false);
 
     // Device may really want us to have called vkGetSwapchainImagesKHR
     // For now just assert that making that call doesn't change our desired
     // swapchain images
     if (d->swap_info.image_count != img_count) {
+      SDL_LogCritical(SDL_LOG_CATEGORY_RENDER,
+                      "Unexpected swapchain image count");
       assert(false);
       return false;
     }
@@ -757,16 +773,15 @@ static bool demo_init_image_views(Demo *d) {
     err =
         vkGetSwapchainImagesKHR(d->device, d->swapchain,
                                 &d->swap_info.image_count, d->swapchain_images);
-    if (err != VK_SUCCESS && err == VK_INCOMPLETE) {
-      assert(false);
-      return false;
+    if (err == VK_INCOMPLETE) {
+      TB_VK_ENSURE_RET(err, "Failed to retrieve swapchain images", false);
     }
   }
 
-  // Create Depth Buffer Views
+  // Create Swapchain Image Views
   {
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      if (d->depth_buffer_views[i]) {
+      if (d->swapchain_image_views[i]) {
         vkDestroyImageView(d->device, d->swapchain_image_views[i], d->vk_alloc);
       }
     }
@@ -789,10 +804,7 @@ static bool demo_init_image_views(Demo *d) {
       create_info.image = d->swapchain_images[i];
       err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
                               &d->swapchain_image_views[i]);
-      if (err != VK_SUCCESS) {
-        assert(false);
-        return false;
-      }
+      TB_VK_ENSURE_RET(err, "Failed to create swapchain image view", false);
     }
   }
 
@@ -822,10 +834,7 @@ static bool demo_init_image_views(Demo *d) {
 
     err = create_gpuimage(d->vma_alloc, &create_info, &alloc_info,
                           &d->depth_buffers);
-    if (err != VK_SUCCESS) {
-      assert(false);
-      return false;
-    }
+    TB_VK_ENSURE_RET(err, "Failed to create depth buffer image", false);
   }
 
   // Create Depth Buffer Views
@@ -855,10 +864,7 @@ static bool demo_init_image_views(Demo *d) {
       create_info.subresourceRange.baseArrayLayer = i;
       err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
                               &d->depth_buffer_views[i]);
-      if (err != VK_SUCCESS) {
-        assert(false);
-        return false;
-      }
+      TB_VK_ENSURE_RET(err, "Failed to create depth buffer view", false);
     }
   }
 
@@ -868,11 +874,11 @@ static bool demo_init_image_views(Demo *d) {
 static bool demo_init_framebuffers(Demo *d) {
   VkResult err = VK_SUCCESS;
 
-  // Cleanup previous framebuffers
+  // Cleanup previous framebuffers that write to the swapchain
   {
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      if (d->main_pass_framebuffers[i]) {
-        vkDestroyFramebuffer(d->device, d->main_pass_framebuffers[i],
+      if (d->tonemap_pass_framebuffers[i]) {
+        vkDestroyFramebuffer(d->device, d->tonemap_pass_framebuffers[i],
                              d->vk_alloc);
       }
     }
@@ -884,28 +890,24 @@ static bool demo_init_framebuffers(Demo *d) {
     }
   }
 
-  VkFramebufferCreateInfo create_info = {0};
-  create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  create_info.renderPass = d->main_pass;
-  create_info.attachmentCount = 2;
-  create_info.width = d->swap_info.width;
-  create_info.height = d->swap_info.height;
-  create_info.layers = 1;
+  VkFramebufferCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+      .attachmentCount = 1,
+      .width = d->swap_info.width,
+      .height = d->swap_info.height,
+      .layers = 1,
+  };
 
-  // Create main pass framebuffers
+  // Create tonemap pass framebuffers
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-    VkImageView attachments[2] = {
+    VkImageView attachments[1] = {
         d->swapchain_image_views[i],
-        d->depth_buffer_views[i],
     };
-
     create_info.pAttachments = attachments;
+    create_info.renderPass = d->tonemap_pass;
     err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
-                              &d->main_pass_framebuffers[i]);
-    if (err != VK_SUCCESS) {
-      assert(false);
-      return false;
-    }
+                              &d->tonemap_pass_framebuffers[i]);
+    TB_VK_ENSURE_RET(err, "Failed to create tonemapping framebuffer", false);
   }
 
   // Create ui pass framebuffers
@@ -913,16 +915,11 @@ static bool demo_init_framebuffers(Demo *d) {
     VkImageView attachments[1] = {
         d->swapchain_image_views[i],
     };
-
-    create_info.attachmentCount = 1;
     create_info.pAttachments = attachments;
     create_info.renderPass = d->imgui_pass;
     err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
                               &d->ui_pass_framebuffers[i]);
-    if (err != VK_SUCCESS) {
-      assert(false);
-      return false;
-    }
+    TB_VK_ENSURE_RET(err, "Failed to create imgui framebuffer", false);
   }
 
   return true;
@@ -1057,6 +1054,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   if (!SDL_Vulkan_CreateSurface(window, instance, &surface)) {
+    SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "Failed to create vulkan surface");
     assert(false);
     return false;
   }
@@ -1207,35 +1205,31 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Allocator
   VmaAllocator vma_alloc = {0};
   {
-    VmaVulkanFunctions volk_functions = {0};
-    volk_functions.vkGetPhysicalDeviceProperties =
-        vkGetPhysicalDeviceProperties;
-    volk_functions.vkGetPhysicalDeviceMemoryProperties =
-        vkGetPhysicalDeviceMemoryProperties;
-    volk_functions.vkAllocateMemory = vkAllocateMemory;
-    volk_functions.vkFreeMemory = vkFreeMemory;
-    volk_functions.vkMapMemory = vkMapMemory;
-    volk_functions.vkUnmapMemory = vkUnmapMemory;
-    volk_functions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
-    volk_functions.vkInvalidateMappedMemoryRanges =
-        vkInvalidateMappedMemoryRanges;
-    volk_functions.vkBindBufferMemory = vkBindBufferMemory;
-    volk_functions.vkBindImageMemory = vkBindImageMemory;
-    volk_functions.vkGetBufferMemoryRequirements =
-        vkGetBufferMemoryRequirements;
-    volk_functions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
-    volk_functions.vkCreateBuffer = vkCreateBuffer;
-    volk_functions.vkDestroyBuffer = vkDestroyBuffer;
-    volk_functions.vkCreateImage = vkCreateImage;
-    volk_functions.vkDestroyImage = vkDestroyImage;
-    volk_functions.vkCmdCopyBuffer = vkCmdCopyBuffer;
-
+    VmaVulkanFunctions volk_functions = {
+        .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
+        .vkGetPhysicalDeviceMemoryProperties =
+            vkGetPhysicalDeviceMemoryProperties,
+        .vkAllocateMemory = vkAllocateMemory,
+        .vkFreeMemory = vkFreeMemory,
+        .vkMapMemory = vkMapMemory,
+        .vkUnmapMemory = vkUnmapMemory,
+        .vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges,
+        .vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges,
+        .vkBindBufferMemory = vkBindBufferMemory,
+        .vkBindImageMemory = vkBindImageMemory,
+        .vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements,
+        .vkGetImageMemoryRequirements = vkGetImageMemoryRequirements,
+        .vkCreateBuffer = vkCreateBuffer,
+        .vkDestroyBuffer = vkDestroyBuffer,
+        .vkCreateImage = vkCreateImage,
+        .vkDestroyImage = vkDestroyImage,
+        .vkCmdCopyBuffer = vkCmdCopyBuffer,
+    };
     VmaDeviceMemoryCallbacks vma_callbacks = {
         vma_alloc_fn,
         vma_free_fn,
         NULL,
     };
-
     VmaAllocatorCreateInfo create_info = {
         .physicalDevice = gpu,
         .device = device,
@@ -1247,7 +1241,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
 
     err = vmaCreateAllocator(&create_info, &vma_alloc);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create vma allocator");
   }
 
   uint32_t width = 0;
@@ -1321,105 +1315,184 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
 
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &shadow_pass);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create shadow pass");
 
     SET_VK_NAME(device, shadow_pass, VK_OBJECT_TYPE_RENDER_PASS, "shadow pass");
   }
 
   // Create Main Render Pass
+  // Targets the offscreen render target
   VkRenderPass main_pass = VK_NULL_HANDLE;
   {
-    VkAttachmentDescription color_attachment = {0};
-    color_attachment.format = swap_info.format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentDescription depth_attachment = {0};
-    depth_attachment.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth_attachment.finalLayout =
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentDescription attachments[2] = {color_attachment,
-                                              depth_attachment};
-
+    VkAttachmentDescription color_attachment = {
+        .format = swap_info.format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentDescription depth_attachment = {
+        .format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentDescription attachments[2] = {
+        color_attachment,
+        depth_attachment,
+    };
     VkAttachmentReference color_attachment_ref = {
-        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
     VkAttachmentReference depth_attachment_ref = {
-        1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-
-    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
-
-    VkSubpassDescription subpass = {0};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = attachment_refs;
-    subpass.pDepthStencilAttachment = &depth_attachment_ref;
-
-    VkRenderPassCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    create_info.attachmentCount = 2;
-    create_info.pAttachments = attachments;
-    create_info.subpassCount = 1;
-    create_info.pSubpasses = &subpass;
+        1,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference attachment_refs[1] = {
+        color_attachment_ref,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+        .pDepthStencilAttachment = &depth_attachment_ref,
+    };
+    // Use subpass dependencies to handle transitions
+    // The offscreen target will need to transition to and from a readable /
+    // writable state
+    VkSubpassDependency dependencies[2] = {
+        {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+        {
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+    };
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 2,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = 2,
+        .pDependencies = dependencies,
+    };
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &main_pass);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create main pass");
 
     SET_VK_NAME(device, main_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "main render pass");
   }
 
+  // Create Tonemapping pass
+  // Renders the offscreen HDR target to the screen
+  VkRenderPass tonemap_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription color_attachment = {
+        .format = swap_info.format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentDescription attachments[1] = {
+        color_attachment,
+    };
+    VkAttachmentReference color_attachment_ref = {
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference attachment_refs[1] = {
+        color_attachment_ref,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+    };
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+    };
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &tonemap_pass);
+    TB_VK_ENSURE(err, "Failed to create tonemapping pass");
+
+    SET_VK_NAME(device, tonemap_pass, VK_OBJECT_TYPE_RENDER_PASS,
+                "tonemapping render pass");
+  }
+
   // Create ImGui Render Pass
+  // Renders directly to the screen
   VkRenderPass imgui_pass = VK_NULL_HANDLE;
   {
-    VkAttachmentDescription color_attachment = {0};
-    color_attachment.format = swap_info.format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentDescription attachments[1] = {color_attachment};
-
+    VkAttachmentDescription color_attachment = {
+        .format = swap_info.format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    };
+    VkAttachmentDescription attachments[1] = {
+        color_attachment,
+    };
     VkAttachmentReference color_attachment_ref = {
-        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-
-    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
-
-    VkSubpassDescription subpass = {0};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = attachment_refs;
-
-    VkSubpassDependency subpass_dep = {0};
-    subpass_dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    subpass_dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    subpass_dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    VkRenderPassCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    create_info.attachmentCount = 1;
-    create_info.pAttachments = attachments;
-    create_info.subpassCount = 1;
-    create_info.pSubpasses = &subpass;
-    create_info.pDependencies = &subpass_dep;
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference attachment_refs[1] = {
+        color_attachment_ref,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+    };
+    VkSubpassDependency subpass_dep = {
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .pDependencies = &subpass_dep,
+    };
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &imgui_pass);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create imgui pass");
 
     SET_VK_NAME(device, imgui_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "imgui render pass");
@@ -1443,14 +1516,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
       SDL_RWclose(cache_file);
     }
+    VkPipelineCacheCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .initialDataSize = data_size,
+        .pInitialData = data,
+    };
 
-    VkPipelineCacheCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-    create_info.initialDataSize = data_size;
-    create_info.pInitialData = data;
     err =
         vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create pipeline cache");
 
     SET_VK_NAME(device, pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
                 "pipeline cache");
@@ -1490,7 +1564,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create immutable sampler");
 
     SET_VK_NAME(device, sampler, VK_OBJECT_TYPE_SAMPLER, "immutable sampler");
   }
@@ -1507,14 +1581,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             NULL,
         },
     };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 1;
-    create_info.pBindings = bindings;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = bindings,
+    };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_object_set_layout);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create common descriptor set layout");
     SET_VK_NAME(device, gltf_object_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf object set layout");
   }
@@ -1545,14 +1619,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
             NULL,
         },
     };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 3;
-    create_info.pBindings = bindings;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 3,
+        .pBindings = bindings,
+    };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_view_set_layout);
-    assert(err == VK_SUCCESS);
+    TB_VK_ENSURE(err, "Failed to create per-view descriptor set layout");
 
     SET_VK_NAME(device, gltf_view_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf view set layout");
@@ -2458,6 +2532,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   d->irradiance_cubemap = irradiance_cubemap;
   d->shadow_pass = shadow_pass;
   d->main_pass = main_pass;
+  d->tonemap_pass = tonemap_pass;
   d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
   d->sampler = sampler;
@@ -2572,10 +2647,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Offscreen Targets
   {
+    d->offscreen_format = VK_FORMAT_R16G16B16A16_SFLOAT;
+
     VkImageCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = d->offscreen_format,
         .extent = (VkExtent3D){d->swap_info.width, d->swap_info.height, 1},
         .mipLevels = 1,
         .arrayLayers = FRAME_LATENCY,
@@ -2606,7 +2683,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = d->offscreen_target.image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = d->offscreen_format,
         .components =
             (VkComponentMapping){
                 VK_COMPONENT_SWIZZLE_R,
@@ -2720,6 +2797,39 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       if (err != VK_SUCCESS) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER,
                      "Failed to create shadow pass framebuffers");
+        assert(false);
+        return false;
+      }
+    }
+  }
+
+  // Create Main Pass Framebuffers
+  // The main pass targets an offscreen HDR target
+  {
+    // Main pass currently set up to render to a target the same
+    // size as the original swapchain size
+    // But eventually we may want to use this as a target for Dynamic Resolution
+    // Scaling
+    VkFramebufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = d->main_pass,
+        .attachmentCount = 2,
+        .width = d->swap_info.width,
+        .height = d->swap_info.height,
+        .layers = 1,
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      VkImageView attachments[2] = {
+          d->swapchain_image_views[i],
+          d->depth_buffer_views[i],
+      };
+      create_info.pAttachments = attachments;
+      err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
+                                &d->main_pass_framebuffers[i]);
+      if (err != VK_SUCCESS) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                     "Failed to create main pass framebuffers");
         assert(false);
         return false;
       }
@@ -3306,7 +3416,7 @@ void demo_destroy(Demo *d) {
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyImageView(device, d->irradiance_cubemap_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
-    vkDestroyDescriptorPool(d->device, d->dyn_desc_pools[i], d->vk_alloc);
+    vkDestroyDescriptorPool(d->device, d->dyn_desc_pools[i], vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
     vkDestroySemaphore(device, d->shadow_complete_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->env_complete_sems[i], vk_alloc);
@@ -3317,6 +3427,7 @@ void demo_destroy(Demo *d) {
     vkDestroyImageView(device, d->swapchain_image_views[i], vk_alloc);
     vkDestroyFramebuffer(device, d->shadow_pass_framebuffers[i], vk_alloc);
     vkDestroyFramebuffer(device, d->main_pass_framebuffers[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->tonemap_pass_framebuffers[i], vk_alloc);
     vkDestroyFramebuffer(device, d->ui_pass_framebuffers[i], vk_alloc);
     vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
 
@@ -3405,6 +3516,7 @@ void demo_destroy(Demo *d) {
   vkDestroyRenderPass(device, d->shadow_pass, vk_alloc);
   vkDestroyRenderPass(device, d->env_map_pass, vk_alloc);
   vkDestroyRenderPass(device, d->main_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->tonemap_pass, vk_alloc);
   vkDestroyRenderPass(device, d->imgui_pass, vk_alloc);
   vkDestroyRenderPass(device, d->env_filtered_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
