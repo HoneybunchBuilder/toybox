@@ -595,87 +595,6 @@
             ]
         },
         {
-            "name": "debug-x64-macos-ninja-llvm",
-            "displayName": "Debug",
-            "configurePreset": "x64-macos-ninja-llvm",
-            "configuration": "Debug"
-        },
-        {
-            "name": "relwithdebinfo-x64-macos-ninja-llvm",
-            "displayName": "RelWithDebInfo",
-            "configurePreset": "x64-macos-ninja-llvm",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "release-x64-macos-ninja-llvm",
-            "displayName": "Release",
-            "configurePreset": "x64-macos-ninja-llvm",
-            "configuration": "Release"
-        },
-        {
-            "name": "package-x64-macos-ninja-llvm",
-            "displayName": "Package",
-            "configuration": "Release",
-            "configurePreset": "x64-macos-ninja-llvm",
-            "targets": [
-                "package"
-            ]
-        },
-        {
-            "name": "debug-x64-macos-ninja-gcc",
-            "displayName": "Debug",
-            "configurePreset": "x64-macos-ninja-gcc",
-            "configuration": "Debug"
-        },
-        {
-            "name": "relwithdebinfo-x64-macos-ninja-gcc",
-            "displayName": "RelWithDebInfo",
-            "configurePreset": "x64-macos-ninja-gcc",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "release-x64-macos-ninja-gcc",
-            "displayName": "Release",
-            "configurePreset": "x64-macos-ninja-gcc",
-            "configuration": "Release"
-        },
-        {
-            "name": "package-x64-macos-ninja-gcc",
-            "displayName": "Package",
-            "configuration": "Release",
-            "configurePreset": "x64-macos-ninja-gcc",
-            "targets": [
-                "package"
-            ]
-        },
-        {
-            "name": "debug-x64-macos-xcode-llvm",
-            "displayName": "Debug",
-            "configurePreset": "x64-macos-xcode-llvm",
-            "configuration": "Debug"
-        },
-        {
-            "name": "relwithdebinfo-x64-macos-xcode-llvm",
-            "displayName": "RelWithDebInfo",
-            "configurePreset": "x64-macos-xcode-llvm",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "release-x64-macos-xcode-llvm",
-            "displayName": "Release",
-            "configurePreset": "x64-macos-xcode-llvm",
-            "configuration": "Release"
-        },
-        {
-            "name": "package-x64-macos-xcode-llvm",
-            "displayName": "Package",
-            "configuration": "Release",
-            "configurePreset": "x64-macos-xcode-llvm",
-            "targets": [
-                "package"
-            ]
-        },
-        {
             "name": "debug-arm64-macos-ninja-llvm",
             "displayName": "Debug",
             "configurePreset": "arm64-macos-ninja-llvm",
@@ -698,6 +617,60 @@
             "displayName": "Package",
             "configuration": "Release",
             "configurePreset": "arm64-macos-ninja-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-macos-xcode-llvm",
+            "displayName": "Debug",
+            "configurePreset": "arm64-macos-xcode-llvm",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-macos-xcode-llvm",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-macos-xcode-llvm",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-macos-xcode-llvm",
+            "displayName": "Release",
+            "configurePreset": "arm64-macos-xcode-llvm",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-macos-xcode-llvm",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-macos-xcode-llvm",
+            "targets": [
+                "package"
+            ]
+        },
+        {
+            "name": "debug-arm64-macos-ninja-gcc",
+            "displayName": "Debug",
+            "configurePreset": "arm64-macos-ninja-gcc",
+            "configuration": "Debug"
+        },
+        {
+            "name": "relwithdebinfo-arm64-macos-ninja-gcc",
+            "displayName": "RelWithDebInfo",
+            "configurePreset": "arm64-macos-ninja-gcc",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "release-arm64-macos-ninja-gcc",
+            "displayName": "Release",
+            "configurePreset": "arm64-macos-ninja-gcc",
+            "configuration": "Release"
+        },
+        {
+            "name": "package-arm64-macos-ninja-gcc",
+            "displayName": "Package",
+            "configuration": "Release",
+            "configurePreset": "arm64-macos-ninja-gcc",
             "targets": [
                 "package"
             ]
