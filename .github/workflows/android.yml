@@ -16,8 +16,7 @@ jobs:
         toolsets: [
           {host: [Windows, X64, self-hosted], preset: arm64-android-ninja-llvm},
           {host: [Linux, X64, self-hosted], preset: arm64-android-ninja-llvm},
-          # Disabling mac host until a mac mini is self hosted
-          #{host: [macos-12], preset: arm64-android-ninja-llvm, self-hosted: no},
+          {host: [macOS, ARM64, self-hosted], preset: arm64-android-ninja-llvm},
         ]
 
     name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
