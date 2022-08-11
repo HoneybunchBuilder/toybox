@@ -204,60 +204,6 @@
             }
         },
         {
-            "name": "x64-macos-ninja-llvm",
-            "displayName": "x64 macOS Ninja LLVM",
-            "generator": "Ninja Multi-Config",
-            "binaryDir": "${sourceDir}/build/x64/macos-llvm",
-            "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-osx",
-                "CMAKE_OSX_ARCHITECTURES": "x86_64",
-                "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Darwin"
-            }
-        },
-        {
-            "name": "x64-macos-xcode-llvm",
-            "displayName": "x64 macOS Xcode LLVM",
-            "generator": "Xcode",
-            "binaryDir": "${sourceDir}/build/x64/macos-xcode-llvm",
-            "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-osx",
-                "CMAKE_OSX_ARCHITECTURES": "x86_64",
-                "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Darwin"
-            }
-        },
-        {
-            "name": "x64-macos-ninja-gcc",
-            "displayName": "x64 macOS Ninja GCC",
-            "generator": "Ninja Multi-Config",
-            "binaryDir": "${sourceDir}/build/x64/macos-gcc",
-            "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-osx",
-                "CMAKE_OSX_ARCHITECTURES": "x86_64",
-                "CMAKE_C_COMPILER": "gcc",
-                "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-            },
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Darwin"
-            }
-        },
-        {
             "name": "arm64-macos-ninja-llvm",
             "displayName": "arm64 macOS Ninja LLVM",
             "generator": "Ninja Multi-Config",
@@ -267,6 +213,42 @@
                 "CMAKE_OSX_ARCHITECTURES": "arm64",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "arm64-macos-xcode-llvm",
+            "displayName": "arm64 macOS Xcode LLVM",
+            "generator": "Xcode",
+            "binaryDir": "${sourceDir}/build/arm64/macos-xcode-llvm",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-osx",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "arm64-macos-ninja-gcc",
+            "displayName": "arm64 macOS Ninja GCC",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/arm64/macos-gcc",
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-osx",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             },
             "condition": {
