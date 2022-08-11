@@ -14,10 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: [macos-12], preset: x64-macos-ninja-llvm},
-          {host: [macos-12], preset: x64-macos-xcode-llvm},
-          {host: [macos-12], preset: x64-macos-ninja-gcc},
-          {host: [macos-12], preset: arm64-macos-ninja-llvm},
+          {host: [macOS, ARM64, self-hosted], preset: arm64-macos-ninja-llvm},
+          # TODO: Figure out xcode build
+          {host: [macOS, ARM64, self-hosted], preset: arm64-macos-ninja-gcc},
         ]
 
     name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
@@ -25,17 +24,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
-    - name: Install Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
-
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v10
-      with:
-        vcpkgGitCommitId: 9ba75e6e174b30b97afc5c8c3170c5d25c548b32
 
     - name: Configure
       run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF
