@@ -67,7 +67,7 @@ float magsqf3(float3 v) {
   return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]);
 }
 
-float magsqf4(float3 v) {
+float magsqf4(float4 v) {
   return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]) + (v[3] * v[3]);
 }
 

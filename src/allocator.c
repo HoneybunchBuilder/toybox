@@ -19,7 +19,12 @@ static void *arena_alloc(void *user_data, size_t size) {
     return NULL;
   }
   void *ptr = &arena->data[cur_size];
-  arena->size += size;
+
+  // Always 16 byte aligned
+  intptr_t padding = (intptr_t)ptr % 16;
+  ptr = (void *)((intptr_t)ptr + padding);
+
+  arena->size += (size + padding);
   TracyCZoneEnd(ctx);
   return ptr;
 }
