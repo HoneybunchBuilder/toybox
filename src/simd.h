@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 typedef float __attribute__((vector_size(16))) float4;
-typedef float __attribute__((vector_size(16))) float3;
+typedef float __attribute__((vector_size(12))) float3;
 typedef float __attribute__((vector_size(8))) float2;
 
 typedef double __attribute__((vector_size(32))) double4;

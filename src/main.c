@@ -11,12 +11,16 @@
 #include "demo.h"
 #include "pi.h"
 #include "profiling.h"
+#include "rendersystem.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvma.h"
+#include "transformcomponent.h"
+#include "world.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -314,11 +318,49 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 #endif
 
+  uint64_t component_count = 1;
+  ComponentDescriptor component_descs[1] = {0};
+  tb_transform_component_descriptor(&component_descs[0]);
+
+  // TODO: Things like the vulkan system allocator and the vulkan instance
+  // can be owned by the render system
+  RenderSystemDescriptor render_system_desc = {
+      .window = window,
+      .instance = instance,
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+      .vk_alloc = vk_alloc_ptr,
+  };
+
+  uint64_t system_count = 1;
+  SystemDescriptor system_descs[1] = {0};
+  tb_render_system_descriptor(&system_descs[0], &render_system_desc);
+
+  WorldDescriptor world_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+      .component_count = component_count,
+      .component_descs = component_descs,
+      .system_count = system_count,
+      .system_descs = system_descs,
+  };
+
+  World world = {0};
+  bool success = tb_create_world(&world_desc, &world);
+  TB_CHECK_RETURN(success, "Failed to create world.", -1);
+
+  // Create an entity with a transform component
+  {
+    const uint32_t entity_component_count = 1;
+    const ComponentId entity_component_ids[1] = {TransformComponentId};
+
+    tb_add_entity(&world, entity_component_count, entity_component_ids);
+  }
+
   Demo d = {0};
-  bool success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
-                           vk_alloc_ptr, &d);
-  assert(success);
-  (void)success;
+  success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
+                      vk_alloc_ptr, &d);
+  TB_CHECK_RETURN(success, "Failed to create demo.", -1);
 
   // Get scene asset paths
   const char **scene_asset_paths =
@@ -332,7 +374,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Load starter scene
   int32_t scene_idx = 4;
   const char *scene_path = scene_asset_paths[scene_idx];
-  demo_load_scene(&d, scene_path);
+  success = demo_load_scene(&d, scene_path);
+  TB_CHECK_RETURN(success, "Failed to load scene.", -1);
 
   SkyData sky_data = {
       .cirrus = 0.4f,
@@ -340,7 +383,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .sun_dir = {0, -1, 0},
   };
 
-  CommonCameraData camera_data = (CommonCameraData){0};
+  CommonCameraData camera_data = (CommonCameraData){
+      .view_pos = (float3){0.0f, 0.0f, 0.0f},
+  };
 
   // Query SDL for available display modes
   uint32_t display_count = (uint32_t)SDL_GetNumVideoDisplays();
@@ -967,6 +1012,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
 
+    // Tick the world
+    tb_tick_world(&world, delta_time_seconds);
+
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
@@ -987,6 +1035,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SDL_DestroyWindow(window);
   window = NULL;
+
+  tb_destroy_world(&world);
 
   demo_destroy(&d);
 

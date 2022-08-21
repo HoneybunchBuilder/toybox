@@ -22,7 +22,7 @@ typedef void free_fn(void *user_data, void *ptr);
   (T *)(a).realloc((a).user_data, (orig), (n) * sizeof(T))
 #define tb_realloc_aligned(a, orig, size, align)                               \
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
-#define tb_free(a, ptr) a.free(a.user_data, (ptr))
+#define tb_free(a, ptr) (a).free((a).user_data, (ptr))
 
 typedef struct Allocator {
   void *user_data;
