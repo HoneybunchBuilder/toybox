@@ -2,8 +2,10 @@
 
 #include "allocator.h"
 #include "profiling.h"
+#include "simd.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
+#include "transformcomponent.h"
 
 static cgltf_result
 sdl_read_glb(const struct cgltf_memory_options *memory_options,
@@ -178,6 +180,7 @@ void tb_tick_world(World *world, float delta_seconds) {
               &packed_store->components[packed_comp_idx * comp_size];
           SDL_memcpy(packed_comp_dst, component, comp_size);
           packed_store->entity_ids[packed_comp_idx] = (EntityId)entity_id;
+          packed_comp_idx++;
           packed_store->count++;
         }
       }
@@ -244,6 +247,7 @@ void tb_destroy_world(World *world) {
 
 bool tb_world_load_scene(World *world, const char *scene_path) {
   Allocator std_alloc = world->std_alloc;
+  Allocator tmp_alloc = world->tmp_alloc;
 
   // Get qualified path to scene asset
   char *asset_path = NULL;
@@ -288,6 +292,86 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 #endif
   }
   TB_CHECK_RETURN(data, "Failed to load glb", false);
+
+  // Create an entity for each node
+  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+    const cgltf_node *node = &data->nodes[i];
+
+    // Get component count
+    uint32_t component_count = 0;
+    {
+      if (node->camera) {
+      }
+      if (node->light) {
+      }
+      if (node->mesh) {
+      }
+      if (node->skin) {
+      }
+      // Only nodes with a non-zero scale have transforms
+      if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
+          node->scale[2] != 0.0f) {
+        component_count++;
+      }
+    }
+
+    ComponentId *component_ids =
+        tb_alloc_nm_tp(tmp_alloc, component_count, ComponentId);
+    InternalDescriptor *component_descriptors =
+        tb_alloc_nm_tp(tmp_alloc, component_count, InternalDescriptor);
+
+    EntityDescriptor entity_desc = {
+        .component_count = component_count,
+        .component_ids = component_ids,
+        .component_descriptors = component_descriptors,
+        .name = node->name, // Do we want to copy this onto some string pool?
+    };
+
+    uint32_t component_idx = 0;
+    {
+      if (node->camera) {
+      }
+      if (node->light) {
+      }
+      if (node->mesh) {
+      }
+      if (node->skin) {
+      }
+      if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
+          node->scale[2] != 0.0f) {
+        Transform transform = {0};
+        {
+          {
+            transform.position[0] = node->translation[0];
+            transform.position[1] = node->translation[1];
+            transform.position[2] = node->translation[2];
+          }
+          {
+            transform.rotation[0] = node->rotation[0];
+            transform.rotation[1] = node->rotation[1];
+            transform.rotation[2] = node->rotation[2];
+          }
+          {
+            transform.scale[0] = node->scale[0];
+            transform.scale[1] = node->scale[1];
+            transform.scale[2] = node->scale[2];
+          }
+          // TODO: Children and hierarchy
+        }
+
+        TransformComponentDescriptor *transform_desc =
+            tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
+        transform_desc->transform = transform;
+
+        // Add component to entity
+        component_ids[component_idx] = TransformComponentId;
+        component_descriptors[component_idx] = transform_desc;
+        component_idx++;
+      }
+    }
+
+    tb_world_add_entity(world, &entity_desc);
+  }
 
   return true;
 }
