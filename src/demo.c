@@ -8,16 +8,11 @@
 #include "pipelines.h"
 #include "simd.h"
 #include "skydome.h"
+#include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvma.h"
 #include "vkdbg.h"
-
-#ifdef __ANDROID__
-#define ASSET_PREFIX ""
-#else
-#define ASSET_PREFIX "./assets/"
-#endif
 
 // TODO: Make more adjustable
 #define SHADOW_MAP_WIDTH 4096

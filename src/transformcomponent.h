@@ -5,9 +5,10 @@
 
 #define TransformComponentId 0xDEADBEEF
 
-typedef struct SomeOtherStruct {
-  Transform t;
-} SomeOtherStruct;
+typedef struct TransformComponentDescriptor {
+  Transform transform;
+  // TODO: How to specify children?
+} TransformComponentDescriptor;
 
 typedef struct TransformComponent {
   Transform transform;

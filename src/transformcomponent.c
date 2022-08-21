@@ -1,8 +1,9 @@
 #include "transformcomponent.h"
 
-void create_transform_component(TransformComponent *comp) {
+void create_transform_component(TransformComponent *comp,
+                                const TransformComponentDescriptor *desc) {
   *comp = (TransformComponent){
-      .transform.scale = (float3){1.0f, 1.0f, 1.0f},
+      .transform = desc->transform,
   };
 }
 
@@ -14,8 +15,9 @@ void destroy_transform_component(TransformComponent *comp) {
   };
 }
 
-bool tb_create_transform_component(void *comp) {
-  create_transform_component((TransformComponent *)comp);
+bool tb_create_transform_component(void *comp, InternalDescriptor desc) {
+  create_transform_component((TransformComponent *)comp,
+                             (const TransformComponentDescriptor *)desc);
   return true;
 }
 
