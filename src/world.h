@@ -4,12 +4,12 @@
 
 typedef struct World World;
 
-typedef uint64_t EntityId;
-typedef uint64_t Entity;
+typedef uint32_t EntityId;
+typedef uint32_t Entity;
 
 typedef const void *InternalDescriptor;
 
-typedef uint64_t ComponentId;
+typedef uint32_t ComponentId;
 typedef bool (*ComponentCreateFn)(void *self);
 typedef void (*ComponentDestroyFn)(void *self);
 typedef struct ComponentDescriptor {
@@ -40,6 +40,7 @@ typedef struct PackedComponentStore {
   ComponentId id;
   uint32_t count;
   uint8_t *components;
+  EntityId *entity_ids;
 } PackedComponentStore;
 
 typedef struct SystemDependencyColumns {
@@ -86,9 +87,9 @@ typedef struct World {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
-  uint64_t entity_count;
+  uint32_t entity_count;
   Entity *entities;
-  uint64_t max_entities;
+  uint32_t max_entities;
 
   uint32_t component_store_count;
   ComponentStore *component_stores;
@@ -102,6 +103,8 @@ bool tb_create_world(const WorldDescriptor *desc, World *world);
 void tb_tick_world(World *world, float delta_seconds);
 void tb_destroy_world(World *world);
 
-EntityId tb_add_entity(World *world, uint32_t comp_count,
-                       const ComponentId *components);
-bool tb_remove_entity(World *world, EntityId id);
+bool tb_world_load_scene(World *world, const char *scene_path);
+
+EntityId tb_world_add_entity(World *world, uint32_t comp_count,
+                             const ComponentId *components);
+bool tb_world_remove_entity(World *world, EntityId id);

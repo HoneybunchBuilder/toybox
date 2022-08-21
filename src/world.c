@@ -48,13 +48,13 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
 
   // Create component stores
   {
-    const uint64_t store_count = desc->component_count;
+    const uint32_t store_count = desc->component_count;
     ComponentStore *stores = NULL;
     if (store_count > 0) {
       stores = tb_alloc_nm_tp(std_alloc, store_count, ComponentStore);
       TB_CHECK_RETURN(stores, "Failed to allocate component stores.", false);
 
-      for (uint64_t i = 0; i < store_count; ++i) {
+      for (uint32_t i = 0; i < store_count; ++i) {
         const ComponentDescriptor *comp_desc = &desc->component_descs[i];
         create_component_store(&stores[i], comp_desc);
       }
@@ -66,14 +66,14 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
 
   // Create systems
   {
-    const uint64_t system_count = desc->system_count;
+    const uint32_t system_count = desc->system_count;
     System *systems = NULL;
     if (system_count > 0) {
       systems = tb_alloc_nm_tp(std_alloc, system_count, System);
       TB_CHECK_RETURN(systems, "Failed to allocate systems.", false);
 
       bool system_created = false;
-      for (uint64_t i = 0; i < system_count; ++i) {
+      for (uint32_t i = 0; i < system_count; ++i) {
         const SystemDescriptor *sys_desc = &desc->system_descs[i];
         system_created = create_system(world, &systems[i], sys_desc);
         TB_CHECK_RETURN(system_created, "Failed to create system.", false);
@@ -94,7 +94,7 @@ void tb_tick_world(World *world, float delta_seconds) {
   Allocator tmp_alloc = world->tmp_alloc;
 
   // Gather packed columns for each component type
-  const uint64_t store_count = world->component_store_count;
+  const uint32_t store_count = world->component_store_count;
   PackedComponentStore *packed_stores = NULL;
   if (store_count > 0) {
     TracyCZoneN(pack_ctx, "Pack Columns", true);
@@ -105,7 +105,7 @@ void tb_tick_world(World *world, float delta_seconds) {
     packed_stores =
         tb_alloc_nm_tp(tmp_alloc, store_count, PackedComponentStore);
 
-    for (uint64_t store_idx = 0; store_idx < world->component_store_count;
+    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
          ++store_idx) {
       const ComponentStore *store = &world->component_stores[store_idx];
       const uint64_t comp_size = store->size;
@@ -115,18 +115,22 @@ void tb_tick_world(World *world, float delta_seconds) {
       packed_store->id = store->id;
       packed_store->components =
           tb_alloc(tmp_alloc, store->size * store->count);
+      packed_store->entity_ids =
+          tb_alloc_nm_tp(tmp_alloc, store->count, EntityId);
       packed_store->count = 0;
 
       // Copy components from the core store to the packed store
       uint32_t packed_comp_idx = 0;
-      for (uint32_t comp_idx = 0; comp_idx < world->max_entities; ++comp_idx) {
-        Entity entity = world->entities[comp_idx];
+      for (uint32_t entity_id = 0; entity_id < world->max_entities;
+           ++entity_id) {
+        Entity entity = world->entities[entity_id];
         // If the entity is marked to use this component
-        if ((entity & (1 << comp_idx)) == 1) {
-          uint8_t *component = &store->components[comp_idx * comp_size];
+        if ((entity & (1 << store_idx)) == 1) {
+          uint8_t *component = &store->components[entity_id * comp_size];
           uint8_t *packed_comp_dst =
               &packed_store->components[packed_comp_idx * comp_size];
           SDL_memcpy(packed_comp_dst, component, comp_size);
+          packed_store->entity_ids[packed_comp_idx] = (EntityId)entity_id;
           packed_store->count++;
         }
       }
@@ -138,7 +142,7 @@ void tb_tick_world(World *world, float delta_seconds) {
   {
     TracyCZoneN(system_tick_ctx, "Tick Systems", true);
     TracyCZoneColor(system_tick_ctx, TracyCategoryColorCore);
-    for (uint64_t system_idx = 0; system_idx < world->system_count;
+    for (uint32_t system_idx = 0; system_idx < world->system_count;
          ++system_idx) {
       System *system = &world->systems[system_idx];
 
@@ -167,9 +171,9 @@ void tb_tick_world(World *world, float delta_seconds) {
 
 void tb_destroy_world(World *world) {
   if (world->component_store_count > 0) {
-    for (uint64_t i = 0; i < world->component_store_count; ++i) {
+    for (uint32_t i = 0; i < world->component_store_count; ++i) {
       ComponentStore *store = &world->component_stores[i];
-      for (uint64_t comp_idx = 0; comp_idx < world->entity_count; ++comp_idx) {
+      for (uint32_t comp_idx = 0; comp_idx < world->entity_count; ++comp_idx) {
         uint8_t *comp = &store->components[(store->size * comp_idx)];
         if (comp) {
           store->destroy(comp);
@@ -180,7 +184,7 @@ void tb_destroy_world(World *world) {
   }
 
   if (world->system_count > 0) {
-    for (uint64_t i = 0; i < world->system_count; ++i) {
+    for (uint32_t i = 0; i < world->system_count; ++i) {
       System *system = &world->systems[i];
       system->destroy(system->self);
       tb_free(world->std_alloc, system->self);
@@ -191,13 +195,15 @@ void tb_destroy_world(World *world) {
   *world = (World){0};
 }
 
-EntityId tb_add_entity(World *world, uint32_t comp_count,
-                       const ComponentId *components) {
+bool tb_world_load_scene(World *world, const char *scene_path) { return true; }
+
+EntityId tb_world_add_entity(World *world, uint32_t comp_count,
+                             const ComponentId *components) {
   TracyCZoneN(ctx, "Add Entity", true);
   TracyCZoneColor(ctx, TracyCategoryColorCore);
 
   // Determine if we need to grow the entity list
-  const uint64_t new_entity_count = world->entity_count + 1;
+  const uint32_t new_entity_count = world->entity_count + 1;
   if (new_entity_count > world->max_entities) {
     world->max_entities = new_entity_count * 2;
     world->entities = tb_realloc_nm_tp(world->std_alloc, world->entities,
@@ -246,7 +252,7 @@ EntityId tb_add_entity(World *world, uint32_t comp_count,
   return entity_id;
 }
 
-bool tb_remove_entity(World *world, EntityId id) {
+bool tb_world_remove_entity(World *world, EntityId id) {
   (void)world;
   (void)id;
   return false;
