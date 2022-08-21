@@ -351,10 +351,24 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Create an entity with a transform component
   {
-    const uint32_t entity_component_count = 1;
     const ComponentId entity_component_ids[1] = {TransformComponentId};
+    const TransformComponentDescriptor entity_transform_desc = {
+        .transform = {
+            .position = (float3){1.0f, 2.0f, 3.0f},
+            .rotation = (float3){.2f, .3f, .4f},
+            .scale = (float3){1.0f, 1.0f, 1.0f},
+        }};
+    const InternalDescriptor entity_component_descs[1] = {
+        &entity_transform_desc,
+    };
+    EntityDescriptor entity_desc = {
+        .name = "test",
+        .component_count = 1,
+        .component_ids = entity_component_ids,
+        .component_descriptors = entity_component_descs,
+    };
 
-    tb_world_add_entity(&world, entity_component_count, entity_component_ids);
+    tb_world_add_entity(&world, &entity_desc);
   }
 
   Demo d = {0};

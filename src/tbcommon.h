@@ -13,3 +13,9 @@
     SDL_TriggerBreakpoint();                                                   \
     return (ret);                                                              \
   }
+
+#ifdef __ANDROID__
+#define ASSET_PREFIX ""
+#else
+#define ASSET_PREFIX "./assets/"
+#endif

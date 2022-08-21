@@ -3,8 +3,37 @@
 #include "allocator.h"
 #include "profiling.h"
 #include "tbcommon.h"
+#include "tbgltf.h"
 
-#include "transformcomponent.h"
+static cgltf_result
+sdl_read_glb(const struct cgltf_memory_options *memory_options,
+             const struct cgltf_file_options *file_options, const char *path,
+             cgltf_size *size, void **data) {
+  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
+  cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
+  (void)path;
+
+  void *mem = memory_options->alloc(memory_options->user_data, file_size);
+  TB_CHECK_RETURN(mem, "clgtf out of memory.", cgltf_result_out_of_memory);
+
+  TB_CHECK_RETURN(SDL_RWread(file, mem, file_size, 1) != 0, "clgtf io error.",
+                  cgltf_result_io_error);
+
+  *size = file_size;
+  *data = mem;
+
+  return cgltf_result_success;
+}
+
+static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
+                            const struct cgltf_file_options *file_options,
+                            void *data) {
+  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
+
+  memory_options->free(memory_options->user_data, data);
+
+  TB_CHECK(SDL_RWclose(file) == 0, "Failed to close glb file.");
+}
 
 void create_component_store(ComponentStore *store,
                             const ComponentDescriptor *desc) {
@@ -92,6 +121,24 @@ void tb_tick_world(World *world, float delta_seconds) {
   TracyCZoneColor(world_tick_ctx, TracyCategoryColorCore);
 
   Allocator tmp_alloc = world->tmp_alloc;
+
+  /*
+    TODO: A better approach here would be:
+    For each system
+    {
+      Find the set of entity ids where all components required by the system are
+    enabled.
+      Pack together a structure on the temp allocator that is a table
+    where each column is a linear array. The first column stores entity ids on
+    the global world table and each subsequent column is the packed array of
+    that component type.
+      Pass that as input to the system's tick
+    }
+
+    We have to do this packing per-system anyway since each system could change
+    the world. Still have to figure out how to handle systems writing to the
+    world.
+  */
 
   // Gather packed columns for each component type
   const uint32_t store_count = world->component_store_count;
@@ -195,10 +242,57 @@ void tb_destroy_world(World *world) {
   *world = (World){0};
 }
 
-bool tb_world_load_scene(World *world, const char *scene_path) { return true; }
+bool tb_world_load_scene(World *world, const char *scene_path) {
+  Allocator std_alloc = world->std_alloc;
 
-EntityId tb_world_add_entity(World *world, uint32_t comp_count,
-                             const ComponentId *components) {
+  // Get qualified path to scene asset
+  char *asset_path = NULL;
+  {
+    const uint32_t max_asset_len = 2048;
+    asset_path = tb_alloc(world->tmp_alloc, max_asset_len);
+    SDL_memset(asset_path, 0, max_asset_len);
+    SDL_snprintf(asset_path, max_asset_len, "%s%s", ASSET_PREFIX, scene_path);
+  }
+  TB_CHECK_RETURN(asset_path, "Failed to resolve asset path.", false);
+
+  // Load glb off disk
+  cgltf_data *data = NULL;
+  {
+    SDL_RWops *glb_file = SDL_RWFromFile(asset_path, "rb");
+    TB_CHECK_RETURN(glb_file, "Failed to open glb.", false);
+
+    cgltf_options options = {.type = cgltf_file_type_glb,
+                             .memory =
+                                 {
+                                     .user_data = std_alloc.user_data,
+                                     .alloc = std_alloc.alloc,
+                                     .free = std_alloc.free,
+                                 },
+                             .file = {
+                                 .read = sdl_read_glb,
+                                 .release = sdl_release_glb,
+                                 .user_data = glb_file,
+                             }};
+
+    cgltf_result res = cgltf_parse_file(&options, asset_path, &data);
+    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to parse glb.", false);
+
+    res = cgltf_load_buffers(&options, data, asset_path);
+    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to load glb buffers.",
+                    false);
+
+#if !defined(FINAL)
+    res = cgltf_validate(data);
+    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to validate glb.",
+                    false);
+#endif
+  }
+  TB_CHECK_RETURN(data, "Failed to load glb", false);
+
+  return true;
+}
+
+EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
   TracyCZoneN(ctx, "Add Entity", true);
   TracyCZoneColor(ctx, TracyCategoryColorCore);
 
@@ -227,15 +321,15 @@ EntityId tb_world_add_entity(World *world, uint32_t comp_count,
     ComponentStore *store = &world->component_stores[store_idx];
 
     // Determine if this component store will be referenced by this entity
-    for (uint32_t comp_idx = 0; comp_idx < comp_count; ++comp_idx) {
-      if (components[comp_idx] == store->id) {
+    for (uint32_t comp_idx = 0; comp_idx < desc->component_count; ++comp_idx) {
+      if (desc->component_ids[comp_idx] == store->id) {
         // Mark this store as being used by the entity
         (*entity) |= (1 << store_idx);
         store->count++;
 
         // Create a component in the store at this entity index
         uint8_t *comp_head = &store->components[entity_id * store->size];
-        if (!store->create(comp_head)) {
+        if (!store->create(comp_head, desc->component_descriptors[comp_idx])) {
           SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "%s",
                        "Failed to create component for entity.");
           SDL_TriggerBreakpoint();

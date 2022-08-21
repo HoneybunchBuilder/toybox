@@ -4,13 +4,20 @@
 
 typedef struct World World;
 
-typedef uint32_t EntityId;
-typedef uint32_t Entity;
-
 typedef const void *InternalDescriptor;
 
+typedef uint32_t EntityId;
 typedef uint32_t ComponentId;
-typedef bool (*ComponentCreateFn)(void *self);
+
+typedef uint32_t Entity;
+typedef struct EntityDescriptor {
+  const char *name;
+  uint32_t component_count;
+  const ComponentId *component_ids;
+  const InternalDescriptor *component_descriptors;
+} EntityDescriptor;
+
+typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc);
 typedef void (*ComponentDestroyFn)(void *self);
 typedef struct ComponentDescriptor {
   const char *name;
@@ -105,6 +112,5 @@ void tb_destroy_world(World *world);
 
 bool tb_world_load_scene(World *world, const char *scene_path);
 
-EntityId tb_world_add_entity(World *world, uint32_t comp_count,
-                             const ComponentId *components);
+EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc);
 bool tb_world_remove_entity(World *world, EntityId id);
