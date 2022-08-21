@@ -3,7 +3,7 @@
 #include "simd.h"
 #include "world.h"
 
-#define TransformComponentId 0xFF00FF00FF00FF00
+#define TransformComponentId 0xDEADBEEF
 
 typedef struct SomeOtherStruct {
   Transform t;

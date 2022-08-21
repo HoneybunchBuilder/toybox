@@ -354,7 +354,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     const uint32_t entity_component_count = 1;
     const ComponentId entity_component_ids[1] = {TransformComponentId};
 
-    tb_add_entity(&world, entity_component_count, entity_component_ids);
+    tb_world_add_entity(&world, entity_component_count, entity_component_ids);
   }
 
   Demo d = {0};
@@ -375,6 +375,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   int32_t scene_idx = 4;
   const char *scene_path = scene_asset_paths[scene_idx];
   success = demo_load_scene(&d, scene_path);
+  TB_CHECK_RETURN(success, "Failed to load scene.", -1);
+
+  // Load starter scene into world
+  success = tb_world_load_scene(&world, scene_path);
   TB_CHECK_RETURN(success, "Failed to load scene.", -1);
 
   SkyData sky_data = {
