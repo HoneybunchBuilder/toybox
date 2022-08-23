@@ -127,13 +127,15 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
   {
     cgltf_size new_tex_count = old_tex_count + data->textures_count;
 
-    s->textures =
-        tb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, GPUTexture);
-    if (s->textures == NULL) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to allocate textures for scene");
-      SDL_TriggerBreakpoint();
-      return -4;
+    if (new_tex_count > 0) {
+      s->textures =
+          tb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, GPUTexture);
+      if (s->textures == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                     "Failed to allocate textures for scene");
+        SDL_TriggerBreakpoint();
+        return -4;
+      }
     }
 
     // TODO: Determine a good way to do texture de-duplication
@@ -177,13 +179,15 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
 
   // Append materials to scene
   {
-    s->materials =
-        tb_realloc_nm_tp(std_alloc, s->materials, new_mat_count, GPUMaterial);
-    if (s->materials == NULL) {
-      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
-                   "Failed to allocate textures for scene");
-      SDL_TriggerBreakpoint();
-      return -4;
+    if (new_mat_count > 0) {
+      s->materials =
+          tb_realloc_nm_tp(std_alloc, s->materials, new_mat_count, GPUMaterial);
+      if (s->materials == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                     "Failed to allocate textures for scene");
+        SDL_TriggerBreakpoint();
+        return -4;
+      }
     }
 
     for (cgltf_size i = old_mat_count; i < new_mat_count; ++i) {
