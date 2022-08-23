@@ -1,6 +1,7 @@
 #include "world.h"
 
 #include "allocator.h"
+#include "cameracomponent.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -301,6 +302,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
     uint32_t component_count = 0;
     {
       if (node->camera) {
+        component_count++;
       }
       if (node->light) {
       }
@@ -329,7 +331,21 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 
     uint32_t component_idx = 0;
     {
-      if (node->camera) {
+      {
+        cgltf_camera *camera = node->camera;
+        if (camera) {
+          const cgltf_camera_type type = camera->type;
+
+          if (type == cgltf_camera_type_perspective) {
+            // Add component to entity
+            component_ids[component_idx] = CameraComponentId;
+            component_descriptors[component_idx] = &camera->data.perspective;
+            component_idx++;
+          } else {
+            // TODO: Handle ortho camera / invalid camera
+            SDL_TriggerBreakpoint();
+          }
+        }
       }
       if (node->light) {
       }

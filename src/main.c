@@ -7,6 +7,7 @@
 #include "allocator.h"
 #include "assetmanifest.h"
 #include "camera.h"
+#include "cameracomponent.h"
 #include "config.h"
 #include "demo.h"
 #include "pi.h"
@@ -318,9 +319,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 #endif
 
-  uint64_t component_count = 1;
-  ComponentDescriptor component_descs[1] = {0};
+  const uint32_t component_count = 2;
+  ComponentDescriptor component_descs[2] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
+  tb_camera_component_descriptor(&component_descs[1]);
 
   // TODO: Things like the vulkan system allocator and the vulkan instance
   // can be owned by the render system
@@ -332,7 +334,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .vk_alloc = vk_alloc_ptr,
   };
 
-  uint64_t system_count = 1;
+  const uint32_t system_count = 1;
   SystemDescriptor system_descs[1] = {0};
   tb_render_system_descriptor(&system_descs[0], &render_system_desc);
 
@@ -349,28 +351,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool success = tb_create_world(&world_desc, &world);
   TB_CHECK_RETURN(success, "Failed to create world.", -1);
 
-  // Create an entity with a transform component
-  {
-    const ComponentId entity_component_ids[1] = {TransformComponentId};
-    const TransformComponentDescriptor entity_transform_desc = {
-        .transform = {
-            .position = (float3){1.0f, 2.0f, 3.0f},
-            .rotation = (float3){.2f, .3f, .4f},
-            .scale = (float3){1.0f, 1.0f, 1.0f},
-        }};
-    const InternalDescriptor entity_component_descs[1] = {
-        &entity_transform_desc,
-    };
-    EntityDescriptor entity_desc = {
-        .name = "test",
-        .component_count = 1,
-        .component_ids = entity_component_ids,
-        .component_descriptors = entity_component_descs,
-    };
-
-    tb_world_add_entity(&world, &entity_desc);
-  }
-
   Demo d = {0};
   success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
                       vk_alloc_ptr, &d);
@@ -386,7 +366,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Load starter scene
-  int32_t scene_idx = 4;
+  int32_t scene_idx = 2;
   const char *scene_path = scene_asset_paths[scene_idx];
   success = demo_load_scene(&d, scene_path);
   TB_CHECK_RETURN(success, "Failed to load scene.", -1);
