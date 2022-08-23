@@ -2,7 +2,7 @@
 
 // TODO: Physically based camera?
 
-#define CameraComponentId 0xDEADFEED
+#define CameraComponentId 0xDEADC0DE
 
 typedef struct ComponentDescriptor ComponentDescriptor;
 
