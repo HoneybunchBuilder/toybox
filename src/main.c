@@ -10,6 +10,7 @@
 #include "cameracomponent.h"
 #include "config.h"
 #include "demo.h"
+#include "lightcomponent.h"
 #include "pi.h"
 #include "profiling.h"
 #include "rendersystem.h"
@@ -319,10 +320,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 #endif
 
-  const uint32_t component_count = 2;
-  ComponentDescriptor component_descs[2] = {0};
+  const uint32_t component_count = 3;
+  ComponentDescriptor component_descs[3] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
+  tb_directional_light_component_descriptor(&component_descs[2]);
 
   // TODO: Things like the vulkan system allocator and the vulkan instance
   // can be owned by the render system

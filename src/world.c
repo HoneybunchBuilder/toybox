@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "cameracomponent.h"
+#include "lightcomponent.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -305,6 +306,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         component_count++;
       }
       if (node->light) {
+        component_count++;
       }
       if (node->mesh) {
       }
@@ -332,7 +334,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
     uint32_t component_idx = 0;
     {
       {
-        cgltf_camera *camera = node->camera;
+        const cgltf_camera *camera = node->camera;
         if (camera) {
           const cgltf_camera_type type = camera->type;
 
@@ -348,6 +350,19 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         }
       }
       if (node->light) {
+        const cgltf_light *light = node->light;
+        if (light) {
+          const cgltf_light_type type = light->type;
+          if (type == cgltf_light_type_directional) {
+            // Add component to entity
+            component_ids[component_idx] = DirectionalLightComponentId;
+            component_descriptors[component_idx] = light;
+            component_idx++;
+          } else {
+            // TODO: Handle other light types
+            SDL_TriggerBreakpoint();
+          }
+        }
       }
       if (node->mesh) {
       }
