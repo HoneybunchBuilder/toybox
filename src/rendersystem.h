@@ -2,6 +2,8 @@
 
 #include "allocator.h"
 
+#define RenderSystemId 0xABADBABE
+
 typedef struct SystemDescriptor SystemDescriptor;
 
 typedef struct SDL_Window SDL_Window;
