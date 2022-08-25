@@ -1,28 +1,30 @@
-#include <assert.h>
-#include <stdbool.h>
-#include <stdint.h>
-
 #include <mimalloc.h>
 
 #include "allocator.h"
 #include "assetmanifest.h"
 #include "camera.h"
-#include "cameracomponent.h"
 #include "config.h"
 #include "demo.h"
 #include "lightcomponent.h"
 #include "pi.h"
 #include "profiling.h"
-#include "rendersystem.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "world.h"
+
 #include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvma.h"
+
+#include "cameracomponent.h"
+#include "noclipcomponent.h"
 #include "transformcomponent.h"
-#include "world.h"
+
+#include "inputsystem.h"
+#include "noclipcontrollersystem.h"
+#include "rendersystem.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -226,13 +228,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     {
       uint32_t instance_layer_count = 0;
       err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
-      assert(err == VK_SUCCESS);
+      SDL_assert(err == VK_SUCCESS);
       if (instance_layer_count > 0) {
         VkLayerProperties *instance_layers = tb_alloc_nm_tp(
             arena.alloc, instance_layer_count, VkLayerProperties);
         err = vkEnumerateInstanceLayerProperties(&instance_layer_count,
                                                  instance_layers);
-        assert(err == VK_SUCCESS);
+        SDL_assert(err == VK_SUCCESS);
 #ifdef VALIDATION
         {
           const char *validation_layer_name = "VK_LAYER_KHRONOS_validation";
@@ -240,7 +242,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           bool validation_found = check_layer(
               validation_layer_name, instance_layer_count, instance_layers);
           if (validation_found) {
-            assert(layer_count + 1 < MAX_LAYER_COUNT);
+            SDL_assert(layer_count + 1 < MAX_LAYER_COUNT);
             layer_names[layer_count++] = validation_layer_name;
           }
         }
@@ -253,13 +255,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     const char *ext_names[MAX_EXT_COUNT] = {0};
     SDL_Vulkan_GetInstanceExtensions(window, &ext_count, NULL);
 
-    assert(ext_count < MAX_EXT_COUNT);
+    SDL_assert(ext_count < MAX_EXT_COUNT);
     SDL_Vulkan_GetInstanceExtensions(window, &ext_count, ext_names);
 
 // Add debug ext
 #ifdef VALIDATION
     {
-      assert(ext_count + 1 < MAX_EXT_COUNT);
+      SDL_assert(ext_count + 1 < MAX_EXT_COUNT);
       ext_names[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     }
 #endif
@@ -267,7 +269,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 // Add portability for apple devices
 #ifdef __APPLE__
     {
-      assert(ext_count + 1 < MAX_EXT_COUNT);
+      SDL_assert(ext_count + 1 < MAX_EXT_COUNT);
       ext_names[ext_count++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
     }
 #endif
@@ -297,7 +299,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     create_info.ppEnabledExtensionNames = ext_names;
 
     err = vkCreateInstance(&create_info, vk_alloc_ptr, &instance);
-    assert(err == VK_SUCCESS);
+    SDL_assert(err == VK_SUCCESS);
     volkLoadInstance(instance);
   }
 
@@ -316,15 +318,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     ext_info.pfnUserCallback = vk_debug_callback;
     err = vkCreateDebugUtilsMessengerEXT(instance, &ext_info, vk_alloc_ptr,
                                          &debug_utils_messenger);
-    assert(err == VK_SUCCESS);
+    SDL_assert(err == VK_SUCCESS);
   }
 #endif
 
-  const uint32_t component_count = 3;
-  ComponentDescriptor component_descs[3] = {0};
+  const uint32_t component_count = 4;
+  ComponentDescriptor component_descs[4] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
   tb_directional_light_component_descriptor(&component_descs[2]);
+  tb_noclip_component_descriptor(&component_descs[3]);
+
+  InputSystemDescriptor input_system_desc = {
+      .window = window,
+  };
+
+  NoClipControllerSystemDescriptor noclip_system_desc = {0};
 
   // TODO: Things like the vulkan system allocator and the vulkan instance
   // can be owned by the render system
@@ -336,9 +345,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .vk_alloc = vk_alloc_ptr,
   };
 
-  const uint32_t system_count = 1;
-  SystemDescriptor system_descs[1] = {0};
-  tb_render_system_descriptor(&system_descs[0], &render_system_desc);
+  const uint32_t system_count = 3;
+  SystemDescriptor system_descs[3] = {0};
+  tb_input_system_descriptor(&system_descs[0], &input_system_desc);
+  tb_render_system_descriptor(&system_descs[1], &render_system_desc);
+  tb_noclip_controller_system_descriptor(&system_descs[2], &noclip_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
@@ -481,6 +492,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCZoneColor(ctx, TracyCategoryColorInput);
 
       SDL_Event e = {0};
+      /*
+
       {
         TracyCZoneN(sdl_ctx, "SDL_PollEvent", true);
         SDL_PollEvent(&e);
@@ -492,6 +505,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         break;
       }
       demo_process_event(&d, &e);
+      */
 
       editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
 
@@ -1013,12 +1027,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
 
     // Tick the world
-    tb_tick_world(&world, delta_time_seconds);
+    if (!tb_tick_world(&world, delta_time_seconds)) {
+      running = false;
+      TracyCZoneEnd(trcy_ctx);
+      TracyCFrameMarkEnd("Frame");
+      break;
+    }
 
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx) TracyCFrameMarkEnd("Frame");
+    TracyCZoneEnd(trcy_ctx);
+    TracyCFrameMarkEnd("Frame");
   }
 
   // Cleanup display modes

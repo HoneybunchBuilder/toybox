@@ -26,6 +26,8 @@ void destroy_render_system(RenderSystem *self) { *self = (RenderSystem){0}; }
 void tick_render_system(SystemDependencyColumns *columns, RenderSystem *self,
                         float delta_seconds) {
   (void)self;
+  (void)delta_seconds;
+
   TracyCZoneN(tick_ctx, "Render System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
@@ -51,16 +53,10 @@ void tick_render_system(SystemDependencyColumns *columns, RenderSystem *self,
 
   for (uint32_t i = 0; i < transform_count; ++i) {
     const Transform *t = &transform_components[i].transform;
-    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER,
-                "Renderer Sees Transform\nPosition\t(%.3f,%.3f,"
-                "%.3f)\nRotation\t(%.3f,%.3f,%.3f)\nScale\t\t(%.3f,%.3f,%.3f)",
-                t->position[0], t->position[1], t->position[2], t->rotation[0],
-                t->rotation[1], t->rotation[2], t->scale[0], t->scale[1],
-                t->scale[2]);
+    (void)t;
   }
 
-  SDL_LogInfo(SDL_LOG_CATEGORY_RENDER,
-              "Ticking Render System. Delta Seconds: %f", delta_seconds);
+  SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Ticking Render System");
 
   TracyCZoneEnd(tick_ctx);
 }
@@ -81,6 +77,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc) {
   desc->name = "Render";
   desc->size = sizeof(RenderSystem);
+  desc->id = RenderSystemId;
   desc->desc = (InternalDescriptor)render_desc;
   desc->deps = (SystemComponentDependencies){1,
                                              {

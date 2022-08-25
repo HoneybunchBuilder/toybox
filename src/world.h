@@ -63,6 +63,7 @@ typedef void (*SystemTickFn)(SystemDependencyColumns *columns, void *self,
 typedef struct SystemDescriptor {
   const char *name;
   uint64_t size;
+  SystemId id;
   InternalDescriptor desc;
   SystemComponentDependencies deps;
   SystemCreateFn create;
@@ -71,6 +72,7 @@ typedef struct SystemDescriptor {
 } SystemDescriptor;
 typedef struct System {
   const char *name;
+  SystemId id;
   SystemComponentDependencies deps;
   void *self;
   SystemCreateFn create;
@@ -107,7 +109,7 @@ typedef struct World {
 } World;
 
 bool tb_create_world(const WorldDescriptor *desc, World *world);
-void tb_tick_world(World *world, float delta_seconds);
+bool tb_tick_world(World *world, float delta_seconds);
 void tb_destroy_world(World *world);
 
 bool tb_world_load_scene(World *world, const char *scene_path);

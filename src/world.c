@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "cameracomponent.h"
+#include "inputsystem.h"
 #include "lightcomponent.h"
 #include "profiling.h"
 #include "simd.h"
@@ -52,6 +53,7 @@ void create_component_store(ComponentStore *store,
 
 bool create_system(World *world, System *system, const SystemDescriptor *desc) {
   system->name = desc->name;
+  system->id = desc->id;
   system->deps = desc->deps;
   system->create = desc->create;
   system->destroy = desc->destroy;
@@ -120,7 +122,7 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
   return true;
 }
 
-void tb_tick_world(World *world, float delta_seconds) {
+bool tb_tick_world(World *world, float delta_seconds) {
   TracyCZoneN(world_tick_ctx, "World Tick", true);
   TracyCZoneColor(world_tick_ctx, TracyCategoryColorCore);
 
@@ -214,11 +216,38 @@ void tb_tick_world(World *world, float delta_seconds) {
       }
 
       system->tick(&columns, system->self, delta_seconds);
+
+      // HACK: Custom input handling on the world
+      // To detect if the user issues a quit event
+      if (system->id == InputSystemId) {
+        uint32_t event_count = 0;
+        if (tb_input_system_get_events(system->self, &event_count, NULL)) {
+          if (event_count > 0) {
+            SDL_Event *events =
+                tb_alloc_nm_tp(tmp_alloc, event_count, SDL_Event);
+            if (tb_input_system_get_events(system->self, &event_count,
+                                           events)) {
+              for (uint32_t i = 0; i < event_count; ++i) {
+                const SDL_Event *e = &events[i];
+                if (e->type == SDL_QUIT) {
+                  SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                              "World has encountered quit event and is "
+                              "gracefully exiting.");
+                  return false;
+                  TracyCZoneEnd(system_tick_ctx);
+                  TracyCZoneEnd(world_tick_ctx);
+                }
+              }
+            }
+          }
+        }
+      }
     }
     TracyCZoneEnd(system_tick_ctx);
   }
 
   TracyCZoneEnd(world_tick_ctx);
+  return true;
 }
 
 void tb_destroy_world(World *world) {
