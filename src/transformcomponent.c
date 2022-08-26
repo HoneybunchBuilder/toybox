@@ -1,10 +1,12 @@
 #include "transformcomponent.h"
 
-void create_transform_component(TransformComponent *comp,
+bool create_transform_component(TransformComponent *comp,
                                 const TransformComponentDescriptor *desc) {
   *comp = (TransformComponent){
       .transform = desc->transform,
   };
+
+  return true;
 }
 
 void destroy_transform_component(TransformComponent *comp) {
@@ -15,15 +17,7 @@ void destroy_transform_component(TransformComponent *comp) {
   };
 }
 
-bool tb_create_transform_component(void *comp, InternalDescriptor desc) {
-  create_transform_component((TransformComponent *)comp,
-                             (const TransformComponentDescriptor *)desc);
-  return true;
-}
-
-void tb_destroy_transform_component(void *comp) {
-  destroy_transform_component((TransformComponent *)comp);
-}
+TB_DEFINE_COMPONENT(transform, TransformComponent, TransformComponentDescriptor)
 
 void tb_transform_component_descriptor(ComponentDescriptor *desc) {
   desc->name = "Transform";

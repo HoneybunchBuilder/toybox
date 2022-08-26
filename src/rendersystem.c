@@ -61,17 +61,7 @@ void tick_render_system(SystemDependencyColumns *columns, RenderSystem *self,
   TracyCZoneEnd(tick_ctx);
 }
 
-bool tb_create_render_system(void *self, InternalDescriptor desc) {
-  return create_render_system((RenderSystem *)self,
-                              (const RenderSystemDescriptor *)desc);
-}
-void tb_destroy_render_system(void *self) {
-  destroy_render_system((RenderSystem *)self);
-}
-void tb_tick_render_system(SystemDependencyColumns *columns, void *self,
-                           float delta_seconds) {
-  tick_render_system(columns, (RenderSystem *)self, delta_seconds);
-}
+TB_DEFINE_SYSTEM(render, RenderSystem, RenderSystemDescriptor)
 
 void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc) {

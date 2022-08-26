@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simd.h"
+#include <stdint.h>
 
 #define NoClipComponentId 0xC00010FF
 

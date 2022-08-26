@@ -43,17 +43,7 @@ void tick_input_system(SystemDependencyColumns *columns, InputSystem *self,
   TracyCZoneEnd(tick_ctx);
 }
 
-bool tb_create_input_system(void *self, InternalDescriptor desc) {
-  return create_input_system((InputSystem *)self,
-                             (const InputSystemDescriptor *)desc);
-}
-void tb_destroy_input_system(void *self) {
-  destroy_input_system((InputSystem *)self);
-}
-void tb_tick_input_system(SystemDependencyColumns *columns, void *self,
-                          float delta_seconds) {
-  tick_input_system(columns, (InputSystem *)self, delta_seconds);
-}
+TB_DEFINE_SYSTEM(input, InputSystem, InputSystemDescriptor)
 
 bool tb_input_system_get_events(const InputSystem *system,
                                 uint32_t *event_count, SDL_Event *events) {
