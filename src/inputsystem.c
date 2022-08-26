@@ -16,11 +16,11 @@ bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc) {
 
 void destroy_input_system(InputSystem *self) { *self = (InputSystem){0}; }
 
-void tick_input_system(InputSystem *self, SystemDependencyColumns *columns,
+void tick_input_system(InputSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
-  (void)columns; // We have no dependencies here
-  (void)output;  // Results of this system output to the system itself rather
-                 // than an output column
+  (void)input;  // We have no input
+  (void)output; // Results of this system output to the system itself rather
+                // than an output column
   (void)delta_seconds;
   TracyCZoneN(tick_ctx, "Input System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorInput);
@@ -71,7 +71,9 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
   desc->size = sizeof(InputSystem);
   desc->id = InputSystemId;
   desc->desc = (InternalDescriptor)input_desc;
-  desc->deps = (SystemComponentDependencies){0, {0}};
+  desc->dep_count = 0;
+  SDL_memset(desc->deps, 0,
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
   desc->create = tb_create_input_system;
   desc->destroy = tb_destroy_input_system;
   desc->tick = tb_tick_input_system;

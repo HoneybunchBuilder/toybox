@@ -52,14 +52,20 @@ void create_component_store(ComponentStore *store,
 }
 
 bool create_system(World *world, System *system, const SystemDescriptor *desc) {
+  const uint32_t dep_count = desc->dep_count > MAX_DEPENDENCY_SET_COUT
+                                 ? MAX_DEPENDENCY_SET_COUT
+                                 : desc->dep_count;
+
   system->name = desc->name;
   system->id = desc->id;
-  system->deps = desc->deps;
+  system->dep_count = dep_count;
+  SDL_memcpy(system->deps, desc->deps,
+             sizeof(SystemComponentDependencies) * dep_count);
   system->create = desc->create;
   system->destroy = desc->destroy;
   system->tick = desc->tick;
 
-  // Allocate and initialize each system
+  // Allocate and initialize each system1
   system->self = tb_alloc(world->std_alloc, desc->size);
   TB_CHECK_RETURN(system->self, "Failed to allocate system.", false);
 
@@ -201,23 +207,35 @@ bool tb_tick_world(World *world, float delta_seconds) {
       System *system = &world->systems[system_idx];
 
       // Gather packed component columns for this system
-      SystemDependencyColumns columns = {0};
-      {
-        const SystemComponentDependencies deps = system->deps;
-        for (uint32_t column_idx = 0; column_idx < deps.count; ++column_idx) {
-          const ComponentId comp_id = deps.dependent_ids[column_idx];
+      const uint32_t set_count = system->dep_count >= MAX_DEPENDENCY_SET_COUT
+                                     ? MAX_DEPENDENCY_SET_COUT
+                                     : system->dep_count;
+
+      SystemInput input = (SystemInput){
+          .dep_set_count = set_count,
+          .dep_sets = {0},
+      };
+
+      for (uint32_t i = 0; i < set_count; ++i) {
+        const SystemComponentDependencies *deps = &system->deps[i];
+        SystemDependencySet *set = &input.dep_sets[i];
+
+        for (uint32_t column_idx = 0; column_idx < deps->count; ++column_idx) {
+          const ComponentId comp_id = deps->dependent_ids[column_idx];
           for (uint32_t store_idx = 0; store_idx < world->component_store_count;
                ++store_idx) {
             if (packed_stores[store_idx].id == comp_id) {
-              columns.columns[columns.count++] = &packed_stores[store_idx];
+              set->columns[set->column_count++] = &packed_stores[store_idx];
             }
           }
         }
       }
 
+      // TODO: Construct output structure so that the system outputs to the
+      // correct locations
       SystemOutput output = (SystemOutput){0};
 
-      system->tick(system->self, &columns, &output, delta_seconds);
+      system->tick(system->self, &input, &output, delta_seconds);
 
       // HACK: Custom input handling on the world
       // To detect if the user issues a quit event
