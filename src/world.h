@@ -23,9 +23,11 @@
     destroy_##lower_name##_system((self_type *)self);                          \
   }                                                                            \
                                                                                \
-  void tb_tick_##lower_name##_system(SystemDependencyColumns *columns,         \
-                                     void *self, float delta_seconds) {        \
-    tick_##lower_name##_system(columns, (self_type *)self, delta_seconds);     \
+  void tb_tick_##lower_name##_system(                                          \
+      void *self, SystemDependencyColumns *columns, SystemOutput *output,      \
+      float delta_seconds) {                                                   \
+    tick_##lower_name##_system((self_type *)self, columns, output,             \
+                               delta_seconds);                                 \
   }
 
 typedef struct World World;
@@ -81,11 +83,15 @@ typedef struct SystemDependencyColumns {
   PackedComponentStore const *columns[MAX_COMPONENT_DEP_COUNT];
 } SystemDependencyColumns;
 
+typedef struct SystemOutput {
+  uint32_t count;
+} SystemOutput;
+
 typedef uint64_t SystemId;
 typedef bool (*SystemCreateFn)(void *self, InternalDescriptor desc);
 typedef void (*SystemDestroyFn)(void *self);
-typedef void (*SystemTickFn)(SystemDependencyColumns *columns, void *self,
-                             float delta_seconds);
+typedef void (*SystemTickFn)(void *self, SystemDependencyColumns *columns,
+                             SystemOutput *output, float delta_seconds);
 typedef struct SystemDescriptor {
   const char *name;
   uint64_t size;

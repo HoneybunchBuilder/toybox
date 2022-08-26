@@ -20,10 +20,12 @@ void destroy_noclip_system(NoClipControllerSystem *self) {
   *self = (NoClipControllerSystem){0};
 }
 
-void tick_noclip_system(SystemDependencyColumns *columns,
-                        NoClipControllerSystem *self, float delta_seconds) {
+void tick_noclip_system(NoClipControllerSystem *self,
+                        SystemDependencyColumns *columns, SystemOutput *output,
+                        float delta_seconds) {
   (void)self;
   (void)columns;
+  (void)output;
   (void)delta_seconds;
   TracyCZoneN(tick_ctx, "NoClip System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorGame);

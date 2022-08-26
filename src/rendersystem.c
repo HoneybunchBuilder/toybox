@@ -23,9 +23,10 @@ bool create_render_system(RenderSystem *self,
 
 void destroy_render_system(RenderSystem *self) { *self = (RenderSystem){0}; }
 
-void tick_render_system(SystemDependencyColumns *columns, RenderSystem *self,
-                        float delta_seconds) {
+void tick_render_system(RenderSystem *self, SystemDependencyColumns *columns,
+                        SystemOutput *output, float delta_seconds) {
   (void)self;
+  (void)output;
   (void)delta_seconds;
 
   TracyCZoneN(tick_ctx, "Render System Tick", true);

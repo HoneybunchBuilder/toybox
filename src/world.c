@@ -215,7 +215,9 @@ bool tb_tick_world(World *world, float delta_seconds) {
         }
       }
 
-      system->tick(&columns, system->self, delta_seconds);
+      SystemOutput output = (SystemOutput){0};
+
+      system->tick(system->self, &columns, &output, delta_seconds);
 
       // HACK: Custom input handling on the world
       // To detect if the user issues a quit event
