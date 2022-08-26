@@ -16,9 +16,11 @@ bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc) {
 
 void destroy_input_system(InputSystem *self) { *self = (InputSystem){0}; }
 
-void tick_input_system(SystemDependencyColumns *columns, InputSystem *self,
-                       float delta_seconds) {
+void tick_input_system(InputSystem *self, SystemDependencyColumns *columns,
+                       SystemOutput *output, float delta_seconds) {
   (void)columns; // We have no dependencies here
+  (void)output;  // Results of this system output to the system itself rather
+                 // than an output column
   (void)delta_seconds;
   TracyCZoneN(tick_ctx, "Input System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorInput);
