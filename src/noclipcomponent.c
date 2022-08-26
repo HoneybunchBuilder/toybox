@@ -2,27 +2,20 @@
 
 #include "world.h"
 
-void create_noclip_component(NoClipComponent *comp,
+bool create_noclip_component(NoClipComponent *comp,
                              const NoClipComponentDescriptor *desc) {
   *comp = (NoClipComponent){
       .move_speed = desc->move_speed,
       .look_speed = desc->look_speed,
   };
+  return true;
 }
 
 void destroy_noclip_component(NoClipComponent *comp) {
   *comp = (NoClipComponent){0};
 }
 
-bool tb_create_noclip_component(void *comp, InternalDescriptor desc) {
-  create_noclip_component((NoClipComponent *)comp,
-                          (const NoClipComponentDescriptor *)desc);
-  return true;
-}
-
-void tb_destroy_noclip_component(void *comp) {
-  destroy_noclip_component((NoClipComponent *)comp);
-}
+TB_DEFINE_COMPONENT(noclip, NoClipComponent, NoClipComponentDescriptor)
 
 void tb_noclip_component_descriptor(ComponentDescriptor *desc) {
   desc->name = "NoClip";

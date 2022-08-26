@@ -5,31 +5,24 @@
 
 #include "world.h"
 
-void create_directional_light_component(DirectionalLightComponent *comp,
+bool create_directional_light_component(DirectionalLightComponent *comp,
                                         const cgltf_light *desc) {
-  TB_CHECK(desc->type == cgltf_light_type_directional,
-           "Creating directional light with incorrect descriptor.");
+  TB_CHECK_RETURN(desc->type == cgltf_light_type_directional,
+                  "Creating directional light with incorrect descriptor.",
+                  false);
 
   *comp = (DirectionalLightComponent){
       .color = {desc->color[0], desc->color[1], desc->color[2]},
       .intensity = desc->intensity,
   };
+  return true;
 }
 
 void destroy_directional_light_component(DirectionalLightComponent *comp) {
   *comp = (DirectionalLightComponent){0};
 }
 
-bool tb_create_directional_light_component(void *comp,
-                                           InternalDescriptor desc) {
-  create_directional_light_component((DirectionalLightComponent *)comp,
-                                     (const cgltf_light *)desc);
-  return true;
-}
-
-void tb_destroy_directional_light_component(void *comp) {
-  destroy_directional_light_component((DirectionalLightComponent *)comp);
-}
+TB_DEFINE_COMPONENT(directional_light, DirectionalLightComponent, cgltf_light)
 
 void tb_directional_light_component_descriptor(ComponentDescriptor *desc) {
   desc->name = "Directional Light";

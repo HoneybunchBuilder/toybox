@@ -33,17 +33,8 @@ void tick_noclip_system(SystemDependencyColumns *columns,
   TracyCZoneEnd(tick_ctx);
 }
 
-bool tb_create_noclip_system(void *self, InternalDescriptor desc) {
-  return create_noclip_system((NoClipControllerSystem *)self,
-                              (const NoClipControllerSystemDescriptor *)desc);
-}
-void tb_destroy_noclip_system(void *self) {
-  destroy_noclip_system((NoClipControllerSystem *)self);
-}
-void tb_tick_noclip_system(SystemDependencyColumns *columns, void *self,
-                           float delta_seconds) {
-  tick_noclip_system(columns, (NoClipControllerSystem *)self, delta_seconds);
-}
+TB_DEFINE_SYSTEM(noclip, NoClipControllerSystem,
+                 NoClipControllerSystemDescriptor)
 
 void tb_noclip_controller_system_descriptor(
     SystemDescriptor *desc,

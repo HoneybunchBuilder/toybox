@@ -2,6 +2,32 @@
 
 #include "allocator.h"
 
+#define TB_DEFINE_COMPONENT(lower_name, self_type, desc_type)                  \
+  bool tb_create_##lower_name##_component(void *self,                          \
+                                          InternalDescriptor desc) {           \
+    return create_##lower_name##_component((self_type *)self,                  \
+                                           (const desc_type *)desc);           \
+  }                                                                            \
+                                                                               \
+  void tb_destroy_##lower_name##_component(void *self) {                       \
+    destroy_##lower_name##_component((self_type *)self);                       \
+  }
+
+#define TB_DEFINE_SYSTEM(lower_name, self_type, desc_type)                     \
+  bool tb_create_##lower_name##_system(void *self, InternalDescriptor desc) {  \
+    return create_##lower_name##_system((self_type *)self,                     \
+                                        (const desc_type *)desc);              \
+  }                                                                            \
+                                                                               \
+  void tb_destroy_##lower_name##_system(void *self) {                          \
+    destroy_##lower_name##_system((self_type *)self);                          \
+  }                                                                            \
+                                                                               \
+  void tb_tick_##lower_name##_system(SystemDependencyColumns *columns,         \
+                                     void *self, float delta_seconds) {        \
+    tick_##lower_name##_system(columns, (self_type *)self, delta_seconds);     \
+  }
+
 typedef struct World World;
 
 typedef const void *InternalDescriptor;
