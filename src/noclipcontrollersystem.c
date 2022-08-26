@@ -20,11 +20,10 @@ void destroy_noclip_system(NoClipControllerSystem *self) {
   *self = (NoClipControllerSystem){0};
 }
 
-void tick_noclip_system(NoClipControllerSystem *self,
-                        SystemDependencyColumns *columns, SystemOutput *output,
-                        float delta_seconds) {
+void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
   (void)self;
-  (void)columns;
+  (void)input;
   (void)output;
   (void)delta_seconds;
   TracyCZoneN(tick_ctx, "NoClip System Tick", true);
@@ -45,11 +44,14 @@ void tb_noclip_controller_system_descriptor(
   desc->size = sizeof(NoClipControllerSystem);
   desc->id = NoClipControllerSystemId;
   desc->desc = (InternalDescriptor)noclip_desc;
-  desc->deps = (SystemComponentDependencies){2,
-                                             {
-                                                 TransformComponentId,
-                                                 NoClipComponentId,
-                                             }};
+  SDL_memset(desc->deps, 0,
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+  desc->dep_count = 2;
+  desc->deps[0] = (SystemComponentDependencies){2,
+                                                {
+                                                    TransformComponentId,
+                                                    NoClipComponentId,
+                                                }};
   desc->create = tb_create_noclip_system;
   desc->destroy = tb_destroy_noclip_system;
   desc->tick = tb_tick_noclip_system;

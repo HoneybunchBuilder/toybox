@@ -23,10 +23,10 @@
     destroy_##lower_name##_system((self_type *)self);                          \
   }                                                                            \
                                                                                \
-  void tb_tick_##lower_name##_system(                                          \
-      void *self, SystemDependencyColumns *columns, SystemOutput *output,      \
-      float delta_seconds) {                                                   \
-    tick_##lower_name##_system((self_type *)self, columns, output,             \
+  void tb_tick_##lower_name##_system(void *self, const SystemInput *input,     \
+                                     SystemOutput *output,                     \
+                                     float delta_seconds) {                    \
+    tick_##lower_name##_system((self_type *)self, input, output,               \
                                delta_seconds);                                 \
   }
 
@@ -65,7 +65,8 @@ typedef struct ComponentStore {
   ComponentDestroyFn destroy;
 } ComponentStore;
 
-#define MAX_COMPONENT_DEP_COUNT 16
+#define MAX_COMPONENT_DEP_COUNT 4
+#define MAX_DEPENDENCY_SET_COUT 4
 typedef struct SystemComponentDependencies {
   uint32_t count;
   ComponentId dependent_ids[MAX_COMPONENT_DEP_COUNT];
@@ -78,10 +79,15 @@ typedef struct PackedComponentStore {
   EntityId *entity_ids;
 } PackedComponentStore;
 
-typedef struct SystemDependencyColumns {
-  uint32_t count;
+typedef struct SystemDependencySet {
+  uint32_t column_count;
   PackedComponentStore const *columns[MAX_COMPONENT_DEP_COUNT];
-} SystemDependencyColumns;
+} SystemDependencySet;
+
+typedef struct SystemInput {
+  uint32_t dep_set_count;
+  SystemDependencySet dep_sets[MAX_DEPENDENCY_SET_COUT];
+} SystemInput;
 
 typedef struct SystemOutput {
   uint32_t count;
@@ -90,14 +96,15 @@ typedef struct SystemOutput {
 typedef uint64_t SystemId;
 typedef bool (*SystemCreateFn)(void *self, InternalDescriptor desc);
 typedef void (*SystemDestroyFn)(void *self);
-typedef void (*SystemTickFn)(void *self, SystemDependencyColumns *columns,
+typedef void (*SystemTickFn)(void *self, const SystemInput *input,
                              SystemOutput *output, float delta_seconds);
 typedef struct SystemDescriptor {
   const char *name;
   uint64_t size;
   SystemId id;
   InternalDescriptor desc;
-  SystemComponentDependencies deps;
+  uint32_t dep_count;
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUT];
   SystemCreateFn create;
   SystemDestroyFn destroy;
   SystemTickFn tick;
@@ -105,7 +112,8 @@ typedef struct SystemDescriptor {
 typedef struct System {
   const char *name;
   SystemId id;
-  SystemComponentDependencies deps;
+  uint32_t dep_count;
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUT];
   void *self;
   SystemCreateFn create;
   SystemDestroyFn destroy;

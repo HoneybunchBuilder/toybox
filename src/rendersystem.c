@@ -23,10 +23,12 @@ bool create_render_system(RenderSystem *self,
 
 void destroy_render_system(RenderSystem *self) { *self = (RenderSystem){0}; }
 
-void tick_render_system(RenderSystem *self, SystemDependencyColumns *columns,
+void tick_render_system(RenderSystem *self, const SystemInput *input,
                         SystemOutput *output, float delta_seconds) {
   (void)self;
-  (void)output;
+  (void)input;
+  (void)output; // Won't actually have output to the world but will write to the
+                // screen we hope
   (void)delta_seconds;
 
   TracyCZoneN(tick_ctx, "Render System Tick", true);
@@ -34,10 +36,14 @@ void tick_render_system(RenderSystem *self, SystemDependencyColumns *columns,
 
   const PackedComponentStore *transform_store = NULL;
 
-  for (uint32_t i = 0; i < columns->count; ++i) {
-    const PackedComponentStore *store = columns->columns[i];
-    if (store->id == TransformComponentId) {
-      transform_store = store;
+  // TODO: Properly use multiple dependency sets
+  for (uint32_t dep_idx = 0; dep_idx < input->dep_set_count; ++dep_idx) {
+    const SystemDependencySet *set = &input->dep_sets[dep_idx];
+    for (uint32_t col_idx = 0; col_idx < set->column_count; ++col_idx) {
+      const PackedComponentStore *store = set->columns[col_idx];
+      if (store->id == TransformComponentId) {
+        transform_store = store;
+      }
     }
   }
 
@@ -70,10 +76,13 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
   desc->size = sizeof(RenderSystem);
   desc->id = RenderSystemId;
   desc->desc = (InternalDescriptor)render_desc;
-  desc->deps = (SystemComponentDependencies){1,
-                                             {
-                                                 TransformComponentId,
-                                             }};
+  SDL_memset(desc->deps, 0,
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+  desc->dep_count = 1;
+  desc->deps[0] = (SystemComponentDependencies){1,
+                                                {
+                                                    TransformComponentId,
+                                                }};
   desc->create = tb_create_render_system;
   desc->destroy = tb_destroy_render_system;
   desc->tick = tb_tick_render_system;
