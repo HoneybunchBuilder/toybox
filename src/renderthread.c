@@ -120,67 +120,11 @@ static void vk_free_fn(void *pUserData, void *pMemory) {
   TracyCZoneEnd(ctx);
 }
 
-bool init_frame_states(RenderThread *thread) {
-  thread->frame_count = 0;
-  thread->frame_idx = 0;
-
-  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
-    FrameState *state = &thread->frame_states[i];
-
-    state->wait_sem = SDL_CreateSemaphore(1);
-    TB_CHECK_RETURN(state->wait_sem,
-                    "Failed to create frame state wait semaphore", false);
-    state->signal_sem = SDL_CreateSemaphore(0);
-    TB_CHECK_RETURN(state->signal_sem,
-                    "Failed to create frame state signal semaphore", false);
-  }
-
-  return true;
-}
-
-void destroy_frame_states(RenderThread *thread) {
-  thread->frame_count = 0;
-  thread->frame_idx = 0;
-
-  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
-    FrameState *state = &thread->frame_states[i];
-
-    SDL_DestroySemaphore(state->wait_sem);
-    SDL_DestroySemaphore(state->signal_sem);
-
-    *state = (FrameState){0};
-  }
-}
-
-bool init_render_thread(RenderThread *thread) {
-  TB_CHECK_RETURN(thread, "Invalid render thread", false);
-  TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
-
+bool init_instance(SDL_Window *window, Allocator tmp_alloc,
+                   VkAllocationCallbacks *vk_alloc, VkInstance *instance) {
   VkResult err = VK_SUCCESS;
 
-  // Create render arena tmp allocator
-  ArenaAllocator arena = {0};
-  {
-    const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-    create_arena_allocator("Render Arena", &arena, arena_alloc_size);
-  }
-
-  err = volkInitialize();
-  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to initialize volk", false);
-
-  // Create vulkan allocator
-  mi_heap_t *vk_heap = mi_heap_new();
-  TB_CHECK_RETURN(vk_heap, "Failed to create vk heap", false);
-
-  VkAllocationCallbacks vk_alloc = {
-      .pUserData = vk_heap,
-      .pfnAllocation = vk_alloc_fn,
-      .pfnReallocation = vk_realloc_fn,
-      .pfnFree = vk_free_fn,
-  };
-
   // Create vulkan instance
-  VkInstance instance = VK_NULL_HANDLE;
   {
     // Gather required layers
     uint32_t layer_count = 0;
@@ -191,8 +135,8 @@ bool init_render_thread(RenderThread *thread) {
       err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
       SDL_assert(err == VK_SUCCESS);
       if (instance_layer_count > 0) {
-        VkLayerProperties *instance_layers = tb_alloc_nm_tp(
-            arena.alloc, instance_layer_count, VkLayerProperties);
+        VkLayerProperties *instance_layers =
+            tb_alloc_nm_tp(tmp_alloc, instance_layer_count, VkLayerProperties);
         err = vkEnumerateInstanceLayerProperties(&instance_layer_count,
                                                  instance_layers);
         SDL_assert(err == VK_SUCCESS);
@@ -214,10 +158,10 @@ bool init_render_thread(RenderThread *thread) {
     // Query SDL for required extensions
     uint32_t ext_count = 0;
     const char *ext_names[MAX_EXT_COUNT] = {0};
-    SDL_Vulkan_GetInstanceExtensions(thread->window, &ext_count, NULL);
+    SDL_Vulkan_GetInstanceExtensions(window, &ext_count, NULL);
 
     SDL_assert(ext_count < MAX_EXT_COUNT);
-    SDL_Vulkan_GetInstanceExtensions(thread->window, &ext_count, ext_names);
+    SDL_Vulkan_GetInstanceExtensions(window, &ext_count, ext_names);
 
 // Add debug ext
 #ifdef VALIDATION
@@ -259,47 +203,103 @@ bool init_render_thread(RenderThread *thread) {
     create_info.enabledExtensionCount = ext_count;
     create_info.ppEnabledExtensionNames = ext_names;
 
-    err = vkCreateInstance(&create_info, &vk_alloc, &instance);
+    err = vkCreateInstance(&create_info, vk_alloc, instance);
     TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create vulkan instance",
                     false);
   }
 
-  volkLoadInstance(instance);
+  volkLoadInstance(*instance);
+  return true;
+}
 
+bool init_debug_messenger(VkInstance instance, VkAllocationCallbacks *vk_alloc,
+                          VkDebugUtilsMessengerEXT *debug) {
   // Load debug callback
 #ifdef VALIDATION
-  VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
-  {
-    VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
-    ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    ext_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    ext_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    ext_info.pfnUserCallback = vk_debug_callback;
-    err = vkCreateDebugUtilsMessengerEXT(instance, &ext_info, &vk_alloc,
-                                         &debug_utils_messenger);
-    SDL_assert(err == VK_SUCCESS);
-  }
-#endif
-
-  TB_CHECK_RETURN(init_frame_states(thread), "Failed to init frame states",
+  VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
+  ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  ext_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  ext_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  ext_info.pfnUserCallback = vk_debug_callback;
+  VkResult err =
+      vkCreateDebugUtilsMessengerEXT(instance, &ext_info, vk_alloc, debug);
+  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create debug utils messenger",
                   false);
-
-  // Write to the thread object
-  {
-    thread->render_arena = arena;
-
-    thread->vk_heap = vk_heap;
-    thread->vk_alloc = vk_alloc;
-
-    thread->instance = instance;
-#ifdef VALIDATION
-    thread->debug_utils_messenger = debug_utils_messenger;
 #endif
+  return true;
+}
+
+bool init_frame_states(FrameState *states) {
+  TB_CHECK_RETURN(states, "Invalid states", false);
+
+  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+    FrameState *state = &states[i];
+
+    state->wait_sem = SDL_CreateSemaphore(1);
+    TB_CHECK_RETURN(state->wait_sem,
+                    "Failed to create frame state wait semaphore", false);
+    state->signal_sem = SDL_CreateSemaphore(0);
+    TB_CHECK_RETURN(state->signal_sem,
+                    "Failed to create frame state signal semaphore", false);
   }
+
+  return true;
+}
+
+void destroy_frame_states(FrameState *states) {
+  TB_CHECK(states, "Invalid states");
+
+  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+    FrameState *state = &states[i];
+
+    SDL_DestroySemaphore(state->wait_sem);
+    SDL_DestroySemaphore(state->signal_sem);
+
+    *state = (FrameState){0};
+  }
+}
+
+bool init_render_thread(RenderThread *thread) {
+  TB_CHECK_RETURN(thread, "Invalid render thread", false);
+  TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
+
+  VkResult err = VK_SUCCESS;
+
+  // Create render arena tmp allocator
+  {
+    const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
+    create_arena_allocator("Render Arena", &thread->render_arena,
+                           arena_alloc_size);
+  }
+
+  err = volkInitialize();
+  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to initialize volk", false);
+
+  // Create vulkan allocator
+  thread->vk_heap = mi_heap_new();
+  TB_CHECK_RETURN(thread->vk_heap, "Failed to create vk heap", false);
+
+  thread->vk_alloc = (VkAllocationCallbacks){
+      .pUserData = thread->vk_heap,
+      .pfnAllocation = vk_alloc_fn,
+      .pfnReallocation = vk_realloc_fn,
+      .pfnFree = vk_free_fn,
+  };
+
+  TB_CHECK_RETURN(init_instance(thread->window, thread->render_arena.alloc,
+                                &thread->vk_alloc, &thread->instance),
+                  "Failed to create instance", false);
+
+  TB_CHECK_RETURN(init_debug_messenger(thread->instance, &thread->vk_alloc,
+                                       &thread->debug_utils_messenger),
+                  "Failed to create debug messenger", false);
+
+  TB_CHECK_RETURN(init_frame_states(thread->frame_states),
+                  "Failed to init frame states", false);
 
   return true;
 }
@@ -307,8 +307,9 @@ bool init_render_thread(RenderThread *thread) {
 void destroy_render_thread(RenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
-  destroy_frame_states(thread);
+  destroy_frame_states(thread->frame_states);
 
+  // Destroy debug messenger
 #ifdef VALIDATION
   vkDestroyDebugUtilsMessengerEXT(
       thread->instance, thread->debug_utils_messenger, &thread->vk_alloc);
