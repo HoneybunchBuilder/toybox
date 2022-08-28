@@ -25,13 +25,13 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
 }
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
-  (void)thread;
-  (void)frame_idx;
+  TB_CHECK(frame_idx < MAX_FRAME_STATES, "Invalid frame index");
+  SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
-  (void)thread;
-  (void)frame_idx;
+  TB_CHECK(frame_idx < MAX_FRAME_STATES, "Invalid frame index");
+  SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
 }
 
 void tb_stop_render_thread(RenderThread *thread) {
@@ -118,6 +118,38 @@ static void vk_free_fn(void *pUserData, void *pMemory) {
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   TracyCFreeN(pMemory, "Vulkan") mi_free(pMemory);
   TracyCZoneEnd(ctx);
+}
+
+bool init_frame_states(RenderThread *thread) {
+  thread->frame_count = 0;
+  thread->frame_idx = 0;
+
+  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+    FrameState *state = &thread->frame_states[i];
+
+    state->wait_sem = SDL_CreateSemaphore(1);
+    TB_CHECK_RETURN(state->wait_sem,
+                    "Failed to create frame state wait semaphore", false);
+    state->signal_sem = SDL_CreateSemaphore(0);
+    TB_CHECK_RETURN(state->signal_sem,
+                    "Failed to create frame state signal semaphore", false);
+  }
+
+  return true;
+}
+
+void destroy_frame_states(RenderThread *thread) {
+  thread->frame_count = 0;
+  thread->frame_idx = 0;
+
+  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+    FrameState *state = &thread->frame_states[i];
+
+    SDL_DestroySemaphore(state->wait_sem);
+    SDL_DestroySemaphore(state->signal_sem);
+
+    *state = (FrameState){0};
+  }
 }
 
 bool init_render_thread(RenderThread *thread) {
@@ -253,6 +285,9 @@ bool init_render_thread(RenderThread *thread) {
   }
 #endif
 
+  TB_CHECK_RETURN(init_frame_states(thread), "Failed to init frame states",
+                  false);
+
   // Write to the thread object
   {
     thread->render_arena = arena;
@@ -270,6 +305,10 @@ bool init_render_thread(RenderThread *thread) {
 }
 
 void destroy_render_thread(RenderThread *thread) {
+  TB_CHECK(thread, "Invalid thread");
+
+  destroy_frame_states(thread);
+
 #ifdef VALIDATION
   vkDestroyDebugUtilsMessengerEXT(
       thread->instance, thread->debug_utils_messenger, &thread->vk_alloc);
@@ -291,16 +330,33 @@ int32_t render_thread(void *data) {
 
   // Main thread loop
   while (true) {
-    // TODO: Wait for signal
-
-    // TracyCFrameMarkStart("Render Frame");
     TracyCZoneN(ctx, "Render Frame", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
+    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
-    // TODO: Signal frame done
+    // Wait for signal
+    {
+      TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
+      TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+
+      SDL_SemWait(frame_state->wait_sem);
+
+      TracyCZoneEnd(wait_ctx);
+    }
+
+    { // TODO: Draw!
+      // SDL_Log("Render Thread: idx (%d) count (%d)", thread->frame_idx,
+      //        thread->frame_count);
+    }
+
+    // Increment frame count when done
+    thread->frame_count++;
+    thread->frame_idx = thread->frame_count % MAX_FRAME_STATES;
+
+    // Signal frame done
+    SDL_SemPost(frame_state->signal_sem);
 
     TracyCZoneEnd(ctx);
-    // TracyCFrameMarkEnd("Render Frame");
   }
 
   // Shutdown

@@ -14,6 +14,7 @@ typedef struct RenderSystemDescriptor {
 
 typedef struct RenderSystem {
   RenderThread *render_thread;
+  uint32_t last_frame_idx;
 } RenderSystem;
 
 void tb_render_system_descriptor(SystemDescriptor *desc,

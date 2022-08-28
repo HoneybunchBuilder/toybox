@@ -28,10 +28,30 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
   // Wait for the render thread to finish the frame with this index
-  tb_wait_render(self->render_thread, 0);
+  {
+    TracyCZoneN(wait_ctx, "Wait for Render Thread", true);
+    TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+    tb_wait_render(self->render_thread, self->last_frame_idx);
+    TracyCZoneEnd(wait_ctx);
+  }
 
-  // Signal the render thread to start the next frame
-  tb_signal_render(self->render_thread, 0);
+  uint32_t this_frame_idx = self->last_frame_idx + 1;
+  this_frame_idx %= MAX_FRAME_STATES;
+
+  {
+    TracyCZoneN(ctx, "Render System Tick", true);
+    TracyCZoneColor(ctx, TracyCategoryColorRendering);
+
+    // TODO
+    // SDL_Log("Render System: last idx (%d), this idx", self->last_frame_idx,
+    //        this_frame_idx);
+
+    TracyCZoneEnd(ctx);
+  }
+
+  // Signal the render thread to start rendering this frame
+  tb_signal_render(self->render_thread, this_frame_idx);
+  self->last_frame_idx = this_frame_idx;
 
   TracyCZoneEnd(tick_ctx);
 }

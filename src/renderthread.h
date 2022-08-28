@@ -10,6 +10,8 @@
 
 typedef struct SDL_Window SDL_Window;
 typedef struct SDL_Thread SDL_Thread;
+typedef struct SDL_semaphore SDL_semaphore;
+typedef struct SDL_mutex SDL_mutex;
 
 typedef struct mi_heap_s mi_heap_t;
 
@@ -17,7 +19,18 @@ typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
 
+#define MAX_FRAME_STATES 3
+
+typedef struct FrameState {
+  SDL_semaphore *wait_sem;
+  SDL_semaphore *signal_sem;
+} FrameState;
+
 typedef struct RenderThread {
+  uint32_t frame_idx;
+  uint64_t frame_count;
+  FrameState frame_states[MAX_FRAME_STATES];
+
   SDL_Window *window;
   SDL_Thread *thread;
 
