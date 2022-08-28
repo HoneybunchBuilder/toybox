@@ -37,6 +37,8 @@ typedef const void *InternalDescriptor;
 typedef uint32_t EntityId;
 typedef uint32_t ComponentId;
 
+#define InvalidId 0xFFFFFFFFF
+
 #define ComponentIdAsStr(id) "\"" #id "\""
 
 typedef uint32_t Entity;

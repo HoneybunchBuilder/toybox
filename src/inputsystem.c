@@ -10,6 +10,7 @@ bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc) {
   }
 
   *self = (InputSystem){
+      .tmp_alloc = desc->tmp_alloc,
       .window = desc->window,
   };
   return true;
@@ -92,9 +93,13 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
   desc->size = sizeof(InputSystem);
   desc->id = InputSystemId;
   desc->desc = (InternalDescriptor)input_desc;
-  desc->dep_count = 0;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+  desc->dep_count = 1;
+  desc->deps[0] = (SystemComponentDependencies){
+      .count = 1,
+      .dependent_ids = {InputComponentId},
+  };
   desc->create = tb_create_input_system;
   desc->destroy = tb_destroy_input_system;
   desc->tick = tb_tick_input_system;
