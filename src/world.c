@@ -150,7 +150,7 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
       SystemInput input = (SystemInput){
           .dep_set_count = set_count,
-          .dep_sets = {0},
+          .dep_sets = {{0}},
       };
 
       // Each dependency set can have a number of dependent columns
