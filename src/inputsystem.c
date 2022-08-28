@@ -27,8 +27,6 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "Input System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorInput);
 
-  SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "Ticking Input System");
-
   // Get which entities we need to write out to
   EntityId *entities = NULL;
   uint32_t entity_count = 0;

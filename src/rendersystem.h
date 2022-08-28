@@ -6,24 +6,14 @@
 
 typedef struct SystemDescriptor SystemDescriptor;
 
-typedef struct SDL_Window SDL_Window;
-typedef struct VkInstance_T *VkInstance;
-typedef struct VkAllocationCallbacks VkAllocationCallbacks;
+typedef struct RenderThread RenderThread;
 
 typedef struct RenderSystemDescriptor {
-  SDL_Window *window;
-  VkInstance instance;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-  const VkAllocationCallbacks *vk_alloc;
+  RenderThread *render_thread;
 } RenderSystemDescriptor;
 
 typedef struct RenderSystem {
-  SDL_Window *window;
-  VkInstance instance;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-  const VkAllocationCallbacks *vk_alloc;
+  RenderThread *render_thread;
 } RenderSystem;
 
 void tb_render_system_descriptor(SystemDescriptor *desc,

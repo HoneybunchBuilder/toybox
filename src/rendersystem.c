@@ -1,22 +1,15 @@
 #include "rendersystem.h"
 
 #include "profiling.h"
-#include "tbsdl.h"
-#include "transformcomponent.h"
+#include "renderthread.h"
+#include "tbcommon.h"
 #include "world.h"
 
 bool create_render_system(RenderSystem *self,
                           const RenderSystemDescriptor *desc) {
-  if (!desc) {
-    return false;
-  }
-
+  TB_CHECK_RETURN(desc, "Invalid RenderSystemDescriptor", false);
   *self = (RenderSystem){
-      .window = desc->window,
-      .instance = desc->instance,
-      .std_alloc = desc->std_alloc,
-      .tmp_alloc = desc->tmp_alloc,
-      .vk_alloc = desc->vk_alloc,
+      .render_thread = desc->render_thread,
   };
   return true;
 }
@@ -34,7 +27,11 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "Render System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
-  SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Ticking Render System");
+  // Wait for the render thread to finish the frame with this index
+  tb_wait_render(self->render_thread, 0);
+
+  // Signal the render thread to start the next frame
+  tb_signal_render(self->render_thread, 0);
 
   TracyCZoneEnd(tick_ctx);
 }
@@ -49,11 +46,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
   desc->desc = (InternalDescriptor)render_desc;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
-  desc->dep_count = 1;
-  desc->deps[0] = (SystemComponentDependencies){1,
-                                                {
-                                                    TransformComponentId,
-                                                }};
+  desc->dep_count = 0;
   desc->create = tb_create_render_system;
   desc->destroy = tb_destroy_render_system;
   desc->tick = tb_tick_render_system;
