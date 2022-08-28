@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #define NoClipComponentId 0xC00010FF
+#define NoClipComponentIdStr "0xC00010FF"
 
 typedef struct ComponentDescriptor ComponentDescriptor;
 

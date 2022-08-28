@@ -124,6 +124,7 @@ if(UNIX)
     add_library(zstd::zstd ALIAS zstd::libzstd_static)
   endif()
 endif()
+find_package(json-c CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -254,7 +255,7 @@ else()
 endif()
 #set_property(TARGET toybox PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c")
 
 target_link_libraries(toybox PRIVATE ${library_list})
 

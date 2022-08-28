@@ -1,5 +1,6 @@
 #include "inputsystem.h"
 
+#include "inputcomponent.h"
 #include "profiling.h"
 #include "tbsdl.h"
 
@@ -27,43 +28,63 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
 
   SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "Ticking Input System");
 
-  // Clear out previous frame's inputs
-  SDL_memset(self->events, 0, sizeof(SDL_Event) * InputSystemMaxEvents);
+  // Get which entities we need to write out to
+  EntityId *entities = NULL;
+  uint32_t entity_count = 0;
+  for (uint32_t dep_idx = 0; dep_idx < input->dep_set_count; ++dep_idx) {
+    const SystemDependencySet *set = &input->dep_sets[dep_idx];
+
+    for (uint32_t col_idx = 0; col_idx < set->column_count; ++col_idx) {
+      const PackedComponentStore *column = &set->columns[col_idx];
+      if (column->id == InputComponentId) {
+        entities = set->entity_ids;
+        entity_count = set->entity_count;
+        break;
+      }
+    }
+  }
+
+  // Gather all input into a single input component
+  InputComponent input_comp = (InputComponent){0};
 
   // Read up-to InputSystemMaxEvents events from SDL and store them
   // in a buffer
   uint32_t event_index = 0;
   // Note that we must check the event index first or else we risk overrunning
   // the buffer. mimalloc should catch these cases.
-  while (event_index < InputSystemMaxEvents &&
-         SDL_PollEvent(&self->events[event_index])) {
+  while (event_index < InputComponentMaxEvents &&
+         SDL_PollEvent(&input_comp.events[event_index])) {
     SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "Polled event %d", event_index);
     event_index++;
   }
-  self->event_count = event_index;
+  input_comp.event_count = event_index;
+
+  // Write that input component to the output input component(s)
+  // There should only be one but if there is more than one just write to them
+  // and issue a warning that this isn't intended. Maybe in the future it could
+  // be a neat feature to be able to filter input based on player at this level?
+  const uint32_t out_count = entity_count;
+  if (out_count > 0) {
+    InputComponent *components =
+        tb_alloc_nm_tp(self->tmp_alloc, out_count, InputComponent);
+
+    for (uint32_t i = 0; i < out_count; ++i) {
+      components[i] = input_comp;
+    }
+
+    output->set_count = 1;
+    output->write_sets[0] = (SystemWriteSet){
+        .id = InputComponentId,
+        .count = out_count,
+        .components = (uint8_t *)components,
+        .entities = entities,
+    };
+  }
 
   TracyCZoneEnd(tick_ctx);
 }
 
 TB_DEFINE_SYSTEM(input, InputSystem, InputSystemDescriptor)
-
-bool tb_input_system_get_events(const InputSystem *system,
-                                uint32_t *event_count, SDL_Event *events) {
-  if (event_count) {
-    if (!events) {
-      *event_count = system->event_count;
-      return true;
-    } else {
-      // Ensure we can't copy more than the max number of events
-      if ((*event_count) > InputSystemMaxEvents) {
-        *event_count = InputSystemMaxEvents;
-      }
-      SDL_memcpy(events, system->events, (*event_count) * sizeof(SDL_Event));
-      return true;
-    }
-  }
-  return false;
-}
 
 void tb_input_system_descriptor(SystemDescriptor *desc,
                                 const InputSystemDescriptor *input_desc) {

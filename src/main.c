@@ -5,7 +5,6 @@
 #include "camera.h"
 #include "config.h"
 #include "demo.h"
-#include "lightcomponent.h"
 #include "pi.h"
 #include "profiling.h"
 #include "settings.h"
@@ -19,6 +18,8 @@
 #include "tbvma.h"
 
 #include "cameracomponent.h"
+#include "inputcomponent.h"
+#include "lightcomponent.h"
 #include "noclipcomponent.h"
 #include "transformcomponent.h"
 
@@ -322,18 +323,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 #endif
 
-  const uint32_t component_count = 4;
-  ComponentDescriptor component_descs[4] = {0};
+  const uint32_t component_count = 5;
+  ComponentDescriptor component_descs[5] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
   tb_directional_light_component_descriptor(&component_descs[2]);
   tb_noclip_component_descriptor(&component_descs[3]);
+  tb_input_component_descriptor(&component_descs[4]);
 
   InputSystemDescriptor input_system_desc = {
+      .tmp_alloc = arena.alloc,
       .window = window,
   };
-
-  NoClipControllerSystemDescriptor noclip_system_desc = {0};
 
   // TODO: Things like the vulkan system allocator and the vulkan instance
   // can be owned by the render system
@@ -343,6 +344,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
       .vk_alloc = vk_alloc_ptr,
+  };
+
+  NoClipControllerSystemDescriptor noclip_system_desc = {
+      .tmp_alloc = arena.alloc,
   };
 
   const uint32_t system_count = 3;
@@ -363,6 +368,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   World world = {0};
   bool success = tb_create_world(&world_desc, &world);
   TB_CHECK_RETURN(success, "Failed to create world.", -1);
+
+  // Create entity with some default components
+  const uint32_t core_comp_count = 1;
+  ComponentId core_comp_ids[1] = {InputComponentId};
+  InternalDescriptor core_comp_descs[1] = {0};
+  EntityDescriptor entity_desc = {
+      .name = "Core",
+      .component_count = core_comp_count,
+      .component_ids = core_comp_ids,
+      .component_descriptors = core_comp_descs,
+  };
+  tb_world_add_entity(&world, &entity_desc);
 
   Demo d = {0};
   success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
