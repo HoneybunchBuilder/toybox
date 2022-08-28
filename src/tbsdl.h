@@ -15,6 +15,7 @@
 #include <SDL2/SDL_log.h>
 #include <SDL2/SDL_rwops.h>
 #include <SDL2/SDL_stdinc.h>
+#include <SDL2/SDL_thread.h>
 #include <SDL2/SDL_vulkan.h>
 
 #ifdef __clang__

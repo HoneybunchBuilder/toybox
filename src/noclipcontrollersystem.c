@@ -29,8 +29,6 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "NoClip System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorGame);
 
-  SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Ticking NoClip System");
-
   const uint32_t dep_count = input->dep_set_count > MAX_DEPENDENCY_SET_COUT
                                  ? MAX_DEPENDENCY_SET_COUT
                                  : input->dep_set_count;
