@@ -13,7 +13,12 @@ void destroy_transform_component(TransformComponent *comp) {
   // Setting scale to 0 to implicitly zero out the entire object
   // while avoiding nonsense warnings from the compiler in IDEs
   *comp = (TransformComponent){
-      .transform.scale = (float3){0.0f, 0.0f, 0.0f},
+      {
+          .scale = (float3){0},
+          .rotation = (float3){0},
+      },
+      .child_count = 0,
+      .children = NULL,
   };
 }
 
