@@ -3,7 +3,11 @@
 #include "allocator.h"
 #include "cameracomponent.h"
 #include "inputsystem.h"
+#include "json-c/json_object.h"
+#include "json-c/json_tokener.h"
+#include "json-c/linkhash.h"
 #include "lightcomponent.h"
+#include "noclipcomponent.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -134,71 +138,6 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
   Allocator tmp_alloc = world->tmp_alloc;
 
-  /*
-    TODO: A better approach here would be:
-    For each system
-    {
-      Find the set of entity ids where all components required by the system are
-    enabled.
-      Pack together a structure on the temp allocator that is a table
-    where each column is a linear array. The first column stores entity ids on
-    the global world table and each subsequent column is the packed array of
-    that component type.
-      Pass that as input to the system's tick
-    }
-
-    We have to do this packing per-system anyway since each system could change
-    the world. Still have to figure out how to handle systems writing to the
-    world.
-  */
-
-  // Gather packed columns for each component type
-  const uint32_t store_count = world->component_store_count;
-  PackedComponentStore *packed_stores = NULL;
-  if (store_count > 0) {
-    TracyCZoneN(pack_ctx, "Pack Columns", true);
-    TracyCZoneColor(pack_ctx, TracyCategoryColorCore);
-
-    // Allocate the list of packed stores on the temp allocator
-    // We just need it for this frame
-    packed_stores =
-        tb_alloc_nm_tp(tmp_alloc, store_count, PackedComponentStore);
-
-    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-         ++store_idx) {
-      const ComponentStore *store = &world->component_stores[store_idx];
-      const uint64_t comp_size = store->size;
-
-      // Get the packed store that corresponds with this current store
-      PackedComponentStore *packed_store = &packed_stores[store_idx];
-      packed_store->id = store->id;
-      packed_store->components =
-          tb_alloc(tmp_alloc, store->size * store->count);
-      packed_store->entity_ids =
-          tb_alloc_nm_tp(tmp_alloc, store->count, EntityId);
-      packed_store->count = 0;
-
-      // Copy components from the core store to the packed store
-      uint32_t packed_comp_idx = 0;
-      for (uint32_t entity_id = 0; entity_id < world->max_entities;
-           ++entity_id) {
-        Entity entity = world->entities[entity_id];
-        // If the entity is marked to use this component
-        if ((entity & (1 << store_idx)) == 1) {
-          uint8_t *component = &store->components[entity_id * comp_size];
-          uint8_t *packed_comp_dst =
-              &packed_store->components[packed_comp_idx * comp_size];
-          SDL_memcpy(packed_comp_dst, component, comp_size);
-          packed_store->entity_ids[packed_comp_idx] = (EntityId)entity_id;
-          packed_comp_idx++;
-          packed_store->count++;
-        }
-      }
-    }
-
-    TracyCZoneEnd(pack_ctx);
-  }
-
   {
     TracyCZoneN(system_tick_ctx, "Tick Systems", true);
     TracyCZoneColor(system_tick_ctx, TracyCategoryColorCore);
@@ -206,62 +145,116 @@ bool tb_tick_world(World *world, float delta_seconds) {
          ++system_idx) {
       System *system = &world->systems[system_idx];
 
-      // Gather packed component columns for this system
-      const uint32_t set_count = system->dep_count >= MAX_DEPENDENCY_SET_COUT
-                                     ? MAX_DEPENDENCY_SET_COUT
-                                     : system->dep_count;
+      // Gather and pack component columns for this system's input
+      const uint32_t set_count = system->dep_count;
 
       SystemInput input = (SystemInput){
           .dep_set_count = set_count,
           .dep_sets = {0},
       };
 
-      for (uint32_t i = 0; i < set_count; ++i) {
-        const SystemComponentDependencies *deps = &system->deps[i];
-        SystemDependencySet *set = &input.dep_sets[i];
+      // Each dependency set can have a number of dependent columns
+      for (uint32_t set_idx = 0; set_idx < set_count; ++set_idx) {
+        // Gather the components that this dependency set requires
+        const SystemComponentDependencies *dep = &system->deps[set_idx];
+        SystemDependencySet *set = &input.dep_sets[set_idx];
 
-        for (uint32_t column_idx = 0; column_idx < deps->count; ++column_idx) {
-          const ComponentId comp_id = deps->dependent_ids[column_idx];
-          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-               ++store_idx) {
-            if (packed_stores[store_idx].id == comp_id) {
-              set->columns[set->column_count++] = &packed_stores[store_idx];
+        // Find the entities that have the required components
+        uint32_t entity_count = 0;
+        for (EntityId entity_id = 0; entity_id < world->entity_count;
+             ++entity_id) {
+          uint32_t matched_component_count = 0;
+          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+               ++comp_idx) {
+            const ComponentId store_id = world->component_stores[comp_idx].id;
+            for (uint32_t i = 0; i < dep->count; ++i) {
+              if (store_id == dep->dependent_ids[i]) {
+                matched_component_count++;
+                break;
+              }
             }
+          }
+          // Count if this entity has all required components
+          if (matched_component_count == dep->count) {
+            entity_count++;
+          }
+        }
+
+        // Allocate collection of entities
+        EntityId *entities = tb_alloc_nm_tp(tmp_alloc, entity_count, EntityId);
+        entity_count = 0;
+        for (EntityId entity_id = 0; entity_id < world->entity_count;
+             ++entity_id) {
+          uint32_t matched_component_count = 0;
+          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+               ++comp_idx) {
+            const ComponentId store_id = world->component_stores[comp_idx].id;
+            for (uint32_t i = 0; i < dep->count; ++i) {
+              if (store_id == dep->dependent_ids[i]) {
+                matched_component_count++;
+                break;
+              }
+            }
+          }
+          // Count if this entity has all required components
+          if (matched_component_count == dep->count) {
+            entities[entity_count] = entity_id;
+            entity_count++;
+          }
+        }
+        set->entity_count = entity_count;
+        set->entity_ids = entities;
+
+        // Now we know how much we need to allocate for eached packed component
+        // store
+        set->column_count = dep->count;
+        for (uint32_t col_id = 0; col_id < dep->count; ++col_id) {
+          const ComponentId id = dep->dependent_ids[col_id];
+
+          uint64_t components_size = 0;
+          const ComponentStore *world_store = NULL;
+          // Find world component store for this id and determine how much space
+          // we need for the packed component store
+          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+               ++comp_idx) {
+            const ComponentStore *store = &world->component_stores[comp_idx];
+            if (store->id == id) {
+              world_store = store;
+              components_size = entity_count * store->size;
+              break;
+            }
+          }
+          if (components_size > 0) {
+            uint8_t *components =
+                tb_alloc_nm_tp(tmp_alloc, components_size, uint8_t);
+            const uint64_t comp_size = world_store->size;
+
+            // Copy from the world store based on entity index into the packed
+            // store
+            for (uint32_t entity_idx = 0; entity_idx < entity_count;
+                 ++entity_idx) {
+              EntityId entity_id = entities[entity_idx];
+
+              const uint8_t *in_comp =
+                  &world_store->components[entity_id * comp_size];
+              uint8_t *out_comp = &components[entity_idx * comp_size];
+
+              SDL_memcpy(out_comp, in_comp, comp_size);
+            }
+
+            set->columns[col_id] = (PackedComponentStore){
+                .id = id,
+                .components = components,
+            };
           }
         }
       }
 
-      // TODO: Construct output structure so that the system outputs to the
-      // correct locations
       SystemOutput output = (SystemOutput){0};
 
       system->tick(system->self, &input, &output, delta_seconds);
 
-      // HACK: Custom input handling on the world
-      // To detect if the user issues a quit event
-      if (system->id == InputSystemId) {
-        uint32_t event_count = 0;
-        if (tb_input_system_get_events(system->self, &event_count, NULL)) {
-          if (event_count > 0) {
-            SDL_Event *events =
-                tb_alloc_nm_tp(tmp_alloc, event_count, SDL_Event);
-            if (tb_input_system_get_events(system->self, &event_count,
-                                           events)) {
-              for (uint32_t i = 0; i < event_count; ++i) {
-                const SDL_Event *e = &events[i];
-                if (e->type == SDL_QUIT) {
-                  SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                              "World has encountered quit event and is "
-                              "gracefully exiting.");
-                  return false;
-                  TracyCZoneEnd(system_tick_ctx);
-                  TracyCZoneEnd(world_tick_ctx);
-                }
-              }
-            }
-          }
-        }
-      }
+      // TODO: Write output back to world stores
     }
     TracyCZoneEnd(system_tick_ctx);
   }
@@ -344,9 +337,24 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   }
   TB_CHECK_RETURN(data, "Failed to load glb", false);
 
+  json_tokener *tok = json_tokener_new();
+
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->nodes_count; ++i) {
     const cgltf_node *node = &data->nodes[i];
+
+    // Get extras
+    cgltf_size extra_size = 0;
+    char *extra_json = NULL;
+    if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
+      extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
+      extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
+      if (cgltf_copy_extras_json(data, &node->extras, extra_json,
+                                 &extra_size) != cgltf_result_success) {
+        extra_size = 0;
+        extra_json = NULL;
+      }
+    }
 
     // Get component count
     uint32_t component_count = 0;
@@ -365,6 +373,23 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
       if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
           node->scale[2] != 0.0f) {
         component_count++;
+      }
+      // Find custom components
+      if (extra_json) {
+        json_object *json =
+            json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
+        if (json) {
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strncmp(key, "id", 2) == 0) {
+              const int32_t id_len = json_object_get_string_len(value);
+              const char *id_str = json_object_get_string(value);
+              if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
+                component_count++;
+                break;
+              }
+            }
+          }
+        }
       }
     }
 
@@ -448,10 +473,51 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         component_descriptors[component_idx] = transform_desc;
         component_idx++;
       }
+
+      // Add extra components to entity
+      if (extra_json) {
+        json_object *json =
+            json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
+        if (json) {
+          ComponentId comp_id = 0;
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strcmp(key, "id") == 0) {
+              const int32_t id_len = json_object_get_string_len(value);
+              const char *id_str = json_object_get_string(value);
+              if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
+                comp_id = NoClipComponentId;
+                break;
+              }
+            }
+          }
+
+          if (comp_id == NoClipComponentId) {
+            NoClipComponentDescriptor *comp_desc =
+                tb_alloc_tp(tmp_alloc, NoClipComponentDescriptor);
+            *comp_desc = (NoClipComponentDescriptor){0};
+
+            // Find move_speed and look_speed
+            json_object_object_foreach(json, key, value) {
+              if (SDL_strcmp(key, "move_speed") == 0) {
+                comp_desc->move_speed = (float)json_object_get_double(value);
+              } else if (SDL_strcmp(key, "look_speed") == 0) {
+                comp_desc->look_speed = (float)json_object_get_double(value);
+              }
+            }
+
+            // Add component to entity
+            component_ids[component_idx] = NoClipComponentId;
+            component_descriptors[component_idx] = comp_desc;
+            component_idx++;
+          }
+        }
+      }
     }
 
     tb_world_add_entity(world, &entity_desc);
   }
+
+  json_tokener_free(tok);
 
   return true;
 }

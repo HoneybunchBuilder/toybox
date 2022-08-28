@@ -30,7 +30,8 @@
                 "vulkan",
                 "tools"
             ]
-        }
+        },
+        "json-c"
     ],
     "overrides": [
         {

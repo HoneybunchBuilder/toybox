@@ -37,6 +37,8 @@ typedef const void *InternalDescriptor;
 typedef uint32_t EntityId;
 typedef uint32_t ComponentId;
 
+#define ComponentIdAsStr(id) "\"" #id "\""
+
 typedef uint32_t Entity;
 typedef struct EntityDescriptor {
   const char *name;
@@ -66,7 +68,9 @@ typedef struct ComponentStore {
 } ComponentStore;
 
 #define MAX_COMPONENT_DEP_COUNT 4
+#define MAX_COLUMN_COUNT MAX_COMPONENT_DEP_COUNT
 #define MAX_DEPENDENCY_SET_COUT 4
+#define MAX_OUTPUT_SET_COUNT 4
 typedef struct SystemComponentDependencies {
   uint32_t count;
   ComponentId dependent_ids[MAX_COMPONENT_DEP_COUNT];
@@ -74,14 +78,14 @@ typedef struct SystemComponentDependencies {
 
 typedef struct PackedComponentStore {
   ComponentId id;
-  uint32_t count;
   uint8_t *components;
-  EntityId *entity_ids;
 } PackedComponentStore;
 
 typedef struct SystemDependencySet {
   uint32_t column_count;
-  PackedComponentStore const *columns[MAX_COMPONENT_DEP_COUNT];
+  PackedComponentStore columns[MAX_COLUMN_COUNT];
+  uint32_t entity_count;
+  EntityId *entity_ids;
 } SystemDependencySet;
 
 typedef struct SystemInput {
@@ -89,8 +93,19 @@ typedef struct SystemInput {
   SystemDependencySet dep_sets[MAX_DEPENDENCY_SET_COUT];
 } SystemInput;
 
-typedef struct SystemOutput {
+// The idea is that the system tick can write to this object
+// Memory for dynamic members is expected to come from a temporary allocator
+// components and entities are expected to be the same array lengths (count).
+typedef struct SystemWriteSet {
+  ComponentId id;
   uint32_t count;
+  uint8_t *components;
+  EntityId *entities;
+} SystemWriteSet;
+
+typedef struct SystemOutput {
+  uint32_t set_count;
+  SystemWriteSet write_sets[MAX_OUTPUT_SET_COUNT];
 } SystemOutput;
 
 typedef uint64_t SystemId;

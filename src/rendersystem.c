@@ -34,35 +34,6 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "Render System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
-  const PackedComponentStore *transform_store = NULL;
-
-  // TODO: Properly use multiple dependency sets
-  for (uint32_t dep_idx = 0; dep_idx < input->dep_set_count; ++dep_idx) {
-    const SystemDependencySet *set = &input->dep_sets[dep_idx];
-    for (uint32_t col_idx = 0; col_idx < set->column_count; ++col_idx) {
-      const PackedComponentStore *store = set->columns[col_idx];
-      if (store->id == TransformComponentId) {
-        transform_store = store;
-      }
-    }
-  }
-
-  if (transform_store == NULL) {
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, "%s",
-                 "Failed to retrieve transform components for render system.");
-    SDL_TriggerBreakpoint();
-    return;
-  }
-
-  const TransformComponent *transform_components =
-      (const TransformComponent *)transform_store->components;
-  const uint32_t transform_count = transform_store->count;
-
-  for (uint32_t i = 0; i < transform_count; ++i) {
-    const Transform *t = &transform_components[i].transform;
-    (void)t;
-  }
-
   SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Ticking Render System");
 
   TracyCZoneEnd(tick_ctx);

@@ -6,10 +6,13 @@
 
 typedef struct SystemDescriptor SystemDescriptor;
 
-// We don't actually need data for these to function so just take up a little
-// space since empty structs aren't allowed
-typedef uint32_t NoClipControllerSystemDescriptor;
-typedef uint32_t NoClipControllerSystem;
+typedef struct NoClipControllerSystemDescriptor {
+  Allocator tmp_alloc;
+} NoClipControllerSystemDescriptor;
+
+typedef struct NoClipControllerSystem {
+  Allocator tmp_alloc;
+} NoClipControllerSystem;
 
 void tb_noclip_controller_system_descriptor(
     SystemDescriptor *desc,
