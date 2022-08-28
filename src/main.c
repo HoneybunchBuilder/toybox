@@ -986,6 +986,48 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCZoneEnd(ctx);
     }
 
+    // Tick the world
+    if (!tb_tick_world(&world, delta_time_seconds)) {
+      running = false;
+      TracyCZoneEnd(trcy_ctx);
+      TracyCFrameMarkEnd("Frame");
+      break;
+    }
+
+    // MASSIVE HACK
+    // We're going to grab the known noclip camera transform from the
+    // world ecs and patch that data into the old demo system
+    // for proof of concept
+    {
+      for (EntityId entity_id = 0; entity_id < world.entity_count;
+           ++entity_id) {
+        uint32_t noclip_store_idx = 0;
+        uint32_t transform_store_idx = 0;
+        for (uint32_t store_idx = 0; store_idx < world.component_store_count;
+             ++store_idx) {
+          const ComponentStore *store = &world.component_stores[store_idx];
+          if (store->id == TransformComponentId) {
+            transform_store_idx = store_idx;
+          } else if (store->id == NoClipComponentId) {
+            noclip_store_idx = store_idx;
+          }
+        }
+
+        Entity entity = world.entities[entity_id];
+        if (entity & (1 << noclip_store_idx)) {
+          const ComponentStore *transform_store =
+              &world.component_stores[transform_store_idx];
+
+          const TransformComponent *transform_comp =
+              (const TransformComponent *)&transform_store
+                  ->components[entity_id * sizeof(TransformComponent)];
+
+          main_cam.transform = transform_comp->transform;
+          break;
+        }
+      }
+    }
+
     float4x4 view = {.row0 = {0}};
     camera_view(&main_cam, &view);
 
@@ -1042,14 +1084,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     demo_set_sky(&d, &sky_data);
 
     demo_render_frame(&d, &vp, &sky_vp, &sun_vp);
-
-    // Tick the world
-    if (!tb_tick_world(&world, delta_time_seconds)) {
-      running = false;
-      TracyCZoneEnd(trcy_ctx);
-      TracyCFrameMarkEnd("Frame");
-      break;
-    }
 
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now

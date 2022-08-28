@@ -163,13 +163,16 @@ bool tb_tick_world(World *world, float delta_seconds) {
         uint32_t entity_count = 0;
         for (EntityId entity_id = 0; entity_id < world->entity_count;
              ++entity_id) {
+          Entity entity = world->entities[entity_id];
           uint32_t matched_component_count = 0;
-          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
-               ++comp_idx) {
-            const ComponentId store_id = world->component_stores[comp_idx].id;
+          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+               ++store_idx) {
+            const ComponentId store_id = world->component_stores[store_idx].id;
             for (uint32_t i = 0; i < dep->count; ++i) {
               if (store_id == dep->dependent_ids[i]) {
-                matched_component_count++;
+                if (entity & (1 << store_idx)) {
+                  matched_component_count++;
+                }
                 break;
               }
             }
@@ -185,13 +188,16 @@ bool tb_tick_world(World *world, float delta_seconds) {
         entity_count = 0;
         for (EntityId entity_id = 0; entity_id < world->entity_count;
              ++entity_id) {
+          Entity entity = world->entities[entity_id];
           uint32_t matched_component_count = 0;
-          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
-               ++comp_idx) {
-            const ComponentId store_id = world->component_stores[comp_idx].id;
+          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+               ++store_idx) {
+            const ComponentId store_id = world->component_stores[store_idx].id;
             for (uint32_t i = 0; i < dep->count; ++i) {
               if (store_id == dep->dependent_ids[i]) {
-                matched_component_count++;
+                if (entity & (1 << store_idx)) {
+                  matched_component_count++;
+                }
                 break;
               }
             }
@@ -254,7 +260,36 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
       system->tick(system->self, &input, &output, delta_seconds);
 
-      // TODO: Write output back to world stores
+      // Write output back to world stores
+      TB_CHECK(output.set_count <= MAX_OUTPUT_SET_COUNT,
+               "Too many output sets");
+      for (uint32_t set_idx = 0; set_idx < output.set_count; ++set_idx) {
+        const SystemWriteSet *set = &output.write_sets[set_idx];
+
+        // Get the world component store that matches this set's component id
+        ComponentStore *comp_store = NULL;
+        for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+             ++store_idx) {
+          ComponentStore *store = &world->component_stores[store_idx];
+          if (set->id == store->id) {
+            comp_store = store;
+            break;
+          }
+        }
+        TB_CHECK(comp_store, "Failed to retrieve component store");
+
+        // Write out the components from the output set
+        for (uint32_t entity_idx = 0; entity_idx < set->count; ++entity_idx) {
+          EntityId entity_id = set->entities[entity_idx];
+
+          const uint64_t comp_size = comp_store->size;
+
+          const uint8_t *src = &set->components[entity_idx * comp_size];
+          uint8_t *dst = &comp_store->components[entity_id * comp_size];
+
+          SDL_memcpy(dst, src, comp_size);
+        }
+      }
     }
     TracyCZoneEnd(system_tick_ctx);
   }
@@ -444,7 +479,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
       }
       if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
           node->scale[2] != 0.0f) {
-        Transform transform = {0};
+        Transform transform = {.position = {0}};
         {
           {
             transform.position[0] = node->translation[0];
