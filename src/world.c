@@ -73,7 +73,7 @@ bool create_system(World *world, System *system, const SystemDescriptor *desc) {
   system->self = tb_alloc(world->std_alloc, desc->size);
   TB_CHECK_RETURN(system->self, "Failed to allocate system.", false);
 
-  bool created = system->create(system->self, world);
+  bool created = system->create(system->self, desc->desc);
   TB_CHECK_RETURN(created, "Failed to create system internals.", false);
 
   return true;
