@@ -133,13 +133,16 @@ bool init_instance(SDL_Window *window, Allocator tmp_alloc,
     {
       uint32_t instance_layer_count = 0;
       err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
-      SDL_assert(err == VK_SUCCESS);
+      TB_CHECK_RETURN(err == VK_SUCCESS,
+                      "Failed to enumerate instance layer property count",
+                      false);
       if (instance_layer_count > 0) {
         VkLayerProperties *instance_layers =
             tb_alloc_nm_tp(tmp_alloc, instance_layer_count, VkLayerProperties);
         err = vkEnumerateInstanceLayerProperties(&instance_layer_count,
                                                  instance_layers);
-        SDL_assert(err == VK_SUCCESS);
+        TB_CHECK_RETURN(err == VK_SUCCESS,
+                        "Failed to enumerate instance layer properties", false);
 #ifdef VALIDATION
         {
           const char *validation_layer_name = "VK_LAYER_KHRONOS_validation";
@@ -147,7 +150,8 @@ bool init_instance(SDL_Window *window, Allocator tmp_alloc,
           bool validation_found = check_layer(
               validation_layer_name, instance_layer_count, instance_layers);
           if (validation_found) {
-            SDL_assert(layer_count + 1 < MAX_LAYER_COUNT);
+            TB_CHECK_RETURN(layer_count + 1 < MAX_LAYER_COUNT,
+                            "Layer count out of range", false);
             layer_names[layer_count++] = validation_layer_name;
           }
         }
@@ -347,12 +351,266 @@ void destroy_gpu(Allocator std_alloc, VkQueueFamilyProperties *queue_props) {
   tb_free(std_alloc, queue_props);
 }
 
-bool init_device(VkInstance instance, Allocator tmp_alloc,
-                 VkAllocationCallbacks *vk_alloc, VkDevice *device) {
-  (void)instance;
-  (void)tmp_alloc;
-  (void)vk_alloc;
-  (void)device;
+bool init_surface(VkInstance instance, SDL_Window *window,
+                  VkSurfaceKHR *surface) {
+  // SDL subsystems will clean up this surface on their own
+  TB_CHECK_RETURN(SDL_Vulkan_CreateSurface(window, instance, surface),
+                  "Failed to create surface", false);
+  return true;
+}
+
+bool find_queue_families(Allocator tmp_alloc, VkPhysicalDevice gpu,
+                         VkSurfaceKHR surface, uint32_t queue_family_count,
+                         const VkQueueFamilyProperties *queue_props,
+                         uint32_t *present_queue_family_index,
+                         uint32_t *graphics_queue_family_index) {
+  uint32_t graphics_idx = 0xFFFFFFFF;
+  uint32_t present_idx = 0xFFFFFFFF;
+  {
+    // Iterate over each queue to learn whether it supports presenting:
+    VkBool32 *supports_present =
+        tb_alloc_nm_tp(tmp_alloc, queue_family_count, VkBool32);
+    for (uint32_t i = 0; i < queue_family_count; i++) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface,
+                                           &supports_present[i]);
+    }
+
+    // Search for a graphics and a present queue in the array of queue
+    // families, try to find one that supports both
+    for (uint32_t i = 0; i < queue_family_count; i++) {
+      if ((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
+        if (graphics_idx == 0xFFFFFFFF) {
+          graphics_idx = i;
+        }
+
+        if (supports_present[i] == VK_TRUE) {
+          graphics_idx = i;
+          present_idx = i;
+          break;
+        }
+      }
+    }
+
+    if (present_idx == 0xFFFFFFFF) {
+      // If didn't find a queue that supports both graphics and present, then
+      // find a separate present queue.
+      for (uint32_t i = 0; i < queue_family_count; ++i) {
+        if (supports_present[i] == VK_TRUE) {
+          present_idx = i;
+          break;
+        }
+      }
+    }
+
+    // Generate error if could not find both a graphics and a present queue
+    TB_CHECK_RETURN(graphics_idx != 0xFFFFFFFF && present_idx != 0xFFFFFFFF,
+                    "Invalid queue family indices", false);
+  }
+  *present_queue_family_index = present_idx;
+  *graphics_queue_family_index = graphics_idx;
+  return true;
+}
+
+bool device_supports_ext(const VkExtensionProperties *props,
+                         uint32_t prop_count, const char *ext_name) {
+  for (uint32_t i = 0; i < prop_count; ++i) {
+    const VkExtensionProperties *prop = &props[i];
+    if (SDL_strcmp(prop->extensionName, ext_name) == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void required_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
+                         const VkExtensionProperties *props,
+                         uint32_t prop_count, const char *ext_name) {
+  if (device_supports_ext(props, prop_count, ext_name)) {
+    SDL_assert((*out_ext_count + 1) < MAX_EXT_COUNT);
+    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading required extension: %s",
+                ext_name);
+    out_ext_names[(*out_ext_count)++] = ext_name;
+    return;
+  }
+
+  SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Missing required extension: %s",
+               ext_name);
+  SDL_TriggerBreakpoint();
+}
+
+bool optional_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
+                         const VkExtensionProperties *props,
+                         uint32_t prop_count, const char *ext_name) {
+  if (device_supports_ext(props, prop_count, ext_name)) {
+    SDL_assert((*out_ext_count + 1) < MAX_EXT_COUNT);
+    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading optional extension: %s",
+                ext_name);
+    out_ext_names[(*out_ext_count)++] = ext_name;
+    return true;
+  }
+
+  SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "Optional extension not supported: %s",
+              ext_name);
+  return false;
+}
+
+bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
+                 uint32_t present_queue_family_index, Allocator tmp_alloc,
+                 VkAllocationCallbacks *vk_alloc,
+                 RenderExtensionSupport *ext_support, VkDevice *device) {
+  VkResult err = VK_SUCCESS;
+
+  uint32_t device_ext_count = 0;
+  const char *device_ext_names[MAX_EXT_COUNT] = {0};
+
+  RenderExtensionSupport ext = {0};
+  {
+    const uint32_t max_props = 256;
+    VkExtensionProperties *props =
+        tb_alloc_nm_tp(tmp_alloc, max_props, VkExtensionProperties);
+
+    uint32_t prop_count = 0;
+    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, NULL);
+    TB_CHECK_RETURN(err == VK_SUCCESS,
+                    "Failed to enumerate device extension property count",
+                    false);
+
+    TB_CHECK_RETURN(prop_count < max_props,
+                    "Device extension property count out of range", false);
+
+    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, props);
+    TB_CHECK_RETURN(err == VK_SUCCESS,
+                    "Failed to enumerate device extension properties", false);
+
+    // Only need portability on macos / ios
+#if (defined(VK_USE_PLATFORM_MACOS_MVK) ||                                     \
+     defined(VK_USE_PLATFORM_IOS_MVK)) &&                                      \
+    (VK_HEADER_VERSION >= 216)
+    ext.portability = optional_device_ext(
+        &device_ext_names, &device_ext_count, props, prop_count,
+        VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+#endif
+
+    // Need a swapchain
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+    // Raytracing is optional
+#if defined(VK_KHR_ray_tracing_pipeline)
+    if (optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                            props, prop_count,
+                            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)) {
+      ext.raytracing = true;
+
+      // Required for Spirv 1.4
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+
+      // Required for VK_KHR_ray_tracing_pipeline
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+
+      // Required for VK_KHR_acceleration_structure
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+
+      // Required for raytracing
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count, VK_KHR_RAY_QUERY_EXTENSION_NAME);
+      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
+                          props, prop_count,
+                          VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
+    }
+#endif
+
+#ifdef TRACY_ENABLE
+    // Enable calibrated timestamps if we can when profiling with tracy
+    {
+      ext.calibrated_timestamps = optional_device_ext(
+          (const char **)&device_ext_names, &device_ext_count, props,
+          prop_count, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+    }
+#endif
+  }
+
+  float queue_priorities[1] = {0.0};
+  VkDeviceQueueCreateInfo queues[2];
+  queues[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  queues[0].pNext = NULL;
+  queues[0].queueFamilyIndex = graphics_queue_family_index;
+  queues[0].queueCount = 1;
+  queues[0].pQueuePriorities = queue_priorities;
+  queues[0].flags = 0;
+
+#if defined(VK_KHR_ray_tracing_pipeline)
+  VkPhysicalDeviceRayQueryFeaturesKHR rt_query_feature = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
+      .rayQuery = ext_support->raytracing,
+  };
+
+  VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+      .rayTracingPipeline = ext_support->raytracing,
+      .pNext = &rt_query_feature,
+  };
+#endif
+
+  VkPhysicalDeviceVulkan11Features vk_11_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .multiview = VK_TRUE,
+      .pNext = &rt_pipe_feature,
+  };
+
+  VkDeviceCreateInfo create_info = {0};
+  create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  create_info.pNext = (const void *)&vk_11_features;
+  create_info.queueCreateInfoCount = 1;
+  create_info.pQueueCreateInfos = queues;
+  create_info.enabledExtensionCount = device_ext_count;
+  create_info.ppEnabledExtensionNames = device_ext_names;
+
+  if (present_queue_family_index != graphics_queue_family_index) {
+    queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queues[1].pNext = NULL;
+    queues[1].queueFamilyIndex = present_queue_family_index;
+    queues[1].queueCount = 1;
+    queues[1].pQueuePriorities = queue_priorities;
+    queues[1].flags = 0;
+    create_info.queueCreateInfoCount = 2;
+  }
+
+  err = vkCreateDevice(gpu, &create_info, vk_alloc, device);
+  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create device", false);
+
+  *ext_support = ext;
+
+  return true;
+}
+
+bool init_queues(VkDevice device, uint32_t graphics_queue_family_index,
+                 uint32_t present_queue_family_index, VkQueue *graphics_queue,
+                 VkQueue *present_queue) {
+  vkGetDeviceQueue(device, graphics_queue_family_index, 0, graphics_queue);
+
+  if (graphics_queue_family_index == present_queue_family_index) {
+    *present_queue = *graphics_queue;
+  } else {
+    vkGetDeviceQueue(device, present_queue_family_index, 0, present_queue);
+  }
+
   return true;
 }
 
@@ -403,6 +661,28 @@ bool init_render_thread(RenderThread *thread) {
                            &thread->gpu_features, &thread->gpu_mem_props),
                   "Failed to select gpu", false)
 
+  TB_CHECK_RETURN(
+      init_surface(thread->instance, thread->window, &thread->surface),
+      "Failed to create surface", false);
+
+  TB_CHECK_RETURN(find_queue_families(tmp_alloc, thread->gpu, thread->surface,
+                                      thread->queue_family_count,
+                                      thread->queue_props,
+                                      &thread->present_queue_family_index,
+                                      &thread->graphics_queue_family_index),
+                  "Failed to get find queue families", false);
+
+  TB_CHECK_RETURN(init_device(thread->gpu, thread->graphics_queue_family_index,
+                              thread->present_queue_family_index, tmp_alloc,
+                              vk_alloc, &thread->ext_support, &thread->device),
+                  "Failed to init device", false);
+
+  TB_CHECK_RETURN(init_queues(thread->device,
+                              thread->graphics_queue_family_index,
+                              thread->present_queue_family_index,
+                              &thread->graphics_queue, &thread->present_queue),
+                  "Failed to init queues", false);
+
   TB_CHECK_RETURN(init_frame_states(thread->frame_states),
                   "Failed to init frame states", false);
 
@@ -412,17 +692,22 @@ bool init_render_thread(RenderThread *thread) {
 void destroy_render_thread(RenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
+  VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
+  Allocator std_alloc = thread->std_alloc.alloc;
+
   destroy_frame_states(thread->frame_states);
 
-  destroy_gpu(thread->std_alloc.alloc, thread->queue_props);
+  vkDestroyDevice(thread->device, vk_alloc);
+
+  destroy_gpu(std_alloc, thread->queue_props);
 
   // Destroy debug messenger
 #ifdef VALIDATION
-  vkDestroyDebugUtilsMessengerEXT(
-      thread->instance, thread->debug_utils_messenger, &thread->vk_alloc);
+  vkDestroyDebugUtilsMessengerEXT(thread->instance,
+                                  thread->debug_utils_messenger, vk_alloc);
 #endif
 
-  vkDestroyInstance(thread->instance, &thread->vk_alloc);
+  vkDestroyInstance(thread->instance, vk_alloc);
 
   *thread = (RenderThread){0};
 }

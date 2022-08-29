@@ -53,7 +53,6 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   // the buffer. mimalloc should catch these cases.
   while (event_index < InputComponentMaxEvents &&
          SDL_PollEvent(&input_comp.events[event_index])) {
-    SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "Polled event %d", event_index);
     event_index++;
   }
   input_comp.event_count = event_index;
