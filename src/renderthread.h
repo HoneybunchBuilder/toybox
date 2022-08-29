@@ -24,25 +24,77 @@ typedef struct RenderThreadDescriptor {
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
   SDL_semaphore *signal_sem;
+
+  VkCommandPool command_pool;
+  void *tracy_gpu_context;
+
+  VkImage swapchain_image;
+  VkImageView swapchain_image_view;
+
+  VkImageView depth_buffer_view;
+
+  VkSemaphore render_complete_sem;
+  VkFence fence;
 } FrameState;
 
-typedef struct RenderThread {
-  uint32_t frame_idx;
-  uint64_t frame_count;
-  FrameState frame_states[MAX_FRAME_STATES];
+typedef struct Swapchain {
+  bool valid;
+  VkSwapchainKHR swapchain;
+  uint32_t image_count;
+  VkFormat format;
+  VkColorSpaceKHR color_space;
+  VkPresentModeKHR present_mode;
+  uint32_t width;
+  uint32_t height;
+} Swapchain;
 
+typedef struct RenderExtensionSupport {
+  bool portability : 1;
+  bool raytracing : 1;
+  bool calibrated_timestamps : 1;
+} RenderExtensionSupport;
+
+typedef struct RenderThread {
   SDL_Window *window;
   SDL_Thread *thread;
 
+  StandardAllocator std_alloc;
   ArenaAllocator render_arena;
 
   mi_heap_t *vk_heap;
   VkAllocationCallbacks vk_alloc;
 
   VkInstance instance;
-#ifdef VALIDATION
   VkDebugUtilsMessengerEXT debug_utils_messenger;
-#endif
+
+  VkPhysicalDevice gpu;
+  VkPhysicalDeviceProperties2 gpu_props;
+  VkPhysicalDeviceDriverProperties driver_props;
+  uint32_t queue_family_count;
+  VkQueueFamilyProperties *queue_props;
+  VkPhysicalDeviceFeatures gpu_features;
+  VkPhysicalDeviceMemoryProperties gpu_mem_props;
+
+  VkSurfaceKHR surface;
+  uint32_t graphics_queue_family_index;
+  uint32_t present_queue_family_index;
+  bool separate_present_queue;
+
+  RenderExtensionSupport ext_support;
+
+  VkDevice device;
+  VkQueue present_queue;
+  VkQueue graphics_queue;
+
+  Swapchain swapchain;
+
+  VkPipelineCache pipeline_cache;
+
+  VkSampler default_sampler;
+
+  uint32_t frame_idx;
+  uint64_t frame_count;
+  FrameState frame_states[MAX_FRAME_STATES];
 } RenderThread;
 
 bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);

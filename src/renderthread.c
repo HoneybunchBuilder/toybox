@@ -263,17 +263,112 @@ void destroy_frame_states(FrameState *states) {
   }
 }
 
+bool init_gpu(VkInstance instance, Allocator std_alloc, Allocator tmp_alloc,
+              VkPhysicalDevice *gpu, VkPhysicalDeviceProperties2 *gpu_props,
+              VkPhysicalDeviceDriverProperties *driver_props,
+              uint32_t *queue_family_count,
+              VkQueueFamilyProperties **queue_props,
+              VkPhysicalDeviceFeatures *gpu_features,
+              VkPhysicalDeviceMemoryProperties *gpu_mem_props) {
+  uint32_t gpu_count = 0;
+  VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
+  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to enumerate gpu count", false);
+
+  VkPhysicalDevice *gpus =
+      tb_alloc_nm_tp(tmp_alloc, gpu_count, VkPhysicalDevice);
+  err = vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
+  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to enumerate gpus", false);
+
+  /* Try to auto select most suitable device */
+  int32_t gpu_idx = -1;
+  {
+    uint32_t count_device_type[VK_PHYSICAL_DEVICE_TYPE_CPU + 1];
+    SDL_memset(count_device_type, 0, sizeof(count_device_type));
+
+    VkPhysicalDeviceProperties gpu_props = {0};
+    for (uint32_t i = 0; i < gpu_count; i++) {
+      vkGetPhysicalDeviceProperties(gpus[i], &gpu_props);
+      TB_CHECK_RETURN(gpu_props.deviceType <= VK_PHYSICAL_DEVICE_TYPE_CPU,
+                      "Unexpected gpu type", false);
+
+      count_device_type[gpu_props.deviceType]++;
+    }
+
+    VkPhysicalDeviceType search_for_device_type =
+        VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    if (count_device_type[VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU]) {
+      search_for_device_type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    } else if (count_device_type[VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU]) {
+      search_for_device_type = VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+    } else if (count_device_type[VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU]) {
+      search_for_device_type = VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU;
+    } else if (count_device_type[VK_PHYSICAL_DEVICE_TYPE_CPU]) {
+      search_for_device_type = VK_PHYSICAL_DEVICE_TYPE_CPU;
+    } else if (count_device_type[VK_PHYSICAL_DEVICE_TYPE_OTHER]) {
+      search_for_device_type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
+    }
+
+    for (uint32_t i = 0; i < gpu_count; i++) {
+      vkGetPhysicalDeviceProperties(gpus[i], &gpu_props);
+      if (gpu_props.deviceType == search_for_device_type) {
+        gpu_idx = (int32_t)i;
+        break;
+      }
+    }
+  }
+
+  TB_CHECK_RETURN(gpu_idx >= 0, "Failed to find suitable gpu", false);
+  *gpu = gpus[gpu_idx];
+
+  // Check physical device properties
+  *driver_props = (VkPhysicalDeviceDriverProperties){
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+  *gpu_props = (VkPhysicalDeviceProperties2){
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = driver_props};
+  vkGetPhysicalDeviceProperties2(*gpu, gpu_props);
+
+  vkGetPhysicalDeviceQueueFamilyProperties(*gpu, queue_family_count, NULL);
+
+  (*queue_props) =
+      tb_alloc_nm_tp(std_alloc, *queue_family_count, VkQueueFamilyProperties);
+  TB_CHECK_RETURN(queue_props, "Failed to allocate queue props", false);
+  vkGetPhysicalDeviceQueueFamilyProperties(*gpu, queue_family_count,
+                                           (*queue_props));
+
+  vkGetPhysicalDeviceFeatures(*gpu, gpu_features);
+
+  vkGetPhysicalDeviceMemoryProperties(*gpu, gpu_mem_props);
+
+  return true;
+}
+
+void destroy_gpu(Allocator std_alloc, VkQueueFamilyProperties *queue_props) {
+  tb_free(std_alloc, queue_props);
+}
+
+bool init_device(VkInstance instance, Allocator tmp_alloc,
+                 VkAllocationCallbacks *vk_alloc, VkDevice *device) {
+  (void)instance;
+  (void)tmp_alloc;
+  (void)vk_alloc;
+  (void)device;
+  return true;
+}
+
 bool init_render_thread(RenderThread *thread) {
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
 
   VkResult err = VK_SUCCESS;
 
-  // Create render arena tmp allocator
+  // Create renderer allocators
   {
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
     create_arena_allocator("Render Arena", &thread->render_arena,
                            arena_alloc_size);
+
+    create_standard_allocator(&thread->std_alloc, "Render Std Alloc");
   }
 
   err = volkInitialize();
@@ -290,13 +385,23 @@ bool init_render_thread(RenderThread *thread) {
       .pfnFree = vk_free_fn,
   };
 
-  TB_CHECK_RETURN(init_instance(thread->window, thread->render_arena.alloc,
-                                &thread->vk_alloc, &thread->instance),
-                  "Failed to create instance", false);
+  Allocator std_alloc = thread->std_alloc.alloc;
+  Allocator tmp_alloc = thread->render_arena.alloc;
+  VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
 
-  TB_CHECK_RETURN(init_debug_messenger(thread->instance, &thread->vk_alloc,
+  TB_CHECK_RETURN(
+      init_instance(thread->window, tmp_alloc, vk_alloc, &thread->instance),
+      "Failed to create instance", false);
+
+  TB_CHECK_RETURN(init_debug_messenger(thread->instance, vk_alloc,
                                        &thread->debug_utils_messenger),
                   "Failed to create debug messenger", false);
+
+  TB_CHECK_RETURN(init_gpu(thread->instance, std_alloc, tmp_alloc, &thread->gpu,
+                           &thread->gpu_props, &thread->driver_props,
+                           &thread->queue_family_count, &thread->queue_props,
+                           &thread->gpu_features, &thread->gpu_mem_props),
+                  "Failed to select gpu", false)
 
   TB_CHECK_RETURN(init_frame_states(thread->frame_states),
                   "Failed to init frame states", false);
@@ -308,6 +413,8 @@ void destroy_render_thread(RenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
   destroy_frame_states(thread->frame_states);
+
+  destroy_gpu(thread->std_alloc.alloc, thread->queue_props);
 
   // Destroy debug messenger
 #ifdef VALIDATION
