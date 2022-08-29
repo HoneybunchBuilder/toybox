@@ -26,42 +26,25 @@
 
 #define MAX_EXT_COUNT 16
 
-#define TB_VK_CHECK(err, message)                                              \
-  if ((err) != VK_SUCCESS) {                                                   \
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
-    assert(false);                                                             \
-  }
-#define TB_VK_ENSURE(err, message)                                             \
-  if ((err) != VK_SUCCESS) {                                                   \
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
-    SDL_TriggerBreakpoint();                                                   \
-  }
-#define TB_VK_ENSURE_RET(err, message, ret)                                    \
-  if ((err) != VK_SUCCESS) {                                                   \
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
-    SDL_TriggerBreakpoint();                                                   \
-    return (ret);                                                              \
-  }
-
-static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
-                         VkDeviceMemory memory, VkDeviceSize size,
-                         void *pUserData) {
+static void vma_alloc_fn_old(VmaAllocator allocator, uint32_t memoryType,
+                             VkDeviceMemory memory, VkDeviceSize size,
+                             void *pUserData) {
   (void)allocator;
   (void)memoryType;
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCAllocN((void *)memory, size, "VMA")
+  TracyCAllocN((void *)memory, size, "VMA old")
 }
-static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
-                        VkDeviceMemory memory, VkDeviceSize size,
-                        void *pUserData) {
+static void vma_free_fn_old(VmaAllocator allocator, uint32_t memoryType,
+                            VkDeviceMemory memory, VkDeviceSize size,
+                            void *pUserData) {
   (void)allocator;
   (void)memoryType;
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCFreeN((void *)memory, "VMA")
+  TracyCFreeN((void *)memory, "VMA old")
 }
 
 static bool device_supports_ext_old(const VkExtensionProperties *props,
@@ -730,7 +713,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
   };
 
   err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, swapchain);
-  TB_VK_ENSURE(err, "Failed to create swapchain");
+  TB_VK_CHECK(err, "Failed to create swapchain");
 
   swap_info = (SwapchainInfo){
       .valid = true,
@@ -753,7 +736,7 @@ static bool demo_init_image_views(Demo *d) {
   {
     uint32_t img_count = 0;
     err = vkGetSwapchainImagesKHR(d->device, d->swapchain, &img_count, NULL);
-    TB_VK_ENSURE_RET(err, "Failed to retrieve swapchain image count", false);
+    TB_VK_CHECK_RET(err, "Failed to retrieve swapchain image count", false);
 
     // Device may really want us to have called vkGetSwapchainImagesKHR
     // For now just assert that making that call doesn't change our desired
@@ -769,7 +752,7 @@ static bool demo_init_image_views(Demo *d) {
         vkGetSwapchainImagesKHR(d->device, d->swapchain,
                                 &d->swap_info.image_count, d->swapchain_images);
     if (err == VK_INCOMPLETE) {
-      TB_VK_ENSURE_RET(err, "Failed to retrieve swapchain images", false);
+      TB_VK_CHECK_RET(err, "Failed to retrieve swapchain images", false);
     }
   }
 
@@ -799,7 +782,7 @@ static bool demo_init_image_views(Demo *d) {
       create_info.image = d->swapchain_images[i];
       err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
                               &d->swapchain_image_views[i]);
-      TB_VK_ENSURE_RET(err, "Failed to create swapchain image view", false);
+      TB_VK_CHECK_RET(err, "Failed to create swapchain image view", false);
     }
   }
 
@@ -829,7 +812,7 @@ static bool demo_init_image_views(Demo *d) {
 
     err = create_gpuimage(d->vma_alloc, &create_info, &alloc_info,
                           &d->depth_buffers);
-    TB_VK_ENSURE_RET(err, "Failed to create depth buffer image", false);
+    TB_VK_CHECK_RET(err, "Failed to create depth buffer image", false);
   }
 
   // Create Depth Buffer Views
@@ -859,7 +842,7 @@ static bool demo_init_image_views(Demo *d) {
       create_info.subresourceRange.baseArrayLayer = i;
       err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
                               &d->depth_buffer_views[i]);
-      TB_VK_ENSURE_RET(err, "Failed to create depth buffer view", false);
+      TB_VK_CHECK_RET(err, "Failed to create depth buffer view", false);
     }
   }
 
@@ -902,7 +885,7 @@ static bool demo_init_framebuffers(Demo *d) {
     create_info.renderPass = d->tonemap_pass;
     err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
                               &d->tonemap_pass_framebuffers[i]);
-    TB_VK_ENSURE_RET(err, "Failed to create tonemapping framebuffer", false);
+    TB_VK_CHECK_RET(err, "Failed to create tonemapping framebuffer", false);
   }
 
   // Create ui pass framebuffers
@@ -914,7 +897,7 @@ static bool demo_init_framebuffers(Demo *d) {
     create_info.renderPass = d->imgui_pass;
     err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
                               &d->ui_pass_framebuffers[i]);
-    TB_VK_ENSURE_RET(err, "Failed to create imgui framebuffer", false);
+    TB_VK_CHECK_RET(err, "Failed to create imgui framebuffer", false);
   }
 
   return true;
@@ -1054,8 +1037,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     return false;
   }
 
-  uint32_t graphics_queue_family_index = UINT32_MAX;
-  uint32_t present_queue_family_index = UINT32_MAX;
+  uint32_t graphics_queue_family_index = 0xFFFFFFFF;
+  uint32_t present_queue_family_index = 0xFFFFFFFF;
   {
     // Iterate over each queue to learn whether it supports presenting:
     VkBool32 *supports_present =
@@ -1069,7 +1052,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     // families, try to find one that supports both
     for (uint32_t i = 0; i < queue_family_count; i++) {
       if ((queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
-        if (graphics_queue_family_index == UINT32_MAX) {
+        if (graphics_queue_family_index == 0xFFFFFFFF) {
           graphics_queue_family_index = i;
         }
 
@@ -1081,7 +1064,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
       }
     }
 
-    if (present_queue_family_index == UINT32_MAX) {
+    if (present_queue_family_index == 0xFFFFFFFF) {
       // If didn't find a queue that supports both graphics and present, then
       // find a separate present queue.
       for (uint32_t i = 0; i < queue_family_count; ++i) {
@@ -1094,8 +1077,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     tb_free(tmp_alloc, supports_present);
 
     // Generate error if could not find both a graphics and a present queue
-    if (graphics_queue_family_index == UINT32_MAX ||
-        present_queue_family_index == UINT32_MAX) {
+    if (graphics_queue_family_index == 0xFFFFFFFF ||
+        present_queue_family_index == 0xFFFFFFFF) {
       return false;
     }
   }
@@ -1223,8 +1206,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .vkCmdCopyBuffer = vkCmdCopyBuffer,
     };
     VmaDeviceMemoryCallbacks vma_callbacks = {
-        vma_alloc_fn,
-        vma_free_fn,
+        vma_alloc_fn_old,
+        vma_free_fn_old,
         NULL,
     };
     VmaAllocatorCreateInfo create_info = {
@@ -1238,7 +1221,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
 
     err = vmaCreateAllocator(&create_info, &vma_alloc);
-    TB_VK_ENSURE(err, "Failed to create vma allocator");
+    TB_VK_CHECK(err, "Failed to create vma allocator");
   }
 
   uint32_t width = 0;
@@ -1312,7 +1295,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
 
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &shadow_pass);
-    TB_VK_ENSURE(err, "Failed to create shadow pass");
+    TB_VK_CHECK(err, "Failed to create shadow pass");
 
     SET_VK_NAME(device, shadow_pass, VK_OBJECT_TYPE_RENDER_PASS, "shadow pass");
   }
@@ -1395,7 +1378,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .pDependencies = dependencies,
     };
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &main_pass);
-    TB_VK_ENSURE(err, "Failed to create main pass");
+    TB_VK_CHECK(err, "Failed to create main pass");
 
     SET_VK_NAME(device, main_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "main render pass");
@@ -1438,7 +1421,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .pSubpasses = &subpass,
     };
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &tonemap_pass);
-    TB_VK_ENSURE(err, "Failed to create tonemapping pass");
+    TB_VK_CHECK(err, "Failed to create tonemapping pass");
 
     SET_VK_NAME(device, tonemap_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "tonemapping render pass");
@@ -1489,7 +1472,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .pDependencies = &subpass_dep,
     };
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &imgui_pass);
-    TB_VK_ENSURE(err, "Failed to create imgui pass");
+    TB_VK_CHECK(err, "Failed to create imgui pass");
 
     SET_VK_NAME(device, imgui_pass, VK_OBJECT_TYPE_RENDER_PASS,
                 "imgui render pass");
@@ -1521,7 +1504,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
     err =
         vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
-    TB_VK_ENSURE(err, "Failed to create pipeline cache");
+    TB_VK_CHECK(err, "Failed to create pipeline cache");
 
     SET_VK_NAME(device, pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
                 "pipeline cache");
@@ -1561,7 +1544,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
-    TB_VK_ENSURE(err, "Failed to create immutable sampler");
+    TB_VK_CHECK(err, "Failed to create immutable sampler");
 
     SET_VK_NAME(device, sampler, VK_OBJECT_TYPE_SAMPLER, "immutable sampler");
   }
@@ -1585,7 +1568,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_object_set_layout);
-    TB_VK_ENSURE(err, "Failed to create common descriptor set layout");
+    TB_VK_CHECK(err, "Failed to create common descriptor set layout");
     SET_VK_NAME(device, gltf_object_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf object set layout");
   }
@@ -1623,7 +1606,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_view_set_layout);
-    TB_VK_ENSURE(err, "Failed to create per-view descriptor set layout");
+    TB_VK_CHECK(err, "Failed to create per-view descriptor set layout");
 
     SET_VK_NAME(device, gltf_view_set_layout,
                 VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf view set layout");

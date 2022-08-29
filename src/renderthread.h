@@ -15,6 +15,8 @@ typedef struct SDL_mutex SDL_mutex;
 
 typedef struct mi_heap_s mi_heap_t;
 
+typedef struct VmaAllocator_T *VmaAllocator;
+
 typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
@@ -84,6 +86,8 @@ typedef struct RenderThread {
   VkDevice device;
   VkQueue present_queue;
   VkQueue graphics_queue;
+
+  VmaAllocator vma_alloc;
 
   Swapchain swapchain;
 

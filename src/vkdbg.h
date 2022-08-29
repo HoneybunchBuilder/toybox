@@ -1,7 +1,7 @@
 #pragma once
 
 #include "simd.h"
-#include <stdint.h>
+#include "tbsdl.h"
 
 typedef struct VkQueue_T *VkQueue;
 typedef struct VkCommandBuffer_T *VkCommandBuffer;
@@ -20,3 +20,15 @@ void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
 
 #define SET_VK_NAME(device, object, type, name)                                \
   set_vk_name(device, (uint64_t)object, type, name)
+
+#define TB_VK_CHECK(err, message)                                              \
+  if ((err) != VK_SUCCESS) {                                                   \
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    SDL_TriggerBreakpoint();                                                   \
+  }
+#define TB_VK_CHECK_RET(err, message, ret)                                     \
+  if ((err) != VK_SUCCESS) {                                                   \
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    SDL_TriggerBreakpoint();                                                   \
+    return (ret);                                                              \
+  }
