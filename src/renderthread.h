@@ -78,7 +78,6 @@ typedef struct RenderThread {
   VkSurfaceKHR surface;
   uint32_t graphics_queue_family_index;
   uint32_t present_queue_family_index;
-  bool separate_present_queue;
 
   RenderExtensionSupport ext_support;
 
