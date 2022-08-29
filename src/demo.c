@@ -63,7 +63,7 @@ static void required_device_ext_old(const char **out_ext_names,
                                     uint32_t *out_ext_count,
                                     const VkExtensionProperties *props,
                                     uint32_t prop_count, const char *ext_name) {
-  if (device_supports_ext(props, prop_count, ext_name)) {
+  if (device_supports_ext_old(props, prop_count, ext_name)) {
     assert((*out_ext_count + 1) < MAX_EXT_COUNT);
     SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading required extension: %s",
                 ext_name);
@@ -80,7 +80,7 @@ static bool optional_device_ext_old(const char **out_ext_names,
                                     uint32_t *out_ext_count,
                                     const VkExtensionProperties *props,
                                     uint32_t prop_count, const char *ext_name) {
-  if (device_supports_ext(props, prop_count, ext_name)) {
+  if (device_supports_ext_old(props, prop_count, ext_name)) {
     assert((*out_ext_count + 1) < MAX_EXT_COUNT);
     SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading optional extension: %s",
                 ext_name);
@@ -4242,7 +4242,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
 
         vkCmdEndRenderPass(env_cube_buffer);
 
-        TracyCVkZoneEnd(env_cube_draw) cmd_end_label(env_cube_buffer);
+        TracyCVkZoneEnd(env_cube_draw);
+        cmd_end_label(env_cube_buffer);
       }
 
       // Filter Env Cubemap
@@ -4317,7 +4318,8 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
           vkCmdEndRenderPass(env_cube_buffer);
         }
 
-        TracyCVkZoneEnd(env_cube_filter) cmd_end_label(env_cube_buffer);
+        TracyCVkZoneEnd(env_cube_filter);
+        cmd_end_label(env_cube_buffer);
       }
 
       TracyCVkZoneEnd(env_cube_scope);

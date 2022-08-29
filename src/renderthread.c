@@ -239,8 +239,26 @@ bool init_debug_messenger(VkInstance instance, VkAllocationCallbacks *vk_alloc,
   return true;
 }
 
-bool init_frame_states(FrameState *states) {
+bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
+                       const Swapchain *swapchain, VkQueue graphics_queue,
+                       uint32_t graphics_queue_family_index,
+                       VkAllocationCallbacks *vk_alloc, FrameState *states) {
   TB_CHECK_RETURN(states, "Invalid states", false);
+  VkResult err = VK_SUCCESS;
+
+  uint32_t swap_img_count = 0;
+  vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count, NULL);
+  TB_VK_CHECK_RET(err, "Failed to get swapchain image count", false);
+  TB_CHECK_RETURN(swap_img_count >= MAX_FRAME_STATES,
+                  "Fewer than required swapchain images", false);
+  if (swap_img_count > MAX_FRAME_STATES) {
+    swap_img_count = MAX_FRAME_STATES;
+  }
+
+  VkImage swapchain_images[MAX_FRAME_STATES] = {0};
+  vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
+                          swapchain_images);
+  TB_VK_CHECK_RET(err, "Failed to get swapchain images", false);
 
   for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
@@ -251,6 +269,115 @@ bool init_frame_states(FrameState *states) {
     state->signal_sem = SDL_CreateSemaphore(0);
     TB_CHECK_RETURN(state->signal_sem,
                     "Failed to create frame state signal semaphore", false);
+
+    {
+      VkCommandPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+          .queueFamilyIndex = graphics_queue_family_index,
+          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      };
+      err = vkCreateCommandPool(device, &create_info, vk_alloc,
+                                &state->command_pool);
+      TB_VK_CHECK_RET(err, "Failed to create frame state command pool", false);
+      SET_VK_NAME(device, state->command_pool, VK_OBJECT_TYPE_COMMAND_POOL,
+                  "Frame State Command Pool");
+    }
+
+    {
+      VkCommandBufferAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+          .commandBufferCount = 1,
+          .commandPool = state->command_pool,
+      };
+      err =
+          vkAllocateCommandBuffers(device, &alloc_info, &state->command_buffer);
+      TB_VK_CHECK_RET(err, "Failed to create frame state command buffer",
+                      false);
+      SET_VK_NAME(device, state->command_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                  "Frame State Command Buffer");
+    }
+
+    {
+      state->swapchain_image = swapchain_images[i];
+      SET_VK_NAME(device, state->swapchain_image, VK_OBJECT_TYPE_IMAGE,
+                  "Frame State Swapchain Image");
+
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = swapchain->format,
+          .image = state->swapchain_image,
+          .components =
+              (VkComponentMapping){
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              (VkImageSubresourceRange){
+                  VK_IMAGE_ASPECT_COLOR_BIT,
+                  0,
+                  1,
+                  0,
+                  1,
+              },
+      };
+      err = vkCreateImageView(device, &create_info, vk_alloc,
+                              &state->swapchain_image_view);
+      TB_VK_CHECK_RET(err, "Failed to create frame state swapchain image view",
+                      false);
+      SET_VK_NAME(device, state->swapchain_image_view,
+                  VK_OBJECT_TYPE_IMAGE_VIEW,
+                  "Frame State Swapchain Image View");
+    }
+
+    {
+      VkSemaphoreCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      };
+
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &state->img_acquired_sem);
+      TB_VK_CHECK_RET(
+          err, "Failed to create swapchain image acquired semaphore", false);
+      SET_VK_NAME(device, state->img_acquired_sem, VK_OBJECT_TYPE_SEMAPHORE,
+                  "Frame State Swapchain Image Acquired Sem");
+
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &state->swapchain_image_sem);
+      TB_VK_CHECK_RET(err, "Failed to create swapchain image semaphore", false);
+      SET_VK_NAME(device, state->swapchain_image_sem, VK_OBJECT_TYPE_SEMAPHORE,
+                  "Frame State Swapchain Image Sem");
+
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &state->render_complete_sem);
+      TB_VK_CHECK_RET(err, "Failed to create render complete semaphore", false);
+      SET_VK_NAME(device, state->render_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
+                  "Frame State Render Complete Sem");
+    }
+
+    {
+      VkFenceCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+          .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+      };
+      err = vkCreateFence(device, &create_info, vk_alloc, &state->fence);
+      TB_VK_CHECK_RET(err, "Failed to create fence", false);
+      SET_VK_NAME(device, state->fence, VK_OBJECT_TYPE_FENCE,
+                  "Frame State Fence");
+    }
+
+    {
+      TracyCGPUContext *gpu_ctx =
+          TracyCVkContextExt(gpu, device, graphics_queue, state->command_buffer,
+                             vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+                             vkGetCalibratedTimestampsEXT);
+      const char *name = "Frame State GPU Context";
+      TracyCVkContextName(gpu_ctx, name, SDL_strlen(name));
+      state->tracy_gpu_context = gpu_ctx;
+    }
   }
 
   return true;
@@ -685,6 +812,160 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
   return true;
 }
 
+bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
+                    VkSurfaceKHR surface, Allocator tmp_alloc,
+                    VkAllocationCallbacks *vk_alloc, Swapchain *swapchain) {
+  int32_t width = 0;
+  int32_t height = 0;
+  SDL_Vulkan_GetDrawableSize(window, &width, &height);
+
+  uint32_t format_count = 0;
+  VkResult err =
+      vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
+  TB_VK_CHECK_RET(err, "Failed to get physical device surface format count",
+                  false);
+  VkSurfaceFormatKHR *surface_formats =
+      tb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
+  err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
+                                             surface_formats);
+  TB_VK_CHECK_RET(err, "Failed to get physical device surface formats", false);
+
+  VkSurfaceFormatKHR surface_format = surface_formats[0];
+  // See if we can find a better surface format
+  {
+    for (uint32_t i = 0; i < format_count; i++) {
+      const VkFormat format = surface_formats[i].format;
+
+      if (format == VK_FORMAT_R8G8B8A8_UNORM ||
+          format == VK_FORMAT_B8G8R8A8_UNORM ||
+          format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ||
+          format == VK_FORMAT_A2R10G10B10_UNORM_PACK32 ||
+          format == VK_FORMAT_R16G16B16A16_SFLOAT) {
+        surface_format = surface_formats[i];
+        break;
+      }
+    }
+  }
+
+  VkSurfaceCapabilitiesKHR surf_caps;
+  err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surf_caps);
+  TB_VK_CHECK_RET(err, "Failed to get physical device surface caps", false);
+
+  uint32_t present_mode_count = 0;
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface,
+                                                  &present_mode_count, NULL);
+  TB_VK_CHECK_RET(
+      err, "Failed to get physical device surface present mode count", false);
+  VkPresentModeKHR *present_modes =
+      tb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
+  TB_CHECK_RETURN(present_modes, "Failed to allocate tmp present modes", false);
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(
+      gpu, surface, &present_mode_count, present_modes);
+  TB_VK_CHECK_RET(err, "Failed to get physical device surface present modes",
+                  false);
+
+  VkExtent2D swapchain_extent = {
+      .width = (uint32_t)width,
+      .height = (uint32_t)height,
+  };
+
+  // The FIFO present mode is guaranteed by the spec to be supported
+  // and to have no tearing.  It's a great default present mode to use.
+  VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+  VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+  if (present_mode != swapchain_present_mode) {
+    for (uint32_t i = 0; i < present_mode_count; ++i) {
+      if (present_modes[i] == present_mode) {
+        swapchain_present_mode = present_mode;
+        break;
+      }
+    }
+  }
+  if (swapchain_present_mode != present_mode) {
+    // The desired present mode was not found, just use the first one
+    present_mode = present_modes[0];
+  }
+  present_modes = NULL;
+
+  // Determine the number of VkImages to use in the swap chain.
+  // Application desires to acquire 3 images at a time for triple
+  // buffering
+  uint32_t image_count = MAX_FRAME_STATES;
+  if (image_count < surf_caps.minImageCount) {
+    image_count = surf_caps.minImageCount;
+  }
+  // If maxImageCount is 0, we can ask for as many images as we want;
+  // otherwise we're limited to maxImageCount
+  if ((surf_caps.maxImageCount > 0) &&
+      (image_count > surf_caps.maxImageCount)) {
+    // Application must settle for fewer images than desired:
+    image_count = surf_caps.maxImageCount;
+  }
+
+  VkSurfaceTransformFlagBitsKHR pre_transform;
+  if (surf_caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+    pre_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  } else {
+    pre_transform = surf_caps.currentTransform;
+  }
+
+  // Find a supported composite alpha mode - one of these is guaranteed to
+  // be set
+  VkCompositeAlphaFlagBitsKHR composite_alpha =
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  VkCompositeAlphaFlagBitsKHR composite_alpha_flags[4] = {
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+      VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+      VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+      VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+  };
+  for (uint32_t i = 0; i < 4; i++) {
+    if (surf_caps.supportedCompositeAlpha &
+        (VkCompositeAlphaFlagsKHR)composite_alpha_flags[i]) {
+      composite_alpha = composite_alpha_flags[i];
+      break;
+    }
+  }
+
+  VkSwapchainCreateInfoKHR create_info = {
+      .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+      .surface = surface,
+  // On Android, vkGetSwapchainImagesKHR is always returning 1 more image than
+  // our min image count
+#ifdef __ANDROID__
+      .minImageCount = image_count - 1,
+#else
+      .minImageCount = image_count,
+#endif
+      .imageFormat = surface_format.format,
+      .imageColorSpace = surface_format.colorSpace,
+      .imageExtent = swapchain_extent,
+      .imageArrayLayers = 1,
+      .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+      .compositeAlpha = composite_alpha,
+      .preTransform = pre_transform,
+      .presentMode = present_mode,
+      .oldSwapchain = swapchain->swapchain,
+  };
+
+  VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
+  err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, &vk_swapchain);
+  TB_VK_CHECK_RET(err, "Failed to create swapchain", false);
+  SET_VK_NAME(device, vk_swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "Swapchain");
+
+  *swapchain = (Swapchain){
+      .valid = true,
+      .format = surface_format.format,
+      .color_space = surface_format.colorSpace,
+      .present_mode = present_mode,
+      .image_count = image_count,
+      .width = swapchain_extent.width,
+      .height = swapchain_extent.height,
+      .swapchain = vk_swapchain,
+  };
+  return true;
+}
+
 bool init_render_thread(RenderThread *thread) {
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
@@ -758,7 +1039,15 @@ bool init_render_thread(RenderThread *thread) {
                            vk_alloc, &thread->vma_alloc),
                   "Failed to init the Vulkan Memory Allocator", false);
 
-  TB_CHECK_RETURN(init_frame_states(thread->frame_states),
+  TB_CHECK_RETURN(init_swapchain(thread->window, thread->device, thread->gpu,
+                                 thread->surface, tmp_alloc, vk_alloc,
+                                 &thread->swapchain),
+                  "Failed to init swapchain", false);
+
+  TB_CHECK_RETURN(init_frame_states(thread->gpu, thread->device,
+                                    &thread->swapchain, thread->graphics_queue,
+                                    thread->graphics_queue_family_index,
+                                    vk_alloc, thread->frame_states),
                   "Failed to init frame states", false);
 
   return true;
@@ -789,8 +1078,13 @@ void destroy_render_thread(RenderThread *thread) {
   *thread = (RenderThread){0};
 }
 
+void resize_swapchain() {
+  // TODO
+}
+
 int32_t render_thread(void *data) {
   RenderThread *thread = (RenderThread *)data;
+  VkResult err = VK_SUCCESS;
 
   // Init
   TB_CHECK_RETURN(init_render_thread(thread), "Failed to init render thread",
@@ -814,9 +1108,239 @@ int32_t render_thread(void *data) {
       TracyCZoneEnd(wait_ctx);
     }
 
-    { // TODO: Draw!
-      // SDL_Log("Render Thread: idx (%d) count (%d)", thread->frame_idx,
-      //        thread->frame_count);
+    {
+      VkDevice device = thread->device;
+
+      VkQueue graphics_queue = thread->graphics_queue;
+      VkQueue present_queue = thread->present_queue;
+
+      VkSemaphore img_acquired_sem = frame_state->img_acquired_sem;
+      VkSemaphore render_complete_sem = frame_state->render_complete_sem;
+      VkSemaphore swapchain_image_sem = frame_state->swapchain_image_sem;
+      VkFence fence = frame_state->fence;
+
+      VkCommandBuffer command_buffer = frame_state->command_buffer;
+
+      // Ensure no more than MAX_FRAME_STATES renderings are outstanding
+      {
+        TracyCZoneN(fence_ctx, "Wait for GPU", true);
+        TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
+        vkWaitForFences(thread->device, 1, &fence, VK_TRUE, SDL_MAX_UINT64);
+        TracyCZoneEnd(fence_ctx);
+
+        vkResetFences(device, 1, &fence);
+      }
+
+      // Acquire Image
+      {
+        TracyCZoneN(acquire_ctx, "Acquired Next Swapchain Image", true);
+        do {
+          err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
+                                      SDL_MIN_UINT64, img_acquired_sem,
+                                      VK_NULL_HANDLE, &thread->frame_idx);
+          if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+            // swapchain is out of date (e.g. the window was resized) and
+            // must be recreated:
+            resize_swapchain();
+          } else if (err == VK_SUBOPTIMAL_KHR) {
+            // swapchain is not as optimal as it could be, but the
+            // platform's presentation engine will still present the image
+            // correctly.
+            break;
+          } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+            // If the surface was lost we could re-create it.
+            // But the surface is owned by SDL2
+            SDL_assert(err == VK_SUCCESS);
+          } else {
+            SDL_assert(err == VK_SUCCESS);
+          }
+        } while (err != VK_SUCCESS);
+        TracyCZoneEnd(acquire_ctx);
+      }
+
+      // Reset Pool
+      {
+        TracyCZoneN(pool_ctx, "Reset Pool", true);
+        TracyCZoneColor(pool_ctx, TracyCategoryColorRendering);
+
+        vkResetCommandPool(device, frame_state->command_pool, 0);
+
+        TracyCZoneEnd(pool_ctx);
+      }
+
+      // Draw
+      {
+        TracyCZoneN(draw_ctx, "Draw", true);
+        TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+
+        {
+          VkCommandBufferBeginInfo begin_info = {
+              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+          };
+          err = vkBeginCommandBuffer(command_buffer, &begin_info);
+          TB_VK_CHECK(err, "Failed to begin command buffer");
+        }
+
+        TracyCGPUContext *gpu_ctx =
+            (TracyCGPUContext *)frame_state->tracy_gpu_context;
+
+        TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1,
+                          true);
+
+        // Transition swapchain image to color attachment output
+        {
+          TracyCZoneN(swap_trans_e, "Transition swapchain to color output",
+                      true);
+          VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+          if (thread->frame_count >= MAX_FRAME_STATES) {
+            old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+          }
+
+          VkImageMemoryBarrier barrier = {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+              .oldLayout = old_layout,
+              .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              .image = frame_state->swapchain_image,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .subresourceRange.levelCount = 1,
+              .subresourceRange.layerCount = 1,
+          };
+
+          vkCmdPipelineBarrier(command_buffer,
+                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                               0, NULL, 0, NULL, 1, &barrier);
+          TracyCZoneEnd(swap_trans_e);
+        }
+
+        // Transition swapchain image back to presentable
+        {
+          TracyCZoneN(swap_trans_e, "Transition swapchain to presentable",
+                      true);
+          VkImageMemoryBarrier barrier = {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+              .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+              .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+              .image = frame_state->swapchain_image,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+              .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .subresourceRange.levelCount = 1,
+              .subresourceRange.layerCount = 1,
+          };
+          vkCmdPipelineBarrier(
+              command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+          TracyCZoneEnd(swap_trans_e);
+        }
+
+        {
+          TracyCVkZoneEnd(frame_scope);
+
+          TracyCVkCollect(gpu_ctx, command_buffer);
+
+          err = vkEndCommandBuffer(command_buffer);
+          TB_VK_CHECK(err, "Failed to end command buffer");
+        }
+
+        TracyCZoneEnd(draw_ctx);
+      }
+
+      // Submit
+      {
+        TracyCZoneN(submit_ctx, "Submit", true);
+        TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+        uint32_t wait_sem_count = 0;
+        VkSemaphore wait_sems[16] = {0};
+        VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+        wait_sems[wait_sem_count] = img_acquired_sem;
+        wait_stage_flags[wait_sem_count++] =
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        {
+          VkSubmitInfo submit_info = {
+              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+              .waitSemaphoreCount = wait_sem_count,
+              .pWaitSemaphores = wait_sems,
+              .pWaitDstStageMask = wait_stage_flags,
+              .commandBufferCount = 1,
+              .pCommandBuffers = &command_buffer,
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &render_complete_sem,
+          };
+
+          queue_begin_label(graphics_queue, "raster",
+                            (float4){1.0f, 0.1f, 0.1f, 1.0f});
+          err = vkQueueSubmit(graphics_queue, 1, &submit_info,
+                              frame_state->fence);
+          queue_end_label(graphics_queue);
+          TB_VK_CHECK(err, "Failed to submit raster work");
+        }
+
+        TracyCZoneEnd(submit_ctx);
+      }
+
+      // Present
+      {
+        TracyCZoneN(present_ctx, "Present", true);
+        TracyCZoneColor(present_ctx, TracyCategoryColorRendering);
+
+        VkSemaphore wait_sem = render_complete_sem;
+        if (thread->present_queue_family_index !=
+            thread->graphics_queue_family_index) {
+          // If we are using separate queues, change image ownership to the
+          // present queue before presenting, waiting for the draw complete
+          // semaphore and signalling the ownership released semaphore when
+          // finished
+          VkSubmitInfo submit_info = {
+              .waitSemaphoreCount = 1,
+              .pWaitSemaphores = &render_complete_sem,
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &swapchain_image_sem,
+          };
+
+          err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
+          TB_VK_CHECK(err, "Failed to submit to queue");
+
+          wait_sem = swapchain_image_sem;
+        }
+
+        VkPresentInfoKHR present_info = {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &wait_sem,
+            .swapchainCount = 1,
+            .pSwapchains = &thread->swapchain.swapchain,
+            .pImageIndices = &thread->frame_idx,
+        };
+        err = vkQueuePresentKHR(present_queue, &present_info);
+
+        if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+          // swapchain is out of date (e.g. the window was resized) and
+          // must be recreated:
+          resize_swapchain();
+        } else if (err == VK_SUBOPTIMAL_KHR) {
+          // Swapchain is not as optimal as it could be, but the
+          // platform's presentation engine will still present the image
+          // correctly.
+        } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+          // If the surface was lost we could re-create it.
+          // But the surface is owned by SDL2
+          SDL_assert(err == VK_SUCCESS);
+        } else {
+          SDL_assert(err == VK_SUCCESS);
+        }
+
+        TracyCZoneEnd(present_ctx);
+      }
     }
 
     // Increment frame count when done
