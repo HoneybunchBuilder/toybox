@@ -13,9 +13,9 @@
 #include "vk_mem_alloc.h"
 #include "vkdbg.h"
 
-// Public API
-
 int32_t render_thread(void *data);
+
+// Public API
 
 bool tb_start_render_thread(RenderThreadDescriptor *desc,
                             RenderThread *thread) {
@@ -1125,9 +1125,240 @@ void resize_swapchain() {
   // TODO
 }
 
+void tick_render_thread(RenderThread *thread, FrameState *state) {
+  VkResult err = VK_SUCCESS;
+
+  VkDevice device = thread->device;
+
+  VkQueue graphics_queue = thread->graphics_queue;
+  VkQueue present_queue = thread->present_queue;
+
+  VkSemaphore img_acquired_sem = state->img_acquired_sem;
+  VkSemaphore render_complete_sem = state->render_complete_sem;
+  VkSemaphore swapchain_image_sem = state->swapchain_image_sem;
+  VkFence fence = state->fence;
+
+  VkCommandBuffer command_buffer = state->command_buffer;
+
+  // Ensure no more than MAX_FRAME_STATES renderings are outstanding
+  {
+    TracyCZoneN(fence_ctx, "Wait for GPU", true);
+    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
+    vkWaitForFences(thread->device, 1, &fence, VK_TRUE, SDL_MAX_UINT64);
+    TracyCZoneEnd(fence_ctx);
+
+    vkResetFences(device, 1, &fence);
+  }
+
+  // Acquire Image
+  {
+    TracyCZoneN(acquire_ctx, "Acquired Next Swapchain Image", true);
+    do {
+      err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
+                                  SDL_MIN_UINT64, img_acquired_sem,
+                                  VK_NULL_HANDLE, &thread->frame_idx);
+      if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+        // swapchain is out of date (e.g. the window was resized) and
+        // must be recreated:
+        resize_swapchain();
+      } else if (err == VK_SUBOPTIMAL_KHR) {
+        // swapchain is not as optimal as it could be, but the
+        // platform's presentation engine will still present the image
+        // correctly.
+        break;
+      } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+        // If the surface was lost we could re-create it.
+        // But the surface is owned by SDL2
+        SDL_assert(err == VK_SUCCESS);
+      } else {
+        SDL_assert(err == VK_SUCCESS);
+      }
+    } while (err != VK_SUCCESS);
+    TracyCZoneEnd(acquire_ctx);
+  }
+
+  // Reset Pool
+  {
+    TracyCZoneN(pool_ctx, "Reset Pool", true);
+    TracyCZoneColor(pool_ctx, TracyCategoryColorRendering);
+
+    vkResetCommandPool(device, state->command_pool, 0);
+
+    TracyCZoneEnd(pool_ctx);
+  }
+
+  // Draw
+  {
+    TracyCZoneN(draw_ctx, "Draw", true);
+    TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+
+    {
+      VkCommandBufferBeginInfo begin_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      };
+      err = vkBeginCommandBuffer(command_buffer, &begin_info);
+      TB_VK_CHECK(err, "Failed to begin command buffer");
+    }
+
+    TracyCGPUContext *gpu_ctx = (TracyCGPUContext *)state->tracy_gpu_context;
+
+    TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1, true);
+
+    // Transition swapchain image to color attachment output
+    {
+      TracyCZoneN(swap_trans_e, "Transition swapchain to color output", true);
+      VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      if (thread->frame_count >= MAX_FRAME_STATES) {
+        old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+      }
+
+      VkImageMemoryBarrier barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          .oldLayout = old_layout,
+          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+          .image = state->swapchain_image,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .subresourceRange.levelCount = 1,
+          .subresourceRange.layerCount = 1,
+      };
+
+      vkCmdPipelineBarrier(command_buffer,
+                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
+                           NULL, 0, NULL, 1, &barrier);
+      TracyCZoneEnd(swap_trans_e);
+    }
+
+    // Transition swapchain image back to presentable
+    {
+      TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
+      VkImageMemoryBarrier barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+          .image = state->swapchain_image,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .subresourceRange.levelCount = 1,
+          .subresourceRange.layerCount = 1,
+      };
+      vkCmdPipelineBarrier(
+          command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+      TracyCZoneEnd(swap_trans_e);
+    }
+
+    {
+      TracyCVkZoneEnd(frame_scope);
+
+      TracyCVkCollect(gpu_ctx, command_buffer);
+
+      err = vkEndCommandBuffer(command_buffer);
+      TB_VK_CHECK(err, "Failed to end command buffer");
+    }
+
+    TracyCZoneEnd(draw_ctx);
+  }
+
+  // Submit
+  {
+    TracyCZoneN(submit_ctx, "Submit", true);
+    TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+    uint32_t wait_sem_count = 0;
+    VkSemaphore wait_sems[16] = {0};
+    VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+    wait_sems[wait_sem_count] = img_acquired_sem;
+    wait_stage_flags[wait_sem_count++] =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    {
+      VkSubmitInfo submit_info = {
+          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+          .waitSemaphoreCount = wait_sem_count,
+          .pWaitSemaphores = wait_sems,
+          .pWaitDstStageMask = wait_stage_flags,
+          .commandBufferCount = 1,
+          .pCommandBuffers = &command_buffer,
+          .signalSemaphoreCount = 1,
+          .pSignalSemaphores = &render_complete_sem,
+      };
+
+      queue_begin_label(graphics_queue, "raster",
+                        (float4){1.0f, 0.1f, 0.1f, 1.0f});
+      err = vkQueueSubmit(graphics_queue, 1, &submit_info, state->fence);
+      queue_end_label(graphics_queue);
+      TB_VK_CHECK(err, "Failed to submit raster work");
+    }
+
+    TracyCZoneEnd(submit_ctx);
+  }
+
+  // Present
+  {
+    TracyCZoneN(present_ctx, "Present", true);
+    TracyCZoneColor(present_ctx, TracyCategoryColorRendering);
+
+    VkSemaphore wait_sem = render_complete_sem;
+    if (thread->present_queue_family_index !=
+        thread->graphics_queue_family_index) {
+      // If we are using separate queues, change image ownership to the
+      // present queue before presenting, waiting for the draw complete
+      // semaphore and signalling the ownership released semaphore when
+      // finished
+      VkSubmitInfo submit_info = {
+          .waitSemaphoreCount = 1,
+          .pWaitSemaphores = &render_complete_sem,
+          .signalSemaphoreCount = 1,
+          .pSignalSemaphores = &swapchain_image_sem,
+      };
+
+      err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
+      TB_VK_CHECK(err, "Failed to submit to queue");
+
+      wait_sem = swapchain_image_sem;
+    }
+
+    VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &wait_sem,
+        .swapchainCount = 1,
+        .pSwapchains = &thread->swapchain.swapchain,
+        .pImageIndices = &thread->frame_idx,
+    };
+    err = vkQueuePresentKHR(present_queue, &present_info);
+
+    if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+      // swapchain is out of date (e.g. the window was resized) and
+      // must be recreated:
+      resize_swapchain();
+    } else if (err == VK_SUBOPTIMAL_KHR) {
+      // Swapchain is not as optimal as it could be, but the
+      // platform's presentation engine will still present the image
+      // correctly.
+    } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+      // If the surface was lost we could re-create it.
+      // But the surface is owned by SDL2
+      SDL_assert(err == VK_SUCCESS);
+    } else {
+      SDL_assert(err == VK_SUCCESS);
+    }
+
+    TracyCZoneEnd(present_ctx);
+  }
+}
+
 int32_t render_thread(void *data) {
   RenderThread *thread = (RenderThread *)data;
-  VkResult err = VK_SUCCESS;
 
   // Init
   TB_CHECK_RETURN(init_render_thread(thread), "Failed to init render thread",
@@ -1157,240 +1388,7 @@ int32_t render_thread(void *data) {
       break;
     }
 
-    {
-      VkDevice device = thread->device;
-
-      VkQueue graphics_queue = thread->graphics_queue;
-      VkQueue present_queue = thread->present_queue;
-
-      VkSemaphore img_acquired_sem = frame_state->img_acquired_sem;
-      VkSemaphore render_complete_sem = frame_state->render_complete_sem;
-      VkSemaphore swapchain_image_sem = frame_state->swapchain_image_sem;
-      VkFence fence = frame_state->fence;
-
-      VkCommandBuffer command_buffer = frame_state->command_buffer;
-
-      // Ensure no more than MAX_FRAME_STATES renderings are outstanding
-      {
-        TracyCZoneN(fence_ctx, "Wait for GPU", true);
-        TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
-        vkWaitForFences(thread->device, 1, &fence, VK_TRUE, SDL_MAX_UINT64);
-        TracyCZoneEnd(fence_ctx);
-
-        vkResetFences(device, 1, &fence);
-      }
-
-      // Acquire Image
-      {
-        TracyCZoneN(acquire_ctx, "Acquired Next Swapchain Image", true);
-        do {
-          err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
-                                      SDL_MIN_UINT64, img_acquired_sem,
-                                      VK_NULL_HANDLE, &thread->frame_idx);
-          if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-            // swapchain is out of date (e.g. the window was resized) and
-            // must be recreated:
-            resize_swapchain();
-          } else if (err == VK_SUBOPTIMAL_KHR) {
-            // swapchain is not as optimal as it could be, but the
-            // platform's presentation engine will still present the image
-            // correctly.
-            break;
-          } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
-            // If the surface was lost we could re-create it.
-            // But the surface is owned by SDL2
-            SDL_assert(err == VK_SUCCESS);
-          } else {
-            SDL_assert(err == VK_SUCCESS);
-          }
-        } while (err != VK_SUCCESS);
-        TracyCZoneEnd(acquire_ctx);
-      }
-
-      // Reset Pool
-      {
-        TracyCZoneN(pool_ctx, "Reset Pool", true);
-        TracyCZoneColor(pool_ctx, TracyCategoryColorRendering);
-
-        vkResetCommandPool(device, frame_state->command_pool, 0);
-
-        TracyCZoneEnd(pool_ctx);
-      }
-
-      // Draw
-      {
-        TracyCZoneN(draw_ctx, "Draw", true);
-        TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
-
-        {
-          VkCommandBufferBeginInfo begin_info = {
-              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-          };
-          err = vkBeginCommandBuffer(command_buffer, &begin_info);
-          TB_VK_CHECK(err, "Failed to begin command buffer");
-        }
-
-        TracyCGPUContext *gpu_ctx =
-            (TracyCGPUContext *)frame_state->tracy_gpu_context;
-
-        TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1,
-                          true);
-
-        // Transition swapchain image to color attachment output
-        {
-          TracyCZoneN(swap_trans_e, "Transition swapchain to color output",
-                      true);
-          VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-          if (thread->frame_count >= MAX_FRAME_STATES) {
-            old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-          }
-
-          VkImageMemoryBarrier barrier = {
-              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-              .oldLayout = old_layout,
-              .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              .image = frame_state->swapchain_image,
-              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-              .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .subresourceRange.levelCount = 1,
-              .subresourceRange.layerCount = 1,
-          };
-
-          vkCmdPipelineBarrier(command_buffer,
-                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
-                               0, NULL, 0, NULL, 1, &barrier);
-          TracyCZoneEnd(swap_trans_e);
-        }
-
-        // Transition swapchain image back to presentable
-        {
-          TracyCZoneN(swap_trans_e, "Transition swapchain to presentable",
-                      true);
-          VkImageMemoryBarrier barrier = {
-              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-              .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-              .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-              .image = frame_state->swapchain_image,
-              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-              .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .subresourceRange.levelCount = 1,
-              .subresourceRange.layerCount = 1,
-          };
-          vkCmdPipelineBarrier(
-              command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-              VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
-          TracyCZoneEnd(swap_trans_e);
-        }
-
-        {
-          TracyCVkZoneEnd(frame_scope);
-
-          TracyCVkCollect(gpu_ctx, command_buffer);
-
-          err = vkEndCommandBuffer(command_buffer);
-          TB_VK_CHECK(err, "Failed to end command buffer");
-        }
-
-        TracyCZoneEnd(draw_ctx);
-      }
-
-      // Submit
-      {
-        TracyCZoneN(submit_ctx, "Submit", true);
-        TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
-
-        uint32_t wait_sem_count = 0;
-        VkSemaphore wait_sems[16] = {0};
-        VkPipelineStageFlags wait_stage_flags[16] = {0};
-
-        wait_sems[wait_sem_count] = img_acquired_sem;
-        wait_stage_flags[wait_sem_count++] =
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        {
-          VkSubmitInfo submit_info = {
-              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-              .waitSemaphoreCount = wait_sem_count,
-              .pWaitSemaphores = wait_sems,
-              .pWaitDstStageMask = wait_stage_flags,
-              .commandBufferCount = 1,
-              .pCommandBuffers = &command_buffer,
-              .signalSemaphoreCount = 1,
-              .pSignalSemaphores = &render_complete_sem,
-          };
-
-          queue_begin_label(graphics_queue, "raster",
-                            (float4){1.0f, 0.1f, 0.1f, 1.0f});
-          err = vkQueueSubmit(graphics_queue, 1, &submit_info,
-                              frame_state->fence);
-          queue_end_label(graphics_queue);
-          TB_VK_CHECK(err, "Failed to submit raster work");
-        }
-
-        TracyCZoneEnd(submit_ctx);
-      }
-
-      // Present
-      {
-        TracyCZoneN(present_ctx, "Present", true);
-        TracyCZoneColor(present_ctx, TracyCategoryColorRendering);
-
-        VkSemaphore wait_sem = render_complete_sem;
-        if (thread->present_queue_family_index !=
-            thread->graphics_queue_family_index) {
-          // If we are using separate queues, change image ownership to the
-          // present queue before presenting, waiting for the draw complete
-          // semaphore and signalling the ownership released semaphore when
-          // finished
-          VkSubmitInfo submit_info = {
-              .waitSemaphoreCount = 1,
-              .pWaitSemaphores = &render_complete_sem,
-              .signalSemaphoreCount = 1,
-              .pSignalSemaphores = &swapchain_image_sem,
-          };
-
-          err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
-          TB_VK_CHECK(err, "Failed to submit to queue");
-
-          wait_sem = swapchain_image_sem;
-        }
-
-        VkPresentInfoKHR present_info = {
-            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .waitSemaphoreCount = 1,
-            .pWaitSemaphores = &wait_sem,
-            .swapchainCount = 1,
-            .pSwapchains = &thread->swapchain.swapchain,
-            .pImageIndices = &thread->frame_idx,
-        };
-        err = vkQueuePresentKHR(present_queue, &present_info);
-
-        if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-          // swapchain is out of date (e.g. the window was resized) and
-          // must be recreated:
-          resize_swapchain();
-        } else if (err == VK_SUBOPTIMAL_KHR) {
-          // Swapchain is not as optimal as it could be, but the
-          // platform's presentation engine will still present the image
-          // correctly.
-        } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
-          // If the surface was lost we could re-create it.
-          // But the surface is owned by SDL2
-          SDL_assert(err == VK_SUCCESS);
-        } else {
-          SDL_assert(err == VK_SUCCESS);
-        }
-
-        TracyCZoneEnd(present_ctx);
-      }
-    }
+    tick_render_thread(thread, &thread->frame_states[thread->frame_idx]);
 
     // Increment frame count when done
     thread->frame_count++;

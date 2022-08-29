@@ -2,12 +2,11 @@
 
 #include "inputcomponent.h"
 #include "profiling.h"
+#include "tbcommon.h"
 #include "tbsdl.h"
 
 bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc) {
-  if (!desc) {
-    return false;
-  }
+  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
   *self = (InputSystem){
       .tmp_alloc = desc->tmp_alloc,

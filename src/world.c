@@ -332,11 +332,14 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
 void tb_destroy_world(World *world) {
   if (world->component_store_count > 0) {
-    for (uint32_t i = 0; i < world->component_store_count; ++i) {
-      ComponentStore *store = &world->component_stores[i];
-      for (uint32_t comp_idx = 0; comp_idx < world->entity_count; ++comp_idx) {
-        uint8_t *comp = &store->components[(store->size * comp_idx)];
-        if (comp) {
+    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+         ++store_idx) {
+      ComponentStore *store = &world->component_stores[store_idx];
+      for (EntityId entity_id = 0; entity_id < world->entity_count;
+           ++entity_id) {
+        Entity entity = world->entities[entity_id];
+        uint8_t *comp = &store->components[(store->size * entity_id)];
+        if (entity & (1 << store_idx)) {
           store->destroy(comp);
         }
       }
