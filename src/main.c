@@ -18,11 +18,15 @@
 #include "tbvma.h"
 
 #include "cameracomponent.h"
+#include "coreuicomponent.h"
+#include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "lightcomponent.h"
 #include "noclipcomponent.h"
 #include "transformcomponent.h"
 
+#include "coreuisystem.h"
+#include "imguisystem.h"
 #include "inputsystem.h"
 #include "noclipcontrollersystem.h"
 #include "rendersystem.h"
@@ -95,34 +99,47 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
            "Failed to start render thread");
 
-  const uint32_t component_count = 5;
-  ComponentDescriptor component_descs[5] = {0};
+  // Order does not matter
+  const uint32_t component_count = 7;
+  ComponentDescriptor component_descs[7] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
   tb_directional_light_component_descriptor(&component_descs[2]);
   tb_noclip_component_descriptor(&component_descs[3]);
   tb_input_component_descriptor(&component_descs[4]);
+  tb_coreui_component_descriptor(&component_descs[5]);
+  tb_imgui_component_descriptor(&component_descs[6]);
 
   InputSystemDescriptor input_system_desc = {
       .tmp_alloc = arena.alloc,
       .window = window,
   };
 
-  // TODO: Things like the vulkan system allocator and the vulkan instance
-  // can be owned by the render system
-  RenderSystemDescriptor render_system_desc = {
-      .render_thread = render_thread,
-  };
-
   NoClipControllerSystemDescriptor noclip_system_desc = {
       .tmp_alloc = arena.alloc,
   };
 
-  const uint32_t system_count = 3;
-  SystemDescriptor system_descs[3] = {0};
+  CoreUISystemDescriptor coreui_system_desc = {
+      .tmp_alloc = arena.alloc,
+  };
+
+  ImGuiSystemDescriptor imgui_system_desc = {
+      .render_thread = render_thread,
+      .tmp_alloc = arena.alloc,
+  };
+
+  RenderSystemDescriptor render_system_desc = {
+      .render_thread = render_thread,
+  };
+
+  // Order matters
+  const uint32_t system_count = 5;
+  SystemDescriptor system_descs[5] = {0};
   tb_input_system_descriptor(&system_descs[0], &input_system_desc);
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
-  tb_render_system_descriptor(&system_descs[2], &render_system_desc);
+  tb_coreui_system_descriptor(&system_descs[2], &coreui_system_desc);
+  tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
+  tb_render_system_descriptor(&system_descs[4], &render_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
@@ -138,9 +155,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   TB_CHECK_RETURN(success, "Failed to create world.", -1);
 
   // Create entity with some default components
-  const uint32_t core_comp_count = 1;
-  ComponentId core_comp_ids[1] = {InputComponentId};
-  InternalDescriptor core_comp_descs[1] = {0};
+  ImGuiComponentDescriptor imgui_comp_desc = {
+      .font_atlas = NULL,
+  };
+  const uint32_t core_comp_count = 3;
+  ComponentId core_comp_ids[3] = {InputComponentId, CoreUIComponentId,
+                                  ImGuiComponentId};
+  InternalDescriptor core_comp_descs[3] = {
+      NULL,
+      NULL,
+      &imgui_comp_desc,
+  };
   EntityDescriptor entity_desc = {
       .name = "Core",
       .component_count = core_comp_count,
