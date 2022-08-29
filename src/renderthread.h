@@ -28,6 +28,7 @@ typedef struct FrameState {
   SDL_semaphore *signal_sem;
 
   VkCommandPool command_pool;
+  VkCommandBuffer command_buffer;
   void *tracy_gpu_context;
 
   VkImage swapchain_image;
@@ -35,6 +36,8 @@ typedef struct FrameState {
 
   VkImageView depth_buffer_view;
 
+  VkSemaphore img_acquired_sem;
+  VkSemaphore swapchain_image_sem;
   VkSemaphore render_complete_sem;
   VkFence fence;
 } FrameState;
