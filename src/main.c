@@ -200,11 +200,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCFrameMarkEnd("Simulation Frame");
   }
 
+  // Stopping the render thread will also close the window
   tb_stop_render_thread(render_thread);
   tb_free(std_alloc.alloc, render_thread);
   render_thread = NULL;
-
-  SDL_DestroyWindow(window);
   window = NULL;
 
   tb_destroy_world(&world);

@@ -101,6 +101,8 @@ typedef struct RenderThread {
   uint32_t frame_idx;
   uint64_t frame_count;
   FrameState frame_states[MAX_FRAME_STATES];
+
+  uint32_t stop_signal;
 } RenderThread;
 
 bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);

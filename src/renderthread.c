@@ -37,8 +37,26 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
 }
 
 void tb_stop_render_thread(RenderThread *thread) {
-  (void)thread;
-  // TODO: signal render thread to stop
+  uint32_t frame_idx = thread->frame_idx;
+  // Wait for render thread
+  SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
+  // Set the stop signal
+  thread->stop_signal = 1;
+  // Signal Render thread
+  SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
+
+  // Wait for the thread to stop
+  int32_t thread_code = 0;
+  SDL_WaitThread(thread->thread, &thread_code);
+
+  // Clean up the last of the thread
+  SDL_DestroyWindow(thread->window);
+
+  vkDestroySurfaceKHR(thread->instance, thread->surface, NULL);
+
+  vkDestroyInstance(thread->instance, &thread->vk_alloc);
+
+  *thread = (RenderThread){0};
 }
 
 // Private internals
@@ -123,7 +141,8 @@ static void vk_free_fn(void *pUserData, void *pMemory) {
 }
 
 bool init_instance(SDL_Window *window, Allocator tmp_alloc,
-                   VkAllocationCallbacks *vk_alloc, VkInstance *instance) {
+                   const VkAllocationCallbacks *vk_alloc,
+                   VkInstance *instance) {
   VkResult err = VK_SUCCESS;
 
   // Create vulkan instance
@@ -218,7 +237,8 @@ bool init_instance(SDL_Window *window, Allocator tmp_alloc,
   return true;
 }
 
-bool init_debug_messenger(VkInstance instance, VkAllocationCallbacks *vk_alloc,
+bool init_debug_messenger(VkInstance instance,
+                          const VkAllocationCallbacks *vk_alloc,
                           VkDebugUtilsMessengerEXT *debug) {
   // Load debug callback
 #ifdef VALIDATION
@@ -242,7 +262,8 @@ bool init_debug_messenger(VkInstance instance, VkAllocationCallbacks *vk_alloc,
 bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        const Swapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
-                       VkAllocationCallbacks *vk_alloc, FrameState *states) {
+                       const VkAllocationCallbacks *vk_alloc,
+                       FrameState *states) {
   TB_CHECK_RETURN(states, "Invalid states", false);
   VkResult err = VK_SUCCESS;
 
@@ -383,7 +404,9 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   return true;
 }
 
-void destroy_frame_states(FrameState *states) {
+void destroy_frame_states(VkDevice device,
+                          const VkAllocationCallbacks *vk_alloc,
+                          FrameState *states) {
   TB_CHECK(states, "Invalid states");
 
   for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
@@ -391,6 +414,22 @@ void destroy_frame_states(FrameState *states) {
 
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
+
+    vkFreeCommandBuffers(device, state->command_pool, 1,
+                         &state->command_buffer);
+    vkDestroyCommandPool(device, state->command_pool, vk_alloc);
+
+    TracyCVkContextDestroy(state->tracy_gpu_context);
+
+    // swapchain_image is owned by the KHR swapchain and doesn't need to be
+    // freed
+    vkDestroyImageView(device, state->swapchain_image_view, vk_alloc);
+
+    vkDestroySemaphore(device, state->img_acquired_sem, vk_alloc);
+    vkDestroySemaphore(device, state->swapchain_image_sem, vk_alloc);
+    vkDestroySemaphore(device, state->render_complete_sem, vk_alloc);
+
+    vkDestroyFence(device, state->fence, vk_alloc);
 
     *state = (FrameState){0};
   }
@@ -586,7 +625,7 @@ bool optional_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
 
 bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
                  uint32_t present_queue_family_index, Allocator tmp_alloc,
-                 VkAllocationCallbacks *vk_alloc,
+                 const VkAllocationCallbacks *vk_alloc,
                  RenderExtensionSupport *ext_support, VkDevice *device) {
   VkResult err = VK_SUCCESS;
 
@@ -771,7 +810,7 @@ void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
 }
 
 bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
-              VkAllocationCallbacks *vk_alloc, VmaAllocator *vma_alloc) {
+              const VkAllocationCallbacks *vk_alloc, VmaAllocator *vma_alloc) {
   VmaVulkanFunctions volk_functions = {
       .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
       .vkGetPhysicalDeviceMemoryProperties =
@@ -814,7 +853,8 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
 
 bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
                     VkSurfaceKHR surface, Allocator tmp_alloc,
-                    VkAllocationCallbacks *vk_alloc, Swapchain *swapchain) {
+                    const VkAllocationCallbacks *vk_alloc,
+                    Swapchain *swapchain) {
   int32_t width = 0;
   int32_t height = 0;
   SDL_Vulkan_GetDrawableSize(window, &width, &height);
@@ -997,7 +1037,7 @@ bool init_render_thread(RenderThread *thread) {
 
   Allocator std_alloc = thread->std_alloc.alloc;
   Allocator tmp_alloc = thread->render_arena.alloc;
-  VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
+  const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
 
   TB_CHECK_RETURN(
       init_instance(thread->window, tmp_alloc, vk_alloc, &thread->instance),
@@ -1056,10 +1096,17 @@ bool init_render_thread(RenderThread *thread) {
 void destroy_render_thread(RenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
-  VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
+  const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
   Allocator std_alloc = thread->std_alloc.alloc;
 
-  destroy_frame_states(thread->frame_states);
+  // Wait for the GPU to be done before we start deleting things
+  vkQueueWaitIdle(thread->graphics_queue);
+  if (thread->graphics_queue_family_index !=
+      thread->present_queue_family_index) {
+    vkQueueWaitIdle(thread->present_queue);
+  }
+
+  destroy_frame_states(thread->device, vk_alloc, thread->frame_states);
 
   vmaDestroyAllocator(thread->vma_alloc);
 
@@ -1072,10 +1119,6 @@ void destroy_render_thread(RenderThread *thread) {
   vkDestroyDebugUtilsMessengerEXT(thread->instance,
                                   thread->debug_utils_messenger, vk_alloc);
 #endif
-
-  vkDestroyInstance(thread->instance, vk_alloc);
-
-  *thread = (RenderThread){0};
 }
 
 void resize_swapchain() {
@@ -1106,6 +1149,12 @@ int32_t render_thread(void *data) {
       SDL_SemWait(frame_state->wait_sem);
 
       TracyCZoneEnd(wait_ctx);
+    }
+
+    // If we got a stop signal, stop
+    if (thread->stop_signal > 0) {
+      TracyCZoneEnd(ctx);
+      break;
     }
 
     {

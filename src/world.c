@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "cameracomponent.h"
+#include "inputcomponent.h"
 #include "inputsystem.h"
 #include "json-c/json_object.h"
 #include "json-c/json_tokener.h"
@@ -288,6 +289,37 @@ bool tb_tick_world(World *world, float delta_seconds) {
           uint8_t *dst = &comp_store->components[entity_id * comp_size];
 
           SDL_memcpy(dst, src, comp_size);
+        }
+      }
+
+      // Check for quit event
+      {
+        ComponentStore *input_store = NULL;
+        // Find the input components
+        for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+             ++store_idx) {
+          ComponentStore *store = &world->component_stores[store_idx];
+          if (store->id == InputComponentId) {
+            input_store = store;
+            break;
+          }
+        }
+
+        if (input_store) {
+          const InputComponent *input_components =
+              (const InputComponent *)input_store->components;
+          for (uint32_t input_idx = 0; input_idx < input_store->count;
+               ++input_idx) {
+            const InputComponent *input_comp = &input_components[input_idx];
+            for (uint32_t event_idx = 0; event_idx < input_comp->event_count;
+                 ++event_idx) {
+              if (input_comp->events[event_idx].type == SDL_QUIT) {
+                TracyCZoneEnd(system_tick_ctx);
+                TracyCZoneEnd(world_tick_ctx);
+                return false;
+              }
+            }
+          }
         }
       }
     }
