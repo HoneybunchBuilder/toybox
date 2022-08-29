@@ -10,6 +10,8 @@
 #include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
+#include "vk_mem_alloc.h"
+#include "vkdbg.h"
 
 // Public API
 
@@ -595,6 +597,9 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   err = vkCreateDevice(gpu, &create_info, vk_alloc, device);
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create device", false);
 
+  SET_VK_NAME(*device, *device, VK_OBJECT_TYPE_DEVICE, "Toybox Vulkan Device");
+  SET_VK_NAME(*device, gpu, VK_OBJECT_TYPE_PHYSICAL_DEVICE, "Toybox GPU");
+
   *ext_support = ext;
 
   return true;
@@ -607,10 +612,76 @@ bool init_queues(VkDevice device, uint32_t graphics_queue_family_index,
 
   if (graphics_queue_family_index == present_queue_family_index) {
     *present_queue = *graphics_queue;
+    SET_VK_NAME(device, *graphics_queue, VK_OBJECT_TYPE_QUEUE,
+                "Graphics & Present Queue");
   } else {
     vkGetDeviceQueue(device, present_queue_family_index, 0, present_queue);
+    SET_VK_NAME(device, *graphics_queue, VK_OBJECT_TYPE_QUEUE,
+                "Graphics Queue");
+    SET_VK_NAME(device, *present_queue, VK_OBJECT_TYPE_QUEUE, "Present Queue");
   }
 
+  return true;
+}
+
+void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
+                  VkDeviceMemory memory, VkDeviceSize size, void *pUserData) {
+  (void)allocator;
+  (void)memoryType;
+  (void)memory;
+  (void)size;
+  (void)pUserData;
+  TracyCAllocN((void *)memory, size, "VMA")
+}
+void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
+                 VkDeviceMemory memory, VkDeviceSize size, void *pUserData) {
+  (void)allocator;
+  (void)memoryType;
+  (void)memory;
+  (void)size;
+  (void)pUserData;
+  TracyCFreeN((void *)memory, "VMA")
+}
+
+bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
+              VkAllocationCallbacks *vk_alloc, VmaAllocator *vma_alloc) {
+  VmaVulkanFunctions volk_functions = {
+      .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
+      .vkGetPhysicalDeviceMemoryProperties =
+          vkGetPhysicalDeviceMemoryProperties,
+      .vkAllocateMemory = vkAllocateMemory,
+      .vkFreeMemory = vkFreeMemory,
+      .vkMapMemory = vkMapMemory,
+      .vkUnmapMemory = vkUnmapMemory,
+      .vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges,
+      .vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges,
+      .vkBindBufferMemory = vkBindBufferMemory,
+      .vkBindImageMemory = vkBindImageMemory,
+      .vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements,
+      .vkGetImageMemoryRequirements = vkGetImageMemoryRequirements,
+      .vkCreateBuffer = vkCreateBuffer,
+      .vkDestroyBuffer = vkDestroyBuffer,
+      .vkCreateImage = vkCreateImage,
+      .vkDestroyImage = vkDestroyImage,
+      .vkCmdCopyBuffer = vkCmdCopyBuffer,
+  };
+  VmaDeviceMemoryCallbacks vma_callbacks = {
+      vma_alloc_fn,
+      vma_free_fn,
+      NULL,
+  };
+  VmaAllocatorCreateInfo create_info = {
+      .physicalDevice = gpu,
+      .device = device,
+      .pVulkanFunctions = &volk_functions,
+      .instance = instance,
+      .vulkanApiVersion = VK_API_VERSION_1_0,
+      .pAllocationCallbacks = vk_alloc,
+      .pDeviceMemoryCallbacks = &vma_callbacks,
+  };
+
+  VkResult err = vmaCreateAllocator(&create_info, vma_alloc);
+  TB_VK_CHECK_RET(err, "Failed to create vma allocator", false);
   return true;
 }
 
@@ -683,6 +754,10 @@ bool init_render_thread(RenderThread *thread) {
                               &thread->graphics_queue, &thread->present_queue),
                   "Failed to init queues", false);
 
+  TB_CHECK_RETURN(init_vma(thread->instance, thread->gpu, thread->device,
+                           vk_alloc, &thread->vma_alloc),
+                  "Failed to init the Vulkan Memory Allocator", false);
+
   TB_CHECK_RETURN(init_frame_states(thread->frame_states),
                   "Failed to init frame states", false);
 
@@ -696,6 +771,8 @@ void destroy_render_thread(RenderThread *thread) {
   Allocator std_alloc = thread->std_alloc.alloc;
 
   destroy_frame_states(thread->frame_states);
+
+  vmaDestroyAllocator(thread->vma_alloc);
 
   vkDestroyDevice(thread->device, vk_alloc);
 
