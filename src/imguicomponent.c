@@ -8,6 +8,23 @@ bool create_imgui_component(ImGuiComponent *self,
   *self = (ImGuiComponent){
       .context = igCreateContext(desc->font_atlas),
   };
+
+  // Get atlas texture data for this context
+  ImGuiIO *io = igGetIO();
+
+  uint8_t *pixels = NULL;
+  int32_t tex_w = 0;
+  int32_t tex_h = 0;
+  int32_t bytes_pp = 0;
+  ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
+
+  // TODO: Actually create and upload this texture
+
+  // Setup basic display size
+  io->DisplaySize = (ImVec2){800.0f, 600.0f};
+  io->DeltaTime = 0.1666667f;
+
+  igNewFrame();
   return true;
 }
 

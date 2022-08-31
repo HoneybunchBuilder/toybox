@@ -4,7 +4,9 @@
 
 bool create_coreui_component(CoreUIComponent *self, const void *desc) {
   (void)desc;
-  *self = (CoreUIComponent){0};
+  *self = (CoreUIComponent){
+      .show_all = 1, // Show UI by default
+  };
   return true;
 }
 
