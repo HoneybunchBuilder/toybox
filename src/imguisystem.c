@@ -121,8 +121,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
           imgui_size = idx_size + align_padding + vtx_size;
         }
-        if (imgui_size > 0) {
 
+        if (imgui_size > 0) {
           // Make space for this on the next frame. For the host and the device
           VkBuffer tmp_host_buffer = VK_NULL_HANDLE;
           uint64_t offset = 0;
@@ -135,6 +135,34 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
           }
 
           // Copy imgui mesh to the gpu driver controlled host buffer
+          {
+            size_t idx_size =
+                (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+
+            // We know to use 8 for the alignment because the vertex
+            // attribute layout starts with a float2
+            const size_t alignment = 8;
+            size_t align_padding = idx_size % alignment;
+
+            uint8_t *idx_dst = (uint8_t *)tmp_ptr;
+            uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
+
+            // Organize all mesh data into a single cpu-side buffer
+            for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+              const ImDrawList *cmd_list = draw_data->CmdLists[i];
+
+              size_t idx_byte_count =
+                  (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+              size_t vtx_byte_count =
+                  (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+
+              SDL_memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
+              SDL_memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
+
+              idx_dst += idx_byte_count;
+              vtx_dst += vtx_byte_count;
+            }
+          }
 
           // Instruct the render thread that it needs to upload the mesh to the
           // gpu
