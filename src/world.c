@@ -95,6 +95,7 @@ bool create_system(World *world, System *system, const SystemDescriptor *desc) {
                     false);
     system->system_deps[sys_dep_idx] = sys;
   }
+  system->system_dep_count = system_dep_count;
 
   bool created = system->create(system->self, desc->desc,
                                 system->system_dep_count, system->system_deps);
@@ -136,21 +137,23 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
   // Create systems
   {
     const uint32_t system_count = desc->system_count;
+    world->system_count = system_count;
+
     System *systems = NULL;
     if (system_count > 0) {
       systems = tb_alloc_nm_tp(std_alloc, system_count, System);
       TB_CHECK_RETURN(systems, "Failed to allocate systems.", false);
+      world->systems = systems;
 
       bool system_created = false;
-      for (uint32_t i = 0; i < system_count; ++i) {
+
+      // Create in reverse order
+      for (int32_t i = system_count - 1; i >= 0; i--) {
         const SystemDescriptor *sys_desc = &desc->system_descs[i];
         system_created = create_system(world, &systems[i], sys_desc);
         TB_CHECK_RETURN(system_created, "Failed to create system.", false);
       }
     }
-
-    world->system_count = system_count;
-    world->systems = systems;
   }
 
   return true;

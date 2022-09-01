@@ -11,11 +11,24 @@
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
+  TB_CHECK_RETURN(system_dep_count == 1,
+                  "Different than expected number of system dependencies",
+                  false);
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
+  // Find the render system
+  RenderSystem *render_system = NULL;
+  for (uint32_t i = 0; i < system_dep_count; ++i) {
+    if (system_deps[i]->id == RenderSystemId) {
+      render_system = (RenderSystem *)system_deps[i]->self;
+      break;
+    }
+  }
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which imgui depends on", false);
+
   *self = (ImGuiSystem){
+      .render_system = render_system,
       .tmp_alloc = desc->tmp_alloc,
   };
   return true;
@@ -112,14 +125,12 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
           // Make space for this on the next frame. For the host and the device
           VkBuffer tmp_host_buffer = VK_NULL_HANDLE;
-          (void)tmp_host_buffer;
-          // if (!tb_rnd_alloc_tmp_host_buffer(
-          //         self->render_system, imgui_size,
-          //         VMA_MEMORY_USAGE_CPU_TO_GPU,
-          //         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &tmp_host_buffer)) {
-          //   TracyCZoneEnd(ctx);
-          //   return;
-          // }
+          if (!tb_rnd_sys_alloc_tmp_host_buffer(
+                  self->render_system, imgui_size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &tmp_host_buffer)) {
+            TracyCZoneEnd(ctx);
+            return;
+          }
 
           // Copy imgui mesh to the gpu driver controlled host buffer
 
@@ -156,6 +167,8 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
       .count = 1,
       .dependent_ids = {ImGuiComponentId},
   };
+  desc->system_dep_count = 1;
+  desc->system_deps[0] = RenderSystemId;
   desc->create = tb_create_imgui_system;
   desc->destroy = tb_destroy_imgui_system;
   desc->tick = tb_tick_imgui_system;

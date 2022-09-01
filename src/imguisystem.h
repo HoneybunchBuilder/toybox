@@ -5,11 +5,14 @@
 
 #define ImGuiSystemId 0xDEADFA11
 
+typedef struct RenderSystem RenderSystem;
+
 typedef struct ImGuiSystemDescriptor {
   Allocator tmp_alloc;
 } ImGuiSystemDescriptor;
 
 typedef struct ImGuiSystem {
+  RenderSystem *render_system;
   Allocator tmp_alloc;
 } ImGuiSystem;
 

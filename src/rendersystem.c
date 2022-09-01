@@ -147,11 +147,10 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
 
   // Reset temp pools
   {
-    // Here we reset the *previous* frame's pools because the next frame
-    // will probably be edited by the main thread now. The previous frame
-    // should have already been rendered by now so we know we can
-    // free those resources
-    const uint32_t next_frame_idx = (self->frame_idx - 1) % MAX_FRAME_STATES;
+    // Reset the *next* frame's pool. Assume that it has already been
+    // consumed by the render thread and that it's now free to nuke in
+    // prep for the next frame
+    const uint32_t next_frame_idx = (self->frame_idx + 1) % MAX_FRAME_STATES;
 
     RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
 
