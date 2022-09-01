@@ -125,9 +125,11 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
           // Make space for this on the next frame. For the host and the device
           VkBuffer tmp_host_buffer = VK_NULL_HANDLE;
-          if (!tb_rnd_sys_alloc_tmp_host_buffer(
-                  self->render_system, imgui_size, VMA_MEMORY_USAGE_CPU_TO_GPU,
-                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &tmp_host_buffer)) {
+          uint64_t offset = 0;
+          void *tmp_ptr = NULL;
+          if (!tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
+                                                &tmp_host_buffer, &offset,
+                                                &tmp_ptr)) {
             TracyCZoneEnd(ctx);
             return;
           }

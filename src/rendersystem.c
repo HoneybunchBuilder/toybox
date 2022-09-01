@@ -85,6 +85,8 @@ bool create_render_system(RenderSystem *self,
     for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
       RenderSystemFrameState *state = &self->frame_states[state_idx];
 
+      const uint64_t size_bytes = TB_VMA_TMP_HOST_BYTES * 1024 * 1024;
+
       // Create tmp host vma pool
       {
         uint32_t host_mem_type_idx = 0xFFFFFFFF;
@@ -102,11 +104,36 @@ bool create_render_system(RenderSystem *self,
         VmaPoolCreateInfo create_info = {
             .memoryTypeIndex = host_mem_type_idx,
             .flags = VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT,
-            .maxBlockCount = MAX_VMA_TMP_HOST_BLOCK_COUNT,
+            .maxBlockCount = 1,
+            .blockSize = size_bytes,
         };
         err =
             vmaCreatePool(self->vma_alloc, &create_info, &state->tmp_host_pool);
         TB_VK_CHECK_RET(err, "Failed to create vma temp host pool", false);
+      }
+
+      // Allocate tmp host buffer
+      {
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size_bytes,
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        };
+        VmaAllocationCreateInfo alloc_create_info = {
+            .pool = state->tmp_host_pool,
+            .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        };
+        VmaAllocationInfo alloc_info = {0};
+        err = vmaCreateBuffer(self->vma_alloc, &create_info, &alloc_create_info,
+                              &state->tmp_host_buffer, &state->tmp_host_alloc,
+                              &alloc_info);
+        TB_VK_CHECK_RET(err, "Failed to allocate temporary buffer", false);
+        SET_VK_NAME(self->render_thread->device, state->tmp_host_buffer,
+                    VK_OBJECT_TYPE_BUFFER, "Vulkan Tmp Host Buffer");
+
+        err = vmaMapMemory(self->vma_alloc, state->tmp_host_alloc,
+                           (void **)&state->tmp_host_mapped);
+        TB_VK_CHECK_RET(err, "Failed to map temporary buffer", false);
       }
     }
   }
@@ -117,9 +144,8 @@ void destroy_render_system(RenderSystem *self) {
   VmaAllocator vma_alloc = self->vma_alloc;
   for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
     RenderSystemFrameState *state = &self->frame_states[state_idx];
-    for (uint32_t i = 0; i < state->tmp_host_blocks_allocated; ++i) {
-      vmaFreeMemory(vma_alloc, state->tmp_host_allocs[i]);
-    }
+    vmaUnmapMemory(vma_alloc, state->tmp_host_alloc);
+    vmaDestroyBuffer(vma_alloc, state->tmp_host_buffer, state->tmp_host_alloc);
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
   }
   vmaDestroyAllocator(vma_alloc);
@@ -154,12 +180,9 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
 
     RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
 
-    for (uint32_t i = 0; i < prev_state->tmp_host_blocks_allocated; ++i) {
-      vmaFreeMemory(self->vma_alloc, prev_state->tmp_host_allocs[i]);
-    }
-    SDL_memset(prev_state->tmp_host_allocs, 0,
-               sizeof(VmaAllocation) * MAX_VMA_TMP_HOST_BLOCK_COUNT);
-    prev_state->tmp_host_blocks_allocated = 0;
+    // TODO
+
+    prev_state->tmp_host_size = 0;
   }
 
   {
@@ -197,28 +220,25 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
 }
 
 bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                      uint32_t memory_usage,
-                                      uint32_t buffer_usage, VkBuffer *buffer) {
-  VkResult err = VK_SUCCESS;
-
+                                      VkBuffer *buffer, uint64_t *offset,
+                                      void **ptr) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
-  VkBufferCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = size,
-      .usage = buffer_usage,
-  };
-  VmaAllocationCreateInfo alloc_create_info = {
-      .pool = state->tmp_host_pool,
-      .usage = memory_usage,
-  };
-  VmaAllocation *alloc =
-      &state->tmp_host_allocs[state->tmp_host_blocks_allocated];
-  VmaAllocationInfo alloc_info = {0};
-  err = vmaCreateBuffer(self->vma_alloc, &create_info, &alloc_create_info,
-                        buffer, alloc, &alloc_info);
-  TB_VK_CHECK_RET(err, "Failed to allocate temporary buffer", false);
+  void *tmp_ptr = &state->tmp_host_mapped[state->tmp_host_size];
 
-  state->tmp_host_blocks_allocated++;
+  // Always 16 byte aligned
+  intptr_t padding = (16 - (intptr_t)tmp_ptr % 16);
+  tmp_ptr = (void *)((intptr_t)tmp_ptr + padding);
+
+  TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation", false);
+
+  uint64_t off = state->tmp_host_size;
+
+  state->tmp_host_size += (size + padding);
+
+  *buffer = state->tmp_host_buffer;
+  *offset = off;
+  *ptr = tmp_ptr;
+
   return true;
 }
