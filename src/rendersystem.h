@@ -6,7 +6,7 @@
 
 #define RenderSystemId 0xABADBABE
 
-#define MAX_VMA_TMP_HOST_BLOCK_COUNT 256
+#define TB_VMA_TMP_HOST_BYTES 256
 
 typedef struct SystemDescriptor SystemDescriptor;
 
@@ -18,13 +18,17 @@ typedef struct VmaPool_T *VmaPool;
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
 
+typedef struct VkBuffer_T *VkBuffer;
+
 typedef struct RenderSystemDescriptor {
   RenderThread *render_thread;
 } RenderSystemDescriptor;
 
 typedef struct RenderSystemFrameState {
-  uint32_t tmp_host_blocks_allocated;
-  VmaAllocation tmp_host_allocs[MAX_VMA_TMP_HOST_BLOCK_COUNT];
+  uint64_t tmp_host_size;
+  VmaAllocation tmp_host_alloc;
+  VkBuffer tmp_host_buffer;
+  uint8_t *tmp_host_mapped;
   VmaPool tmp_host_pool;
 } RenderSystemFrameState;
 
@@ -44,5 +48,5 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc);
 
 bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                      uint32_t memory_usage,
-                                      uint32_t buffer_usage, VkBuffer *buffer);
+                                      VkBuffer *buffer, uint64_t *offset,
+                                      void **ptr);

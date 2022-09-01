@@ -156,7 +156,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool success = tb_create_world(&world_desc, &world);
   TB_CHECK_RETURN(success, "Failed to create world.", -1);
 
-    // Create entity with some default components
+  // Create entity with some default components
   ImGuiComponentDescriptor imgui_comp_desc = {
       .font_atlas = NULL,
   };
@@ -227,13 +227,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCFrameMarkEnd("Simulation Frame");
   }
 
+  tb_destroy_world(&world);
+
   // Stopping the render thread will also close the window
   tb_stop_render_thread(render_thread);
   tb_free(std_alloc.alloc, render_thread);
   render_thread = NULL;
   window = NULL;
-
-  tb_destroy_world(&world);
 
   IMG_Quit();
   SDL_Quit();
