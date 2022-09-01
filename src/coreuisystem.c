@@ -7,7 +7,11 @@
 #include "tbimgui.h"
 
 bool create_coreui_system(CoreUISystem *self,
-                          const CoreUISystemDescriptor *desc) {
+                          const CoreUISystemDescriptor *desc,
+                          uint32_t system_dep_count,
+                          System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
   *self = (CoreUISystem){

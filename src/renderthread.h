@@ -15,13 +15,17 @@ typedef struct SDL_mutex SDL_mutex;
 
 typedef struct mi_heap_s mi_heap_t;
 
+typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VmaAllocator_T *VmaAllocator;
+typedef struct VmaPool_T *VmaPool;
 
 typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
 
 #define MAX_FRAME_STATES 3
+
+#define MAX_VMA_TMP_GPU_BLOCK_COUNT 256
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
@@ -40,6 +44,10 @@ typedef struct FrameState {
   VkSemaphore swapchain_image_sem;
   VkSemaphore render_complete_sem;
   VkFence fence;
+
+  uint32_t tmp_gpu_blocks_allocated;
+  VmaAllocation tmp_gpu_allocs[MAX_VMA_TMP_GPU_BLOCK_COUNT];
+  VmaPool tmp_gpu_pool;
 } FrameState;
 
 typedef struct Swapchain {
@@ -62,6 +70,7 @@ typedef struct RenderExtensionSupport {
 typedef struct RenderThread {
   SDL_Window *window;
   SDL_Thread *thread;
+  SDL_semaphore *initialized;
 
   StandardAllocator std_alloc;
   ArenaAllocator render_arena;
@@ -105,10 +114,30 @@ typedef struct RenderThread {
   uint32_t stop_signal;
 } RenderThread;
 
+typedef struct UploadInstruction {
+  VkBuffer host_buffer;
+  VkBuffer gpu_buffer;
+} UploadInstruction;
+
+typedef struct DrawInstruction {
+  VkBuffer buffer;
+
+} DrawInstruction;
+
 bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx);
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx);
 
+void tb_wait_thread_initialized(RenderThread *thread);
+
 void tb_stop_render_thread(RenderThread *thread);
+
+bool tb_rnd_alloc_tmp_gpu_buffer(RenderThread *thread, uint64_t size,
+                                 VkBuffer *buffer);
+
+void tb_rnd_copy_to_tmp_gpu_buffer(RenderThread *thread, const uint8_t *data,
+                                   uint64_t size);
+
+void tb_rnd_draw(RenderThread *thread, const DrawInstruction *draw);

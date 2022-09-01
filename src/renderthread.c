@@ -10,6 +10,7 @@
 #include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
+#include "tbvkalloc.h"
 #include "vk_mem_alloc.h"
 #include "vkdbg.h"
 
@@ -21,6 +22,7 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
                             RenderThread *thread) {
   TB_CHECK_RETURN(desc, "Invalid RenderThreadDescriptor", false);
   thread->window = desc->window;
+  thread->initialized = SDL_CreateSemaphore(0);
   thread->thread = SDL_CreateThread(render_thread, "Render Thread", thread);
   TB_CHECK_RETURN(thread->thread, "Failed to create render thread", false);
   return true;
@@ -36,6 +38,10 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
 }
 
+void tb_wait_thread_initialized(RenderThread *thread) {
+  SDL_SemWait(thread->initialized);
+}
+
 void tb_stop_render_thread(RenderThread *thread) {
   uint32_t frame_idx = thread->frame_idx;
   // Wait for render thread
@@ -49,6 +55,8 @@ void tb_stop_render_thread(RenderThread *thread) {
   int32_t thread_code = 0;
   SDL_WaitThread(thread->thread, &thread_code);
 
+  SDL_DestroySemaphore(thread->initialized);
+
   // Clean up the last of the thread
   SDL_DestroyWindow(thread->window);
 
@@ -57,6 +65,26 @@ void tb_stop_render_thread(RenderThread *thread) {
   vkDestroyInstance(thread->instance, &thread->vk_alloc);
 
   *thread = (RenderThread){0};
+}
+
+bool tb_rnd_alloc_tmp_gpu_buffer(RenderThread *thread, uint64_t size,
+                                 VkBuffer *buffer) {
+  (void)thread;
+  (void)size;
+  (void)buffer;
+  return true;
+}
+
+void tb_rnd_copy_to_tmp_gpu_buffer(RenderThread *thread, const uint8_t *data,
+                                   uint64_t size) {
+  (void)thread;
+  (void)data;
+  (void)size;
+  // For the next frame:
+  //   Allocate a temporary buffer on the host
+  //   Allocate a matching temporary buffer on the gpu
+  //   Map & Copy the given data to the temporary host buffer
+  //   Issue a copy request to the matching gpu buffer
 }
 
 // Private internals
@@ -262,6 +290,8 @@ bool init_debug_messenger(VkInstance instance,
 bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        const Swapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
+                       const VkPhysicalDeviceMemoryProperties *gpu_mem_props,
+                       VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        FrameState *states) {
   TB_CHECK_RETURN(states, "Invalid states", false);
@@ -399,12 +429,34 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       TracyCVkContextName(gpu_ctx, name, SDL_strlen(name));
       state->tracy_gpu_context = gpu_ctx;
     }
+
+    {
+      uint32_t gpu_mem_type_idx = 0xFFFFFFFF;
+      // Find the desired memory type index
+      for (uint32_t i = 0; i < gpu_mem_props->memoryTypeCount; ++i) {
+        VkMemoryType type = gpu_mem_props->memoryTypes[i];
+        if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+          gpu_mem_type_idx = i;
+          break;
+        }
+      }
+      TB_CHECK_RETURN(gpu_mem_type_idx != 0xFFFFFFFF,
+                      "Failed to find gpu visible memory", false);
+
+      VmaPoolCreateInfo create_info = {
+          .memoryTypeIndex = gpu_mem_type_idx,
+          .flags = VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT,
+          .maxBlockCount = MAX_VMA_TMP_GPU_BLOCK_COUNT,
+      };
+      err = vmaCreatePool(vma_alloc, &create_info, &state->tmp_gpu_pool);
+      TB_VK_CHECK_RET(err, "Failed to create vma temp host pool", false);
+    }
   }
 
   return true;
 }
 
-void destroy_frame_states(VkDevice device,
+void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
                           const VkAllocationCallbacks *vk_alloc,
                           FrameState *states) {
   TB_CHECK(states, "Invalid states");
@@ -430,6 +482,11 @@ void destroy_frame_states(VkDevice device,
     vkDestroySemaphore(device, state->render_complete_sem, vk_alloc);
 
     vkDestroyFence(device, state->fence, vk_alloc);
+
+    for (uint32_t i = 0; i < state->tmp_gpu_blocks_allocated; ++i) {
+      vmaFreeMemory(vma_alloc, state->tmp_gpu_allocs[i]);
+    }
+    vmaDestroyPool(vma_alloc, state->tmp_gpu_pool);
 
     *state = (FrameState){0};
   }
@@ -790,25 +847,6 @@ bool init_queues(VkDevice device, uint32_t graphics_queue_family_index,
   return true;
 }
 
-void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
-                  VkDeviceMemory memory, VkDeviceSize size, void *pUserData) {
-  (void)allocator;
-  (void)memoryType;
-  (void)memory;
-  (void)size;
-  (void)pUserData;
-  TracyCAllocN((void *)memory, size, "VMA")
-}
-void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
-                 VkDeviceMemory memory, VkDeviceSize size, void *pUserData) {
-  (void)allocator;
-  (void)memoryType;
-  (void)memory;
-  (void)size;
-  (void)pUserData;
-  TracyCFreeN((void *)memory, "VMA")
-}
-
 bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
               const VkAllocationCallbacks *vk_alloc, VmaAllocator *vma_alloc) {
   VmaVulkanFunctions volk_functions = {
@@ -832,8 +870,8 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
       .vkCmdCopyBuffer = vkCmdCopyBuffer,
   };
   VmaDeviceMemoryCallbacks vma_callbacks = {
-      vma_alloc_fn,
-      vma_free_fn,
+      tb_vma_alloc_fn,
+      tb_vma_free_fn,
       NULL,
   };
   VmaAllocatorCreateInfo create_info = {
@@ -1087,6 +1125,7 @@ bool init_render_thread(RenderThread *thread) {
   TB_CHECK_RETURN(init_frame_states(thread->gpu, thread->device,
                                     &thread->swapchain, thread->graphics_queue,
                                     thread->graphics_queue_family_index,
+                                    &thread->gpu_mem_props, thread->vma_alloc,
                                     vk_alloc, thread->frame_states),
                   "Failed to init frame states", false);
 
@@ -1106,7 +1145,8 @@ void destroy_render_thread(RenderThread *thread) {
     vkQueueWaitIdle(thread->present_queue);
   }
 
-  destroy_frame_states(thread->device, vk_alloc, thread->frame_states);
+  destroy_frame_states(thread->device, thread->vma_alloc, vk_alloc,
+                       thread->frame_states);
 
   vmaDestroyAllocator(thread->vma_alloc);
 
@@ -1129,6 +1169,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkResult err = VK_SUCCESS;
 
   VkDevice device = thread->device;
+  VmaAllocator vma_alloc = thread->vma_alloc;
 
   VkQueue graphics_queue = thread->graphics_queue;
   VkQueue present_queue = thread->present_queue;
@@ -1148,6 +1189,24 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneEnd(fence_ctx);
 
     vkResetFences(device, 1, &fence);
+  }
+
+  // Reset temp pools
+  {
+    // Here we reset the *previous* frame's pools because the next frame
+    // will probably be edited by the main thread now. The previous frame
+    // should have already been rendered by now so we know we can
+    // free those resources
+    const uint32_t next_frame_idx = (thread->frame_idx - 1) % MAX_FRAME_STATES;
+
+    FrameState *prev_state = &thread->frame_states[next_frame_idx];
+
+    for (uint32_t i = 0; i < prev_state->tmp_gpu_blocks_allocated; ++i) {
+      vmaFreeMemory(vma_alloc, prev_state->tmp_gpu_allocs[i]);
+    }
+    SDL_memset(prev_state->tmp_gpu_allocs, 0,
+               sizeof(VmaAllocation) * MAX_VMA_TMP_GPU_BLOCK_COUNT);
+    prev_state->tmp_gpu_blocks_allocated = 0;
   }
 
   // Acquire Image
@@ -1363,8 +1422,9 @@ int32_t render_thread(void *data) {
   // Init
   TB_CHECK_RETURN(init_render_thread(thread), "Failed to init render thread",
                   -1);
-
   TracyCSetThreadName("Render Thread");
+
+  SDL_SemPost(thread->initialized);
 
   // Main thread loop
   while (true) {

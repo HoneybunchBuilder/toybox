@@ -5,15 +5,11 @@
 
 #define ImGuiSystemId 0xDEADFA11
 
-typedef struct RenderThread RenderThread;
-
 typedef struct ImGuiSystemDescriptor {
-  RenderThread *render_thread;
   Allocator tmp_alloc;
 } ImGuiSystemDescriptor;
 
 typedef struct ImGuiSystem {
-  RenderThread *render_thread;
   Allocator tmp_alloc;
 } ImGuiSystem;
 

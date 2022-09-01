@@ -70,11 +70,34 @@ bool create_system(World *world, System *system, const SystemDescriptor *desc) {
   system->destroy = desc->destroy;
   system->tick = desc->tick;
 
-  // Allocate and initialize each system1
+  // Allocate and initialize each system
   system->self = tb_alloc(world->std_alloc, desc->size);
   TB_CHECK_RETURN(system->self, "Failed to allocate system.", false);
 
-  bool created = system->create(system->self, desc->desc);
+  // If this system has dependencies on other systems, look those up now and
+  // pass them to create
+  uint32_t system_dep_count = desc->system_dep_count;
+  TB_CHECK_RETURN(system_dep_count <= MAX_SYSTEM_DEP_COUNT,
+                  "System dependency count out of range", false);
+  for (uint32_t sys_dep_idx = 0; sys_dep_idx < system_dep_count;
+       ++sys_dep_idx) {
+    SystemId id = desc->system_deps[sys_dep_idx];
+    System *sys = NULL;
+    for (uint32_t sys_idx = 0; sys_idx < world->system_count; ++sys_idx) {
+      if (id == world->systems[sys_idx].id) {
+        sys = &world->systems[sys_idx];
+        break;
+      }
+    }
+    TB_CHECK_RETURN(sys,
+                    "Failed to find dependent system, did you initialize "
+                    "systems in the right order?",
+                    false);
+    system->system_deps[sys_dep_idx] = sys;
+  }
+
+  bool created = system->create(system->self, desc->desc,
+                                system->system_dep_count, system->system_deps);
   TB_CHECK_RETURN(created, "Failed to create system internals.", false);
 
   return true;
