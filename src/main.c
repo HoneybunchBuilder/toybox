@@ -124,7 +124,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   ImGuiSystemDescriptor imgui_system_desc = {
-      .render_thread = render_thread,
       .tmp_alloc = arena.alloc,
   };
 
@@ -150,11 +149,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .system_descs = system_descs,
   };
 
+  // Do not go initializing anything until we know the render thread is ready
+  tb_wait_thread_initialized(render_thread);
+
   World world = {0};
   bool success = tb_create_world(&world_desc, &world);
   TB_CHECK_RETURN(success, "Failed to create world.", -1);
 
-  // Create entity with some default components
+    // Create entity with some default components
   ImGuiComponentDescriptor imgui_comp_desc = {
       .font_atlas = NULL,
   };

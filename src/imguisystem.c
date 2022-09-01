@@ -3,14 +3,19 @@
 #include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "profiling.h"
+#include "rendersystem.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
+#include "tbvma.h"
 
-bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc) {
+bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
+                         uint32_t system_dep_count,
+                         System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
   *self = (ImGuiSystem){
-      .render_thread = desc->render_thread,
       .tmp_alloc = desc->tmp_alloc,
   };
   return true;
@@ -22,7 +27,6 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
   (void)self;
   (void)output; // No output for this system
-  (void)delta_seconds;
   TracyCZoneN(ctx, "ImGui System", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
 
@@ -86,8 +90,45 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
       igRender();
 
       ImDrawData *draw_data = igGetDrawData();
-      (void)draw_data;
       TB_CHECK(draw_data, "Failed to retrieve draw data");
+
+      // Send to render thread
+      if (draw_data->Valid) {
+        // Calculate how big the draw data is
+        size_t imgui_size = 0;
+        {
+          const size_t idx_size =
+              (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+          const size_t vtx_size =
+              (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
+          // We know to use 8 for the alignment because the vertex
+          // attribute layout starts with a float2
+          const size_t alignment = 8;
+          const size_t align_padding = idx_size % alignment;
+
+          imgui_size = idx_size + align_padding + vtx_size;
+        }
+        if (imgui_size > 0) {
+
+          // Make space for this on the next frame. For the host and the device
+          VkBuffer tmp_host_buffer = VK_NULL_HANDLE;
+          (void)tmp_host_buffer;
+          // if (!tb_rnd_alloc_tmp_host_buffer(
+          //         self->render_system, imgui_size,
+          //         VMA_MEMORY_USAGE_CPU_TO_GPU,
+          //         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &tmp_host_buffer)) {
+          //   TracyCZoneEnd(ctx);
+          //   return;
+          // }
+
+          // Copy imgui mesh to the gpu driver controlled host buffer
+
+          // Instruct the render thread that it needs to upload the mesh to the
+          // gpu
+
+          // Send the render thread a draw instruction
+        }
+      }
 
       igNewFrame();
     }

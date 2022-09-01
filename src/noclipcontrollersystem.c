@@ -9,7 +9,11 @@
 #include "world.h"
 
 bool create_noclip_system(NoClipControllerSystem *self,
-                          const NoClipControllerSystemDescriptor *desc) {
+                          const NoClipControllerSystemDescriptor *desc,
+                          uint32_t system_dep_count,
+                          System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   if (!desc) {
     return false;
   }
