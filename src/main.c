@@ -128,6 +128,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   RenderSystemDescriptor render_system_desc = {
+      .std_alloc = std_alloc.alloc,
       .render_thread = render_thread,
   };
 

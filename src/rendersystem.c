@@ -18,6 +18,7 @@ bool create_render_system(RenderSystem *self,
   RenderThread *thread = desc->render_thread;
   TB_CHECK_RETURN(thread, "Invalid RenderThread", false);
   *self = (RenderSystem){
+      .std_alloc = desc->std_alloc,
       .render_thread = thread,
   };
 
@@ -85,7 +86,7 @@ bool create_render_system(RenderSystem *self,
     for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
       RenderSystemFrameState *state = &self->frame_states[state_idx];
 
-      const uint64_t size_bytes = TB_VMA_TMP_HOST_BYTES * 1024 * 1024;
+      const uint64_t size_bytes = TB_VMA_TMP_HOST_MB * 1024 * 1024;
 
       // Create tmp host vma pool
       {
@@ -171,27 +172,45 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
     TracyCZoneEnd(wait_ctx);
   }
 
-  // Reset temp pools
-  {
-    // Reset the *next* frame's pool. Assume that it has already been
-    // consumed by the render thread and that it's now free to nuke in
-    // prep for the next frame
-    const uint32_t next_frame_idx = (self->frame_idx + 1) % MAX_FRAME_STATES;
-
-    RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
-
-    // TODO
-
-    prev_state->tmp_host_size = 0;
-  }
-
   {
     TracyCZoneN(ctx, "Render System Tick", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
-    // TODO
-    // SDL_Log("Render System: last idx (%d), this idx", self->last_frame_idx,
-    //        this_frame_idx);
+    // Reset temp pools
+    {
+      // Reset the *next* frame's pool. Assume that it has already been
+      // consumed by the render thread and that it's now free to nuke in
+      // prep for the next frame
+      const uint32_t next_frame_idx = (self->frame_idx + 1) % MAX_FRAME_STATES;
+      RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
+      prev_state->tmp_host_size = 0;
+    }
+
+    RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+    FrameState *thread_state =
+        &self->render_thread->frame_states[self->frame_idx];
+
+    // Copy this frame state's temp buffer to the gpu
+    {
+      BufferUpload up = {
+          .dst = thread_state->tmp_gpu_buffer,
+          .src = state->tmp_host_buffer,
+          .region =
+              {
+                  .dstOffset = 0,
+                  .srcOffset = 0,
+                  .size = state->tmp_host_size,
+              },
+      };
+      tb_rnd_upload_buffers(self, &up, 1);
+    }
+
+    // Send and Reset buffer upload pool
+    {
+      // Assign to the thread
+      thread_state->buffer_up_queue = state->buffer_up_queue;
+      state->buffer_up_queue.req_count = 0;
+    }
 
     TracyCZoneEnd(ctx);
   }
@@ -241,4 +260,28 @@ bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
   *ptr = tmp_ptr;
 
   return true;
+}
+
+void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
+                           uint32_t upload_count) {
+  const uint32_t frame_idx = self->frame_idx;
+
+  RenderSystemFrameState *state = &self->frame_states[frame_idx];
+  BufferUploadQueue *queue = &state->buffer_up_queue;
+
+  // See if we need to resize queue
+  Allocator std_alloc = self->std_alloc;
+  const uint64_t new_count = queue->req_count + upload_count;
+  if (queue->req_max < new_count) {
+    const uint64_t new_max = new_count * 2;
+    queue->reqs =
+        tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferUpload);
+    queue->req_max = new_max;
+  }
+
+  // Append uploads to queue
+  SDL_memcpy(&queue->reqs[queue->req_count], uploads,
+             sizeof(BufferUpload) * upload_count);
+
+  queue->req_count = new_count;
 }
