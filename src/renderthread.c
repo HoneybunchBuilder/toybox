@@ -67,26 +67,6 @@ void tb_stop_render_thread(RenderThread *thread) {
   *thread = (RenderThread){0};
 }
 
-bool tb_rnd_alloc_tmp_gpu_buffer(RenderThread *thread, uint64_t size,
-                                 VkBuffer *buffer) {
-  (void)thread;
-  (void)size;
-  (void)buffer;
-  return true;
-}
-
-void tb_rnd_copy_to_tmp_gpu_buffer(RenderThread *thread, const uint8_t *data,
-                                   uint64_t size) {
-  (void)thread;
-  (void)data;
-  (void)size;
-  // For the next frame:
-  //   Allocate a temporary buffer on the host
-  //   Allocate a matching temporary buffer on the gpu
-  //   Map & Copy the given data to the temporary host buffer
-  //   Issue a copy request to the matching gpu buffer
-}
-
 // Private internals
 
 #define MAX_LAYER_COUNT 16
@@ -430,6 +410,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       state->tracy_gpu_context = gpu_ctx;
     }
 
+    const uint64_t size_bytes = TB_VMA_TMP_GPU_MB * 1024 * 1024;
+
     {
       uint32_t gpu_mem_type_idx = 0xFFFFFFFF;
       // Find the desired memory type index
@@ -446,10 +428,32 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       VmaPoolCreateInfo create_info = {
           .memoryTypeIndex = gpu_mem_type_idx,
           .flags = VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT,
-          .maxBlockCount = MAX_VMA_TMP_GPU_BLOCK_COUNT,
+          .maxBlockCount = 1,
+          .blockSize = size_bytes,
       };
       err = vmaCreatePool(vma_alloc, &create_info, &state->tmp_gpu_pool);
       TB_VK_CHECK_RET(err, "Failed to create vma temp host pool", false);
+    }
+
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = size_bytes,
+          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+      };
+      VmaAllocationCreateInfo alloc_create_info = {
+          .pool = state->tmp_gpu_pool,
+          .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+      };
+      VmaAllocationInfo alloc_info = {0};
+      err = vmaCreateBuffer(vma_alloc, &create_info, &alloc_create_info,
+                            &state->tmp_gpu_buffer, &state->tmp_gpu_alloc,
+                            &alloc_info);
+      TB_VK_CHECK_RET(err, "Failed to create vma temp gpu buffer", false);
+      SET_VK_NAME(device, state->tmp_gpu_buffer, VK_OBJECT_TYPE_BUFFER,
+                  "Vulkan Tmp GPU Buffer");
     }
   }
 
@@ -483,9 +487,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     vkDestroyFence(device, state->fence, vk_alloc);
 
-    for (uint32_t i = 0; i < state->tmp_gpu_blocks_allocated; ++i) {
-      vmaFreeMemory(vma_alloc, state->tmp_gpu_allocs[i]);
-    }
+    vmaDestroyBuffer(vma_alloc, state->tmp_gpu_buffer, state->tmp_gpu_alloc);
     vmaDestroyPool(vma_alloc, state->tmp_gpu_pool);
 
     *state = (FrameState){0};
@@ -1169,7 +1171,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkResult err = VK_SUCCESS;
 
   VkDevice device = thread->device;
-  VmaAllocator vma_alloc = thread->vma_alloc;
 
   VkQueue graphics_queue = thread->graphics_queue;
   VkQueue present_queue = thread->present_queue;
@@ -1189,24 +1190,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneEnd(fence_ctx);
 
     vkResetFences(device, 1, &fence);
-  }
-
-  // Reset temp pools
-  {
-    // Here we reset the *previous* frame's pools because the next frame
-    // will probably be edited by the main thread now. The previous frame
-    // should have already been rendered by now so we know we can
-    // free those resources
-    const uint32_t next_frame_idx = (thread->frame_idx - 1) % MAX_FRAME_STATES;
-
-    FrameState *prev_state = &thread->frame_states[next_frame_idx];
-
-    for (uint32_t i = 0; i < prev_state->tmp_gpu_blocks_allocated; ++i) {
-      vmaFreeMemory(vma_alloc, prev_state->tmp_gpu_allocs[i]);
-    }
-    SDL_memset(prev_state->tmp_gpu_allocs, 0,
-               sizeof(VmaAllocation) * MAX_VMA_TMP_GPU_BLOCK_COUNT);
-    prev_state->tmp_gpu_blocks_allocated = 0;
   }
 
   // Acquire Image
@@ -1261,60 +1244,81 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
     TracyCGPUContext *gpu_ctx = (TracyCGPUContext *)state->tracy_gpu_context;
 
-    TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1, true);
-
-    // Transition swapchain image to color attachment output
+    // Upload
     {
-      TracyCZoneN(swap_trans_e, "Transition swapchain to color output", true);
-      VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-      if (thread->frame_count >= MAX_FRAME_STATES) {
-        old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+      TracyCZoneN(up_ctx, "Record Upload", true);
+      TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Upload", 1,
+                        true);
+      // Upload all buffer requests
+      {
+        for (uint32_t i = 0; i < state->buffer_up_queue.req_count; ++i) {
+          const BufferUpload *up = &state->buffer_up_queue.reqs[i];
+
+          vkCmdCopyBuffer(command_buffer, up->src, up->dst, 1, &up->region);
+        }
+
+        state->buffer_up_queue.req_count = 0;
       }
 
-      VkImageMemoryBarrier barrier = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-          .oldLayout = old_layout,
-          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          .image = state->swapchain_image,
-          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-          .subresourceRange.levelCount = 1,
-          .subresourceRange.layerCount = 1,
-      };
-
-      vkCmdPipelineBarrier(command_buffer,
-                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
-                           NULL, 0, NULL, 1, &barrier);
-      TracyCZoneEnd(swap_trans_e);
-    }
-
-    // Transition swapchain image back to presentable
-    {
-      TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
-      VkImageMemoryBarrier barrier = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-          .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-          .image = state->swapchain_image,
-          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-          .subresourceRange.levelCount = 1,
-          .subresourceRange.layerCount = 1,
-      };
-      vkCmdPipelineBarrier(
-          command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-          VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
-      TracyCZoneEnd(swap_trans_e);
+      TracyCVkZoneEnd(frame_scope);
+      TracyCZoneEnd(up_ctx);
     }
 
     {
+      TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1,
+                        true);
+
+      // Transition swapchain image to color attachment output
+      {
+        TracyCZoneN(swap_trans_e, "Transition swapchain to color output", true);
+        VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        if (thread->frame_count >= MAX_FRAME_STATES) {
+          old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        }
+
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout = old_layout,
+            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .image = state->swapchain_image,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.levelCount = 1,
+            .subresourceRange.layerCount = 1,
+        };
+
+        vkCmdPipelineBarrier(command_buffer,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
+                             0, NULL, 0, NULL, 1, &barrier);
+        TracyCZoneEnd(swap_trans_e);
+      }
+
+      // Transition swapchain image back to presentable
+      {
+        TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
+        VkImageMemoryBarrier barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .image = state->swapchain_image,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.levelCount = 1,
+            .subresourceRange.layerCount = 1,
+        };
+        vkCmdPipelineBarrier(
+            command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+        TracyCZoneEnd(swap_trans_e);
+      }
+
       TracyCVkZoneEnd(frame_scope);
 
       TracyCVkCollect(gpu_ctx, command_buffer);

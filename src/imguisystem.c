@@ -164,10 +164,10 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             }
           }
 
-          // Instruct the render thread that it needs to upload the mesh to the
+          // Instruct the render system that it needs to upload the mesh to the
           // gpu
 
-          // Send the render thread a draw instruction
+          // Send the render system a draw instruction
         }
       }
 

@@ -25,7 +25,19 @@ typedef struct RenderThreadDescriptor {
 
 #define MAX_FRAME_STATES 3
 
-#define MAX_VMA_TMP_GPU_BLOCK_COUNT 256
+#define TB_VMA_TMP_GPU_MB 256
+
+typedef struct BufferUpload {
+  VkBuffer dst;
+  VkBuffer src;
+  VkBufferCopy region;
+} BufferUpload;
+
+typedef struct BufferUploadQueue {
+  uint32_t req_count;
+  BufferUpload *reqs;
+  uint32_t req_max;
+} BufferUploadQueue;
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
@@ -45,9 +57,14 @@ typedef struct FrameState {
   VkSemaphore render_complete_sem;
   VkFence fence;
 
-  uint32_t tmp_gpu_blocks_allocated;
-  VmaAllocation tmp_gpu_allocs[MAX_VMA_TMP_GPU_BLOCK_COUNT];
+  VmaAllocation tmp_gpu_alloc;
+  VkBuffer tmp_gpu_buffer;
   VmaPool tmp_gpu_pool;
+
+  // Memory expected to be actually allocated by the main thread
+  // The main thread will write to this and the render thread will read it
+  BufferUploadQueue buffer_up_queue;
+
 } FrameState;
 
 typedef struct Swapchain {
@@ -114,11 +131,6 @@ typedef struct RenderThread {
   uint32_t stop_signal;
 } RenderThread;
 
-typedef struct UploadInstruction {
-  VkBuffer host_buffer;
-  VkBuffer gpu_buffer;
-} UploadInstruction;
-
 typedef struct DrawInstruction {
   VkBuffer buffer;
 
@@ -133,11 +145,5 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx);
 void tb_wait_thread_initialized(RenderThread *thread);
 
 void tb_stop_render_thread(RenderThread *thread);
-
-bool tb_rnd_alloc_tmp_gpu_buffer(RenderThread *thread, uint64_t size,
-                                 VkBuffer *buffer);
-
-void tb_rnd_copy_to_tmp_gpu_buffer(RenderThread *thread, const uint8_t *data,
-                                   uint64_t size);
 
 void tb_rnd_draw(RenderThread *thread, const DrawInstruction *draw);

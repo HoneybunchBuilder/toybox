@@ -1,16 +1,14 @@
 #pragma once
 
 #include "allocator.h"
-#include "tbvk.h"
+#include "renderthread.h"
 #include "tbvkalloc.h"
 
 #define RenderSystemId 0xABADBABE
 
-#define TB_VMA_TMP_HOST_BYTES 256
+#define TB_VMA_TMP_HOST_MB 256
 
 typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct RenderThread RenderThread;
 
 typedef struct mi_heap_s mi_heap_t;
 
@@ -21,6 +19,7 @@ typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VkBuffer_T *VkBuffer;
 
 typedef struct RenderSystemDescriptor {
+  Allocator std_alloc;
   RenderThread *render_thread;
 } RenderSystemDescriptor;
 
@@ -30,9 +29,12 @@ typedef struct RenderSystemFrameState {
   VkBuffer tmp_host_buffer;
   uint8_t *tmp_host_mapped;
   VmaPool tmp_host_pool;
+
+  BufferUploadQueue buffer_up_queue;
 } RenderSystemFrameState;
 
 typedef struct RenderSystem {
+  Allocator std_alloc;
   RenderThread *render_thread;
 
   VkHostAlloc vk_host_alloc;
@@ -50,3 +52,6 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
 bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                       VkBuffer *buffer, uint64_t *offset,
                                       void **ptr);
+
+void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
+                           uint32_t upload_count);
