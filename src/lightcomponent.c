@@ -6,7 +6,12 @@
 #include "world.h"
 
 bool create_directional_light_component(DirectionalLightComponent *comp,
-                                        const cgltf_light *desc) {
+                                        const cgltf_light *desc,
+                                        uint32_t system_dep_count,
+                                        System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
+
   TB_CHECK_RETURN(desc->type == cgltf_light_type_directional,
                   "Creating directional light with incorrect descriptor.",
                   false);

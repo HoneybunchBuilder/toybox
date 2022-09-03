@@ -2,7 +2,11 @@
 
 #include "world.h"
 
-bool create_coreui_component(CoreUIComponent *self, const void *desc) {
+bool create_coreui_component(CoreUIComponent *self, const void *desc,
+                             uint32_t system_dep_count,
+                             System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   (void)desc;
   *self = (CoreUIComponent){
       .show_all = 1, // Show UI by default

@@ -653,9 +653,14 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
         (*entity) |= (1 << store_idx);
         store->count++;
 
+        // TODO: Find system dependencies
+        uint32_t system_dep_count = 0;
+        System **system_deps = NULL;
+
         // Create a component in the store at this entity index
         uint8_t *comp_head = &store->components[entity_id * store->size];
-        if (!store->create(comp_head, desc->component_descriptors[comp_idx])) {
+        if (!store->create(comp_head, desc->component_descriptors[comp_idx],
+                           system_dep_count, system_deps)) {
           SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "%s",
                        "Failed to create component for entity.");
           SDL_TriggerBreakpoint();

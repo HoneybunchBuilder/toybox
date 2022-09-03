@@ -6,9 +6,9 @@
   bool tb_create_##lower_name##_component(void *self, InternalDescriptor desc, \
                                           uint32_t system_dep_count,           \
                                           System *const *system_deps) {        \
-    return create_##lower_name##_component(                                    \
-        (self_type *)self, (const desc_type *)desc, uint32_t system_dep_count, \
-        System *const *system_deps);                                           \
+    return create_##lower_name##_component((self_type *)self,                  \
+                                           (const desc_type *)desc,            \
+                                           system_dep_count, system_deps);     \
   }                                                                            \
                                                                                \
   void tb_destroy_##lower_name##_component(void *self) {                       \
@@ -60,7 +60,12 @@ typedef struct EntityDescriptor {
   const InternalDescriptor *component_descriptors;
 } EntityDescriptor;
 
-typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc);
+typedef uint64_t SystemId;
+typedef struct System System;
+
+typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc,
+                                  uint32_t system_dep_count,
+                                  System *const *system_deps);
 typedef void (*ComponentDestroyFn)(void *self);
 typedef struct ComponentDescriptor {
   const char *name;
@@ -120,10 +125,6 @@ typedef struct SystemOutput {
   uint32_t set_count;
   SystemWriteSet write_sets[MAX_OUTPUT_SET_COUNT];
 } SystemOutput;
-
-typedef uint64_t SystemId;
-
-typedef struct System System;
 
 typedef bool (*SystemCreateFn)(void *self, InternalDescriptor desc,
                                uint32_t system_dep_count,

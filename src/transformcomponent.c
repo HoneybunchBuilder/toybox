@@ -4,6 +4,8 @@ bool create_transform_component(TransformComponent *comp,
                                 const TransformComponentDescriptor *desc,
                                 uint32_t system_dep_count,
                                 System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *comp = (TransformComponent){
       .transform = desc->transform,
   };
