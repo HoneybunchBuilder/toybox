@@ -4,7 +4,9 @@
 #include "world.h"
 
 bool create_imgui_component(ImGuiComponent *self,
-                            const ImGuiComponentDescriptor *desc) {
+                            const ImGuiComponentDescriptor *desc,
+                            uint32_t system_dep_count,
+                            System *const *system_deps) {
   *self = (ImGuiComponent){
       .context = igCreateContext(desc->font_atlas),
   };
