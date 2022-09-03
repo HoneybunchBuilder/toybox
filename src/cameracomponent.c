@@ -26,9 +26,11 @@ void destroy_camera_component(CameraComponent *comp) {
 TB_DEFINE_COMPONENT(camera, CameraComponent, cgltf_camera_perspective)
 
 void tb_camera_component_descriptor(ComponentDescriptor *desc) {
-  desc->name = "Camera";
-  desc->size = sizeof(CameraComponent);
-  desc->id = CameraComponentId;
-  desc->create = tb_create_camera_component;
-  desc->destroy = tb_destroy_camera_component;
+  *desc = (ComponentDescriptor){
+      .name = "Camera",
+      .size = sizeof(CameraComponent),
+      .id = CameraComponentId,
+      .create = tb_create_camera_component,
+      .destroy = tb_destroy_camera_component,
+  };
 }
