@@ -1,8 +1,9 @@
 #include "imguicomponent.h"
 
-#include "rendersystem.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
+#include "tbvma.h"
+#include "vkdbg.h"
 #include "world.h"
 
 bool create_imgui_component(ImGuiComponent *self,
@@ -14,10 +15,11 @@ bool create_imgui_component(ImGuiComponent *self,
   for (uint32_t i = 0; i < system_dep_count; ++i) {
     System *sys = system_deps[i];
     if (sys->id == RenderSystemId) {
-      render_system = (RenderSystem *)sys;
+      render_system = (RenderSystem *)((System *)sys)->self;
       break;
     }
   }
+
   TB_CHECK_RETURN(render_system, "Failed to get render system reference",
                   false);
 
@@ -35,7 +37,29 @@ bool create_imgui_component(ImGuiComponent *self,
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
   // Copy this texture to host visible image
-  {}
+  {
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .arrayLayers = 1,
+        .extent =
+            (VkExtent3D){
+                .width = tex_w,
+                .height = tex_h,
+                .depth = 1,
+            },
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .mipLevels = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+
+    VkResult err =
+        tb_rnd_sys_alloc_gpu_image(render_system, &create_info, &self->atlas);
+    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", false);
+
+    self->rnd = render_system;
+  }
 
   // Setup basic display size
   io->DisplaySize = (ImVec2){800.0f, 600.0f};
@@ -46,6 +70,7 @@ bool create_imgui_component(ImGuiComponent *self,
 }
 
 void destroy_imgui_component(ImGuiComponent *self) {
+  vmaDestroyImage(self->rnd->vma_alloc, self->atlas.image, self->atlas.alloc);
   igDestroyContext(self->context);
   *self = (ImGuiComponent){0};
 }
