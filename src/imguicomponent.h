@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rendersystem.h"
+
 typedef struct ImFontAtlas ImFontAtlas;
 typedef struct ImGuiContext ImGuiContext;
 typedef struct ImGuiIO ImGuiIO;
@@ -14,6 +16,8 @@ typedef struct ImGuiComponentDescriptor {
 
 typedef struct ImGuiComponent {
   ImGuiContext *context;
+  RenderSystem *rnd;
+  TbImage atlas;
 } ImGuiComponent;
 
 void tb_imgui_component_descriptor(ComponentDescriptor *desc);
