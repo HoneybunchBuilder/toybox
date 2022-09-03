@@ -3,10 +3,12 @@
 #include "allocator.h"
 
 #define TB_DEFINE_COMPONENT(lower_name, self_type, desc_type)                  \
-  bool tb_create_##lower_name##_component(void *self,                          \
-                                          InternalDescriptor desc) {           \
-    return create_##lower_name##_component((self_type *)self,                  \
-                                           (const desc_type *)desc);           \
+  bool tb_create_##lower_name##_component(void *self, InternalDescriptor desc, \
+                                          uint32_t system_dep_count,           \
+                                          System *const *system_deps) {        \
+    return create_##lower_name##_component(                                    \
+        (self_type *)self, (const desc_type *)desc, uint32_t system_dep_count, \
+        System *const *system_deps);                                           \
   }                                                                            \
                                                                                \
   void tb_destroy_##lower_name##_component(void *self) {                       \
@@ -44,6 +46,12 @@ typedef uint32_t ComponentId;
 
 #define ComponentIdAsStr(id) "\"" #id "\""
 
+#define MAX_COMPONENT_DEP_COUNT 4
+#define MAX_COLUMN_COUNT MAX_COMPONENT_DEP_COUNT
+#define MAX_DEPENDENCY_SET_COUT 4
+#define MAX_SYSTEM_DEP_COUNT 4
+#define MAX_OUTPUT_SET_COUNT 4
+
 typedef uint32_t Entity;
 typedef struct EntityDescriptor {
   const char *name;
@@ -58,6 +66,10 @@ typedef struct ComponentDescriptor {
   const char *name;
   uint64_t size;
   ComponentId id;
+
+  uint32_t system_dep_count;
+  SystemId system_deps[MAX_SYSTEM_DEP_COUNT];
+
   ComponentCreateFn create;
   ComponentDestroyFn destroy;
 } ComponentDescriptor;
@@ -72,11 +84,6 @@ typedef struct ComponentStore {
   ComponentDestroyFn destroy;
 } ComponentStore;
 
-#define MAX_COMPONENT_DEP_COUNT 4
-#define MAX_COLUMN_COUNT MAX_COMPONENT_DEP_COUNT
-#define MAX_DEPENDENCY_SET_COUT 4
-#define MAX_SYSTEM_DEP_COUNT 4
-#define MAX_OUTPUT_SET_COUNT 4
 typedef struct SystemComponentDependencies {
   uint32_t count;
   ComponentId dependent_ids[MAX_COMPONENT_DEP_COUNT];
