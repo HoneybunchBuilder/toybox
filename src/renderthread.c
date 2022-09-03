@@ -1145,7 +1145,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
   VkCommandBuffer command_buffer = state->command_buffer;
 
-  // Ensure no more than MAX_FRAME_STATES renderings are outstanding
+  // Ensure the frame state we're about to use isn't being handled by the GPU
   {
     TracyCZoneN(fence_ctx, "Wait for GPU", true);
     TracyCZoneColor(fence_ctx, TracyCategoryColorWait);

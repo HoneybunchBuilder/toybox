@@ -230,28 +230,28 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
   desc->tick = tb_tick_render_system;
 }
 
-bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                      VkBuffer *buffer, uint64_t *offset,
-                                      void **ptr) {
+VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
+                                          TbBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
-  void *tmp_ptr = &state->tmp_host_mapped[state->tmp_host_size];
+  void *ptr = &state->tmp_host_mapped[state->tmp_host_size];
 
   // Always 16 byte aligned
-  intptr_t padding = (16 - (intptr_t)tmp_ptr % 16);
-  tmp_ptr = (void *)((intptr_t)tmp_ptr + padding);
+  intptr_t padding = (16 - (intptr_t)ptr % 16);
+  ptr = (void *)((intptr_t)ptr + padding);
 
-  TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation", false);
+  TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation",
+                  VK_ERROR_OUT_OF_HOST_MEMORY);
 
-  uint64_t off = state->tmp_host_size;
+  const uint64_t offset = state->tmp_host_size;
 
   state->tmp_host_size += (size + padding);
 
-  *buffer = state->tmp_host_buffer;
-  *offset = off;
-  *ptr = tmp_ptr;
+  buffer->buffer = state->tmp_host_buffer;
+  buffer->offset = offset;
+  buffer->ptr = ptr;
 
-  return true;
+  return VK_SUCCESS;
 }
 
 void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,

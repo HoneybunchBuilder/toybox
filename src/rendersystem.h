@@ -45,12 +45,26 @@ typedef struct RenderSystem {
   RenderSystemFrameState frame_states[3];
 } RenderSystem;
 
+typedef struct TbBuffer {
+  VkBuffer buffer;
+  uint64_t offset;
+  void *ptr;
+} TbBuffer;
+
+typedef struct TbImage {
+  VkImage image;
+  void *ptr;
+} TbImage;
+
 void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc);
 
-bool tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                      VkBuffer *buffer, uint64_t *offset,
-                                      void **ptr);
+VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
+                                          TbBuffer *buffer);
+
+VkResult tb_rnd_sys_alloc_host_image(RenderSystem *self,
+                                     const VkImageCreateInfo *create_info,
+                                     TbImage *image);
 
 void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
                            uint32_t upload_count);
