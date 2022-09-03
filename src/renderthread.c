@@ -115,39 +115,6 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 #endif
 
-static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
-                         VkSystemAllocationScope scope) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  (void)scope;
-  mi_heap_t *heap = (mi_heap_t *)pUserData;
-  void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan");
-  TracyCZoneEnd(ctx);
-  return ptr;
-}
-
-static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
-                           size_t alignment, VkSystemAllocationScope scope) {
-  (void)scope;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  mi_heap_t *heap = (mi_heap_t *)pUserData;
-  TracyCFreeN(pOriginal, "Vulkan");
-  void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
-  TracyCAllocN(ptr, size, "Vulkan");
-  TracyCZoneEnd(ctx);
-  return ptr;
-}
-
-static void vk_free_fn(void *pUserData, void *pMemory) {
-  (void)pUserData;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  TracyCFreeN(pMemory, "Vulkan") mi_free(pMemory);
-  TracyCZoneEnd(ctx);
-}
-
 bool init_instance(SDL_Window *window, Allocator tmp_alloc,
                    const VkAllocationCallbacks *vk_alloc,
                    VkInstance *instance) {
@@ -1065,14 +1032,10 @@ bool init_render_thread(RenderThread *thread) {
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to initialize volk", false);
 
   // Create vulkan allocator
-  thread->vk_heap = mi_heap_new();
-  TB_CHECK_RETURN(thread->vk_heap, "Failed to create vk heap", false);
-
   thread->vk_alloc = (VkAllocationCallbacks){
-      .pUserData = thread->vk_heap,
-      .pfnAllocation = vk_alloc_fn,
-      .pfnReallocation = vk_realloc_fn,
-      .pfnFree = vk_free_fn,
+      .pfnAllocation = tb_vk_alloc_fn,
+      .pfnReallocation = tb_vk_realloc_fn,
+      .pfnFree = tb_vk_free_fn,
   };
 
   Allocator std_alloc = thread->std_alloc.alloc;

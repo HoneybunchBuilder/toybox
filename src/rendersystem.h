@@ -37,7 +37,6 @@ typedef struct RenderSystem {
   Allocator std_alloc;
   RenderThread *render_thread;
 
-  VkHostAlloc vk_host_alloc;
   VkAllocationCallbacks vk_host_alloc_cb;
 
   VmaAllocator vma_alloc;

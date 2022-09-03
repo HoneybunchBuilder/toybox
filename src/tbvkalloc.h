@@ -2,14 +2,7 @@
 
 #include "tbvk.h"
 
-typedef struct mi_heap_s mi_heap_t;
-
 typedef struct VmaAllocator_T *VmaAllocator;
-
-typedef struct VkHostAlloc {
-  const char *name;
-  mi_heap_t *heap;
-} VkHostAlloc;
 
 void *tb_vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                      VkSystemAllocationScope scope);

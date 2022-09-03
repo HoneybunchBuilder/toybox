@@ -11,10 +11,14 @@ void *tb_vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
 
-  VkHostAlloc *alloc = (VkHostAlloc *)pUserData;
-  void *ptr = mi_heap_malloc_aligned(alloc->heap, size, alignment);
+  // In mimalloc every heap is thread local except for the global heap.
+  // When using debugging tools like RenderDoc their injection may cause
+  // some vulkan related allocations to be made from a dll's thread. In which
+  // case this will crash if trying to alloc from a mimalloc heap. So we use the
+  // global heap instead since it doesn't have this limitation.
+  void *ptr = mi_malloc_aligned(size, alignment);
 
-  TracyCAllocN(ptr, size, alloc->name);
+  TracyCAllocN(ptr, size, "Vulkan Global Heap");
   TracyCZoneEnd(ctx);
   return ptr;
 }
@@ -26,11 +30,10 @@ void *tb_vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
 
-  VkHostAlloc *alloc = (VkHostAlloc *)pUserData;
-  TracyCFreeN(pOriginal, alloc->name);
-  void *ptr = mi_heap_realloc_aligned(alloc->heap, pOriginal, size, alignment);
+  TracyCFreeN(pOriginal, "Vulkan Global Heap");
+  void *ptr = mi_realloc_aligned(pOriginal, size, alignment);
 
-  TracyCAllocN(ptr, size, alloc->name);
+  TracyCAllocN(ptr, size, "Vulkan Global Heap");
   TracyCZoneEnd(ctx);
   return ptr;
 }
@@ -40,8 +43,7 @@ void tb_vk_free_fn(void *pUserData, void *pMemory) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
 
-  VkHostAlloc *alloc = (VkHostAlloc *)pUserData;
-  TracyCFreeN(pMemory, alloc->name);
+  TracyCFreeN(pMemory, "Vulkan Global Heap");
   mi_free(pMemory);
 
   TracyCZoneEnd(ctx);
