@@ -124,12 +124,10 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
         if (imgui_size > 0) {
           // Make space for this on the next frame. For the host and the device
-          VkBuffer tmp_host_buffer = VK_NULL_HANDLE;
-          uint64_t offset = 0;
-          void *tmp_ptr = NULL;
-          if (!tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
-                                                &tmp_host_buffer, &offset,
-                                                &tmp_ptr)) {
+          TbBuffer tmp_host_buffer = {0};
+          if (tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
+                                               &tmp_host_buffer) !=
+              VK_SUCCESS) {
             TracyCZoneEnd(ctx);
             return;
           }
@@ -144,7 +142,10 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             const size_t alignment = 8;
             size_t align_padding = idx_size % alignment;
 
-            uint8_t *idx_dst = (uint8_t *)tmp_ptr;
+            uint8_t *offset_ptr =
+                ((uint8_t *)tmp_host_buffer.ptr) + tmp_host_buffer.offset;
+
+            uint8_t *idx_dst = offset_ptr;
             uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
 
             // Organize all mesh data into a single cpu-side buffer
