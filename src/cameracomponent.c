@@ -5,7 +5,11 @@
 #include "world.h"
 
 bool create_camera_component(CameraComponent *comp,
-                             const cgltf_camera_perspective *desc) {
+                             const cgltf_camera_perspective *desc,
+                             uint32_t system_dep_count,
+                             System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *comp = (CameraComponent){
       .aspect_ratio = desc->aspect_ratio,
       .fov = desc->yfov,
