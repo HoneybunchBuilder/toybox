@@ -85,6 +85,7 @@ typedef struct ComponentStore {
   uint64_t size;       // size of the component element
   uint32_t count;      // Number of components in the collection
   uint8_t *components; // Component storage in generic bytes
+  ComponentDescriptor desc;
   ComponentCreateFn create;
   ComponentDestroyFn destroy;
 } ComponentStore;

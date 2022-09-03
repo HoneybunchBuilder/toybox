@@ -52,6 +52,7 @@ void create_component_store(ComponentStore *store,
   store->size = desc->size;
   store->count = 0;
   store->components = NULL;
+  store->desc = *desc;
   store->create = desc->create;
   store->destroy = desc->destroy;
 }
@@ -653,9 +654,29 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
         (*entity) |= (1 << store_idx);
         store->count++;
 
-        // TODO: Find system dependencies
         uint32_t system_dep_count = 0;
         System **system_deps = NULL;
+
+        const ComponentDescriptor *comp_desc = &store->desc;
+
+        if (comp_desc) {
+          // Find system dependencies
+          system_dep_count = comp_desc->system_dep_count;
+          if (system_dep_count > 0) {
+            system_deps =
+                tb_alloc_nm_tp(world->tmp_alloc, system_dep_count, System *);
+            for (uint32_t dep_idx = 0; dep_idx < system_dep_count; ++dep_idx) {
+              for (uint32_t sys_idx = 0; sys_idx < world->system_count;
+                   ++sys_idx) {
+                if (world->systems[sys_idx].id ==
+                    comp_desc->system_deps[dep_idx]) {
+                  system_deps[dep_idx] = &world->systems[sys_idx];
+                  break;
+                }
+              }
+            }
+          }
+        }
 
         // Create a component in the store at this entity index
         uint8_t *comp_head = &store->components[entity_id * store->size];

@@ -1,5 +1,7 @@
 #include "imguicomponent.h"
 
+#include "rendersystem.h"
+#include "tbcommon.h"
 #include "tbimgui.h"
 #include "world.h"
 
@@ -7,6 +9,18 @@ bool create_imgui_component(ImGuiComponent *self,
                             const ImGuiComponentDescriptor *desc,
                             uint32_t system_dep_count,
                             System *const *system_deps) {
+  // Ensure we have a reference to the render system
+  RenderSystem *render_system = NULL;
+  for (uint32_t i = 0; i < system_dep_count; ++i) {
+    System *sys = system_deps[i];
+    if (sys->id == RenderSystemId) {
+      render_system = (RenderSystem *)sys;
+      break;
+    }
+  }
+  TB_CHECK_RETURN(render_system, "Failed to get render system reference",
+                  false);
+
   *self = (ImGuiComponent){
       .context = igCreateContext(desc->font_atlas),
   };
@@ -20,7 +34,8 @@ bool create_imgui_component(ImGuiComponent *self,
   int32_t bytes_pp = 0;
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
-  // TODO: Actually create and upload this texture
+  // Copy this texture to host visible image
+  {}
 
   // Setup basic display size
   io->DisplaySize = (ImVec2){800.0f, 600.0f};
@@ -38,9 +53,13 @@ void destroy_imgui_component(ImGuiComponent *self) {
 TB_DEFINE_COMPONENT(imgui, ImGuiComponent, void)
 
 void tb_imgui_component_descriptor(ComponentDescriptor *desc) {
-  desc->name = "ImGui";
-  desc->size = sizeof(ImGuiComponent);
-  desc->id = ImGuiComponentId;
-  desc->create = tb_create_imgui_component;
-  desc->destroy = tb_destroy_imgui_component;
+  *desc = (ComponentDescriptor){
+      .name = "ImGui",
+      .size = sizeof(ImGuiComponent),
+      .id = ImGuiComponentId,
+      .system_dep_count = 1,
+      .system_deps[0] = RenderSystemId,
+      .create = tb_create_imgui_component,
+      .destroy = tb_destroy_imgui_component,
+  };
 }
