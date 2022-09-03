@@ -27,15 +27,7 @@ bool create_render_system(RenderSystem *self,
     VkResult err = VK_SUCCESS;
 
     // Create vulkan allocator for main thread
-    self->vk_host_alloc = (VkHostAlloc){
-        .name = "Vulkan Main Thread Temp Host",
-        .heap = mi_heap_new(),
-    };
-    TB_CHECK_RETURN(self->vk_host_alloc.heap, "Failed to create main vk heap",
-                    false);
-
     self->vk_host_alloc_cb = (VkAllocationCallbacks){
-        .pUserData = &self->vk_host_alloc,
         .pfnAllocation = tb_vk_alloc_fn,
         .pfnReallocation = tb_vk_realloc_fn,
         .pfnFree = tb_vk_free_fn,
