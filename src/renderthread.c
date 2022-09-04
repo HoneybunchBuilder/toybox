@@ -29,12 +29,12 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
 }
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
-  TB_CHECK(frame_idx < MAX_FRAME_STATES, "Invalid frame index");
+  TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
-  TB_CHECK(frame_idx < MAX_FRAME_STATES, "Invalid frame index");
+  TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
 }
 
@@ -247,18 +247,18 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   uint32_t swap_img_count = 0;
   vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count, NULL);
   TB_VK_CHECK_RET(err, "Failed to get swapchain image count", false);
-  TB_CHECK_RETURN(swap_img_count >= MAX_FRAME_STATES,
+  TB_CHECK_RETURN(swap_img_count >= TB_MAX_FRAME_STATES,
                   "Fewer than required swapchain images", false);
-  if (swap_img_count > MAX_FRAME_STATES) {
-    swap_img_count = MAX_FRAME_STATES;
+  if (swap_img_count > TB_MAX_FRAME_STATES) {
+    swap_img_count = TB_MAX_FRAME_STATES;
   }
 
-  VkImage swapchain_images[MAX_FRAME_STATES] = {0};
+  VkImage swapchain_images[TB_MAX_FRAME_STATES] = {0};
   vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
                           swapchain_images);
   TB_VK_CHECK_RET(err, "Failed to get swapchain images", false);
 
-  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
     state->wait_sem = SDL_CreateSemaphore(1);
@@ -433,7 +433,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
                           FrameState *states) {
   TB_CHECK(states, "Invalid states");
 
-  for (uint32_t i = 0; i < MAX_FRAME_STATES; ++i) {
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
     SDL_DestroySemaphore(state->wait_sem);
@@ -938,7 +938,7 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
   // Determine the number of VkImages to use in the swap chain.
   // Application desires to acquire 3 images at a time for triple
   // buffering
-  uint32_t image_count = MAX_FRAME_STATES;
+  uint32_t image_count = TB_MAX_FRAME_STATES;
   if (image_count < surf_caps.minImageCount) {
     image_count = surf_caps.minImageCount;
   }
@@ -1298,7 +1298,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       {
         TracyCZoneN(swap_trans_e, "Transition swapchain to color output", true);
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        if (thread->frame_count >= MAX_FRAME_STATES) {
+        if (thread->frame_count >= TB_MAX_FRAME_STATES) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
 
@@ -1482,7 +1482,7 @@ int32_t render_thread(void *data) {
 
     // Increment frame count when done
     thread->frame_count++;
-    thread->frame_idx = thread->frame_count % MAX_FRAME_STATES;
+    thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
 
     // Signal frame done
     SDL_SemPost(frame_state->signal_sem);
