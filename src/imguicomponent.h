@@ -16,7 +16,7 @@ typedef struct ImGuiComponentDescriptor {
 
 typedef struct ImGuiComponent {
   ImGuiContext *context;
-  RenderSystem *rnd;
+  RenderSystem *render_system;
   TbImage atlas;
 } ImGuiComponent;
 

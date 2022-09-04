@@ -362,3 +362,12 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 
   queue->req_count = new_count;
 }
+
+void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
+  tb_wait_render(self->render_thread, self->frame_idx);
+  vkDeviceWaitIdle(self->render_thread->device);
+
+  vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
+
+  tb_signal_render(self->render_thread, self->frame_idx);
+}

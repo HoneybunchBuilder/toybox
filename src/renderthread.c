@@ -406,7 +406,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
           .size = size_bytes,
-          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
       };
