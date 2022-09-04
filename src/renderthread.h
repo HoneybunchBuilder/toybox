@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 
+#include "tbrendercommon.h"
 #include "tbvk.h"
 
 #if !defined(FINAL) && !defined(__ANDROID__)
@@ -22,8 +23,6 @@ typedef struct VmaPool_T *VmaPool;
 typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
-
-#define MAX_FRAME_STATES 3
 
 #define TB_VMA_TMP_GPU_MB 256
 
@@ -139,7 +138,7 @@ typedef struct RenderThread {
 
   uint32_t frame_idx;
   uint64_t frame_count;
-  FrameState frame_states[MAX_FRAME_STATES];
+  FrameState frame_states[TB_MAX_FRAME_STATES];
 
   uint32_t stop_signal;
 } RenderThread;

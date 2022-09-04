@@ -75,7 +75,7 @@ bool create_render_system(RenderSystem *self,
     }
 
     // Initialize all game thread render frame state
-    for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
+    for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
       RenderSystemFrameState *state = &self->frame_states[state_idx];
 
       const uint64_t size_bytes = TB_VMA_TMP_HOST_MB * 1024 * 1024;
@@ -160,12 +160,12 @@ void destroy_render_system(RenderSystem *self) {
 
   // Wait for all frame states to finish so that the queue and device are not in
   // use
-  for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
+  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     tb_wait_render(self->render_thread, state_idx);
   }
   vkDeviceWaitIdle(self->render_thread->device);
 
-  for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
+  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     RenderSystemFrameState *state = &self->frame_states[state_idx];
 
     vmaUnmapMemory(vma_alloc, state->tmp_host_alloc);
@@ -176,7 +176,7 @@ void destroy_render_system(RenderSystem *self) {
   }
 
   // Re-signal all frame states to flush the thread
-  for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
+  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     tb_signal_render(self->render_thread, state_idx);
   }
 
@@ -212,7 +212,8 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
       // Reset the *next* frame's pool. Assume that it has already been
       // consumed by the render thread and that it's now free to nuke in
       // prep for the next frame
-      const uint32_t next_frame_idx = (self->frame_idx + 1) % MAX_FRAME_STATES;
+      const uint32_t next_frame_idx =
+          (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
       RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
       prev_state->tmp_host_size = 0;
     }
@@ -249,7 +250,7 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
 
   // Signal the render thread to start rendering this frame
   tb_signal_render(self->render_thread, self->frame_idx);
-  self->frame_idx = (self->frame_idx + 1) % MAX_FRAME_STATES;
+  self->frame_idx = (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
 
   TracyCZoneEnd(tick_ctx);
 }
@@ -316,6 +317,21 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   return VK_SUCCESS;
 }
 
+VkResult tb_rnd_create_render_pass(RenderSystem *self,
+                                   const VkRenderPassCreateInfo *create_info,
+                                   const char *name, VkRenderPass *pass) {
+  VkResult err = VK_SUCCESS;
+
+  err = vkCreateRenderPass(self->render_thread->device, create_info,
+                           &self->vk_host_alloc_cb, pass);
+  TB_VK_CHECK_RET(err, "Failed to create render pass", err);
+
+  SET_VK_NAME(self->render_thread->device, *pass, VK_OBJECT_TYPE_RENDER_PASS,
+              name);
+
+  return err;
+}
+
 void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count) {
   const uint32_t frame_idx = self->frame_idx;
@@ -370,4 +386,9 @@ void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
   vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
 
   tb_signal_render(self->render_thread, self->frame_idx);
+}
+
+void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass) {
+  vkDestroyRenderPass(self->render_thread->device, pass,
+                      &self->vk_host_alloc_cb);
 }

@@ -7,6 +7,7 @@
 #include "tbcommon.h"
 #include "tbimgui.h"
 #include "tbvma.h"
+#include "vkdbg.h"
 
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
@@ -27,14 +28,72 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which imgui depends on", false);
 
+  VkResult err = VK_SUCCESS;
+
+  // Load imgui pipeline
+
+  // Create imgui render pass
+  // Will render directly to the swapchain
+  VkRenderPass imgui_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription color_attachment = {
+        .format = render_system->render_thread->swapchain.format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentDescription attachments[1] = {
+        color_attachment,
+    };
+    VkAttachmentReference color_attachment_ref = {
+        0,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkAttachmentReference attachment_refs[1] = {
+        color_attachment_ref,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = attachment_refs,
+    };
+    VkSubpassDependency subpass_dep = {
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .pDependencies = &subpass_dep,
+    };
+    err = tb_rnd_create_render_pass(render_system, &create_info, "ImGui Pass",
+                                    &imgui_pass);
+    TB_VK_CHECK_RET(err, "Failed to create imgui render pass", false);
+  }
+
   *self = (ImGuiSystem){
       .render_system = render_system,
       .tmp_alloc = desc->tmp_alloc,
+      .pass = imgui_pass,
   };
   return true;
 }
 
-void destroy_imgui_system(ImGuiSystem *self) { *self = (ImGuiSystem){0}; }
+void destroy_imgui_system(ImGuiSystem *self) {
+  tb_rnd_destroy_render_pass(self->render_system, self->pass);
+
+  *self = (ImGuiSystem){0};
+}
 
 void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
