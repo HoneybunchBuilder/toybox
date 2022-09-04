@@ -27,17 +27,29 @@ typedef struct RenderThreadDescriptor {
 
 #define TB_VMA_TMP_GPU_MB 256
 
-typedef struct BufferUpload {
-  VkBuffer dst;
+typedef struct BufferCopy {
   VkBuffer src;
+  VkBuffer dst;
   VkBufferCopy region;
-} BufferUpload;
+} BufferCopy;
 
-typedef struct BufferUploadQueue {
+typedef struct BufferImageCopy {
+  VkBuffer src;
+  VkImage dst;
+  VkBufferImageCopy region;
+} BufferImageCopy;
+
+typedef struct BufferCopyQueue {
   uint32_t req_count;
-  BufferUpload *reqs;
+  BufferCopy *reqs;
   uint32_t req_max;
-} BufferUploadQueue;
+} BufferCopyQueue;
+
+typedef struct BufferImageCopyQueue {
+  uint32_t req_count;
+  BufferImageCopy *reqs;
+  uint32_t req_max;
+} BufferImageCopyQueue;
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
@@ -63,7 +75,8 @@ typedef struct FrameState {
 
   // Memory expected to be actually allocated by the main thread
   // The main thread will write to this and the render thread will read it
-  BufferUploadQueue buffer_up_queue;
+  BufferCopyQueue buf_copy_queue;
+  BufferImageCopyQueue buf_img_copy_queue;
 
 } FrameState;
 
