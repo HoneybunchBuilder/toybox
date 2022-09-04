@@ -158,20 +158,28 @@ bool create_render_system(RenderSystem *self,
 void destroy_render_system(RenderSystem *self) {
   VmaAllocator vma_alloc = self->vma_alloc;
 
+  // Wait for all frame states to finish so that the queue and device are not in
+  // use
+  for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
+    tb_wait_render(self->render_thread, state_idx);
+  }
+  vkDeviceWaitIdle(self->render_thread->device);
+
   for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
     RenderSystemFrameState *state = &self->frame_states[state_idx];
-
-    tb_wait_render(self->render_thread, state_idx);
-    vkDeviceWaitIdle(self->render_thread->device);
 
     vmaUnmapMemory(vma_alloc, state->tmp_host_alloc);
     vmaDestroyBuffer(vma_alloc, state->tmp_host_buffer, state->tmp_host_alloc);
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
 
     vmaDestroyPool(vma_alloc, state->gpu_image_pool);
+  }
 
+  // Re-signal all frame states to flush the thread
+  for (uint32_t state_idx = 0; state_idx < MAX_FRAME_STATES; ++state_idx) {
     tb_signal_render(self->render_thread, state_idx);
   }
+
   vmaDestroyAllocator(vma_alloc);
   *self = (RenderSystem){0};
 }
