@@ -59,8 +59,6 @@ bool create_imgui_component(ImGuiComponent *self,
     err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, "ImGui Atlas",
                                      &self->atlas);
     TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", false);
-
-    self->rnd = render_system;
   }
 
   // Get space for the image on the tmp buffer
@@ -75,10 +73,15 @@ bool create_imgui_component(ImGuiComponent *self,
     SDL_memcpy(host_buf.ptr, pixels, atlas_size);
   }
 
-  // Copy the image from the tmp buffer to the gpu image
+  // Copy the image from the tmp gpu buffer to the gpu image
   {
+    // A bit jank, but upload the image directly from the gpu buffer that we
+    // know will be copied to from the tmp host buffer before this copy
+    // is completed.
     BufferImageCopy upload = {
-        .src = host_buf.buffer,
+        .src =
+            render_system->render_thread->frame_states[render_system->frame_idx]
+                .tmp_gpu_buffer,
         .dst = self->atlas.image,
         .region =
             {
@@ -104,12 +107,17 @@ bool create_imgui_component(ImGuiComponent *self,
   io->DisplaySize = (ImVec2){800.0f, 600.0f};
   io->DeltaTime = 0.1666667f;
 
+  // For clean-up
+  self->render_system = render_system;
+
   igNewFrame();
   return true;
 }
 
 void destroy_imgui_component(ImGuiComponent *self) {
-  vmaDestroyImage(self->rnd->vma_alloc, self->atlas.image, self->atlas.alloc);
+  // Wait for the current frame to complete
+  tb_rnd_free_gpu_image(self->render_system, &self->atlas);
+
   igDestroyContext(self->context);
   *self = (ImGuiComponent){0};
 }

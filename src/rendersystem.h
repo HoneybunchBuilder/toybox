@@ -68,3 +68,5 @@ void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count);
 void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
                                    uint32_t upload_count);
+
+void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image);
