@@ -27,6 +27,8 @@ bool create_imgui_component(ImGuiComponent *self,
       .context = igCreateContext(desc->font_atlas),
   };
 
+  VkResult err = VK_SUCCESS;
+
   // Get atlas texture data for this context
   ImGuiIO *io = igGetIO();
 
@@ -36,7 +38,7 @@ bool create_imgui_component(ImGuiComponent *self,
   int32_t bytes_pp = 0;
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
-  // Copy this texture to host visible image
+  // Create the atlas image on the GPU
   {
     VkImageCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -54,11 +56,48 @@ bool create_imgui_component(ImGuiComponent *self,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     };
 
-    VkResult err =
-        tb_rnd_sys_alloc_gpu_image(render_system, &create_info, &self->atlas);
+    err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, "ImGui Atlas",
+                                     &self->atlas);
     TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", false);
 
     self->rnd = render_system;
+  }
+
+  // Get space for the image on the tmp buffer
+  TbBuffer host_buf;
+  {
+    const uint64_t atlas_size = self->atlas.info.size;
+    err =
+        tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, &host_buf);
+    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer",
+                    false);
+
+    SDL_memcpy(host_buf.ptr, pixels, atlas_size);
+  }
+
+  // Copy the image from the tmp buffer to the gpu image
+  {
+    BufferImageCopy upload = {
+        .src = host_buf.buffer,
+        .dst = self->atlas.image,
+        .region =
+            {
+                .bufferOffset = host_buf.offset,
+                .imageSubresource =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .layerCount = 1,
+                    },
+                .imageExtent =
+                    {
+                        .width = tex_w,
+                        .height = tex_h,
+                        .depth = 1,
+                    },
+            },
+
+    };
+    tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
   }
 
   // Setup basic display size

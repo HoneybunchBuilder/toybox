@@ -223,7 +223,7 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
 
     // Copy this frame state's temp buffer to the gpu
     {
-      BufferUpload up = {
+      BufferCopy up = {
           .dst = thread_state->tmp_gpu_buffer,
           .src = state->tmp_host_buffer,
           .region =
@@ -239,8 +239,9 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
     // Send and Reset buffer upload pool
     {
       // Assign to the thread
-      thread_state->buffer_up_queue = state->buffer_up_queue;
-      state->buffer_up_queue.req_count = 0;
+      thread_state->buf_copy_queue = state->buf_copy_queue;
+      thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
+      state->buf_copy_queue.req_count = 0;
     }
 
     TracyCZoneEnd(ctx);
@@ -295,7 +296,7 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
 
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
-                                    TbImage *image) {
+                                    const char *name, TbImage *image) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
   VmaAllocator vma_alloc = self->vma_alloc;
@@ -305,20 +306,45 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
       .memoryTypeBits = VMA_MEMORY_USAGE_GPU_ONLY,
       .pool = pool,
   };
-  VmaAllocationInfo alloc_info = {0};
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
-                                &image->image, &image->alloc, &alloc_info);
+                                &image->image, &image->alloc, &image->info);
   TB_VK_CHECK_RET(err, "Failed to allocate gpu image", err);
+
+  SET_VK_NAME(self->render_thread->device, image->image, VK_OBJECT_TYPE_IMAGE,
+              name);
 
   return VK_SUCCESS;
 }
 
-void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
+void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count) {
   const uint32_t frame_idx = self->frame_idx;
 
   RenderSystemFrameState *state = &self->frame_states[frame_idx];
-  BufferUploadQueue *queue = &state->buffer_up_queue;
+  BufferCopyQueue *queue = &state->buf_copy_queue;
+
+  // See if we need to resize queue
+  Allocator std_alloc = self->std_alloc;
+  const uint64_t new_count = queue->req_count + upload_count;
+  if (queue->req_max < new_count) {
+    const uint64_t new_max = new_count * 2;
+    queue->reqs = tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferCopy);
+    queue->req_max = new_max;
+  }
+
+  // Append uploads to queue
+  SDL_memcpy(&queue->reqs[queue->req_count], uploads,
+             sizeof(BufferCopy) * upload_count);
+
+  queue->req_count = new_count;
+}
+
+void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
+                                   uint32_t upload_count) {
+  const uint32_t frame_idx = self->frame_idx;
+
+  RenderSystemFrameState *state = &self->frame_states[frame_idx];
+  BufferImageCopyQueue *queue = &state->buf_img_copy_queue;
 
   // See if we need to resize queue
   Allocator std_alloc = self->std_alloc;
@@ -326,13 +352,13 @@ void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
   if (queue->req_max < new_count) {
     const uint64_t new_max = new_count * 2;
     queue->reqs =
-        tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferUpload);
+        tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferImageCopy);
     queue->req_max = new_max;
   }
 
   // Append uploads to queue
   SDL_memcpy(&queue->reqs[queue->req_count], uploads,
-             sizeof(BufferUpload) * upload_count);
+             sizeof(BufferImageCopy) * upload_count);
 
   queue->req_count = new_count;
 }

@@ -1214,13 +1214,75 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                         true);
       // Upload all buffer requests
       {
-        for (uint32_t i = 0; i < state->buffer_up_queue.req_count; ++i) {
-          const BufferUpload *up = &state->buffer_up_queue.reqs[i];
-
+        for (uint32_t i = 0; i < state->buf_copy_queue.req_count; ++i) {
+          const BufferCopy *up = &state->buf_copy_queue.reqs[i];
           vkCmdCopyBuffer(command_buffer, up->src, up->dst, 1, &up->region);
         }
 
-        state->buffer_up_queue.req_count = 0;
+        state->buf_copy_queue.req_count = 0;
+      }
+
+      // Upload all buffer to image requests
+      {
+        for (uint32_t i = 0; i < state->buf_img_copy_queue.req_count; ++i) {
+          const BufferImageCopy *up = &state->buf_img_copy_queue.reqs[i];
+
+          // Transition target image to copy dst
+          {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .subresourceRange =
+                    {
+                        .baseArrayLayer =
+                            up->region.imageSubresource.baseArrayLayer,
+                        .baseMipLevel = up->region.imageSubresource.mipLevel,
+                        .levelCount = 1,
+                        .layerCount = up->region.imageSubresource.layerCount,
+                        .aspectMask = up->region.imageSubresource.aspectMask,
+                    },
+                .srcAccessMask = 0,
+                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .image = up->dst,
+            };
+            vkCmdPipelineBarrier(command_buffer,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0,
+                                 NULL, 1, &barrier);
+          }
+
+          // Perform the copy
+          vkCmdCopyBufferToImage(command_buffer, up->src, up->dst,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                 &up->region);
+
+          // Transition to readable layout
+          {
+            VkImageMemoryBarrier barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .subresourceRange =
+                    {
+                        .baseArrayLayer =
+                            up->region.imageSubresource.baseArrayLayer,
+                        .baseMipLevel = up->region.imageSubresource.mipLevel,
+                        .levelCount = 1,
+                        .layerCount = up->region.imageSubresource.layerCount,
+                        .aspectMask = up->region.imageSubresource.aspectMask,
+                    },
+                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .image = up->dst,
+            };
+            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                                 NULL, 0, NULL, 1, &barrier);
+          }
+        }
+
+        state->buf_img_copy_queue.req_count = 0;
       }
 
       TracyCVkZoneEnd(frame_scope);

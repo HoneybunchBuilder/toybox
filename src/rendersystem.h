@@ -3,20 +3,13 @@
 #include "allocator.h"
 #include "renderthread.h"
 #include "tbvkalloc.h"
+#include "tbvma.h"
 
 #define RenderSystemId 0xABADBABE
 
 #define TB_VMA_TMP_HOST_MB 256
 
 typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct mi_heap_s mi_heap_t;
-
-typedef struct VmaPool_T *VmaPool;
-typedef struct VmaAllocator_T *VmaAllocator;
-typedef struct VmaAllocation_T *VmaAllocation;
-
-typedef struct VkBuffer_T *VkBuffer;
 
 typedef struct RenderSystemDescriptor {
   Allocator std_alloc;
@@ -32,7 +25,8 @@ typedef struct RenderSystemFrameState {
 
   VmaPool gpu_image_pool;
 
-  BufferUploadQueue buffer_up_queue;
+  BufferCopyQueue buf_copy_queue;
+  BufferImageCopyQueue buf_img_copy_queue;
 } RenderSystemFrameState;
 
 typedef struct RenderSystem {
@@ -56,6 +50,7 @@ typedef struct TbBuffer {
 typedef struct TbImage {
   VkImage image;
   VmaAllocation alloc;
+  VmaAllocationInfo info;
   void *ptr;
 } TbImage;
 
@@ -67,7 +62,9 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
 
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
-                                    TbImage *image);
+                                    const char *name, TbImage *image);
 
-void tb_rnd_upload_buffers(RenderSystem *self, BufferUpload *uploads,
+void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count);
+void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
+                                   uint32_t upload_count);
