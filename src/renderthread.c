@@ -1114,7 +1114,7 @@ void destroy_render_thread(RenderThread *thread) {
   destroy_frame_states(thread->device, thread->vma_alloc, vk_alloc,
                        thread->frame_states);
 
-  vmaDestroyAllocator(thread->vma_alloc);
+    vmaDestroyAllocator(thread->vma_alloc);
 
   vkDestroyDevice(thread->device, vk_alloc);
 

@@ -9,6 +9,10 @@
 typedef struct RenderSystem RenderSystem;
 
 typedef struct VkRenderPass_T *VkRenderPass;
+typedef struct VkSampler_T *VkSampler;
+typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+typedef struct VkPipelineLayout_T *VkPipelineLayout;
+typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkFramebuffer_T *VkFramebuffer;
 
 typedef struct ImGuiSystemDescriptor {
@@ -20,6 +24,12 @@ typedef struct ImGuiSystem {
   Allocator tmp_alloc;
 
   VkRenderPass pass;
+
+  VkSampler sampler;
+  VkDescriptorSetLayout set_layout;
+  VkPipelineLayout pipe_layout;
+  VkPipeline pipeline;
+
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 } ImGuiSystem;
 

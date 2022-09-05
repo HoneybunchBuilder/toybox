@@ -216,6 +216,9 @@ if(WIN32)
     target_compile_options(toybox PRIVATE -Wno-documentation)
   endif()
 
+  # Folding VLAs to constant arrays is desired
+  target_compile_options(toybox PRIVATE -Wno-gnu-folding-constant)
+
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
