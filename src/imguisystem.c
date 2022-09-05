@@ -1,13 +1,235 @@
 #include "imguisystem.h"
 
+// Ignore some warnings for the generated headers
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+#include "imgui_frag.h"
+#include "imgui_vert.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 #include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "profiling.h"
 #include "rendersystem.h"
+#include "shadercommon.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
 #include "tbvma.h"
 #include "vkdbg.h"
+
+VkResult create_imgui_pipeline2(VkDevice device,
+                                const VkAllocationCallbacks *vk_alloc,
+                                VkPipelineCache cache, VkRenderPass pass,
+                                VkSampler *sampler,
+                                VkPipelineLayout *pipe_layout,
+                                VkDescriptorSetLayout *set_layout,
+                                VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  // Create Immutable Sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    err = vkCreateSampler(device, &create_info, vk_alloc, sampler);
+    TB_VK_CHECK_RET(err, "Failed to create imgui samplers", err);
+    SET_VK_NAME(device, *sampler, VK_OBJECT_TYPE_SAMPLER, "ImGui Sampler");
+  }
+
+  // Create Descriptor Set
+  {
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = bindings,
+    };
+    err =
+        vkCreateDescriptorSetLayout(device, &create_info, vk_alloc, set_layout);
+    TB_VK_CHECK_RET(err, "Failed to create imgui descriptor set layout", err);
+    SET_VK_NAME(device, *set_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+                "ImGui DS Layout");
+  }
+
+  // Create Pipeline Layout
+  {
+
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                VK_SHADER_STAGE_ALL_GRAPHICS,
+                0,
+                sizeof(ImGuiPushConstants),
+            },
+    };
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc, pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create imgui pipeline layout", err);
+    SET_VK_NAME(device, *pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                "ImGui Pipeline Layout");
+  }
+
+  // Create ImGui Pipeline
+  {
+    // Load Shaders
+    VkShaderModule vert_mod = VK_NULL_HANDLE;
+    VkShaderModule frag_mod = VK_NULL_HANDLE;
+    {
+      VkShaderModuleCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      };
+
+      create_info.codeSize = sizeof(imgui_vert);
+      create_info.pCode = (const uint32_t *)imgui_vert;
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
+      TB_VK_CHECK_RET(err, "Failed to load imgui vert shader module", err);
+
+      create_info.codeSize = sizeof(imgui_frag);
+      create_info.pCode = (const uint32_t *)imgui_frag;
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
+      TB_VK_CHECK_RET(err, "Failed to load imgui frag shader module", err);
+    }
+
+    const uint32_t stage_count = 2;
+    VkPipelineShaderStageCreateInfo stages[stage_count] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = vert_mod,
+            .pName = "vert",
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = frag_mod,
+            .pName = "frag",
+        },
+    };
+
+    VkVertexInputBindingDescription vert_bindings[1] = {
+        {0, sizeof(float2) + sizeof(float2) + sizeof(uint32_t),
+         VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    VkVertexInputAttributeDescription vert_attrs[3] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float2)},
+        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, sizeof(float2) * 2},
+    };
+    VkPipelineVertexInputStateCreateInfo vert_input_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = vert_bindings,
+        .vertexAttributeDescriptionCount = 3,
+        .pVertexAttributeDescriptions = vert_attrs,
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+
+    VkViewport viewport = {0, 600.0f, 800.0f, -600.0f, 0, 1};
+    VkRect2D scissor = {{0, 0}, {800, 600}};
+    VkPipelineViewportStateCreateInfo viewport_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor,
+    };
+
+    VkPipelineRasterizationStateCreateInfo raster_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_NONE,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .lineWidth = 1.0f,
+    };
+
+    VkPipelineMultisampleStateCreateInfo multisample_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+
+    VkPipelineColorBlendAttachmentState attachment_state = {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    };
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &attachment_state,
+    };
+
+    VkPipelineDepthStencilStateCreateInfo depth_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+
+    VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
+                                   VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dyn_states,
+    };
+
+    VkGraphicsPipelineCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = stage_count,
+        .pStages = stages,
+        .pVertexInputState = &vert_input_state,
+        .pInputAssemblyState = &input_assembly_state,
+        .pViewportState = &viewport_state,
+        .pRasterizationState = &raster_state,
+        .pMultisampleState = &multisample_state,
+        .pColorBlendState = &color_blend_state,
+        .pDepthStencilState = &depth_state,
+        .pDynamicState = &dynamic_state,
+        .layout = *pipe_layout,
+        .renderPass = pass,
+    };
+    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
+                                    pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
+    SET_VK_NAME(device, *pipeline, VK_OBJECT_TYPE_PIPELINE, "ImGui Pipeline");
+
+    // Can safely dispose of shader module objects
+    vkDestroyShaderModule(device, vert_mod, vk_alloc);
+    vkDestroyShaderModule(device, frag_mod, vk_alloc);
+  }
+
+  return err;
+}
 
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
@@ -28,13 +250,15 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which imgui depends on", false);
 
-  VkResult err = VK_SUCCESS;
+  *self = (ImGuiSystem){
+      .render_system = render_system,
+      .tmp_alloc = desc->tmp_alloc,
+  };
 
-  // Load imgui pipeline
+  VkResult err = VK_SUCCESS;
 
   // Create imgui render pass
   // Will render directly to the swapchain
-  VkRenderPass imgui_pass = VK_NULL_HANDLE;
   {
     VkAttachmentDescription color_attachment = {
         .format = render_system->render_thread->swapchain.format,
@@ -77,20 +301,29 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
         .pDependencies = &subpass_dep,
     };
     err = tb_rnd_create_render_pass(render_system, &create_info, "ImGui Pass",
-                                    &imgui_pass);
+                                    &self->pass);
     TB_VK_CHECK_RET(err, "Failed to create imgui render pass", false);
   }
 
-  *self = (ImGuiSystem){
-      .render_system = render_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .pass = imgui_pass,
-  };
+  // Create imgui pipeline
+  err = create_imgui_pipeline2(
+      render_system->render_thread->device, &render_system->vk_host_alloc_cb,
+      render_system->pipeline_cache, self->pass, &self->sampler,
+      &self->pipe_layout, &self->set_layout, &self->pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", false);
+
   return true;
 }
 
 void destroy_imgui_system(ImGuiSystem *self) {
-  tb_rnd_destroy_render_pass(self->render_system, self->pass);
+  RenderSystem *render_system = self->render_system;
+
+  tb_rnd_destroy_render_pass(render_system, self->pass);
+
+  tb_rnd_destroy_sampler(render_system, self->sampler);
+  tb_rnd_destroy_set_layout(render_system, self->set_layout);
+  tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
+  tb_rnd_destroy_pipeline(render_system, self->pipeline);
 
   *self = (ImGuiSystem){0};
 }

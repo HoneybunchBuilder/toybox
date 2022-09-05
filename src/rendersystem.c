@@ -19,6 +19,7 @@ bool create_render_system(RenderSystem *self,
   TB_CHECK_RETURN(thread, "Invalid RenderThread", false);
   *self = (RenderSystem){
       .std_alloc = desc->std_alloc,
+      .tmp_alloc = desc->tmp_alloc,
       .render_thread = thread,
   };
 
@@ -151,6 +152,34 @@ bool create_render_system(RenderSystem *self,
         TB_VK_CHECK_RET(err, "Failed to create vma host image pool", false);
       }
     }
+
+    // Load the pipeline cache
+    {
+      size_t data_size = 0;
+      void *data = NULL;
+
+      // If an existing pipeline cache exists, load it
+      SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "rb");
+      if (cache_file != NULL) {
+        data_size = (size_t)SDL_RWsize(cache_file);
+
+        data = tb_alloc(self->tmp_alloc, data_size);
+
+        SDL_RWread(cache_file, data, data_size, 1);
+        SDL_RWclose(cache_file);
+      }
+      VkPipelineCacheCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+          .initialDataSize = data_size,
+          .pInitialData = data,
+      };
+      err =
+          vkCreatePipelineCache(thread->device, &create_info,
+                                &self->vk_host_alloc_cb, &self->pipeline_cache);
+      TB_VK_CHECK_RET(err, "Failed to create pipeline cache", false);
+      SET_VK_NAME(thread->device, self->pipeline_cache,
+                  VK_OBJECT_TYPE_PIPELINE_CACHE, "Toybox Pipeline Cache");
+    }
   }
   return true;
 }
@@ -163,7 +192,32 @@ void destroy_render_system(RenderSystem *self) {
   for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     tb_wait_render(self->render_thread, state_idx);
   }
-  vkDeviceWaitIdle(self->render_thread->device);
+  VkDevice device = self->render_thread->device;
+  vkDeviceWaitIdle(device);
+
+  // Write out pipeline cache
+  {
+    VkResult err = VK_SUCCESS;
+
+    size_t cache_size = 0;
+    err =
+        vkGetPipelineCacheData(device, self->pipeline_cache, &cache_size, NULL);
+    if (err == VK_SUCCESS) {
+      void *cache = tb_alloc(self->tmp_alloc, cache_size);
+      err = vkGetPipelineCacheData(device, self->pipeline_cache, &cache_size,
+                                   cache);
+      if (err == VK_SUCCESS) {
+        SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb");
+        if (cache_file != NULL) {
+          SDL_RWwrite(cache_file, cache, cache_size, 1);
+          SDL_RWclose(cache_file);
+        }
+      }
+    }
+
+    vkDestroyPipelineCache(device, self->pipeline_cache,
+                           &self->vk_host_alloc_cb);
+  }
 
   for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     RenderSystemFrameState *state = &self->frame_states[state_idx];
@@ -391,4 +445,24 @@ void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
 void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass) {
   vkDestroyRenderPass(self->render_thread->device, pass,
                       &self->vk_host_alloc_cb);
+}
+
+void tb_rnd_destroy_sampler(RenderSystem *self, VkSampler sampler) {
+  vkDestroySampler(self->render_thread->device, sampler,
+                   &self->vk_host_alloc_cb);
+}
+void tb_rnd_destroy_set_layout(RenderSystem *self,
+                               VkDescriptorSetLayout set_layout) {
+  vkDestroyDescriptorSetLayout(self->render_thread->device, set_layout,
+                               &self->vk_host_alloc_cb);
+}
+void tb_rnd_destroy_pipe_layout(RenderSystem *self,
+                                VkPipelineLayout pipe_layout) {
+  vkDestroyPipelineLayout(self->render_thread->device, pipe_layout,
+                          &self->vk_host_alloc_cb);
+}
+
+void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline) {
+  vkDestroyPipeline(self->render_thread->device, pipeline,
+                    &self->vk_host_alloc_cb);
 }

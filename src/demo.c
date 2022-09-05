@@ -1505,7 +1505,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
     err =
         vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
     TB_VK_CHECK(err, "Failed to create pipeline cache");
-
     SET_VK_NAME(device, pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
                 "pipeline cache");
 

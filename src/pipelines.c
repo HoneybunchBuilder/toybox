@@ -23,8 +23,6 @@
 #include "gltf_P3N3_frag.h"
 #include "gltf_P3N3_vert.h"
 #include "gpuresources.h"
-#include "imgui_frag.h"
-#include "imgui_vert.h"
 #include "shadercommon.h"
 #include "sky_cube_frag.h"
 #include "sky_cube_vert.h"
@@ -599,6 +597,9 @@ uint32_t create_imgui_pipeline(VkDevice device,
   // Create ImGui Pipeline
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
+    extern const char *imgui_vert;
+    extern const char *imgui_frag;
+
     // Load Shaders
     VkShaderModule vert_mod = VK_NULL_HANDLE;
     VkShaderModule frag_mod = VK_NULL_HANDLE;

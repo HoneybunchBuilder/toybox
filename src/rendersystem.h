@@ -13,6 +13,7 @@ typedef struct SystemDescriptor SystemDescriptor;
 
 typedef struct RenderSystemDescriptor {
   Allocator std_alloc;
+  Allocator tmp_alloc;
   RenderThread *render_thread;
 } RenderSystemDescriptor;
 
@@ -31,11 +32,13 @@ typedef struct RenderSystemFrameState {
 
 typedef struct RenderSystem {
   Allocator std_alloc;
+  Allocator tmp_alloc;
   RenderThread *render_thread;
 
   VkAllocationCallbacks vk_host_alloc_cb;
-
   VmaAllocator vma_alloc;
+
+  VkPipelineCache pipeline_cache;
 
   uint32_t frame_idx;
   RenderSystemFrameState frame_states[3];
@@ -76,3 +79,9 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image);
 
 void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass);
+void tb_rnd_destroy_sampler(RenderSystem *self, VkSampler sampler);
+void tb_rnd_destroy_set_layout(RenderSystem *self,
+                               VkDescriptorSetLayout set_layout);
+void tb_rnd_destroy_pipe_layout(RenderSystem *self,
+                                VkPipelineLayout pipe_layout);
+void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
