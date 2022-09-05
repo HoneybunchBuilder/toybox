@@ -3,7 +3,6 @@
 #include "allocator.h"
 
 #include "tbrendercommon.h"
-#include "tbvk.h"
 
 #if !defined(FINAL) && !defined(__ANDROID__)
 #define VALIDATION
@@ -25,30 +24,6 @@ typedef struct RenderThreadDescriptor {
 } RenderThreadDescriptor;
 
 #define TB_VMA_TMP_GPU_MB 256
-
-typedef struct BufferCopy {
-  VkBuffer src;
-  VkBuffer dst;
-  VkBufferCopy region;
-} BufferCopy;
-
-typedef struct BufferImageCopy {
-  VkBuffer src;
-  VkImage dst;
-  VkBufferImageCopy region;
-} BufferImageCopy;
-
-typedef struct BufferCopyQueue {
-  uint32_t req_count;
-  BufferCopy *reqs;
-  uint32_t req_max;
-} BufferCopyQueue;
-
-typedef struct BufferImageCopyQueue {
-  uint32_t req_count;
-  BufferImageCopy *reqs;
-  uint32_t req_max;
-} BufferImageCopyQueue;
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
@@ -143,11 +118,6 @@ typedef struct RenderThread {
   uint32_t stop_signal;
 } RenderThread;
 
-typedef struct DrawInstruction {
-  VkBuffer buffer;
-
-} DrawInstruction;
-
 bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx);
@@ -157,5 +127,3 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx);
 void tb_wait_thread_initialized(RenderThread *thread);
 
 void tb_stop_render_thread(RenderThread *thread);
-
-void tb_rnd_draw(RenderThread *thread, const DrawInstruction *draw);

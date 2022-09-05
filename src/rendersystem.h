@@ -30,6 +30,11 @@ typedef struct RenderSystemFrameState {
   BufferImageCopyQueue buf_img_copy_queue;
 } RenderSystemFrameState;
 
+typedef struct PassRecordPair {
+  VkRenderPass pass;
+  tb_pass_record *record_cb;
+} PassRecordPair;
+
 typedef struct RenderSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -42,20 +47,11 @@ typedef struct RenderSystem {
 
   uint32_t frame_idx;
   RenderSystemFrameState frame_states[3];
+
+  uint32_t pass_record_count;
+  PassRecordPair *pass_record_cbs;
+  uint32_t pass_record_max;
 } RenderSystem;
-
-typedef struct TbBuffer {
-  VkBuffer buffer;
-  uint64_t offset;
-  void *ptr;
-} TbBuffer;
-
-typedef struct TbImage {
-  VkImage image;
-  VmaAllocation alloc;
-  VmaAllocationInfo info;
-  void *ptr;
-} TbImage;
 
 void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc);
@@ -66,6 +62,10 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image);
+
+void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
+                          tb_pass_record *record_cb);
+void tb_rnd_issue_draw();
 
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
                                    const VkRenderPassCreateInfo *create_info,
