@@ -21,6 +21,25 @@
 #include "tbvma.h"
 #include "vkdbg.h"
 
+typedef struct ImGuiDraw {
+  VkBuffer geom_buffer;
+  uint64_t index_offset;
+  uint64_t vertex_offset;
+  uint32_t index_count;
+} ImGuiDraw;
+
+typedef struct ImGuiDrawBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+
+  VkPushConstantRange const_range;
+  ImGuiPushConstants consts;
+  VkDescriptorSet atlas_set;
+
+  uint32_t draw_count;
+  ImGuiDraw *draws;
+} ImGuiDrawBatch;
+
 VkResult create_imgui_pipeline2(VkDevice device,
                                 const VkAllocationCallbacks *vk_alloc,
                                 VkPipelineCache cache, VkRenderPass pass,
@@ -231,6 +250,32 @@ VkResult create_imgui_pipeline2(VkDevice device,
   return err;
 }
 
+void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
+                       const void *batches) {
+  const ImGuiDrawBatch *imgui_batches = (ImGuiDrawBatch *)batches;
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const ImGuiDrawBatch *batch = &imgui_batches[batch_idx];
+
+    VkPushConstantRange range = batch->const_range;
+    const ImGuiPushConstants *consts = &batch->consts;
+    vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
+                       range.size, consts);
+
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            batch->layout, 0, 1, &batch->atlas_set, 0, NULL);
+
+    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+      const ImGuiDraw *draw = &batch->draws[draw_idx];
+      vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
+                           VK_INDEX_TYPE_UINT16);
+      vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
+                             &draw->vertex_offset);
+      vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
+    }
+  }
+}
+
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
@@ -311,6 +356,9 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
       render_system->pipeline_cache, self->pass, &self->sampler,
       &self->pipe_layout, &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", false);
+
+  // Register a pass with the render system
+  tb_rnd_register_pass(render_system, self->pass, imgui_pass_record);
 
   return true;
 }

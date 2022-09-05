@@ -4,8 +4,6 @@
 #include "profiling.h"
 #include "renderthread.h"
 #include "tbcommon.h"
-#include "tbvma.h"
-#include "vkdbg.h"
 #include "world.h"
 
 bool create_render_system(RenderSystem *self,
@@ -369,6 +367,23 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
               name);
 
   return VK_SUCCESS;
+}
+
+void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
+                          tb_pass_record *record_cb) {
+  const uint32_t new_count = self->pass_record_count + 1;
+  if (new_count > self->pass_record_max) {
+    const uint32_t new_max = new_count * 2;
+    self->pass_record_cbs = tb_realloc_nm_tp(
+        self->std_alloc, self->pass_record_cbs, new_max, PassRecordPair);
+    self->pass_record_max = new_max;
+  }
+
+  self->pass_record_cbs[self->pass_record_count] = (PassRecordPair){
+      .pass = pass,
+      .record_cb = record_cb,
+  };
+  self->pass_record_count = new_count;
 }
 
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
