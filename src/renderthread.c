@@ -409,7 +409,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
           .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       };
       VmaAllocationCreateInfo alloc_create_info = {
           .pool = state->tmp_gpu_pool,
@@ -769,9 +769,16 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .pNext = &rt_pipe_feature,
   };
 
+  VkPhysicalDeviceVulkan12Features vk_12_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+      .descriptorIndexing = VK_TRUE,
+      .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+      .pNext = &vk_11_features,
+  };
+
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_info.pNext = (const void *)&vk_11_features;
+  create_info.pNext = (const void *)&vk_12_features;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = queues;
   create_info.enabledExtensionCount = device_ext_count;
@@ -1114,7 +1121,7 @@ void destroy_render_thread(RenderThread *thread) {
   destroy_frame_states(thread->device, thread->vma_alloc, vk_alloc,
                        thread->frame_states);
 
-    vmaDestroyAllocator(thread->vma_alloc);
+  vmaDestroyAllocator(thread->vma_alloc);
 
   vkDestroyDevice(thread->device, vk_alloc);
 
@@ -1321,6 +1328,38 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
         TracyCZoneEnd(swap_trans_e);
+      }
+
+      // Draw user registered passes
+      for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
+        PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
+
+        // TODO: Fix assumption that we want the pass to target the swapchain
+        VkRenderPassBeginInfo begin_info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .renderPass = ctx->pass,
+            .framebuffer = ctx->framebuffer,
+            .renderArea =
+                {
+                    .extent =
+                        {
+                            .width = ctx->width,
+                            .height = ctx->height,
+                        },
+                },
+            .clearValueCount = 1,
+            .pClearValues =
+                &(VkClearValue){
+                    .color.float32 = {0},
+                },
+        };
+
+        vkCmdBeginRenderPass(command_buffer, &begin_info,
+                             VK_SUBPASS_CONTENTS_INLINE);
+
+        ctx->record_cb(command_buffer, ctx->batch_count, ctx->batches);
+
+        vkCmdEndRenderPass(command_buffer);
       }
 
       // Transition swapchain image back to presentable

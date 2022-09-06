@@ -63,9 +63,14 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image);
 
+VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self);
+
 void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
+                          VkFramebuffer *framebuffers,
                           tb_pass_record *record_cb);
-void tb_rnd_issue_draw();
+void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
+                             uint32_t batch_count, uint64_t batch_size,
+                             const void *batches);
 
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
                                    const VkRenderPassCreateInfo *create_info,

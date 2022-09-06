@@ -25,6 +25,17 @@ typedef struct RenderThreadDescriptor {
 
 #define TB_VMA_TMP_GPU_MB 256
 
+typedef struct PassDrawCtx {
+  VkRenderPass pass;
+  VkFramebuffer framebuffer;
+  uint32_t width;
+  uint32_t height;
+  tb_pass_record *record_cb;
+  uint32_t batch_count;
+  uint32_t batch_size;
+  const void *batches;
+} PassDrawCtx;
+
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
   SDL_semaphore *signal_sem;
@@ -51,6 +62,10 @@ typedef struct FrameState {
   // The main thread will write to this and the render thread will read it
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
+
+  uint32_t pass_count;
+  PassDrawCtx *pass_draw_contexts;
+  uint32_t pass_max;
 
 } FrameState;
 

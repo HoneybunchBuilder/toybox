@@ -103,6 +103,35 @@ bool create_imgui_component(ImGuiComponent *self,
     tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
   }
 
+  // Create Image View for atlas
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = self->atlas.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .components =
+            {
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            {
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                1,
+                0,
+                1,
+            },
+    };
+    err =
+        vkCreateImageView(render_system->render_thread->device, &create_info,
+                          &render_system->vk_host_alloc_cb, &self->atlas_view);
+    TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", false);
+  }
+
   // Setup basic display size
   io->DisplaySize = (ImVec2){800.0f, 600.0f};
   io->DeltaTime = 0.1666667f;

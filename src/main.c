@@ -124,6 +124,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   ImGuiSystemDescriptor imgui_system_desc = {
+      .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 

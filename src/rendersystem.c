@@ -295,6 +295,7 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
       thread_state->buf_copy_queue = state->buf_copy_queue;
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
       state->buf_copy_queue.req_count = 0;
+      state->buf_img_copy_queue.req_count = 0;
     }
 
     TracyCZoneEnd(ctx);
@@ -369,21 +370,59 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   return VK_SUCCESS;
 }
 
-void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
-                          tb_pass_record *record_cb) {
-  const uint32_t new_count = self->pass_record_count + 1;
-  if (new_count > self->pass_record_max) {
-    const uint32_t new_max = new_count * 2;
-    self->pass_record_cbs = tb_realloc_nm_tp(
-        self->std_alloc, self->pass_record_cbs, new_max, PassRecordPair);
-    self->pass_record_max = new_max;
-  }
+VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self) {
+  return self->render_thread->frame_states[self->frame_idx].tmp_gpu_buffer;
+}
 
-  self->pass_record_cbs[self->pass_record_count] = (PassRecordPair){
-      .pass = pass,
-      .record_cb = record_cb,
-  };
-  self->pass_record_count = new_count;
+void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
+                          VkFramebuffer *framebuffers,
+                          tb_pass_record *record_cb) {
+  Allocator std_alloc = self->std_alloc;
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state = &self->render_thread->frame_states[frame_idx];
+
+    const uint32_t new_count = state->pass_count + 1;
+    if (new_count > state->pass_max) {
+      const uint32_t new_max = new_count * 2;
+      state->pass_draw_contexts = tb_realloc_nm_tp(
+          std_alloc, state->pass_draw_contexts, new_max, PassDrawCtx);
+      state->pass_max = new_max;
+    }
+
+    state->pass_draw_contexts[state->pass_count] = (PassDrawCtx){
+        .pass = pass,
+        .framebuffer = framebuffers[frame_idx],
+        .record_cb = record_cb,
+    };
+    state->pass_count = new_count;
+  }
+}
+
+void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
+                             uint32_t batch_count, uint64_t batch_size,
+                             const void *batches) {
+  // TOOD: rethink this... the tmp allocator may not be sufficient here
+  Allocator tmp_alloc = self->tmp_alloc;
+
+  FrameState *state = &self->render_thread->frame_states[self->frame_idx];
+  for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
+    PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
+    if (ctx->pass == pass) {
+      // Allocate space in the render thread's temp allocator for the next frame
+      // for
+      // the draw batches
+      const uint64_t batch_bytes = batch_size * batch_count;
+      void *batch_dst = tb_alloc(tmp_alloc, batch_bytes);
+
+      // Copy draw batches
+      SDL_memcpy(batch_dst, batches, batch_bytes);
+
+      ctx->batch_count = batch_count;
+      ctx->batch_size = batch_size;
+      ctx->batches = batch_dst;
+      break;
+    }
+  }
 }
 
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
