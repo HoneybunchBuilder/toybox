@@ -18,6 +18,7 @@ typedef struct ImGuiComponent {
   ImGuiContext *context;
   RenderSystem *render_system;
   TbImage atlas;
+  VkImageView atlas_view;
 } ImGuiComponent;
 
 void tb_imgui_component_descriptor(ComponentDescriptor *desc);

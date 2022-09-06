@@ -32,6 +32,9 @@ typedef struct ImGuiDrawBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
 
+  VkViewport viewport;
+  VkRect2D scissor;
+
   VkPushConstantRange const_range;
   ImGuiPushConstants consts;
   VkDescriptorSet atlas_set;
@@ -78,10 +81,24 @@ VkResult create_imgui_pipeline2(VkDevice device,
          sampler},
     };
 
+    VkDescriptorBindingFlags binding_flags[] = {
+        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+        0,
+    };
+
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = 2,
+                .pBindingFlags = binding_flags,
+            },
         .bindingCount = 2,
         .pBindings = bindings,
+
     };
     err =
         vkCreateDescriptorSetLayout(device, &create_info, vk_alloc, set_layout);
@@ -92,7 +109,6 @@ VkResult create_imgui_pipeline2(VkDevice device,
 
   // Create Pipeline Layout
   {
-
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
@@ -100,7 +116,7 @@ VkResult create_imgui_pipeline2(VkDevice device,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =
             &(VkPushConstantRange){
-                VK_SHADER_STAGE_ALL_GRAPHICS,
+                VK_SHADER_STAGE_VERTEX_BIT,
                 0,
                 sizeof(ImGuiPushConstants),
             },
@@ -257,6 +273,11 @@ void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const ImGuiDrawBatch *batch = &imgui_batches[batch_idx];
 
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
     VkPushConstantRange range = batch->const_range;
     const ImGuiPushConstants *consts = &batch->consts;
     vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
@@ -298,6 +319,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   *self = (ImGuiSystem){
       .render_system = render_system,
       .tmp_alloc = desc->tmp_alloc,
+      .std_alloc = desc->std_alloc,
   };
 
   VkResult err = VK_SUCCESS;
@@ -357,14 +379,39 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
       &self->pipe_layout, &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", false);
 
+  // Create framebuffers that associate imgui pass with swapchain target
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    VkFramebufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = self->pass,
+        .attachmentCount = 1,
+        .pAttachments =
+            &render_system->render_thread->frame_states[i].swapchain_image_view,
+        .width = render_system->render_thread->swapchain.width,
+        .height = render_system->render_thread->swapchain.height,
+        .layers = 1,
+    };
+    err = vkCreateFramebuffer(render_system->render_thread->device,
+                              &create_info, &render_system->vk_host_alloc_cb,
+                              &self->framebuffers[i]);
+    TB_VK_CHECK_RET(err, "Failed to create imgui framebuffer", false);
+  }
+
   // Register a pass with the render system
-  tb_rnd_register_pass(render_system, self->pass, imgui_pass_record);
+  tb_rnd_register_pass(render_system, self->pass, self->framebuffers,
+                       imgui_pass_record);
 
   return true;
 }
 
 void destroy_imgui_system(ImGuiSystem *self) {
   RenderSystem *render_system = self->render_system;
+
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    vkDestroyFramebuffer(render_system->render_thread->device,
+                         self->framebuffers[i],
+                         &render_system->vk_host_alloc_cb);
+  }
 
   tb_rnd_destroy_render_pass(render_system, self->pass);
 
@@ -378,10 +425,11 @@ void destroy_imgui_system(ImGuiSystem *self) {
 
 void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
-  (void)self;
   (void)output; // No output for this system
   TracyCZoneN(ctx, "ImGui System", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
+
+  VkResult err = VK_SUCCESS;
 
   // Find expected components
   uint32_t imgui_entity_count = 0;
@@ -412,6 +460,63 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
   if (imgui_entity_count > 0) {
     TB_CHECK(imgui_entities, "Invalid input entities");
     TB_CHECK(imgui_comp_store, "Failed to find imgui component store");
+
+    // Allocate a max draw batch per entity
+    uint32_t batch_count = 0;
+    ImGuiDrawBatch *batches =
+        tb_alloc_nm_tp(self->tmp_alloc, imgui_entity_count, ImGuiDrawBatch);
+
+    // Resize atlas descriptor pool if necessary
+    {
+      const uint32_t new_count = imgui_entity_count;
+      if (new_count > self->atlas_set_max) {
+        if (self->atlas_pool) {
+          vkDestroyDescriptorPool(self->render_system->render_thread->device,
+                                  self->atlas_pool,
+                                  &self->render_system->vk_host_alloc_cb);
+        }
+
+        self->atlas_set_max = new_count * 2;
+
+        VkDescriptorPoolCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = self->atlas_set_max,
+            .poolSizeCount = 1,
+            .pPoolSizes =
+                &(VkDescriptorPoolSize){
+                    .descriptorCount = self->atlas_set_max,
+                    .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                },
+            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        };
+        err = vkCreateDescriptorPool(
+            self->render_system->render_thread->device, &create_info,
+            &self->render_system->vk_host_alloc_cb, &self->atlas_pool);
+        TB_VK_CHECK(err, "Failed to create imgui atlas descriptor pool");
+
+        // Re-allocate descriptors
+        self->atlas_sets =
+            tb_realloc_nm_tp(self->std_alloc, self->atlas_sets,
+                             self->atlas_set_max, VkDescriptorSet);
+
+        VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+            self->tmp_alloc, imgui_entity_count, VkDescriptorSetLayout);
+        for (uint32_t i = 0; i < imgui_entity_count; ++i) {
+          layouts[i] = self->set_layout;
+        }
+
+        VkDescriptorSetAllocateInfo alloc_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorSetCount = imgui_entity_count,
+            .descriptorPool = self->atlas_pool,
+            .pSetLayouts = layouts,
+        };
+        err =
+            vkAllocateDescriptorSets(self->render_system->render_thread->device,
+                                     &alloc_info, self->atlas_sets);
+        TB_VK_CHECK(err, "Failed to allocate imgui atlas descriptor sets");
+      }
+    }
 
     for (uint32_t entity_idx = 0; entity_idx < imgui_entity_count;
          ++entity_idx) {
@@ -474,6 +579,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             return;
           }
 
+          size_t vtx_offset = 0;
+
           // Copy imgui mesh to the gpu driver controlled host buffer
           {
             size_t idx_size =
@@ -484,11 +591,13 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             const size_t alignment = 8;
             size_t align_padding = idx_size % alignment;
 
+            vtx_offset = idx_size + align_padding;
+
             uint8_t *offset_ptr =
                 ((uint8_t *)tmp_host_buffer.ptr) + tmp_host_buffer.offset;
 
             uint8_t *idx_dst = offset_ptr;
-            uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
+            uint8_t *vtx_dst = idx_dst + vtx_offset;
 
             // Organize all mesh data into a single cpu-side buffer
             for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
@@ -507,9 +616,81 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             }
           }
 
-          // Send the render system a draw instruction
+          // Send the render system a batch to draw
+          {
+            // Write atlas to the descriptor set we're using for this draw
+            VkDescriptorSet atlas_set = self->atlas_sets[entity_idx];
+            {
+              VkWriteDescriptorSet write = {
+                  .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                  .dstSet = atlas_set,
+                  .dstBinding = 0,
+                  .dstArrayElement = 0,
+                  .descriptorCount = 1,
+                  .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                  .pImageInfo =
+                      &(VkDescriptorImageInfo){
+                          .imageLayout =
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          .imageView = imgui->atlas_view,
+                          // Sampler is immutable
+                      },
+              };
+              vkUpdateDescriptorSets(self->render_system->render_thread->device,
+                                     1, &write, 0, NULL);
+            }
+
+            VkBuffer gpu_tmp_buffer =
+                tb_rnd_get_gpu_tmp_buffer(self->render_system);
+
+            const float width = draw_data->DisplaySize.x;
+            const float height = draw_data->DisplaySize.y;
+
+            const float scale_x = 2.0f / width;
+            const float scale_y = 2.0f / height;
+
+            ImGuiDraw *draw = tb_alloc_tp(self->tmp_alloc, ImGuiDraw);
+            *draw = (ImGuiDraw){
+                .geom_buffer = gpu_tmp_buffer,
+                .index_count = draw_data->TotalIdxCount,
+                .index_offset = 0,
+                .vertex_offset = vtx_offset,
+            };
+
+            batches[batch_count++] = (ImGuiDrawBatch){
+                .layout = self->pipe_layout,
+                .pipeline = self->pipeline,
+                .viewport = {0, height, width, -height, 0, 1},
+                .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
+                .const_range =
+                    (VkPushConstantRange){
+                        .size = sizeof(ImGuiPushConstants),
+                        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    },
+                .consts =
+                    {
+                        .scale =
+                            {
+                                scale_x,
+                                scale_y,
+                            },
+                        .translation =
+                            {
+                                -1.0f - draw_data->DisplayPos.x * scale_x,
+                                -1.0f - draw_data->DisplayPos.y * scale_y,
+                            },
+                    },
+                .draw_count = 1,
+                .draws = draw,
+                .atlas_set = atlas_set,
+            };
+          }
         }
       }
+
+      // Issue draw batches
+      tb_rnd_issue_draw_batch(self->render_system, self->pass, batch_count,
+                              sizeof(ImGuiDrawBatch), batches);
 
       igNewFrame();
     }
