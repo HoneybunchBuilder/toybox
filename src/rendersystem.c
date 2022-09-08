@@ -183,15 +183,10 @@ bool create_render_system(RenderSystem *self,
 }
 
 void destroy_render_system(RenderSystem *self) {
+  // Assume we have already stopped the render thread at this point
   VmaAllocator vma_alloc = self->vma_alloc;
 
-  // Wait for all frame states to finish so that the queue and device are not in
-  // use
-  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
-    tb_wait_render(self->render_thread, state_idx);
-  }
   VkDevice device = self->render_thread->device;
-  vkDeviceWaitIdle(device);
 
   // Write out pipeline cache
   {
@@ -491,12 +486,7 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 }
 
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
-  tb_wait_render(self->render_thread, self->frame_idx);
-  vkDeviceWaitIdle(self->render_thread->device);
-
   vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
-
-  tb_signal_render(self->render_thread, self->frame_idx);
 }
 
 void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass) {

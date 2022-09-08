@@ -142,3 +142,5 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx);
 void tb_wait_thread_initialized(RenderThread *thread);
 
 void tb_stop_render_thread(RenderThread *thread);
+
+void tb_destroy_render_thread(RenderThread *thread);
