@@ -130,6 +130,8 @@ bool create_imgui_component(ImGuiComponent *self,
         vkCreateImageView(render_system->render_thread->device, &create_info,
                           &render_system->vk_host_alloc_cb, &self->atlas_view);
     TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", false);
+    SET_VK_NAME(render_system->render_thread->device, self->atlas_view,
+                VK_OBJECT_TYPE_IMAGE_VIEW, "ImGui Atlas");
   }
 
   // Setup basic display size
@@ -144,8 +146,9 @@ bool create_imgui_component(ImGuiComponent *self,
 }
 
 void destroy_imgui_component(ImGuiComponent *self) {
-  // Wait for the current frame to complete
   tb_rnd_free_gpu_image(self->render_system, &self->atlas);
+  vkDestroyImageView(self->render_system->render_thread->device,
+                     self->atlas_view, &self->render_system->vk_host_alloc_cb);
 
   igDestroyContext(self->context);
   *self = (ImGuiComponent){0};

@@ -55,6 +55,36 @@ void tb_stop_render_thread(RenderThread *thread) {
   int32_t thread_code = 0;
   SDL_WaitThread(thread->thread, &thread_code);
 
+  // Wait for the GPU to be done too
+  vkQueueWaitIdle(thread->graphics_queue);
+  if (thread->graphics_queue_family_index !=
+      thread->present_queue_family_index) {
+    vkQueueWaitIdle(thread->present_queue);
+  }
+}
+
+void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
+                          const VkAllocationCallbacks *vk_alloc,
+                          FrameState *states);
+
+void tb_destroy_render_thread(RenderThread *thread) {
+  TB_CHECK(thread, "Invalid thread");
+
+  const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
+  Allocator std_alloc = thread->std_alloc.alloc;
+
+  vmaDestroyAllocator(thread->vma_alloc);
+
+  vkDestroyDevice(thread->device, vk_alloc);
+
+  tb_free(std_alloc, thread->queue_props);
+
+  // Destroy debug messenger
+#ifdef VALIDATION
+  vkDestroyDebugUtilsMessengerEXT(thread->instance,
+                                  thread->debug_utils_messenger, vk_alloc);
+#endif
+
   SDL_DestroySemaphore(thread->initialized);
 
   // Clean up the last of the thread
@@ -433,6 +463,8 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
                           FrameState *states) {
   TB_CHECK(states, "Invalid states");
 
+  vkDeviceWaitIdle(device);
+
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
@@ -540,10 +572,6 @@ bool init_gpu(VkInstance instance, Allocator std_alloc, Allocator tmp_alloc,
   vkGetPhysicalDeviceMemoryProperties(*gpu, gpu_mem_props);
 
   return true;
-}
-
-void destroy_gpu(Allocator std_alloc, VkQueueFamilyProperties *queue_props) {
-  tb_free(std_alloc, queue_props);
 }
 
 bool init_surface(VkInstance instance, SDL_Window *window,
@@ -1105,35 +1133,6 @@ bool init_render_thread(RenderThread *thread) {
   return true;
 }
 
-void destroy_render_thread(RenderThread *thread) {
-  TB_CHECK(thread, "Invalid thread");
-
-  const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
-  Allocator std_alloc = thread->std_alloc.alloc;
-
-  // Wait for the GPU to be done before we start deleting things
-  vkQueueWaitIdle(thread->graphics_queue);
-  if (thread->graphics_queue_family_index !=
-      thread->present_queue_family_index) {
-    vkQueueWaitIdle(thread->present_queue);
-  }
-
-  destroy_frame_states(thread->device, thread->vma_alloc, vk_alloc,
-                       thread->frame_states);
-
-  vmaDestroyAllocator(thread->vma_alloc);
-
-  vkDestroyDevice(thread->device, vk_alloc);
-
-  destroy_gpu(std_alloc, thread->queue_props);
-
-  // Destroy debug messenger
-#ifdef VALIDATION
-  vkDestroyDebugUtilsMessengerEXT(thread->instance,
-                                  thread->debug_utils_messenger, vk_alloc);
-#endif
-}
-
 void resize_swapchain(void) {
   // TODO
 }
@@ -1529,8 +1528,9 @@ int32_t render_thread(void *data) {
     TracyCZoneEnd(ctx);
   }
 
-  // Shutdown
-  destroy_render_thread(thread);
+  // Frame states must be destroyed on this thread
+  destroy_frame_states(thread->device, thread->vma_alloc, &thread->vk_alloc,
+                       thread->frame_states);
 
   return 0;
 }

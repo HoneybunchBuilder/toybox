@@ -416,6 +416,9 @@ void destroy_imgui_system(ImGuiSystem *self) {
 
   tb_rnd_destroy_render_pass(render_system, self->pass);
 
+  vkDestroyDescriptorPool(render_system->render_thread->device,
+                          self->atlas_pool, &render_system->vk_host_alloc_cb);
+
   tb_rnd_destroy_sampler(render_system, self->sampler);
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
@@ -494,6 +497,9 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             self->render_system->render_thread->device, &create_info,
             &self->render_system->vk_host_alloc_cb, &self->atlas_pool);
         TB_VK_CHECK(err, "Failed to create imgui atlas descriptor pool");
+        SET_VK_NAME(self->render_system->render_thread->device,
+                    self->atlas_pool, VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+                    "ImGui Atlas Set Pool");
 
         // Re-allocate descriptors
         self->atlas_sets =
@@ -658,7 +664,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             batches[batch_count++] = (ImGuiDrawBatch){
                 .layout = self->pipe_layout,
                 .pipeline = self->pipeline,
-                .viewport = {0, height, width, -height, 0, 1},
+                .viewport = {0, 0, width, height, 0, 1},
                 .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
                 .const_range =
                     (VkPushConstantRange){
