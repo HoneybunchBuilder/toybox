@@ -269,6 +269,8 @@ VkResult create_imgui_pipeline2(VkDevice device,
 
 void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                        const void *batches) {
+  TracyCZoneN(ctx, "ImGui Record", true);
+  TracyCZoneColor(ctx, TracyCategoryColorRendering);
   const ImGuiDrawBatch *imgui_batches = (ImGuiDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -296,6 +298,7 @@ void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
       vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
     }
   }
+  TracyCZoneEnd(ctx);
 }
 
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
@@ -400,6 +403,8 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
 
   // Register a pass with the render system
   tb_rnd_register_pass(render_system, self->pass, self->framebuffers,
+                       render_system->render_thread->swapchain.width,
+                       render_system->render_thread->swapchain.height,
                        imgui_pass_record);
 
   return true;

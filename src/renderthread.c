@@ -1330,35 +1330,39 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       }
 
       // Draw user registered passes
-      for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
-        PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
+      {
+        TracyCZoneN(pass_ctx, "Record Passes", true);
+        for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
+          PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
 
-        // TODO: Fix assumption that we want the pass to target the swapchain
-        VkRenderPassBeginInfo begin_info = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .renderPass = ctx->pass,
-            .framebuffer = ctx->framebuffer,
-            .renderArea =
-                {
-                    .extent =
-                        {
-                            .width = ctx->width,
-                            .height = ctx->height,
-                        },
-                },
-            .clearValueCount = 1,
-            .pClearValues =
-                &(VkClearValue){
-                    .color.float32 = {0},
-                },
-        };
+          // TODO: Fix assumption that we want the pass to target the swapchain
+          VkRenderPassBeginInfo begin_info = {
+              .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+              .renderPass = ctx->pass,
+              .framebuffer = ctx->framebuffer,
+              .renderArea =
+                  {
+                      .extent =
+                          {
+                              .width = ctx->width,
+                              .height = ctx->height,
+                          },
+                  },
+              .clearValueCount = 1,
+              .pClearValues =
+                  &(VkClearValue){
+                      .color.float32 = {0},
+                  },
+          };
 
-        vkCmdBeginRenderPass(command_buffer, &begin_info,
-                             VK_SUBPASS_CONTENTS_INLINE);
+          vkCmdBeginRenderPass(command_buffer, &begin_info,
+                               VK_SUBPASS_CONTENTS_INLINE);
 
-        ctx->record_cb(command_buffer, ctx->batch_count, ctx->batches);
+          ctx->record_cb(command_buffer, ctx->batch_count, ctx->batches);
 
-        vkCmdEndRenderPass(command_buffer);
+          vkCmdEndRenderPass(command_buffer);
+        }
+        TracyCZoneEnd(pass_ctx);
       }
 
       // Transition swapchain image back to presentable

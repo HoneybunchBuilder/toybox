@@ -373,8 +373,8 @@ VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self) {
 }
 
 void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
-                          VkFramebuffer *framebuffers,
-                          tb_pass_record *record_cb) {
+                          VkFramebuffer *framebuffers, uint32_t width,
+                          uint32_t height, tb_pass_record *record_cb) {
   Allocator std_alloc = self->std_alloc;
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &self->render_thread->frame_states[frame_idx];
@@ -391,6 +391,8 @@ void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
         .pass = pass,
         .framebuffer = framebuffers[frame_idx],
         .record_cb = record_cb,
+        .width = width,
+        .height = height,
     };
     state->pass_count = new_count;
   }
