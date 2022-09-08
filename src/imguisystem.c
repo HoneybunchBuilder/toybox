@@ -228,7 +228,8 @@ VkResult create_imgui_pipeline2(VkDevice device,
     };
 
     VkPipelineDepthStencilStateCreateInfo depth_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+    };
 
     VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                    VK_DYNAMIC_STATE_SCISSOR};
@@ -593,10 +594,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
             vtx_offset = idx_size + align_padding;
 
-            uint8_t *offset_ptr =
-                ((uint8_t *)tmp_host_buffer.ptr) + tmp_host_buffer.offset;
-
-            uint8_t *idx_dst = offset_ptr;
+            uint8_t *idx_dst = ((uint8_t *)tmp_host_buffer.ptr);
             uint8_t *vtx_dst = idx_dst + vtx_offset;
 
             // Organize all mesh data into a single cpu-side buffer

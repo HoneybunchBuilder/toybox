@@ -22,7 +22,10 @@ static void *arena_alloc(void *user_data, size_t size) {
   void *ptr = &arena->data[cur_size];
 
   // Always 16 byte aligned
-  intptr_t padding = (16 - (intptr_t)ptr % 16);
+  intptr_t padding = 0;
+  if ((intptr_t)ptr % 16 != 0) {
+    padding = (16 - (intptr_t)ptr % 16);
+  }
   ptr = (void *)((intptr_t)ptr + padding);
 
   SDL_assert((intptr_t)ptr % 16 == 0);
