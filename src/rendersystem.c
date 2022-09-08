@@ -331,7 +331,10 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
   void *ptr = &state->tmp_host_mapped[state->tmp_host_size];
 
   // Always 16 byte aligned
-  intptr_t padding = (16 - (intptr_t)ptr % 16);
+  intptr_t padding = 0;
+  if ((intptr_t)ptr % 16 != 0) {
+    padding = (16 - (intptr_t)ptr % 16);
+  }
   ptr = (void *)((intptr_t)ptr + padding);
 
   TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation",

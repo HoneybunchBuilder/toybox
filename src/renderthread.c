@@ -1134,7 +1134,7 @@ void destroy_render_thread(RenderThread *thread) {
 #endif
 }
 
-void resize_swapchain() {
+void resize_swapchain(void) {
   // TODO
 }
 
