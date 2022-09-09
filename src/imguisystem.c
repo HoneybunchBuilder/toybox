@@ -275,27 +275,29 @@ void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const ImGuiDrawBatch *batch = &imgui_batches[batch_idx];
+    if (batch->draw_count > 0) {
+      vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        batch->pipeline);
 
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+      vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+      vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
-    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+      VkPushConstantRange range = batch->const_range;
+      const ImGuiPushConstants *consts = &batch->consts;
+      vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
+                         range.size, consts);
 
-    VkPushConstantRange range = batch->const_range;
-    const ImGuiPushConstants *consts = &batch->consts;
-    vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
-                       range.size, consts);
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              batch->layout, 0, 1, &batch->atlas_set, 0, NULL);
 
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            batch->layout, 0, 1, &batch->atlas_set, 0, NULL);
-
-    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const ImGuiDraw *draw = &batch->draws[draw_idx];
-      vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
-                           VK_INDEX_TYPE_UINT16);
-      vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
-                             &draw->vertex_offset);
-      vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
+      for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+        const ImGuiDraw *draw = &batch->draws[draw_idx];
+        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
+                             VK_INDEX_TYPE_UINT16);
+        vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
+                               &draw->vertex_offset);
+        vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
+      }
     }
   }
   TracyCZoneEnd(ctx);
@@ -334,7 +336,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
     VkAttachmentDescription color_attachment = {
         .format = render_system->render_thread->swapchain.format,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, // TODO: Want to load to blend
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -473,7 +475,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
     ImGuiDrawBatch *batches =
-        tb_alloc_nm_tp(self->tmp_alloc, imgui_entity_count, ImGuiDrawBatch);
+        tb_alloc_nm_tp(self->render_system->render_thread->render_arena.alloc,
+                       imgui_entity_count, ImGuiDrawBatch);
 
     // Resize atlas descriptor pool if necessary
     {
@@ -537,6 +540,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
       igSetCurrentContext(imgui->context);
 
+      ImGuiIO *io = igGetIO();
+
       // Apply this frame's input
       for (uint32_t input_idx = 0; input_idx < input_entity_count;
            ++input_idx) {
@@ -546,16 +551,31 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
              ++event_idx) {
           const SDL_Event *event = &input->events[event_idx];
 
-          // TODO: Feed event to imgui
-          (void)event;
+          // Feed event to imgui
+          if (event->type == SDL_MOUSEMOTION) {
+            io->MousePos = (ImVec2){
+                (float)event->motion.x,
+                (float)event->motion.y,
+            };
+          } else if (event->type == SDL_MOUSEBUTTONDOWN ||
+                     event->type == SDL_MOUSEBUTTONUP) {
+            if (event->button.button == SDL_BUTTON(SDL_BUTTON_LEFT)) {
+              io->MouseDown[0] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            } else if (event->button.button == SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+              io->MouseDown[1] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            } else if (event->button.button == SDL_BUTTON(SDL_BUTTON_MIDDLE)) {
+              io->MouseDown[2] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            }
+          }
         }
       }
 
       // Apply basic IO
-      ImGuiIO *io = igGetIO();
       io->DeltaTime = delta_seconds; // Note that ImGui expects seconds
-      // TODO: Fetch this from the renderer
-      io->DisplaySize = (ImVec2){1600.0f, 900.0f};
+      io->DisplaySize = (ImVec2){
+          self->render_system->render_thread->swapchain.width,
+          self->render_system->render_thread->swapchain.height,
+      };
 
       igRender();
 
@@ -590,6 +610,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             TracyCZoneEnd(ctx);
             return;
           }
+          const uint32_t imgui_draw_count = draw_data->CmdListsCount;
 
           size_t vtx_offset = 0;
 
@@ -605,11 +626,12 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
             vtx_offset = idx_size + align_padding;
 
-            uint8_t *idx_dst = ((uint8_t *)tmp_host_buffer.ptr);
+            uint8_t *idx_dst =
+                ((uint8_t *)tmp_host_buffer.ptr + tmp_host_buffer.offset);
             uint8_t *vtx_dst = idx_dst + vtx_offset;
 
             // Organize all mesh data into a single cpu-side buffer
-            for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+            for (uint32_t i = 0; i < imgui_draw_count; ++i) {
               const ImDrawList *cmd_list = draw_data->CmdLists[i];
 
               size_t idx_byte_count =
@@ -658,13 +680,29 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             const float scale_x = 2.0f / width;
             const float scale_y = 2.0f / height;
 
-            ImGuiDraw *draw = tb_alloc_tp(self->tmp_alloc, ImGuiDraw);
-            *draw = (ImGuiDraw){
-                .geom_buffer = gpu_tmp_buffer,
-                .index_count = draw_data->TotalIdxCount,
-                .index_offset = 0,
-                .vertex_offset = vtx_offset,
-            };
+            ImGuiDraw *draws =
+                tb_alloc_nm_tp(self->tmp_alloc, imgui_draw_count, ImGuiDraw);
+            {
+              uint32_t cmd_index_offset = 0;
+              uint32_t cmd_vertex_offset = 0;
+
+              for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
+                   ++draw_idx) {
+                const ImDrawList *cmd_list = draw_data->CmdLists[draw_idx];
+                const uint32_t index_count = cmd_list->IdxBuffer.Size;
+
+                draws[draw_idx] = (ImGuiDraw){
+                    .geom_buffer = gpu_tmp_buffer,
+                    .index_count = index_count,
+                    .index_offset = cmd_index_offset,
+                    .vertex_offset = vtx_offset + cmd_vertex_offset,
+                };
+
+                cmd_index_offset += index_count * sizeof(ImDrawIdx);
+                cmd_vertex_offset +=
+                    cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+              }
+            }
 
             batches[batch_count++] = (ImGuiDrawBatch){
                 .layout = self->pipe_layout,
@@ -689,8 +727,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                                 -1.0f - draw_data->DisplayPos.y * scale_y,
                             },
                     },
-                .draw_count = 1,
-                .draws = draw,
+                .draw_count = imgui_draw_count,
+                .draws = draws,
                 .atlas_set = atlas_set,
             };
           }

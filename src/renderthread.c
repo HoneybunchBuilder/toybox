@@ -1486,6 +1486,9 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
     TracyCZoneEnd(present_ctx);
   }
+
+  // It's now safe to reset the arena
+  thread->render_arena = reset_arena(thread->render_arena, false);
 }
 
 int32_t render_thread(void *data) {

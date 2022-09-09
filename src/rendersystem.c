@@ -254,17 +254,6 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
     TracyCZoneN(ctx, "Render System Tick", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
-    // Reset temp pools
-    {
-      // Reset the *next* frame's pool. Assume that it has already been
-      // consumed by the render thread and that it's now free to nuke in
-      // prep for the next frame
-      const uint32_t next_frame_idx =
-          (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
-      RenderSystemFrameState *prev_state = &self->frame_states[next_frame_idx];
-      prev_state->tmp_host_size = 0;
-    }
-
     RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
     FrameState *thread_state =
         &self->render_thread->frame_states[self->frame_idx];
@@ -291,6 +280,13 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
       state->buf_copy_queue.req_count = 0;
       state->buf_img_copy_queue.req_count = 0;
+    }
+
+    // Reset temp pools of the next frame
+    {
+      const uint32_t next_frame = (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
+      RenderSystemFrameState *state = &self->frame_states[next_frame];
+      state->tmp_host_size = 0;
     }
 
     TracyCZoneEnd(ctx);
@@ -401,8 +397,7 @@ void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
 void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
                              uint32_t batch_count, uint64_t batch_size,
                              const void *batches) {
-  // TOOD: rethink this... the tmp allocator may not be sufficient here
-  Allocator tmp_alloc = self->tmp_alloc;
+  Allocator tmp_alloc = self->render_thread->render_arena.alloc;
 
   FrameState *state = &self->render_thread->frame_states[self->frame_idx];
   for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
