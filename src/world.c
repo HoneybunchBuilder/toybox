@@ -10,6 +10,7 @@
 #include "lightcomponent.h"
 #include "noclipcomponent.h"
 #include "profiling.h"
+#include "rendersystem.h"
 #include "simd.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
@@ -169,6 +170,21 @@ bool tb_tick_world(World *world, float delta_seconds) {
   {
     TracyCZoneN(system_tick_ctx, "Tick Systems", true);
     TracyCZoneColor(system_tick_ctx, TracyCategoryColorCore);
+
+    // HACK: Find the rendering system and manually make sure that we don't
+    // have to wait for the render thread
+    for (uint32_t system_idx = 0; system_idx < world->system_count;
+         ++system_idx) {
+      System *system = &world->systems[system_idx];
+      if (system->id == RenderSystemId) {
+        RenderSystem *render_system = (RenderSystem *)system->self;
+        TracyCZoneN(wait_ctx, "Wait for Render Thread", true);
+        TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+        tb_wait_render(render_system->render_thread, render_system->frame_idx);
+        TracyCZoneEnd(wait_ctx);
+      }
+    }
+
     for (uint32_t system_idx = 0; system_idx < world->system_count;
          ++system_idx) {
       System *system = &world->systems[system_idx];
