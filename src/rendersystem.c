@@ -242,14 +242,6 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "Render System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
-  // Wait for the render thread to finish the frame with this index
-  {
-    TracyCZoneN(wait_ctx, "Wait for Render Thread", true);
-    TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
-    tb_wait_render(self->render_thread, self->frame_idx);
-    TracyCZoneEnd(wait_ctx);
-  }
-
   {
     TracyCZoneN(ctx, "Render System Tick", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
@@ -331,7 +323,7 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
   TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation",
                   VK_ERROR_OUT_OF_HOST_MEMORY);
 
-  const uint64_t offset = state->tmp_host_size;
+  const uint64_t offset = state->tmp_host_size + padding;
 
   state->tmp_host_size += (size + padding);
 

@@ -626,8 +626,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
             vtx_offset = idx_size + align_padding;
 
-            uint8_t *idx_dst =
-                ((uint8_t *)tmp_host_buffer.ptr + tmp_host_buffer.offset);
+            uint8_t *idx_dst = (uint8_t *)tmp_host_buffer.ptr;
             uint8_t *vtx_dst = idx_dst + vtx_offset;
 
             // Organize all mesh data into a single cpu-side buffer

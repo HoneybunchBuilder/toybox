@@ -44,8 +44,6 @@ void tb_wait_thread_initialized(RenderThread *thread) {
 
 void tb_stop_render_thread(RenderThread *thread) {
   uint32_t frame_idx = thread->frame_idx;
-  // Wait for render thread
-  SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
   // Set the stop signal
   thread->stop_signal = 1;
   // Signal Render thread
