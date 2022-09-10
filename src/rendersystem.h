@@ -24,6 +24,7 @@ typedef struct RenderSystemFrameState {
   uint8_t *tmp_host_mapped;
   VmaPool tmp_host_pool;
 
+  VmaPool gpu_buffer_pool;
   VmaPool gpu_image_pool;
 
   BufferCopyQueue buf_copy_queue;
@@ -57,8 +58,11 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc);
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                          TbBuffer *buffer);
+                                          TbHostBuffer *buffer);
 
+VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
+                                     const VkBufferCreateInfo *create_info,
+                                     const char *name, TbBuffer *buffer);
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image);

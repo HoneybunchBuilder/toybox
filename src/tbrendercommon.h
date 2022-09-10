@@ -30,17 +30,22 @@ typedef struct BufferImageCopyQueue {
   uint32_t req_max;
 } BufferImageCopyQueue;
 
-typedef struct TbBuffer {
+typedef struct TbHostBuffer {
   VkBuffer buffer;
   uint64_t offset;
   void *ptr;
+} TbHostBuffer;
+
+typedef struct TbBuffer {
+  VkBuffer buffer;
+  VmaAllocation alloc;
+  VmaAllocationInfo info;
 } TbBuffer;
 
 typedef struct TbImage {
   VkImage image;
   VmaAllocation alloc;
   VmaAllocationInfo info;
-  void *ptr;
 } TbImage;
 
 typedef void tb_pass_record(VkCommandBuffer buffer, uint32_t batch_count,

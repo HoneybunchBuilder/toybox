@@ -128,9 +128,9 @@ bool create_render_system(RenderSystem *self,
         TB_VK_CHECK_RET(err, "Failed to map temporary buffer", false);
       }
 
-      // Create gpu image pool
+      // Create gpu pools
       {
-        uint32_t gpu_img_mem_type_idx = 0xFFFFFFFF;
+        uint32_t gpu_img_mem_type_idx = SDL_MAX_UINT32;
         // Find the desired memory type index
         for (uint32_t i = 0; i < thread->gpu_mem_props.memoryTypeCount; ++i) {
           VkMemoryType type = thread->gpu_mem_props.memoryTypes[i];
@@ -139,7 +139,7 @@ bool create_render_system(RenderSystem *self,
             break;
           }
         }
-        TB_CHECK_RETURN(gpu_img_mem_type_idx != 0xFFFFFFFF,
+        TB_CHECK_RETURN(gpu_img_mem_type_idx != SDL_MAX_UINT32,
                         "Failed to find gpu visible memory", false);
 
         VmaPoolCreateInfo create_info = {
@@ -147,7 +147,11 @@ bool create_render_system(RenderSystem *self,
         };
         err = vmaCreatePool(self->vma_alloc, &create_info,
                             &state->gpu_image_pool);
-        TB_VK_CHECK_RET(err, "Failed to create vma host image pool", false);
+        TB_VK_CHECK_RET(err, "Failed to create vma gpu image pool", false);
+
+        err = vmaCreatePool(self->vma_alloc, &create_info,
+                            &state->gpu_buffer_pool);
+        TB_VK_CHECK_RET(err, "Failed to create vma gpu buffer pool", false);
       }
     }
 
@@ -220,6 +224,7 @@ void destroy_render_system(RenderSystem *self) {
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
 
     vmaDestroyPool(vma_alloc, state->gpu_image_pool);
+    vmaDestroyPool(vma_alloc, state->gpu_buffer_pool);
   }
 
   // Re-signal all frame states to flush the thread
@@ -308,7 +313,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
 }
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                          TbBuffer *buffer) {
+                                          TbHostBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
   void *ptr = &state->tmp_host_mapped[state->tmp_host_size];
@@ -334,6 +339,29 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
   return VK_SUCCESS;
 }
 
+VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
+                                     const VkBufferCreateInfo *create_info,
+                                     const char *name, TbBuffer *buffer) {
+  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+
+  VmaAllocator vma_alloc = self->vma_alloc;
+  VmaPool pool = state->gpu_buffer_pool;
+
+  VmaAllocationCreateInfo alloc_create_info = {
+      .memoryTypeBits = VMA_MEMORY_USAGE_GPU_ONLY,
+      .pool = pool,
+  };
+  VkResult err =
+      vmaCreateBuffer(vma_alloc, create_info, &alloc_create_info,
+                      &buffer->buffer, &buffer->alloc, &buffer->info);
+  TB_VK_CHECK_RET(err, "Failed to allocate gpu buffer", err);
+
+  SET_VK_NAME(self->render_thread->device, buffer->buffer,
+              VK_OBJECT_TYPE_BUFFER, name);
+
+  return err;
+}
+
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image) {
@@ -353,7 +381,7 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   SET_VK_NAME(self->render_thread->device, image->image, VK_OBJECT_TYPE_IMAGE,
               name);
 
-  return VK_SUCCESS;
+  return err;
 }
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self) {

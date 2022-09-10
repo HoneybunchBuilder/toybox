@@ -15,6 +15,7 @@
 #include "profiling.h"
 #include "rendersystem.h"
 #include "skycomponent.h"
+#include "skydome.h"
 #include "tbcommon.h"
 #include "world.h"
 
@@ -330,7 +331,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
     err = vkCreateFramebuffer(render_system->render_thread->device,
                               &create_info, &render_system->vk_host_alloc_cb,
                               &self->framebuffers[i]);
-    TB_VK_CHECK_RET(err, "Failed to create sky framebuffer", false);
+    TB_VK_CHECK_RET(err, "Failed to create sky framebuffer", err);
     SET_VK_NAME(render_system->render_thread->device, self->framebuffers[i],
                 VK_OBJECT_TYPE_FRAMEBUFFER, "Sky Pass Framebuffer");
   }
@@ -340,6 +341,52 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                        render_system->render_thread->swapchain.width,
                        render_system->render_thread->swapchain.height,
                        sky_pass_record);
+
+  // Create sky box geometry
+  {
+    const uint64_t skydome_size = get_skydome_size();
+    // Make space for the sky geometry on the GPU
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          .size = skydome_size,
+      };
+      err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
+                                        "Sky Geom Buffer",
+                                        &self->sky_geom_gpu_buffer);
+      TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", err);
+    }
+
+    // Use the gpu tmp buffer to copy the geom buffer
+    {
+      TbHostBuffer host_buf = {0};
+      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size,
+                                             &host_buf);
+      TB_VK_CHECK_RET(err, "Failed to alloc tmp space for the skydome geometry",
+                      err);
+      copy_skydome(host_buf.ptr); // Copy to the newly alloced host buffer
+
+      // We know that the tmp host buffer gets uploaded automatically
+      // so issue a copy to the perm gpu geom buffer
+      {
+        VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+
+        BufferCopy skydome_copy = {
+            .src = tmp_gpu_buffer,
+            .dst = self->sky_geom_gpu_buffer.buffer,
+            .region =
+                {
+                    .srcOffset = host_buf.offset,
+                    .size = skydome_size,
+                },
+        };
+        tb_rnd_upload_buffers(render_system, &skydome_copy, 1);
+      }
+    }
+  }
 
   return true;
 }
@@ -352,6 +399,9 @@ void destroy_sky_system(SkySystem *self) {
                          self->framebuffers[i],
                          &render_system->vk_host_alloc_cb);
   }
+
+  vmaDestroyBuffer(render_system->vma_alloc, self->sky_geom_gpu_buffer.buffer,
+                   self->sky_geom_gpu_buffer.alloc);
 
   tb_rnd_destroy_render_pass(render_system, self->pass);
 
