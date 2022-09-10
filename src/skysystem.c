@@ -424,7 +424,7 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
   desc->id = SkySystemId;
   desc->desc = (InternalDescriptor)sky_desc;
   SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 1;
   desc->deps[0] = (SystemComponentDependencies){
       .count = 1,

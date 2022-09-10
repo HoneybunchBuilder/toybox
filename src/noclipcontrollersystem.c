@@ -33,67 +33,45 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "NoClip System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorGame);
 
-  const uint32_t dep_count = input->dep_set_count > MAX_DEPENDENCY_SET_COUT
-                                 ? MAX_DEPENDENCY_SET_COUT
+  const uint32_t dep_count = input->dep_set_count > MAX_DEPENDENCY_SET_COUNT
+                                 ? MAX_DEPENDENCY_SET_COUNT
                                  : input->dep_set_count;
   if (dep_count > 0) {
     // Expecting one dependency set with all entities that have a transform,
     // camera and noclip component attached
     EntityId *entities = NULL;
     uint32_t entity_count = 0;
-    PackedComponentStore transform_store = {0};
-    PackedComponentStore noclip_store = {0};
+    const PackedComponentStore *transform_store =
+        tb_get_column_check_id(input, 0, 0, TransformComponentId);
+    TB_CHECK(transform_store, "Failed to find required transform store");
+    const PackedComponentStore *noclip_store =
+        tb_get_column_check_id(input, 0, 1, NoClipComponentId);
+    TB_CHECK(noclip_store, "Failed to find required noclip store");
+
+    const PackedComponentStore *input_store =
+        tb_get_column_check_id(input, 1, 0, InputComponentId);
+    TB_CHECK(noclip_store, "Failed to find required input store");
 
     // Expecting one dependency set with one input component
-    PackedComponentStore input_store = {0};
-    uint32_t input_comp_count = 0;
-
-    for (uint32_t dep_idx = 0; dep_idx < dep_count; ++dep_idx) {
-      const SystemDependencySet *dep_set = &input->dep_sets[dep_idx];
-
-      const uint32_t col_count = dep_set->column_count > MAX_COLUMN_COUNT
-                                     ? MAX_COLUMN_COUNT
-                                     : dep_set->column_count;
-      for (uint32_t col_idx = 0; col_idx < col_count; ++col_idx) {
-        const PackedComponentStore *column = &dep_set->columns[col_idx];
-        if (column->id == TransformComponentId ||
-            column->id == NoClipComponentId) {
-          entities = dep_set->entity_ids;
-          entity_count = dep_set->entity_count;
-          if (column->id == TransformComponentId) {
-            transform_store = *column;
-            continue;
-          } else if (column->id == NoClipComponentId) {
-            noclip_store = *column;
-            continue;
-          }
-        }
-
-        if (column->id == InputComponentId) {
-          input_store = *column;
-          input_comp_count = dep_set->column_count;
-          continue;
-        }
-      }
-    }
+    const uint32_t input_comp_count = tb_get_column_component_count(input, 1);
 
     // Make sure all dependent stores were found
-    if (transform_store.components != NULL && noclip_store.components != NULL &&
-        input_store.components != NULL) {
+    if (transform_store != NULL && noclip_store != NULL &&
+        input_store != NULL) {
 
       const NoClipComponent *noclip_comps =
-          (const NoClipComponent *)noclip_store.components;
+          (const NoClipComponent *)noclip_store->components;
 
       // Make a copy of the transform input as the output
       TransformComponent *out_transforms =
           tb_alloc_nm_tp(self->tmp_alloc, entity_count, TransformComponent);
-      SDL_memcpy(out_transforms, transform_store.components,
+      SDL_memcpy(out_transforms, transform_store->components,
                  entity_count * sizeof(TransformComponent));
 
       // Based on the input, modify all the transform components for each
       // entity
       const InputComponent *input_comps =
-          (const InputComponent *)input_store.components;
+          (const InputComponent *)input_store->components;
       for (uint32_t in_idx = 0; in_idx < input_comp_count; ++in_idx) {
         const InputComponent *input_comp = &input_comps[in_idx];
 
@@ -239,7 +217,7 @@ void tb_noclip_controller_system_descriptor(
   desc->id = NoClipControllerSystemId;
   desc->desc = (InternalDescriptor)noclip_desc;
   SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 2;
   desc->deps[0] = (SystemComponentDependencies){2,
                                                 {

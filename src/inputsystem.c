@@ -94,7 +94,7 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
   desc->id = InputSystemId;
   desc->desc = (InternalDescriptor)input_desc;
   SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 1;
   desc->deps[0] = (SystemComponentDependencies){
       .count = 1,

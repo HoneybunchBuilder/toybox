@@ -59,8 +59,8 @@ void create_component_store(ComponentStore *store,
 }
 
 bool create_system(World *world, System *system, const SystemDescriptor *desc) {
-  const uint32_t dep_count = desc->dep_count > MAX_DEPENDENCY_SET_COUT
-                                 ? MAX_DEPENDENCY_SET_COUT
+  const uint32_t dep_count = desc->dep_count > MAX_DEPENDENCY_SET_COUNT
+                                 ? MAX_DEPENDENCY_SET_COUNT
                                  : desc->dep_count;
 
   system->name = desc->name;
@@ -712,6 +712,42 @@ bool tb_world_remove_entity(World *world, EntityId id) {
   (void)world;
   (void)id;
   return false;
+}
+
+const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
+                                                   uint32_t set, uint32_t index,
+                                                   ComponentId id) {
+  TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
+                  "Dependency set index out of range", NULL);
+  TB_CHECK_RETURN(index < MAX_DEPENDENCY_SET_COUNT,
+                  "Component Store index out of range", NULL);
+  if (set >= input->dep_set_count) {
+    return NULL;
+  }
+
+  const SystemDependencySet *dep = &input->dep_sets[set];
+  if (index >= dep->column_count) {
+    return NULL;
+  }
+
+  // Make sure it's the id the caller wanted
+  const PackedComponentStore *store = &dep->columns[index];
+  if (store->id == id) {
+    return store;
+  }
+
+  return NULL;
+}
+
+uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set) {
+  TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
+                  "Dependency set index out of range", 0);
+  if (set >= input->dep_set_count) {
+    return 0;
+  }
+
+  const SystemDependencySet *dep = &input->dep_sets[set];
+  return dep->column_count;
 }
 
 System *tb_find_system_by_id(System *systems, uint32_t system_count,
