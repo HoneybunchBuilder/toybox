@@ -37,28 +37,20 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
   // Find expected components
   uint32_t entity_count = 0;
   const EntityId *entities = NULL;
-  const PackedComponentStore *coreui_comp_store = NULL;
-  const PackedComponentStore *imgui_comp_store = NULL;
-  TB_CHECK(input->dep_set_count == 1, "Unexpected number of dependency sets");
+  const PackedComponentStore *coreui_comp_store =
+      tb_get_column_check_id(input, 0, 0, CoreUIComponentId);
+  TB_CHECK(coreui_comp_store, "Failed to get required coreui component store");
+  const PackedComponentStore *imgui_comp_store =
+      tb_get_column_check_id(input, 0, 1, ImGuiComponentId);
+  TB_CHECK(imgui_comp_store, "Failed to get required imgui component store");
   for (uint32_t dep_set_idx = 0; dep_set_idx < input->dep_set_count;
        ++dep_set_idx) {
     const SystemDependencySet *dep_set = &input->dep_sets[dep_set_idx];
     entities = dep_set->entity_ids;
     entity_count = dep_set->entity_count;
-    for (uint32_t col_idx = 0; col_idx < dep_set->column_count; ++col_idx) {
-      const PackedComponentStore *column = &dep_set->columns[col_idx];
-      if (column->id == CoreUIComponentId) {
-        coreui_comp_store = column;
-      }
-      if (column->id == ImGuiComponentId) {
-        imgui_comp_store = column;
-      }
-    }
   }
   if (entity_count > 0) {
     TB_CHECK(entities, "Invalid input entities");
-    TB_CHECK(coreui_comp_store, "Failed to find coreui component store");
-    TB_CHECK(imgui_comp_store, "Failed to find imgui component store");
 
     CoreUIComponent *out_coreui =
         tb_alloc_nm_tp(self->tmp_alloc, entity_count, CoreUIComponent);
