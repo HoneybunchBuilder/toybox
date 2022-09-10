@@ -192,7 +192,7 @@ VkResult create_sky_pipeline2(VkDevice device,
 
     VkPipelineDepthStencilStateCreateInfo depth_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_FALSE,
+        .depthTestEnable = VK_TRUE,
         .depthWriteEnable = VK_FALSE,
         .depthCompareOp = VK_COMPARE_OP_EQUAL,
         .maxDepthBounds = 1.0f,
