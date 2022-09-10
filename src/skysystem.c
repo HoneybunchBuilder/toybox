@@ -11,12 +11,15 @@
 #pragma clang diagnostic pop
 #endif
 
+#include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
 #include "rendersystem.h"
+#include "shadercommon.h"
 #include "skycomponent.h"
 #include "skydome.h"
 #include "tbcommon.h"
+#include "transformcomponent.h"
 #include "world.h"
 
 typedef struct SkyDrawBatch {
@@ -403,6 +406,9 @@ void destroy_sky_system(SkySystem *self) {
   vmaDestroyBuffer(render_system->vma_alloc, self->sky_geom_gpu_buffer.buffer,
                    self->sky_geom_gpu_buffer.alloc);
 
+  vkDestroyDescriptorPool(render_system->render_thread->device, self->sky_pool,
+                          &render_system->vk_host_alloc_cb);
+
   tb_rnd_destroy_render_pass(render_system, self->pass);
 
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
@@ -413,7 +419,173 @@ void destroy_sky_system(SkySystem *self) {
 }
 
 void tick_sky_system(SkySystem *self, const SystemInput *input,
-                     SystemOutput *output, float delta_seconds) {}
+                     SystemOutput *output, float delta_seconds) {
+  (void)output;
+  VkResult err = VK_SUCCESS;
+
+  const PackedComponentStore *skys =
+      tb_get_column_check_id(input, 0, 0, SkyComponentId);
+  const uint32_t sky_count = tb_get_column_component_count(input, 0);
+  const PackedComponentStore *cameras =
+      tb_get_column_check_id(input, 1, 0, CameraComponentId);
+  const PackedComponentStore *transforms =
+      tb_get_column_check_id(input, 1, 1, TransformComponentId);
+  const uint32_t camera_count = tb_get_column_component_count(input, 1);
+
+  if (skys == NULL || cameras == NULL || transforms == NULL) {
+    return;
+  }
+
+  // TODO: Make this less hacky
+  const uint32_t width = self->render_system->render_thread->swapchain.width;
+  const uint32_t height = self->render_system->render_thread->swapchain.height;
+
+  if (camera_count > 0 && sky_count > 0) {
+    const CameraComponent *camera_comps =
+        (const CameraComponent *)cameras->components;
+    const TransformComponent *transform_comps =
+        (const TransformComponent *)transforms->components;
+    const SkyComponent *sky_comps = (const SkyComponent *)skys->components;
+
+    uint32_t batch_count = 0;
+    SkyDrawBatch *batches =
+        tb_alloc_nm_tp(self->render_system->render_thread->render_arena.alloc,
+                       sky_count * camera_count, SkyDrawBatch);
+
+    // Determine if we need to resize & reallocate descriptor sets
+    if (sky_count > self->sky_set_max) {
+      if (self->sky_pool) {
+        vkDestroyDescriptorPool(self->render_system->render_thread->device,
+                                self->sky_pool,
+                                &self->render_system->vk_host_alloc_cb);
+      }
+
+      self->sky_set_max = sky_count * 2;
+
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = self->sky_set_max,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              &(VkDescriptorPoolSize){
+                  .descriptorCount = self->sky_set_max,
+                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              },
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      };
+      err = vkCreateDescriptorPool(
+          self->render_system->render_thread->device, &create_info,
+          &self->render_system->vk_host_alloc_cb, &self->sky_pool);
+      TB_VK_CHECK(err, "Failed to create sky descriptor pool");
+      SET_VK_NAME(self->render_system->render_thread->device, self->sky_pool,
+                  VK_OBJECT_TYPE_DESCRIPTOR_POOL, "Sky Set Pool");
+
+      // Re-allocate descriptors
+      self->sky_sets = tb_realloc_nm_tp(self->std_alloc, self->sky_sets,
+                                        self->sky_set_max, VkDescriptorSet);
+
+      VkDescriptorSetLayout *layouts =
+          tb_alloc_nm_tp(self->tmp_alloc, sky_count, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < sky_count; ++i) {
+        layouts[i] = self->set_layout;
+      }
+
+      VkDescriptorSetAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+          .descriptorSetCount = sky_count,
+          .descriptorPool = self->sky_pool,
+          .pSetLayouts = layouts,
+      };
+      err = vkAllocateDescriptorSets(self->render_system->render_thread->device,
+                                     &alloc_info, self->sky_sets);
+      TB_VK_CHECK(err, "Failed to allocate sky descriptor sets");
+    }
+
+    // Submit a sky draw for each camera, for each sky
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      const CameraComponent *camera = &camera_comps[cam_idx];
+      const TransformComponent *transform = &transform_comps[cam_idx];
+
+      // TODO: Instead of calculating the vp matrix here, a camera system could
+      // do it earlier in the frame
+      float4x4 vp = {.row0 = {0}};
+      {
+        float4x4 proj = {.row0 = {0}};
+        perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
+                    camera->far);
+
+        float4x4 model = {.row0 = {0}};
+        transform_to_matrix(&model, &transform->transform);
+        float3 forward = f4tof3(model.row2);
+
+        float4x4 view = {.row0 = {0}};
+        look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
+                     (float3){0.0f, 1.0f, 0.0f});
+      }
+
+      for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
+        const SkyComponent *sky = &sky_comps[sky_idx];
+
+        // Update the sky's descriptor set
+        {
+          VkDescriptorSet sky_set = self->sky_sets[batch_count];
+
+          SkyData sky_data = {
+              .time = delta_seconds,
+              .cirrus = sky->cirrus,
+              .cumulus = sky->cumulus,
+              .sun_dir = sky->sun_dir,
+          };
+
+          TbHostBuffer host_buffer = {0};
+          tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, sizeof(SkyData),
+                                           &host_buffer);
+          SDL_memcpy(host_buffer.ptr, &sky_data, sizeof(SkyData));
+
+          VkWriteDescriptorSet write = {
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+              .dstSet = sky_set,
+              .dstBinding = 0,
+              .dstArrayElement = 0,
+              .descriptorCount = 1,
+              .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              .pBufferInfo =
+                  &(VkDescriptorBufferInfo){
+                      .buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system),
+                      .offset = host_buffer.offset,
+                      .range = sizeof(SkyData),
+                  },
+          };
+          vkUpdateDescriptorSets(self->render_system->render_thread->device, 1,
+                                 &write, 0, NULL);
+        }
+
+        batches[batch_count] = (SkyDrawBatch){
+            .layout = self->pipe_layout,
+            .pipeline = self->pipeline,
+            .viewport = {0, 0, width, height, 0, 1},
+            .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
+            .const_range =
+                (VkPushConstantRange){
+                    .size = sizeof(SkyPushConstants),
+                    .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                },
+            .consts =
+                {
+                    .vp = vp,
+                },
+            .sky_set = self->sky_sets[batch_count],
+            .geom_buffer = self->sky_geom_gpu_buffer.buffer,
+            .index_count = get_skydome_index_count(),
+        };
+        batch_count++;
+      }
+    }
+
+    tb_rnd_issue_draw_batch(self->render_system, self->pass, batch_count,
+                            sizeof(SkyDrawBatch), batches);
+  }
+}
 
 TB_DEFINE_SYSTEM(sky, SkySystem, SkySystemDescriptor)
 
@@ -425,10 +597,14 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
   desc->desc = (InternalDescriptor)sky_desc;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 1;
+  desc->dep_count = 2;
   desc->deps[0] = (SystemComponentDependencies){
       .count = 1,
       .dependent_ids = {SkyComponentId},
+  };
+  desc->deps[1] = (SystemComponentDependencies){
+      .count = 2,
+      .dependent_ids = {CameraComponentId, TransformComponentId},
   };
   desc->system_dep_count = 1;
   desc->system_deps[0] = RenderSystemId;

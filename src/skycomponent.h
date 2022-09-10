@@ -1,5 +1,7 @@
 #pragma once
 
+#include "simd.h"
+
 typedef struct RenderSystem RenderSystem;
 
 #define SkyComponentId 0xCAFEB0BA
@@ -7,11 +9,16 @@ typedef struct RenderSystem RenderSystem;
 typedef struct ComponentDescriptor ComponentDescriptor;
 
 typedef struct SkyComponentDescriptor {
-  int tmp;
+  float cirrus;
+  float cumulus;
+  float3 sun_dir;
 } SkyComponentDescriptor;
 
 typedef struct SkyComponent {
-  RenderSystem *render_system;
+  float cirrus;
+  float cumulus;
+  float3 sun_dir; // TODO: decouple this and instead reference this data from a
+                  // directional light component
 } SkyComponent;
 
 void tb_sky_component_descriptor(ComponentDescriptor *desc);

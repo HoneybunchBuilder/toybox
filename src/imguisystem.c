@@ -466,6 +466,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
       }
     }
   }
+
   if (imgui_entity_count > 0) {
     TB_CHECK(imgui_entities, "Invalid input entities");
     TB_CHECK(imgui_comp_store, "Failed to find imgui component store");
@@ -477,58 +478,52 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                        imgui_entity_count, ImGuiDrawBatch);
 
     // Resize atlas descriptor pool if necessary
-    {
-      const uint32_t new_count = imgui_entity_count;
-      if (new_count > self->atlas_set_max) {
-        if (self->atlas_pool) {
-          vkDestroyDescriptorPool(self->render_system->render_thread->device,
-                                  self->atlas_pool,
-                                  &self->render_system->vk_host_alloc_cb);
-        }
-
-        self->atlas_set_max = new_count * 2;
-
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = self->atlas_set_max,
-            .poolSizeCount = 1,
-            .pPoolSizes =
-                &(VkDescriptorPoolSize){
-                    .descriptorCount = self->atlas_set_max,
-                    .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                },
-            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        };
-        err = vkCreateDescriptorPool(
-            self->render_system->render_thread->device, &create_info,
-            &self->render_system->vk_host_alloc_cb, &self->atlas_pool);
-        TB_VK_CHECK(err, "Failed to create imgui atlas descriptor pool");
-        SET_VK_NAME(self->render_system->render_thread->device,
-                    self->atlas_pool, VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-                    "ImGui Atlas Set Pool");
-
-        // Re-allocate descriptors
-        self->atlas_sets =
-            tb_realloc_nm_tp(self->std_alloc, self->atlas_sets,
-                             self->atlas_set_max, VkDescriptorSet);
-
-        VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-            self->tmp_alloc, imgui_entity_count, VkDescriptorSetLayout);
-        for (uint32_t i = 0; i < imgui_entity_count; ++i) {
-          layouts[i] = self->set_layout;
-        }
-
-        VkDescriptorSetAllocateInfo alloc_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorSetCount = imgui_entity_count,
-            .descriptorPool = self->atlas_pool,
-            .pSetLayouts = layouts,
-        };
-        err =
-            vkAllocateDescriptorSets(self->render_system->render_thread->device,
-                                     &alloc_info, self->atlas_sets);
-        TB_VK_CHECK(err, "Failed to allocate imgui atlas descriptor sets");
+    if (imgui_entity_count > self->atlas_set_max) {
+      if (self->atlas_pool) {
+        vkDestroyDescriptorPool(self->render_system->render_thread->device,
+                                self->atlas_pool,
+                                &self->render_system->vk_host_alloc_cb);
       }
+
+      self->atlas_set_max = imgui_entity_count * 2;
+
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = self->atlas_set_max,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              &(VkDescriptorPoolSize){
+                  .descriptorCount = self->atlas_set_max,
+                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              },
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      };
+      err = vkCreateDescriptorPool(
+          self->render_system->render_thread->device, &create_info,
+          &self->render_system->vk_host_alloc_cb, &self->atlas_pool);
+      TB_VK_CHECK(err, "Failed to create imgui atlas descriptor pool");
+      SET_VK_NAME(self->render_system->render_thread->device, self->atlas_pool,
+                  VK_OBJECT_TYPE_DESCRIPTOR_POOL, "ImGui Atlas Set Pool");
+
+      // Re-allocate descriptors
+      self->atlas_sets = tb_realloc_nm_tp(self->std_alloc, self->atlas_sets,
+                                          self->atlas_set_max, VkDescriptorSet);
+
+      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+          self->tmp_alloc, imgui_entity_count, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < imgui_entity_count; ++i) {
+        layouts[i] = self->set_layout;
+      }
+
+      VkDescriptorSetAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+          .descriptorSetCount = imgui_entity_count,
+          .descriptorPool = self->atlas_pool,
+          .pSetLayouts = layouts,
+      };
+      err = vkAllocateDescriptorSets(self->render_system->render_thread->device,
+                                     &alloc_info, self->atlas_sets);
+      TB_VK_CHECK(err, "Failed to allocate imgui atlas descriptor sets");
     }
 
     for (uint32_t entity_idx = 0; entity_idx < imgui_entity_count;
