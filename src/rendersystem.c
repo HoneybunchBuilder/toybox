@@ -313,19 +313,19 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
 }
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
+                                          uint32_t alignment,
                                           TbHostBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
   void *ptr = &state->tmp_host_mapped[state->tmp_host_size];
 
-  // Always 16 byte aligned
   intptr_t padding = 0;
-  if ((intptr_t)ptr % 16 != 0) {
-    padding = (16 - (intptr_t)ptr % 16);
+  if ((intptr_t)ptr % alignment != 0) {
+    padding = (alignment - (intptr_t)ptr % alignment);
   }
   ptr = (void *)((intptr_t)ptr + padding);
 
-  TB_CHECK_RETURN((intptr_t)ptr % 16 == 0, "Failed to align allocation",
+  TB_CHECK_RETURN((intptr_t)ptr % alignment == 0, "Failed to align allocation",
                   VK_ERROR_OUT_OF_HOST_MEMORY);
 
   const uint64_t offset = state->tmp_host_size + padding;
@@ -417,15 +417,14 @@ void tb_rnd_register_pass(RenderSystem *self, VkRenderPass pass,
 void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
                              uint32_t batch_count, uint64_t batch_size,
                              const void *batches) {
-  Allocator tmp_alloc = self->render_thread->render_arena.alloc;
 
   FrameState *state = &self->render_thread->frame_states[self->frame_idx];
+  Allocator tmp_alloc = state->tmp_alloc.alloc;
   for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
     PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
     if (ctx->pass == pass) {
-      // Allocate space in the render thread's temp allocator for the next frame
-      // for
-      // the draw batches
+      // Allocate space in the states's temp allocator for the next frame
+      // for the draw batches
       const uint64_t batch_bytes = batch_size * batch_count;
       void *batch_dst = tb_alloc(tmp_alloc, batch_bytes);
 

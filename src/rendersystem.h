@@ -58,6 +58,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc);
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
+                                          uint32_t alignment,
                                           TbHostBuffer *buffer);
 
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,

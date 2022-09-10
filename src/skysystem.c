@@ -37,6 +37,7 @@ typedef struct SkyDrawBatch {
   // May want multiple batches for multiple layers
   VkBuffer geom_buffer;
   uint32_t index_count;
+  uint64_t vertex_offset;
 } SkyDrawBatch;
 
 VkResult create_sky_pipeline2(VkDevice device,
@@ -191,7 +192,7 @@ VkResult create_sky_pipeline2(VkDevice device,
 
     VkPipelineDepthStencilStateCreateInfo depth_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_TRUE,
+        .depthTestEnable = VK_FALSE,
         .depthWriteEnable = VK_FALSE,
         .depthCompareOp = VK_COMPARE_OP_EQUAL,
         .maxDepthBounds = 1.0f,
@@ -242,7 +243,23 @@ void sky_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const SkyDrawBatch *batch = &sky_batches[batch_idx];
-    (void)batch;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
+    VkPushConstantRange range = batch->const_range;
+    const SkyPushConstants *consts = &batch->consts;
+    vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
+                       range.size, consts);
+
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            batch->layout, 0, 1, &batch->sky_set, 0, NULL);
+
+    vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
+                           &batch->vertex_offset);
+    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
   TracyCZoneEnd(ctx);
 }
@@ -366,7 +383,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
     // Use the gpu tmp buffer to copy the geom buffer
     {
       TbHostBuffer host_buf = {0};
-      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size,
+      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size, 16,
                                              &host_buf);
       TB_VK_CHECK_RET(err, "Failed to alloc tmp space for the skydome geometry",
                       err);
@@ -521,6 +538,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         float4x4 view = {.row0 = {0}};
         look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
                      (float3){0.0f, 1.0f, 0.0f});
+
+        mulmf44(&proj, &view, &vp);
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
@@ -539,7 +558,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
 
           TbHostBuffer host_buffer = {0};
           tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, sizeof(SkyData),
-                                           &host_buffer);
+                                           0x40, &host_buffer);
           SDL_memcpy(host_buffer.ptr, &sky_data, sizeof(SkyData));
 
           VkWriteDescriptorSet write = {
@@ -563,8 +582,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         batches[batch_count] = (SkyDrawBatch){
             .layout = self->pipe_layout,
             .pipeline = self->pipeline,
-            .viewport = {0, 0, width, height, 0, 1},
-            .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
+            .viewport = {0, height, width, -(float)height, 0, 1},
+            .scissor = {{0, 0}, {width, height}},
             .const_range =
                 (VkPushConstantRange){
                     .size = sizeof(SkyPushConstants),
@@ -577,6 +596,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             .sky_set = self->sky_sets[batch_count],
             .geom_buffer = self->sky_geom_gpu_buffer.buffer,
             .index_count = get_skydome_index_count(),
+            .vertex_offset = get_skydome_vert_offset(),
         };
         batch_count++;
       }

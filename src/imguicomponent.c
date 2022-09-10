@@ -58,8 +58,8 @@ bool create_imgui_component(ImGuiComponent *self,
   TbHostBuffer host_buf;
   {
     const uint64_t atlas_size = self->atlas.info.size;
-    err =
-        tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, &host_buf);
+    err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, 16,
+                                           &host_buf);
     TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer", err);
 
     SDL_memcpy(host_buf.ptr, pixels, atlas_size);

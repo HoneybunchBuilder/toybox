@@ -598,7 +598,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
           // to the gpu every frame
           TbHostBuffer tmp_host_buffer = {0};
           if (tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
-                                               &tmp_host_buffer) !=
+                                               16, &tmp_host_buffer) !=
               VK_SUCCESS) {
             TracyCZoneEnd(ctx);
             return;

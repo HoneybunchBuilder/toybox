@@ -39,8 +39,8 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
   if (dep_count > 0) {
     // Expecting one dependency set with all entities that have a transform,
     // camera and noclip component attached
-    EntityId *entities = NULL;
-    uint32_t entity_count = 0;
+    EntityId *entities = tb_get_column_entity_ids(input, 0);
+    uint32_t entity_count = tb_get_column_component_count(input, 0);
     const PackedComponentStore *transform_store =
         tb_get_column_check_id(input, 0, 0, TransformComponentId);
     TB_CHECK(transform_store, "Failed to find required transform store");

@@ -63,6 +63,8 @@ typedef struct FrameState {
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
 
+  ArenaAllocator tmp_alloc;
+
   uint32_t pass_count;
   PassDrawCtx *pass_draw_contexts;
   uint32_t pass_max;
