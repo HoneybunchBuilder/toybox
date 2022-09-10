@@ -1219,8 +1219,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Upload", 1,
                         true);
       // Upload all buffer requests
-      {
-        for (uint32_t i = 0; i < state->buf_copy_queue.req_count; ++i) {
+      if (state->buf_copy_queue.req_count > 0) {
+        for (int32_t i = state->buf_copy_queue.req_count - 1; i >= 0; i--) {
           const BufferCopy *up = &state->buf_copy_queue.reqs[i];
           vkCmdCopyBuffer(command_buffer, up->src, up->dst, 1, &up->region);
         }
@@ -1229,8 +1229,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       }
 
       // Upload all buffer to image requests
-      {
-        for (uint32_t i = 0; i < state->buf_img_copy_queue.req_count; ++i) {
+      if (state->buf_img_copy_queue.req_count > 0) {
+        for (int32_t i = state->buf_img_copy_queue.req_count - 1; i >= 0; i--) {
           const BufferImageCopy *up = &state->buf_img_copy_queue.reqs[i];
 
           // Transition target image to copy dst

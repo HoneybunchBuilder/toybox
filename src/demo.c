@@ -1896,10 +1896,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Skydome Mesh
   GPUMesh skydome = {0};
   {
-    CPUMesh *skydome_cpu = create_skydome(&tmp_alloc);
+    // CPUMesh *skydome_cpu = create_skydome(&tmp_alloc);
 
     uint64_t input_perm = VA_INPUT_PERM_POSITION;
-    err = create_gpumesh(vma_alloc, input_perm, skydome_cpu, &skydome);
+    // err = create_gpumesh(vma_alloc, input_perm, skydome_cpu, &skydome);
     assert(err == VK_SUCCESS);
   }
 

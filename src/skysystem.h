@@ -29,6 +29,8 @@ typedef struct SkySystem {
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
 
+  TbBuffer sky_geom_gpu_buffer;
+
   uint32_t sky_set_count;
   VkDescriptorPool sky_pool;
   VkDescriptorSet *sky_sets;

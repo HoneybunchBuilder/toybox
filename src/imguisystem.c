@@ -601,7 +601,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
           // Make space for this on the next frame. For the host and the device
           // Note that we can rely on the tmp host buffer to be uploaded
           // to the gpu every frame
-          TbBuffer tmp_host_buffer = {0};
+          TbHostBuffer tmp_host_buffer = {0};
           if (tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
                                                &tmp_host_buffer) !=
               VK_SUCCESS) {

@@ -1,11 +1,6 @@
 #include "skydome.h"
 
-#include "allocator.h"
-#include "cpuresources.h"
-
-#include <assert.h>
-#include <stddef.h>
-#include <string.h>
+#include <SDL2/SDL_stdinc.h>
 
 static const uint16_t skydome_indices[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,
@@ -358,50 +353,32 @@ static const float2 skydome_uvs[] = {
     {0.75000f, 0.11810f},
 };
 
-static const size_t skydome_index_size = sizeof(skydome_indices);
-static const size_t skydome_geom_size =
+static const uint64_t skydome_index_size = sizeof(skydome_indices);
+static const uint64_t skydome_geom_size =
     sizeof(skydome_positions) + sizeof(skydome_normals) + sizeof(skydome_uvs);
-static const size_t skydome_index_count =
+static const uint64_t skydome_index_count =
     sizeof(skydome_indices) / sizeof(uint16_t);
-static const size_t skydome_vertex_count =
-    sizeof(skydome_positions) / sizeof(float3);
+// static const uint64_t skydome_vertex_count =
+//     sizeof(skydome_positions) / sizeof(float3);
 
-// There is technically a const cast but I'm forgiving it for now
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wcast-qual"
-#pragma clang diagnostic ignored "-Wcast-align"
-#endif
-
-CPUMesh *create_skydome(Allocator *a) {
-  size_t size = sizeof(CPUMesh) + skydome_geom_size + skydome_index_size;
-  CPUMesh *skydome = (CPUMesh *)a->alloc(a->user_data, size);
-  assert(skydome);
-
-  size_t offset = sizeof(CPUMesh);
-  skydome->indices = (uint16_t *)((uint8_t *)skydome + offset);
-  offset += skydome_index_size;
-  skydome->vertices = ((uint8_t *)skydome) + offset;
-
-  uint8_t *pos = ((uint8_t *)skydome) + offset;
-  offset += sizeof(skydome_positions);
-  uint8_t *norm = ((uint8_t *)skydome) + offset;
-  offset += sizeof(skydome_normals);
-  uint8_t *uv = ((uint8_t *)skydome) + offset;
-
-  skydome->index_size = skydome_index_size;
-  skydome->geom_size = skydome_geom_size;
-  skydome->index_count = skydome_index_count;
-  skydome->vertex_count = skydome_vertex_count;
-
-  memcpy((void *)skydome->indices, skydome_indices, skydome_index_size);
-  memcpy(pos, skydome_positions, sizeof(skydome_positions));
-  memcpy(norm, skydome_normals, sizeof(skydome_normals));
-  memcpy(uv, skydome_uvs, sizeof(skydome_uvs));
-
-  return skydome;
+uint32_t get_skydome_index_count(void) { return skydome_index_count; }
+uint64_t get_skydome_size(void) {
+  return skydome_geom_size + skydome_index_size;
 }
+uint64_t get_skydome_vert_offset(void) { return skydome_index_size; }
 
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
+void copy_skydome(void *dst) {
+  uint8_t *geom_bytes = (uint8_t *)dst;
+
+  SDL_memcpy(geom_bytes, skydome_indices, skydome_index_size);
+  geom_bytes += skydome_index_size;
+
+  SDL_memcpy(geom_bytes, skydome_positions, sizeof(skydome_positions));
+  geom_bytes += sizeof(skydome_positions);
+
+  SDL_memcpy(geom_bytes, skydome_normals, sizeof(skydome_normals));
+  geom_bytes += sizeof(skydome_normals);
+
+  SDL_memcpy(geom_bytes, skydome_uvs, sizeof(skydome_uvs));
+  geom_bytes += sizeof(skydome_uvs);
+}

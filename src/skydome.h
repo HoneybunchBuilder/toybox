@@ -2,7 +2,8 @@
 
 #include "simd.h"
 
-typedef struct CPUMesh CPUMesh;
-typedef struct Allocator Allocator;
+uint32_t get_skydome_index_count(void);
+uint64_t get_skydome_size(void);
+uint64_t get_skydome_vert_offset(void);
 
-CPUMesh *create_skydome(Allocator *a);
+void copy_skydome(void *dst);

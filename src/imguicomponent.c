@@ -51,17 +51,16 @@ bool create_imgui_component(ImGuiComponent *self,
 
     err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, "ImGui Atlas",
                                      &self->atlas);
-    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", false);
+    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", err);
   }
 
   // Get space for the image on the tmp buffer
-  TbBuffer host_buf;
+  TbHostBuffer host_buf;
   {
     const uint64_t atlas_size = self->atlas.info.size;
     err =
         tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, &host_buf);
-    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer",
-                    false);
+    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer", err);
 
     SDL_memcpy(host_buf.ptr, pixels, atlas_size);
   }
@@ -122,7 +121,7 @@ bool create_imgui_component(ImGuiComponent *self,
     err =
         vkCreateImageView(render_system->render_thread->device, &create_info,
                           &render_system->vk_host_alloc_cb, &self->atlas_view);
-    TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", false);
+    TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", err);
     SET_VK_NAME(render_system->render_thread->device, self->atlas_view,
                 VK_OBJECT_TYPE_IMAGE_VIEW, "ImGui Atlas");
   }
