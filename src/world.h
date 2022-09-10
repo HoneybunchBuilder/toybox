@@ -205,6 +205,7 @@ bool tb_world_remove_entity(World *world, EntityId id);
 const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
                                                    uint32_t set, uint32_t index,
                                                    ComponentId id);
+EntityId *tb_get_column_entity_ids(const SystemInput *input, uint32_t set);
 uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set);
 
 System *tb_find_system_by_id(System *systems, uint32_t system_count,

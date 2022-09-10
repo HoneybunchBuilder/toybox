@@ -494,6 +494,9 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
               if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
                 component_count++;
                 break;
+              } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
+                component_count++;
+                break;
               }
             }
           }
@@ -770,7 +773,18 @@ uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set) {
   }
 
   const SystemDependencySet *dep = &input->dep_sets[set];
-  return dep->column_count;
+  return dep->entity_count;
+}
+
+EntityId *tb_get_column_entity_ids(const SystemInput *input, uint32_t set) {
+  TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
+                  "Dependency set index out of range", 0);
+  if (set >= input->dep_set_count) {
+    return 0;
+  }
+
+  const SystemDependencySet *dep = &input->dep_sets[set];
+  return dep->entity_ids;
 }
 
 System *tb_find_system_by_id(System *systems, uint32_t system_count,

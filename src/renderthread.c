@@ -289,6 +289,9 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
+    create_arena_allocator("Render Thread Frame State Tmp Alloc",
+                           &state->tmp_alloc, 128 * 1024 * 1024);
+
     state->wait_sem = SDL_CreateSemaphore(1);
     TB_CHECK_RETURN(state->wait_sem,
                     "Failed to create frame state wait semaphore", false);
@@ -436,6 +439,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
           .size = size_bytes,
           .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       };
@@ -465,6 +469,8 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
+
+    destroy_arena_allocator(state->tmp_alloc);
 
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
@@ -1486,7 +1492,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneEnd(present_ctx);
   }
 
-  // It's now safe to reset the arena
+  // It's now safe to reset the arenas
+  state->tmp_alloc = reset_arena(state->tmp_alloc, false);
   thread->render_arena = reset_arena(thread->render_arena, false);
 }
 
