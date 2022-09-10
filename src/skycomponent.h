@@ -5,6 +5,7 @@
 typedef struct RenderSystem RenderSystem;
 
 #define SkyComponentId 0xCAFEB0BA
+#define SkyComponentIdStr "0xCAFEB0BA"
 
 typedef struct ComponentDescriptor ComponentDescriptor;
 
