@@ -84,13 +84,7 @@ bool create_system(World *world, System *system, const SystemDescriptor *desc) {
   for (uint32_t sys_dep_idx = 0; sys_dep_idx < system_dep_count;
        ++sys_dep_idx) {
     SystemId id = desc->system_deps[sys_dep_idx];
-    System *sys = NULL;
-    for (uint32_t sys_idx = 0; sys_idx < world->system_count; ++sys_idx) {
-      if (id == world->systems[sys_idx].id) {
-        sys = &world->systems[sys_idx];
-        break;
-      }
-    }
+    System *sys = tb_find_system_by_id(world->systems, world->system_count, id);
     TB_CHECK_RETURN(sys,
                     "Failed to find dependent system, did you initialize "
                     "systems in the right order?",
@@ -173,10 +167,10 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
     // HACK: Find the rendering system and manually make sure that we don't
     // have to wait for the render thread
-    for (uint32_t system_idx = 0; system_idx < world->system_count;
-         ++system_idx) {
-      System *system = &world->systems[system_idx];
-      if (system->id == RenderSystemId) {
+    {
+      System *system = tb_find_system_by_id(world->systems, world->system_count,
+                                            RenderSystemId);
+      if (system) {
         RenderSystem *render_system = (RenderSystem *)system->self;
         TracyCZoneN(wait_ctx, "Wait for Render Thread", true);
         TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
@@ -718,4 +712,34 @@ bool tb_world_remove_entity(World *world, EntityId id) {
   (void)world;
   (void)id;
   return false;
+}
+
+System *tb_find_system_by_id(System *systems, uint32_t system_count,
+                             SystemId id) {
+  for (uint32_t i = 0; i < system_count; ++i) {
+    System *system = &systems[i];
+    if (system->id == id) {
+      return system;
+    }
+  }
+  return NULL;
+}
+
+System *tb_find_system_dep_by_id(System *const *systems, uint32_t system_count,
+                                 SystemId id) {
+  for (uint32_t i = 0; i < system_count; ++i) {
+    System *system = systems[i];
+    if (system->id == id) {
+      return system;
+    }
+  }
+  return NULL;
+}
+void *tb_find_system_dep_self_by_id(System *const *systems,
+                                    uint32_t system_count, SystemId id) {
+  System *sys = tb_find_system_dep_by_id(systems, system_count, id);
+  if (sys) {
+    return sys->self;
+  }
+  return NULL;
 }
