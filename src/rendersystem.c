@@ -305,7 +305,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
   desc->id = RenderSystemId;
   desc->desc = (InternalDescriptor)render_desc;
   SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUT);
+             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 0;
   desc->create = tb_create_render_system;
   desc->destroy = tb_destroy_render_system;

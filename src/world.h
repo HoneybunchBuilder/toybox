@@ -48,7 +48,7 @@ typedef uint32_t ComponentId;
 
 #define MAX_COMPONENT_DEP_COUNT 4
 #define MAX_COLUMN_COUNT MAX_COMPONENT_DEP_COUNT
-#define MAX_DEPENDENCY_SET_COUT 4
+#define MAX_DEPENDENCY_SET_COUNT 4
 #define MAX_SYSTEM_DEP_COUNT 4
 #define MAX_OUTPUT_SET_COUNT 4
 
@@ -109,7 +109,7 @@ typedef struct SystemDependencySet {
 
 typedef struct SystemInput {
   uint32_t dep_set_count;
-  SystemDependencySet dep_sets[MAX_DEPENDENCY_SET_COUT];
+  SystemDependencySet dep_sets[MAX_DEPENDENCY_SET_COUNT];
 } SystemInput;
 
 // The idea is that the system tick can write to this object
@@ -140,7 +140,7 @@ typedef struct SystemDescriptor {
   InternalDescriptor desc;
 
   uint32_t dep_count;
-  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUT];
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
 
   uint32_t system_dep_count;
   SystemId system_deps[MAX_SYSTEM_DEP_COUNT];
@@ -154,7 +154,7 @@ typedef struct System {
   SystemId id;
 
   uint32_t dep_count;
-  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUT];
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
 
   uint32_t system_dep_count;
   System *system_deps[MAX_SYSTEM_DEP_COUNT];
@@ -201,6 +201,11 @@ bool tb_world_load_scene(World *world, const char *scene_path);
 
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc);
 bool tb_world_remove_entity(World *world, EntityId id);
+
+const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
+                                                   uint32_t set, uint32_t index,
+                                                   ComponentId id);
+uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set);
 
 System *tb_find_system_by_id(System *systems, uint32_t system_count,
                              SystemId id);
