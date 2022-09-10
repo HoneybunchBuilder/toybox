@@ -799,6 +799,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .descriptorIndexing = VK_TRUE,
       .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+      .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
       .pNext = &vk_11_features,
   };
 

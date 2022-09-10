@@ -26,8 +26,6 @@
 #include "shadercommon.h"
 #include "sky_cube_frag.h"
 #include "sky_cube_vert.h"
-#include "sky_frag.h"
-#include "sky_vert.h"
 #include "uv_mesh_frag.h"
 #include "uv_mesh_vert.h"
 
@@ -463,17 +461,19 @@ uint32_t create_skydome_pipeline(VkDevice device,
     VkShaderModule vert_mod = VK_NULL_HANDLE;
     VkShaderModule frag_mod = VK_NULL_HANDLE;
     {
-      VkShaderModuleCreateInfo create_info = {0};
-      create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      create_info.codeSize = sizeof(sky_vert);
-      create_info.pCode = (const uint32_t *)sky_vert;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
-      assert(err == VK_SUCCESS);
+      /*
+    VkShaderModuleCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.codeSize = sizeof(sky_vert);
+    create_info.pCode = (const uint32_t *)sky_vert;
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
+    assert(err == VK_SUCCESS);
 
-      create_info.codeSize = sizeof(sky_frag);
-      create_info.pCode = (const uint32_t *)sky_frag;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
-      assert(err == VK_SUCCESS);
+    create_info.codeSize = sizeof(sky_frag);
+    create_info.pCode = (const uint32_t *)sky_frag;
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
+    assert(err == VK_SUCCESS);
+    */
     }
 
     VkPipelineShaderStageCreateInfo vert_stage = {0};
