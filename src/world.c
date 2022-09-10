@@ -12,6 +12,7 @@
 #include "profiling.h"
 #include "rendersystem.h"
 #include "simd.h"
+#include "skycomponent.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
 #include "transformcomponent.h"
@@ -594,6 +595,9 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
               if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
                 comp_id = NoClipComponentId;
                 break;
+              } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
+                comp_id = SkyComponentId;
+                break;
               }
             }
           }
@@ -614,6 +618,25 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 
             // Add component to entity
             component_ids[component_idx] = NoClipComponentId;
+            component_descriptors[component_idx] = comp_desc;
+            component_idx++;
+          } else if (comp_id == SkyComponentId) {
+            SkyComponentDescriptor *comp_desc =
+                tb_alloc_tp(tmp_alloc, SkyComponentDescriptor);
+            *comp_desc = (SkyComponentDescriptor){0};
+
+            // Find properties
+            json_object_object_foreach(json, key, value) {
+              if (SDL_strcmp(key, "cirrus") == 0) {
+                comp_desc->cirrus = (float)json_object_get_double(value);
+              } else if (SDL_strcmp(key, "cumulus") == 0) {
+                comp_desc->cumulus = (float)json_object_get_double(value);
+              }
+            }
+            comp_desc->sun_dir = (float3){0.0f, 1.0f, 0.0f}; // TMP HACK
+
+            // Add component to entity
+            component_ids[component_idx] = SkyComponentId;
             component_descriptors[component_idx] = comp_desc;
             component_idx++;
           }
