@@ -201,3 +201,10 @@ bool tb_world_load_scene(World *world, const char *scene_path);
 
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc);
 bool tb_world_remove_entity(World *world, EntityId id);
+
+System *tb_find_system_by_id(System *systems, uint32_t system_count,
+                             SystemId id);
+System *tb_find_system_dep_by_id(System *const *systems, uint32_t system_count,
+                                 SystemId id);
+void *tb_find_system_dep_self_by_id(System *const *systems,
+                                    uint32_t system_count, SystemId id);

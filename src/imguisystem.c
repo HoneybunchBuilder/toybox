@@ -312,13 +312,8 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
   // Find the render system
-  RenderSystem *render_system = NULL;
-  for (uint32_t i = 0; i < system_dep_count; ++i) {
-    if (system_deps[i]->id == RenderSystemId) {
-      render_system = (RenderSystem *)system_deps[i]->self;
-      break;
-    }
-  }
+  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which imgui depends on", false);
 

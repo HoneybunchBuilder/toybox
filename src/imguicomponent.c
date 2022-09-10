@@ -11,15 +11,8 @@ bool create_imgui_component(ImGuiComponent *self,
                             uint32_t system_dep_count,
                             System *const *system_deps) {
   // Ensure we have a reference to the render system
-  RenderSystem *render_system = NULL;
-  for (uint32_t i = 0; i < system_dep_count; ++i) {
-    System *sys = system_deps[i];
-    if (sys->id == RenderSystemId) {
-      render_system = (RenderSystem *)((System *)sys)->self;
-      break;
-    }
-  }
-
+  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system, "Failed to get render system reference",
                   false);
 
