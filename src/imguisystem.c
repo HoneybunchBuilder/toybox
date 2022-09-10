@@ -72,7 +72,7 @@ VkResult create_imgui_pipeline2(VkDevice device,
     SET_VK_NAME(device, *sampler, VK_OBJECT_TYPE_SAMPLER, "ImGui Sampler");
   }
 
-  // Create Descriptor Set
+  // Create Descriptor Set Layout
   {
     VkDescriptorSetLayoutBinding bindings[2] = {
         {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -308,14 +308,15 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          System *const *system_deps) {
   TB_CHECK_RETURN(system_dep_count == 1,
                   "Different than expected number of system dependencies",
-                  false);
-  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
+                  VK_ERROR_UNKNOWN);
+  TB_CHECK_RETURN(desc, "Invalid descriptor", VK_ERROR_UNKNOWN);
 
   // Find the render system
   RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which imgui depends on", false);
+                  "Failed to find render system which imgui depends on",
+                  VK_ERROR_UNKNOWN);
 
   *self = (ImGuiSystem){
       .render_system = render_system,
@@ -331,7 +332,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
     VkAttachmentDescription color_attachment = {
         .format = render_system->render_thread->swapchain.format,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, // TODO: Want to load to blend
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -370,7 +371,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
     };
     err = tb_rnd_create_render_pass(render_system, &create_info, "ImGui Pass",
                                     &self->pass);
-    TB_VK_CHECK_RET(err, "Failed to create imgui render pass", false);
+    TB_VK_CHECK_RET(err, "Failed to create imgui render pass", err);
   }
 
   // Create imgui pipeline
@@ -378,7 +379,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
       render_system->pipeline_cache, self->pass, &self->sampler,
       &self->pipe_layout, &self->set_layout, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", false);
+  TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
 
   // Create framebuffers that associate imgui pass with swapchain target
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -395,7 +396,9 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
     err = vkCreateFramebuffer(render_system->render_thread->device,
                               &create_info, &render_system->vk_host_alloc_cb,
                               &self->framebuffers[i]);
-    TB_VK_CHECK_RET(err, "Failed to create imgui framebuffer", false);
+    TB_VK_CHECK_RET(err, "Failed to create imgui framebuffer", err);
+    SET_VK_NAME(render_system->render_thread->device, self->framebuffers[i],
+                VK_OBJECT_TYPE_FRAMEBUFFER, "ImGui Pass Framebuffer");
   }
 
   // Register a pass with the render system
