@@ -2,6 +2,8 @@
 
 // TODO: Physically based camera?
 
+#include "simd.h"
+
 #define CameraComponentId 0xDEADC0DE
 
 typedef struct ComponentDescriptor ComponentDescriptor;
@@ -14,3 +16,5 @@ typedef struct CameraComponent {
 } CameraComponent;
 
 void tb_camera_component_descriptor(ComponentDescriptor *desc);
+
+void tb_camera_view_projection(const CameraComponent *self, float4x4 *vp);
