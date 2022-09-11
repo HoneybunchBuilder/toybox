@@ -746,11 +746,11 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
 
 void tb_imgui_system_descriptor(SystemDescriptor *desc,
-                                const ImGuiSystemDescriptor *input_desc) {
+                                const ImGuiSystemDescriptor *imgui_desc) {
   desc->name = "ImGui";
   desc->size = sizeof(ImGuiSystem);
   desc->id = ImGuiSystemId;
-  desc->desc = (InternalDescriptor)input_desc;
+  desc->desc = (InternalDescriptor)imgui_desc;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 2;
