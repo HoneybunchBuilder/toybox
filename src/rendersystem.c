@@ -279,10 +279,10 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
       state->buf_img_copy_queue.req_count = 0;
     }
 
-    // Reset temp pools of the next frame
+    // Reset temp pool, the contents will still be intact for the render thread
+    // but it will be reset for the next time this frame is processed
     {
-      const uint32_t next_frame = (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
-      RenderSystemFrameState *state = &self->frame_states[next_frame];
+      RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
       state->tmp_host_size = 0;
     }
 

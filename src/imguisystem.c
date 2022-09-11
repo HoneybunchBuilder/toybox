@@ -474,7 +474,9 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
     ImGuiDrawBatch *batches =
-        tb_alloc_nm_tp(self->render_system->render_thread->render_arena.alloc,
+        tb_alloc_nm_tp(self->render_system->render_thread
+                           ->frame_states[self->render_system->frame_idx]
+                           .tmp_alloc.alloc,
                        imgui_entity_count, ImGuiDrawBatch);
 
     // Resize atlas descriptor pool if necessary
@@ -672,8 +674,11 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             const float scale_x = 2.0f / width;
             const float scale_y = 2.0f / height;
 
-            ImGuiDraw *draws =
-                tb_alloc_nm_tp(self->tmp_alloc, imgui_draw_count, ImGuiDraw);
+            ImGuiDraw *draws = tb_alloc_nm_tp(
+                self->render_system->render_thread
+                    ->frame_states[self->render_system->frame_idx]
+                    .tmp_alloc.alloc,
+                imgui_draw_count, ImGuiDraw);
             {
               uint32_t cmd_index_offset = 0;
               uint32_t cmd_vertex_offset = 0;
