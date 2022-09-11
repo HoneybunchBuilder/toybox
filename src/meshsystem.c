@@ -73,3 +73,60 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
   desc->destroy = tb_destroy_mesh_system;
   desc->tick = tb_tick_mesh_system;
 }
+
+uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
+  for (uint32_t i = 0; i < self->mesh_count; ++i) {
+    if (self->mesh_ids[i] == id) {
+      return i;
+      break;
+    }
+  }
+  return SDL_MAX_UINT32;
+}
+
+bool tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
+                              const cgltf_mesh *mesh, TbMeshId *id) {
+  return true;
+}
+
+bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id) {
+  uint32_t index = find_mesh_by_id(self, id);
+  TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh", false);
+
+  self->mesh_ref_counts[index]++;
+
+  return true;
+}
+
+VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id) {
+  uint32_t index = find_mesh_by_id(self, id);
+  TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh",
+                  VK_NULL_HANDLE);
+
+  VkBuffer buffer = self->mesh_gpu_buffers[index].buffer;
+  TB_CHECK_RETURN(buffer, "Failed to retrieve buffer", VK_NULL_HANDLE);
+
+  return buffer;
+}
+
+void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
+  uint32_t index = find_mesh_by_id(self, id);
+
+  if (index == SDL_MAX_UINT32) {
+    TB_CHECK(false, "Failed to find mesh");
+    return;
+  }
+
+  if (self->mesh_ref_counts[index] == 0) {
+    TB_CHECK(false, "Tried to release reference to mesh with 0 ref count");
+    return;
+  }
+
+  self->mesh_ref_counts[index]--;
+
+  if (self->mesh_ref_counts[index] == 0) {
+    // TODO: Actually free mesh
+  }
+
+  return;
+}
