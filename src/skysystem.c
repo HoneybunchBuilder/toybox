@@ -466,7 +466,9 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
 
     uint32_t batch_count = 0;
     SkyDrawBatch *batches =
-        tb_alloc_nm_tp(self->render_system->render_thread->render_arena.alloc,
+        tb_alloc_nm_tp(self->render_system->render_thread
+                           ->frame_states[self->render_system->frame_idx]
+                           .tmp_alloc.alloc,
                        sky_count * camera_count, SkyDrawBatch);
 
     // Determine if we need to resize & reallocate descriptor sets
