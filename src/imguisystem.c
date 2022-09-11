@@ -554,11 +554,11 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             };
           } else if (event->type == SDL_MOUSEBUTTONDOWN ||
                      event->type == SDL_MOUSEBUTTONUP) {
-            if (event->button.button == SDL_BUTTON(SDL_BUTTON_LEFT)) {
+            if (event->button.button == SDL_BUTTON_LEFT) {
               io->MouseDown[0] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
-            } else if (event->button.button == SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+            } else if (event->button.button == SDL_BUTTON_RIGHT) {
               io->MouseDown[1] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
-            } else if (event->button.button == SDL_BUTTON(SDL_BUTTON_MIDDLE)) {
+            } else if (event->button.button == SDL_BUTTON_MIDDLE) {
               io->MouseDown[2] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
             }
           }
