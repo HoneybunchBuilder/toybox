@@ -14,7 +14,7 @@ bool create_material_system(MaterialSystem *self,
   RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which materials depends on",
+                  "Failed to find render system which materials depend on",
                   VK_ERROR_UNKNOWN);
 
   *self = (MaterialSystem){
