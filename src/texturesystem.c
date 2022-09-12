@@ -71,9 +71,9 @@ bool create_texture_system(TextureSystem *self,
 }
 
 void destroy_texture_system(TextureSystem *self) {
-  tb_mat_system_release_texture_ref(self, self->default_metal_rough_tex);
-  tb_mat_system_release_texture_ref(self, self->default_normal_tex);
-  tb_mat_system_release_texture_ref(self, self->default_color_tex);
+  tb_tex_system_release_texture_ref(self, self->default_metal_rough_tex);
+  tb_tex_system_release_texture_ref(self, self->default_normal_tex);
+  tb_tex_system_release_texture_ref(self, self->default_color_tex);
 
   *self = (TextureSystem){
       .default_color_tex = InvalidTextureId,
@@ -273,10 +273,10 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
     }
 
     self->tex_ids[index] = id;
-    self->tex_ref_counts[index] = 1;
-
     self->tex_count++;
   }
+
+  self->tex_ref_counts[index]++;
 
   return id;
 }
@@ -297,8 +297,8 @@ SDL_Surface *parse_and_transform_image2(uint8_t *data, int32_t size) {
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
                                        TbTextureUsage usage,
                                        const cgltf_texture *texture) {
-  const char *name = texture->name;
   const cgltf_image *image = texture->image;
+  const char *name = image->name;
   const cgltf_buffer_view *image_view = image->buffer_view;
   const cgltf_buffer *image_data = image_view->buffer;
 
@@ -324,7 +324,16 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
   return tex;
 }
 
-void tb_mat_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
+bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id) {
+  uint32_t index = find_tex_by_id(self, id);
+  TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find texture", false);
+
+  self->tex_ref_counts[index]++;
+
+  return true;
+}
+
+void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
   const uint32_t index = find_tex_by_id(self, tex);
   if (index == SDL_MAX_UINT32) {
     TB_CHECK(false, "Failed to find texture to release");
@@ -332,7 +341,7 @@ void tb_mat_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
   }
 
   if (self->tex_ref_counts[index] == 0) {
-    TB_CHECK(false, "Tried to release reference to mesh with 0 ref count");
+    TB_CHECK(false, "Tried to release reference to texture with 0 ref count");
     return;
   }
 
