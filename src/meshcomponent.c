@@ -4,6 +4,7 @@
 
 #include "cgltf.h"
 #include "common.hlsli"
+#include "materialsystem.h"
 #include "meshsystem.h"
 #include "world.h"
 
@@ -11,18 +12,17 @@ bool create_mesh_component(MeshComponent *self,
                            const MeshComponentDescriptor *desc,
                            uint32_t system_dep_count,
                            System *const *system_deps) {
-  // Ensure we have a reference to the mesh system
+  // Ensure we have a reference to the necessary systems
   MeshSystem *mesh_system = (MeshSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, MeshSystemId);
   TB_CHECK_RETURN(mesh_system, "Failed to get mesh system reference", false);
+  MaterialSystem *mat_system = (MaterialSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, MaterialSystemId);
+  TB_CHECK_RETURN(mat_system, "Failed to get material system reference", false);
 
   TbMeshId id =
       tb_mesh_system_load_mesh(mesh_system, desc->source_path, desc->mesh);
   TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
-
-  VkBuffer geom_buffer = tb_mesh_system_get_gpu_mesh(mesh_system, id);
-  TB_CHECK_RETURN(geom_buffer != VK_NULL_HANDLE, "Failed to reference mesh",
-                  false);
 
   const uint32_t submesh_count = desc->mesh->primitives_count;
   SubMesh *submeshes =
@@ -37,6 +37,12 @@ bool create_mesh_component(MeshComponent *self,
 
       submeshes[prim_idx].index_count = indices->count;
       submeshes[prim_idx].index_offset = offset;
+
+      // Load materials
+      submeshes[prim_idx].material = tb_mat_system_load_material(
+          mat_system, desc->source_path, prim->material);
+      TB_CHECK_RETURN(submeshes[prim_idx].material, "Failed to load material",
+                      false);
 
       offset += indices->buffer_view->size;
     }
@@ -109,7 +115,6 @@ bool create_mesh_component(MeshComponent *self,
 
   *self = (MeshComponent){
       .mesh_id = id,
-      .geom_buffer = geom_buffer,
       .submesh_count = submesh_count,
       .submeshes = submeshes,
   };
@@ -119,10 +124,17 @@ bool create_mesh_component(MeshComponent *self,
 
 void destroy_mesh_component(MeshComponent *self, uint32_t system_dep_count,
                             System *const *system_deps) {
-  // Ensure we have a reference to the mesh system
+  // Ensure we have a reference to the required systems
   MeshSystem *mesh_system = (MeshSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, MeshSystemId);
   TB_CHECK(mesh_system, "Failed to get mesh system reference");
+  MaterialSystem *mat_system = (MaterialSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, MaterialSystemId);
+  TB_CHECK(mat_system, "Failed to get material system reference");
+
+  for (uint32_t i = 0; i < self->submesh_count; ++i) {
+    tb_mat_system_release_material_ref(mat_system, self->submeshes[i].material);
+  }
 
   tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
 
@@ -138,8 +150,9 @@ void tb_mesh_component_descriptor(ComponentDescriptor *desc) {
       .name = "Mesh",
       .size = sizeof(MeshComponent),
       .id = MeshComponentId,
-      .system_dep_count = 1,
+      .system_dep_count = 2,
       .system_deps[0] = MeshSystemId,
+      .system_deps[1] = MaterialSystemId,
       .create = tb_create_mesh_component,
       .destroy = tb_destroy_mesh_component,
   };

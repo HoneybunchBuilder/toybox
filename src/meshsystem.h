@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
@@ -12,7 +13,7 @@ typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 
 typedef uint64_t TbMeshId;
-static const TbMeshId InvalidMeshId = 0xFFFFFFFF;
+static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
 typedef struct MeshSystemDescriptor {
   Allocator std_alloc;

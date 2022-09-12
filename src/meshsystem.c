@@ -89,13 +89,14 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_mesh *mesh) {
+  // Hash the mesh's path and gltf name to get the id
   TbMeshId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
   id = sdbm(id, (const uint8_t *)mesh->name, SDL_strlen(mesh->name));
 
   uint32_t index = find_mesh_by_id(self, id);
 
   // Mesh was not found, load it now
-  if (index == InvalidMeshId) {
+  if (index == SDL_MAX_UINT32) {
     const uint32_t new_count = self->mesh_count + 1;
     if (new_count > self->mesh_max) {
       // Re-allocate space for meshes
