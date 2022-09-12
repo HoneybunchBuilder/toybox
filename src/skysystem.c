@@ -238,7 +238,7 @@ void sky_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                      const void *batches) {
   TracyCZoneN(ctx, "Sky Record", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
-  (void)buffer;
+
   const SkyDrawBatch *sky_batches = (SkyDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {

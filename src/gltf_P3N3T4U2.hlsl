@@ -15,9 +15,9 @@ ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
 // Per-view data
 ConstantBuffer<CommonCameraData> camera_data: register(b0, space2); // Frag Only
-ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
-Texture2D shadow_map : register(t2, space2); // Frag Only
-SamplerState shadow_sampler : register(s2, space2);
+//ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
+//Texture2D shadow_map : register(t2, space2); // Frag Only
+//SamplerState shadow_sampler : register(s2, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -56,7 +56,7 @@ Interpolators vert(VertexIn i)
     o.tangent = normalize(mul(orientation, i.tangent.xyz));
     o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
     o.uv = i.uv;
-    o.shadowcoord = mul(world_pos, light_data.light_vp);
+    //o.shadowcoord = mul(world_pos, light_data.light_vp);
 
     return o;
 }
@@ -133,6 +133,7 @@ float4 frag(Interpolators i) : SV_TARGET
         float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
         //for each light
+        /*
         {
             float3 light_color = float3(1, 1, 1);
             float3 L = normalize(light_data.light_dir);
@@ -148,6 +149,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
             out_color += pbr_lighting(light, N, V, NdotV);
         }
+        */
 
         // TODO: Ambient IBL
 
@@ -160,6 +162,7 @@ float4 frag(Interpolators i) : SV_TARGET
         float gloss = 0.5;
 
         // for each light
+        /*
         {
             float3 L = normalize(light_data.light_dir);
             float3 H = normalize(V + L);
@@ -167,23 +170,28 @@ float4 frag(Interpolators i) : SV_TARGET
             float3 light_color = float3(1, 1, 1);
             out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
         }
+        */
     }
 
     // Tonemap
+    /*
     float exposure = 4.5f; // TODO: pass in as a parameter
     out_color = tonemap(out_color * exposure);
     out_color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
+    */
 
     // Gamma correction
     float gamma = 2.2f; // TODO: pass in as a parameter
     out_color = pow(out_color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
 
     // Shadow hack
+    /*
     float3 L = normalize(light_data.light_dir);
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
 
     float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler, NdotL);
     out_color *= shadow;
+    */
 
     // Want to add ambient term after shadowing
     float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;

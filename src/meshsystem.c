@@ -1,19 +1,35 @@
 #include "meshsystem.h"
 
+#include "cameracomponent.h"
 #include "cgltf.h"
 #include "common.hlsli"
 #include "hash.h"
+#include "materialsystem.h"
 #include "meshcomponent.h"
+#include "profiling.h"
 #include "rendersystem.h"
 #include "world.h"
 
+void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
+                        const void *batches) {
+  TracyCZoneN(ctx, "Mesh Opaque Record", true);
+  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+
+  TracyCZoneEnd(ctx);
+}
+
 bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                         uint32_t system_dep_count, System *const *system_deps) {
-  // Find the render system
+  // Find the necessary systems
   RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which meshes depend on", false);
+  RenderSystem *material_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, MaterialSystemId);
+  TB_CHECK_RETURN(material_system,
+                  "Failed to find material system which meshes depend on",
+                  false);
 
   *self = (MeshSystem){
       .tmp_alloc = desc->tmp_alloc,
@@ -21,27 +37,154 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .render_system = render_system,
   };
 
+  // Setup mesh system for rendering
+  {
+    VkResult err = VK_SUCCESS;
+
+    // Create render pass for opaque meshes
+    {
+      // TODO: include depth buffer
+      VkAttachmentDescription color_attachment = {
+          .format = render_system->render_thread->swapchain.format,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+          .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+          .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+          .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      };
+      VkAttachmentDescription attachments[1] = {
+          color_attachment,
+      };
+      VkAttachmentReference color_attachment_ref = {
+          0,
+          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      };
+      VkAttachmentReference attachment_refs[1] = {
+          color_attachment_ref,
+      };
+      VkSubpassDescription subpass = {
+          .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+          .colorAttachmentCount = 1,
+          .pColorAttachments = attachment_refs,
+      };
+      VkSubpassDependency subpass_dep = {
+          .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+          .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      };
+      VkRenderPassCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+          .attachmentCount = 1,
+          .pAttachments = attachments,
+          .subpassCount = 1,
+          .pSubpasses = &subpass,
+          .pDependencies = &subpass_dep,
+      };
+      err = tb_rnd_create_render_pass(render_system, &create_info,
+                                      "Opaque Mesh Pass", &self->opaque_pass);
+      TB_VK_CHECK_RET(err, "Failed to create opaque mesh render pass", false);
+    }
+
+    // Create descriptor set layout for objects
+    {
+      VkDescriptorSetLayoutBinding bindings[1] = {
+          {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+           NULL},
+      };
+      VkDescriptorSetLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+          .bindingCount = 1,
+          .pBindings = bindings,
+      };
+      err = tb_rnd_create_set_layout(render_system, &create_info,
+                                     "Object Descriptor Set",
+                                     &self->obj_set_layout);
+      TB_VK_CHECK_RET(err, "Failed to create object descriptor set layout",
+                      false);
+    }
+
+    // Create descriptor set layout for views
+    {
+      VkDescriptorSetLayoutBinding bindings[1] = {
+          {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+           VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
+      };
+      VkDescriptorSetLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+          .bindingCount = 1,
+          .pBindings = bindings,
+      };
+      err = tb_rnd_create_set_layout(render_system, &create_info,
+                                     "View Descriptor Set",
+                                     &self->view_set_layout);
+      TB_VK_CHECK_RET(err, "Failed to create view descriptor set layout",
+                      false);
+    }
+
+    // Create pipeline layout
+    {
+      VkDescriptorSetLayout mat_set_layout =
+          tb_mat_system_get_set_layout(material_system);
+      VkDescriptorSetLayout obj_set_layout = self->obj_set_layout;
+      VkDescriptorSetLayout view_set_layout = self->view_set_layout;
+      const uint32_t layout_count = 3;
+      VkDescriptorSetLayout layouts[layout_count] = {
+          mat_set_layout,
+          obj_set_layout,
+          view_set_layout,
+      };
+
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = layout_count,
+          .pSetLayouts = layouts,
+      };
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "GLTF Pipeline Layout",
+                                          &self->pipe_layout);
+    }
+
+    // Create framebuffers that associate opaque pass with swapchain target
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      VkFramebufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .renderPass = self->opaque_pass,
+          .attachmentCount = 1,
+          .pAttachments = &render_system->render_thread->frame_states[i]
+                               .swapchain_image_view,
+          .width = render_system->render_thread->swapchain.width,
+          .height = render_system->render_thread->swapchain.height,
+          .layers = 1,
+      };
+      err = tb_rnd_create_framebuffer(render_system, &create_info,
+                                      "Opaque Pass Framebuffer",
+                                      &self->framebuffers[i]);
+    }
+  }
+  // Register the render pass
+  tb_rnd_register_pass(render_system, self->opaque_pass, self->framebuffers,
+                       render_system->render_thread->swapchain.width,
+                       render_system->render_thread->swapchain.height,
+                       opaque_pass_record);
+
   return true;
 }
 
 void destroy_mesh_system(MeshSystem *self) {
   RenderSystem *render_system = self->render_system;
-  (void)render_system;
 
-  /* TODO:
-for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-  vkDestroyFramebuffer(render_system->render_thread->device,
-                       self->framebuffers[i],
-                       &render_system->vk_host_alloc_cb);
-}
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
+  }
 
-tb_rnd_destroy_render_pass(render_system, self->pass);
-
-tb_rnd_destroy_sampler(render_system, self->sampler);
-tb_rnd_destroy_set_layout(render_system, self->set_layout);
-tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-tb_rnd_destroy_pipeline(render_system, self->pipeline);
-*/
+  tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
+  tb_rnd_destroy_set_layout(render_system, self->view_set_layout);
+  tb_rnd_destroy_set_layout(render_system, self->obj_set_layout);
+  tb_rnd_destroy_render_pass(render_system, self->opaque_pass);
 
   *self = (MeshSystem){0};
 }
@@ -64,13 +207,18 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
   desc->desc = (InternalDescriptor)mesh_desc;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 1;
+  desc->dep_count = 2;
   desc->deps[0] = (SystemComponentDependencies){
+      .count = 1,
+      .dependent_ids = {CameraComponentId},
+  };
+  desc->deps[1] = (SystemComponentDependencies){
       .count = 1,
       .dependent_ids = {MeshComponentId},
   };
-  desc->system_dep_count = 1;
+  desc->system_dep_count = 2;
   desc->system_deps[0] = RenderSystemId;
+  desc->system_deps[1] = MaterialSystemId;
   desc->create = tb_create_mesh_system;
   desc->destroy = tb_destroy_mesh_system;
   desc->tick = tb_tick_mesh_system;
