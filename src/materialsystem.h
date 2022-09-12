@@ -37,6 +37,7 @@ typedef struct MaterialSystem {
 
   uint32_t mat_count;
   TbMaterialId *mat_ids;
+  uint64_t *mat_perms;
   uint32_t *mat_ref_counts;
   TbBuffer *mat_gpu_buffers;
   TbTextureId *mat_color_maps;

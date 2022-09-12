@@ -296,10 +296,10 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     }
 
     self->mesh_ids[index] = id;
-    self->mesh_ref_counts[index] = 1;
-
     self->mesh_count++;
   }
+
+  self->mesh_ref_counts[index]++;
 
   return id;
 }
