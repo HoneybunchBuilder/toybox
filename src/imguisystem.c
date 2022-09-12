@@ -393,12 +393,9 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
         .height = render_system->render_thread->swapchain.height,
         .layers = 1,
     };
-    err = vkCreateFramebuffer(render_system->render_thread->device,
-                              &create_info, &render_system->vk_host_alloc_cb,
-                              &self->framebuffers[i]);
-    TB_VK_CHECK_RET(err, "Failed to create imgui framebuffer", err);
-    SET_VK_NAME(render_system->render_thread->device, self->framebuffers[i],
-                VK_OBJECT_TYPE_FRAMEBUFFER, "ImGui Pass Framebuffer");
+    err = tb_rnd_create_framebuffer(render_system, &create_info,
+                                    "ImGui Pass Framebuffer",
+                                    &self->framebuffers[i]);
   }
 
   // Register a pass with the render system
@@ -414,9 +411,7 @@ void destroy_imgui_system(ImGuiSystem *self) {
   RenderSystem *render_system = self->render_system;
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    vkDestroyFramebuffer(render_system->render_thread->device,
-                         self->framebuffers[i],
-                         &render_system->vk_host_alloc_cb);
+    tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
   }
 
   tb_rnd_destroy_render_pass(render_system, self->pass);
@@ -566,7 +561,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
       }
 
       // Apply basic IO
-      io->DeltaTime = delta_seconds; // Note that ImGui expects seconds
+      io->DeltaTime = delta_seconds * 1000; // Note that ImGui expects seconds
       io->DisplaySize = (ImVec2){
           self->render_system->render_thread->swapchain.width,
           self->render_system->render_thread->swapchain.height,

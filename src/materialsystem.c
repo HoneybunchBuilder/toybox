@@ -94,8 +94,8 @@ void destroy_material_system(MaterialSystem *self) {
   VkDevice device = render_system->render_thread->device;
   const VkAllocationCallbacks *vk_alloc = &render_system->vk_host_alloc_cb;
 
-  vkDestroyDescriptorSetLayout(device, self->set_layout, vk_alloc);
-  vkDestroySampler(device, self->sampler, vk_alloc);
+  tb_rnd_destroy_set_layout(render_system, self->set_layout);
+  tb_rnd_destroy_sampler(render_system, self->sampler);
 
   vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
 

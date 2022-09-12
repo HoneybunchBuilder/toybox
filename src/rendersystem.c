@@ -489,14 +489,50 @@ VkResult tb_rnd_create_render_pass(RenderSystem *self,
                                    const VkRenderPassCreateInfo *create_info,
                                    const char *name, VkRenderPass *pass) {
   VkResult err = VK_SUCCESS;
-
   err = vkCreateRenderPass(self->render_thread->device, create_info,
                            &self->vk_host_alloc_cb, pass);
   TB_VK_CHECK_RET(err, "Failed to create render pass", err);
-
   SET_VK_NAME(self->render_thread->device, *pass, VK_OBJECT_TYPE_RENDER_PASS,
               name);
+  return err;
+}
 
+VkResult tb_rnd_create_framebuffer(RenderSystem *self,
+                                   const VkFramebufferCreateInfo *create_info,
+                                   const char *name,
+                                   VkFramebuffer *framebuffer) {
+  VkResult err = VK_SUCCESS;
+  err = vkCreateFramebuffer(self->render_thread->device, create_info,
+                            &self->vk_host_alloc_cb, framebuffer);
+  TB_VK_CHECK_RET(err, "Failed to create framebuffer", err);
+  SET_VK_NAME(self->render_thread->device, *framebuffer,
+              VK_OBJECT_TYPE_FRAMEBUFFER, name);
+  return err;
+}
+
+VkResult
+tb_rnd_create_set_layout(RenderSystem *self,
+                         const VkDescriptorSetLayoutCreateInfo *create_info,
+                         const char *name, VkDescriptorSetLayout *set_layout) {
+  VkResult err = VK_SUCCESS;
+  err = vkCreateDescriptorSetLayout(self->render_thread->device, create_info,
+                                    &self->vk_host_alloc_cb, set_layout);
+  TB_VK_CHECK_RET(err, "Failed to create descriptor set layout", err);
+  SET_VK_NAME(self->render_thread->device, *set_layout,
+              VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, name);
+  return err;
+}
+
+VkResult
+tb_rnd_create_pipeline_layout(RenderSystem *self,
+                              const VkPipelineLayoutCreateInfo *create_info,
+                              const char *name, VkPipelineLayout *pipe_layout) {
+  VkResult err = VK_SUCCESS;
+  err = vkCreatePipelineLayout(self->render_thread->device, create_info,
+                               &self->vk_host_alloc_cb, pipe_layout);
+  TB_VK_CHECK_RET(err, "Failed to create pipeline layout", err);
+  SET_VK_NAME(self->render_thread->device, *pipe_layout,
+              VK_OBJECT_TYPE_PIPELINE_LAYOUT, name);
   return err;
 }
 
@@ -549,6 +585,11 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
   vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
+}
+
+void tb_rnd_destroy_framebuffer(RenderSystem *self, VkFramebuffer framebuffer) {
+  vkDestroyFramebuffer(self->render_thread->device, framebuffer,
+                       &self->vk_host_alloc_cb);
 }
 
 void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass) {
