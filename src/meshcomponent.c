@@ -1,6 +1,9 @@
 #include "meshcomponent.h"
 
+#include "simd.h"
+
 #include "cgltf.h"
+#include "common.hlsli"
 #include "meshsystem.h"
 #include "world.h"
 
@@ -21,7 +24,6 @@ bool create_mesh_component(MeshComponent *self,
   TB_CHECK_RETURN(geom_buffer != VK_NULL_HANDLE, "Failed to reference mesh",
                   false);
 
-  // TODO: Figure out how we want to clean these up
   const uint32_t submesh_count = desc->mesh->primitives_count;
   SubMesh *submeshes =
       tb_alloc_nm_tp(mesh_system->std_alloc, submesh_count, SubMesh);
@@ -41,12 +43,75 @@ bool create_mesh_component(MeshComponent *self,
     // Provide padding between vertex and index sections of the buffer
     // to ensure alignment is correct
     offset += offset % (sizeof(float) * 3);
+
+    // Determine the vertex offset for each primitive
+    for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
+      const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
+
+      submeshes[prim_idx].vertex_offset = offset;
+
+      // Determine input permutation and attribute count
+      uint64_t input_perm = 0;
+      uint32_t attrib_count = 0;
+      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+           ++attr_idx) {
+        cgltf_attribute_type type = prim->attributes[attr_idx].type;
+        int32_t index = prim->attributes[attr_idx].index;
+        if ((type == cgltf_attribute_type_position ||
+             type == cgltf_attribute_type_normal ||
+             type == cgltf_attribute_type_tangent ||
+             type == cgltf_attribute_type_texcoord) &&
+            index == 0) {
+          if (type == cgltf_attribute_type_position) {
+            input_perm |= VA_INPUT_PERM_POSITION;
+          } else if (type == cgltf_attribute_type_normal) {
+            input_perm |= VA_INPUT_PERM_NORMAL;
+          } else if (type == cgltf_attribute_type_tangent) {
+            input_perm |= VA_INPUT_PERM_TANGENT;
+          } else if (type == cgltf_attribute_type_texcoord) {
+            input_perm |= VA_INPUT_PERM_TEXCOORD0;
+          }
+
+          attrib_count++;
+        }
+      }
+
+      // Reorder attributes
+      uint32_t *attr_order =
+          tb_alloc(mesh_system->tmp_alloc, sizeof(uint32_t) * attrib_count);
+      for (uint32_t attr_idx = 0; attr_idx < (uint32_t)prim->attributes_count;
+           ++attr_idx) {
+        cgltf_attribute_type attr_type = prim->attributes[attr_idx].type;
+        int32_t idx = prim->attributes[attr_idx].index;
+        if (attr_type == cgltf_attribute_type_position) {
+          attr_order[0] = attr_idx;
+        } else if (attr_type == cgltf_attribute_type_normal) {
+          attr_order[1] = attr_idx;
+        } else if (attr_type == cgltf_attribute_type_tangent) {
+          attr_order[2] = attr_idx;
+        } else if (attr_type == cgltf_attribute_type_texcoord && idx == 0) {
+          if (input_perm & VA_INPUT_PERM_TANGENT) {
+            attr_order[3] = attr_idx;
+          } else {
+            attr_order[2] = attr_idx;
+          }
+        }
+      }
+
+      for (cgltf_size attr_idx = 0; attr_idx < attrib_count; ++attr_idx) {
+        cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
+        cgltf_accessor *accessor = attr->data;
+
+        size_t attr_size = accessor->stride * accessor->count;
+
+        offset += attr_size;
+      }
+    }
   }
 
   *self = (MeshComponent){
       .mesh_id = id,
       .geom_buffer = geom_buffer,
-      .vertex_offset = offset,
       .submesh_count = submesh_count,
       .submeshes = submeshes,
   };

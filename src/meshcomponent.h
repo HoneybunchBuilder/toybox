@@ -23,13 +23,13 @@ typedef struct TbMaterial TbMaterial;
 typedef struct SubMesh {
   uint32_t index_count;
   uint64_t index_offset;
+  uint64_t vertex_offset;
   TbMaterial *material;
 } SubMesh;
 
 typedef struct MeshComponent {
   TbMeshId mesh_id;
   VkBuffer geom_buffer;
-  uint64_t vertex_offset;
   uint32_t submesh_count;
   SubMesh *submeshes;
 } MeshComponent;
