@@ -30,6 +30,7 @@
 #include "coreuisystem.h"
 #include "imguisystem.h"
 #include "inputsystem.h"
+#include "materialsystem.h"
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
 #include "rendersystem.h"
@@ -144,6 +145,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  MaterialSystemDescriptor material_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   RenderSystemDescriptor render_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
@@ -151,7 +157,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   // Order matters
-  const uint32_t system_count = 7;
+  const uint32_t system_count = 8;
   SystemDescriptor system_descs[system_count] = {0};
   tb_input_system_descriptor(&system_descs[0], &input_system_desc);
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
@@ -159,7 +165,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
   tb_sky_system_descriptor(&system_descs[4], &sky_system_desc);
   tb_mesh_system_descriptor(&system_descs[5], &mesh_system_desc);
-  tb_render_system_descriptor(&system_descs[6], &render_system_desc);
+  tb_material_system_descriptor(&system_descs[6], &material_system_desc);
+  tb_render_system_descriptor(&system_descs[7], &render_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
