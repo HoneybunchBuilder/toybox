@@ -9,6 +9,7 @@
 
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
+typedef struct TextureSystem TextureSystem;
 typedef struct cgltf_material cgltf_material;
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
@@ -28,6 +29,7 @@ typedef struct MaterialSystem {
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
+  TextureSystem *texture_system;
 
   VkSampler sampler; // Immutable sampler for material descriptor sets
   VkDescriptorSetLayout set_layout;

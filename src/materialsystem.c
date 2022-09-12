@@ -4,21 +4,29 @@
 #include "common.hlsli"
 #include "hash.h"
 #include "rendersystem.h"
+#include "texturesystem.h"
 #include "world.h"
 
 bool create_material_system(MaterialSystem *self,
                             const MaterialSystemDescriptor *desc,
                             uint32_t system_dep_count,
                             System *const *system_deps) {
-  // Find the render system
+  // Find the necessary systems
   RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which materials depend on",
-                  VK_ERROR_UNKNOWN);
+                  false);
+  TextureSystem *texture_system =
+      (TextureSystem *)tb_find_system_dep_self_by_id(
+          system_deps, system_dep_count, TextureSystemId);
+  TB_CHECK_RETURN(texture_system,
+                  "Failed to find texture system which materials depend on",
+                  false);
 
   *self = (MaterialSystem){
       .render_system = render_system,
+      .texture_system = texture_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -112,8 +120,9 @@ void tb_material_system_descriptor(SystemDescriptor *desc,
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 0;
-  desc->system_dep_count = 1;
+  desc->system_dep_count = 2;
   desc->system_deps[0] = RenderSystemId;
+  desc->system_deps[1] = TextureSystemId;
   desc->create = tb_create_material_system;
   desc->destroy = tb_destroy_material_system;
   desc->tick = tb_tick_material_system;
@@ -252,7 +261,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .pImageInfo =
                     &(VkDescriptorImageInfo){
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = VK_NULL_HANDLE, // TODO
+                        .imageView = tb_tex_system_get_image_view(
+                            self->texture_system, self->mat_color_maps[index]),
                     },
             };
             writes[write_idx + 2] = (VkWriteDescriptorSet){
@@ -264,7 +274,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .pImageInfo =
                     &(VkDescriptorImageInfo){
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = VK_NULL_HANDLE, // TODO
+                        .imageView = tb_tex_system_get_image_view(
+                            self->texture_system, self->mat_normal_maps[index]),
                     },
             };
             writes[write_idx + 3] = (VkWriteDescriptorSet){
@@ -276,7 +287,9 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .pImageInfo =
                     &(VkDescriptorImageInfo){
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = VK_NULL_HANDLE, // TODO
+                        .imageView = tb_tex_system_get_image_view(
+                            self->texture_system,
+                            self->mat_metal_rough_maps[index]),
                     },
             };
           }
