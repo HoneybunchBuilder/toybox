@@ -1,5 +1,7 @@
 #include "meshsystem.h"
 
+#include "cgltf.h"
+#include "hash.h"
 #include "meshcomponent.h"
 #include "rendersystem.h"
 #include "world.h"
@@ -86,7 +88,133 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_mesh *mesh) {
-  return InvalidMeshId;
+  TbMeshId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
+  id = sdbm(id, (const uint8_t *)mesh->name, SDL_strlen(mesh->name));
+
+  uint32_t index = find_mesh_by_id(self, id);
+
+  // Mesh was not found, load it now
+  if (index == InvalidMeshId) {
+    const uint32_t new_count = self->mesh_count + 1;
+    if (new_count > self->mesh_max) {
+      // Re-allocate space for meshes
+      const uint32_t new_max = new_count * 2;
+
+      Allocator alloc = self->std_alloc;
+
+      self->mesh_ids =
+          tb_realloc_nm_tp(alloc, self->mesh_ids, new_max, TbMeshId);
+      self->mesh_host_buffers = tb_realloc_nm_tp(alloc, self->mesh_host_buffers,
+                                                 new_max, TbHostBuffer);
+      self->mesh_gpu_buffers =
+          tb_realloc_nm_tp(alloc, self->mesh_gpu_buffers, new_max, TbBuffer);
+      self->mesh_ref_counts =
+          tb_realloc_nm_tp(alloc, self->mesh_ref_counts, new_max, uint32_t);
+
+      self->mesh_max = new_max;
+    }
+
+    index = self->mesh_count;
+
+    // Determine how big this mesh is
+    uint64_t geom_size = 0;
+    uint64_t vertex_offset = 0;
+    {
+      uint64_t index_size = 0;
+      uint64_t vertex_size = 0;
+      for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
+           ++prim_idx) {
+        cgltf_primitive *prim = &mesh->primitives[prim_idx];
+        cgltf_accessor *indices = prim->indices;
+
+        index_size += indices->buffer_view->size;
+
+        for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+             ++attr_idx) {
+          // Only care about certain attributes at the moment
+          cgltf_attribute_type type = prim->attributes[attr_idx].type;
+          int32_t index = prim->attributes[attr_idx].index;
+          if ((type == cgltf_attribute_type_position ||
+               type == cgltf_attribute_type_normal ||
+               type == cgltf_attribute_type_tangent ||
+               type == cgltf_attribute_type_texcoord) &&
+              index == 0) {
+            cgltf_accessor *attr = prim->attributes[attr_idx].data;
+            vertex_size += attr->count * attr->stride;
+          }
+        }
+
+        // Calculate the necessary padding between the index and vertex contents
+        // of the buffer.
+        // Otherwise we'll get a validation error.
+        // The vertex content needs to start that the correct attribAddress
+        // which must be a multiple of the size of the first attribute
+        uint64_t idx_padding = index_size % (sizeof(float) * 3);
+        vertex_offset = index_size + idx_padding;
+        geom_size = vertex_offset + vertex_size;
+      }
+    }
+
+    VkResult err = VK_SUCCESS;
+
+    // Allocate space on the host that we can read the mesh into
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = geom_size,
+          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      };
+
+      const uint32_t name_max = 100;
+      char name[name_max] = {0};
+      SDL_snprintf(name, name_max, "%s Host Geom Buffer", mesh->name);
+
+      err = tb_rnd_sys_alloc_host_buffer(self->render_system, &create_info,
+                                         name, &self->mesh_host_buffers[index]);
+      TB_VK_CHECK_RET(err, "Failed to create host mesh buffer", false);
+    }
+
+    // Create space on the gpu for the mesh
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = geom_size,
+          .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      };
+
+      const uint32_t name_max = 100;
+      char name[name_max] = {0};
+      SDL_snprintf(name, name_max, "%s GPU Geom Buffer", mesh->name);
+
+      err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info, name,
+                                        &self->mesh_gpu_buffers[index]);
+      TB_VK_CHECK_RET(err, "Failed to create gpu mesh buffer", false);
+    }
+
+    // Read the cgltf mesh into the driver owned memory
+    {
+
+    }
+
+    // Instruct the render system to upload this
+    {
+      BufferCopy copy = {
+          .src = self->mesh_host_buffers[index].buffer,
+          .dst = self->mesh_gpu_buffers[index].buffer,
+          .region = {.size = geom_size},
+      };
+      tb_rnd_upload_buffers(self->render_system, &copy, 1);
+    }
+
+    self->mesh_ids[index] = id;
+    self->mesh_ref_counts[index] = 1;
+
+    self->mesh_count++;
+  }
+
+  return id;
 }
 
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id) {
@@ -125,7 +253,19 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
   self->mesh_ref_counts[index]--;
 
   if (self->mesh_ref_counts[index] == 0) {
-    // TODO: Actually free mesh
+    // Free the mesh at this index
+    VmaAllocator vma_alloc = self->render_system->vma_alloc;
+
+    TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
+    TbBuffer *gpu_buf = &self->mesh_gpu_buffers[index];
+
+    vmaUnmapMemory(vma_alloc, host_buf->alloc);
+
+    vmaDestroyBuffer(vma_alloc, host_buf->buffer, host_buf->alloc);
+    vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);
+
+    *host_buf = (TbHostBuffer){0};
+    *gpu_buf = (TbBuffer){0};
   }
 
   return;
