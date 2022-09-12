@@ -15,6 +15,13 @@ typedef struct VkImageView_T *VkImageView;
 typedef uint64_t TbTextureId;
 static const TbTextureId InvalidTextureId = SDL_MAX_UINT64;
 
+typedef enum TbTextureUsage {
+  TB_TEX_USAGE_UNKNOWN = 0,
+  TB_TEX_USAGE_COLOR,
+  TB_TEX_USAGE_NORMAL,
+  TB_TEX_USAGE_METAL_ROUGH,
+} TbTextureUsage;
+
 typedef struct TextureSystemDescriptor {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -28,7 +35,7 @@ typedef struct TextureSystem {
 
   uint32_t tex_count;
   TbTextureId *tex_ids;
-  TbBuffer *tex_host_buffers;
+  TbHostBuffer *tex_host_buffers;
   TbImage *tex_gpu_images;
   VkImageView *tex_image_views;
   uint32_t *tex_ref_counts;
@@ -45,7 +52,10 @@ void tb_texture_system_descriptor(SystemDescriptor *desc,
 VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex);
 
 TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
-                                         const char *name);
+                                         const char *name, TbTextureUsage usage,
+                                         uint32_t width, uint32_t height,
+                                         const uint8_t *pixels, uint64_t size);
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
+                                       TbTextureUsage usage,
                                        const cgltf_texture *texture);
 void tb_mat_system_release_texture_ref(TextureSystem *self, TbTextureId tex);
