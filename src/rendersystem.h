@@ -18,14 +18,8 @@ typedef struct RenderSystemDescriptor {
 } RenderSystemDescriptor;
 
 typedef struct RenderSystemFrameState {
-  uint64_t tmp_host_size;
-  VmaAllocation tmp_host_alloc;
-  VkBuffer tmp_host_buffer;
-  uint8_t *tmp_host_mapped;
+  TbHostBuffer tmp_host_buffer;
   VmaPool tmp_host_pool;
-
-  VmaPool gpu_buffer_pool;
-  VmaPool gpu_image_pool;
 
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
@@ -40,6 +34,11 @@ typedef struct RenderSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
   RenderThread *render_thread;
+
+  VmaPool host_buffer_pool;
+
+  VmaPool gpu_buffer_pool;
+  VmaPool gpu_image_pool;
 
   VkAllocationCallbacks vk_host_alloc_cb;
   VmaAllocator vma_alloc;
@@ -61,6 +60,9 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                           uint32_t alignment,
                                           TbHostBuffer *buffer);
 
+VkResult tb_rnd_sys_alloc_host_buffer(RenderSystem *self,
+                                      const VkBufferCreateInfo *create_info,
+                                      const char *name, TbHostBuffer *buffer);
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
                                      const VkBufferCreateInfo *create_info,
                                      const char *name, TbBuffer *buffer);

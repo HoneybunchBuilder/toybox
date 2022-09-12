@@ -32,6 +32,8 @@ typedef struct BufferImageCopyQueue {
 
 typedef struct TbHostBuffer {
   VkBuffer buffer;
+  VmaAllocation alloc;
+  VmaAllocationInfo info;
   uint64_t offset;
   void *ptr;
 } TbHostBuffer;

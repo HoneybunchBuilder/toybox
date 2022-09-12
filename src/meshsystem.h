@@ -11,7 +11,7 @@ typedef struct RenderSystem RenderSystem;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 
-typedef uint32_t TbMeshId;
+typedef uint64_t TbMeshId;
 static const TbMeshId InvalidMeshId = 0xFFFFFFFF;
 
 typedef struct MeshSystemDescriptor {
@@ -34,7 +34,7 @@ typedef struct MeshSystem {
 
   uint32_t mesh_count;
   TbMeshId *mesh_ids;
-  TbBuffer *mesh_host_buffers;
+  TbHostBuffer *mesh_host_buffers;
   TbBuffer *mesh_gpu_buffers;
   uint32_t *mesh_ref_counts;
   uint32_t mesh_max;

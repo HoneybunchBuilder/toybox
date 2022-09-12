@@ -11,7 +11,7 @@ typedef struct cgltf_mesh cgltf_mesh;
 
 typedef struct VkBuffer_T *VkBuffer;
 
-typedef uint32_t TbMeshId;
+typedef uint64_t TbMeshId;
 
 typedef struct MeshComponentDescriptor {
   const char *source_path;
