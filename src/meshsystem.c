@@ -13,13 +13,12 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which meshes depends on",
-                  VK_ERROR_UNKNOWN);
+                  "Failed to find render system which meshes depend on", false);
 
   *self = (MeshSystem){
-      .render_system = render_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
+      .render_system = render_system,
   };
 
   return true;
