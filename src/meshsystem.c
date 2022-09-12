@@ -1,6 +1,7 @@
 #include "meshsystem.h"
 
 #include "cgltf.h"
+#include "common.hlsli"
 #include "hash.h"
 #include "meshcomponent.h"
 #include "rendersystem.h"
@@ -119,6 +120,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     // Determine how big this mesh is
     uint64_t geom_size = 0;
     uint64_t vertex_offset = 0;
+    uint32_t attrib_count = 0;
+    uint64_t input_perm = 0;
     {
       uint64_t index_size = 0;
       uint64_t vertex_size = 0;
@@ -141,6 +144,18 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
               index == 0) {
             cgltf_accessor *attr = prim->attributes[attr_idx].data;
             vertex_size += attr->count * attr->stride;
+
+            if (type == cgltf_attribute_type_position) {
+              input_perm |= VA_INPUT_PERM_POSITION;
+            } else if (type == cgltf_attribute_type_normal) {
+              input_perm |= VA_INPUT_PERM_NORMAL;
+            } else if (type == cgltf_attribute_type_tangent) {
+              input_perm |= VA_INPUT_PERM_TANGENT;
+            } else if (type == cgltf_attribute_type_texcoord) {
+              input_perm |= VA_INPUT_PERM_TEXCOORD0;
+            }
+
+            attrib_count++;
           }
         }
 
@@ -195,7 +210,79 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     // Read the cgltf mesh into the driver owned memory
     {
+      TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
+      uint64_t idx_offset = 0;
+      uint64_t vtx_offset = vertex_offset;
+      for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
+           ++prim_idx) {
+        cgltf_primitive *prim = &mesh->primitives[prim_idx];
 
+        {
+          cgltf_accessor *indices = prim->indices;
+          cgltf_buffer_view *view = indices->buffer_view;
+          cgltf_size src_offset = indices->offset + view->offset;
+          cgltf_size index_size = view->size;
+
+          void *src = ((uint8_t *)view->buffer->data) + src_offset;
+          void *dst = ((uint8_t *)(host_buf->ptr)) + idx_offset;
+          SDL_memcpy(dst, src, index_size);
+          idx_offset += index_size;
+        }
+
+        // Reorder attributes
+        uint32_t *attr_order =
+            tb_alloc(self->tmp_alloc, sizeof(uint32_t) * attrib_count);
+        for (uint32_t i = 0; i < (uint32_t)prim->attributes_count; ++i) {
+          cgltf_attribute_type attr_type = prim->attributes[i].type;
+          int32_t attr_idx = prim->attributes[i].index;
+          if (attr_type == cgltf_attribute_type_position) {
+            attr_order[0] = i;
+          } else if (attr_type == cgltf_attribute_type_normal) {
+            attr_order[1] = i;
+          } else if (attr_type == cgltf_attribute_type_tangent) {
+            attr_order[2] = i;
+          } else if (attr_type == cgltf_attribute_type_texcoord &&
+                     attr_idx == 0) {
+            if (input_perm & VA_INPUT_PERM_TANGENT) {
+              attr_order[3] = i;
+            } else {
+              attr_order[2] = i;
+            }
+          }
+        }
+
+        for (cgltf_size attr_idx = 0; attr_idx < attrib_count; ++attr_idx) {
+          cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
+          cgltf_accessor *accessor = attr->data;
+          cgltf_buffer_view *view = accessor->buffer_view;
+
+          size_t attr_offset = view->offset + accessor->offset;
+          size_t attr_size = accessor->stride * accessor->count;
+
+          // TODO: Figure out how to handle when an object can't use the
+          // expected pipeline
+          if (SDL_strcmp(attr->name, "NORMAL") == 0) {
+            if (attr_idx + 1 < prim->attributes_count) {
+              cgltf_attribute *next =
+                  &prim->attributes[attr_order[attr_idx + 1]];
+              if (input_perm & VA_INPUT_PERM_TANGENT) {
+                if (SDL_strcmp(next->name, "TANGENT") != 0) {
+                  SDL_TriggerBreakpoint();
+                }
+              } else {
+                if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
+                  SDL_TriggerBreakpoint();
+                }
+              }
+            }
+          }
+
+          void *src = ((uint8_t *)view->buffer->data) + attr_offset;
+          void *dst = ((uint8_t *)(host_buf->ptr)) + vtx_offset;
+          SDL_memcpy(dst, src, attr_size);
+          vtx_offset += attr_size;
+        }
+      }
     }
 
     // Instruct the render system to upload this
@@ -267,6 +354,4 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
     *host_buf = (TbHostBuffer){0};
     *gpu_buf = (TbBuffer){0};
   }
-
-  return;
 }
