@@ -6,10 +6,7 @@
 #define MeshComponentIdStr "0x0D15EA5E"
 
 typedef struct ComponentDescriptor ComponentDescriptor;
-
 typedef struct cgltf_mesh cgltf_mesh;
-
-typedef struct VkBuffer_T *VkBuffer;
 
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialId;
@@ -28,7 +25,6 @@ typedef struct SubMesh {
 
 typedef struct MeshComponent {
   TbMeshId mesh_id;
-  VkBuffer geom_buffer;
   uint32_t submesh_count;
   SubMesh *submeshes;
 } MeshComponent;
