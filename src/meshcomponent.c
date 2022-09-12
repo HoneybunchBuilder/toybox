@@ -102,9 +102,7 @@ bool create_mesh_component(MeshComponent *self,
         cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
         cgltf_accessor *accessor = attr->data;
 
-        size_t attr_size = accessor->stride * accessor->count;
-
-        offset += attr_size;
+        offset += accessor->stride * accessor->count;
       }
     }
   }
