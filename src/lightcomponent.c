@@ -23,7 +23,11 @@ bool create_directional_light_component(DirectionalLightComponent *comp,
   return true;
 }
 
-void destroy_directional_light_component(DirectionalLightComponent *comp) {
+void destroy_directional_light_component(DirectionalLightComponent *comp,
+                                         uint32_t system_dep_count,
+                                         System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *comp = (DirectionalLightComponent){0};
 }
 

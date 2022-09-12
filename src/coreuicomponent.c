@@ -14,7 +14,10 @@ bool create_coreui_component(CoreUIComponent *self, const void *desc,
   return true;
 }
 
-void destroy_coreui_component(CoreUIComponent *self) {
+void destroy_coreui_component(CoreUIComponent *self, uint32_t system_dep_count,
+                              System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *self = (CoreUIComponent){0};
 }
 

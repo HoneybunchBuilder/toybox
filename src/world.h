@@ -11,8 +11,10 @@
                                            system_dep_count, system_deps);     \
   }                                                                            \
                                                                                \
-  void tb_destroy_##lower_name##_component(void *self) {                       \
-    destroy_##lower_name##_component((self_type *)self);                       \
+  void tb_destroy_##lower_name##_component(                                    \
+      void *self, uint32_t system_dep_count, System *const *system_deps) {     \
+    destroy_##lower_name##_component((self_type *)self, system_dep_count,      \
+                                     system_deps);                             \
   }
 
 #define TB_DEFINE_SYSTEM(lower_name, self_type, desc_type)                     \
@@ -66,7 +68,8 @@ typedef struct System System;
 typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc,
                                   uint32_t system_dep_count,
                                   System *const *system_deps);
-typedef void (*ComponentDestroyFn)(void *self);
+typedef void (*ComponentDestroyFn)(void *self, uint32_t system_dep_count,
+                                   System *const *system_deps);
 typedef struct ComponentDescriptor {
   const char *name;
   uint64_t size;
@@ -83,8 +86,10 @@ typedef struct ComponentStore {
   const char *name;
   ComponentId id;
   uint64_t size;       // size of the component element
-  uint32_t count;      // Number of components in the collection
-  uint8_t *components; // Component storage in generic bytes
+  uint32_t count;      // Number of components in
+                       // the collection
+  uint8_t *components; // Component storage in
+                       // generic bytes
   ComponentDescriptor desc;
   ComponentCreateFn create;
   ComponentDestroyFn destroy;
@@ -112,9 +117,12 @@ typedef struct SystemInput {
   SystemDependencySet dep_sets[MAX_DEPENDENCY_SET_COUNT];
 } SystemInput;
 
-// The idea is that the system tick can write to this object
-// Memory for dynamic members is expected to come from a temporary allocator
-// components and entities are expected to be the same array lengths (count).
+// The idea is that the system tick can write
+// to this object Memory for dynamic members
+// is expected to come from a temporary
+// allocator components and entities are
+// expected to be the same array lengths
+// (count).
 typedef struct SystemWriteSet {
   ComponentId id;
   uint32_t count;

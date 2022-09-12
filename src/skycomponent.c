@@ -18,7 +18,12 @@ bool create_sky_component(SkyComponent *self,
   return true;
 }
 
-void destroy_sky_component(SkyComponent *self) { *self = (SkyComponent){0}; }
+void destroy_sky_component(SkyComponent *self, uint32_t system_dep_count,
+                           System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
+  *self = (SkyComponent){0};
+}
 
 TB_DEFINE_COMPONENT(sky, SkyComponent, SkyComponentDescriptor)
 

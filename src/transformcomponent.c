@@ -13,7 +13,11 @@ bool create_transform_component(TransformComponent *comp,
   return true;
 }
 
-void destroy_transform_component(TransformComponent *comp) {
+void destroy_transform_component(TransformComponent *comp,
+                                 uint32_t system_dep_count,
+                                 System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   // Setting scale to 0 to implicitly zero out the entire object
   // while avoiding nonsense warnings from the compiler in IDEs
   *comp = (TransformComponent){
