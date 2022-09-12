@@ -12,6 +12,7 @@ typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 
 typedef uint32_t TbMeshId;
+static const TbMeshId InvalidMeshId = 0xFFFFFFFF;
 
 typedef struct MeshSystemDescriptor {
   Allocator std_alloc;
@@ -42,8 +43,8 @@ typedef struct MeshSystem {
 void tb_mesh_system_descriptor(SystemDescriptor *desc,
                                const MeshSystemDescriptor *mesh_desc);
 
-bool tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
-                              const cgltf_mesh *mesh, TbMeshId *id);
+TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
+                                  const cgltf_mesh *mesh);
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id);
 VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id);
 void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id);

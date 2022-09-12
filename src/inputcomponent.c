@@ -12,7 +12,10 @@ bool create_input_component(InputComponent *self, const void *desc,
   return true;
 }
 
-void destroy_input_component(InputComponent *self) {
+void destroy_input_component(InputComponent *self, uint32_t system_dep_count,
+                             System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *self = (InputComponent){0};
 }
 

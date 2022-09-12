@@ -84,9 +84,9 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
   return SDL_MAX_UINT32;
 }
 
-bool tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
-                              const cgltf_mesh *mesh, TbMeshId *id) {
-  return true;
+TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
+                                  const cgltf_mesh *mesh) {
+  return InvalidMeshId;
 }
 
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id) {

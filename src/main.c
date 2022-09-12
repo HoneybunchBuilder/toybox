@@ -22,6 +22,7 @@
 #include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "lightcomponent.h"
+#include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
@@ -29,6 +30,7 @@
 #include "coreuisystem.h"
 #include "imguisystem.h"
 #include "inputsystem.h"
+#include "meshsystem.h"
 #include "noclipcontrollersystem.h"
 #include "rendersystem.h"
 #include "skysystem.h"
@@ -102,7 +104,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
   // Order does not matter
-  const uint32_t component_count = 8;
+  const uint32_t component_count = 9;
   ComponentDescriptor component_descs[component_count] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
@@ -112,6 +114,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_coreui_component_descriptor(&component_descs[5]);
   tb_imgui_component_descriptor(&component_descs[6]);
   tb_sky_component_descriptor(&component_descs[7]);
+  tb_mesh_component_descriptor(&component_descs[8]);
 
   InputSystemDescriptor input_system_desc = {
       .tmp_alloc = arena.alloc,
@@ -126,12 +129,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  ImGuiSystemDescriptor imgui_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   SkySystemDescriptor sky_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
-  ImGuiSystemDescriptor imgui_system_desc = {
+  MeshSystemDescriptor mesh_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
@@ -143,14 +151,15 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   // Order matters
-  const uint32_t system_count = 6;
+  const uint32_t system_count = 7;
   SystemDescriptor system_descs[system_count] = {0};
   tb_input_system_descriptor(&system_descs[0], &input_system_desc);
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
   tb_coreui_system_descriptor(&system_descs[2], &coreui_system_desc);
   tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
   tb_sky_system_descriptor(&system_descs[4], &sky_system_desc);
-  tb_render_system_descriptor(&system_descs[5], &render_system_desc);
+  tb_mesh_system_descriptor(&system_descs[5], &mesh_system_desc);
+  tb_render_system_descriptor(&system_descs[6], &render_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,

@@ -137,7 +137,10 @@ bool create_imgui_component(ImGuiComponent *self,
   return true;
 }
 
-void destroy_imgui_component(ImGuiComponent *self) {
+void destroy_imgui_component(ImGuiComponent *self, uint32_t system_dep_count,
+                           System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   tb_rnd_free_gpu_image(self->render_system, &self->atlas);
   vkDestroyImageView(self->render_system->render_thread->device,
                      self->atlas_view, &self->render_system->vk_host_alloc_cb);

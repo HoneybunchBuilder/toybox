@@ -15,7 +15,10 @@ bool create_noclip_component(NoClipComponent *comp,
   return true;
 }
 
-void destroy_noclip_component(NoClipComponent *comp) {
+void destroy_noclip_component(NoClipComponent *comp, uint32_t system_dep_count,
+                              System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *comp = (NoClipComponent){0};
 }
 

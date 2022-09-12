@@ -1,21 +1,25 @@
 #include "world.h"
 
 #include "allocator.h"
-#include "cameracomponent.h"
-#include "inputcomponent.h"
-#include "inputsystem.h"
+#include "profiling.h"
+#include "simd.h"
+#include "tbcommon.h"
+#include "tbgltf.h"
+
 #include "json-c/json_object.h"
 #include "json-c/json_tokener.h"
 #include "json-c/linkhash.h"
+
+#include "cameracomponent.h"
+#include "inputcomponent.h"
 #include "lightcomponent.h"
+#include "meshcomponent.h"
 #include "noclipcomponent.h"
-#include "profiling.h"
-#include "rendersystem.h"
-#include "simd.h"
 #include "skycomponent.h"
-#include "tbcommon.h"
-#include "tbgltf.h"
 #include "transformcomponent.h"
+
+#include "inputsystem.h"
+#include "rendersystem.h"
 
 static cgltf_result
 sdl_read_glb(const struct cgltf_memory_options *memory_options,
@@ -378,7 +382,32 @@ void tb_destroy_world(World *world) {
         Entity entity = world->entities[entity_id];
         uint8_t *comp = &store->components[(store->size * entity_id)];
         if (entity & (1 << store_idx)) {
-          store->destroy(comp);
+          uint32_t system_dep_count = 0;
+          System **system_deps = NULL;
+
+          const ComponentDescriptor *comp_desc = &store->desc;
+
+          if (comp_desc) {
+            // Find system dependencies
+            system_dep_count = comp_desc->system_dep_count;
+            if (system_dep_count > 0) {
+              system_deps =
+                  tb_alloc_nm_tp(world->tmp_alloc, system_dep_count, System *);
+              for (uint32_t dep_idx = 0; dep_idx < system_dep_count;
+                   ++dep_idx) {
+                for (uint32_t sys_idx = 0; sys_idx < world->system_count;
+                     ++sys_idx) {
+                  if (world->systems[sys_idx].id ==
+                      comp_desc->system_deps[dep_idx]) {
+                    system_deps[dep_idx] = &world->systems[sys_idx];
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          store->destroy(comp, system_dep_count, system_deps);
         }
       }
     }
@@ -474,6 +503,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         component_count++;
       }
       if (node->mesh) {
+        component_count++;
       }
       if (node->skin) {
       }
@@ -550,6 +580,15 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         }
       }
       if (node->mesh) {
+        MeshComponentDescriptor mesh_desc = {
+            .mesh = node->mesh,
+            .source_path = scene_path,
+        };
+
+        // Add component to entity
+        component_ids[component_idx] = MeshComponentId;
+        component_descriptors[component_idx] = &mesh_desc;
+        component_idx++;
       }
       if (node->skin) {
       }

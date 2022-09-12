@@ -19,7 +19,10 @@ bool create_camera_component(CameraComponent *comp,
   return true;
 }
 
-void destroy_camera_component(CameraComponent *comp) {
+void destroy_camera_component(CameraComponent *comp, uint32_t system_dep_count,
+                              System *const *system_deps) {
+  (void)system_dep_count;
+  (void)system_deps;
   *comp = (CameraComponent){0};
 }
 
