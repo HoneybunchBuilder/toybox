@@ -49,8 +49,8 @@ bool create_texture_system(TextureSystem *self,
   {
     // 2x2 blank normal image
     const uint8_t pixels[] = {
-        255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255,
+        0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
+        0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
     };
     self->default_normal_tex = tb_tex_system_create_texture(
         self, "", "Default Normal Texture", TB_TEX_USAGE_NORMAL, 2, 2, pixels,
@@ -108,9 +108,7 @@ void tb_texture_system_descriptor(SystemDescriptor *desc,
   desc->tick = tb_tick_texture_system;
 }
 
-VkImageView tb_texture_system_get_image_view(TextureSystem *self,
-                                             TbTextureId tex) {
-
+VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
   const uint32_t index = find_tex_by_id(self, tex);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32,
                   "Failed to find texture by id when retrieving image view",
