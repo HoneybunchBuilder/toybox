@@ -117,7 +117,7 @@ bool create_render_system(RenderSystem *self,
         };
         VmaAllocationInfo alloc_info = {0};
         err = vmaCreateBuffer(self->vma_alloc, &create_info, &alloc_create_info,
-                              &state->tmp_host_buffer,
+                              &state->tmp_host_buffer.buffer,
                               &state->tmp_host_buffer.alloc, &alloc_info);
         TB_VK_CHECK_RET(err, "Failed to allocate temporary buffer", false);
         SET_VK_NAME(self->render_thread->device, state->tmp_host_buffer.buffer,
@@ -340,7 +340,8 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                           TbHostBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
-  void *ptr = &state->tmp_host_buffer.ptr[state->tmp_host_buffer.info.size];
+  void *ptr = &(
+      (uint8_t *)state->tmp_host_buffer.ptr)[state->tmp_host_buffer.info.size];
 
   intptr_t padding = 0;
   if ((intptr_t)ptr % alignment != 0) {
@@ -388,8 +389,6 @@ VkResult tb_rnd_sys_alloc_host_buffer(RenderSystem *self,
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
                                      const VkBufferCreateInfo *create_info,
                                      const char *name, TbBuffer *buffer) {
-  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-
   VmaAllocator vma_alloc = self->vma_alloc;
   VmaPool pool = self->gpu_buffer_pool;
 
@@ -411,8 +410,6 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image) {
-  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-
   VmaAllocator vma_alloc = self->vma_alloc;
   VmaPool pool = self->gpu_image_pool;
 

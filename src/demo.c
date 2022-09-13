@@ -1898,9 +1898,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   {
     // CPUMesh *skydome_cpu = create_skydome(&tmp_alloc);
 
-    uint64_t input_perm = VA_INPUT_PERM_POSITION;
-    // err = create_gpumesh(vma_alloc, input_perm, skydome_cpu, &skydome);
-    assert(err == VK_SUCCESS);
+    // uint64_t input_perm = VA_INPUT_PERM_POSITION;
+    //  err = create_gpumesh(vma_alloc, input_perm, skydome_cpu, &skydome);
+    // assert(err == VK_SUCCESS);
   }
 
   // Create Uniform buffer for sky data
@@ -3949,7 +3949,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
       }
 
       for (uint32_t i = 0; i < max_mat_count; ++i) {
-        const GPUMaterial *mat = &d->main_scene->materials[i];
+        // const GPUMaterial *mat = &d->main_scene->materials[i];
         set_layouts[set_idx++] = d->gltf_material_set_layout;
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
