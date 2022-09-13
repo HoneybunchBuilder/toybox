@@ -16,12 +16,6 @@
 #include "env_filter_vert.h"
 #include "fractal_frag.h"
 #include "fractal_vert.h"
-#include "gltf_P3N3T4U2_frag.h"
-#include "gltf_P3N3T4U2_vert.h"
-#include "gltf_P3N3U2_frag.h"
-#include "gltf_P3N3U2_vert.h"
-#include "gltf_P3N3_frag.h"
-#include "gltf_P3N3_vert.h"
 #include "gpuresources.h"
 #include "shadercommon.h"
 #include "sky_cube_frag.h"
@@ -1390,43 +1384,45 @@ uint32_t create_gltf_pipeline(VkDevice device,
   VkShaderModule vert_mod_P3N3T4U2 = VK_NULL_HANDLE;
   VkShaderModule frag_mod_P3N3T4U2 = VK_NULL_HANDLE;
 
-  VkShaderModuleCreateInfo shader_mod_create_info = {0};
-  shader_mod_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3);
-  assert(err == VK_SUCCESS);
+  /*
+    VkShaderModuleCreateInfo shader_mod_create_info = {0};
+    shader_mod_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &vert_mod_P3N3);
+    assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3);
-  assert(err == VK_SUCCESS);
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &frag_mod_P3N3);
+    assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3U2);
-  assert(err == VK_SUCCESS);
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &vert_mod_P3N3U2);
+    assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3U2);
-  assert(err == VK_SUCCESS);
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &frag_mod_P3N3U2);
+    assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3T4U2);
-  assert(err == VK_SUCCESS);
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_vert);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_vert;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &vert_mod_P3N3T4U2);
+    assert(err == VK_SUCCESS);
 
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3T4U2);
-  assert(err == VK_SUCCESS);
+    shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_frag);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_frag;
+    err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                               &frag_mod_P3N3T4U2);
+    assert(err == VK_SUCCESS);
+    */
 
   VkPipelineShaderStageCreateInfo vert_stage_P3N3 = {0};
   vert_stage_P3N3.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1497,7 +1493,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
   create_info_bases[2].pVertexInputState = &vert_input_state_P3N3T4U2;
 
   // Calculate number of permuatations
-  uint32_t feature_perm_count = 1 << GLTF_PERM_FLAG_COUNT;
+  uint32_t feature_perm_count = 1; // << GLTF_PERM_FLAG_COUNT;
 
   GPUPipelineDesc desc = {
       device, vk_alloc,           tmp_alloc,        std_alloc,

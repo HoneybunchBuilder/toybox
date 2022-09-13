@@ -10,8 +10,348 @@
 #include "rendersystem.h"
 #include "world.h"
 
+// Ignore some warnings for the generated headers
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+#include "gltf_P3N3T4U2_frag.h"
+#include "gltf_P3N3T4U2_vert.h"
+#include "gltf_P3N3U2_frag.h"
+#include "gltf_P3N3U2_vert.h"
+#include "gltf_P3N3_frag.h"
+#include "gltf_P3N3_vert.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
+                               Allocator std_alloc,
+                               const VkAllocationCallbacks *vk_alloc,
+                               VkPipelineCache cache, VkRenderPass pass,
+                               VkPipelineLayout pipe_layout,
+                               uint32_t *pipe_count, VkPipeline **pipelines) {
+  VkResult err = VK_SUCCESS;
+
+  // We know how many input permutations we want
+  const uint32_t input_perm_count = 3;
+  // Perm 1: Position & Normal - P3N3
+  // Perm 2: Position & Normal & Texcoord0 - P3N3U2
+  // Perm 3: Position & Normal & Tangent & Texcoord0 - P3N3T4U2
+
+  VkVertexInputBindingDescription vert_bindings_P3N3[2] = {
+      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+
+  VkVertexInputBindingDescription vert_bindings_P3N3U2[3] = {
+      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {2, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+
+  VkVertexInputBindingDescription vert_bindings_P3N3T4U2[4] = {
+      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {2, sizeof(float) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+      {3, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+
+  VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
+      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+  };
+
+  VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
+      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {2, 2, VK_FORMAT_R32G32_SFLOAT, 0},
+  };
+
+  VkVertexInputAttributeDescription vert_attrs_P3N3T4U2[4] = {
+      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {2, 2, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
+      {3, 3, VK_FORMAT_R32G32_SFLOAT, 0},
+  };
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 2,
+      .pVertexBindingDescriptions = vert_bindings_P3N3,
+      .vertexAttributeDescriptionCount = 2,
+      .pVertexAttributeDescriptions = vert_attrs_P3N3,
+  };
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 3,
+      .pVertexBindingDescriptions = vert_bindings_P3N3U2,
+      .vertexAttributeDescriptionCount = 3,
+      .pVertexAttributeDescriptions = vert_attrs_P3N3U2,
+  };
+
+  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3T4U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 4,
+      .pVertexBindingDescriptions = vert_bindings_P3N3T4U2,
+      .vertexAttributeDescriptionCount = 4,
+      .pVertexAttributeDescriptions = vert_attrs_P3N3T4U2,
+  };
+
+  VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+  };
+
+  VkViewport viewport = {0, 600.0f, 800.0f, -600.0f, 0, 1};
+  VkRect2D scissor = {{0, 0}, {800, 600}};
+
+  VkPipelineViewportStateCreateInfo viewport_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+      .viewportCount = 1,
+      .pViewports = &viewport,
+      .scissorCount = 1,
+      .pScissors = &scissor,
+  };
+  VkPipelineRasterizationStateCreateInfo raster_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .polygonMode = VK_POLYGON_MODE_FILL,
+      .cullMode = VK_CULL_MODE_BACK_BIT,
+      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+      .lineWidth = 1.0f,
+  };
+
+  VkPipelineMultisampleStateCreateInfo multisample_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+  };
+  VkPipelineDepthStencilStateCreateInfo depth_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      .depthTestEnable = VK_TRUE,
+      .depthWriteEnable = VK_TRUE,
+      .depthCompareOp = VK_COMPARE_OP_GREATER,
+      .maxDepthBounds = 1.0f,
+  };
+
+  VkPipelineColorBlendAttachmentState attachment_state = {
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+  VkPipelineColorBlendStateCreateInfo color_blend_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      .attachmentCount = 1,
+      .pAttachments = &attachment_state,
+  };
+  const uint32_t dyn_state_count = 2;
+  VkDynamicState dyn_states[dyn_state_count] = {VK_DYNAMIC_STATE_VIEWPORT,
+                                                VK_DYNAMIC_STATE_SCISSOR};
+  VkPipelineDynamicStateCreateInfo dynamic_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+      .dynamicStateCount = dyn_state_count,
+      .pDynamicStates = dyn_states,
+  };
+
+  // Load Shader Modules
+  VkShaderModule vert_mod_P3N3 = VK_NULL_HANDLE;
+  VkShaderModule frag_mod_P3N3 = VK_NULL_HANDLE;
+  VkShaderModule vert_mod_P3N3U2 = VK_NULL_HANDLE;
+  VkShaderModule frag_mod_P3N3U2 = VK_NULL_HANDLE;
+  VkShaderModule vert_mod_P3N3T4U2 = VK_NULL_HANDLE;
+  VkShaderModule frag_mod_P3N3T4U2 = VK_NULL_HANDLE;
+
+  VkShaderModuleCreateInfo shader_mod_create_info = {
+      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+  };
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &vert_mod_P3N3);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &frag_mod_P3N3);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &vert_mod_P3N3U2);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &frag_mod_P3N3U2);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_vert);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_vert;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &vert_mod_P3N3T4U2);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_frag);
+  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_frag;
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &frag_mod_P3N3T4U2);
+  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+
+  VkPipelineShaderStageCreateInfo vert_stage_P3N3 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = vert_mod_P3N3,
+      .pName = "vert",
+  };
+  VkPipelineShaderStageCreateInfo frag_stage_P3N3 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = frag_mod_P3N3,
+      .pName = "frag",
+  };
+  VkPipelineShaderStageCreateInfo vert_stage_P3N3U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = vert_mod_P3N3U2,
+      .pName = "vert",
+  };
+  VkPipelineShaderStageCreateInfo frag_stage_P3N3U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = frag_mod_P3N3U2,
+      .pName = "frag",
+  };
+  VkPipelineShaderStageCreateInfo vert_stage_P3N3T4U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = vert_mod_P3N3T4U2,
+      .pName = "vert",
+  };
+  VkPipelineShaderStageCreateInfo frag_stage_P3N3T4U2 = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = frag_mod_P3N3T4U2,
+      .pName = "frag",
+  };
+
+  VkPipelineShaderStageCreateInfo stages_P3N3[2] = {vert_stage_P3N3,
+                                                    frag_stage_P3N3};
+
+  VkPipelineShaderStageCreateInfo stages_P3N3U2[2] = {vert_stage_P3N3U2,
+                                                      frag_stage_P3N3U2};
+
+  VkPipelineShaderStageCreateInfo stages_P3N3T4U2[2] = {vert_stage_P3N3T4U2,
+                                                        frag_stage_P3N3T4U2};
+
+  VkGraphicsPipelineCreateInfo create_info_base = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount = 2,
+
+      .pInputAssemblyState = &input_assembly_state,
+      .pViewportState = &viewport_state,
+      .pRasterizationState = &raster_state,
+      .pMultisampleState = &multisample_state,
+      .pDepthStencilState = &depth_state,
+      .pColorBlendState = &color_blend_state,
+      .pDynamicState = &dynamic_state,
+      .layout = pipe_layout,
+      .renderPass = pass,
+  };
+
+  VkGraphicsPipelineCreateInfo create_info_bases[input_perm_count] = {0};
+  create_info_bases[0] = create_info_base;
+  create_info_bases[0].pStages = stages_P3N3;
+  create_info_bases[0].pVertexInputState = &vert_input_state_P3N3;
+  create_info_bases[1] = create_info_base;
+  create_info_bases[1].pStages = stages_P3N3U2;
+  create_info_bases[1].pVertexInputState = &vert_input_state_P3N3U2;
+  create_info_bases[2] = create_info_base;
+  create_info_bases[2].pStages = stages_P3N3T4U2;
+  create_info_bases[2].pVertexInputState = &vert_input_state_P3N3T4U2;
+
+  // Calculate number of permuatations
+  const uint32_t feature_perm_count = 1 << GLTF_PERM_FLAG_COUNT;
+
+  // Create pipelines
+  {
+    const uint32_t pipeline_count = feature_perm_count * input_perm_count;
+    VkGraphicsPipelineCreateInfo *create_info =
+        tb_alloc_nm_tp(tmp_alloc, pipeline_count, VkGraphicsPipelineCreateInfo);
+    VkPipeline *pipes = tb_alloc_nm_tp(std_alloc, pipeline_count, VkPipeline);
+
+    uint32_t perm_idx = 0;
+    for (uint32_t ip_idx = 0; ip_idx < input_perm_count; ++ip_idx) {
+      const VkGraphicsPipelineCreateInfo *base = &create_info_bases[ip_idx];
+
+      const uint32_t stage_count = base->stageCount;
+      const uint32_t perm_stage_count = feature_perm_count * stage_count;
+
+      // Every shader stage needs its own create info
+      VkPipelineShaderStageCreateInfo *pipe_stage_info = tb_alloc_nm_tp(
+          tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
+
+      VkSpecializationMapEntry map_entries[1] = {
+          {0, 0, sizeof(uint32_t)},
+      };
+
+      VkSpecializationInfo *spec_info =
+          tb_alloc_nm_tp(tmp_alloc, feature_perm_count, VkSpecializationInfo);
+      uint32_t *flags = tb_alloc_nm_tp(tmp_alloc, feature_perm_count, uint32_t);
+
+      // Insert specialization info to every shader stage
+      for (uint32_t fp_idx = 0; fp_idx < feature_perm_count; ++fp_idx) {
+
+        create_info[perm_idx] = *base;
+
+        flags[fp_idx] = fp_idx;
+        spec_info[fp_idx] = (VkSpecializationInfo){
+            1,
+            map_entries,
+            sizeof(uint32_t),
+            &flags[fp_idx],
+        };
+
+        uint32_t stage_idx = fp_idx * stage_count;
+        for (uint32_t i = 0; i < stage_count; ++i) {
+          VkPipelineShaderStageCreateInfo *stage =
+              &pipe_stage_info[stage_idx + i];
+          *stage = base->pStages[i];
+          stage->pSpecializationInfo = &spec_info[fp_idx];
+        }
+        create_info[perm_idx].pStages = &pipe_stage_info[stage_idx];
+
+        // Set permutation tracking values
+        // pipe->input_flags[perm_idx] = input_perm;
+        // pipe->pipeline_flags[perm_idx] = fp_idx;
+        perm_idx++;
+      }
+    }
+    err = vkCreateGraphicsPipelines(device, cache, pipeline_count, create_info,
+                                    vk_alloc, pipes);
+    TB_VK_CHECK_RET(err, "Failed to create graphics pipeline", err);
+
+    *pipelines = pipes;
+    *pipe_count = pipeline_count;
+  }
+
+  // Can destroy shader moduless
+  vkDestroyShaderModule(device, vert_mod_P3N3, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod_P3N3, vk_alloc);
+  vkDestroyShaderModule(device, vert_mod_P3N3U2, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod_P3N3U2, vk_alloc);
+  vkDestroyShaderModule(device, vert_mod_P3N3T4U2, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod_P3N3T4U2, vk_alloc);
+
+  return err;
+}
+
 void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                         const void *batches) {
+  (void)buffer;
+  (void)batch_count;
+  (void)batches;
   TracyCZoneN(ctx, "Mesh Opaque Record", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
@@ -25,8 +365,9 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       system_deps, system_dep_count, RenderSystemId);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which meshes depend on", false);
-  RenderSystem *material_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MaterialSystemId);
+  MaterialSystem *material_system =
+      (MaterialSystem *)tb_find_system_dep_self_by_id(
+          system_deps, system_dep_count, MaterialSystemId);
   TB_CHECK_RETURN(material_system,
                   "Failed to find material system which meshes depend on",
                   false);
@@ -164,6 +505,13 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                                       "Opaque Pass Framebuffer",
                                       &self->framebuffers[i]);
     }
+
+    err = create_mesh_pipelines(
+        self->render_system->render_thread->device, self->tmp_alloc,
+        self->std_alloc, &self->render_system->vk_host_alloc_cb,
+        self->render_system->pipeline_cache, self->opaque_pass,
+        self->pipe_layout, &self->pipe_count, &self->pipelines);
+    TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
   }
   // Register the render pass
   tb_rnd_register_pass(render_system, self->opaque_pass, self->framebuffers,
@@ -179,6 +527,10 @@ void destroy_mesh_system(MeshSystem *self) {
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
+  }
+
+  for (uint32_t i = 0; i < self->pipe_count; ++i) {
+    tb_rnd_destroy_pipeline(render_system, self->pipelines[i]);
   }
 
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);

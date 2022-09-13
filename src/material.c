@@ -5,8 +5,9 @@
 
 #include <assert.h>
 
-static SubMaterialSelection phong_blinn_submaterial_select(materialoptionflags options,
-                                                    const void *material) {
+static SubMaterialSelection
+phong_blinn_submaterial_select(materialoptionflags options,
+                               const void *material) {
   const PhongBlinnMaterial *mat = (const PhongBlinnMaterial *)material;
 
   SubMaterialSelection selection = {0};
@@ -27,7 +28,7 @@ static SubMaterialSelection phong_blinn_submaterial_select(materialoptionflags o
 
   selection.pipeline_perm_flags = 0;
   if (has_normal_map) {
-    selection.pipeline_perm_flags |= GLTF_PERM_NORMAL_MAP;
+    // selection.pipeline_perm_flags |= GLTF_PERM_NORMAL_MAP;
   }
 
   return selection;
