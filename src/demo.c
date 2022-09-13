@@ -3978,18 +3978,20 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         memset(tex_info_indices, (int32_t)first_valid_tex_idx,
                sizeof(uint32_t) * 3);
 
-        uint32_t tex_info_idx = first_valid_tex_idx;
-        if (mat->feature_perm & GLTF_PERM_BASE_COLOR_MAP) {
-          tex_info_indices[0] = tex_info_idx++;
-        }
+        /*
+              uint32_t tex_info_idx = first_valid_tex_idx;
+              if (mat->feature_perm & GLTF_PERM_BASE_COLOR_MAP) {
+                tex_info_indices[0] = tex_info_idx++;
+              }
 
-        if (mat->feature_perm & GLTF_PERM_NORMAL_MAP) {
-          tex_info_indices[1] = tex_info_idx++;
-        }
+              if (mat->feature_perm & GLTF_PERM_NORMAL_MAP) {
+                tex_info_indices[1] = tex_info_idx++;
+              }
 
-        if (mat->feature_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
-          tex_info_indices[2] = tex_info_idx++;
-        }
+              if (mat->feature_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
+                tex_info_indices[2] = tex_info_idx++;
+              }
+              */
 
         set_writes[write_idx++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

@@ -14,8 +14,8 @@ ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonCameraData> camera_data: register(b0, space2);
-ConstantBuffer<CommonLightData> light_data : register(b1, space2);
-Texture2D lightmap : register(t2, space2);
+//ConstantBuffer<CommonLightData> light_data : register(b1, space2);
+//Texture2D lightmap : register(t2, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -106,6 +106,7 @@ float4 frag(Interpolators i) : SV_TARGET
         float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
         //for each light
+        /*
         {
             float3 light_color = float3(1, 1, 1);
             float3 L = normalize(light_data.light_dir);
@@ -121,19 +122,21 @@ float4 frag(Interpolators i) : SV_TARGET
 
             out_color += pbr_lighting(light, N, V, NdotV);
         }
+        */
     }
     else // Phong fallback
     {
         float gloss = 0.5;
 
         // for each light
+        /*
         {
             float3 L = normalize(light_data.light_dir);
             float3 H = normalize(V + L);
 
             float3 light_color = float3(1, 1, 1);
             out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
-        }
+        }*/
     }
 
     // Gamma correct

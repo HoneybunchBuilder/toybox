@@ -21,6 +21,24 @@ typedef struct MeshSystemDescriptor {
   Allocator tmp_alloc;
 } MeshSystemDescriptor;
 
+typedef enum GLTF_PERMUTATIONS {
+  GLTF_PERM_NONE = 0x00000000,
+  GLTF_PERM_BASE_COLOR_MAP = 0x00000001,
+  GLTF_PERM_NORMAL_MAP = 0x00000002,
+  GLTF_PERM_PBR_METALLIC_ROUGHNESS = 0x00000004,
+  GLTF_PERM_PBR_METAL_ROUGH_TEX = 0x00000008,
+  GLTF_PERM_PBR_SPECULAR_GLOSSINESS = 0x0000010,
+  GLTF_PERM_CLEARCOAT = 0x00000020,
+  GLTF_PERM_TRANSMISSION = 0x00000040,
+  GLTF_PERM_VOLUME = 0x00000080,
+  GLTF_PERM_IOR = 0x00000100,
+  GLTF_PERM_SPECULAR = 0x00000200,
+  GLTF_PERM_SHEEN = 0x000000400,
+  GLTF_PERM_UNLIT = 0x00000800,
+  // Actually 13... but using 4 to cut down on startup time
+  GLTF_PERM_FLAG_COUNT = 4,
+} GLTF_PERMUTATIONS;
+
 typedef struct MeshSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -33,7 +51,9 @@ typedef struct MeshSystem {
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+
+  uint32_t pipe_count;
+  VkPipeline *pipelines;
 
   // TODO: Consolidate into a view system
   VkDescriptorPool view_set_pool;
