@@ -8,6 +8,7 @@
 #include "meshcomponent.h"
 #include "profiling.h"
 #include "rendersystem.h"
+#include "transformcomponent.h"
 #include "world.h"
 
 // Ignore some warnings for the generated headers
@@ -543,10 +544,36 @@ void destroy_mesh_system(MeshSystem *self) {
 
 void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
-  (void)self;
-  (void)input;
   (void)output;
+
+  (void)self;
   (void)delta_seconds;
+
+  TracyCZoneN(ctx, "Mesh System", true);
+  TracyCZoneColor(ctx, TracyCategoryColorUI);
+
+  const uint32_t mesh_count = tb_get_column_component_count(input, 0);
+  const PackedComponentStore *mesh_store =
+      tb_get_column_check_id(input, 0, 0, MeshComponentId);
+  const PackedComponentStore *mesh_transform_store =
+      tb_get_column_check_id(input, 0, 1, TransformComponentId);
+
+  const uint32_t camera_count = tb_get_column_component_count(input, 1);
+  const PackedComponentStore *camera_store =
+      tb_get_column_check_id(input, 1, 0, CameraComponentId);
+  const PackedComponentStore *camera_transform_store =
+      tb_get_column_check_id(input, 1, 1, CameraComponentId);
+
+  if (mesh_count == 0 || camera_count == 0) {
+    return;
+  }
+
+  (void)mesh_store;
+  (void)mesh_transform_store;
+  (void)camera_store;
+  (void)camera_transform_store;
+
+  TracyCZoneEnd(ctx);
 }
 
 TB_DEFINE_SYSTEM(mesh, MeshSystem, MeshSystemDescriptor)
@@ -561,12 +588,12 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
   desc->dep_count = 2;
   desc->deps[0] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {CameraComponentId},
+      .count = 2,
+      .dependent_ids = {CameraComponentId, TransformComponentId},
   };
   desc->deps[1] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {MeshComponentId},
+      .count = 2,
+      .dependent_ids = {MeshComponentId, TransformComponentId},
   };
   desc->system_dep_count = 2;
   desc->system_deps[0] = RenderSystemId;

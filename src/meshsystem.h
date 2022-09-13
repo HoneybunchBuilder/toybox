@@ -12,6 +12,7 @@ typedef struct RenderSystem RenderSystem;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 typedef struct CameraComponent CameraComponent;
+typedef struct MeshComponent MeshComponent;
 
 typedef uint64_t TbMeshId;
 static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
@@ -58,17 +59,22 @@ typedef struct MeshSystem {
   // TODO: Consolidate into a view system
   VkDescriptorPool view_set_pool;
   uint32_t view_count;
-  CameraComponent *view_ids;
+  CameraComponent **view_ids;
   TbBuffer *view_gpu_buffer;
   VkDescriptorSet *view_sets;
   uint32_t view_max;
 
-  uint32_t mesh_count;
   VkDescriptorPool obj_set_pool;
-  TbMeshId *mesh_ids;
-  TbHostBuffer *mesh_host_buffers;
+  uint32_t obj_count;
+  MeshComponent **obj_ids;
   TbBuffer *obj_gpu_buffers;
   VkDescriptorSet *obj_sets;
+  uint32_t obj_max;
+
+  uint32_t mesh_count;
+
+  TbMeshId *mesh_ids;
+  TbHostBuffer *mesh_host_buffers;
   TbBuffer *mesh_gpu_buffers;
   uint32_t *mesh_ref_counts;
   uint32_t mesh_max;
