@@ -529,6 +529,14 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
   return id;
 }
 
+TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat) {
+  const uint32_t index = find_mat_by_id(self, mat);
+  if (index == SDL_MAX_UINT32) {
+    TB_CHECK_RETURN(false, "Failed to find material to get permutation", 0);
+  }
+  return self->mat_perms[index];
+}
+
 void tb_mat_system_release_material_ref(MaterialSystem *self,
                                         TbMaterialId mat) {
   const uint32_t index = find_mat_by_id(self, mat);

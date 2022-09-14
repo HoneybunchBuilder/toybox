@@ -222,3 +222,7 @@ System *tb_find_system_dep_by_id(System *const *systems, uint32_t system_count,
                                  SystemId id);
 void *tb_find_system_dep_self_by_id(System *const *systems,
                                     uint32_t system_count, SystemId id);
+
+// Helper API
+#define tb_get_component(store, idx, Type)                                     \
+  &((const Type *)(store)->components)[(idx)];

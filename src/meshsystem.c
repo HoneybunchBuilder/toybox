@@ -26,6 +26,34 @@
 #pragma clang diagnostic pop
 #endif
 
+// We know how many input permutations we have
+static const uint32_t max_pipe_count = VI_Count * GLTF_PERM_COUNT;
+
+typedef struct SubMeshDraw {
+  uint32_t index_count;
+  uint64_t index_offset;
+  uint64_t vertex_offset;
+} SubMeshDraw;
+
+typedef struct MeshDraw {
+  VkDescriptorSet obj_set;
+  VkBuffer geom_buffer;
+  uint32_t submesh_draw_count;
+  SubMeshDraw submesh_draws[TB_SUBMESH_MAX];
+} MeshDraw;
+
+typedef struct MeshDrawView {
+  VkDescriptorSet view_set;
+  uint32_t draw_count;
+  MeshDraw *draws;
+} MeshDrawView;
+
+typedef struct MeshDrawBatch {
+  VkPipeline pipeline;
+  uint32_t view_count;
+  MeshDrawView *views;
+} MeshDrawBatch;
+
 VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
                                Allocator std_alloc,
                                const VkAllocationCallbacks *vk_alloc,
@@ -34,11 +62,9 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
                                uint32_t *pipe_count, VkPipeline **pipelines) {
   VkResult err = VK_SUCCESS;
 
-  // We know how many input permutations we want
-  const uint32_t input_perm_count = 3;
-  // Perm 1: Position & Normal - P3N3
-  // Perm 2: Position & Normal & Texcoord0 - P3N3U2
-  // Perm 3: Position & Normal & Tangent & Texcoord0 - P3N3T4U2
+  // VI 1: Position & Normal - P3N3
+  // VI 2: Position & Normal & Texcoord0 - P3N3U2
+  // VI 3: Position & Normal & Tangent & Texcoord0 - P3N3T4U2
 
   VkVertexInputBindingDescription vert_bindings_P3N3[2] = {
       {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
@@ -261,7 +287,7 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
       .renderPass = pass,
   };
 
-  VkGraphicsPipelineCreateInfo create_info_bases[input_perm_count] = {0};
+  VkGraphicsPipelineCreateInfo create_info_bases[VI_Count] = {0};
   create_info_bases[0] = create_info_base;
   create_info_bases[0].pStages = stages_P3N3;
   create_info_bases[0].pVertexInputState = &vert_input_state_P3N3;
@@ -272,22 +298,18 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
   create_info_bases[2].pStages = stages_P3N3T4U2;
   create_info_bases[2].pVertexInputState = &vert_input_state_P3N3T4U2;
 
-  // Calculate number of permuatations
-  const uint32_t feature_perm_count = 1 << GLTF_PERM_FLAG_COUNT;
-
   // Create pipelines
   {
-    const uint32_t pipeline_count = feature_perm_count * input_perm_count;
     VkGraphicsPipelineCreateInfo *create_info =
-        tb_alloc_nm_tp(tmp_alloc, pipeline_count, VkGraphicsPipelineCreateInfo);
-    VkPipeline *pipes = tb_alloc_nm_tp(std_alloc, pipeline_count, VkPipeline);
+        tb_alloc_nm_tp(tmp_alloc, max_pipe_count, VkGraphicsPipelineCreateInfo);
+    VkPipeline *pipes = tb_alloc_nm_tp(std_alloc, max_pipe_count, VkPipeline);
 
     uint32_t perm_idx = 0;
-    for (uint32_t ip_idx = 0; ip_idx < input_perm_count; ++ip_idx) {
-      const VkGraphicsPipelineCreateInfo *base = &create_info_bases[ip_idx];
+    for (uint32_t vi_idx = 0; vi_idx < VI_Count; ++vi_idx) {
+      const VkGraphicsPipelineCreateInfo *base = &create_info_bases[vi_idx];
 
       const uint32_t stage_count = base->stageCount;
-      const uint32_t perm_stage_count = feature_perm_count * stage_count;
+      const uint32_t perm_stage_count = GLTF_PERM_COUNT * stage_count;
 
       // Every shader stage needs its own create info
       VkPipelineShaderStageCreateInfo *pipe_stage_info = tb_alloc_nm_tp(
@@ -298,11 +320,11 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
       };
 
       VkSpecializationInfo *spec_info =
-          tb_alloc_nm_tp(tmp_alloc, feature_perm_count, VkSpecializationInfo);
-      uint32_t *flags = tb_alloc_nm_tp(tmp_alloc, feature_perm_count, uint32_t);
+          tb_alloc_nm_tp(tmp_alloc, GLTF_PERM_COUNT, VkSpecializationInfo);
+      uint32_t *flags = tb_alloc_nm_tp(tmp_alloc, GLTF_PERM_COUNT, uint32_t);
 
       // Insert specialization info to every shader stage
-      for (uint32_t fp_idx = 0; fp_idx < feature_perm_count; ++fp_idx) {
+      for (uint32_t fp_idx = 0; fp_idx < GLTF_PERM_COUNT; ++fp_idx) {
 
         create_info[perm_idx] = *base;
 
@@ -324,17 +346,17 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
         create_info[perm_idx].pStages = &pipe_stage_info[stage_idx];
 
         // Set permutation tracking values
-        // pipe->input_flags[perm_idx] = input_perm;
+        // pipe->input_flags[perm_idx] = vertex_input;
         // pipe->pipeline_flags[perm_idx] = fp_idx;
         perm_idx++;
       }
     }
-    err = vkCreateGraphicsPipelines(device, cache, pipeline_count, create_info,
+    err = vkCreateGraphicsPipelines(device, cache, max_pipe_count, create_info,
                                     vk_alloc, pipes);
     TB_VK_CHECK_RET(err, "Failed to create graphics pipeline", err);
 
     *pipelines = pipes;
-    *pipe_count = pipeline_count;
+    *pipe_count = max_pipe_count;
   }
 
   // Can destroy shader moduless
@@ -377,6 +399,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
       .render_system = render_system,
+      .material_system = material_system,
   };
 
   // Setup mesh system for rendering
@@ -542,6 +565,26 @@ void destroy_mesh_system(MeshSystem *self) {
   *self = (MeshSystem){0};
 }
 
+uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
+                                        TbMaterialPerm mat) {
+  TracyCZone(ctx, true);
+  // We know the layout of the distribution of pipelines so we can
+  // decode the vertex input and the material permutation from the
+  // index
+  for (uint32_t pipe_idx = 0; pipe_idx < self->pipe_count; ++pipe_idx) {
+    const TbVertexInput vi = pipe_idx / GLTF_PERM_COUNT;
+    const TbMaterialPerm mp = pipe_idx % GLTF_PERM_COUNT;
+
+    if (input == vi && mat == mp) {
+      TracyCZoneEnd(ctx);
+      return pipe_idx;
+    }
+  }
+  TracyCZoneEnd(ctx);
+  TB_CHECK_RETURN(false, "Failed to find pipeline for given mesh permutations",
+                  SDL_MAX_UINT32);
+}
+
 void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
   (void)output;
@@ -550,22 +593,89 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   (void)delta_seconds;
 
   TracyCZoneN(ctx, "Mesh System", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
+  TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
-  const uint32_t mesh_count = tb_get_column_component_count(input, 0);
-  const PackedComponentStore *mesh_store =
-      tb_get_column_check_id(input, 0, 0, MeshComponentId);
-  const PackedComponentStore *mesh_transform_store =
+  const uint32_t camera_count = tb_get_column_component_count(input, 0);
+  const PackedComponentStore *camera_store =
+      tb_get_column_check_id(input, 0, 0, CameraComponentId);
+  const PackedComponentStore *camera_transform_store =
       tb_get_column_check_id(input, 0, 1, TransformComponentId);
 
-  const uint32_t camera_count = tb_get_column_component_count(input, 1);
-  const PackedComponentStore *camera_store =
-      tb_get_column_check_id(input, 1, 0, CameraComponentId);
-  const PackedComponentStore *camera_transform_store =
-      tb_get_column_check_id(input, 1, 1, CameraComponentId);
+  const uint32_t mesh_count = tb_get_column_component_count(input, 1);
+  const PackedComponentStore *mesh_store =
+      tb_get_column_check_id(input, 1, 0, MeshComponentId);
+  const PackedComponentStore *mesh_transform_store =
+      tb_get_column_check_id(input, 1, 1, TransformComponentId);
 
   if (mesh_count == 0 || camera_count == 0) {
     return;
+  }
+
+  // Determine which pipelines are in use by marking their index in this
+  // collection. Really just care about the unique pipeline count
+  uint32_t batch_count = 0;
+  {
+    // Could be made faster by setting bits rather than a bool field
+    uint8_t *pipe_idxes =
+        tb_alloc_nm_tp(self->tmp_alloc, max_pipe_count, uint8_t);
+    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+      const MeshComponent *mesh_comp =
+          tb_get_component(mesh_store, mesh_idx, MeshComponent);
+
+      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+           ++sub_idx) {
+        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+        TbMaterialPerm mat_perm =
+            tb_mat_system_get_perm(self->material_system, submesh->material);
+        TbVertexInput vertex_input = submesh->vertex_input;
+        const uint32_t pipe_idx =
+            get_pipeline_for_input_and_mat(self, vertex_input, mat_perm);
+        if (pipe_idxes[pipe_idx] == 0) {
+          batch_count++;
+        } else {
+          pipe_idxes[pipe_idx] = 1;
+        }
+      }
+    }
+  }
+
+  // Allocate and initialize each batch
+  MeshDrawBatch *batches =
+      tb_alloc_nm_tp(self->tmp_alloc, batch_count, MeshDrawBatch);
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    // Each batch could use each view
+    MeshDrawBatch *batch = &batches[batch_idx];
+    *batch = (MeshDrawBatch){0};
+    batch->views = tb_alloc_nm_tp(self->tmp_alloc, camera_count, MeshDrawView);
+
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      MeshDrawView *view = &batch->views[cam_idx];
+      // Each view could see each mesh
+      // Each mesh could have TB_SUBMESH_MAX # of submeshes
+      *view = (MeshDrawView){0};
+      view->draws = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, MeshDraw);
+    }
+  }
+
+  for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+    const CameraComponent *camera =
+        tb_get_component(camera_store, cam_idx, CameraComponent);
+    const TransformComponent *cam_trans =
+        tb_get_component(camera_transform_store, cam_idx, TransformComponent);
+
+    // TODO: Update camera descriptor sets
+
+    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+      const MeshComponent *mesh_comp =
+          tb_get_component(mesh_store, mesh_idx, MeshComponent);
+      const TransformComponent *mesh_trans =
+          tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
+
+      // TODO: Update object descriptor sets
+
+      // Organize draws into batches
+      {}
+    }
   }
 
   (void)mesh_store;
@@ -648,7 +758,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     uint64_t geom_size = 0;
     uint64_t vertex_offset = 0;
     uint32_t attrib_count = 0;
-    uint64_t input_perm = 0;
+    uint64_t vertex_input = 0;
     {
       uint64_t index_size = 0;
       uint64_t vertex_size = 0;
@@ -673,13 +783,13 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
             vertex_size += attr->count * attr->stride;
 
             if (type == cgltf_attribute_type_position) {
-              input_perm |= VA_INPUT_PERM_POSITION;
+              vertex_input |= VA_INPUT_PERM_POSITION;
             } else if (type == cgltf_attribute_type_normal) {
-              input_perm |= VA_INPUT_PERM_NORMAL;
+              vertex_input |= VA_INPUT_PERM_NORMAL;
             } else if (type == cgltf_attribute_type_tangent) {
-              input_perm |= VA_INPUT_PERM_TANGENT;
+              vertex_input |= VA_INPUT_PERM_TANGENT;
             } else if (type == cgltf_attribute_type_texcoord) {
-              input_perm |= VA_INPUT_PERM_TEXCOORD0;
+              vertex_input |= VA_INPUT_PERM_TEXCOORD0;
             }
 
             attrib_count++;
@@ -770,7 +880,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
             attr_order[2] = i;
           } else if (attr_type == cgltf_attribute_type_texcoord &&
                      attr_idx == 0) {
-            if (input_perm & VA_INPUT_PERM_TANGENT) {
+            if (vertex_input & VA_INPUT_PERM_TANGENT) {
               attr_order[3] = i;
             } else {
               attr_order[2] = i;
@@ -792,7 +902,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
             if (attr_idx + 1 < prim->attributes_count) {
               cgltf_attribute *next =
                   &prim->attributes[attr_order[attr_idx + 1]];
-              if (input_perm & VA_INPUT_PERM_TANGENT) {
+              if (vertex_input & VA_INPUT_PERM_TANGENT) {
                 if (SDL_strcmp(next->name, "TANGENT") != 0) {
                   SDL_TriggerBreakpoint();
                 }

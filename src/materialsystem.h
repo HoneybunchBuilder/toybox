@@ -16,6 +16,7 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 
 typedef uint64_t TbMaterialId;
 typedef uint64_t TbTextureId;
+typedef uint64_t TbMaterialPerm;
 
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
 
@@ -37,7 +38,7 @@ typedef struct MaterialSystem {
 
   uint32_t mat_count;
   TbMaterialId *mat_ids;
-  uint64_t *mat_perms;
+  TbMaterialPerm *mat_perms;
   uint32_t *mat_ref_counts;
   TbBuffer *mat_gpu_buffers;
   TbTextureId *mat_color_maps;
@@ -54,4 +55,7 @@ VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self);
 
 TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                                          const cgltf_material *material);
+
+TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat);
+
 void tb_mat_system_release_material_ref(MaterialSystem *self, TbMaterialId mat);

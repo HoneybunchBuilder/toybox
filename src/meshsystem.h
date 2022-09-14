@@ -9,12 +9,14 @@
 
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
+typedef struct MaterialSystem MaterialSystem;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 typedef struct CameraComponent CameraComponent;
 typedef struct MeshComponent MeshComponent;
 
 typedef uint64_t TbMeshId;
+typedef uint64_t TbMaterialPerm;
 static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
 typedef struct MeshSystemDescriptor {
@@ -38,13 +40,30 @@ typedef enum GLTF_PERMUTATIONS {
   GLTF_PERM_UNLIT = 0x00000800,
   // Actually 13... but using 4 to cut down on startup time
   GLTF_PERM_FLAG_COUNT = 4,
+  GLTF_PERM_COUNT = 1 << GLTF_PERM_FLAG_COUNT,
 } GLTF_PERMUTATIONS;
+
+static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
+    GLTF_PERM_BASE_COLOR_MAP,
+    GLTF_PERM_NORMAL_MAP,
+    GLTF_PERM_PBR_METALLIC_ROUGHNESS,
+    GLTF_PERM_PBR_METAL_ROUGH_TEX,
+    GLTF_PERM_PBR_SPECULAR_GLOSSINESS,
+    GLTF_PERM_CLEARCOAT,
+    GLTF_PERM_TRANSMISSION,
+    GLTF_PERM_VOLUME,
+    GLTF_PERM_IOR,
+    GLTF_PERM_SPECULAR,
+    GLTF_PERM_SHEEN,
+    GLTF_PERM_UNLIT,
+};
 
 typedef struct MeshSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
+  MaterialSystem *material_system;
 
   VkRenderPass opaque_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
