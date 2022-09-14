@@ -25,24 +25,29 @@ bool create_mesh_component(MeshComponent *self,
   TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
 
   const uint32_t submesh_count = desc->mesh->primitives_count;
-  SubMesh *submeshes =
-      tb_alloc_nm_tp(mesh_system->std_alloc, submesh_count, SubMesh);
+  TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
+
+  *self = (MeshComponent){
+      .mesh_id = id,
+      .submesh_count = submesh_count,
+  };
 
   // Retrieve info about how to draw this mesh
   uint64_t offset = 0;
   {
+
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
 
-      submeshes[prim_idx].index_count = indices->count;
-      submeshes[prim_idx].index_offset = offset;
+      self->submeshes[prim_idx].index_count = indices->count;
+      self->submeshes[prim_idx].index_offset = offset;
 
       // Load materials
-      submeshes[prim_idx].material = tb_mat_system_load_material(
+      self->submeshes[prim_idx].material = tb_mat_system_load_material(
           mat_system, desc->source_path, prim->material);
-      TB_CHECK_RETURN(submeshes[prim_idx].material, "Failed to load material",
-                      false);
+      TB_CHECK_RETURN(self->submeshes[prim_idx].material,
+                      "Failed to load material", false);
 
       offset += indices->buffer_view->size;
     }
@@ -54,10 +59,11 @@ bool create_mesh_component(MeshComponent *self,
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
 
-      submeshes[prim_idx].vertex_offset = offset;
+      self->submeshes[prim_idx].vertex_offset = offset;
+
+      uint64_t vertex_attributes = 0;
 
       // Determine input permutation and attribute count
-      uint64_t input_perm = 0;
       uint32_t attrib_count = 0;
       for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
            ++attr_idx) {
@@ -69,13 +75,13 @@ bool create_mesh_component(MeshComponent *self,
              type == cgltf_attribute_type_texcoord) &&
             index == 0) {
           if (type == cgltf_attribute_type_position) {
-            input_perm |= VA_INPUT_PERM_POSITION;
+            vertex_attributes |= VA_INPUT_PERM_POSITION;
           } else if (type == cgltf_attribute_type_normal) {
-            input_perm |= VA_INPUT_PERM_NORMAL;
+            vertex_attributes |= VA_INPUT_PERM_NORMAL;
           } else if (type == cgltf_attribute_type_tangent) {
-            input_perm |= VA_INPUT_PERM_TANGENT;
+            vertex_attributes |= VA_INPUT_PERM_TANGENT;
           } else if (type == cgltf_attribute_type_texcoord) {
-            input_perm |= VA_INPUT_PERM_TEXCOORD0;
+            vertex_attributes |= VA_INPUT_PERM_TEXCOORD0;
           }
 
           attrib_count++;
@@ -96,13 +102,32 @@ bool create_mesh_component(MeshComponent *self,
         } else if (attr_type == cgltf_attribute_type_tangent) {
           attr_order[2] = attr_idx;
         } else if (attr_type == cgltf_attribute_type_texcoord && idx == 0) {
-          if (input_perm & VA_INPUT_PERM_TANGENT) {
+          if (vertex_attributes & VA_INPUT_PERM_TANGENT) {
             attr_order[3] = attr_idx;
           } else {
             attr_order[2] = attr_idx;
           }
         }
       }
+
+      // Decode vertex attributes into full vertex input layouts
+      TbVertexInput vertex_input = 0;
+      {
+        if (vertex_attributes & VA_INPUT_PERM_POSITION) {
+          if (vertex_attributes & VA_INPUT_PERM_NORMAL) {
+            if (vertex_attributes & VA_INPUT_PERM_TEXCOORD0) {
+              if (vertex_attributes & VA_INPUT_PERM_TANGENT) {
+                vertex_input = VI_P3N3T4U2;
+              }
+              vertex_input = VI_P3N3U2;
+            }
+            vertex_input = VI_P3N3;
+          }
+        }
+      }
+      TB_CHECK_RETURN(vertex_input, "Unexpected vertex input", false);
+
+      self->submeshes[prim_idx].vertex_input = vertex_input;
 
       for (cgltf_size attr_idx = 0; attr_idx < attrib_count; ++attr_idx) {
         cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
@@ -112,12 +137,6 @@ bool create_mesh_component(MeshComponent *self,
       }
     }
   }
-
-  *self = (MeshComponent){
-      .mesh_id = id,
-      .submesh_count = submesh_count,
-      .submeshes = submeshes,
-  };
 
   return true;
 }
@@ -137,8 +156,6 @@ void destroy_mesh_component(MeshComponent *self, uint32_t system_dep_count,
   }
 
   tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
-
-  tb_free(mesh_system->std_alloc, self->submeshes);
 
   *self = (MeshComponent){0};
 }
