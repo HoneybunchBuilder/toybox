@@ -673,14 +673,71 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     }
   }
 
+  VkResult err = VK_SUCCESS;
+  VkDevice device = self->render_system->render_thread->device;
+  VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system);
+
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const CameraComponent *camera =
         tb_get_component(camera_store, cam_idx, CameraComponent);
     const TransformComponent *cam_trans =
         tb_get_component(camera_transform_store, cam_idx, TransformComponent);
 
-    // TODO: Update camera descriptor sets
-    VkDescriptorSet view_set = VK_NULL_HANDLE;
+    // Update camera descriptor sets
+    VkDescriptorSet view_set = self->view_sets[cam_idx];
+    CommonCameraData camera_data = {0};
+    {
+      // Upload transform to the tmp buffer
+      TbHostBuffer host_buffer = {0};
+      err = tb_rnd_sys_alloc_tmp_host_buffer(
+          self->render_system, sizeof(CommonCameraData), 0x40, &host_buffer);
+      TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
+
+      // TODO: Instead of calculating the vp matrix here, a camera system could
+      // do it earlier in the frame
+      float4x4 vp = {.row0 = {0}};
+      {
+        float4x4 proj = {.row0 = {0}};
+        perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
+                    camera->far);
+
+        float4x4 model = {.row0 = {0}};
+        transform_to_matrix(&model, &cam_trans->transform);
+        float3 forward = f4tof3(model.row2);
+
+        float4x4 view = {.row0 = {0}};
+        look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
+                     (float3){0.0f, 1.0f, 0.0f});
+
+        mulmf44(&proj, &view, &vp);
+      }
+      float4x4 inv_vp = {.row0 = {0}}; // TODO
+
+      float3 view_pos = cam_trans->transform.position;
+
+      camera_data = (CommonCameraData){
+          .view_pos = view_pos,
+          .inv_vp = inv_vp,
+          .vp = vp,
+      };
+      SDL_memcpy(host_buffer.ptr, &camera_data, sizeof(CommonCameraData));
+
+      VkWriteDescriptorSet write = {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = view_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = tmp_gpu_buffer,
+                  .offset = host_buffer.offset,
+                  .range = host_buffer.info.size,
+              },
+      };
+      vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
+    }
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
@@ -688,8 +745,37 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       const TransformComponent *mesh_trans =
           tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
 
-      // TODO: Update object descriptor sets
-      VkDescriptorSet obj_set = VK_NULL_HANDLE;
+      // Update object descriptor sets
+      VkDescriptorSet obj_set = self->obj_sets[mesh_idx];
+      {
+        // Upload transform to the tmp buffer
+        TbHostBuffer host_buffer = {0};
+        err = tb_rnd_sys_alloc_tmp_host_buffer(
+            self->render_system, sizeof(CommonCameraData), 0x40, &host_buffer);
+        TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
+
+        CommonObjectData obj_data = {.m = {.row0 = {0}}};
+        transform_to_matrix(&obj_data.m, &mesh_trans->transform);
+        mulmf44(&camera_data.vp, &obj_data.m, &obj_data.mvp);
+
+        SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonCameraData));
+
+        VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = obj_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo =
+                &(VkDescriptorBufferInfo){
+                    .buffer = tmp_gpu_buffer,
+                    .offset = host_buffer.offset,
+                    .range = host_buffer.info.size,
+                },
+        };
+        vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
+      }
 
       // Organize draws into batches
       {
