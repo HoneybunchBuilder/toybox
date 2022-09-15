@@ -35,11 +35,16 @@ bool create_mesh_component(MeshComponent *self,
   // Retrieve info about how to draw this mesh
   uint64_t offset = 0;
   {
-
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
 
+      VkIndexType index_type = VK_INDEX_TYPE_UINT16;
+      if (indices->stride > 2) {
+        index_type = VK_INDEX_TYPE_UINT32;
+      }
+
+      self->submeshes[prim_idx].index_type = index_type;
       self->submeshes[prim_idx].index_count = indices->count;
       self->submeshes[prim_idx].index_offset = offset;
 

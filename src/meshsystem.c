@@ -30,6 +30,8 @@
 static const uint32_t max_pipe_count = VI_Count * GLTF_PERM_COUNT;
 
 typedef struct SubMeshDraw {
+  VkDescriptorSet mat_set;
+  VkIndexType index_type;
   uint32_t index_count;
   uint64_t index_offset;
   uint64_t vertex_offset;
@@ -50,6 +52,7 @@ typedef struct MeshDrawView {
 
 typedef struct MeshDrawBatch {
   VkPipeline pipeline;
+  VkPipelineLayout layout;
   uint32_t view_count;
   MeshDrawView *views;
 } MeshDrawBatch;
@@ -372,11 +375,49 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
 
 void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                         const void *batches) {
-  (void)buffer;
-  (void)batch_count;
-  (void)batches;
   TracyCZoneN(ctx, "Mesh Opaque Record", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
+
+  const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const MeshDrawBatch *batch = &mesh_batches[batch_idx];
+    if (batch->view_count == 0) {
+      continue;
+    }
+    VkPipelineLayout layout = batch->layout;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+    for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
+      const MeshDrawView *view = &batch->views[view_idx];
+      if (view->draw_count == 0) {
+        continue;
+      }
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              0, 1, &view->view_set, 0, NULL);
+      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
+        const MeshDraw *draw = &view->draws[draw_idx];
+        if (draw->submesh_draw_count == 0) {
+          continue;
+        }
+        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                                1, 1, &draw->obj_set, 0, NULL);
+        VkBuffer geom_buffer = draw->geom_buffer;
+
+        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
+             ++sub_idx) {
+          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
+          vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  layout, 2, 1, &submesh->mat_set, 0, NULL);
+          vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
+                               submesh->index_type);
+          vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
+                                 &submesh->vertex_offset);
+
+          vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+        }
+      }
+    }
+  }
 
   TracyCZoneEnd(ctx);
 }
@@ -611,33 +652,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     return;
   }
 
-  // Determine which pipelines are in use by marking their index in this
-  // collection. Really just care about the unique pipeline count
-  uint32_t batch_count = 0;
-  {
-    // Could be made faster by setting bits rather than a bool field
-    uint8_t *pipe_idxes =
-        tb_alloc_nm_tp(self->tmp_alloc, max_pipe_count, uint8_t);
-    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-      const MeshComponent *mesh_comp =
-          tb_get_component(mesh_store, mesh_idx, MeshComponent);
-
-      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
-           ++sub_idx) {
-        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-        TbMaterialPerm mat_perm =
-            tb_mat_system_get_perm(self->material_system, submesh->material);
-        TbVertexInput vertex_input = submesh->vertex_input;
-        const uint32_t pipe_idx =
-            get_pipeline_for_input_and_mat(self, vertex_input, mat_perm);
-        if (pipe_idxes[pipe_idx] == 0) {
-          batch_count++;
-        } else {
-          pipe_idxes[pipe_idx] = 1;
-        }
-      }
-    }
-  }
+  // Just collect a batch for every possible pipeline
+  const uint32_t batch_count = max_pipe_count;
 
   // Allocate and initialize each batch
   MeshDrawBatch *batches =
@@ -664,6 +680,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         tb_get_component(camera_transform_store, cam_idx, TransformComponent);
 
     // TODO: Update camera descriptor sets
+    VkDescriptorSet view_set = VK_NULL_HANDLE;
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
@@ -672,11 +689,53 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
 
       // TODO: Update object descriptor sets
+      VkDescriptorSet obj_set = VK_NULL_HANDLE;
 
       // Organize draws into batches
-      {}
+      {
+        // Determine which pipeline is in use
+        VkBuffer geom_buffer =
+            tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
+
+        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+             ++sub_idx) {
+          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+
+          TbMaterialPerm mat_perm =
+              tb_mat_system_get_perm(self->material_system, submesh->material);
+          VkDescriptorSet material_set =
+              tb_mat_system_get_set(self->material_system, submesh->material);
+
+          uint32_t pipe_idx = get_pipeline_for_input_and_mat(
+              self, submesh->vertex_input, mat_perm);
+
+          MeshDrawBatch *batch = &batches[pipe_idx];
+          batch->pipeline = self->pipelines[pipe_idx];
+          batch->layout = self->pipe_layout; // Can we avoid putting this here?
+          batch->view_count = camera_count;
+          MeshDrawView *view = &batch->views[cam_idx];
+          view->view_set = view_set;
+          view->draw_count = mesh_count,
+          view->draws[mesh_idx] = (MeshDraw){
+              .geom_buffer = geom_buffer,
+              .obj_set = obj_set,
+              .submesh_draw_count = mesh_comp->submesh_count,
+          };
+          view->draws[mesh_idx].submesh_draws[sub_idx] = (SubMeshDraw){
+              .mat_set = material_set,
+              .index_type = submesh->index_type,
+              .index_count = submesh->index_count,
+              .index_offset = submesh->index_offset,
+              .vertex_offset = submesh->vertex_offset,
+          };
+        }
+      }
     }
   }
+
+  // Submit batches
+  tb_rnd_issue_draw_batch(self->render_system, self->opaque_pass, batch_count,
+                          sizeof(MeshDrawBatch), batches);
 
   (void)mesh_store;
   (void)mesh_transform_store;
