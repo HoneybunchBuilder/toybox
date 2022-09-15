@@ -57,5 +57,6 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                                          const cgltf_material *material);
 
 TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat);
+VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat);
 
 void tb_mat_system_release_material_ref(MaterialSystem *self, TbMaterialId mat);
