@@ -613,3 +613,8 @@ void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline) {
   vkDestroyPipeline(self->render_thread->device, pipeline,
                     &self->vk_host_alloc_cb);
 }
+
+void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool) {
+  vkDestroyDescriptorPool(self->render_thread->device, pool,
+                          &self->vk_host_alloc_cb);
+}

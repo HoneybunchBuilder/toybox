@@ -8,6 +8,9 @@
 typedef struct ComponentDescriptor ComponentDescriptor;
 typedef struct cgltf_mesh cgltf_mesh;
 
+#define TB_SUBMESH_MAX 16
+#define TB_VERTEX_BINDING_MAX 4
+
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialId;
 typedef enum TbVertexInput {
@@ -30,8 +33,6 @@ typedef struct SubMesh {
   TbVertexInput vertex_input;
   TbMaterialId material;
 } SubMesh;
-
-#define TB_SUBMESH_MAX 16
 
 typedef struct MeshComponent {
   TbMeshId mesh_id;

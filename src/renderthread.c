@@ -36,6 +36,8 @@ void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
+  vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
+                  VK_TRUE, SDL_MAX_UINT64);
 }
 
 void tb_wait_thread_initialized(RenderThread *thread) {
