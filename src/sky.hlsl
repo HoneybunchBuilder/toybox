@@ -25,7 +25,6 @@ struct FragmentOut {
 Interpolators vert(VertexIn i) {
   Interpolators o;
   o.view_pos = i.local_pos;
-  o.view_pos.xy *= -1.0;
   o.clip_pos = mul(float4(i.local_pos, 1.0), consts.vp);
   return o;
 }

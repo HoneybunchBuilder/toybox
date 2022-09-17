@@ -150,7 +150,7 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
   VkPipelineRasterizationStateCreateInfo raster_state = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
       .polygonMode = VK_POLYGON_MODE_FILL,
-      .cullMode = VK_CULL_MODE_BACK_BIT,
+      .cullMode = VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT,
       .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
       .lineWidth = 1.0f,
   };
@@ -161,7 +161,7 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
   };
   VkPipelineDepthStencilStateCreateInfo depth_state = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-      .depthTestEnable = VK_TRUE,
+      .depthTestEnable = VK_FALSE,
       .depthWriteEnable = VK_TRUE,
       .depthCompareOp = VK_COMPARE_OP_GREATER,
       .maxDepthBounds = 1.0f,
@@ -849,6 +849,10 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           self->render_system, sizeof(CommonCameraData), 0x40, &host_buffer);
       TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
 
+      const Transform *camera_transform = &cam_trans->transform;
+
+      float3 view_pos = camera_transform->position;
+
       // TODO: Instead of calculating the vp matrix here, a camera system could
       // do it earlier in the frame
       float4x4 vp = {.row0 = {0}};
@@ -858,18 +862,15 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                     camera->far);
 
         float4x4 model = {.row0 = {0}};
-        transform_to_matrix(&model, &cam_trans->transform);
+        transform_to_matrix(&model, camera_transform);
         float3 forward = f4tof3(model.row2);
 
         float4x4 view = {.row0 = {0}};
-        look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
-                     (float3){0.0f, 1.0f, 0.0f});
+        look_forward(&view, view_pos, forward, (float3){0.0f, 1.0f, 0.0f});
 
         mulmf44(&proj, &view, &vp);
       }
       float4x4 inv_vp = {.row0 = {0}}; // TODO
-
-      float3 view_pos = cam_trans->transform.position;
 
       camera_data = (CommonCameraData){
           .view_pos = view_pos,
@@ -957,7 +958,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           batch->view_count = camera_count;
           MeshDrawView *view = &batch->views[cam_idx];
           view->view_set = view_set;
-          view->viewport = (VkViewport){0, height, width, -(float)height, 0, 1};
+          view->viewport = (VkViewport){0, 0, width, height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
           view->draw_count = mesh_count;
           view->draws[mesh_idx] = (MeshDraw){

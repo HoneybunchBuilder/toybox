@@ -169,7 +169,7 @@ VkResult create_sky_pipeline2(VkDevice device,
     VkPipelineRasterizationStateCreateInfo raster_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_FRONT_BIT,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .lineWidth = 1.0f,
     };
@@ -584,7 +584,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         batches[batch_count] = (SkyDrawBatch){
             .layout = self->pipe_layout,
             .pipeline = self->pipeline,
-            .viewport = {0, height, width, -(float)height, 0, 1},
+            .viewport = {0, 0, width, height, 0, 1},
             .scissor = {{0, 0}, {width, height}},
             .const_range =
                 (VkPushConstantRange){

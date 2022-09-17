@@ -176,7 +176,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
                       (float)mouse_x_delta * delta_look_speed;
                 }
                 if (state & NOCLIP_LOOKING_DOWN || state & NOCLIP_LOOKING_UP) {
-                  angular_velocity[0] -=
+                  angular_velocity[0] +=
                       (float)mouse_y_delta * delta_look_speed;
                 }
               }
