@@ -169,8 +169,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
   tb_coreui_system_descriptor(&system_descs[2], &coreui_system_desc);
   tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
-  tb_sky_system_descriptor(&system_descs[4], &sky_system_desc);
-  tb_mesh_system_descriptor(&system_descs[5], &mesh_system_desc);
+  tb_mesh_system_descriptor(&system_descs[4], &mesh_system_desc);
+  tb_sky_system_descriptor(&system_descs[5], &sky_system_desc);
   tb_material_system_descriptor(&system_descs[6], &material_system_desc);
   tb_texture_system_descriptor(&system_descs[7], &texture_system_desc);
   tb_render_system_descriptor(&system_descs[8], &render_system_desc);
