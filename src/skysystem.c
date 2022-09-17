@@ -389,13 +389,9 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                       err);
       copy_skydome(host_buf.ptr); // Copy to the newly alloced host buffer
 
-      // We know that the tmp host buffer gets uploaded automatically
-      // so issue a copy to the perm gpu geom buffer
       {
-        VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
-
         BufferCopy skydome_copy = {
-            .src = tmp_gpu_buffer,
+            .src = host_buf.buffer,
             .dst = self->sky_geom_gpu_buffer.buffer,
             .region =
                 {
