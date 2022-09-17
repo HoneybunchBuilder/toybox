@@ -16,6 +16,7 @@ typedef struct SkyComponentDescriptor {
 } SkyComponentDescriptor;
 
 typedef struct SkyComponent {
+  float time;
   float cirrus;
   float cumulus;
   float3 sun_dir; // TODO: decouple this and instead reference this data from a

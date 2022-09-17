@@ -440,6 +440,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
   (void)output;
   VkResult err = VK_SUCCESS;
 
+  EntityId *entities = tb_get_column_entity_ids(input, 0);
+
   const PackedComponentStore *skys =
       tb_get_column_check_id(input, 0, 0, SkyComponentId);
   const uint32_t sky_count = tb_get_column_component_count(input, 0);
@@ -463,6 +465,11 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     const TransformComponent *transform_comps =
         (const TransformComponent *)transforms->components;
     const SkyComponent *sky_comps = (const SkyComponent *)skys->components;
+
+    // Copy the sky component for output
+    SkyComponent *out_skys =
+        tb_alloc_nm_tp(self->tmp_alloc, sky_count, SkyComponent);
+    SDL_memcpy(out_skys, sky_comps, sky_count * sizeof(SkyComponent));
 
     uint32_t batch_count = 0;
     SkyDrawBatch *batches =
@@ -545,14 +552,16 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
-        const SkyComponent *sky = &sky_comps[sky_idx];
+        SkyComponent *sky = &out_skys[sky_idx];
 
         // Update the sky's descriptor set
         {
           VkDescriptorSet sky_set = self->sky_sets[batch_count];
 
+          sky->time += delta_seconds;
+
           SkyData sky_data = {
-              .time = delta_seconds,
+              .time = sky->time,
               .cirrus = sky->cirrus,
               .cumulus = sky->cumulus,
               .sun_dir = sky->sun_dir,
@@ -606,6 +615,15 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
 
     tb_rnd_issue_draw_batch(self->render_system, self->pass, batch_count,
                             sizeof(SkyDrawBatch), batches);
+
+    // Report output (we've updated the time on the sky component)
+    output->set_count = 1;
+    output->write_sets[0] = (SystemWriteSet){
+        .id = SkyComponentId,
+        .count = sky_count,
+        .components = (uint8_t *)out_skys,
+        .entities = entities,
+    };
   }
 }
 
