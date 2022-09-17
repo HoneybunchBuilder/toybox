@@ -561,7 +561,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
       }
 
       // Apply basic IO
-      io->DeltaTime = delta_seconds * 1000; // Note that ImGui expects seconds
+      io->DeltaTime = delta_seconds; // Note that ImGui expects seconds
       io->DisplaySize = (ImVec2){
           self->render_system->render_thread->swapchain.width,
           self->render_system->render_thread->swapchain.height,

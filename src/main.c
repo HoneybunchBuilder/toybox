@@ -231,7 +231,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   uint64_t time = 0;
   uint64_t start_time = SDL_GetPerformanceCounter();
-  uint64_t last_time = SDL_GetPerformanceCounter();
+  uint64_t last_time = 0;
   uint64_t delta_time = 0;
   float delta_time_seconds = 0.0f;
 

@@ -177,8 +177,9 @@ bool tb_tick_world(World *world, float delta_seconds) {
                                             RenderSystemId);
       if (system) {
         RenderSystem *render_system = (RenderSystem *)system->self;
-        TracyCZoneN(wait_ctx, "Wait for Render Thread", true);
-        TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+        TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
+                     true);
+        TracyCZoneValue(wait_ctx, render_system->frame_idx);
         tb_wait_render(render_system->render_thread, render_system->frame_idx);
         TracyCZoneEnd(wait_ctx);
       }
