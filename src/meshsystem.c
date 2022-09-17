@@ -34,7 +34,8 @@ typedef struct SubMeshDraw {
   VkIndexType index_type;
   uint32_t index_count;
   uint64_t index_offset;
-  uint64_t vertex_offset;
+  uint32_t vertex_binding_count;
+  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
 } SubMeshDraw;
 
 typedef struct MeshDraw {
@@ -45,6 +46,8 @@ typedef struct MeshDraw {
 } MeshDraw;
 
 typedef struct MeshDrawView {
+  VkViewport viewport;
+  VkRect2D scissor;
   VkDescriptorSet view_set;
   uint32_t draw_count;
   MeshDraw *draws;
@@ -392,8 +395,11 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
       if (view->draw_count == 0) {
         continue;
       }
+      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
+      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
+
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                              0, 1, &view->view_set, 0, NULL);
+                              2, 1, &view->view_set, 0, NULL);
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
         const MeshDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
@@ -407,11 +413,14 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
              ++sub_idx) {
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  layout, 2, 1, &submesh->mat_set, 0, NULL);
+                                  layout, 0, 1, &submesh->mat_set, 0, NULL);
           vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                submesh->index_type);
-          vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
-                                 &submesh->vertex_offset);
+          for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
+               ++vb_idx) {
+            vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
+                                   &submesh->vertex_binding_offsets[vb_idx]);
+          }
 
           vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
         }
@@ -592,6 +601,10 @@ void destroy_mesh_system(MeshSystem *self) {
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
+    tb_rnd_destroy_descriptor_pool(render_system,
+                                   self->frame_states[i].view_set_pool);
+    tb_rnd_destroy_descriptor_pool(render_system,
+                                   self->frame_states[i].obj_set_pool);
   }
 
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
@@ -626,6 +639,138 @@ uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
                   SDL_MAX_UINT32);
 }
 
+MeshSystemFrameState *tick_frame_state(MeshSystem *self, uint32_t view_count,
+                                       uint32_t mesh_count) {
+  MeshSystemFrameState *state =
+      &self->frame_states[self->render_system->frame_idx];
+
+  VkResult err = VK_SUCCESS;
+  VkDevice device = self->render_system->render_thread->device;
+  const VkAllocationCallbacks *vk_alloc =
+      &self->render_system->vk_host_alloc_cb;
+
+  // Allocate descriptor sets
+  {
+    Allocator alloc = self->std_alloc;
+
+    // One set per camera
+    {
+      state->view_count = view_count;
+      if (view_count > state->view_max) {
+        const uint32_t new_max = view_count * 2;
+
+        // Resize the descriptor pool
+        {
+          if (state->view_set_pool) {
+            vkDestroyDescriptorPool(device, state->view_set_pool, vk_alloc);
+          }
+
+          VkDescriptorPoolCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+              .maxSets = new_max,
+              .poolSizeCount = 1,
+              .pPoolSizes =
+                  &(VkDescriptorPoolSize){
+                      .descriptorCount = 1,
+                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                  },
+              .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+          };
+          err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
+                                       &state->view_set_pool);
+          TB_VK_CHECK(err, "Failed to create view descriptor pool");
+          SET_VK_NAME(device, state->view_set_pool,
+                      VK_OBJECT_TYPE_DESCRIPTOR_POOL, "View Set Pool");
+        }
+
+        // Reallocate descriptors
+        state->view_sets =
+            tb_realloc_nm_tp(alloc, state->view_sets, new_max, VkDescriptorSet);
+
+        state->view_max = new_max;
+
+      } else {
+        err = vkResetDescriptorPool(device, state->view_set_pool, 0);
+        TB_VK_CHECK(err, "Failed to reset view descriptor pool");
+      }
+
+      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+          self->tmp_alloc, state->view_max, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < state->view_max; ++i) {
+        layouts[i] = self->view_set_layout;
+      }
+
+      VkDescriptorSetAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+          .descriptorSetCount = state->view_max,
+          .descriptorPool = state->view_set_pool,
+          .pSetLayouts = layouts,
+      };
+      err = vkAllocateDescriptorSets(device, &alloc_info, state->view_sets);
+      TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
+    }
+
+    // One set per mesh
+    {
+      state->obj_count = mesh_count;
+      if (mesh_count > state->obj_max) {
+        const uint32_t new_max = mesh_count * 2;
+
+        // Resize the descriptor pool
+        {
+          if (state->obj_set_pool) {
+            vkDestroyDescriptorPool(device, state->obj_set_pool, vk_alloc);
+          }
+
+          VkDescriptorPoolCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+              .maxSets = new_max,
+              .poolSizeCount = 1,
+              .pPoolSizes =
+                  &(VkDescriptorPoolSize){
+                      .descriptorCount = 1,
+                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                  },
+              .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+          };
+          err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
+                                       &state->obj_set_pool);
+          TB_VK_CHECK(err, "Failed to create object descriptor pool");
+          SET_VK_NAME(device, state->obj_set_pool,
+                      VK_OBJECT_TYPE_DESCRIPTOR_POOL, "Object Set Pool");
+        }
+
+        // Reallocate descriptors
+        state->obj_sets =
+            tb_realloc_nm_tp(alloc, state->obj_sets, new_max, VkDescriptorSet);
+
+        state->obj_max = new_max;
+
+      } else {
+        err = vkResetDescriptorPool(device, state->obj_set_pool, 0);
+        TB_VK_CHECK(err, "Failed to reset object descriptor pool");
+      }
+
+      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+          self->tmp_alloc, state->obj_max, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < state->obj_max; ++i) {
+        layouts[i] = self->obj_set_layout;
+      }
+
+      VkDescriptorSetAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+          .descriptorSetCount = state->obj_max,
+          .descriptorPool = state->obj_set_pool,
+          .pSetLayouts = layouts,
+      };
+      err = vkAllocateDescriptorSets(device, &alloc_info, state->obj_sets);
+      TB_VK_CHECK(err, "Failed to re-allocate object descriptor sets");
+    }
+  }
+
+  return state;
+}
+
 void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
   (void)output;
@@ -655,27 +800,38 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Just collect a batch for every possible pipeline
   const uint32_t batch_count = max_pipe_count;
 
+  Allocator tmp_alloc = self->render_system->render_thread
+                            ->frame_states[self->render_system->frame_idx]
+                            .tmp_alloc.alloc;
+
   // Allocate and initialize each batch
   MeshDrawBatch *batches =
-      tb_alloc_nm_tp(self->tmp_alloc, batch_count, MeshDrawBatch);
+      tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     // Each batch could use each view
     MeshDrawBatch *batch = &batches[batch_idx];
     *batch = (MeshDrawBatch){0};
-    batch->views = tb_alloc_nm_tp(self->tmp_alloc, camera_count, MeshDrawView);
+    batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
 
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
       MeshDrawView *view = &batch->views[cam_idx];
       // Each view could see each mesh
       // Each mesh could have TB_SUBMESH_MAX # of submeshes
       *view = (MeshDrawView){0};
-      view->draws = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, MeshDraw);
+      view->draws = tb_alloc_nm_tp(tmp_alloc, mesh_count, MeshDraw);
     }
   }
 
   VkResult err = VK_SUCCESS;
   VkDevice device = self->render_system->render_thread->device;
   VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system);
+
+  MeshSystemFrameState *state =
+      tick_frame_state(self, camera_count, mesh_count);
+
+  // TODO: Make this less hacky
+  const uint32_t width = self->render_system->render_thread->swapchain.width;
+  const uint32_t height = self->render_system->render_thread->swapchain.height;
 
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const CameraComponent *camera =
@@ -684,8 +840,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         tb_get_component(camera_transform_store, cam_idx, TransformComponent);
 
     // Update camera descriptor sets
-    VkDescriptorSet view_set = self->view_sets[cam_idx];
-    CommonCameraData camera_data = {0};
+    VkDescriptorSet view_set = state->view_sets[cam_idx];
+    CommonCameraData camera_data = {.view_pos = {0}};
     {
       // Upload transform to the tmp buffer
       TbHostBuffer host_buffer = {0};
@@ -733,7 +889,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
               &(VkDescriptorBufferInfo){
                   .buffer = tmp_gpu_buffer,
                   .offset = host_buffer.offset,
-                  .range = host_buffer.info.size,
+                  .range = sizeof(CommonCameraData),
               },
       };
       vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
@@ -746,19 +902,19 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
 
       // Update object descriptor sets
-      VkDescriptorSet obj_set = self->obj_sets[mesh_idx];
+      VkDescriptorSet obj_set = state->obj_sets[mesh_idx];
       {
         // Upload transform to the tmp buffer
         TbHostBuffer host_buffer = {0};
         err = tb_rnd_sys_alloc_tmp_host_buffer(
-            self->render_system, sizeof(CommonCameraData), 0x40, &host_buffer);
+            self->render_system, sizeof(CommonObjectData), 0x40, &host_buffer);
         TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
 
         CommonObjectData obj_data = {.m = {.row0 = {0}}};
         transform_to_matrix(&obj_data.m, &mesh_trans->transform);
         mulmf44(&camera_data.vp, &obj_data.m, &obj_data.mvp);
 
-        SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonCameraData));
+        SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonObjectData));
 
         VkWriteDescriptorSet write = {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -771,7 +927,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                 &(VkDescriptorBufferInfo){
                     .buffer = tmp_gpu_buffer,
                     .offset = host_buffer.offset,
-                    .range = host_buffer.info.size,
+                    .range = sizeof(CommonObjectData),
                 },
         };
         vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
@@ -801,19 +957,41 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           batch->view_count = camera_count;
           MeshDrawView *view = &batch->views[cam_idx];
           view->view_set = view_set;
-          view->draw_count = mesh_count,
+          view->viewport = (VkViewport){0, height, width, -(float)height, 0, 1};
+          view->scissor = (VkRect2D){{0, 0}, {width, height}};
+          view->draw_count = mesh_count;
           view->draws[mesh_idx] = (MeshDraw){
               .geom_buffer = geom_buffer,
               .obj_set = obj_set,
               .submesh_draw_count = mesh_comp->submesh_count,
           };
-          view->draws[mesh_idx].submesh_draws[sub_idx] = (SubMeshDraw){
+          SubMeshDraw *sub_draw = &view->draws[mesh_idx].submesh_draws[sub_idx];
+          *sub_draw = (SubMeshDraw){
               .mat_set = material_set,
               .index_type = submesh->index_type,
               .index_count = submesh->index_count,
               .index_offset = submesh->index_offset,
-              .vertex_offset = submesh->vertex_offset,
           };
+
+          const uint64_t base_vert_offset = submesh->vertex_offset;
+
+          switch (submesh->vertex_input) {
+          case VI_P3N3:
+            sub_draw->vertex_binding_count = 2;
+            sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
+          case VI_P3N3U2:
+            sub_draw->vertex_binding_count = 3;
+            sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[2] = base_vert_offset;
+          case VI_P3N3T4U2:
+            sub_draw->vertex_binding_count = 4;
+            sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[2] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[3] = base_vert_offset;
+          }
         }
       }
     }
@@ -822,11 +1000,6 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Submit batches
   tb_rnd_issue_draw_batch(self->render_system, self->opaque_pass, batch_count,
                           sizeof(MeshDrawBatch), batches);
-
-  (void)mesh_store;
-  (void)mesh_transform_store;
-  (void)camera_store;
-  (void)camera_transform_store;
 
   TracyCZoneEnd(ctx);
 }

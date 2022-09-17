@@ -113,3 +113,4 @@ void tb_rnd_destroy_set_layout(RenderSystem *self,
 void tb_rnd_destroy_pipe_layout(RenderSystem *self,
                                 VkPipelineLayout pipe_layout);
 void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
+void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);

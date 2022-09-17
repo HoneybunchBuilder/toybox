@@ -7,7 +7,7 @@
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #endif
 
-#define TRACY_VK_C_ENABLE
+//#define TRACY_VK_C_ENABLE
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
