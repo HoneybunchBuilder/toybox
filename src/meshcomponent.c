@@ -47,6 +47,7 @@ bool create_mesh_component(MeshComponent *self,
       self->submeshes[prim_idx].index_type = index_type;
       self->submeshes[prim_idx].index_count = indices->count;
       self->submeshes[prim_idx].index_offset = offset;
+      self->submeshes[prim_idx].vertex_count = prim->attributes[0].data->count;
 
       // Load materials
       self->submeshes[prim_idx].material = tb_mat_system_load_material(
@@ -120,13 +121,13 @@ bool create_mesh_component(MeshComponent *self,
       {
         if (vertex_attributes & VA_INPUT_PERM_POSITION) {
           if (vertex_attributes & VA_INPUT_PERM_NORMAL) {
+            vertex_input = VI_P3N3;
             if (vertex_attributes & VA_INPUT_PERM_TEXCOORD0) {
+              vertex_input = VI_P3N3U2;
               if (vertex_attributes & VA_INPUT_PERM_TANGENT) {
                 vertex_input = VI_P3N3T4U2;
               }
-              vertex_input = VI_P3N3U2;
             }
-            vertex_input = VI_P3N3;
           }
         }
       }

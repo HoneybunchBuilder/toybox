@@ -975,23 +975,39 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           };
 
           const uint64_t base_vert_offset = submesh->vertex_offset;
+          const uint32_t vertex_count = submesh->vertex_count;
+
+          static const uint64_t float3_size = sizeof(float) * 3;
 
           switch (submesh->vertex_input) {
           case VI_P3N3:
             sub_draw->vertex_binding_count = 2;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] =
+                base_vert_offset + (vertex_count * float3_size);
+            break;
           case VI_P3N3U2:
             sub_draw->vertex_binding_count = 3;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[2] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] =
+                base_vert_offset + (vertex_count * float3_size);
+            sub_draw->vertex_binding_offsets[2] =
+                base_vert_offset + (vertex_count * float3_size * 2);
+            break;
           case VI_P3N3T4U2:
             sub_draw->vertex_binding_count = 4;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[1] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[2] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[3] = base_vert_offset;
+            sub_draw->vertex_binding_offsets[1] =
+                base_vert_offset + (vertex_count * float3_size * 1);
+            sub_draw->vertex_binding_offsets[2] =
+                base_vert_offset + (vertex_count * float3_size * 2);
+            sub_draw->vertex_binding_offsets[3] =
+                base_vert_offset +
+                (vertex_count * ((float3_size * 2) + sizeof(float4)));
+            break;
+          default:
+            TB_CHECK(false, "Unexepcted vertex input");
+            break;
           }
         }
       }
