@@ -22,6 +22,12 @@ typedef struct OceanSystem {
   Allocator std_alloc;
 
   TbMeshId ocean_patch_mesh;
+
+  VkRenderPass ocean_pass;
+  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+
+  VkPipelineLayout pipe_layout;
+  VkPipeline pipeline;
 } OceanSystem;
 
 void tb_ocean_system_descriptor(SystemDescriptor *desc,

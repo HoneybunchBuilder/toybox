@@ -38,13 +38,26 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Parse expected mesh from glb
   self->ocean_patch_mesh =
-      tb_mesh_system_load_mesh(self->mesh_system, asset_path, &data->meshes[0]);
+      tb_mesh_system_load_mesh(mesh_system, asset_path, &data->meshes[0]);
+
+  // Create ocean pipeline layout
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    };
+    VkResult err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                                 "Ocean Pipeline Layout",
+                                                 &self->pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", err);
+  }
 
   return true;
 }
 
 void destroy_ocean_system(OceanSystem *self) {
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->ocean_patch_mesh);
+
+  tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
 
   *self = (OceanSystem){0};
 }
