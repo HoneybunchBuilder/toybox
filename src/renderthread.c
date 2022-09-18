@@ -366,6 +366,66 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                   "Frame State Swapchain Image View");
     }
 
+    // Create depth buffer
+    {
+      VkImageCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+          .imageType = VK_IMAGE_TYPE_2D,
+          .format = VK_FORMAT_D32_SFLOAT,
+          .extent =
+              {
+                  .width = swapchain->width,
+                  .height = swapchain->height,
+                  .depth = 1,
+              },
+          .mipLevels = 1,
+          .arrayLayers = 1,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+      };
+      VmaAllocationCreateInfo alloc_create_info = {
+          .usage = VMA_MEMORY_USAGE_GPU_ONLY,
+      };
+      err =
+          vmaCreateImage(vma_alloc, &create_info, &alloc_create_info,
+                         &state->depth_buffer.image, &state->depth_buffer.alloc,
+                         &state->depth_buffer.info);
+      TB_VK_CHECK_RET(err, "Failed to create frame state depth buffer", false);
+      SET_VK_NAME(device, state->depth_buffer.image, VK_OBJECT_TYPE_IMAGE,
+                  "Frame State Depth Buffer");
+    }
+
+    // Create depth buffer view
+    {
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = VK_FORMAT_D32_SFLOAT,
+          .image = state->depth_buffer.image,
+          .components =
+              (VkComponentMapping){
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              (VkImageSubresourceRange){
+                  VK_IMAGE_ASPECT_DEPTH_BIT,
+                  0,
+                  1,
+                  0,
+                  1,
+              },
+      };
+      err = vkCreateImageView(device, &create_info, vk_alloc,
+                              &state->depth_buffer_view);
+      TB_VK_CHECK_RET(err, "Failed to create frame state depth image view",
+                      false);
+      SET_VK_NAME(device, state->depth_buffer_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                  "Frame State Depth Image View");
+    }
+
     {
       VkSemaphoreCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -478,6 +538,10 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
+
+    vmaDestroyImage(vma_alloc, state->depth_buffer.image,
+                    state->depth_buffer.alloc);
+    vkDestroyImageView(device, state->depth_buffer_view, vk_alloc);
 
     vkFreeCommandBuffers(device, state->command_pool, 1,
                          &state->command_buffer);
@@ -1344,6 +1408,12 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
           PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
 
+          const uint32_t clear_value_count = 2;
+          VkClearValue clear_values[clear_value_count] = {
+              {.color.float32 = {0}},
+              {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+          };
+
           // TODO: Fix assumption that we want the pass to target the swapchain
           VkRenderPassBeginInfo begin_info = {
               .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1357,11 +1427,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                               .height = ctx->height,
                           },
                   },
-              .clearValueCount = 1,
-              .pClearValues =
-                  &(VkClearValue){
-                      .color.float32 = {0},
-                  },
+              .clearValueCount = 2,
+              .pClearValues = clear_values,
           };
 
           vkCmdBeginRenderPass(command_buffer, &begin_info,
