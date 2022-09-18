@@ -19,12 +19,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
   // Find the necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which ocean depends on", false);
-  MeshSystem *mesh_system = (MeshSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MeshSystemId);
+  MeshSystem *mesh_system =
+      tb_get_system(system_deps, system_dep_count, MeshSystem);
   TB_CHECK_RETURN(mesh_system,
                   "Failed to find mesh system which ocean depends on", false);
 
