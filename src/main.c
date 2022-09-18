@@ -24,6 +24,7 @@
 #include "lightcomponent.h"
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
+#include "oceancomponent.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
@@ -33,6 +34,7 @@
 #include "materialsystem.h"
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
+#include "oceansystem.h"
 #include "rendersystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
@@ -106,7 +108,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
   // Order does not matter
-  const uint32_t component_count = 9;
+  const uint32_t component_count = 10;
   ComponentDescriptor component_descs[component_count] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
@@ -117,6 +119,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_imgui_component_descriptor(&component_descs[6]);
   tb_sky_component_descriptor(&component_descs[7]);
   tb_mesh_component_descriptor(&component_descs[8]);
+  tb_ocean_component_descriptor(&component_descs[9]);
 
   InputSystemDescriptor input_system_desc = {
       .tmp_alloc = arena.alloc,
@@ -146,6 +149,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  OceanSystemDescriptor ocean_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   MaterialSystemDescriptor material_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
@@ -163,7 +171,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   // Order matters
-  const uint32_t system_count = 9;
+  const uint32_t system_count = 10;
   SystemDescriptor system_descs[system_count] = {0};
   tb_input_system_descriptor(&system_descs[0], &input_system_desc);
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
@@ -171,9 +179,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
   tb_sky_system_descriptor(&system_descs[4], &sky_system_desc);
   tb_mesh_system_descriptor(&system_descs[5], &mesh_system_desc);
-  tb_material_system_descriptor(&system_descs[6], &material_system_desc);
-  tb_texture_system_descriptor(&system_descs[7], &texture_system_desc);
-  tb_render_system_descriptor(&system_descs[8], &render_system_desc);
+  tb_ocean_system_descriptor(&system_descs[6], &ocean_system_desc);
+  tb_material_system_descriptor(&system_descs[7], &material_system_desc);
+  tb_texture_system_descriptor(&system_descs[8], &texture_system_desc);
+  tb_render_system_descriptor(&system_descs[9], &render_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
