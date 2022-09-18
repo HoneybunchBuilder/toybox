@@ -47,6 +47,7 @@ typedef struct FrameState {
   VkImage swapchain_image;
   VkImageView swapchain_image_view;
 
+  TbImage depth_buffer;
   VkImageView depth_buffer_view;
 
   VkSemaphore img_acquired_sem;
