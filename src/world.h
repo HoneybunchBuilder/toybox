@@ -226,3 +226,5 @@ void *tb_find_system_dep_self_by_id(System *const *systems,
 // Helper API
 #define tb_get_component(store, idx, Type)                                     \
   &((const Type *)(store)->components)[(idx)];
+#define tb_get_system(deps, count, Type)                                       \
+  (Type *)tb_find_system_dep_self_by_id(deps, count, Type##Id);
