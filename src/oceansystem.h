@@ -6,7 +6,9 @@
 #define OceanSystemId 0xB000DEAD
 
 typedef struct SystemDescriptor SystemDescriptor;
-typedef struct RenderSystem RenderSystem;
+typedef struct MeshSystem MeshSystem;
+
+typedef uint64_t TbMeshId;
 
 typedef struct OceanSystemDescriptor {
   Allocator tmp_alloc;
@@ -15,11 +17,11 @@ typedef struct OceanSystemDescriptor {
 
 typedef struct OceanSystem {
   RenderSystem *render_system;
+  MeshSystem *mesh_system;
   Allocator tmp_alloc;
   Allocator std_alloc;
 
-  TbHostBuffer host_patch_geom;
-  TbBuffer gpu_patch_geom;
+  TbMeshId ocean_patch_mesh;
 } OceanSystem;
 
 void tb_ocean_system_descriptor(SystemDescriptor *desc,
