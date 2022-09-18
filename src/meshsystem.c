@@ -60,10 +60,8 @@ typedef struct MeshDrawBatch {
   MeshDrawView *views;
 } MeshDrawBatch;
 
-VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
-                               Allocator std_alloc,
-                               const VkAllocationCallbacks *vk_alloc,
-                               VkPipelineCache cache, VkRenderPass pass,
+VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
+                               Allocator std_alloc, VkRenderPass pass,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **pipelines) {
   VkResult err = VK_SUCCESS;
@@ -198,38 +196,38 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
   };
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3 Vert", &vert_mod_P3N3);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3 Frag", &frag_mod_P3N3);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3U2);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3U2 Vert", &vert_mod_P3N3U2);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3U2);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3U2 Frag", &frag_mod_P3N3U2);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_vert);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &vert_mod_P3N3T4U2);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3T4U2 Vert", &vert_mod_P3N3T4U2);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_frag);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
-                             &frag_mod_P3N3T4U2);
+  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
+                             "P3N3T4U2 Frag", &frag_mod_P3N3T4U2);
   TB_VK_CHECK_RET(err, "Failed to create shader module", err);
 
   VkPipelineShaderStageCreateInfo vert_stage_P3N3 = {
@@ -357,21 +355,21 @@ VkResult create_mesh_pipelines(VkDevice device, Allocator tmp_alloc,
         perm_idx++;
       }
     }
-    err = vkCreateGraphicsPipelines(device, cache, max_pipe_count, create_info,
-                                    vk_alloc, pipes);
-    TB_VK_CHECK_RET(err, "Failed to create graphics pipeline", err);
+    err = tb_rnd_create_graphics_pipelines(render_system, max_pipe_count,
+                                           create_info, "Mesh Pipeline", pipes);
+    TB_VK_CHECK_RET(err, "Failed to create graphics pipelines", err);
 
     *pipelines = pipes;
     *pipe_count = max_pipe_count;
   }
 
   // Can destroy shader moduless
-  vkDestroyShaderModule(device, vert_mod_P3N3, vk_alloc);
-  vkDestroyShaderModule(device, frag_mod_P3N3, vk_alloc);
-  vkDestroyShaderModule(device, vert_mod_P3N3U2, vk_alloc);
-  vkDestroyShaderModule(device, frag_mod_P3N3U2, vk_alloc);
-  vkDestroyShaderModule(device, vert_mod_P3N3T4U2, vk_alloc);
-  vkDestroyShaderModule(device, frag_mod_P3N3T4U2, vk_alloc);
+  tb_rnd_destroy_shader(render_system, vert_mod_P3N3);
+  tb_rnd_destroy_shader(render_system, frag_mod_P3N3);
+  tb_rnd_destroy_shader(render_system, vert_mod_P3N3U2);
+  tb_rnd_destroy_shader(render_system, frag_mod_P3N3U2);
+  tb_rnd_destroy_shader(render_system, vert_mod_P3N3T4U2);
+  tb_rnd_destroy_shader(render_system, frag_mod_P3N3T4U2);
 
   return err;
 }
@@ -606,11 +604,10 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                                       &self->framebuffers[i]);
     }
 
-    err = create_mesh_pipelines(
-        self->render_system->render_thread->device, self->tmp_alloc,
-        self->std_alloc, &self->render_system->vk_host_alloc_cb,
-        self->render_system->pipeline_cache, self->opaque_pass,
-        self->pipe_layout, &self->pipe_count, &self->pipelines);
+    err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
+                                self->std_alloc, self->opaque_pass,
+                                self->pipe_layout, &self->pipe_count,
+                                &self->pipelines);
     TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
   }
   // Register the render pass

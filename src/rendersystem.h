@@ -98,6 +98,15 @@ tb_rnd_create_pipeline_layout(RenderSystem *self,
                               const VkPipelineLayoutCreateInfo *create_info,
                               const char *name, VkPipelineLayout *pipe_layout);
 
+VkResult tb_rnd_create_shader(RenderSystem *self,
+                              const VkShaderModuleCreateInfo *create_info,
+                              const char *name, VkShaderModule *shader);
+
+VkResult tb_rnd_create_graphics_pipelines(
+    RenderSystem *self, uint32_t create_info_count,
+    const VkGraphicsPipelineCreateInfo *create_info, const char *name,
+    VkPipeline *pipelines);
+
 void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count);
 void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
@@ -112,5 +121,6 @@ void tb_rnd_destroy_set_layout(RenderSystem *self,
                                VkDescriptorSetLayout set_layout);
 void tb_rnd_destroy_pipe_layout(RenderSystem *self,
                                 VkPipelineLayout pipe_layout);
+void tb_rnd_destroy_shader(RenderSystem *self, VkShaderModule shader);
 void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);
