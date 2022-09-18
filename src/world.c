@@ -1,6 +1,7 @@
 #include "world.h"
 
 #include "allocator.h"
+#include "assets.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -20,36 +21,6 @@
 
 #include "inputsystem.h"
 #include "rendersystem.h"
-
-static cgltf_result
-sdl_read_glb(const struct cgltf_memory_options *memory_options,
-             const struct cgltf_file_options *file_options, const char *path,
-             cgltf_size *size, void **data) {
-  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
-  cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
-  (void)path;
-
-  void *mem = memory_options->alloc(memory_options->user_data, file_size);
-  TB_CHECK_RETURN(mem, "clgtf out of memory.", cgltf_result_out_of_memory);
-
-  TB_CHECK_RETURN(SDL_RWread(file, mem, file_size, 1) != 0, "clgtf io error.",
-                  cgltf_result_io_error);
-
-  *size = file_size;
-  *data = mem;
-
-  return cgltf_result_success;
-}
-
-static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
-                            const struct cgltf_file_options *file_options,
-                            void *data) {
-  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
-
-  memory_options->free(memory_options->user_data, data);
-
-  TB_CHECK(SDL_RWclose(file) == 0, "Failed to close glb file.");
-}
 
 void create_component_store(ComponentStore *store,
                             const ComponentDescriptor *desc) {
@@ -432,47 +403,10 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   Allocator tmp_alloc = world->tmp_alloc;
 
   // Get qualified path to scene asset
-  char *asset_path = NULL;
-  {
-    const uint32_t max_asset_len = 2048;
-    asset_path = tb_alloc(world->tmp_alloc, max_asset_len);
-    SDL_memset(asset_path, 0, max_asset_len);
-    SDL_snprintf(asset_path, max_asset_len, "%s%s", ASSET_PREFIX, scene_path);
-  }
-  TB_CHECK_RETURN(asset_path, "Failed to resolve asset path.", false);
+  char *asset_path = tb_resolve_asset_path(tmp_alloc, scene_path);
 
   // Load glb off disk
-  cgltf_data *data = NULL;
-  {
-    SDL_RWops *glb_file = SDL_RWFromFile(asset_path, "rb");
-    TB_CHECK_RETURN(glb_file, "Failed to open glb.", false);
-
-    cgltf_options options = {.type = cgltf_file_type_glb,
-                             .memory =
-                                 {
-                                     .user_data = std_alloc.user_data,
-                                     .alloc = std_alloc.alloc,
-                                     .free = std_alloc.free,
-                                 },
-                             .file = {
-                                 .read = sdl_read_glb,
-                                 .release = sdl_release_glb,
-                                 .user_data = glb_file,
-                             }};
-
-    cgltf_result res = cgltf_parse_file(&options, asset_path, &data);
-    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to parse glb.", false);
-
-    res = cgltf_load_buffers(&options, data, asset_path);
-    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to load glb buffers.",
-                    false);
-
-#if !defined(FINAL)
-    res = cgltf_validate(data);
-    TB_CHECK_RETURN(res == cgltf_result_success, "Failed to validate glb.",
-                    false);
-#endif
-  }
+  cgltf_data *data = tb_read_glb(std_alloc, asset_path);
   TB_CHECK_RETURN(data, "Failed to load glb", false);
 
   json_tokener *tok = json_tokener_new();
