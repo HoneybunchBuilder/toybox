@@ -15,6 +15,43 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
   (void)batches;
 }
 
+VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
+                               VkPipelineLayout pipe_layout,
+                               VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule ocean_vert = VK_NULL_HANDLE;
+  VkShaderModule ocean_frag = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+
+    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Vert",
+                               &ocean_vert);
+    TB_VK_CHECK_RET(err, "Failed to load ocean vert shader module", err);
+
+    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Frag",
+                               &ocean_frag);
+    TB_VK_CHECK_RET(err, "Failed to load ocean frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .layout = pipe_layout,
+      .renderPass = pass,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Ocean Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, ocean_vert);
+  tb_rnd_destroy_shader(render_system, ocean_frag);
+
+  return err;
+}
+
 bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
