@@ -71,9 +71,7 @@ bool create_imgui_component(ImGuiComponent *self,
     // know will be copied to from the tmp host buffer before this copy
     // is completed.
     BufferImageCopy upload = {
-        .src =
-            render_system->render_thread->frame_states[render_system->frame_idx]
-                .tmp_gpu_buffer,
+        .src = host_buf.buffer,
         .dst = self->atlas.image,
         .region =
             {
@@ -138,7 +136,7 @@ bool create_imgui_component(ImGuiComponent *self,
 }
 
 void destroy_imgui_component(ImGuiComponent *self, uint32_t system_dep_count,
-                           System *const *system_deps) {
+                             System *const *system_deps) {
   (void)system_dep_count;
   (void)system_deps;
   tb_rnd_free_gpu_image(self->render_system, &self->atlas);

@@ -595,7 +595,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
           // to the gpu every frame
           TbHostBuffer tmp_host_buffer = {0};
           if (tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
-                                               16, &tmp_host_buffer) !=
+                                               0x40, &tmp_host_buffer) !=
               VK_SUCCESS) {
             TracyCZoneEnd(ctx);
             return;
@@ -608,6 +608,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
           {
             size_t idx_size =
                 (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+
+            size_t test_offset = 0;
 
             // We know to use 8 for the alignment because the vertex
             // attribute layout starts with a float2
@@ -630,6 +632,10 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
               SDL_memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
               SDL_memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
+
+              test_offset += idx_byte_count;
+              test_offset += vtx_byte_count;
+              TB_CHECK(test_offset <= imgui_size, "Writing past buffer");
 
               idx_dst += idx_byte_count;
               vtx_dst += vtx_byte_count;
@@ -675,8 +681,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                     .tmp_alloc.alloc,
                 imgui_draw_count, ImGuiDraw);
             {
-              uint32_t cmd_index_offset = 0;
-              uint32_t cmd_vertex_offset = 0;
+              uint64_t cmd_index_offset = tmp_host_buffer.offset;
+              uint64_t cmd_vertex_offset = tmp_host_buffer.offset;
 
               for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
                    ++draw_idx) {
