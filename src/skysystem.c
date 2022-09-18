@@ -284,30 +284,45 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   // Create sky render pass
   // Lazy and rendering directly to the swapchain for now
   {
-    VkAttachmentDescription color_attachment = {
-        .format = render_system->render_thread->swapchain.format,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    const uint32_t attachment_count = 2;
+    VkAttachmentDescription attachments[attachment_count] = {
+        {
+            .format = render_system->render_thread->swapchain.format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        },
+        {
+            .format = VK_FORMAT_D32_SFLOAT,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        },
     };
-    VkAttachmentDescription attachments[1] = {
-        color_attachment,
-    };
-    VkAttachmentReference color_attachment_ref = {
-        0,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-    VkAttachmentReference attachment_refs[1] = {
-        color_attachment_ref,
+    const uint32_t color_ref_count = 1;
+    VkAttachmentReference color_refs[color_ref_count] = {
+        {
+            0,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        },
     };
     VkSubpassDescription subpass = {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = attachment_refs,
+        .colorAttachmentCount = color_ref_count,
+        .pColorAttachments = color_refs,
+        .pDepthStencilAttachment =
+            &(VkAttachmentReference){
+                1,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
     };
     VkSubpassDependency subpass_dep = {
         .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
@@ -318,7 +333,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
     };
     VkRenderPassCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
+        .attachmentCount = attachment_count,
         .pAttachments = attachments,
         .subpassCount = 1,
         .pSubpasses = &subpass,
@@ -338,12 +353,19 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
 
   // Create framebuffers that associate the sky pass with the swapchain target
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    const uint32_t attachment_count = 2;
+    // TODO: Figure out a way to do this without referencing the render thread
+    // directly
+    VkImageView attachments[attachment_count] = {
+        render_system->render_thread->frame_states[i].swapchain_image_view,
+        render_system->render_thread->frame_states[i].depth_buffer_view,
+    };
+
     VkFramebufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = self->pass,
-        .attachmentCount = 1,
-        .pAttachments =
-            &render_system->render_thread->frame_states[i].swapchain_image_view,
+        .attachmentCount = attachment_count,
+        .pAttachments = attachments,
         .width = render_system->render_thread->swapchain.width,
         .height = render_system->render_thread->swapchain.height,
         .layers = 1,
