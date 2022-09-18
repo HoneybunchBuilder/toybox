@@ -71,9 +71,16 @@ bool create_texture_system(TextureSystem *self,
 }
 
 void destroy_texture_system(TextureSystem *self) {
+
   tb_tex_system_release_texture_ref(self, self->default_metal_rough_tex);
   tb_tex_system_release_texture_ref(self, self->default_normal_tex);
   tb_tex_system_release_texture_ref(self, self->default_color_tex);
+
+  for (uint32_t i = 0; i < self->tex_count; ++i) {
+    if (self->tex_ref_counts[i] != 0) {
+      TB_CHECK(false, "Leaking textures");
+    }
+  }
 
   *self = (TextureSystem){
       .default_color_tex = InvalidTextureId,
@@ -94,7 +101,7 @@ TB_DEFINE_SYSTEM(texture, TextureSystem, TextureSystemDescriptor)
 
 void tb_texture_system_descriptor(SystemDescriptor *desc,
                                   const TextureSystemDescriptor *tex_desc) {
-  desc->name = "Mesh";
+  desc->name = "Texture";
   desc->size = sizeof(TextureSystem);
   desc->id = TextureSystemId;
   desc->desc = (InternalDescriptor)tex_desc;

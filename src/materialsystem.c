@@ -99,6 +99,12 @@ void destroy_material_system(MaterialSystem *self) {
 
   vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
 
+  for (uint32_t i = 0; i < self->mat_count; ++i) {
+    if (self->mat_ref_counts[i] != 0) {
+      TB_CHECK(false, "Leaking materials");
+    }
+  }
+
   *self = (MaterialSystem){0};
 }
 
@@ -245,7 +251,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             uint32_t write_idx = i * 4;
             writes[write_idx + 0] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[index],
+                .dstSet = self->mat_sets[i],
                 .dstBinding = 0,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -258,7 +264,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             };
             writes[write_idx + 1] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[index],
+                .dstSet = self->mat_sets[i],
                 .dstBinding = 1,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -267,12 +273,12 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                     &(VkDescriptorImageInfo){
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         .imageView = tb_tex_system_get_image_view(
-                            self->texture_system, self->mat_color_maps[index]),
+                            self->texture_system, self->mat_color_maps[i]),
                     },
             };
             writes[write_idx + 2] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[index],
+                .dstSet = self->mat_sets[i],
                 .dstBinding = 2,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -281,12 +287,12 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                     &(VkDescriptorImageInfo){
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         .imageView = tb_tex_system_get_image_view(
-                            self->texture_system, self->mat_normal_maps[index]),
+                            self->texture_system, self->mat_normal_maps[i]),
                     },
             };
             writes[write_idx + 3] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[index],
+                .dstSet = self->mat_sets[i],
                 .dstBinding = 3,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -296,7 +302,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                         .imageView = tb_tex_system_get_image_view(
                             self->texture_system,
-                            self->mat_metal_rough_maps[index]),
+                            self->mat_metal_rough_maps[i]),
                     },
             };
           }
@@ -518,9 +524,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
     self->mat_ids[index] = id;
     self->mat_count++;
-  }
-
-  else {
+  } else {
     // If the material was already loaded, go through the textures and grab
     // a reference so it's known that the texture is in use
     tb_tex_system_take_tex_ref(self->texture_system,

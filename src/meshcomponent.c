@@ -117,7 +117,7 @@ bool create_mesh_component(MeshComponent *self,
       }
 
       // Decode vertex attributes into full vertex input layouts
-      TbVertexInput vertex_input = 0;
+      TbVertexInput vertex_input = VI_Count;
       {
         if (vertex_attributes & VA_INPUT_PERM_POSITION) {
           if (vertex_attributes & VA_INPUT_PERM_NORMAL) {
@@ -131,7 +131,8 @@ bool create_mesh_component(MeshComponent *self,
           }
         }
       }
-      TB_CHECK_RETURN(vertex_input, "Unexpected vertex input", false);
+      TB_CHECK_RETURN(vertex_input < VI_Count, "Unexpected vertex input",
+                      false);
 
       self->submeshes[prim_idx].vertex_input = vertex_input;
 

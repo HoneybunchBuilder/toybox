@@ -4,6 +4,11 @@
 
 // Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
+Texture2D base_color_map : register(t1, space0); // Fragment Stage Only
+Texture2D normal_map : register(t2, space0); // (unusable without per-vertex tangents) Fragment Stage Only
+Texture2D metal_rough_map : register(t3, space0); // Fragment Stage Only
+//Texture2D emissive_map : register(t4, space0); // Fragment Stage Only
+sampler static_sampler : register(s4, space0); // Immutable sampler
 
 // Per-object data - Vertex Stage Only
 ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
@@ -53,6 +58,8 @@ float4 frag(Interpolators i) : SV_TARGET
 
     float3 out_color = float3(0.0, 0.0, 0.0);
 
+    float3 light_dir = float3(0, 1, 0);
+
     if(PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS)
     {
         float metallic = material_data.pbr_metallic_roughness.metallic_factor;
@@ -75,10 +82,9 @@ float4 frag(Interpolators i) : SV_TARGET
         float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
         //for each light
-        /*
         {
             float3 light_color = float3(1, 1, 1);
-            float3 L = normalize(light_data.light_dir);
+            float3 L = light_dir;
 
             PBRLight light = {
                 light_color,
@@ -91,22 +97,19 @@ float4 frag(Interpolators i) : SV_TARGET
 
             out_color += pbr_lighting(light, N, V, NdotV);
         }
-        */
     }
     else // Phong fallback
     {
         float gloss = 0.5f;
 
         // for each light
-        /*
         {
-            float3 L = normalize(light_data.light_dir);
+            float3 L = light_dir;
             float3 H = normalize(V + L);
 
             float3 light_color = float3(1, 1, 1);
             out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
         }
-        */
     }
 
     // Gamma correct

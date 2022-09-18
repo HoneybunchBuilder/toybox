@@ -412,17 +412,19 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
         for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
              ++sub_idx) {
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
-          vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  layout, 0, 1, &submesh->mat_set, 0, NULL);
-          vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
-                               submesh->index_type);
-          for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
-               ++vb_idx) {
-            vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
-                                   &submesh->vertex_binding_offsets[vb_idx]);
-          }
+          if (submesh->index_count > 0) {
+            vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    layout, 0, 1, &submesh->mat_set, 0, NULL);
+            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
+                                 submesh->index_type);
+            for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
+                 ++vb_idx) {
+              vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
+                                     &submesh->vertex_binding_offsets[vb_idx]);
+            }
 
-          vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+          }
         }
       }
     }
@@ -615,6 +617,12 @@ void destroy_mesh_system(MeshSystem *self) {
   tb_rnd_destroy_set_layout(render_system, self->view_set_layout);
   tb_rnd_destroy_set_layout(render_system, self->obj_set_layout);
   tb_rnd_destroy_render_pass(render_system, self->opaque_pass);
+
+  for (uint32_t i = 0; i < self->mesh_count; ++i) {
+    if (self->mesh_ref_counts[i] != 0) {
+      TB_CHECK(false, "Leaking meshes");
+    }
+  }
 
   *self = (MeshSystem){0};
 }
@@ -961,11 +969,10 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           view->viewport = (VkViewport){0, 0, width, height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
           view->draw_count = mesh_count;
-          view->draws[mesh_idx] = (MeshDraw){
-              .geom_buffer = geom_buffer,
-              .obj_set = obj_set,
-              .submesh_draw_count = mesh_comp->submesh_count,
-          };
+          MeshDraw *draw = &view->draws[mesh_idx];
+          draw->geom_buffer = geom_buffer;
+          draw->obj_set = obj_set;
+          draw->submesh_draw_count = mesh_comp->submesh_count;
           SubMeshDraw *sub_draw = &view->draws[mesh_idx].submesh_draws[sub_idx];
           *sub_draw = (SubMeshDraw){
               .mat_set = material_set,
