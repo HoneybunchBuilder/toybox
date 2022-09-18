@@ -43,14 +43,11 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
     uint32_t entity_count = tb_get_column_component_count(input, 0);
     const PackedComponentStore *transform_store =
         tb_get_column_check_id(input, 0, 0, TransformComponentId);
-    TB_CHECK(transform_store, "Failed to find required transform store");
     const PackedComponentStore *noclip_store =
         tb_get_column_check_id(input, 0, 1, NoClipComponentId);
-    TB_CHECK(noclip_store, "Failed to find required noclip store");
 
     const PackedComponentStore *input_store =
         tb_get_column_check_id(input, 1, 0, InputComponentId);
-    TB_CHECK(noclip_store, "Failed to find required input store");
 
     // Expecting one dependency set with one input component
     const uint32_t input_comp_count = tb_get_column_component_count(input, 1);
@@ -200,10 +197,6 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           .components = (uint8_t *)out_transforms,
           .entities = entities,
       };
-
-    } else {
-      TB_CHECK(false, "Failed to retrieve dependent component stores for "
-                      "NoClipControllerSystem");
     }
   }
 
