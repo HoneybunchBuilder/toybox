@@ -16,6 +16,7 @@
 #include "lightcomponent.h"
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
+#include "oceancomponent.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
@@ -462,6 +463,10 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
               } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
                 component_count++;
                 break;
+              } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) ==
+                         0) {
+                component_count++;
+                break;
               }
             }
           }
@@ -575,6 +580,10 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
               } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
                 comp_id = SkyComponentId;
                 break;
+              } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) ==
+                         0) {
+                comp_id = OceanComponentId;
+                break;
               }
             }
           }
@@ -616,6 +625,30 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
             component_ids[component_idx] = SkyComponentId;
             component_descriptors[component_idx] = comp_desc;
             component_idx++;
+          } else if (comp_id == OceanComponentId) {
+            OceanComponentDescriptor *comp_desc =
+                tb_alloc_tp(tmp_alloc, OceanComponentDescriptor);
+            *comp_desc = (OceanComponentDescriptor){
+                .wave_count = 1,
+            };
+            OceanWave *wave = &comp_desc->waves[0];
+            // Find properties for the first wave
+            json_object_object_foreach(json, key, value) {
+              if (SDL_strcmp(key, "steepness") == 0) {
+                wave->steepness = (float)json_object_get_double(value);
+              } else if (SDL_strcmp(key, "wavelength") == 0) {
+                wave->wavelength = (float)json_object_get_double(value);
+              } else if (SDL_strcmp(key, "direction_x") == 0) {
+                wave->direction[0] = (float)json_object_get_double(value);
+              } else if (SDL_strcmp(key, "direction_y") == 0) {
+                wave->direction[1] = (float)json_object_get_double(value);
+              }
+            }
+
+            // Add component to entity
+            component_ids[component_idx] = OceanComponentId;
+            component_descriptors[component_idx] = comp_desc;
+            component_idx++;
           }
         }
       }
@@ -630,9 +663,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 }
 
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
-  TracyCZoneN(ctx, "Add Entity", true);
-  TracyCZoneColor(ctx, TracyCategoryColorCore);
-
+  TracyCZoneNC(ctx, "Add Entity", TracyCategoryColorCore, true);
   // Determine if we need to grow the entity list
   const uint32_t new_entity_count = world->entity_count + 1;
   if (new_entity_count > world->max_entities) {

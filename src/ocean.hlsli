@@ -1,3 +1,4 @@
+#pragma once
 
 #define TB_WAVE_MAX 4
 

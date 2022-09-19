@@ -6,6 +6,7 @@
 #include "meshsystem.h"
 #include "ocean.hlsli"
 #include "oceancomponent.h"
+#include "profiling.h"
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
@@ -22,11 +23,47 @@
 #pragma clang diagnostic pop
 #endif
 
+typedef struct OceanDrawBatch {
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+  VkViewport viewport;
+  VkRect2D scissor;
+  VkDescriptorSet view_set;
+  VkDescriptorSet obj_set;
+  VkDescriptorSet ocean_set;
+  VkBuffer geom_buffer;
+  uint32_t index_count;
+  uint64_t vertex_offset;
+} OceanDrawBatch;
+
 void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                        const void *batches) {
-  (void)buffer;
-  (void)batch_count;
-  (void)batches;
+  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
+
+  const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const OceanDrawBatch *batch = &ocean_batches[batch_idx];
+    VkPipelineLayout layout = batch->layout;
+    VkBuffer geom_buffer = batch->geom_buffer;
+
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
+                            1, &batch->view_set, 0, NULL);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
+                            1, &batch->obj_set, 0, NULL);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                            1, &batch->ocean_set, 0, NULL);
+
+    vkCmdBindIndexBuffer(buffer, geom_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->vertex_offset);
+
+    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+  }
+  TracyCZoneEnd(ctx);
 }
 
 VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
@@ -185,8 +222,18 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   TB_CHECK_RETURN(data, "Failed to load glb", false);
 
   // Parse expected mesh from glb
-  self->ocean_patch_mesh =
-      tb_mesh_system_load_mesh(mesh_system, asset_path, &data->meshes[0]);
+  {
+    const cgltf_mesh *ocean_mesh = &data->meshes[0];
+
+    self->ocean_index_count = ocean_mesh->primitives->indices->count;
+
+    uint64_t index_size = self->ocean_index_count * sizeof(uint32_t);
+    uint64_t idx_padding = index_size % (sizeof(float) * 3);
+    self->ocean_vertex_offset = index_size + idx_padding;
+
+    self->ocean_patch_mesh =
+        tb_mesh_system_load_mesh(mesh_system, asset_path, ocean_mesh);
+  }
 
   VkResult err = VK_SUCCESS;
 
@@ -207,7 +254,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     err = tb_rnd_create_set_layout(render_system, &create_info,
                                    "Ocean Descriptor Set Layout",
                                    &self->set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create ocean descriptor set layout", err);
+    TB_VK_CHECK_RET(err, "Failed to create ocean descriptor set layout", false);
   }
 
   // Create ocean pipeline layout
@@ -232,7 +279,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                         "Ocean Pipeline Layout",
                                         &self->pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", err);
+    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", false);
   }
 
   // Create render pass for the ocean
@@ -294,12 +341,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     };
     err = tb_rnd_create_render_pass(render_system, &create_info, "Ocean Pass",
                                     &self->ocean_pass);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pass", err);
+    TB_VK_CHECK_RET(err, "Failed to create ocean pass", false);
   }
 
   err = create_ocean_pipeline(render_system, self->ocean_pass,
                               self->pipe_layout, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
+  TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
 
   // Create framebuffers for ocean pass
   {
@@ -333,6 +380,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                        render_system->render_thread->swapchain.height,
                        ocean_pass_record);
 
+  self->ocean_geom_buffer =
+      tb_mesh_system_get_gpu_mesh(mesh_system, self->ocean_patch_mesh);
+  TB_CHECK_RETURN(self->ocean_geom_buffer, "Failed to get gpu buffer for mesh",
+                  false);
+
   return true;
 }
 
@@ -354,10 +406,89 @@ void destroy_ocean_system(OceanSystem *self) {
 
 void tick_ocean_system(OceanSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
-  (void)self;
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
+  TracyCZoneNC(ctx, "Ocean System Tick", TracyCategoryColorRendering, true);
+
+  EntityId *ocean_entities = tb_get_column_entity_ids(input, 0);
+
+  const uint32_t ocean_count = tb_get_column_component_count(input, 0);
+  const PackedComponentStore *oceans =
+      tb_get_column_check_id(input, 0, 0, OceanComponentId);
+  const PackedComponentStore *ocean_trans =
+      tb_get_column_check_id(input, 0, 1, TransformComponentId);
+
+  const uint32_t camera_count = tb_get_column_component_count(input, 1);
+  const PackedComponentStore *cameras =
+      tb_get_column_check_id(input, 0, 0, CameraComponentId);
+  const PackedComponentStore *camera_trans =
+      tb_get_column_check_id(input, 0, 1, TransformComponentId);
+
+  (void)ocean_trans;
+  (void)cameras;
+  (void)camera_trans;
+
+  if (ocean_count == 0 || camera_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  // Copy the ocean component for output
+  OceanComponent *out_oceans =
+      tb_alloc_nm_tp(self->tmp_alloc, ocean_count, OceanComponent);
+  SDL_memcpy(out_oceans, oceans->components,
+             ocean_count * sizeof(OceanComponent));
+  // Update time on all ocean components
+  for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
+    OceanComponent *ocean = &out_oceans[ocean_idx];
+    ocean->time += delta_seconds;
+  }
+
+  // TODO: Make this less hacky
+  const uint32_t width = self->render_system->render_thread->swapchain.width;
+  const uint32_t height = self->render_system->render_thread->swapchain.height;
+
+  // Max camera * ocean draw batches are required
+  uint32_t batch_count = 0;
+  const uint32_t batch_max = ocean_count * camera_count;
+  OceanDrawBatch *batches =
+      tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
+
+  for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+    // TODO: Get descriptor set for this view
+    VkDescriptorSet view_set = VK_NULL_HANDLE;
+
+    for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
+
+      // TODO: Update object descriptor set for this view
+      VkDescriptorSet obj_set = VK_NULL_HANDLE;
+      // TODO: Update ocean descriptor set
+      VkDescriptorSet ocean_set = VK_NULL_HANDLE;
+
+      // TODO: only if ocean is visible to camera
+      batches[batch_count++] = (OceanDrawBatch){
+          .pipeline = self->pipeline,
+          .layout = self->pipe_layout,
+          .viewport = {0, 0, width, height, 0, 1},
+          .scissor = {{0, 0}, {width, height}},
+          .view_set = view_set,
+          .obj_set = obj_set,
+          .ocean_set = ocean_set,
+          .geom_buffer = self->ocean_geom_buffer,
+          .index_count = self->ocean_index_count,
+          .vertex_offset = self->ocean_vertex_offset,
+      };
+    }
+  }
+
+  // Report output (we've updated the time on the ocean component)
+  output->set_count = 1;
+  output->write_sets[0] = (SystemWriteSet){
+      .id = OceanComponentId,
+      .count = ocean_count,
+      .components = (uint8_t *)out_oceans,
+      .entities = ocean_entities,
+  };
+
+  TracyCZoneEnd(ctx);
 }
 
 TB_DEFINE_SYSTEM(ocean, OceanSystem, OceanSystemDescriptor)
@@ -370,7 +501,7 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .id = OceanSystemId,
       .desc = (InternalDescriptor)ocean_desc,
       .dep_count = 2,
-      .deps[0] = {1, {OceanComponentId, TransformComponentId}},
+      .deps[0] = {2, {OceanComponentId, TransformComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
       .system_dep_count = 2,
       .system_deps[0] = RenderSystemId,

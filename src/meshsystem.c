@@ -375,8 +375,7 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 
 void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                         const void *batches) {
-  TracyCZoneN(ctx, "Mesh Opaque Record", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
 
   const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
 

@@ -1,6 +1,7 @@
 #include "oceancomponent.h"
 
 #include "world.h"
+#include <SDL2/SDL_stdinc.h>
 
 bool create_ocean_component(OceanComponent *comp,
                             const OceanComponentDescriptor *desc,
@@ -9,8 +10,9 @@ bool create_ocean_component(OceanComponent *comp,
   (void)system_dep_count;
   (void)system_deps;
   *comp = (OceanComponent){
-      .tmp = desc->tmp,
+      .wave_count = desc->wave_count,
   };
+  SDL_memcpy(comp->waves, desc->waves, sizeof(OceanWave) * desc->wave_count);
   return true;
 }
 
