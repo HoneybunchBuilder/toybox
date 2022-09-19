@@ -279,7 +279,6 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
   VkGraphicsPipelineCreateInfo create_info_base = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .stageCount = 2,
-
       .pInputAssemblyState = &input_assembly_state,
       .pViewportState = &viewport_state,
       .pRasterizationState = &raster_state,
