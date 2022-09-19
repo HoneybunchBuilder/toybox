@@ -26,6 +26,7 @@ typedef struct OceanSystem {
   VkRenderPass ocean_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 
+  VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
 } OceanSystem;
