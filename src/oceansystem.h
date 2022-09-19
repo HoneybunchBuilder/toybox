@@ -22,6 +22,9 @@ typedef struct OceanSystem {
   Allocator std_alloc;
 
   TbMeshId ocean_patch_mesh;
+  uint32_t ocean_index_count;
+  uint64_t ocean_vertex_offset;
+  VkBuffer ocean_geom_buffer;
 
   VkRenderPass ocean_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
