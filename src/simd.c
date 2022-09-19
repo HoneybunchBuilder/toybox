@@ -310,7 +310,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   // Transformation matrix = r * p * s;
   float4x4 temp = {.row0 = {0}};
   mulmf44(&p, &r, &temp);
-  mulmf44(&s, &temp, m);
+  mulmf44(&temp, &s, m);
 
   TracyCZoneEnd(ctx);
 }
