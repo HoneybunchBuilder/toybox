@@ -35,7 +35,7 @@ FragmentOut frag(Interpolators i) {
   float cumulus = sky_data.cumulus;
   float3 sun_dir = sky_data.sun_dir;
   float3 view_pos = i.view_pos;
-  
+
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);
 
   /*

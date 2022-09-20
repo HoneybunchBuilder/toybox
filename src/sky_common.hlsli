@@ -1,11 +1,6 @@
 #pragma once
 
-struct SkyData {
-  float time;
-  float cirrus;
-  float cumulus;
-  float3 sun_dir;
-};
+#include "sky.hlsli"
 
 float hash(float n)
 {
