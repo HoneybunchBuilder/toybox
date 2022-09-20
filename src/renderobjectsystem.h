@@ -3,7 +3,7 @@
 #include "allocator.h"
 #include "tbrendercommon.h"
 
-#define RenderObjectSystemId 0xFEE1DEAD
+#define RenderObjectSystemId 0xFEEDC0DE
 
 typedef struct RenderSystem RenderSystem;
 typedef struct SystemDescriptor SystemDescriptor;

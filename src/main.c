@@ -35,6 +35,7 @@
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
 #include "oceansystem.h"
+#include "renderobjectsystem.h"
 #include "rendersystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
@@ -135,11 +136,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
-  ViewSystemDescriptor view_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
   ImGuiSystemDescriptor imgui_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
@@ -170,6 +166,16 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  ViewSystemDescriptor view_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
+  RenderObjectSystemDescriptor render_object_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   RenderSystemDescriptor render_system_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
@@ -177,7 +183,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   // Order matters
-  const uint32_t system_count = 11;
+  const uint32_t system_count = 12;
   SystemDescriptor system_descs[system_count] = {0};
   tb_input_system_descriptor(&system_descs[0], &input_system_desc);
   tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
@@ -189,7 +195,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_material_system_descriptor(&system_descs[7], &material_system_desc);
   tb_texture_system_descriptor(&system_descs[8], &texture_system_desc);
   tb_view_system_descriptor(&system_descs[9], &view_system_desc);
-  tb_render_system_descriptor(&system_descs[10], &render_system_desc);
+  tb_render_object_system_descriptor(&system_descs[10],
+                                     &render_object_system_desc);
+  tb_render_system_descriptor(&system_descs[11], &render_system_desc);
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
