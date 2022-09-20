@@ -11,6 +11,7 @@ typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct MaterialSystem MaterialSystem;
 typedef struct ViewSystem ViewSystem;
+typedef struct RenderObjectSystem RenderObjectSystem;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
 typedef struct CameraComponent CameraComponent;
@@ -78,6 +79,7 @@ typedef struct MeshSystem {
   RenderSystem *render_system;
   MaterialSystem *material_system;
   ViewSystem *view_system;
+  RenderObjectSystem *render_object_system;
 
   VkRenderPass opaque_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
