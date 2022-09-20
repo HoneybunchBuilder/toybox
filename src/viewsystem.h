@@ -1,0 +1,48 @@
+#pragma once
+
+#include "allocator.h"
+#include "tbrendercommon.h"
+
+#define ViewSystemId 0xFEE1DEAD
+
+typedef struct RenderSystem RenderSystem;
+typedef struct SystemDescriptor SystemDescriptor;
+typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+typedef struct VkDescriptorSetPool_T *VkDescriptorSetPool;
+typedef struct VkDescriptorSet_T *VkDescriptorSet;
+typedef struct CommonViewData CommonViewData;
+
+typedef uint64_t TbViewId;
+static const uint64_t InvalidViewId = SDL_MAX_UINT64;
+
+typedef struct ViewSystemDescriptor {
+  Allocator std_alloc;
+  Allocator tmp_alloc;
+} ViewSystemDescriptor;
+
+typedef struct ViewSystemFrameState {
+  uint32_t set_count;
+  VkDescriptorSetPool set_pool;
+  VkDescriptorSet *sets;
+  uint32_t set_max;
+} ViewSystemFrameState;
+
+typedef struct ViewSystem {
+  RenderSystem *render_system;
+  Allocator std_alloc;
+  Allocator tmp_alloc;
+
+  VkDescriptorSetLayout set_layout;
+  ViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
+
+  uint32_t view_count;
+  TbViewId *view_ids;
+  CommonViewData *view_data;
+  uint32_t view_max;
+
+} ViewSystem;
+
+void tb_view_system_descriptor(SystemDescriptor *desc,
+                               const ViewSystemDescriptor *view_desc);
+
+TbViewId tb_view_system_create_view(ViewSystem *self);

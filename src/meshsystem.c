@@ -9,6 +9,7 @@
 #include "profiling.h"
 #include "rendersystem.h"
 #include "transformcomponent.h"
+#include "viewsystem.h"
 #include "world.h"
 
 // Ignore some warnings for the generated headers
@@ -432,16 +433,19 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                         uint32_t system_dep_count, System *const *system_deps) {
   // Find the necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which meshes depend on", false);
   MaterialSystem *material_system =
-      (MaterialSystem *)tb_find_system_dep_self_by_id(
-          system_deps, system_dep_count, MaterialSystemId);
+      tb_get_system(system_deps, system_dep_count, MaterialSystem);
   TB_CHECK_RETURN(material_system,
                   "Failed to find material system which meshes depend on",
                   false);
+  ViewSystem *view_system =
+      tb_get_system(system_deps, system_dep_count, ViewSystem);
+  TB_CHECK_RETURN(material_system,
+                  "Failed to find view system which meshes depend on", false);
 
   *self = (MeshSystem){
       .tmp_alloc = desc->tmp_alloc,
@@ -535,35 +539,21 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                       false);
     }
 
-    // Create descriptor set layout for views
+    // Get view set layout from the view system
     {
-      VkDescriptorSetLayoutBinding bindings[1] = {
-          {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-           VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
-      };
-      VkDescriptorSetLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-          .bindingCount = 1,
-          .pBindings = bindings,
-      };
-      err = tb_rnd_create_set_layout(render_system, &create_info,
-                                     "View Descriptor Set",
-                                     &self->view_set_layout);
-      TB_VK_CHECK_RET(err, "Failed to create view descriptor set layout",
-                      false);
+      self->view_system = view_system;
+      self->view_set_layout = view_system->set_layout;
     }
 
     // Create pipeline layout
     {
       VkDescriptorSetLayout mat_set_layout =
           tb_mat_system_get_set_layout(material_system);
-      VkDescriptorSetLayout obj_set_layout = self->obj_set_layout;
-      VkDescriptorSetLayout view_set_layout = self->view_set_layout;
       const uint32_t layout_count = 3;
       VkDescriptorSetLayout layouts[layout_count] = {
           mat_set_layout,
-          obj_set_layout,
-          view_set_layout,
+          self->obj_set_layout,
+          self->view_set_layout,
       };
 
       VkPipelineLayoutCreateInfo create_info = {
@@ -633,7 +623,6 @@ void destroy_mesh_system(MeshSystem *self) {
   }
 
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_set_layout(render_system, self->view_set_layout);
   tb_rnd_destroy_set_layout(render_system, self->obj_set_layout);
   tb_rnd_destroy_render_pass(render_system, self->opaque_pass);
 
@@ -868,12 +857,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
     // Update camera descriptor sets
     VkDescriptorSet view_set = state->view_sets[cam_idx];
-    CommonCameraData camera_data = {.view_pos = {0}};
+    CommonViewData camera_data = {.view_pos = {0}};
     {
       // Upload transform to the tmp buffer
       TbHostBuffer host_buffer = {0};
       err = tb_rnd_sys_alloc_tmp_host_buffer(
-          self->render_system, sizeof(CommonCameraData), 0x40, &host_buffer);
+          self->render_system, sizeof(CommonViewData), 0x40, &host_buffer);
       TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
 
       const Transform *camera_transform = &cam_trans->transform;
@@ -899,12 +888,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       }
       float4x4 inv_vp = {.row0 = {0}}; // TODO
 
-      camera_data = (CommonCameraData){
+      camera_data = (CommonViewData){
           .view_pos = view_pos,
           .inv_vp = inv_vp,
           .vp = vp,
       };
-      SDL_memcpy(host_buffer.ptr, &camera_data, sizeof(CommonCameraData));
+      SDL_memcpy(host_buffer.ptr, &camera_data, sizeof(CommonViewData));
 
       VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -917,7 +906,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
               &(VkDescriptorBufferInfo){
                   .buffer = tmp_gpu_buffer,
                   .offset = host_buffer.offset,
-                  .range = sizeof(CommonCameraData),
+                  .range = sizeof(CommonViewData),
               },
       };
       vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
@@ -1066,9 +1055,10 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
       .count = 2,
       .dependent_ids = {MeshComponentId, TransformComponentId},
   };
-  desc->system_dep_count = 2;
+  desc->system_dep_count = 3;
   desc->system_deps[0] = RenderSystemId;
   desc->system_deps[1] = MaterialSystemId;
+  desc->system_deps[2] = ViewSystemId;
   desc->create = tb_create_mesh_system;
   desc->destroy = tb_destroy_mesh_system;
   desc->tick = tb_tick_mesh_system;

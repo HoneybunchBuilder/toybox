@@ -14,7 +14,7 @@ sampler static_sampler : register(s4, space0); // Immutable sampler
 ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
 // Per-view data
-ConstantBuffer<CommonCameraData> camera_data: register(b0, space2); // Frag Only
+ConstantBuffer<CommonViewData> camera_data: register(b0, space2); // Frag Only
 //ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
 //Texture2D shadow_map : register(t2, space2); // Frag Only
 //SamplerState shadow_sampler : register(s2, space2);
