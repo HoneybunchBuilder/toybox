@@ -9,6 +9,7 @@
 #include "profiling.h"
 #include "scene.h"
 #include "shadercommon.h"
+#include "sky.hlsli"
 
 #include "tbimgui.h"
 

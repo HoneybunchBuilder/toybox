@@ -15,7 +15,7 @@
 #include "common.hlsli"
 #include "profiling.h"
 #include "rendersystem.h"
-#include "shadercommon.h"
+#include "sky.hlsli"
 #include "skycomponent.h"
 #include "skydome.h"
 #include "tbcommon.h"
