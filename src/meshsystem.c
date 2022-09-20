@@ -7,6 +7,7 @@
 #include "materialsystem.h"
 #include "meshcomponent.h"
 #include "profiling.h"
+#include "renderobjectsystem.h"
 #include "rendersystem.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -446,12 +447,19 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       tb_get_system(system_deps, system_dep_count, ViewSystem);
   TB_CHECK_RETURN(material_system,
                   "Failed to find view system which meshes depend on", false);
+  RenderObjectSystem *render_object_system =
+      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
+  TB_CHECK_RETURN(material_system,
+                  "Failed to find render object system which meshes depend on",
+                  false);
 
   *self = (MeshSystem){
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
       .render_system = render_system,
       .material_system = material_system,
+      .view_system = view_system,
+      .render_object_system = render_object_system,
   };
 
   // Setup mesh system for rendering
@@ -521,37 +529,18 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       TB_VK_CHECK_RET(err, "Failed to create opaque mesh render pass", false);
     }
 
-    // Create descriptor set layout for objects
+    // Get descriptor set layouts from related systems
     {
-      VkDescriptorSetLayoutBinding bindings[1] = {
-          {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
-           NULL},
-      };
-      VkDescriptorSetLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-          .bindingCount = 1,
-          .pBindings = bindings,
-      };
-      err = tb_rnd_create_set_layout(render_system, &create_info,
-                                     "Object Descriptor Set",
-                                     &self->obj_set_layout);
-      TB_VK_CHECK_RET(err, "Failed to create object descriptor set layout",
-                      false);
-    }
 
-    // Get view set layout from the view system
-    {
-      self->view_system = view_system;
+      self->obj_set_layout = render_object_system->set_layout;
       self->view_set_layout = view_system->set_layout;
     }
 
     // Create pipeline layout
     {
-      VkDescriptorSetLayout mat_set_layout =
-          tb_mat_system_get_set_layout(material_system);
       const uint32_t layout_count = 3;
       VkDescriptorSetLayout layouts[layout_count] = {
-          mat_set_layout,
+          material_system->set_layout,
           self->obj_set_layout,
           self->view_set_layout,
       };
@@ -623,7 +612,6 @@ void destroy_mesh_system(MeshSystem *self) {
   }
 
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_set_layout(render_system, self->obj_set_layout);
   tb_rnd_destroy_render_pass(render_system, self->opaque_pass);
 
   for (uint32_t i = 0; i < self->mesh_count; ++i) {
@@ -1055,10 +1043,11 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
       .count = 2,
       .dependent_ids = {MeshComponentId, TransformComponentId},
   };
-  desc->system_dep_count = 3;
+  desc->system_dep_count = 4;
   desc->system_deps[0] = RenderSystemId;
   desc->system_deps[1] = MaterialSystemId;
   desc->system_deps[2] = ViewSystemId;
+  desc->system_deps[3] = RenderObjectSystemId;
   desc->create = tb_create_mesh_system;
   desc->destroy = tb_destroy_mesh_system;
   desc->tick = tb_tick_mesh_system;
