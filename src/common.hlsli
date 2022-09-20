@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef __HLSL_VERSION
+#include "simd.h" // If not a shader, we need simd types
+#endif
+
 #include "pi.h"
 
 // Push Constants Data for a fullscreen pass
@@ -18,11 +22,11 @@ typedef struct EnvFilterConstants{
 }EnvFilterConstants;
 
 // Constant per-view Camera Data
-typedef struct CommonCameraData {
+typedef struct CommonViewData {
   float4x4 vp;
   float4x4 inv_vp;
   float3 view_pos;
-} CommonCameraData;
+} CommonViewData;
 
 // Constant per-view Light Data
 typedef struct CommonLightData {

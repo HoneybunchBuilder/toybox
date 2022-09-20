@@ -11,7 +11,7 @@ ConstantBuffer<OceanPushConstants> consts : register(b1, space0);
 ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
 // Per-view data - Fragment Stage Only
-ConstantBuffer<CommonCameraData> camera_data: register(b0, space2);
+ConstantBuffer<CommonViewData> camera_data: register(b0, space2);
 
 struct VertexIn
 {

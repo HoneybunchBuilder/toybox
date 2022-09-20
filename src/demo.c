@@ -1909,7 +1909,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Uniform buffer for camera data
   GPUConstBuffer camera_const_buffer = create_gpuconstbuffer(
-      device, vma_alloc, vk_alloc, sizeof(CommonCameraData));
+      device, vma_alloc, vk_alloc, sizeof(CommonViewData));
 
   // Create Uniform buffer for light data
   GPUConstBuffer light_const_buffer = create_gpuconstbuffer(
@@ -3510,7 +3510,7 @@ void demo_destroy(Demo *d) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_set_camera(Demo *d, const CommonCameraData *camera) {
+void demo_set_camera(Demo *d, const CommonViewData *camera) {
   TracyCZoneN(ctx, "Update Camera Const Buffer", true);
 
   VmaAllocator vma_alloc = d->vma_alloc;
@@ -3523,7 +3523,7 @@ void demo_set_camera(Demo *d, const CommonCameraData *camera) {
     return;
   }
 
-  SDL_memcpy(data, camera, sizeof(CommonCameraData));
+  SDL_memcpy(data, camera, sizeof(CommonViewData));
   vmaUnmapMemory(vma_alloc, camera_host_alloc);
 
   demo_upload_const_buffer(d, &d->camera_const_buffer);

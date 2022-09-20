@@ -4,7 +4,7 @@
 ConstantBuffer<CommonObjectData> object_data: register(b0, space0);
 
 // Per-view data - Fragment Stage Only
-ConstantBuffer<CommonCameraData> camera_data: register(b0, space1);
+ConstantBuffer<CommonViewData> camera_data: register(b0, space1);
 ConstantBuffer<CommonLightData> light_data : register(b1, space1);
 
 struct VertexIn
