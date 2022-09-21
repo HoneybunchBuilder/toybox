@@ -6,9 +6,12 @@
 
 #define CameraComponentId 0xDEADC0DE
 
+typedef uint64_t TbViewId;
+
 typedef struct ComponentDescriptor ComponentDescriptor;
 
 typedef struct CameraComponent {
+  TbViewId view_id;
   float aspect_ratio;
   float fov;
   float near;

@@ -8,7 +8,7 @@
 typedef struct RenderSystem RenderSystem;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
-typedef struct VkDescriptorSetPool_T *VkDescriptorSetPool;
+typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 typedef struct CommonViewData CommonViewData;
 
@@ -22,9 +22,8 @@ typedef struct ViewSystemDescriptor {
 
 typedef struct ViewSystemFrameState {
   uint32_t set_count;
-  VkDescriptorSetPool set_pool;
+  VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
-  uint32_t set_max;
 } ViewSystemFrameState;
 
 typedef struct ViewSystem {
@@ -46,3 +45,6 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
                                const ViewSystemDescriptor *view_desc);
 
 TbViewId tb_view_system_create_view(ViewSystem *self);
+void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
+                                  const CommonViewData *data);
+VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);

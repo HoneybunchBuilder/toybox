@@ -102,6 +102,11 @@ VkResult tb_rnd_create_shader(RenderSystem *self,
                               const VkShaderModuleCreateInfo *create_info,
                               const char *name, VkShaderModule *shader);
 
+VkResult
+tb_rnd_create_descriptor_pool(RenderSystem *self,
+                              const VkDescriptorPoolCreateInfo *create_info,
+                              const char *name, VkDescriptorPool *pool);
+
 VkResult tb_rnd_create_graphics_pipelines(
     RenderSystem *self, uint32_t create_info_count,
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,
