@@ -243,8 +243,7 @@ bool demo_load_scene(Demo *d, const char *scene_path);
 void demo_unload_scene(Demo *d);
 
 void demo_process_event(Demo *d, const SDL_Event *e);
-void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
-                       const float4x4 *sun_vp);
+void demo_render_frame(Demo *d, const float4x4 *sky_vp);
 
 bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size);

@@ -273,9 +273,7 @@ static void demo_upload_scene(Demo *d, const Scene *s) {
   }
 }
 
-static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
-                                      VkPipelineLayout layout,
-                                      const float4x4 *vp) {
+static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd) {
   TracyCZoneN(ctx, "demo_render_scene_shadows", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
@@ -302,13 +300,13 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
       // use mvp as a push constant
       CommonObjectData object_data = {.m = {.row0 = {0}}};
       transform_to_matrix(&object_data.m, t);
-      mulmf44(vp, &object_data.m, &object_data.mvp);
+      // mulmf44(vp, &object_data.m, &object_data.mvp);
 
       cmd_begin_label(cmd, "demo_render_scene_shadows",
                       (float4){0.1f, 0.5f, 0.5f, 1.0f});
 
-      vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                         sizeof(ShadowPushConstants), &object_data.mvp);
+      // vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+      //                    sizeof(ShadowPushConstants), &object_data.mvp);
 
       const GPUMesh *mesh = &s->meshes[static_mesh_idx];
 
@@ -348,8 +346,7 @@ static void demo_render_scene_shadows(Scene *s, VkCommandBuffer cmd,
 static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               VkPipelineLayout layout, VkDescriptorSet view_set,
                               VkDescriptorSet *object_sets,
-                              VkDescriptorSet *material_sets,
-                              const float4x4 *vp, Demo *d) {
+                              VkDescriptorSet *material_sets, Demo *d) {
   TracyCZoneN(ctx, "demo_render_scene", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
@@ -390,7 +387,7 @@ static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
 
       CommonObjectData object_data = {.m = {.row0 = {0}}};
       transform_to_matrix(&object_data.m, t);
-      mulmf44(vp, &object_data.m, &object_data.mvp);
+      // mulmf44(vp, &object_data.m, &object_data.mvp);
 
       // HACK: Update object's constant buffer here
       {
@@ -3684,8 +3681,7 @@ static void demo_resize(Demo *d) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
-                       const float4x4 *sun_vp) {
+void demo_render_frame(Demo *d, const float4x4 *sky_vp) {
   TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
 
   VkResult err = VK_SUCCESS;
@@ -4123,8 +4119,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
         vkCmdBindPipeline(shadow_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->shadow_pipe);
 
-        demo_render_scene_shadows(d->main_scene, shadow_buffer,
-                                  d->shadow_pipe_layout, sun_vp);
+        demo_render_scene_shadows(d->main_scene, shadow_buffer);
 
         TracyCVkZoneEnd(scene_scope);
       }
@@ -4721,7 +4716,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp,
             demo_render_scene(d->main_scene, graphics_buffer, pipe_layout,
                               d->gltf_view_descriptor_sets[frame_idx],
                               main_scene_object_sets, main_scene_material_sets,
-                              vp, d);
+                              d);
 
             TracyCVkZoneEnd(scene_scope);
           }
