@@ -247,8 +247,40 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           const uint32_t write_count = self->mat_count * 4;
           VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
               self->tmp_alloc, write_count, VkWriteDescriptorSet);
+          VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
+              self->tmp_alloc, self->mat_count, VkDescriptorBufferInfo);
+          VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
+              self->tmp_alloc, self->mat_count * 3, VkDescriptorImageInfo);
           for (uint32_t i = 0; i < self->mat_count; ++i) {
             uint32_t write_idx = i * 4;
+
+            uint32_t img_idx = i * 3;
+
+            VkDescriptorBufferInfo *buf_info = &buffer_info[i];
+            VkDescriptorImageInfo *color_info = &image_info[img_idx + 0];
+            VkDescriptorImageInfo *normal_info = &image_info[img_idx + 1];
+            VkDescriptorImageInfo *metal_rough_info = &image_info[img_idx + 2];
+
+            *buf_info = (VkDescriptorBufferInfo){
+                .buffer = self->mat_gpu_buffers[i].buffer,
+                .range = sizeof(GLTFMaterialData),
+            };
+            *color_info = (VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageView = tb_tex_system_get_image_view(
+                    self->texture_system, self->mat_color_maps[i]),
+            };
+            *normal_info = (VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageView = tb_tex_system_get_image_view(
+                    self->texture_system, self->mat_normal_maps[i]),
+            };
+            *metal_rough_info = (VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageView = tb_tex_system_get_image_view(
+                    self->texture_system, self->mat_metal_rough_maps[i]),
+            };
+
             writes[write_idx + 0] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .dstSet = self->mat_sets[i],
@@ -256,11 +288,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo =
-                    &(VkDescriptorBufferInfo){
-                        .buffer = self->mat_gpu_buffers[i].buffer,
-                        .range = sizeof(GLTFMaterialData),
-                    },
+                .pBufferInfo = buf_info,
             };
             writes[write_idx + 1] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -269,12 +297,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .pImageInfo =
-                    &(VkDescriptorImageInfo){
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = tb_tex_system_get_image_view(
-                            self->texture_system, self->mat_color_maps[i]),
-                    },
+                .pImageInfo = color_info,
             };
             writes[write_idx + 2] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -283,12 +306,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .pImageInfo =
-                    &(VkDescriptorImageInfo){
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = tb_tex_system_get_image_view(
-                            self->texture_system, self->mat_normal_maps[i]),
-                    },
+                .pImageInfo = normal_info,
             };
             writes[write_idx + 3] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -297,13 +315,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .pImageInfo =
-                    &(VkDescriptorImageInfo){
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .imageView = tb_tex_system_get_image_view(
-                            self->texture_system,
-                            self->mat_metal_rough_maps[i]),
-                    },
+                .pImageInfo = metal_rough_info,
             };
           }
           vkUpdateDescriptorSets(device, write_count, writes, 0, NULL);

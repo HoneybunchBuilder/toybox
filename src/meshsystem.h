@@ -60,13 +60,6 @@ static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
     GLTF_PERM_UNLIT,
 };
 
-typedef struct MeshSystemFrameState {
-  VkDescriptorPool obj_set_pool;
-  uint32_t obj_count;
-  VkDescriptorSet *obj_sets;
-  uint32_t obj_max;
-} MeshSystemFrameState;
-
 typedef struct MeshSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -78,8 +71,6 @@ typedef struct MeshSystem {
 
   VkRenderPass opaque_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
-
-  MeshSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;

@@ -44,12 +44,11 @@ typedef struct RenderObjectSystem {
 void tb_render_object_system_descriptor(
     SystemDescriptor *desc, const RenderObjectSystemDescriptor *object_desc);
 
-TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self,
-                                                const CommonObjectData *data);
+TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self);
 
-void tb_render_object_system_set(RenderObjectSystem *self,
-                                 TbRenderObjectId object,
-                                 const CommonObjectData *data);
+void tb_render_object_system_set_object_data(RenderObjectSystem *self,
+                                             TbRenderObjectId object,
+                                             const CommonObjectData *data);
 VkDescriptorSet tb_render_object_system_get_descriptor(RenderObjectSystem *self,
                                                        TbRenderObjectId object);
 const CommonObjectData *

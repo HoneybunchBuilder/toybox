@@ -13,6 +13,7 @@ typedef struct cgltf_mesh cgltf_mesh;
 
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialId;
+typedef uint64_t TbRenderObjectId;
 typedef enum TbVertexInput {
   VI_P3N3 = 0,
   VI_P3N3U2 = 1,
@@ -37,6 +38,7 @@ typedef struct SubMesh {
 
 typedef struct MeshComponent {
   TbMeshId mesh_id;
+  TbRenderObjectId object_id;
   uint32_t submesh_count;
   SubMesh submeshes[TB_SUBMESH_MAX];
 } MeshComponent;
