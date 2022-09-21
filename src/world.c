@@ -801,10 +801,9 @@ const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
 
 uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set) {
   TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
-                  "Dependency set index out of range", 0);
-  if (set >= input->dep_set_count) {
-    return 0;
-  }
+                  "Dependency set index out of range", SDL_MAX_UINT32);
+  TB_CHECK_RETURN(set < input->dep_set_count, "Set out of range",
+                  SDL_MAX_UINT32);
 
   const SystemDependencySet *dep = &input->dep_sets[set];
   return dep->entity_count;
@@ -812,10 +811,8 @@ uint32_t tb_get_column_component_count(const SystemInput *input, uint32_t set) {
 
 EntityId *tb_get_column_entity_ids(const SystemInput *input, uint32_t set) {
   TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
-                  "Dependency set index out of range", 0);
-  if (set >= input->dep_set_count) {
-    return 0;
-  }
+                  "Dependency set index out of range", NULL);
+  TB_CHECK_RETURN(set < input->dep_set_count, "Set out of range", NULL);
 
   const SystemDependencySet *dep = &input->dep_sets[set];
   return dep->entity_ids;

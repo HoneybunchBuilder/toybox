@@ -28,6 +28,7 @@
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
+#include "camerasystem.h"
 #include "coreuisystem.h"
 #include "imguisystem.h"
 #include "inputsystem.h"
@@ -182,8 +183,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .render_thread = render_thread,
   };
 
+  CameraSystemDescriptor camera_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   // Order doesn't matter here
-  const uint32_t system_count = 12;
+  const uint32_t system_count = 13;
   SystemDescriptor system_descs[system_count] = {0};
   {
     uint32_t i = 0;
@@ -201,6 +207,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                                        &render_object_system_desc);
     tb_view_system_descriptor(&system_descs[i++], &view_system_desc);
     tb_render_system_descriptor(&system_descs[i++], &render_system_desc);
+    tb_camera_system_descriptor(&system_descs[i++], &camera_system_desc);
     TB_CHECK(i == system_count, "Incorrect number of systems");
   }
 
@@ -217,6 +224,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = MeshSystemId;
     init_order[i++] = SkySystemId;
     init_order[i++] = OceanSystemId;
+    init_order[i++] = CameraSystemId;
     init_order[i++] = ImGuiSystemId;
     init_order[i++] = NoClipControllerSystemId;
     init_order[i++] = CoreUISystemId;
@@ -228,6 +236,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = InputSystemId;
     tick_order[i++] = NoClipControllerSystemId;
     tick_order[i++] = CoreUISystemId;
+    tick_order[i++] = CameraSystemId;
     tick_order[i++] = ViewSystemId;
     tick_order[i++] = RenderObjectSystemId;
     tick_order[i++] = TextureSystemId;
