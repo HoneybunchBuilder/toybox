@@ -131,6 +131,8 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   // Just upload and write all views for now, they tend to be important anyway
   VkWriteDescriptorSet *writes =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkWriteDescriptorSet);
+  VkDescriptorBufferInfo *buffer_info =
+      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkDescriptorBufferInfo);
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
@@ -148,6 +150,12 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
     // Get the descriptor we want to write to
     VkDescriptorSet view_set = state->sets[view_idx];
 
+    buffer_info[view_idx] = (VkDescriptorBufferInfo){
+        .buffer = tmp_gpu_buffer,
+        .offset = buffer->offset,
+        .range = sizeof(CommonViewData),
+    };
+
     // Construct a write descriptor
     writes[view_idx] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -156,12 +164,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo =
-            &(VkDescriptorBufferInfo){
-                .buffer = tmp_gpu_buffer,
-                .offset = buffer->offset,
-                .range = sizeof(CommonViewData),
-            },
+        .pBufferInfo = &buffer_info[view_idx],
     };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,

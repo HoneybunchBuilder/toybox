@@ -601,10 +601,7 @@ void destroy_mesh_system(MeshSystem *self) {
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
-    tb_rnd_destroy_descriptor_pool(render_system,
-                                   self->frame_states[i].obj_set_pool);
   }
-
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->pipelines[i]);
   }
@@ -641,80 +638,6 @@ uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
                   SDL_MAX_UINT32);
 }
 
-MeshSystemFrameState *tick_frame_state(MeshSystem *self, uint32_t mesh_count) {
-  MeshSystemFrameState *state =
-      &self->frame_states[self->render_system->frame_idx];
-
-  VkResult err = VK_SUCCESS;
-  VkDevice device = self->render_system->render_thread->device;
-  const VkAllocationCallbacks *vk_alloc =
-      &self->render_system->vk_host_alloc_cb;
-
-  // Allocate descriptor sets
-  {
-    Allocator alloc = self->std_alloc;
-
-    // One set per mesh
-    {
-      state->obj_count = mesh_count;
-      if (mesh_count > state->obj_max) {
-        const uint32_t new_max = mesh_count * 2;
-
-        // Resize the descriptor pool
-        {
-          if (state->obj_set_pool) {
-            vkDestroyDescriptorPool(device, state->obj_set_pool, vk_alloc);
-          }
-
-          VkDescriptorPoolCreateInfo create_info = {
-              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-              .maxSets = new_max,
-              .poolSizeCount = 1,
-              .pPoolSizes =
-                  &(VkDescriptorPoolSize){
-                      .descriptorCount = 1,
-                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                  },
-              .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-          };
-          err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
-                                       &state->obj_set_pool);
-          TB_VK_CHECK(err, "Failed to create object descriptor pool");
-          SET_VK_NAME(device, state->obj_set_pool,
-                      VK_OBJECT_TYPE_DESCRIPTOR_POOL, "Object Set Pool");
-        }
-
-        // Reallocate descriptors
-        state->obj_sets =
-            tb_realloc_nm_tp(alloc, state->obj_sets, new_max, VkDescriptorSet);
-
-        state->obj_max = new_max;
-
-      } else {
-        err = vkResetDescriptorPool(device, state->obj_set_pool, 0);
-        TB_VK_CHECK(err, "Failed to reset object descriptor pool");
-      }
-
-      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          self->tmp_alloc, state->obj_max, VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < state->obj_max; ++i) {
-        layouts[i] = self->obj_set_layout;
-      }
-
-      VkDescriptorSetAllocateInfo alloc_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-          .descriptorSetCount = state->obj_max,
-          .descriptorPool = state->obj_set_pool,
-          .pSetLayouts = layouts,
-      };
-      err = vkAllocateDescriptorSets(device, &alloc_info, state->obj_sets);
-      TB_VK_CHECK(err, "Failed to re-allocate object descriptor sets");
-    }
-  }
-
-  return state;
-}
-
 void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
   (void)output;
@@ -737,6 +660,22 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
   if (mesh_count == 0 || camera_count == 0) {
     return;
+  }
+
+  // Update each mesh's render object data
+  for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+    const MeshComponent *mesh_comp =
+        tb_get_component(mesh_store, mesh_idx, MeshComponent);
+    const TransformComponent *mesh_trans =
+        tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
+
+    // Convert the transform to a matrix for rendering
+    // TODO: handle transform heirarchies
+    CommonObjectData data = {.m = {.row0 = {0}}};
+    transform_to_matrix(&data.m, &mesh_trans->transform);
+
+    tb_render_object_system_set_object_data(self->render_object_system,
+                                            mesh_comp->object_id, &data);
   }
 
   // Just collect a batch for every possible pipeline
@@ -764,12 +703,6 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     }
   }
 
-  VkResult err = VK_SUCCESS;
-  VkDevice device = self->render_system->render_thread->device;
-  VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system);
-
-  MeshSystemFrameState *state = tick_frame_state(self, mesh_count);
-
   // TODO: Make this less hacky
   const uint32_t width = self->render_system->render_thread->swapchain.width;
   const uint32_t height = self->render_system->render_thread->swapchain.height;
@@ -778,48 +711,17 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     const CameraComponent *camera =
         tb_get_component(camera_store, cam_idx, CameraComponent);
 
-    // Update camera descriptor sets
+    // Get camera descriptor set
     VkDescriptorSet view_set =
         tb_view_system_get_descriptor(self->view_system, camera->view_id);
-    const CommonViewData *camera_data =
-        tb_view_system_get_data(self->view_system, camera->view_id);
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
           tb_get_component(mesh_store, mesh_idx, MeshComponent);
-      const TransformComponent *mesh_trans =
-          tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
 
-      // Update object descriptor sets
-      VkDescriptorSet obj_set = state->obj_sets[mesh_idx];
-      {
-        // Upload transform to the tmp buffer
-        TbHostBuffer host_buffer = {0};
-        err = tb_rnd_sys_alloc_tmp_host_buffer(
-            self->render_system, sizeof(CommonObjectData), 0x40, &host_buffer);
-        TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
-
-        CommonObjectData obj_data = {.m = {.row0 = {0}}};
-        transform_to_matrix(&obj_data.m, &mesh_trans->transform);
-
-        SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonObjectData));
-
-        VkWriteDescriptorSet write = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = obj_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .buffer = tmp_gpu_buffer,
-                    .offset = host_buffer.offset,
-                    .range = sizeof(CommonObjectData),
-                },
-        };
-        vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
-      }
+      // Get mesh descriptor set
+      VkDescriptorSet obj_set = tb_render_object_system_get_descriptor(
+          self->render_object_system, mesh_comp->object_id);
 
       // Organize draws into batches
       {

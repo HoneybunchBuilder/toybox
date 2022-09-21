@@ -6,6 +6,7 @@
 #include "common.hlsli"
 #include "materialsystem.h"
 #include "meshsystem.h"
+#include "renderobjectsystem.h"
 #include "world.h"
 
 bool create_mesh_component(MeshComponent *self,
@@ -13,22 +14,30 @@ bool create_mesh_component(MeshComponent *self,
                            uint32_t system_dep_count,
                            System *const *system_deps) {
   // Ensure we have a reference to the necessary systems
-  MeshSystem *mesh_system = (MeshSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MeshSystemId);
+  MeshSystem *mesh_system =
+      tb_get_system(system_deps, system_dep_count, MeshSystem);
   TB_CHECK_RETURN(mesh_system, "Failed to get mesh system reference", false);
-  MaterialSystem *mat_system = (MaterialSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MaterialSystemId);
+  MaterialSystem *mat_system =
+      tb_get_system(system_deps, system_dep_count, MaterialSystem);
   TB_CHECK_RETURN(mat_system, "Failed to get material system reference", false);
+  RenderObjectSystem *render_object_system =
+      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
+  TB_CHECK_RETURN(render_object_system,
+                  "Failed to get render object system reference", false);
 
   TbMeshId id =
       tb_mesh_system_load_mesh(mesh_system, desc->source_path, desc->mesh);
   TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
+
+  TbRenderObjectId obj_id =
+      tb_render_object_system_create(render_object_system);
 
   const uint32_t submesh_count = desc->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
   *self = (MeshComponent){
       .mesh_id = id,
+      .object_id = obj_id,
       .submesh_count = submesh_count,
   };
 
@@ -174,9 +183,10 @@ void tb_mesh_component_descriptor(ComponentDescriptor *desc) {
       .name = "Mesh",
       .size = sizeof(MeshComponent),
       .id = MeshComponentId,
-      .system_dep_count = 2,
+      .system_dep_count = 3,
       .system_deps[0] = MeshSystemId,
       .system_deps[1] = MaterialSystemId,
+      .system_deps[2] = RenderObjectSystemId,
       .create = tb_create_mesh_component,
       .destroy = tb_destroy_mesh_component,
   };

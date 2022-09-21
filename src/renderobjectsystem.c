@@ -136,6 +136,8 @@ void tick_render_object_system(RenderObjectSystem *self,
   // Just upload and write all objects for now, they tend to be important anyway
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
       self->tmp_alloc, self->render_object_count, VkWriteDescriptorSet);
+  VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
+      self->tmp_alloc, self->render_object_count, VkDescriptorBufferInfo);
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->render_object_count, TbHostBuffer);
   for (uint32_t obj_idx = 0; obj_idx < self->render_object_count; ++obj_idx) {
@@ -154,7 +156,11 @@ void tick_render_object_system(RenderObjectSystem *self,
     // Get the descriptor we want to write to
     VkDescriptorSet obj_set = state->sets[obj_idx];
 
-    // Construct a write descriptor
+    buffer_info[obj_idx] = (VkDescriptorBufferInfo){
+        .buffer = tmp_gpu_buffer,
+        .offset = buffer->offset,
+        .range = sizeof(CommonObjectData),
+    }; // Construct a write descriptor
     writes[obj_idx] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = obj_set,
@@ -162,12 +168,7 @@ void tick_render_object_system(RenderObjectSystem *self,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo =
-            &(VkDescriptorBufferInfo){
-                .buffer = tmp_gpu_buffer,
-                .offset = buffer->offset,
-                .range = sizeof(CommonObjectData),
-            },
+        .pBufferInfo = &buffer_info[obj_idx],
     };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
@@ -196,8 +197,7 @@ void tb_render_object_system_descriptor(
   };
 }
 
-TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self,
-                                                const CommonObjectData *data) {
+TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self) {
   TbRenderObjectId object = self->render_object_count;
   uint32_t new_count = self->render_object_count + 1;
   if (new_count > self->render_object_max) {
@@ -213,19 +213,19 @@ TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self,
     self->render_object_max = new_max;
   }
 
-  self->render_object_data[object] = (CommonObjectData){
+  self->render_object_data[object] = (CommonObjectData){0};
 
-  };
   // Supply an identity matrix for the world space model matrix
+  mf44_identity(&self->render_object_data[object].m);
 
   self->render_object_count = new_count;
 
   return object;
 }
 
-void tb_render_object_system_set(RenderObjectSystem *self,
-                                 TbRenderObjectId object,
-                                 const CommonObjectData *data) {
+void tb_render_object_system_set_object_data(RenderObjectSystem *self,
+                                             TbRenderObjectId object,
+                                             const CommonObjectData *data) {
   if (object >= self->render_object_count) {
     TB_CHECK(false, "Render Object Id out of range");
   }
