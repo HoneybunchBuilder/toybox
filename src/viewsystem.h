@@ -48,3 +48,4 @@ TbViewId tb_view_system_create_view(ViewSystem *self);
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data);
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);
+const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view);

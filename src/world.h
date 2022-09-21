@@ -182,6 +182,8 @@ typedef struct WorldDescriptor {
 
   uint32_t system_count;
   const SystemDescriptor *system_descs;
+  const SystemId *init_order;
+  const SystemId *tick_order;
 
 } WorldDescriptor;
 
@@ -198,6 +200,7 @@ typedef struct World {
 
   uint32_t system_count;
   System *systems;
+  uint32_t *tick_order;
 
 } World;
 
