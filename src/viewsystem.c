@@ -235,3 +235,10 @@ VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
 
   return self->frame_states[self->render_system->frame_idx].sets[view];
 }
+
+const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view) {
+  if (view >= self->view_count) {
+    TB_CHECK_RETURN(false, "View Id out of range", NULL);
+  }
+  return &self->view_data[view];
+}

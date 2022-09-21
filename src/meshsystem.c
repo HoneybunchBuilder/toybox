@@ -602,8 +602,6 @@ void destroy_mesh_system(MeshSystem *self) {
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
     tb_rnd_destroy_descriptor_pool(render_system,
-                                   self->frame_states[i].view_set_pool);
-    tb_rnd_destroy_descriptor_pool(render_system,
                                    self->frame_states[i].obj_set_pool);
   }
 
@@ -643,8 +641,7 @@ uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
                   SDL_MAX_UINT32);
 }
 
-MeshSystemFrameState *tick_frame_state(MeshSystem *self, uint32_t view_count,
-                                       uint32_t mesh_count) {
+MeshSystemFrameState *tick_frame_state(MeshSystem *self, uint32_t mesh_count) {
   MeshSystemFrameState *state =
       &self->frame_states[self->render_system->frame_idx];
 
@@ -656,63 +653,6 @@ MeshSystemFrameState *tick_frame_state(MeshSystem *self, uint32_t view_count,
   // Allocate descriptor sets
   {
     Allocator alloc = self->std_alloc;
-
-    // One set per camera
-    {
-      state->view_count = view_count;
-      if (view_count > state->view_max) {
-        const uint32_t new_max = view_count * 2;
-
-        // Resize the descriptor pool
-        {
-          if (state->view_set_pool) {
-            vkDestroyDescriptorPool(device, state->view_set_pool, vk_alloc);
-          }
-
-          VkDescriptorPoolCreateInfo create_info = {
-              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-              .maxSets = new_max,
-              .poolSizeCount = 1,
-              .pPoolSizes =
-                  &(VkDescriptorPoolSize){
-                      .descriptorCount = 1,
-                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                  },
-              .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-          };
-          err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
-                                       &state->view_set_pool);
-          TB_VK_CHECK(err, "Failed to create view descriptor pool");
-          SET_VK_NAME(device, state->view_set_pool,
-                      VK_OBJECT_TYPE_DESCRIPTOR_POOL, "View Set Pool");
-        }
-
-        // Reallocate descriptors
-        state->view_sets =
-            tb_realloc_nm_tp(alloc, state->view_sets, new_max, VkDescriptorSet);
-
-        state->view_max = new_max;
-
-      } else {
-        err = vkResetDescriptorPool(device, state->view_set_pool, 0);
-        TB_VK_CHECK(err, "Failed to reset view descriptor pool");
-      }
-
-      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          self->tmp_alloc, state->view_max, VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < state->view_max; ++i) {
-        layouts[i] = self->view_set_layout;
-      }
-
-      VkDescriptorSetAllocateInfo alloc_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-          .descriptorSetCount = state->view_max,
-          .descriptorPool = state->view_set_pool,
-          .pSetLayouts = layouts,
-      };
-      err = vkAllocateDescriptorSets(device, &alloc_info, state->view_sets);
-      TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
-    }
 
     // One set per mesh
     {
@@ -788,8 +728,6 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   const uint32_t camera_count = tb_get_column_component_count(input, 0);
   const PackedComponentStore *camera_store =
       tb_get_column_check_id(input, 0, 0, CameraComponentId);
-  const PackedComponentStore *camera_transform_store =
-      tb_get_column_check_id(input, 0, 1, TransformComponentId);
 
   const uint32_t mesh_count = tb_get_column_component_count(input, 1);
   const PackedComponentStore *mesh_store =
@@ -830,8 +768,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   VkDevice device = self->render_system->render_thread->device;
   VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system);
 
-  MeshSystemFrameState *state =
-      tick_frame_state(self, camera_count, mesh_count);
+  MeshSystemFrameState *state = tick_frame_state(self, mesh_count);
 
   // TODO: Make this less hacky
   const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -840,65 +777,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const CameraComponent *camera =
         tb_get_component(camera_store, cam_idx, CameraComponent);
-    const TransformComponent *cam_trans =
-        tb_get_component(camera_transform_store, cam_idx, TransformComponent);
 
     // Update camera descriptor sets
-    VkDescriptorSet view_set = state->view_sets[cam_idx];
-    CommonViewData camera_data = {.view_pos = {0}};
-    {
-      // Upload transform to the tmp buffer
-      TbHostBuffer host_buffer = {0};
-      err = tb_rnd_sys_alloc_tmp_host_buffer(
-          self->render_system, sizeof(CommonViewData), 0x40, &host_buffer);
-      TB_VK_CHECK(err, "Failed to allocate space on the tmp host buffer");
-
-      const Transform *camera_transform = &cam_trans->transform;
-
-      float3 view_pos = camera_transform->position;
-
-      // TODO: Instead of calculating the vp matrix here, a camera system could
-      // do it earlier in the frame
-      float4x4 vp = {.row0 = {0}};
-      {
-        float4x4 proj = {.row0 = {0}};
-        perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
-                    camera->far);
-
-        float4x4 model = {.row0 = {0}};
-        transform_to_matrix(&model, camera_transform);
-        float3 forward = f4tof3(model.row2);
-
-        float4x4 view = {.row0 = {0}};
-        look_forward(&view, view_pos, forward, (float3){0.0f, 1.0f, 0.0f});
-
-        mulmf44(&proj, &view, &vp);
-      }
-      float4x4 inv_vp = {.row0 = {0}}; // TODO
-
-      camera_data = (CommonViewData){
-          .view_pos = view_pos,
-          .inv_vp = inv_vp,
-          .vp = vp,
-      };
-      SDL_memcpy(host_buffer.ptr, &camera_data, sizeof(CommonViewData));
-
-      VkWriteDescriptorSet write = {
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .dstSet = view_set,
-          .dstBinding = 0,
-          .dstArrayElement = 0,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-          .pBufferInfo =
-              &(VkDescriptorBufferInfo){
-                  .buffer = tmp_gpu_buffer,
-                  .offset = host_buffer.offset,
-                  .range = sizeof(CommonViewData),
-              },
-      };
-      vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
-    }
+    VkDescriptorSet view_set =
+        tb_view_system_get_descriptor(self->view_system, camera->view_id);
+    const CommonViewData *camera_data =
+        tb_view_system_get_data(self->view_system, camera->view_id);
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
@@ -917,7 +801,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
         CommonObjectData obj_data = {.m = {.row0 = {0}}};
         transform_to_matrix(&obj_data.m, &mesh_trans->transform);
-        mulmf44(&camera_data.vp, &obj_data.m, &obj_data.mvp);
+        mulmf44(&camera_data->vp, &obj_data.m, &obj_data.mvp);
 
         SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonObjectData));
 

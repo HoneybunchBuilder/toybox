@@ -77,6 +77,17 @@ bool create_system(World *world, System *system, const SystemDescriptor *desc) {
   return true;
 }
 
+uint32_t find_system_idx_by_id(const SystemDescriptor *descs,
+                               uint32_t desc_count, SystemId id) {
+  for (uint32_t i = 0; i < desc_count; ++i) {
+    const SystemDescriptor *desc = &descs[i];
+    if (desc->id == id) {
+      return i;
+    }
+  }
+  return SDL_MAX_UINT32;
+}
+
 bool tb_create_world(const WorldDescriptor *desc, World *world) {
   if (desc == NULL || world == NULL) {
     return false;
@@ -120,11 +131,28 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
 
       bool system_created = false;
 
-      // Create in reverse order
-      for (int32_t i = system_count - 1; i >= 0; i--) {
-        const SystemDescriptor *sys_desc = &desc->system_descs[i];
-        system_created = create_system(world, &systems[i], sys_desc);
+      // Calculate the init order
+      uint32_t *idxs = tb_alloc_nm_tp(tmp_alloc, desc->system_count, uint32_t);
+      for (uint32_t i = 0; i < desc->system_count; ++i) {
+        idxs[i] = find_system_idx_by_id(desc->system_descs, desc->system_count,
+                                        desc->init_order[i]);
+      }
+
+      // Create in given init order
+      for (uint32_t i = 0; i < desc->system_count; ++i) {
+        uint32_t system_idx = idxs[i];
+        const SystemDescriptor *sys_desc = &desc->system_descs[system_idx];
+
+        system_created = create_system(world, &systems[system_idx], sys_desc);
         TB_CHECK_RETURN(system_created, "Failed to create system.", false);
+      }
+
+      // Calc tick order for later
+      world->tick_order =
+          tb_alloc_nm_tp(std_alloc, desc->system_count, uint32_t);
+      for (uint32_t i = 0; i < desc->system_count; ++i) {
+        world->tick_order[i] = find_system_idx_by_id(
+            desc->system_descs, desc->system_count, desc->tick_order[i]);
       }
     }
   }
@@ -157,8 +185,9 @@ bool tb_tick_world(World *world, float delta_seconds) {
       }
     }
 
-    for (uint32_t system_idx = 0; system_idx < world->system_count;
-         ++system_idx) {
+    // Tick in specified order
+    for (uint32_t idx = 0; idx < world->system_count; idx++) {
+      uint32_t system_idx = world->tick_order[idx];
       System *system = &world->systems[system_idx];
 
       // Gather and pack component columns for this system's input

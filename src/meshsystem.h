@@ -61,11 +61,6 @@ static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
 };
 
 typedef struct MeshSystemFrameState {
-  VkDescriptorPool view_set_pool;
-  uint32_t view_count;
-  VkDescriptorSet *view_sets;
-  uint32_t view_max;
-
   VkDescriptorPool obj_set_pool;
   uint32_t obj_count;
   VkDescriptorSet *obj_sets;

@@ -182,22 +182,63 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .render_thread = render_thread,
   };
 
-  // Order matters
+  // Order doesn't matter here
   const uint32_t system_count = 12;
   SystemDescriptor system_descs[system_count] = {0};
-  tb_input_system_descriptor(&system_descs[0], &input_system_desc);
-  tb_noclip_controller_system_descriptor(&system_descs[1], &noclip_system_desc);
-  tb_coreui_system_descriptor(&system_descs[2], &coreui_system_desc);
-  tb_imgui_system_descriptor(&system_descs[3], &imgui_system_desc);
-  tb_sky_system_descriptor(&system_descs[4], &sky_system_desc);
-  tb_ocean_system_descriptor(&system_descs[5], &ocean_system_desc);
-  tb_mesh_system_descriptor(&system_descs[6], &mesh_system_desc);
-  tb_material_system_descriptor(&system_descs[7], &material_system_desc);
-  tb_texture_system_descriptor(&system_descs[8], &texture_system_desc);
-  tb_view_system_descriptor(&system_descs[9], &view_system_desc);
-  tb_render_object_system_descriptor(&system_descs[10],
-                                     &render_object_system_desc);
-  tb_render_system_descriptor(&system_descs[11], &render_system_desc);
+  {
+    uint32_t i = 0;
+    tb_input_system_descriptor(&system_descs[i++], &input_system_desc);
+    tb_noclip_controller_system_descriptor(&system_descs[i++],
+                                           &noclip_system_desc);
+    tb_coreui_system_descriptor(&system_descs[i++], &coreui_system_desc);
+    tb_imgui_system_descriptor(&system_descs[i++], &imgui_system_desc);
+    tb_sky_system_descriptor(&system_descs[i++], &sky_system_desc);
+    tb_ocean_system_descriptor(&system_descs[i++], &ocean_system_desc);
+    tb_mesh_system_descriptor(&system_descs[i++], &mesh_system_desc);
+    tb_material_system_descriptor(&system_descs[i++], &material_system_desc);
+    tb_texture_system_descriptor(&system_descs[i++], &texture_system_desc);
+    tb_render_object_system_descriptor(&system_descs[i++],
+                                       &render_object_system_desc);
+    tb_view_system_descriptor(&system_descs[i++], &view_system_desc);
+    tb_render_system_descriptor(&system_descs[i++], &render_system_desc);
+    TB_CHECK(i == system_count, "Incorrect number of systems");
+  }
+
+  // But it does matter here
+  SystemId init_order[system_count];
+  {
+    uint32_t i = 0;
+    init_order[i++] = RenderSystemId;
+    init_order[i++] = InputSystemId;
+    init_order[i++] = ViewSystemId;
+    init_order[i++] = RenderObjectSystemId;
+    init_order[i++] = TextureSystemId;
+    init_order[i++] = MaterialSystemId;
+    init_order[i++] = MeshSystemId;
+    init_order[i++] = SkySystemId;
+    init_order[i++] = OceanSystemId;
+    init_order[i++] = ImGuiSystemId;
+    init_order[i++] = NoClipControllerSystemId;
+    init_order[i++] = CoreUISystemId;
+    TB_CHECK(i == system_count, "Incorrect number of systems");
+  }
+  SystemId tick_order[system_count];
+  {
+    uint32_t i = 0;
+    tick_order[i++] = InputSystemId;
+    tick_order[i++] = NoClipControllerSystemId;
+    tick_order[i++] = CoreUISystemId;
+    tick_order[i++] = ViewSystemId;
+    tick_order[i++] = RenderObjectSystemId;
+    tick_order[i++] = TextureSystemId;
+    tick_order[i++] = MaterialSystemId;
+    tick_order[i++] = MeshSystemId;
+    tick_order[i++] = SkySystemId;
+    tick_order[i++] = OceanSystemId;
+    tick_order[i++] = ImGuiSystemId;
+    tick_order[i++] = RenderSystemId;
+    TB_CHECK(i == system_count, "Incorrect number of systems");
+  }
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
@@ -206,6 +247,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .component_descs = component_descs,
       .system_count = system_count,
       .system_descs = system_descs,
+      .init_order = init_order,
+      .tick_order = tick_order,
   };
 
   // Do not go initializing anything until we know the render thread is ready
