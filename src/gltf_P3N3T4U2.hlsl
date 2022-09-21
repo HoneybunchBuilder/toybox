@@ -42,9 +42,11 @@ struct Interpolators
 
 Interpolators vert(VertexIn i)
 {
+    float4x4 mvp = mul(object_data.m, camera_data.vp);
+
     // Apply displacement map
     float3 pos = i.local_pos;
-    float4 clip_pos = mul(float4(pos, 1.0), object_data.mvp);
+    float4 clip_pos = mul(float4(pos, 1.0), mvp);
     float4 world_pos = mul(float4(pos, 1.0), object_data.m);
 
     float3x3 orientation = (float3x3)object_data.m;

@@ -801,7 +801,6 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
         CommonObjectData obj_data = {.m = {.row0 = {0}}};
         transform_to_matrix(&obj_data.m, &mesh_trans->transform);
-        mulmf44(&camera_data->vp, &obj_data.m, &obj_data.mvp);
 
         SDL_memcpy(host_buffer.ptr, &obj_data, sizeof(CommonObjectData));
 

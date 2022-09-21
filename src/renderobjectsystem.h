@@ -8,7 +8,7 @@
 typedef struct RenderSystem RenderSystem;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
-typedef struct VkDescriptorSetPool_T *VkDescriptorSetPool;
+typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 typedef struct CommonObjectData CommonObjectData;
 
@@ -22,7 +22,7 @@ typedef struct RenderObjectSystemDescriptor {
 
 typedef struct RenderObjectSystemFrameState {
   uint32_t set_count;
-  VkDescriptorSetPool set_pool;
+  VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
   uint32_t set_max;
 } RenderObjectSystemFrameState;
@@ -50,3 +50,8 @@ TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self,
 void tb_render_object_system_set(RenderObjectSystem *self,
                                  TbRenderObjectId object,
                                  const CommonObjectData *data);
+VkDescriptorSet tb_render_object_system_get_descriptor(RenderObjectSystem *self,
+                                                       TbRenderObjectId object);
+const CommonObjectData *
+tb_render_object_system_get_data(RenderObjectSystem *self,
+                                 TbRenderObjectId object);

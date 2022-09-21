@@ -36,7 +36,6 @@ typedef struct CommonLightData {
 
 // Constant per-object Object Data for common objects
 typedef struct CommonObjectData {
-  float4x4 mvp;
   float4x4 m;
 } CommonObjectData;
 

@@ -39,8 +39,10 @@ Interpolators vert(VertexIn i)
 
     float3x3 orientation = (float3x3)object_data.m;
 
+    float4x4 mvp = mul(object_data.m, camera_data.vp);
+
     Interpolators o;
-    o.clip_pos = mul(float4(pos, 1.0), object_data.mvp);
+    o.clip_pos = mul(float4(pos, 1.0), mvp);
     o.world_pos = mul(float4(pos, 1.0), object_data.m).xyz;
     o.normal = mul(i.normal, orientation); // convert to world-space normal
     return o;
