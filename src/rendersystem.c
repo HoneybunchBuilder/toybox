@@ -541,6 +541,18 @@ VkResult tb_rnd_create_shader(RenderSystem *self,
   return err;
 }
 
+VkResult
+tb_rnd_create_descriptor_pool(RenderSystem *self,
+                              const VkDescriptorPoolCreateInfo *create_info,
+                              const char *name, VkDescriptorPool *pool) {
+  VkResult err = vkCreateDescriptorPool(
+      self->render_thread->device, create_info, &self->vk_host_alloc_cb, pool);
+  TB_VK_CHECK_RET(err, "Failed to create descriptor pool", err);
+  SET_VK_NAME(self->render_thread->device, *pool,
+              VK_OBJECT_TYPE_DESCRIPTOR_POOL, name);
+  return err;
+}
+
 VkResult tb_rnd_create_graphics_pipelines(
     RenderSystem *self, uint32_t create_info_count,
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,

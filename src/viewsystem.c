@@ -1,6 +1,7 @@
 #include "viewsystem.h"
 
 #include "cameracomponent.h"
+#include "common.hlsli"
 #include "profiling.h"
 #include "rendersystem.h"
 #include "tbcommon.h"
@@ -49,16 +50,123 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 void destroy_view_system(ViewSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    ViewSystemFrameState *state = &self->frame_states[i];
+    tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
+  }
+
   *self = (ViewSystem){0};
 }
 
 void tick_view_system(ViewSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
-  (void)self;
+  // This system doesn't interact with the ECS so these parameters can be
+  // ignored
   (void)input;
   (void)output;
   (void)delta_seconds;
   TracyCZoneNC(ctx, "View System Tick", TracyCategoryColorRendering, true);
+
+  if (self->view_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  VkResult err = VK_SUCCESS;
+
+  RenderSystem *render_system = self->render_system;
+
+  VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+
+  ViewSystemFrameState *state = &self->frame_states[render_system->frame_idx];
+  // Allocate all the descriptor sets for this frame
+  {
+    // Resize the pool
+    if (state->set_count < self->view_count) {
+      if (state->set_pool) {
+        tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
+      }
+
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = self->view_count,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              &(VkDescriptorPoolSize){
+                  .descriptorCount = self->view_count,
+                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              },
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      };
+      err = tb_rnd_create_descriptor_pool(
+          render_system, &create_info,
+          "View System Frame State Descriptor Pool", &state->set_pool);
+      TB_VK_CHECK(err,
+                  "Failed to create view system frame state descriptor pool");
+    } else {
+      vkResetDescriptorPool(self->render_system->render_thread->device,
+                            state->set_pool, 0);
+    }
+    state->set_count = self->view_count;
+    state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                   state->set_count, VkDescriptorSet);
+
+    VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+        self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
+    for (uint32_t i = 0; i < state->set_count; ++i) {
+      layouts[i] = self->set_layout;
+    }
+
+    VkDescriptorSetAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorSetCount = state->set_count,
+        .descriptorPool = state->set_pool,
+        .pSetLayouts = layouts,
+    };
+    err = vkAllocateDescriptorSets(render_system->render_thread->device,
+                                   &alloc_info, state->sets);
+    TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
+  }
+
+  // Just upload and write all views for now, they tend to be important anyway
+  VkWriteDescriptorSet *writes =
+      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkWriteDescriptorSet);
+  TbHostBuffer *buffers =
+      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
+  for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
+    const CommonViewData *data = &self->view_data[view_idx];
+    TbHostBuffer *buffer = &buffers[view_idx];
+
+    // Write view data into the tmp buffer we know will wind up on the GPU
+    err = tb_rnd_sys_alloc_tmp_host_buffer(
+        render_system, sizeof(CommonViewData), 0x40, buffer);
+    TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
+
+    // Copy view data to the allocated buffer
+    SDL_memcpy(buffer->ptr, data, sizeof(CommonViewData));
+
+    // Get the descriptor we want to write to
+    VkDescriptorSet view_set = state->sets[view_idx];
+
+    // Construct a write descriptor
+    writes[view_idx] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo =
+            &(VkDescriptorBufferInfo){
+                .buffer = tmp_gpu_buffer,
+                .offset = buffer->offset,
+                .range = sizeof(CommonViewData),
+            },
+    };
+  }
+  vkUpdateDescriptorSets(self->render_system->render_thread->device,
+                         self->view_count, writes, 0, NULL);
+
   TracyCZoneEnd(ctx);
 }
 
@@ -82,6 +190,48 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
 }
 
 TbViewId tb_view_system_create_view(ViewSystem *self) {
-  (void)self;
-  return InvalidViewId;
+  TbViewId view = self->view_count;
+  uint32_t new_count = self->view_count + 1;
+  if (new_count > self->view_max) {
+    // Reallocate collections
+    const uint32_t new_max = new_count * 2;
+
+    Allocator alloc = self->std_alloc;
+
+    self->view_ids = tb_realloc_nm_tp(alloc, self->view_ids, new_max, TbViewId);
+    self->view_data =
+        tb_realloc_nm_tp(alloc, self->view_data, new_max, CommonViewData);
+    self->view_max = new_max;
+  }
+
+  self->view_data[view] = (CommonViewData){
+      .view_pos = {0},
+  };
+  // Supply a really basic view projection matrix for default
+  float4x4 view_mat = {.row0 = {0}};
+  look_forward(&view_mat, (float3){0, 0, 0}, (float3){0, 0, 1},
+               (float3){0, 1, 0});
+  float4x4 proj_mat = {.row0 = {0}};
+  perspective(&proj_mat, PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
+  mulmf44(&proj_mat, &view_mat, &self->view_data[view].vp);
+
+  self->view_count = new_count;
+
+  return view;
+}
+
+void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
+                                  const CommonViewData *data) {
+  if (view >= self->view_count) {
+    TB_CHECK(false, "View Id out of range");
+  }
+  self->view_data[view] = *data;
+}
+
+VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
+  if (view >= self->view_count) {
+    TB_CHECK(false, "View Id out of range");
+  }
+
+  return self->frame_states[self->render_system->frame_idx].sets[view];
 }
