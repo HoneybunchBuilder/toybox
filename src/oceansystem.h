@@ -38,12 +38,17 @@ typedef struct OceanSystem {
   uint64_t ocean_uv_offset;
   VkBuffer ocean_geom_buffer;
 
+  VkRenderPass ocean_prepass;
+  VkFramebuffer prepass_framebuffers[TB_MAX_FRAME_STATES];
+
   VkRenderPass ocean_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+
   OceanSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
+  VkPipeline prepass_pipeline;
   VkPipeline pipeline;
 } OceanSystem;
 
