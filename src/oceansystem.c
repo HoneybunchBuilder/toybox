@@ -20,6 +20,8 @@
 #endif
 #include "ocean_frag.h"
 #include "ocean_vert.h"
+#include "oceanprepass_frag.h"
+#include "oceanprepass_vert.h"
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -70,10 +72,15 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
-                               VkPipelineLayout pipe_layout,
-                               VkPipeline *pipeline) {
+VkResult create_ocean_pipelines(RenderSystem *render_system,
+                                VkRenderPass prepass, VkRenderPass pass,
+                                VkPipelineLayout pipe_layout,
+                                VkPipeline *prepass_pipeline,
+                                VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
+
+  VkShaderModule oceanprepass_vert_mod = VK_NULL_HANDLE;
+  VkShaderModule oceanprepass_frag_mod = VK_NULL_HANDLE;
 
   VkShaderModule ocean_vert_mod = VK_NULL_HANDLE;
   VkShaderModule ocean_frag_mod = VK_NULL_HANDLE;
@@ -82,6 +89,20 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
+
+    create_info.codeSize = sizeof(oceanprepass_vert);
+    create_info.pCode = (const uint32_t *)oceanprepass_vert;
+    err = tb_rnd_create_shader(render_system, &create_info,
+                               "Ocean Prepass Vert", &oceanprepass_vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ocean prepass vert shader module",
+                    err);
+
+    create_info.codeSize = sizeof(oceanprepass_frag);
+    create_info.pCode = (const uint32_t *)oceanprepass_frag;
+    err = tb_rnd_create_shader(render_system, &create_info,
+                               "Ocean Prepass Frag", &oceanprepass_frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ocean prepass frag shader module",
+                    err);
 
     create_info.codeSize = sizeof(ocean_vert);
     create_info.pCode = (const uint32_t *)ocean_vert;
@@ -172,9 +193,9 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
                       .dstColorBlendFactor =
                           VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                       .colorBlendOp = VK_BLEND_OP_ADD,
-                      .srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-                      .dstAlphaBlendFactor =
+                      .srcAlphaBlendFactor =
                           VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
                       .alphaBlendOp = VK_BLEND_OP_ADD,
                       .colorWriteMask =
                           VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
@@ -186,8 +207,8 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
-              .depthWriteEnable = VK_TRUE,
-              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .depthWriteEnable = VK_FALSE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
               .maxDepthBounds = 1.0f,
           },
       .pDynamicState =
@@ -203,6 +224,42 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Ocean Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
+
+  create_info.pStages =
+      (VkPipelineShaderStageCreateInfo[stage_count]){
+          {
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_VERTEX_BIT,
+              .module = oceanprepass_vert_mod,
+              .pName = "vert",
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+              .module = oceanprepass_frag_mod,
+              .pName = "frag",
+          },
+      },
+  create_info.pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+  };
+  create_info.pDepthStencilState =
+      &(VkPipelineDepthStencilStateCreateInfo){
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          .depthTestEnable = VK_TRUE,
+          .depthWriteEnable = VK_TRUE,
+          .depthCompareOp = VK_COMPARE_OP_GREATER,
+          .maxDepthBounds = 1.0f,
+      },
+  create_info.renderPass = prepass;
+
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Ocean Prepass Pipeline",
+                                         prepass_pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create ocean prepass pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, oceanprepass_vert_mod);
+  tb_rnd_destroy_shader(render_system, oceanprepass_frag_mod);
 
   tb_rnd_destroy_shader(render_system, ocean_vert_mod);
   tb_rnd_destroy_shader(render_system, ocean_frag_mod);
@@ -313,6 +370,47 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", false);
   }
 
+  // Create depth pre pass for the ocean
+  {
+    VkRenderPassCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments =
+            &(VkAttachmentDescription){
+                .format = VK_FORMAT_D32_SFLOAT,
+                .samples = VK_SAMPLE_COUNT_1_BIT,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout =
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            },
+        .subpassCount = 1,
+        .pSubpasses =
+            &(VkSubpassDescription){
+                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                .pDepthStencilAttachment =
+                    &(VkAttachmentReference){
+                        0,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    },
+            },
+        .pDependencies =
+            &(VkSubpassDependency){
+                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            },
+    };
+    err = tb_rnd_create_render_pass(render_system, &create_info,
+                                    "Ocean Pre Pass", &self->ocean_prepass);
+    TB_VK_CHECK_RET(err, "Failed to create ocean pre pass", false);
+  }
+
   // Create render pass for the ocean
   {
     const uint32_t attachment_count = 2;
@@ -375,37 +473,65 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean pass", false);
   }
 
-  err = create_ocean_pipeline(render_system, self->ocean_pass,
-                              self->pipe_layout, &self->pipeline);
+  err = create_ocean_pipelines(render_system, self->ocean_prepass,
+                               self->ocean_pass, self->pipe_layout,
+                               &self->prepass_pipeline, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
 
-  // Create framebuffers for ocean pass
+  // Create framebuffers for ocean pass and prepass
   {
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      const uint32_t attachment_count = 2;
-      // TODO: Figure out a way to do this without referencing the render thread
-      // directly
-      VkImageView attachments[attachment_count] = {
-          render_system->render_thread->frame_states[i].swapchain_image_view,
-          render_system->render_thread->frame_states[i].depth_buffer_view,
-      };
+    // TODO: Figure out a way to do this without referencing the render
+    // thread directly
 
-      VkFramebufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-          .renderPass = self->ocean_pass,
-          .attachmentCount = attachment_count,
-          .pAttachments = attachments,
-          .width = render_system->render_thread->swapchain.width,
-          .height = render_system->render_thread->swapchain.height,
-          .layers = 1,
-      };
-      err = tb_rnd_create_framebuffer(render_system, &create_info,
-                                      "Ocean Pass Framebuffer",
-                                      &self->framebuffers[i]);
+    // Prepass
+    {
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        VkFramebufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = self->ocean_prepass,
+            .attachmentCount = 1,
+            .pAttachments = &render_system->render_thread->frame_states[i]
+                                 .depth_buffer_view,
+            .width = render_system->render_thread->swapchain.width,
+            .height = render_system->render_thread->swapchain.height,
+            .layers = 1,
+        };
+        err = tb_rnd_create_framebuffer(render_system, &create_info,
+                                        "Ocean Pre Pass Framebuffer",
+                                        &self->prepass_framebuffers[i]);
+      }
+    }
+    // Ocean pass
+    {
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        const uint32_t attachment_count = 2;
+        VkFramebufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = self->ocean_pass,
+            .attachmentCount = attachment_count,
+            .pAttachments =
+                (VkImageView[attachment_count]){
+                    render_system->render_thread->frame_states[i]
+                        .swapchain_image_view,
+                    render_system->render_thread->frame_states[i]
+                        .depth_buffer_view,
+                },
+            .width = render_system->render_thread->swapchain.width,
+            .height = render_system->render_thread->swapchain.height,
+            .layers = 1,
+        };
+        err = tb_rnd_create_framebuffer(render_system, &create_info,
+                                        "Ocean Pass Framebuffer",
+                                        &self->framebuffers[i]);
+      }
     }
   }
 
-  // Register the render pass
+  // Register the render passes (they use the same draw routine)
+  tb_rnd_register_pass(
+      render_system, self->ocean_prepass, self->prepass_framebuffers,
+      render_system->render_thread->swapchain.width,
+      render_system->render_thread->swapchain.height, ocean_pass_record);
   tb_rnd_register_pass(render_system, self->ocean_pass, self->framebuffers,
                        render_system->render_thread->swapchain.width,
                        render_system->render_thread->swapchain.height,
@@ -424,13 +550,17 @@ void destroy_ocean_system(OceanSystem *self) {
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(self->render_system, self->framebuffers[i]);
+    tb_rnd_destroy_framebuffer(self->render_system,
+                               self->prepass_framebuffers[i]);
     OceanSystemFrameState *state = &self->frame_states[i];
     tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
   }
 
+  tb_rnd_destroy_pipeline(self->render_system, self->prepass_pipeline);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
 
   tb_rnd_destroy_render_pass(self->render_system, self->ocean_pass);
+  tb_rnd_destroy_render_pass(self->render_system, self->ocean_prepass);
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
@@ -583,6 +713,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   const uint32_t batch_max = ocean_count * camera_count;
   OceanDrawBatch *batches =
       tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
+  OceanDrawBatch *prepass_batches =
+      tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
 
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const CameraComponent *camera =
@@ -599,7 +731,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           self->frame_states[self->render_system->frame_idx].sets[ocean_idx];
 
       // TODO: only if ocean is visible to camera
-      batches[batch_count++] = (OceanDrawBatch){
+      batches[batch_count] = (OceanDrawBatch){
           .pipeline = self->pipeline,
           .layout = self->pipe_layout,
           .viewport = {0, 0, width, height, 0, 1},
@@ -613,9 +745,15 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .pos_offset = self->ocean_pos_offset,
           .uv_offset = self->ocean_uv_offset,
       };
+      prepass_batches[batch_count] = batches[batch_count];
+      prepass_batches[batch_count].pipeline = self->prepass_pipeline;
+      batch_count++;
     }
   }
 
+  // Draw to the prepass and the ocean pass
+  tb_rnd_issue_draw_batch(self->render_system, self->ocean_prepass, batch_count,
+                          sizeof(OceanDrawBatch), prepass_batches);
   tb_rnd_issue_draw_batch(self->render_system, self->ocean_pass, batch_count,
                           sizeof(OceanDrawBatch), batches);
 

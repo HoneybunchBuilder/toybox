@@ -193,27 +193,32 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
       // Resize descriptor pool
       {
+        const uint32_t max_sets =
+            new_max * 4; // *4 because we know we have 4 bindings
+
         if (self->mat_set_pool) {
           vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
         }
 
+        // NOTE: Due to behavior in AMD drivers we use max_sets for the
+        // descriptor count
         const uint32_t pool_size_count = 2;
         VkDescriptorPoolSize pool_sizes[pool_size_count] = {
             // One binding is a uniform buffer
             {
-                .descriptorCount = new_max,
+                .descriptorCount = max_sets,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             },
             // 3 Bindings are sampled images
             {
-                .descriptorCount = new_max * 3,
+                .descriptorCount = max_sets,
                 .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             },
         };
 
         VkDescriptorPoolCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = new_max * 4, // *4 because we know we have 4 bindings
+            .maxSets = max_sets,
             .poolSizeCount = pool_size_count,
             .pPoolSizes = pool_sizes,
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
