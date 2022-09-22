@@ -218,6 +218,8 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
   perspective(&proj_mat, PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
   mulmf44(&proj_mat, &view_mat, &self->view_data[view].vp);
 
+  self->view_data[view].inv_vp = inv_mf44(self->view_data[view].vp);
+
   self->view_count = new_count;
 
   return view;

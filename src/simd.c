@@ -177,7 +177,6 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
   TracyCZoneEnd(ctx);
 }
 
-// UNTESTED
 float4x4 inv_mf44(float4x4 m) {
   TracyCZoneN(ctx, "mulmf44", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
