@@ -549,14 +549,16 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         }
       }
       if (node->mesh) {
-        MeshComponentDescriptor mesh_desc = {
+        MeshComponentDescriptor *mesh_desc =
+            tb_alloc_tp(tmp_alloc, MeshComponentDescriptor);
+        *mesh_desc = (MeshComponentDescriptor){
             .mesh = node->mesh,
             .source_path = scene_path,
         };
 
         // Add component to entity
         component_ids[component_idx] = MeshComponentId;
-        component_descriptors[component_idx] = &mesh_desc;
+        component_descriptors[component_idx] = mesh_desc;
         component_idx++;
       }
       if (node->skin) {

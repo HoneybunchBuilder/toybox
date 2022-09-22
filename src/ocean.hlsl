@@ -16,7 +16,7 @@ ConstantBuffer<CommonViewData> camera_data: register(b0, space1);
 struct VertexIn
 {
     float3 local_pos : SV_POSITION;
-    float2 uv: TEXCOORD0;
+    //float2 uv: TEXCOORD0;
 };
 
 struct Interpolators
@@ -24,10 +24,10 @@ struct Interpolators
   float4 clip_pos : SV_POSITION;
   float3 world_pos: POSITION0;
   float3 normal : NORMAL0;
-  float3 tangent : TANGENT0;
-  float3 binormal : BINORMAL0;
-  float2 uv: TEXCOORD0;
-  float4 shadowcoord : TEXCOORD1;
+  //float3 tangent : TANGENT0;
+  //float3 binormal : BINORMAL0;
+  //float2 uv: TEXCOORD0;
+  //float4 shadowcoord : TEXCOORD1;
 };
 
 float3 gerstner_wave(OceanWave wave, float3 p, inout float3 tangent, inout float3 binormal)
@@ -82,9 +82,9 @@ Interpolators vert(VertexIn i)
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
   o.normal = normal;
-  o.tangent = tangent;
-  o.binormal = binormal;
-  o.uv = i.uv;
+  //o.tangent = tangent;
+  //o.binormal = binormal;
+  //o.uv = i.uv;
 
   return o;
 }
@@ -110,5 +110,5 @@ float4 frag(Interpolators i) : SV_TARGET
     out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
   }
 
-  return float4(out_color, 1);
+  return float4(out_color, 0.6);
 }
