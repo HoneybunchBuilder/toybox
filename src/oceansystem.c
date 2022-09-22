@@ -10,6 +10,7 @@
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
+#include "viewsystem.h"
 #include "world.h"
 
 // Ignore some warnings for the generated headers
@@ -28,12 +29,14 @@ typedef struct OceanDrawBatch {
   VkPipelineLayout layout;
   VkViewport viewport;
   VkRect2D scissor;
+  OceanPushConstants consts;
   VkDescriptorSet view_set;
-  VkDescriptorSet obj_set;
   VkDescriptorSet ocean_set;
   VkBuffer geom_buffer;
+  VkIndexType index_type;
   uint32_t index_count;
-  uint64_t vertex_offset;
+  uint64_t pos_offset;
+  uint64_t uv_offset;
 } OceanDrawBatch;
 
 void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
@@ -51,15 +54,16 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
-                            1, &batch->view_set, 0, NULL);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            1, &batch->obj_set, 0, NULL);
+                            1, &batch->view_set, 0, NULL);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             1, &batch->ocean_set, 0, NULL);
+    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(OceanPushConstants), &batch->consts);
 
-    vkCmdBindIndexBuffer(buffer, geom_buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->vertex_offset);
+    vkCmdBindIndexBuffer(buffer, geom_buffer, 0, batch->index_type);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->pos_offset);
+    vkCmdBindVertexBuffers(buffer, 1, 1, &geom_buffer, &batch->uv_offset);
 
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
@@ -116,14 +120,18 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
           &(VkPipelineVertexInputStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 1,
+              .vertexBindingDescriptionCount = 2,
               .pVertexBindingDescriptions =
-                  &(VkVertexInputBindingDescription){
-                      0, sizeof(float3), VK_VERTEX_INPUT_RATE_VERTEX},
-              .vertexAttributeDescriptionCount = 1,
+                  (VkVertexInputBindingDescription[2]){
+                      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+                      {1, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
+                  },
+              .vertexAttributeDescriptionCount = 2,
               .pVertexAttributeDescriptions =
-                  &(VkVertexInputAttributeDescription){
-                      0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+                  (VkVertexInputAttributeDescription[2]){
+                      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+                      {1, 1, VK_FORMAT_R32G32_SFLOAT, 0},
+                  },
           },
       .pInputAssemblyState =
           &(VkPipelineInputAssemblyStateCreateInfo){
@@ -205,10 +213,15 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       tb_get_system(system_deps, system_dep_count, MeshSystem);
   TB_CHECK_RETURN(mesh_system,
                   "Failed to find mesh system which ocean depends on", false);
+  ViewSystem *view_system =
+      tb_get_system(system_deps, system_dep_count, ViewSystem);
+  TB_CHECK_RETURN(mesh_system,
+                  "Failed to find view system which ocean depends on", false);
 
   *self = (OceanSystem){
       .render_system = render_system,
       .mesh_system = mesh_system,
+      .view_system = view_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -225,11 +238,21 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   {
     const cgltf_mesh *ocean_mesh = &data->meshes[0];
 
+    self->ocean_index_type = ocean_mesh->primitives->indices->stride == 2
+                                 ? VK_INDEX_TYPE_UINT16
+                                 : VK_INDEX_TYPE_UINT32;
     self->ocean_index_count = ocean_mesh->primitives->indices->count;
 
-    uint64_t index_size = self->ocean_index_count * sizeof(uint32_t);
+    uint32_t vertex_count = ocean_mesh->primitives->attributes->data->count;
+
+    uint64_t index_size =
+        self->ocean_index_count *
+        (self->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
     uint64_t idx_padding = index_size % (sizeof(float) * 3);
-    self->ocean_vertex_offset = index_size + idx_padding;
+    self->ocean_pos_offset = index_size + idx_padding;
+    self->ocean_uv_offset =
+        self->ocean_pos_offset +
+        (vertex_count * (sizeof(float) * 6) + sizeof(float4));
 
     self->ocean_patch_mesh =
         tb_mesh_system_load_mesh(mesh_system, asset_path, ocean_mesh);
@@ -259,15 +282,14 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Create ocean pipeline layout
   {
-    const uint32_t set_layout_count = 3;
+    const uint32_t set_layout_count = 2;
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = set_layout_count,
         .pSetLayouts =
             (VkDescriptorSetLayout[set_layout_count]){
                 self->set_layout,
-                mesh_system->obj_set_layout,
-                mesh_system->view_set_layout,
+                self->view_system->set_layout,
             },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =
@@ -393,6 +415,8 @@ void destroy_ocean_system(OceanSystem *self) {
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_framebuffer(self->render_system, self->framebuffers[i]);
+    OceanSystemFrameState *state = &self->frame_states[i];
+    tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
   }
 
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
@@ -413,22 +437,121 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   const uint32_t ocean_count = tb_get_column_component_count(input, 0);
   const PackedComponentStore *oceans =
       tb_get_column_check_id(input, 0, 0, OceanComponentId);
-  const PackedComponentStore *ocean_trans =
-      tb_get_column_check_id(input, 0, 1, TransformComponentId);
 
   const uint32_t camera_count = tb_get_column_component_count(input, 1);
   const PackedComponentStore *cameras =
-      tb_get_column_check_id(input, 0, 0, CameraComponentId);
-  const PackedComponentStore *camera_trans =
-      tb_get_column_check_id(input, 0, 1, TransformComponentId);
-
-  (void)ocean_trans;
-  (void)cameras;
-  (void)camera_trans;
+      tb_get_column_check_id(input, 1, 0, CameraComponentId);
 
   if (ocean_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
     return;
+  }
+
+  // Allocate all the descriptor sets for this frame
+  {
+    VkResult err = VK_SUCCESS;
+
+    RenderSystem *render_system = self->render_system;
+    OceanSystemFrameState *state =
+        &self->frame_states[render_system->frame_idx];
+    VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+    // Allocate all the descriptor sets for this frame
+    {
+      // Resize the pool
+      if (state->set_count < ocean_count) {
+        if (state->set_pool) {
+          tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
+        }
+
+        VkDescriptorPoolCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = ocean_count,
+            .poolSizeCount = 1,
+            .pPoolSizes =
+                &(VkDescriptorPoolSize){
+                    .descriptorCount = ocean_count,
+                    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                },
+            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        };
+        err = tb_rnd_create_descriptor_pool(
+            render_system, &create_info,
+            "View System Frame State Descriptor Pool", &state->set_pool);
+        TB_VK_CHECK(err,
+                    "Failed to create view system frame state descriptor pool");
+      } else {
+        vkResetDescriptorPool(self->render_system->render_thread->device,
+                              state->set_pool, 0);
+      }
+      state->set_count = ocean_count;
+      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                     state->set_count, VkDescriptorSet);
+
+      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+          self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < state->set_count; ++i) {
+        layouts[i] = self->set_layout;
+      }
+
+      VkDescriptorSetAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+          .descriptorSetCount = state->set_count,
+          .descriptorPool = state->set_pool,
+          .pSetLayouts = layouts,
+      };
+      err = vkAllocateDescriptorSets(render_system->render_thread->device,
+                                     &alloc_info, state->sets);
+      TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
+    }
+
+    // Just upload and write all views for now, they tend to be important anyway
+    VkWriteDescriptorSet *writes =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkWriteDescriptorSet);
+    VkDescriptorBufferInfo *buffer_info =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorBufferInfo);
+    TbHostBuffer *buffers =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, TbHostBuffer);
+    for (uint32_t oc_idx = 0; oc_idx < ocean_count; ++oc_idx) {
+      const OceanComponent *ocean_comp =
+          tb_get_component(oceans, oc_idx, OceanComponent);
+      TbHostBuffer *buffer = &buffers[oc_idx];
+
+      OceanData data = {
+          .wave_count = ocean_comp->wave_count,
+      };
+      SDL_memcpy(data.wave, ocean_comp->waves,
+                 data.wave_count * sizeof(OceanWave));
+
+      // Write ocean data into the tmp buffer we know will wind up on the GPU
+      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, sizeof(OceanData),
+                                             0x40, buffer);
+      TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for ocean");
+
+      // Copy view data to the allocated buffer
+      SDL_memcpy(buffer->ptr, &data, sizeof(OceanData));
+
+      // Get the descriptor we want to write to
+      VkDescriptorSet ocean_set = state->sets[oc_idx];
+
+      buffer_info[oc_idx] = (VkDescriptorBufferInfo){
+          .buffer = tmp_gpu_buffer,
+          .offset = buffer->offset,
+          .range = sizeof(OceanData),
+      };
+
+      // Construct a write descriptor
+      writes[oc_idx] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = ocean_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .pBufferInfo = &buffer_info[oc_idx],
+      };
+    }
+    vkUpdateDescriptorSets(self->render_system->render_thread->device,
+                           ocean_count, writes, 0, NULL);
   }
 
   // Copy the ocean component for output
@@ -453,15 +576,18 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
 
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-    // TODO: Get descriptor set for this view
-    VkDescriptorSet view_set = VK_NULL_HANDLE;
+    const CameraComponent *camera =
+        tb_get_component(cameras, cam_idx, CameraComponent);
+
+    VkDescriptorSet view_set =
+        tb_view_system_get_descriptor(self->view_system, camera->view_id);
 
     for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
+      const OceanComponent *ocean_comp =
+          tb_get_component(oceans, ocean_idx, OceanComponent);
 
-      // TODO: Update object descriptor set for this view
-      VkDescriptorSet obj_set = VK_NULL_HANDLE;
-      // TODO: Update ocean descriptor set
-      VkDescriptorSet ocean_set = VK_NULL_HANDLE;
+      VkDescriptorSet ocean_set =
+          self->frame_states[self->render_system->frame_idx].sets[ocean_idx];
 
       // TODO: only if ocean is visible to camera
       batches[batch_count++] = (OceanDrawBatch){
@@ -470,14 +596,19 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .view_set = view_set,
-          .obj_set = obj_set,
           .ocean_set = ocean_set,
+          .consts = (OceanPushConstants){ocean_comp->time},
           .geom_buffer = self->ocean_geom_buffer,
+          .index_type = (VkIndexType)self->ocean_index_type,
           .index_count = self->ocean_index_count,
-          .vertex_offset = self->ocean_vertex_offset,
+          .pos_offset = self->ocean_pos_offset,
+          .uv_offset = self->ocean_uv_offset,
       };
     }
   }
+
+  tb_rnd_issue_draw_batch(self->render_system, self->ocean_pass, batch_count,
+                          sizeof(OceanDrawBatch), batches);
 
   // Report output (we've updated the time on the ocean component)
   output->set_count = 1;
@@ -503,9 +634,10 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .dep_count = 2,
       .deps[0] = {2, {OceanComponentId, TransformComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 2,
+      .system_dep_count = 3,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,
+      .system_deps[2] = ViewSystemId,
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,

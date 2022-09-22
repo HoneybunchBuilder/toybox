@@ -531,7 +531,6 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 
     // Get descriptor set layouts from related systems
     {
-
       self->obj_set_layout = render_object_system->set_layout;
       self->view_set_layout = view_system->set_layout;
     }

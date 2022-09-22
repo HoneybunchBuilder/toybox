@@ -213,8 +213,7 @@ TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self) {
     self->render_object_max = new_max;
   }
 
-  self->render_object_data[object] = (CommonObjectData){0};
-
+  self->render_object_data[object] = (CommonObjectData){.m = {.row0 = {0}}};
   // Supply an identity matrix for the world space model matrix
   mf44_identity(&self->render_object_data[object].m);
 
