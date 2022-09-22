@@ -92,7 +92,7 @@ Interpolators vert(VertexIn i)
 float4 frag(Interpolators i) : SV_TARGET
 {
   float3 base_color = float3(0.1, 0.4, 0.7);
-  float3 light_dir = float3(0.707, 0.707, 0);
+  float3 light_dir = float3(0, 1, 0);
 
   float3 out_color = float3(0.0f, 0.0f, 0.0f);
 
@@ -102,11 +102,12 @@ float4 frag(Interpolators i) : SV_TARGET
 
   // for each light
   {
-      float3 L = light_dir;
-      float3 H = normalize(V + L);
-      
-      float3 light_color = float3(1, 1, 1);
-      out_color += phong_light(base_color, light_color, gloss, i.normal, L, V, H);
+    float3 N = normalize(i.normal);
+    float3 L = light_dir;
+    float3 H = normalize(V + L);
+
+    float3 light_color = float3(1, 1, 1);
+    out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
   }
 
   return float4(out_color, 1);
