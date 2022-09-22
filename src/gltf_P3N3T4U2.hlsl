@@ -37,7 +37,7 @@ struct Interpolators
     float3 tangent : TANGENT0;
     float3 binormal : BINORMAL0;
     float2 uv: TEXCOORD0;
-    float4 shadowcoord : TEXCOORD1;
+    //float4 shadowcoord : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i)

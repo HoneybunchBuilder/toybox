@@ -41,7 +41,7 @@ typedef struct OceanDrawBatch {
 
 void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                        const void *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
+  TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
 
   const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -63,7 +63,7 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, batch->index_type);
     vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->pos_offset);
-    vkCmdBindVertexBuffers(buffer, 1, 1, &geom_buffer, &batch->uv_offset);
+    // vkCmdBindVertexBuffers(buffer, 1, 1, &geom_buffer, &batch->uv_offset);
 
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
@@ -120,13 +120,13 @@ VkResult create_ocean_pipeline(RenderSystem *render_system, VkRenderPass pass,
           &(VkPipelineVertexInputStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 2,
+              .vertexBindingDescriptionCount = 1,
               .pVertexBindingDescriptions =
                   (VkVertexInputBindingDescription[2]){
                       {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
                       {1, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
                   },
-              .vertexAttributeDescriptionCount = 2,
+              .vertexAttributeDescriptionCount = 1,
               .pVertexAttributeDescriptions =
                   (VkVertexInputAttributeDescription[2]){
                       {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
