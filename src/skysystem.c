@@ -550,8 +550,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       const CameraComponent *camera = &camera_comps[cam_idx];
       const TransformComponent *transform = &transform_comps[cam_idx];
 
-      // TODO: Instead of calculating the vp matrix here, a camera system could
-      // do it earlier in the frame
+      // Need to manually calculate this here
       float4x4 vp = {.row0 = {0}};
       {
         float4x4 proj = {.row0 = {0}};

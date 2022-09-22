@@ -242,8 +242,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = TextureSystemId;
     tick_order[i++] = MaterialSystemId;
     tick_order[i++] = MeshSystemId;
-    tick_order[i++] = SkySystemId;
     tick_order[i++] = OceanSystemId;
+    tick_order[i++] = SkySystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderSystemId;
     TB_CHECK(i == system_count, "Incorrect number of systems");
