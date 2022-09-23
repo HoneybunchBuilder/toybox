@@ -3,10 +3,11 @@
 #include "ocean.hlsli"
 #include "common.hlsli"
 
-// Wave data - Vertex & Fragment Stages
-ConstantBuffer<OceanData> ocean_data : register(b0, space0);
-[[vk::push_constant]] // Vertex stage only
-ConstantBuffer<OceanPushConstants> consts : register(b1, space0);
+ConstantBuffer<OceanData> ocean_data : register(b0, space0); // Vertex Stage Only
+Texture2D depth_map : register(t1, space0); // Fragment Stage Only
+sampler static_sampler : register(s2, space0); // Immutable Sampler
+[[vk::push_constant]] 
+ConstantBuffer<OceanPushConstants> consts : register(b3, space0); // Vertex Stage Only
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data: register(b0, space1);

@@ -79,6 +79,10 @@ void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
                              uint32_t batch_count, uint64_t batch_size,
                              const void *batches);
 
+VkResult tb_rnd_create_sampler(RenderSystem *self,
+                               const VkSamplerCreateInfo *create_info,
+                               const char *name, VkSampler *sampler);
+
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
                                    const VkRenderPassCreateInfo *create_info,
                                    const char *name, VkRenderPass *pass);

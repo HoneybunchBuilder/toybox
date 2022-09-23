@@ -481,6 +481,17 @@ void tb_rnd_issue_draw_batch(RenderSystem *self, VkRenderPass pass,
   }
 }
 
+VkResult tb_rnd_create_sampler(RenderSystem *self,
+                               const VkSamplerCreateInfo *create_info,
+                               const char *name, VkSampler *sampler) {
+  VkResult err = vkCreateSampler(self->render_thread->device, create_info,
+                                 &self->vk_host_alloc_cb, sampler);
+  TB_VK_CHECK_RET(err, "Failed to create sampler", err);
+  SET_VK_NAME(self->render_thread->device, *sampler, VK_OBJECT_TYPE_SAMPLER,
+              name);
+  return err;
+}
+
 VkResult tb_rnd_create_render_pass(RenderSystem *self,
                                    const VkRenderPassCreateInfo *create_info,
                                    const char *name, VkRenderPass *pass) {

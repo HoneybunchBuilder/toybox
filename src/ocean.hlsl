@@ -56,6 +56,12 @@ float4 frag(Interpolators i) : SV_TARGET
       color += pbr_lighting(light, N, V, NdotV);
     }
   }
+  
+  /*
+  float2 uv = i.clip_pos.xy / i.clip_pos.w;
+  float depth = depth_map.Sample(static_sampler, uv).x;
+  color = float3( depth, depth , depth);
+  */
 
   return float4(color, 0.8);
 }

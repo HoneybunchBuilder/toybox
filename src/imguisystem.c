@@ -46,31 +46,11 @@ typedef struct ImGuiDrawBatch {
 VkResult create_imgui_pipeline2(VkDevice device,
                                 const VkAllocationCallbacks *vk_alloc,
                                 VkPipelineCache cache, VkRenderPass pass,
-                                VkSampler *sampler,
+                                VkSampler sampler,
                                 VkPipelineLayout *pipe_layout,
                                 VkDescriptorSetLayout *set_layout,
                                 VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
-
-  // Create Immutable Sampler
-  {
-    VkSamplerCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
-        .maxLod = 1.0f,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-    };
-    err = vkCreateSampler(device, &create_info, vk_alloc, sampler);
-    TB_VK_CHECK_RET(err, "Failed to create imgui samplers", err);
-    SET_VK_NAME(device, *sampler, VK_OBJECT_TYPE_SAMPLER, "ImGui Sampler");
-  }
 
   // Create Descriptor Set Layout
   {
@@ -78,7 +58,7 @@ VkResult create_imgui_pipeline2(VkDevice device,
         {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          NULL},
         {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         sampler},
+         &sampler},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {
@@ -362,10 +342,30 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create imgui render pass", err);
   }
 
+  // Create Immutable Sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info, "ImGui Sampler",
+                                &self->sampler);
+    TB_VK_CHECK_RET(err, "Failed to create imgui sampler", err);
+  }
+
   // Create imgui pipeline
   err = create_imgui_pipeline2(
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
-      render_system->pipeline_cache, self->pass, &self->sampler,
+      render_system->pipeline_cache, self->pass, self->sampler,
       &self->pipe_layout, &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
 
