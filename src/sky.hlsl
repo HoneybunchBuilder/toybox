@@ -33,7 +33,7 @@ FragmentOut frag(Interpolators i) {
   float time = sky_data.time * 0.2f;
   float cirrus = sky_data.cirrus;
   float cumulus = sky_data.cumulus;
-  float3 sun_dir = sky_data.sun_dir;
+  float3 sun_dir = normalize(float3(0.707, 0.707, 0));//sky_data.sun_dir;
   float3 view_pos = i.view_pos;
 
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);
@@ -44,10 +44,6 @@ FragmentOut frag(Interpolators i) {
   color = tonemap(color * exposure);
   color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
   */
-
-  // Gamma correction
-  float gamma = 2.2f; // TODO: pass in as a parameter
-  color = pow(color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
 
   FragmentOut o;
   o.color = float4(color, 1.0);
