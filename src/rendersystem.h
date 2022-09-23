@@ -25,6 +25,12 @@ typedef struct RenderSystemFrameState {
   BufferImageCopyQueue buf_img_copy_queue;
 } RenderSystemFrameState;
 
+typedef struct FrameDescriptorPool {
+  uint32_t set_count;
+  VkDescriptorPool set_pool;
+  VkDescriptorSet *sets;
+} FrameDescriptorPool;
+
 typedef struct PassRecordPair {
   VkRenderPass pass;
   tb_pass_record *record_cb;
@@ -133,3 +139,12 @@ void tb_rnd_destroy_pipe_layout(RenderSystem *self,
 void tb_rnd_destroy_shader(RenderSystem *self, VkShaderModule shader);
 void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);
+
+VkResult
+tb_rnd_frame_desc_pool_tick(RenderSystem *self,
+                            const VkDescriptorPoolCreateInfo *pool_info,
+                            const VkDescriptorSetLayout *layouts,
+                            FrameDescriptorPool *pools, uint32_t set_count);
+VkDescriptorSet tb_rnd_frame_desc_pool_get_set(RenderSystem *self,
+                                               FrameDescriptorPool *pools,
+                                               uint32_t set_idx);
