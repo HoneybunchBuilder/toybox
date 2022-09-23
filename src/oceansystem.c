@@ -117,13 +117,11 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
     TB_VK_CHECK_RET(err, "Failed to load ocean frag shader module", err);
   }
 
-  const uint32_t stage_count = 2;
-
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .stageCount = stage_count,
+      .stageCount = 2,
       .pStages =
-          (VkPipelineShaderStageCreateInfo[stage_count]){
+          (VkPipelineShaderStageCreateInfo[2]){
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -226,7 +224,7 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
 
   create_info.pStages =
-      (VkPipelineShaderStageCreateInfo[stage_count]){
+      (VkPipelineShaderStageCreateInfo[2]){
           {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -348,12 +346,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Create ocean pipeline layout
   {
-    const uint32_t set_layout_count = 2;
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = set_layout_count,
+        .setLayoutCount = 2,
         .pSetLayouts =
-            (VkDescriptorSetLayout[set_layout_count]){
+            (VkDescriptorSetLayout[2]){
                 self->set_layout,
                 self->view_system->set_layout,
             },
@@ -413,12 +410,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Create render pass for the ocean
   {
-    const uint32_t attachment_count = 2;
     VkRenderPassCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = attachment_count,
+        .attachmentCount = 2,
         .pAttachments =
-            (VkAttachmentDescription[attachment_count]){
+            (VkAttachmentDescription[2]){
                 {
                     .format = render_system->render_thread->swapchain.format,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -504,13 +500,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     // Ocean pass
     {
       for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-        const uint32_t attachment_count = 2;
         VkFramebufferCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = self->ocean_pass,
-            .attachmentCount = attachment_count,
+            .attachmentCount = 2,
             .pAttachments =
-                (VkImageView[attachment_count]){
+                (VkImageView[2]){
                     render_system->render_thread->frame_states[i]
                         .swapchain_image_view,
                     render_system->render_thread->frame_states[i]
