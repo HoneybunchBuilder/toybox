@@ -38,6 +38,15 @@ typedef struct OceanSystem {
   uint64_t ocean_uv_offset;
   VkBuffer ocean_geom_buffer;
 
+  VkSampler sampler;
+
+  VkRenderPass depth_copy_pass;
+  VkFramebuffer depth_copy_pass_framebuffers[TB_MAX_FRAME_STATES];
+
+  VkDescriptorSetLayout depth_set_layout;
+  VkPipelineLayout depth_pipe_layout;
+  VkPipeline depth_copy_pipe;
+
   VkRenderPass ocean_prepass;
   VkFramebuffer prepass_framebuffers[TB_MAX_FRAME_STATES];
 

@@ -50,6 +50,9 @@ typedef struct FrameState {
   TbImage depth_buffer;
   VkImageView depth_buffer_view;
 
+  TbImage depth_buffer_copy;
+  VkImageView depth_copy_view;
+
   VkSemaphore img_acquired_sem;
   VkSemaphore swapchain_image_sem;
   VkSemaphore render_complete_sem;
