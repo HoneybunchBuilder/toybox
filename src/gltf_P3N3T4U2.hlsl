@@ -93,7 +93,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
     float3 out_color = float3(0.0, 0.0, 0.0);
 
-    float3 light_dir = float3(0, 1, 0);
+    float3 light_dir = normalize(float3(0.707, 0.707, 0));
 
     if(PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS)
     { 
@@ -181,8 +181,8 @@ float4 frag(Interpolators i) : SV_TARGET
     */
 
     // Gamma correction
-    float gamma = 2.2f; // TODO: pass in as a parameter
-    out_color = pow(out_color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
+    //float gamma = 2.2f; // TODO: pass in as a parameter
+    //out_color = pow(out_color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
 
     // Shadow hack
     /*

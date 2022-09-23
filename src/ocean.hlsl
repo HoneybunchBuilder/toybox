@@ -8,8 +8,8 @@
 
 float4 frag(Interpolators i) : SV_TARGET
 {
-  float3 base_color = float3(0.7, 0.7, 1);
-  float3 light_dir = float3(0, 1, 0);
+  float3 base_color = float3(0.3, 0.7, 1);
+  float3 light_dir = normalize(float3(0.707, 0.707, 0));
 
   // Calculate normal after interpolation
   float3 N = normalize(cross(normalize(i.binormal), normalize(i.tangent)));
@@ -41,7 +41,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
     //for each light
     {
-      float3 light_color = float3(0.8, 0.8, 0.8);
+      float3 light_color = float3(1, 1, 1);
       float3 L = light_dir;
 
       PBRLight light = {
@@ -57,9 +57,5 @@ float4 frag(Interpolators i) : SV_TARGET
     }
   }
 
-  // Gamma correction
-  //float gamma = 2.2f; // TODO: pass in as a parameter
-  //color = pow(color, float3(1.0f / gamma, 1.0f / gamma, 1.0f / gamma));
-
-  return float4(color, 0.9);
+  return float4(color, 0.8);
 }
