@@ -293,7 +293,9 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
             .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            // HACK: We know that the depth copy in the ocean system comes
+            // after this and we want to read the depth buffer there
+            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         },
     };
     const uint32_t color_ref_count = 1;
