@@ -38,12 +38,10 @@ FragmentOut frag(Interpolators i) {
 
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);
 
-  /*
   // Tonemap
   float exposure = 4.5f; // TODO: pass in as a parameter
   color = tonemap(color * exposure);
   color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
-  */
 
   FragmentOut o;
   o.color = float4(color, 1.0);
