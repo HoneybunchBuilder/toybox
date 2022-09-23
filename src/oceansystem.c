@@ -392,13 +392,13 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .bindingCount = 2,
         .pBindings = (VkDescriptorSetLayoutBinding[2]){
             {
-                .binding = 1,
+                .binding = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             },
             {
-                .binding = 2,
+                .binding = 1,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -728,8 +728,10 @@ void destroy_ocean_system(OceanSystem *self) {
                                self->prepass_framebuffers[i]);
     tb_rnd_destroy_framebuffer(self->render_system,
                                self->depth_copy_pass_framebuffers[i]);
-    OceanSystemFrameState *state = &self->frame_states[i];
-    tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
+    tb_rnd_destroy_descriptor_pool(self->render_system,
+                                   self->ocean_pools[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(self->render_system,
+                                   self->depth_pools[i].set_pool);
   }
 
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
@@ -768,61 +770,76 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     return;
   }
 
-  // Allocate all the descriptor sets for this frame
+  VkResult err = VK_SUCCESS;
+  RenderSystem *render_system = self->render_system;
+
+  // Allocate and write descriptor sets for copying the depth buffer
   {
-    VkResult err = VK_SUCCESS;
-
-    RenderSystem *render_system = self->render_system;
-    OceanSystemFrameState *state =
-        &self->frame_states[render_system->frame_idx];
-    VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
-    // Allocate all the descriptor sets for this frame
+    // Allocate the one known descriptor set we need for this frame
     {
-      // Resize the pool
-      if (state->set_count < ocean_count) {
-        if (state->set_pool) {
-          tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
-        }
+      VkDescriptorPoolCreateInfo pool_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = 1,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              &(VkDescriptorPoolSize){
+                  .descriptorCount = 1,
+                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              },
+      };
+      err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info,
+                                        &self->depth_set_layout,
+                                        self->depth_pools, 1);
+      TB_VK_CHECK(err, "Failed to tick depth copy's descriptor pool");
+    }
 
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = ocean_count,
-            .poolSizeCount = 1,
-            .pPoolSizes =
-                &(VkDescriptorPoolSize){
-                    .descriptorCount = ocean_count,
-                    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                },
-            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        };
-        err = tb_rnd_create_descriptor_pool(
-            render_system, &create_info,
-            "View System Frame State Descriptor Pool", &state->set_pool);
-        TB_VK_CHECK(err,
-                    "Failed to create view system frame state descriptor pool");
-      } else {
-        vkResetDescriptorPool(self->render_system->render_thread->device,
-                              state->set_pool, 0);
-      }
-      state->set_count = ocean_count;
-      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
-                                     state->set_count, VkDescriptorSet);
+    VkDescriptorSet set =
+        tb_rnd_frame_desc_pool_get_set(render_system, self->depth_pools, 0);
 
-      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < state->set_count; ++i) {
+    // Write the descriptor set
+    VkWriteDescriptorSet write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo =
+            &(VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageView = render_system->render_thread
+                                 ->frame_states[render_system->frame_idx]
+                                 .depth_buffer_view,
+            },
+    };
+    vkUpdateDescriptorSets(render_system->render_thread->device, 1, &write, 0,
+                           NULL);
+  }
+
+  // Issue draw to copy the depth buffer
+
+  // Allocate and write all ocean descriptor sets
+  {
+    // Allocate all the descriptor sets
+    {
+      VkDescriptorPoolCreateInfo pool_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = ocean_count,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              &(VkDescriptorPoolSize){
+                  .descriptorCount = ocean_count,
+                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              },
+      };
+      VkDescriptorSetLayout *layouts =
+          tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorSetLayout);
+      for (uint32_t i = 0; i < ocean_count; ++i) {
         layouts[i] = self->set_layout;
       }
-
-      VkDescriptorSetAllocateInfo alloc_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-          .descriptorSetCount = state->set_count,
-          .descriptorPool = state->set_pool,
-          .pSetLayouts = layouts,
-      };
-      err = vkAllocateDescriptorSets(render_system->render_thread->device,
-                                     &alloc_info, state->sets);
-      TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
+      err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
+                                        self->ocean_pools, ocean_count);
+      TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
     }
 
     // Just upload and write all views for now, they tend to be important anyway
@@ -856,8 +873,11 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       // Copy view data to the allocated buffer
       SDL_memcpy(buffer->ptr, &data, sizeof(OceanData));
 
+      VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+
       // Get the descriptor we want to write to
-      VkDescriptorSet ocean_set = state->sets[oc_idx];
+      VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
+          render_system, self->ocean_pools, oc_idx);
 
       buffer_info[oc_idx] = (VkDescriptorBufferInfo){
           .buffer = tmp_gpu_buffer,
@@ -892,93 +912,96 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       //     .pImageInfo = &image_info[oc_idx],
       // };
     }
-    vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                           write_count, writes, 0, NULL);
+    vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
+                           writes, 0, NULL);
   }
 
-  // Copy the ocean component for output
-  OceanComponent *out_oceans =
-      tb_alloc_nm_tp(self->tmp_alloc, ocean_count, OceanComponent);
-  SDL_memcpy(out_oceans, oceans->components,
-             ocean_count * sizeof(OceanComponent));
-  // Update time on all ocean components
-  for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
-    OceanComponent *ocean = &out_oceans[ocean_idx];
-    ocean->time += delta_seconds;
-  }
-
-  // TODO: Make this less hacky
-  const uint32_t width = self->render_system->render_thread->swapchain.width;
-  const uint32_t height = self->render_system->render_thread->swapchain.height;
-
-  // Max camera * ocean draw batches are required
-  uint32_t batch_count = 0;
-  const uint32_t batch_max = ocean_count * camera_count;
-  OceanDrawBatch *batches =
-      tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
-  OceanDrawBatch *prepass_batches =
-      tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
-
-  for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-    const CameraComponent *camera =
-        tb_get_component(cameras, cam_idx, CameraComponent);
-
-    VkDescriptorSet view_set =
-        tb_view_system_get_descriptor(self->view_system, camera->view_id);
-
+  // Draw the oceans and update components
+  {
+    // Copy the ocean component for output
+    OceanComponent *out_oceans =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, OceanComponent);
+    SDL_memcpy(out_oceans, oceans->components,
+               ocean_count * sizeof(OceanComponent));
+    // Update time on all ocean components
     for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
-      const OceanComponent *ocean_comp =
-          tb_get_component(oceans, ocean_idx, OceanComponent);
-
-      VkDescriptorSet ocean_set =
-          self->frame_states[self->render_system->frame_idx].sets[ocean_idx];
-
-      // TODO: only if ocean is visible to camera
-      batches[batch_count] = (OceanDrawBatch){
-          .pipeline = self->pipeline,
-          .layout = self->pipe_layout,
-          .viewport = {0, 0, width, height, 0, 1},
-          .scissor = {{0, 0}, {width, height}},
-          .view_set = view_set,
-          .ocean_set = ocean_set,
-          .consts = (OceanPushConstants){ocean_comp->time},
-          .geom_buffer = self->ocean_geom_buffer,
-          .index_type = (VkIndexType)self->ocean_index_type,
-          .index_count = self->ocean_index_count,
-          .pos_offset = self->ocean_pos_offset,
-          .uv_offset = self->ocean_uv_offset,
-      };
-      prepass_batches[batch_count] = (OceanDrawBatch){
-          .pipeline = self->prepass_pipeline,
-          .layout = self->pipe_layout,
-          .viewport = {0, 0, width, height, 0, 1},
-          .scissor = {{0, 0}, {width, height}},
-          .view_set = view_set,
-          .ocean_set = ocean_set,
-          .consts = (OceanPushConstants){ocean_comp->time},
-          .geom_buffer = self->ocean_geom_buffer,
-          .index_type = (VkIndexType)self->ocean_index_type,
-          .index_count = self->ocean_index_count,
-          .pos_offset = self->ocean_pos_offset,
-      };
-      batch_count++;
+      OceanComponent *ocean = &out_oceans[ocean_idx];
+      ocean->time += delta_seconds;
     }
+
+    // TODO: Make this less hacky
+    const uint32_t width = render_system->render_thread->swapchain.width;
+    const uint32_t height = render_system->render_thread->swapchain.height;
+
+    // Max camera * ocean draw batches are required
+    uint32_t batch_count = 0;
+    const uint32_t batch_max = ocean_count * camera_count;
+    OceanDrawBatch *batches =
+        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
+    OceanDrawBatch *prepass_batches =
+        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
+
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      const CameraComponent *camera =
+          tb_get_component(cameras, cam_idx, CameraComponent);
+
+      VkDescriptorSet view_set =
+          tb_view_system_get_descriptor(self->view_system, camera->view_id);
+
+      for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
+        const OceanComponent *ocean_comp =
+            tb_get_component(oceans, ocean_idx, OceanComponent);
+
+        VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
+            self->render_system, self->ocean_pools, ocean_idx);
+
+        // TODO: only if ocean is visible to camera
+        batches[batch_count] = (OceanDrawBatch){
+            .pipeline = self->pipeline,
+            .layout = self->pipe_layout,
+            .viewport = {0, 0, width, height, 0, 1},
+            .scissor = {{0, 0}, {width, height}},
+            .view_set = view_set,
+            .ocean_set = ocean_set,
+            .consts = (OceanPushConstants){ocean_comp->time},
+            .geom_buffer = self->ocean_geom_buffer,
+            .index_type = (VkIndexType)self->ocean_index_type,
+            .index_count = self->ocean_index_count,
+            .pos_offset = self->ocean_pos_offset,
+            .uv_offset = self->ocean_uv_offset,
+        };
+        prepass_batches[batch_count] = (OceanDrawBatch){
+            .pipeline = self->prepass_pipeline,
+            .layout = self->pipe_layout,
+            .viewport = {0, 0, width, height, 0, 1},
+            .scissor = {{0, 0}, {width, height}},
+            .view_set = view_set,
+            .ocean_set = ocean_set,
+            .consts = (OceanPushConstants){ocean_comp->time},
+            .geom_buffer = self->ocean_geom_buffer,
+            .index_type = (VkIndexType)self->ocean_index_type,
+            .index_count = self->ocean_index_count,
+            .pos_offset = self->ocean_pos_offset,
+        };
+        batch_count++;
+      }
+    }
+
+    // Draw to the prepass and the ocean pass
+    tb_rnd_issue_draw_batch(render_system, self->ocean_prepass, batch_count,
+                            sizeof(OceanDrawBatch), prepass_batches);
+    tb_rnd_issue_draw_batch(render_system, self->ocean_pass, batch_count,
+                            sizeof(OceanDrawBatch), batches);
+
+    // Report output (we've updated the time on the ocean component)
+    output->set_count = 1;
+    output->write_sets[0] = (SystemWriteSet){
+        .id = OceanComponentId,
+        .count = ocean_count,
+        .components = (uint8_t *)out_oceans,
+        .entities = ocean_entities,
+    };
   }
-
-  // Draw to the prepass and the ocean pass
-  tb_rnd_issue_draw_batch(self->render_system, self->ocean_prepass, batch_count,
-                          sizeof(OceanDrawBatch), prepass_batches);
-  tb_rnd_issue_draw_batch(self->render_system, self->ocean_pass, batch_count,
-                          sizeof(OceanDrawBatch), batches);
-
-  // Report output (we've updated the time on the ocean component)
-  output->set_count = 1;
-  output->write_sets[0] = (SystemWriteSet){
-      .id = OceanComponentId,
-      .count = ocean_count,
-      .components = (uint8_t *)out_oceans,
-      .entities = ocean_entities,
-  };
 
   TracyCZoneEnd(ctx);
 }

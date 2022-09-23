@@ -18,12 +18,6 @@ typedef struct OceanSystemDescriptor {
   Allocator std_alloc;
 } OceanSystemDescriptor;
 
-typedef struct OceanSystemFrameState {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
-  VkDescriptorSet *sets;
-} OceanSystemFrameState;
-
 typedef struct OceanSystem {
   RenderSystem *render_system;
   MeshSystem *mesh_system;
@@ -53,7 +47,8 @@ typedef struct OceanSystem {
   VkRenderPass ocean_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 
-  OceanSystemFrameState frame_states[TB_MAX_FRAME_STATES];
+  FrameDescriptorPool depth_pools[TB_MAX_FRAME_STATES];
+  FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
