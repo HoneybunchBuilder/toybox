@@ -20,11 +20,19 @@ typedef struct ImGuiSystemDescriptor {
   Allocator tmp_alloc;
 } ImGuiSystemDescriptor;
 
+typedef struct ImGuiFrameState {
+  uint32_t set_count;
+  VkDescriptorPool set_pool;
+  VkDescriptorSet *sets;
+} ImGuiFrameState;
+
 typedef struct ImGuiSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
+
+  ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkRenderPass pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
@@ -33,11 +41,6 @@ typedef struct ImGuiSystem {
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
-
-  uint32_t atlas_set_count;
-  VkDescriptorPool atlas_pool;
-  VkDescriptorSet *atlas_sets;
-  uint32_t atlas_set_max;
 } ImGuiSystem;
 
 void tb_imgui_system_descriptor(SystemDescriptor *desc,
