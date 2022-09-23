@@ -344,13 +344,13 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
       (uint8_t *)state->tmp_host_buffer.ptr)[state->tmp_host_buffer.info.size];
 
   intptr_t padding = 0;
-  if ((intptr_t)ptr % alignment != 0) {
+  if (alignment > 0 && (intptr_t)ptr % alignment != 0) {
     padding = (alignment - (intptr_t)ptr % alignment);
   }
   ptr = (void *)((intptr_t)ptr + padding);
 
-  TB_CHECK_RETURN((intptr_t)ptr % alignment == 0, "Failed to align allocation",
-                  VK_ERROR_OUT_OF_HOST_MEMORY);
+  TB_CHECK_RETURN(alignment == 0 || (intptr_t)ptr % alignment == 0,
+                  "Failed to align allocation", VK_ERROR_OUT_OF_HOST_MEMORY);
 
   const uint64_t offset = state->tmp_host_buffer.info.size + padding;
 

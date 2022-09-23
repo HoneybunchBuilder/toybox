@@ -55,9 +55,9 @@ bool create_imgui_component(ImGuiComponent *self,
   }
 
   // Get space for the image on the tmp buffer
-  TbHostBuffer host_buf;
+  TbHostBuffer host_buf = {0};
   {
-    const uint64_t atlas_size = self->atlas.info.size;
+    const uint64_t atlas_size = tex_w * tex_h * bytes_pp;
     err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, 16,
                                            &host_buf);
     TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer", err);

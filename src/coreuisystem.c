@@ -39,10 +39,8 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
   const EntityId *entities = NULL;
   const PackedComponentStore *coreui_comp_store =
       tb_get_column_check_id(input, 0, 0, CoreUIComponentId);
-  TB_CHECK(coreui_comp_store, "Failed to get required coreui component store");
   const PackedComponentStore *imgui_comp_store =
       tb_get_column_check_id(input, 0, 1, ImGuiComponentId);
-  TB_CHECK(imgui_comp_store, "Failed to get required imgui component store");
   for (uint32_t dep_set_idx = 0; dep_set_idx < input->dep_set_count;
        ++dep_set_idx) {
     const SystemDependencySet *dep_set = &input->dep_sets[dep_set_idx];
@@ -58,9 +56,9 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
 
     for (uint32_t entity_idx = 0; entity_idx < entity_count; ++entity_idx) {
       const CoreUIComponent *coreui =
-          &((const CoreUIComponent *)coreui_comp_store->components)[entity_idx];
+          tb_get_component(coreui_comp_store, entity_idx, CoreUIComponent);
       const ImGuiComponent *imgui =
-          &((const ImGuiComponent *)imgui_comp_store->components)[entity_idx];
+          tb_get_component(imgui_comp_store, entity_idx, ImGuiComponent);
 
       *out_coreui = *coreui;
 
