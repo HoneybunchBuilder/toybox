@@ -81,21 +81,9 @@ VkResult create_imgui_pipeline2(VkDevice device,
          sampler},
     };
 
-    VkDescriptorBindingFlags binding_flags[] = {
-        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
-        0,
-    };
-
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-        .pNext =
-            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                .bindingCount = 2,
-                .pBindingFlags = binding_flags,
-            },
         .bindingCount = 2,
         .pBindings = bindings,
 

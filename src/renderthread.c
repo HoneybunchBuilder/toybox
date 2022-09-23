@@ -766,7 +766,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
         tb_alloc_nm_tp(tmp_alloc, max_props, VkExtensionProperties);
 
     uint32_t prop_count = 0;
-    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, NULL);
+    err = vkEnumerateDeviceExtensionProperties(gpu, NULL, &prop_count, NULL);
     TB_CHECK_RETURN(err == VK_SUCCESS,
                     "Failed to enumerate device extension property count",
                     false);
@@ -774,7 +774,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     TB_CHECK_RETURN(prop_count < max_props,
                     "Device extension property count out of range", false);
 
-    err = vkEnumerateDeviceExtensionProperties(gpu, "", &prop_count, props);
+    err = vkEnumerateDeviceExtensionProperties(gpu, NULL, &prop_count, props);
     TB_CHECK_RETURN(err == VK_SUCCESS,
                     "Failed to enumerate device extension properties", false);
 
@@ -849,6 +849,11 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
+  VkPhysicalDeviceVulkan11Features vk_11_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .multiview = VK_TRUE,
+  };
+
 #if defined(VK_KHR_ray_tracing_pipeline)
   VkPhysicalDeviceRayQueryFeaturesKHR rt_query_feature = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
@@ -861,25 +866,12 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .rayTracingPipeline = ext_support->raytracing,
       .pNext = &rt_query_feature,
   };
+  vk_11_features.pNext = &rt_pipe_feature;
 #endif
-
-  VkPhysicalDeviceVulkan11Features vk_11_features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-      .multiview = VK_TRUE,
-      .pNext = &rt_pipe_feature,
-  };
-
-  VkPhysicalDeviceVulkan12Features vk_12_features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-      .descriptorIndexing = VK_TRUE,
-      .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
-      .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
-      .pNext = &vk_11_features,
-  };
 
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_info.pNext = (const void *)&vk_12_features;
+  create_info.pNext = (const void *)&vk_11_features;
   create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = queues;
   create_info.enabledExtensionCount = device_ext_count;

@@ -15,11 +15,18 @@ typedef struct SkySystemDescriptor {
   Allocator tmp_alloc;
 } SkySystemDescriptor;
 
+typedef struct SkySystemFrameState {
+  uint32_t set_count;
+  VkDescriptorPool set_pool;
+  VkDescriptorSet *sets;
+} SkySystemFrameState;
+
 typedef struct SkySystem {
+  RenderSystem *render_system;
   Allocator std_alloc;
   Allocator tmp_alloc;
 
-  RenderSystem *render_system;
+  SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkRenderPass pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
@@ -30,11 +37,6 @@ typedef struct SkySystem {
   VkPipeline pipeline;
 
   TbBuffer sky_geom_gpu_buffer;
-
-  uint32_t sky_set_count;
-  VkDescriptorPool sky_pool;
-  VkDescriptorSet *sky_sets;
-  uint32_t sky_set_max;
 } SkySystem;
 
 void tb_sky_system_descriptor(SystemDescriptor *desc,
