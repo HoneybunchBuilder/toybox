@@ -22,12 +22,20 @@ struct Interpolators
 {
   float4 clip_pos : SV_POSITION;
   float3 world_pos: POSITION0;
-  //float3 normal : NORMAL0;
+  float4 screen_pos : POSITION1;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   //float2 uv: TEXCOORD0;
   //float4 shadowcoord : TEXCOORD1;
 };
+
+float4 clip_to_screen(float4 clip)
+{
+  float4 o = clip * 0.5f + 0.5f;
+  o.xy += o.w;
+  o.zw = clip.zw;
+  return o;
+}
 
 float3 gerstner_wave(OceanWave wave, float3 p, inout float3 tangent, inout float3 binormal)
 {
@@ -81,6 +89,7 @@ Interpolators vert(VertexIn i)
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
+  o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
   //o.uv = i.uv;
