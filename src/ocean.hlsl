@@ -6,6 +6,16 @@
 // Contains the vertex stage
 #include "oceancommon.hlsli"
 
+float linear_depth(float near, float far, float depth)
+{
+  return near * far / (far + depth * (near - far));
+}
+
+float depth_from_clip_z(float z, float near, float far)
+{
+  return max(((1.0-(z)/near)*far),0);
+}
+
 float4 frag(Interpolators i) : SV_TARGET
 {
   float3 base_color = float3(0.3, 0.7, 1);
@@ -20,8 +30,8 @@ float4 frag(Interpolators i) : SV_TARGET
 
   // PBR Lighting
   {
-    float metallic = 0.0;
-    float roughness = 0.5;
+    float metallic = 0.1;
+    float roughness = 0.4;
 
     float alpha_roughness = roughness * roughness;
 
@@ -57,11 +67,5 @@ float4 frag(Interpolators i) : SV_TARGET
     }
   }
   
-  /*
-  float2 uv = i.clip_pos.xy / i.clip_pos.w;
-  float depth = depth_map.Sample(static_sampler, uv).x;
-  color = float3( depth, depth , depth);
-  */
-
-  return float4(color, 0.8);
+  return float4(color, 0.6);
 }

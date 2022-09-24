@@ -611,7 +611,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                 .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             },
         .subpassCount = 1,
         .pSubpasses =
@@ -961,7 +961,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     }
 
     // Just upload and write all views for now, they tend to be important anyway
-    const uint32_t write_count = ocean_count; //* 2;
+    const uint32_t write_count = ocean_count * 2;
     VkWriteDescriptorSet *writes =
         tb_alloc_nm_tp(self->tmp_alloc, write_count, VkWriteDescriptorSet);
     VkDescriptorBufferInfo *buffer_info =
@@ -975,7 +975,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           tb_get_component(oceans, oc_idx, OceanComponent);
       TbHostBuffer *buffer = &buffers[oc_idx];
 
-      const uint32_t write_idx = oc_idx; // * 2;
+      const uint32_t write_idx = oc_idx * 2;
 
       OceanData data = {
           .wave_count = ocean_comp->wave_count,
@@ -1003,12 +1003,12 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .range = sizeof(OceanData),
       };
 
-      // image_info[oc_idx] = (VkDescriptorImageInfo){
-      //     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-      //     .imageView = render_system->render_thread
-      //                      ->frame_states[render_system->frame_idx]
-      //                      .depth_buffer_view,
-      // };
+      image_info[oc_idx] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = render_system->render_thread
+                           ->frame_states[render_system->frame_idx]
+                           .depth_copy_view,
+      };
 
       // Construct write descriptors
       writes[write_idx + 0] = (VkWriteDescriptorSet){
@@ -1020,15 +1020,15 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .pBufferInfo = &buffer_info[oc_idx],
       };
-      // writes[write_idx + 1] = (VkWriteDescriptorSet){
-      //     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      //     .dstSet = ocean_set,
-      //     .dstBinding = 1,
-      //     .dstArrayElement = 0,
-      //     .descriptorCount = 1,
-      //     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-      //     .pImageInfo = &image_info[oc_idx],
-      // };
+      writes[write_idx + 1] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = ocean_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo = &image_info[oc_idx],
+      };
     }
     vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
                            writes, 0, NULL);
