@@ -969,6 +969,12 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       TB_VK_CHECK_RET(err, "Failed to create gpu mesh buffer", false);
     }
 
+    if (SDL_strcmp(
+            mesh->name,
+            "Bistro_Research_Exterior_Paris_LiquorBottle_01A___0__6101") == 0) {
+      SDL_TriggerBreakpoint();
+    }
+
     // Read the cgltf mesh into the driver owned memory
     {
       TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
@@ -993,26 +999,33 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         // Reorder attributes
         uint32_t *attr_order =
             tb_alloc(self->tmp_alloc, sizeof(uint32_t) * attrib_count);
+        uint32_t reordered_attr_count = 0;
         for (uint32_t i = 0; i < (uint32_t)prim->attributes_count; ++i) {
           cgltf_attribute_type attr_type = prim->attributes[i].type;
           int32_t attr_idx = prim->attributes[i].index;
           if (attr_type == cgltf_attribute_type_position) {
             attr_order[0] = i;
+            reordered_attr_count++;
           } else if (attr_type == cgltf_attribute_type_normal) {
             attr_order[1] = i;
+            reordered_attr_count++;
           } else if (attr_type == cgltf_attribute_type_tangent) {
             attr_order[2] = i;
+            reordered_attr_count++;
           } else if (attr_type == cgltf_attribute_type_texcoord &&
                      attr_idx == 0) {
             if (vertex_input & VA_INPUT_PERM_TANGENT) {
               attr_order[3] = i;
+              reordered_attr_count++;
             } else {
               attr_order[2] = i;
+              reordered_attr_count++;
             }
           }
         }
 
-        for (cgltf_size attr_idx = 0; attr_idx < attrib_count; ++attr_idx) {
+        for (cgltf_size attr_idx = 0; attr_idx < reordered_attr_count;
+             ++attr_idx) {
           cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
           cgltf_accessor *accessor = attr->data;
           cgltf_buffer_view *view = accessor->buffer_view;
