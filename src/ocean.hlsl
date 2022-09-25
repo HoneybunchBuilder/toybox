@@ -18,7 +18,14 @@ float depth_from_clip_z(float z, float near, float far)
 
 float4 frag(Interpolators i) : SV_TARGET
 {
-  float3 base_color = float3(0.3, 0.7, 1);
+  // Sylized water
+  const float3 shallow = float3(0.0, 0.86, 0.79);
+  const float3 deep = float3(0.03, 0.08, 0.18);
+
+  float depth = 1.0 - pow(clamp((i.world_pos.y + 5.0) / 25.0, 0.0, 1.5), 1.2);
+  float opacity = lerp(0.1, 0.9, depth);
+  float3 base_color = lerp(shallow, deep, depth);
+
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
 
   // Calculate normal after interpolation
@@ -30,8 +37,8 @@ float4 frag(Interpolators i) : SV_TARGET
 
   // PBR Lighting
   {
-    float metallic = 0.1;
-    float roughness = 0.4;
+    float metallic = 0.0;
+    float roughness = 0.5;
 
     float alpha_roughness = roughness * roughness;
 
@@ -66,6 +73,10 @@ float4 frag(Interpolators i) : SV_TARGET
       color += pbr_lighting(light, N, V, NdotV);
     }
   }
-  
-  return float4(color, 0.6);
+
+  // Want to add ambient term after shadowing
+  float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
+  color += ambient;
+
+  return float4(color, opacity);
 }
