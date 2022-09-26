@@ -573,9 +573,13 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
             transform.position[2] = node->translation[2];
           }
           {
-            transform.rotation[0] = node->rotation[0];
-            transform.rotation[1] = node->rotation[1];
-            transform.rotation[2] = node->rotation[2];
+            Quaternion quat = {
+                node->rotation[0],
+                node->rotation[1],
+                node->rotation[2],
+                node->rotation[3],
+            };
+            transform.rotation = quat_to_euler(quat);
           }
           {
             transform.scale[0] = node->scale[0];
