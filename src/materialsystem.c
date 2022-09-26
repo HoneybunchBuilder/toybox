@@ -588,23 +588,23 @@ void tb_mat_system_release_material_ref(MaterialSystem *self,
 
   self->mat_ref_counts[index]--;
 
+  // Materials should always release their texture references since materials
+  // don't own their textures
+  tb_tex_system_release_texture_ref(self->texture_system,
+                                    self->mat_color_maps[index]);
+  tb_tex_system_release_texture_ref(self->texture_system,
+                                    self->mat_normal_maps[index]);
+  tb_tex_system_release_texture_ref(self->texture_system,
+                                    self->mat_metal_rough_maps[index]);
+
   if (self->mat_ref_counts[index] == 0) {
     // Free the mesh at this index
     VmaAllocator vma_alloc = self->render_system->vma_alloc;
 
     TbBuffer *gpu_buf = &self->mat_gpu_buffers[index];
-    TbTextureId *color_id = &self->mat_color_maps[index];
-    TbTextureId *normal_id = &self->mat_normal_maps[index];
-    TbTextureId *metal_rough_id = &self->mat_metal_rough_maps[index];
 
     vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);
-    tb_tex_system_release_texture_ref(self->texture_system, *color_id);
-    tb_tex_system_release_texture_ref(self->texture_system, *normal_id);
-    tb_tex_system_release_texture_ref(self->texture_system, *metal_rough_id);
 
     *gpu_buf = (TbBuffer){0};
-    *color_id = InvalidTextureId;
-    *normal_id = InvalidTextureId;
-    *metal_rough_id = InvalidTextureId;
   }
 }
