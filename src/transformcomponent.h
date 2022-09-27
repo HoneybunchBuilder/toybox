@@ -11,9 +11,13 @@ typedef struct TransformComponentDescriptor {
 } TransformComponentDescriptor;
 
 typedef struct TransformComponent {
+  bool dirty;
+  float4x4 world_matrix;
   Transform transform;
   uint64_t child_count;
   ComponentId *children;
 } TransformComponent;
 
 void tb_transform_component_descriptor(ComponentDescriptor *desc);
+
+void tb_transform_get_world_matrix(TransformComponent *self, float4x4 *world);
