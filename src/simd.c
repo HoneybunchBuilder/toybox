@@ -449,45 +449,45 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
   Frustum f = {
       .planes[LeftPlane] =
           (float4){
-              vp->row0[3] + vp->row0[0],
-              vp->row1[3] + vp->row1[0],
-              vp->row2[3] + vp->row2[0],
-              vp->row3[3] + vp->row3[0],
+              vp->row3[0] + vp->row0[0],
+              vp->row3[1] + vp->row0[1],
+              vp->row3[2] + vp->row0[2],
+              vp->row3[3] + vp->row0[3],
           },
       .planes[RightPlane] =
           (float4){
-              vp->row0[3] - vp->row0[0],
-              vp->row1[3] - vp->row1[0],
-              vp->row2[3] - vp->row2[0],
-              vp->row3[3] - vp->row3[0],
+              vp->row3[0] - vp->row0[0],
+              vp->row3[1] - vp->row0[1],
+              vp->row3[2] - vp->row0[2],
+              vp->row3[3] - vp->row0[3],
           },
       .planes[TopPlane] =
           (float4){
-              vp->row0[3] - vp->row0[1],
-              vp->row1[3] - vp->row1[1],
-              vp->row2[3] - vp->row2[1],
-              vp->row3[3] - vp->row3[1],
+              vp->row3[0] - vp->row1[0],
+              vp->row3[1] - vp->row1[1],
+              vp->row3[2] - vp->row1[2],
+              vp->row3[3] - vp->row1[3],
           },
       .planes[BottomPlane] =
           (float4){
-              vp->row0[3] + vp->row0[1],
-              vp->row1[3] + vp->row1[1],
-              vp->row2[3] + vp->row2[1],
-              vp->row3[3] + vp->row3[1],
+              vp->row3[0] + vp->row1[0],
+              vp->row3[1] + vp->row1[1],
+              vp->row3[2] + vp->row1[2],
+              vp->row3[3] + vp->row1[3],
           },
       .planes[NearPlane] =
           (float4){
-              vp->row0[2],
-              vp->row1[2],
+              vp->row2[0],
+              vp->row2[1],
               vp->row2[2],
-              vp->row3[2],
+              vp->row2[3],
           },
       .planes[FarPlane] =
           (float4){
-              vp->row0[3] - vp->row0[2],
-              vp->row1[3] - vp->row1[2],
-              vp->row2[3] - vp->row2[2],
-              vp->row3[3] - vp->row3[2],
+              vp->row3[0] - vp->row2[0],
+              vp->row3[1] - vp->row2[1],
+              vp->row3[2] - vp->row2[2],
+              vp->row3[3] - vp->row2[3],
           },
   };
   // Must normalize planes

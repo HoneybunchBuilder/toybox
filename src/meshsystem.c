@@ -692,14 +692,15 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     CommonObjectData data = {.m = {.row0 = {0}}};
     tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
 
-    const float3 translation =
-        (float3){data.m.row0[3], data.m.row1[3], data.m.row2[3]};
+    const float3 translation = out_trans[mesh_idx].transform.position;
+    const float3 scale = out_trans[mesh_idx].transform.scale;
 
     world_space_aabbs[mesh_idx] = mesh_comp->local_aabb;
-    // Manually add translation to min and max of AABB
-    // TODO: consider scale as well?
+    // Manually add translation and scale to min and max of AABB
     world_space_aabbs[mesh_idx].min += translation;
     world_space_aabbs[mesh_idx].max += translation;
+    world_space_aabbs[mesh_idx].min *= scale;
+    world_space_aabbs[mesh_idx].max *= scale;
 
     tb_render_object_system_set_object_data(self->render_object_system,
                                             mesh_comp->object_id, &data);
@@ -722,6 +723,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       MeshDrawBatch *batch = &batches[batch_idx];
       *batch = (MeshDrawBatch){0};
       batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
+      batch->view_count = 0;
 
       for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
         MeshDrawView *view = &batch->views[cam_idx];
@@ -729,6 +731,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         // Each mesh could have TB_SUBMESH_MAX # of submeshes
         *view = (MeshDrawView){0};
         view->draws = tb_alloc_nm_tp(tmp_alloc, mesh_count, MeshDraw);
+        view->draw_count = 0;
+
+        SDL_memset(view->draws, 0, sizeof(MeshDraw) * mesh_count);
       }
     }
     TracyCZoneEnd(batch_ctx);
@@ -748,6 +753,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
     const Frustum *frustum =
         tb_view_system_get_frustum(self->view_system, camera->view_id);
+
+    uint32_t culled_mesh_count = 0;
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
@@ -769,6 +776,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         VkBuffer geom_buffer =
             tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
 
+        uint32_t submesh_draw_idx = 0;
+
         for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
              ++sub_idx) {
           const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
@@ -789,18 +798,21 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           view->view_set = view_set;
           view->viewport = (VkViewport){0, 0, width, height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
-          view->draw_count = mesh_count;
-          MeshDraw *draw = &view->draws[mesh_idx];
+          view->draw_count = culled_mesh_count + 1;
+          MeshDraw *draw = &view->draws[culled_mesh_count];
           draw->geom_buffer = geom_buffer;
           draw->obj_set = obj_set;
-          draw->submesh_draw_count = mesh_comp->submesh_count;
-          SubMeshDraw *sub_draw = &view->draws[mesh_idx].submesh_draws[sub_idx];
+          draw->submesh_draw_count = submesh_draw_idx + 1;
+          SubMeshDraw *sub_draw =
+              &view->draws[culled_mesh_count].submesh_draws[submesh_draw_idx];
           *sub_draw = (SubMeshDraw){
               .mat_set = material_set,
               .index_type = submesh->index_type,
               .index_count = submesh->index_count,
               .index_offset = submesh->index_offset,
           };
+
+          submesh_draw_idx++;
 
           const uint64_t base_vert_offset = submesh->vertex_offset;
           const uint32_t vertex_count = submesh->vertex_count;
@@ -839,6 +851,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           }
         }
       }
+
+      culled_mesh_count++;
     }
   }
 
