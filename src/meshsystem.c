@@ -681,7 +681,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   SDL_memcpy(out_trans, mesh_transform_store->components,
              mesh_count * sizeof(TransformComponent));
 
-  // Update each mesh's render object data
+  // Update each mesh's render object data while also collecting world space
+  // AABBs for culling later
+  AABB *world_space_aabbs = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, AABB);
   for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
     const MeshComponent *mesh_comp =
         tb_get_component(mesh_store, mesh_idx, MeshComponent);
@@ -689,6 +691,15 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     // Convert the transform to a matrix for rendering
     CommonObjectData data = {.m = {.row0 = {0}}};
     tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
+
+    const float3 translation =
+        (float3){data.m.row0[3], data.m.row1[3], data.m.row2[3]};
+
+    world_space_aabbs[mesh_idx] = mesh_comp->local_aabb;
+    // Manually add translation to min and max of AABB
+    // TODO: consider scale as well?
+    world_space_aabbs[mesh_idx].min += translation;
+    world_space_aabbs[mesh_idx].max += translation;
 
     tb_render_object_system_set_object_data(self->render_object_system,
                                             mesh_comp->object_id, &data);
@@ -735,9 +746,18 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     VkDescriptorSet view_set =
         tb_view_system_get_descriptor(self->view_system, camera->view_id);
 
+    const Frustum *frustum =
+        tb_view_system_get_frustum(self->view_system, camera->view_id);
+
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
           tb_get_component(mesh_store, mesh_idx, MeshComponent);
+
+      // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
+      const AABB *world_aabb = &world_space_aabbs[mesh_idx];
+      if (!frustum_test_aabb(frustum, world_aabb)) {
+        continue;
+      }
 
       // Get mesh descriptor set
       VkDescriptorSet obj_set = tb_render_object_system_get_descriptor(
