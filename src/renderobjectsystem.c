@@ -84,39 +84,34 @@ void tick_render_object_system(RenderObjectSystem *self,
   RenderObjectSystemFrameState *state =
       &self->frame_states[render_system->frame_idx];
   // Allocate all the descriptor sets for this frame
-  {
-    // Resize the pool
-    if (state->set_count < self->render_object_count) {
-      if (state->set_pool) {
-        tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
-      }
+  if (state->set_count < self->render_object_count) {
+    TracyCZoneN(alloc_ctx, "Allocate Descriptor Sets", true);
 
-      VkDescriptorPoolCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = self->render_object_count,
-          .poolSizeCount = 1,
-          .pPoolSizes =
-              &(VkDescriptorPoolSize){
-                  .descriptorCount = self->render_object_count,
-                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-              },
-          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-      };
-      err = tb_rnd_create_descriptor_pool(
-          render_system, &create_info,
-          "View System Frame State Descriptor Pool", &state->set_pool);
-      TB_VK_CHECK(
-          err,
-          "Failed to create render object system frame state descriptor pool");
-
-      state->set_count = self->render_object_count;
-      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
-                                     state->set_count, VkDescriptorSet);
-
-    } else {
-      vkResetDescriptorPool(self->render_system->render_thread->device,
-                            state->set_pool, 0);
+    if (state->set_pool) {
+      tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
     }
+
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = self->render_object_count,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            &(VkDescriptorPoolSize){
+                .descriptorCount = self->render_object_count,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            },
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+    };
+    err = tb_rnd_create_descriptor_pool(
+        render_system, &create_info, "View System Frame State Descriptor Pool",
+        &state->set_pool);
+    TB_VK_CHECK(
+        err,
+        "Failed to create render object system frame state descriptor pool");
+
+    state->set_count = self->render_object_count;
+    state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                   state->set_count, VkDescriptorSet);
 
     const uint32_t set_count = self->render_object_count;
 
@@ -135,9 +130,11 @@ void tick_render_object_system(RenderObjectSystem *self,
     err = vkAllocateDescriptorSets(render_system->render_thread->device,
                                    &alloc_info, state->sets);
     TB_VK_CHECK(err, "Failed to re-allocate render object descriptor sets");
+    TracyCZoneEnd(alloc_ctx);
   }
 
-  // Just upload and write all objects for now, they tend to be important anyway
+  // Just upload and write all objects for now, they tend to be important
+  // anyway
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
       self->tmp_alloc, self->render_object_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(

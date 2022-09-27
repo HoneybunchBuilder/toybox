@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL2/SDL_stdinc.h>
 #include <stdbool.h>
 
 #if defined(__clang__)
@@ -55,6 +56,13 @@ void TracyCVkZoneEnd(TracyCGPUScope *scope);
 
 void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 
+#define TB_PROF_MESSAGE(string, ...)                                           \
+  {                                                                            \
+    char message[100] = {0};                                                   \
+    SDL_snprintf(message, 100, string, __VA_ARGS__);                           \
+    TracyCMessage(message, SDL_strlen(message));                               \
+  }
+
 #ifdef __cplusplus
 }
 #endif
@@ -70,6 +78,8 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 #define TracyCVkNamedZone(...)
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
+
+#define TB_PROF_MESSAGE(string, ...)
 
 #endif
 

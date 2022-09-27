@@ -735,6 +735,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Just collect a batch for every known used pipeline
   const uint32_t batch_count = pipe_count;
 
+  TB_PROF_MESSAGE("Batch Count: %d", batch_count);
+
   // Allocate and initialize each batch
   MeshDrawBatch *batches = NULL;
   {
@@ -765,6 +767,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   const uint32_t width = self->render_system->render_thread->swapchain.width;
   const uint32_t height = self->render_system->render_thread->swapchain.height;
 
+  TB_PROF_MESSAGE("Camera Count: %d", camera_count);
+
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const CameraComponent *camera =
         tb_get_component(camera_store, cam_idx, CameraComponent);
@@ -776,7 +780,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     const Frustum *frustum =
         tb_view_system_get_frustum(self->view_system, camera->view_id);
 
-    uint32_t culled_mesh_count = 0;
+    uint32_t visible_mesh_count = 0;
 
     for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
       const MeshComponent *mesh_comp =
@@ -821,13 +825,13 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           view->view_set = view_set;
           view->viewport = (VkViewport){0, 0, width, height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
-          view->draw_count = culled_mesh_count + 1;
-          MeshDraw *draw = &view->draws[culled_mesh_count];
+          view->draw_count = visible_mesh_count + 1;
+          MeshDraw *draw = &view->draws[visible_mesh_count];
           draw->geom_buffer = geom_buffer;
           draw->obj_set = obj_set;
           draw->submesh_draw_count = submesh_draw_idx + 1;
           SubMeshDraw *sub_draw =
-              &view->draws[culled_mesh_count].submesh_draws[submesh_draw_idx];
+              &view->draws[visible_mesh_count].submesh_draws[submesh_draw_idx];
           *sub_draw = (SubMeshDraw){
               .mat_set = material_set,
               .index_type = submesh->index_type,
@@ -875,8 +879,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         }
       }
 
-      culled_mesh_count++;
+      visible_mesh_count++;
     }
+    TB_PROF_MESSAGE("Visible Mesh Count: %d", visible_mesh_count);
   }
 
   // Submit batches
