@@ -72,7 +72,7 @@ bool create_mesh_component(MeshComponent *self,
 
     // While we determine the vertex offset we'll also calculate the local space
     // AABB for this mesh across all primitives
-    AABB aabb = InvalidAABB;
+    self->local_aabb = InvalidAABB;
 
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
@@ -137,6 +137,8 @@ bool create_mesh_component(MeshComponent *self,
         const cgltf_accessor *accessor = pos_attr->data;
         const cgltf_buffer_view *view = accessor->buffer_view;
         const cgltf_buffer *buffer = view->buffer;
+        // Can't just interpret buffer data as float3 since for optimization
+        // reasons float3 is actually 16 bytes wide, not 12
         const float *pos_data =
             (const float *)&((uint8_t *)buffer->data)[view->offset];
         for (uint32_t pos_idx = 0; pos_idx < accessor->count; ++pos_idx) {
@@ -146,7 +148,7 @@ bool create_mesh_component(MeshComponent *self,
               pos_data[float_idx + 1],
               pos_data[float_idx + 2],
           };
-          aabb_add_point(&aabb, pos);
+          aabb_add_point(&self->local_aabb, pos);
         }
       }
 
