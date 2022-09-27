@@ -651,13 +651,9 @@ uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
 
 void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
-  (void)output;
-
-  (void)self;
   (void)delta_seconds;
 
-  TracyCZoneN(ctx, "Mesh System", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+  TracyCZoneNC(ctx, "Mesh System", TracyCategoryColorRendering, true);
 
   const uint32_t camera_count = tb_get_column_component_count(input, 0);
   const PackedComponentStore *camera_store =
@@ -670,6 +666,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       tb_get_column_check_id(input, 1, 1, TransformComponentId);
 
   if (mesh_count == 0 || camera_count == 0) {
+    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -706,12 +703,37 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                                             mesh_comp->object_id, &data);
   }
 
-  // Just collect a batch for every possible pipeline
-  const uint32_t batch_count = max_pipe_count;
-
   Allocator tmp_alloc = self->render_system->render_thread
                             ->frame_states[self->render_system->frame_idx]
                             .tmp_alloc.alloc;
+
+  // Figure out # of unique pipelines so we know how many batches we have
+  uint32_t pipe_count = 0;
+  uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
+  SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
+  {
+    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+      const MeshComponent *mesh_comp =
+          tb_get_component(mesh_store, mesh_idx, MeshComponent);
+      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+           ++sub_idx) {
+        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+        TbMaterialPerm mat_perm =
+            tb_mat_system_get_perm(self->material_system, submesh->material);
+        uint32_t pipe_idx = get_pipeline_for_input_and_mat(
+            self, submesh->vertex_input, mat_perm);
+
+        if (pipe_idxs[pipe_idx] == 0) {
+          pipe_idxs[pipe_idx] = pipe_count;
+          pipe_count++;
+          TB_CHECK(pipe_count <= max_pipe_count, "Unexpected # of pipelines");
+        }
+      }
+    }
+  }
+
+  // Just collect a batch for every known used pipeline
+  const uint32_t batch_count = pipe_count;
 
   // Allocate and initialize each batch
   MeshDrawBatch *batches = NULL;
@@ -787,10 +809,11 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           VkDescriptorSet material_set =
               tb_mat_system_get_set(self->material_system, submesh->material);
 
-          uint32_t pipe_idx = get_pipeline_for_input_and_mat(
+          const uint32_t pipe_idx = get_pipeline_for_input_and_mat(
               self, submesh->vertex_input, mat_perm);
+          const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
 
-          MeshDrawBatch *batch = &batches[pipe_idx];
+          MeshDrawBatch *batch = &batches[local_pipe_idx];
           batch->pipeline = self->pipelines[pipe_idx];
           batch->layout = self->pipe_layout; // Can we avoid putting this here?
           batch->view_count = camera_count;
