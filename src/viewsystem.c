@@ -204,6 +204,8 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
     self->view_ids = tb_realloc_nm_tp(alloc, self->view_ids, new_max, TbViewId);
     self->view_data =
         tb_realloc_nm_tp(alloc, self->view_data, new_max, CommonViewData);
+    self->view_frustums =
+        tb_realloc_nm_tp(alloc, self->view_frustums, new_max, Frustum);
     self->view_max = new_max;
   }
 
@@ -219,6 +221,7 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
   mulmf44(&proj_mat, &view_mat, &self->view_data[view].vp);
 
   self->view_data[view].inv_vp = inv_mf44(self->view_data[view].vp);
+  self->view_frustums[view] = frustum_from_view_proj(&self->view_data[view].vp);
 
   self->view_count = new_count;
 
@@ -231,6 +234,14 @@ void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
     TB_CHECK(false, "View Id out of range");
   }
   self->view_data[view] = *data;
+}
+
+void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
+                                     const Frustum *frust) {
+  if (view >= self->view_count) {
+    TB_CHECK(false, "View Id out of range");
+  }
+  self->view_frustums[view] = *frust;
 }
 
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
@@ -246,4 +257,11 @@ const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view) {
     TB_CHECK_RETURN(false, "View Id out of range", NULL);
   }
   return &self->view_data[view];
+}
+
+const Frustum *tb_view_system_get_frustum(ViewSystem *self, TbViewId view) {
+  if (view >= self->view_count) {
+    TB_CHECK_RETURN(false, "View Id out of range", NULL);
+  }
+  return &self->view_frustums[view];
 }

@@ -59,6 +59,7 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     CommonViewData data = {
         .view_pos = transform.position,
     };
+
     float4x4 model = {.row0 = {0}};
     transform_to_matrix(&model, &transform);
     const float3 forward = f4tof3(model.row2);
@@ -77,7 +78,10 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     // Inverse
     data.inv_vp = inv_mf44(data.vp);
 
+    Frustum frustum = frustum_from_view_proj(&data.vp);
+
     tb_view_system_set_view_data(view_system, cam_comp->view_id, &data);
+    tb_view_system_set_view_frustum(view_system, cam_comp->view_id, &frustum);
   }
 
   TracyCZoneEnd(ctx);

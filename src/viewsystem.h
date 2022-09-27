@@ -37,6 +37,7 @@ typedef struct ViewSystem {
   uint32_t view_count;
   TbViewId *view_ids;
   CommonViewData *view_data;
+  Frustum *view_frustums;
   uint32_t view_max;
 
 } ViewSystem;
@@ -47,5 +48,8 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
 TbViewId tb_view_system_create_view(ViewSystem *self);
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data);
+void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
+                                     const Frustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);
 const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view);
+const Frustum *tb_view_system_get_frustum(ViewSystem *self, TbViewId view);

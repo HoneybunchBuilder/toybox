@@ -70,6 +70,10 @@ bool create_mesh_component(MeshComponent *self,
     // to ensure alignment is correct
     offset += offset % (sizeof(float) * 3);
 
+    // While we determine the vertex offset we'll also calculate the local space
+    // AABB for this mesh across all primitives
+    AABB aabb = InvalidAABB;
+
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
@@ -122,6 +126,27 @@ bool create_mesh_component(MeshComponent *self,
           } else {
             attr_order[2] = attr_idx;
           }
+        }
+      }
+
+      // Add mesh positions to the AABB
+      {
+        const cgltf_attribute *pos_attr = &prim->attributes[attr_order[0]];
+        TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
+                 "Unexpected vertex attribute type");
+        const cgltf_accessor *accessor = pos_attr->data;
+        const cgltf_buffer_view *view = accessor->buffer_view;
+        const cgltf_buffer *buffer = view->buffer;
+        const float *pos_data =
+            (const float *)&((uint8_t *)buffer->data)[view->offset];
+        for (uint32_t pos_idx = 0; pos_idx < accessor->count; ++pos_idx) {
+          const uint32_t float_idx = pos_idx * 3;
+          float3 pos = {
+              pos_data[float_idx + 0],
+              pos_data[float_idx + 1],
+              pos_data[float_idx + 2],
+          };
+          aabb_add_point(&aabb, pos);
         }
       }
 
