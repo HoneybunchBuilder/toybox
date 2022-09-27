@@ -1,5 +1,7 @@
 #pragma once
 
+#include <float.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef float __attribute__((vector_size(16))) float4;
@@ -61,6 +63,39 @@ typedef struct Transform {
   EulerAngles rotation;
 } Transform;
 
+typedef struct Plane {
+  float4 xyzw;
+} Plane;
+
+typedef struct Sphere {
+  float3 center;
+  float radius;
+} Sphere;
+
+typedef struct AABB {
+  float3 min;
+  float3 max;
+} AABB;
+
+static const AABB InvalidAABB = {
+    .min = {FLT_MAX, FLT_MAX, FLT_MAX},
+    .max = {FLT_MIN, FLT_MIN, FLT_MIN},
+};
+
+typedef enum FrustumPlane {
+  TopPlane,
+  BottomPlane,
+  LeftPlane,
+  RightPlane,
+  NearPlane,
+  FarPlane,
+  FrustumPlaneCount
+} FrustumPlane;
+
+typedef struct Frustum {
+  Plane planes[FrustumPlaneCount];
+} Frustum;
+
 float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
 float3x4 m44tom34(float4x4 m);
@@ -96,6 +131,8 @@ Quaternion euler_to_quat(EulerAngles xyz);
 float4x4 euler_to_trans(EulerAngles euler);
 float4x4 quat_to_trans(Quaternion quat);
 
+void aabb_add_point(AABB *aabb, float3 point);
+
 void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
 void rotate(Transform *t, EulerAngles r);
@@ -106,3 +143,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf);
 void orthographic(float4x4 *m, float width, float height, float zn, float zf);
+
+Frustum frustum_from_view_proj(const float4x4 *vp);
+
+bool frustum_test_aabb(const Frustum *frust, const AABB *aabb);

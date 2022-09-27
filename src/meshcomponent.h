@@ -1,6 +1,7 @@
 #pragma once
 
-#include "stdint.h"
+#include "simd.h"
+#include <stdint.h>
 
 #define MeshComponentId 0x0D15EA5E
 #define MeshComponentIdStr "0x0D15EA5E"
@@ -41,6 +42,7 @@ typedef struct MeshComponent {
   TbRenderObjectId object_id;
   uint32_t submesh_count;
   SubMesh submeshes[TB_SUBMESH_MAX];
+  AABB local_aabb;
 } MeshComponent;
 
 void tb_mesh_component_descriptor(ComponentDescriptor *desc);

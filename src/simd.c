@@ -1,5 +1,7 @@
 #include "simd.h"
 
+#include <SDL2/SDL_stdinc.h>
+
 #define _USE_MATH_DEFINES
 #include <assert.h>
 #include <math.h>
@@ -330,6 +332,15 @@ float4x4 quat_to_trans(Quaternion quat) {
   return (float4x4){.row0 = {0}};
 }
 
+void aabb_add_point(AABB *aabb, float3 point) {
+  aabb->min[0] = SDL_min(aabb->min[0], point[0]);
+  aabb->min[1] = SDL_min(aabb->min[1], point[1]);
+  aabb->min[2] = SDL_min(aabb->min[2], point[2]);
+  aabb->max[0] = SDL_max(aabb->max[0], point[0]);
+  aabb->max[1] = SDL_max(aabb->max[1], point[1]);
+  aabb->max[2] = SDL_max(aabb->max[2], point[2]);
+}
+
 void translate(Transform *t, float3 p) {
   assert(t);
   t->position += p;
@@ -430,6 +441,89 @@ void orthographic(float4x4 *m, float width, float height, float zn, float zf) {
       (float4){0, 0, 1 / (zn - zf), zn / (zn - zf)},
       (float4){0, 0, 0, 1},
   };
+}
+
+// See //
+// https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
+Frustum frustum_from_view_proj(const float4x4 *vp) {
+  Frustum f = {
+      .planes[LeftPlane] =
+          (float4){
+              vp->row0[3] + vp->row0[0],
+              vp->row1[3] + vp->row1[0],
+              vp->row2[3] + vp->row2[0],
+              vp->row3[3] + vp->row3[0],
+          },
+      .planes[RightPlane] =
+          (float4){
+              vp->row0[3] - vp->row0[0],
+              vp->row1[3] - vp->row1[0],
+              vp->row2[3] - vp->row2[0],
+              vp->row3[3] - vp->row3[0],
+          },
+      .planes[TopPlane] =
+          (float4){
+              vp->row0[3] - vp->row0[1],
+              vp->row1[3] - vp->row1[1],
+              vp->row2[3] - vp->row2[1],
+              vp->row3[3] - vp->row3[1],
+          },
+      .planes[BottomPlane] =
+          (float4){
+              vp->row0[3] + vp->row0[1],
+              vp->row1[3] + vp->row1[1],
+              vp->row2[3] + vp->row2[1],
+              vp->row3[3] + vp->row3[1],
+          },
+      .planes[NearPlane] =
+          (float4){
+              vp->row0[2],
+              vp->row1[2],
+              vp->row2[2],
+              vp->row3[2],
+          },
+      .planes[FarPlane] =
+          (float4){
+              vp->row0[3] - vp->row0[2],
+              vp->row1[3] - vp->row1[2],
+              vp->row2[3] - vp->row2[2],
+              vp->row3[3] - vp->row3[2],
+          },
+  };
+  // Must normalize planes
+  for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {
+    Plane *p = &f.planes[i];
+    const float norm_length =
+        lenf3((float3){p->xyzw[0], p->xyzw[1], p->xyzw[2]});
+    p->xyzw[0] /= norm_length;
+    p->xyzw[1] /= norm_length;
+    p->xyzw[2] /= norm_length;
+    p->xyzw[3] /= norm_length;
+  }
+  return f;
+}
+
+bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
+  // See
+  // https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
+  for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {
+    const Plane *plane = &frust->planes[i];
+    const float3 normal =
+        (float3){plane->xyzw[0], plane->xyzw[1], plane->xyzw[2]};
+    const float plane_const = plane->xyzw[3];
+
+    float3 axis = {0};
+    axis[0] = normal[0] < 0.0f ? aabb->min[0] : aabb->max[0];
+    axis[1] = normal[1] < 0.0f ? aabb->min[1] : aabb->max[1];
+    axis[2] = normal[2] < 0.0f ? aabb->min[2] : aabb->max[2];
+
+    if (dotf3(normal, axis) + plane_const < 0.0f) {
+      // The AABB was outside one of the planes and failed this test
+      return false;
+    }
+  }
+  // The AABB was inside each plane
+  return true;
 }
 
 #ifdef __clang__
