@@ -108,23 +108,27 @@ void tick_render_object_system(RenderObjectSystem *self,
       TB_VK_CHECK(
           err,
           "Failed to create render object system frame state descriptor pool");
+
+      state->set_count = self->render_object_count;
+      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                     state->set_count, VkDescriptorSet);
+
     } else {
       vkResetDescriptorPool(self->render_system->render_thread->device,
                             state->set_pool, 0);
     }
-    state->set_count = self->render_object_count;
-    state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
-                                   state->set_count, VkDescriptorSet);
 
-    VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-        self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
-    for (uint32_t i = 0; i < state->set_count; ++i) {
+    const uint32_t set_count = self->render_object_count;
+
+    VkDescriptorSetLayout *layouts =
+        tb_alloc_nm_tp(self->tmp_alloc, set_count, VkDescriptorSetLayout);
+    for (uint32_t i = 0; i < set_count; ++i) {
       layouts[i] = self->set_layout;
     }
 
     VkDescriptorSetAllocateInfo alloc_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorSetCount = state->set_count,
+        .descriptorSetCount = set_count,
         .descriptorPool = state->set_pool,
         .pSetLayouts = layouts,
     };

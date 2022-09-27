@@ -382,15 +382,19 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
   const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     const MeshDrawBatch *batch = &mesh_batches[batch_idx];
     if (batch->view_count == 0) {
+      TracyCZoneEnd(batch_ctx);
       continue;
     }
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
+      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       const MeshDrawView *view = &batch->views[view_idx];
       if (view->draw_count == 0) {
+        TracyCZoneEnd(view_ctx);
         continue;
       }
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
@@ -399,8 +403,10 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                               2, 1, &view->view_set, 0, NULL);
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
+        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         const MeshDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
+          TracyCZoneEnd(draw_ctx);
           continue;
         }
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
@@ -409,6 +415,8 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
         for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
              ++sub_idx) {
+          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
+                       true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
             vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -423,9 +431,13 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
           }
+          TracyCZoneEnd(submesh_ctx);
         }
+        TracyCZoneEnd(draw_ctx);
       }
+      TracyCZoneEnd(view_ctx);
     }
+    TracyCZoneEnd(batch_ctx);
   }
 
   TracyCZoneEnd(ctx);
@@ -661,17 +673,22 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     return;
   }
 
+  // Since we want to update the world matrix dirty flag on the transform
+  // component, we need to write the components back out
+  EntityId *out_entity_ids = tb_get_column_entity_ids(input, 1);
+  TransformComponent *out_trans =
+      tb_alloc_nm_tp(self->tmp_alloc, mesh_count, TransformComponent);
+  SDL_memcpy(out_trans, mesh_transform_store->components,
+             mesh_count * sizeof(TransformComponent));
+
   // Update each mesh's render object data
   for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
     const MeshComponent *mesh_comp =
         tb_get_component(mesh_store, mesh_idx, MeshComponent);
-    const TransformComponent *mesh_trans =
-        tb_get_component(mesh_transform_store, mesh_idx, TransformComponent);
 
     // Convert the transform to a matrix for rendering
-    // TODO: handle transform heirarchies
     CommonObjectData data = {.m = {.row0 = {0}}};
-    transform_to_matrix(&data.m, &mesh_trans->transform);
+    tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
 
     tb_render_object_system_set_object_data(self->render_object_system,
                                             mesh_comp->object_id, &data);
@@ -685,21 +702,25 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                             .tmp_alloc.alloc;
 
   // Allocate and initialize each batch
-  MeshDrawBatch *batches =
-      tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
-  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    // Each batch could use each view
-    MeshDrawBatch *batch = &batches[batch_idx];
-    *batch = (MeshDrawBatch){0};
-    batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
+  MeshDrawBatch *batches = NULL;
+  {
+    TracyCZoneN(batch_ctx, "Allocate Batches", true);
+    batches = tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
+    for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+      // Each batch could use each view
+      MeshDrawBatch *batch = &batches[batch_idx];
+      *batch = (MeshDrawBatch){0};
+      batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
 
-    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-      MeshDrawView *view = &batch->views[cam_idx];
-      // Each view could see each mesh
-      // Each mesh could have TB_SUBMESH_MAX # of submeshes
-      *view = (MeshDrawView){0};
-      view->draws = tb_alloc_nm_tp(tmp_alloc, mesh_count, MeshDraw);
+      for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+        MeshDrawView *view = &batch->views[cam_idx];
+        // Each view could see each mesh
+        // Each mesh could have TB_SUBMESH_MAX # of submeshes
+        *view = (MeshDrawView){0};
+        view->draws = tb_alloc_nm_tp(tmp_alloc, mesh_count, MeshDraw);
+      }
     }
+    TracyCZoneEnd(batch_ctx);
   }
 
   // TODO: Make this less hacky
@@ -804,6 +825,17 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Submit batches
   tb_rnd_issue_draw_batch(self->render_system, self->opaque_pass, batch_count,
                           sizeof(MeshDrawBatch), batches);
+
+  // Output potential transform updates
+  {
+    output->set_count = 1;
+    output->write_sets[0] = (SystemWriteSet){
+        .id = TransformComponentId,
+        .count = mesh_count,
+        .components = (uint8_t *)out_trans,
+        .entities = out_entity_ids,
+    };
+  }
 
   TracyCZoneEnd(ctx);
 }

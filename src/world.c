@@ -783,25 +783,30 @@ bool tb_world_remove_entity(World *world, EntityId id) {
 const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
                                                    uint32_t set, uint32_t index,
                                                    ComponentId id) {
+  TracyCZoneNC(ctx, "get column check id", TracyCategoryColorCore, true);
   TB_CHECK_RETURN(set < MAX_DEPENDENCY_SET_COUNT,
                   "Dependency set index out of range", NULL);
   TB_CHECK_RETURN(index < MAX_DEPENDENCY_SET_COUNT,
                   "Component Store index out of range", NULL);
   if (set >= input->dep_set_count) {
+    TracyCZoneEnd(ctx);
     return NULL;
   }
 
   const SystemDependencySet *dep = &input->dep_sets[set];
   if (index >= dep->column_count) {
+    TracyCZoneEnd(ctx);
     return NULL;
   }
 
   // Make sure it's the id the caller wanted
   const PackedComponentStore *store = &dep->columns[index];
   if (store->id == id) {
+    TracyCZoneEnd(ctx);
     return store;
   }
 
+  TracyCZoneEnd(ctx);
   return NULL;
 }
 
@@ -826,23 +831,30 @@ EntityId *tb_get_column_entity_ids(const SystemInput *input, uint32_t set) {
 
 System *tb_find_system_by_id(System *systems, uint32_t system_count,
                              SystemId id) {
+  TracyCZoneNC(ctx, "Find System By Id", TracyCategoryColorCore, true);
   for (uint32_t i = 0; i < system_count; ++i) {
     System *system = &systems[i];
     if (system->id == id) {
+      TracyCZoneEnd(ctx);
       return system;
     }
   }
+  TracyCZoneEnd(ctx);
   return NULL;
 }
 
 System *tb_find_system_dep_by_id(System *const *systems, uint32_t system_count,
                                  SystemId id) {
+  TracyCZoneNC(ctx, "Find System By Dependency Id", TracyCategoryColorCore,
+               true);
   for (uint32_t i = 0; i < system_count; ++i) {
     System *system = systems[i];
     if (system->id == id) {
+      TracyCZoneEnd(ctx);
       return system;
     }
   }
+  TracyCZoneEnd(ctx);
   return NULL;
 }
 void *tb_find_system_dep_self_by_id(System *const *systems,
