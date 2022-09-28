@@ -21,6 +21,6 @@ Interpolators vert(VertexIn i)
     return o;
 }
 
-void frag(Interpolators i) 
+void frag(Interpolators i)
 {
 }
