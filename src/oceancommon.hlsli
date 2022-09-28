@@ -21,12 +21,14 @@ struct VertexIn
 struct Interpolators
 {
   float4 clip_pos : SV_POSITION;
+  #ifndef OCEAN_PREPASS
   float3 world_pos: POSITION0;
-  float4 screen_pos : POSITION1;
+  //float4 screen_pos : POSITION1;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   //float2 uv: TEXCOORD0;
   //float4 shadowcoord : TEXCOORD1;
+  #endif
 };
 
 float4 clip_to_screen(float4 clip)
@@ -84,15 +86,19 @@ Interpolators vert(VertexIn i)
   pos += gerstner_wave(wave_4, pos, tangent, binormal);
 
   float4 clip_pos = mul(float4(pos, 1.0), camera_data.vp);
-  float4 world_pos = float4(pos, 1.0);
 
   Interpolators o;
   o.clip_pos = clip_pos;
+
+  #ifndef OCEAN_PREPASS
+  float4 world_pos = float4(pos, 1.0);
+
   o.world_pos = world_pos.xyz;
-  o.screen_pos = clip_to_screen(clip_pos);
+  //o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
   //o.uv = i.uv;
+  #endif
 
   return o;
 }
