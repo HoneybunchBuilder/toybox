@@ -31,10 +31,10 @@ typedef struct FrameDescriptorPool {
   VkDescriptorSet *sets;
 } FrameDescriptorPool;
 
-typedef struct PassRecordPair {
+typedef struct RenderPass {
   VkRenderPass pass;
   tb_pass_record *record_cb;
-} PassRecordPair;
+} RenderPass;
 
 typedef struct RenderSystem {
   Allocator std_alloc;
@@ -55,7 +55,7 @@ typedef struct RenderSystem {
   RenderSystemFrameState frame_states[3];
 
   uint32_t pass_record_count;
-  PassRecordPair *pass_record_cbs;
+  RenderPass *pass_record_cbs;
   uint32_t pass_record_max;
 } RenderSystem;
 
@@ -97,6 +97,10 @@ VkResult tb_rnd_create_framebuffer(RenderSystem *self,
                                    const VkFramebufferCreateInfo *create_info,
                                    const char *name,
                                    VkFramebuffer *framebuffer);
+
+VkResult tb_rnd_create_image_view(RenderSystem *self,
+                                  const VkImageViewCreateInfo *create_info,
+                                  const char *name, VkImageView *view);
 
 VkResult
 tb_rnd_create_set_layout(RenderSystem *self,

@@ -204,6 +204,7 @@ bool create_render_system(RenderSystem *self,
                   VK_OBJECT_TYPE_PIPELINE_CACHE, "Toybox Pipeline Cache");
     }
   }
+
   return true;
 }
 
@@ -512,6 +513,17 @@ VkResult tb_rnd_create_framebuffer(RenderSystem *self,
   TB_VK_CHECK_RET(err, "Failed to create framebuffer", err);
   SET_VK_NAME(self->render_thread->device, *framebuffer,
               VK_OBJECT_TYPE_FRAMEBUFFER, name);
+  return err;
+}
+
+VkResult tb_rnd_create_image_view(RenderSystem *self,
+                                  const VkImageViewCreateInfo *create_info,
+                                  const char *name, VkImageView *view) {
+  VkResult err = vkCreateImageView(self->render_thread->device, create_info,
+                                   &self->vk_host_alloc_cb, view);
+  TB_VK_CHECK_RET(err, "Failed to create image view", err);
+  SET_VK_NAME(self->render_thread->device, *view, VK_OBJECT_TYPE_IMAGE_VIEW,
+              name);
   return err;
 }
 

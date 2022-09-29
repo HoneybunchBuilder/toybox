@@ -71,7 +71,6 @@ bool create_texture_system(TextureSystem *self,
 }
 
 void destroy_texture_system(TextureSystem *self) {
-
   tb_tex_system_release_texture_ref(self, self->default_metal_rough_tex);
   tb_tex_system_release_texture_ref(self, self->default_normal_tex);
   tb_tex_system_release_texture_ref(self, self->default_color_tex);
@@ -101,18 +100,18 @@ TB_DEFINE_SYSTEM(texture, TextureSystem, TextureSystemDescriptor)
 
 void tb_texture_system_descriptor(SystemDescriptor *desc,
                                   const TextureSystemDescriptor *tex_desc) {
-  desc->name = "Texture";
-  desc->size = sizeof(TextureSystem);
-  desc->id = TextureSystemId;
-  desc->desc = (InternalDescriptor)tex_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 0;
-  desc->system_dep_count = 1;
-  desc->system_deps[0] = RenderSystemId;
-  desc->create = tb_create_texture_system;
-  desc->destroy = tb_destroy_texture_system;
-  desc->tick = tb_tick_texture_system;
+  *desc = (SystemDescriptor){
+      .name = "Texture",
+      .size = sizeof(TextureSystem),
+      .id = TextureSystemId,
+      .desc = (InternalDescriptor)tex_desc,
+      .dep_count = 0,
+      .system_dep_count = 1,
+      .system_deps[0] = RenderSystemId,
+      .create = tb_create_texture_system,
+      .destroy = tb_destroy_texture_system,
+      .tick = tb_tick_texture_system,
+  };
 }
 
 VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
@@ -124,166 +123,285 @@ VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
   return self->tex_image_views[index];
 }
 
+TbTextureId calc_tex_id(const char *path, const char *name) {
+  TbTextureId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
+  id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
+  return id;
+}
+
+uint32_t alloc_tex(TextureSystem *self) {
+  // Resize collection if necessary
+  const uint32_t new_count = self->tex_count + 1;
+  if (new_count > self->tex_max) {
+    // Re-allocate space for meshes
+    const uint32_t new_max = new_count * 2;
+
+    Allocator alloc = self->std_alloc;
+
+    self->tex_ids =
+        tb_realloc_nm_tp(alloc, self->tex_ids, new_max, TbTextureId);
+    self->tex_host_buffers =
+        tb_realloc_nm_tp(alloc, self->tex_host_buffers, new_max, TbHostBuffer);
+    self->tex_gpu_images =
+        tb_realloc_nm_tp(alloc, self->tex_gpu_images, new_max, TbImage);
+    self->tex_image_views =
+        tb_realloc_nm_tp(alloc, self->tex_image_views, new_max, VkImageView);
+    self->tex_ref_counts =
+        tb_realloc_nm_tp(alloc, self->tex_ref_counts, new_max, uint32_t);
+
+    self->tex_max = new_max;
+  }
+
+  const uint32_t index = self->tex_count;
+  self->tex_count++;
+  return index;
+}
+
 TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
                                          const char *name, TbTextureUsage usage,
                                          uint32_t width, uint32_t height,
                                          const uint8_t *pixels, uint64_t size) {
-  // Hash the texture's path and name to get the id
-  TbTextureId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
-
+  TbTextureId id = calc_tex_id(path, name);
   uint32_t index = find_tex_by_id(self, id);
 
-  // If texture wasn't found, load it now
-  if (index == SDL_MAX_UINT32) {
-
-    VkResult err = VK_SUCCESS;
-
-    RenderSystem *render_system = self->render_system;
-
-    // Resize collection if necessary
-    {
-      const uint32_t new_count = self->tex_count + 1;
-      if (new_count > self->tex_max) {
-        // Re-allocate space for meshes
-        const uint32_t new_max = new_count * 2;
-
-        Allocator alloc = self->std_alloc;
-
-        self->tex_ids =
-            tb_realloc_nm_tp(alloc, self->tex_ids, new_max, TbTextureId);
-        self->tex_host_buffers = tb_realloc_nm_tp(alloc, self->tex_host_buffers,
-                                                  new_max, TbHostBuffer);
-        self->tex_gpu_images =
-            tb_realloc_nm_tp(alloc, self->tex_gpu_images, new_max, TbImage);
-        self->tex_image_views = tb_realloc_nm_tp(alloc, self->tex_image_views,
-                                                 new_max, VkImageView);
-        self->tex_ref_counts =
-            tb_realloc_nm_tp(alloc, self->tex_ref_counts, new_max, uint32_t);
-
-        self->tex_max = new_max;
-      }
-
-      index = self->tex_count;
-    }
-
-    // Load texture
-    {
-      // Get host buffer
-      {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = size,
-            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        };
-        err = tb_rnd_sys_alloc_host_buffer(render_system, &create_info, name,
-                                           &self->tex_host_buffers[index]);
-        TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture",
-                        InvalidTextureId);
-
-        // Copy data to the host buffer
-        SDL_memcpy(self->tex_host_buffers[index].ptr, pixels, size);
-      }
-
-      // Determine format based on usage
-      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-      if (usage == TB_TEX_USAGE_COLOR) {
-        format = VK_FORMAT_R8G8B8A8_SRGB;
-      }
-
-      // Allocate gpu image
-      {
-        // TODO: Think about mip maps
-        VkImageCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .arrayLayers = 1,
-            .extent =
-                (VkExtent3D){
-                    .width = width,
-                    .height = height,
-                    .depth = 1,
-                },
-            .format = format,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .mipLevels = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .usage =
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        };
-        err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, name,
-                                         &self->tex_gpu_images[index]);
-        TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
-                        InvalidTextureId);
-      }
-
-      // Create image view
-      {
-        VkImageViewCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = self->tex_gpu_images[index].image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = format,
-            .components =
-                {
-                    VK_COMPONENT_SWIZZLE_R,
-                    VK_COMPONENT_SWIZZLE_G,
-                    VK_COMPONENT_SWIZZLE_B,
-                    VK_COMPONENT_SWIZZLE_A,
-                },
-            .subresourceRange =
-                {
-                    VK_IMAGE_ASPECT_COLOR_BIT,
-                    0,
-                    1,
-                    0,
-                    1,
-                },
-        };
-        err = vkCreateImageView(self->render_system->render_thread->device,
-                                &create_info,
-                                &self->render_system->vk_host_alloc_cb,
-                                &self->tex_image_views[index]);
-        TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
-                        InvalidTextureId);
-
-        const uint32_t view_name_max = 100;
-        char view_name[view_name_max];
-        SDL_snprintf(view_name, view_name_max, "%s Image View", name);
-        SET_VK_NAME(self->render_system->render_thread->device,
-                    self->tex_image_views[index], VK_OBJECT_TYPE_IMAGE_VIEW,
-                    view_name);
-      }
-
-      // Issue upload
-      {
-        BufferImageCopy upload = {
-            .src = self->tex_host_buffers[index].buffer,
-            .dst = self->tex_gpu_images[index].image,
-            .region =
-                {
-                    .bufferOffset = self->tex_host_buffers[index].offset,
-                    .imageSubresource =
-                        {
-                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                            .layerCount = 1,
-                        },
-                    .imageExtent =
-                        {
-                            .width = width,
-                            .height = height,
-                            .depth = 1,
-                        },
-                },
-        };
-        tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
-      }
-    }
-
-    self->tex_ids[index] = id;
-    self->tex_count++;
+  // Index was found, we can just inc the ref count and early out
+  if (index != SDL_MAX_UINT32) {
+    self->tex_ref_counts[index]++;
+    return id;
   }
 
+  // If texture wasn't found, load it now
+  VkResult err = VK_SUCCESS;
+  RenderSystem *render_system = self->render_system;
+
+  index = alloc_tex(self);
+
+  // Load texture
+  {
+    // Get host buffer
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = size,
+          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      };
+      err = tb_rnd_sys_alloc_host_buffer(render_system, &create_info, name,
+                                         &self->tex_host_buffers[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture",
+                      InvalidTextureId);
+
+      // Copy data to the host buffer
+      SDL_memcpy(self->tex_host_buffers[index].ptr, pixels, size);
+    }
+
+    // Determine format based on usage
+    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+    if (usage == TB_TEX_USAGE_COLOR) {
+      format = VK_FORMAT_R8G8B8A8_SRGB;
+    }
+
+    // Allocate gpu image
+    {
+      // TODO: Think about mip maps
+      VkImageCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+          .arrayLayers = 1,
+          .extent =
+              (VkExtent3D){
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .format = format,
+          .imageType = VK_IMAGE_TYPE_2D,
+          .mipLevels = 1,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      };
+      err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, name,
+                                       &self->tex_gpu_images[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
+                      InvalidTextureId);
+    }
+
+    // Create image view
+    {
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .image = self->tex_gpu_images[index].image,
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = format,
+          .components =
+              {
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              {
+                  VK_IMAGE_ASPECT_COLOR_BIT,
+                  0,
+                  1,
+                  0,
+                  1,
+              },
+      };
+      char view_name[100] = {0};
+      SDL_snprintf(view_name, 100, "%s Image View", name);
+      err = tb_rnd_create_image_view(render_system, &create_info, view_name,
+                                     &self->tex_image_views[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
+                      InvalidTextureId);
+    }
+
+    // Issue upload
+    {
+      BufferImageCopy upload = {
+          .src = self->tex_host_buffers[index].buffer,
+          .dst = self->tex_gpu_images[index].image,
+          .region =
+              {
+                  .bufferOffset = self->tex_host_buffers[index].offset,
+                  .imageSubresource =
+                      {
+                          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                          .layerCount = 1,
+                      },
+                  .imageExtent =
+                      {
+                          .width = width,
+                          .height = height,
+                          .depth = 1,
+                      },
+              },
+      };
+      // Will handle transitioning the image's layout to shader read only
+      tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
+    }
+  }
+
+  self->tex_ids[index] = id;
   self->tex_ref_counts[index]++;
+
+  return id;
+}
+
+TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
+                                        const VkImageCreateInfo *create_info) {
+  TbTextureId id = calc_tex_id("", name);
+  uint32_t index = find_tex_by_id(self, id);
+
+  // Index was found, we can just inc the ref count and early out
+  if (index != SDL_MAX_UINT32) {
+    self->tex_ref_counts[index]++;
+    return id;
+  }
+
+  VkResult err = VK_SUCCESS;
+  RenderSystem *render_system = self->render_system;
+
+  index = alloc_tex(self);
+
+  {
+    const VkFormat format = create_info->format;
+    // Allocate image
+    {
+      err = tb_rnd_sys_alloc_gpu_image(render_system, create_info, name,
+                                       &self->tex_gpu_images[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
+                      InvalidTextureId);
+    }
+
+    // Create image view
+    {
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .image = self->tex_gpu_images[index].image,
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = format,
+          .components =
+              {
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              {
+                  VK_IMAGE_ASPECT_COLOR_BIT,
+                  0,
+                  1,
+                  0,
+                  1,
+              },
+      };
+      char view_name[100] = {0};
+      SDL_snprintf(view_name, 100, "%s Image View", name);
+      err = tb_rnd_create_image_view(render_system, &create_info, view_name,
+                                     &self->tex_image_views[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
+                      InvalidTextureId);
+    }
+  }
+
+  self->tex_ids[index] = id;
+  self->tex_ref_counts[index]++;
+
+  return id;
+}
+
+TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
+                                         const TbImage *image,
+                                         VkFormat format) {
+  TbTextureId id = calc_tex_id("", name);
+  uint32_t index = find_tex_by_id(self, id);
+
+  // Index was found, we can just inc the ref count and early out
+  if (index != SDL_MAX_UINT32) {
+    self->tex_ref_counts[index]++;
+    return id;
+  }
+
+  VkResult err = VK_SUCCESS;
+  RenderSystem *render_system = self->render_system;
+
+  index = alloc_tex(self);
+
+  // Create image view
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = self->tex_gpu_images[index].image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format,
+        .components =
+            {
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            {
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                1,
+                0,
+                1,
+            },
+    };
+    char view_name[100] = {0};
+    SDL_snprintf(view_name, 100, "%s Image View", name);
+    err = tb_rnd_create_image_view(render_system, &create_info, view_name,
+                                   &self->tex_image_views[index]);
+    TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
+                    InvalidTextureId);
+  }
+
+  self->tex_ids[index] = id;
+  self->tex_ref_counts[index]++;
+  self->tex_gpu_images[index] = *image;
 
   return id;
 }
