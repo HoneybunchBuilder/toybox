@@ -46,6 +46,7 @@ typedef struct TbBuffer {
 
 typedef struct TbImage {
   VkImage image;
+  VkImageLayout layout;
   VmaAllocation alloc;
   VmaAllocationInfo info;
 } TbImage;

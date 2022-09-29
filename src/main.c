@@ -37,7 +37,9 @@
 #include "noclipcontrollersystem.h"
 #include "oceansystem.h"
 #include "renderobjectsystem.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
 #include "viewsystem.h"
@@ -188,8 +190,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  RenderTargetSystemDescriptor render_target_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
+  RenderPipelineSystemDescriptor render_pipeline_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
   // Order doesn't matter here
-  const uint32_t system_count = 13;
+  const uint32_t system_count = 15;
   SystemDescriptor system_descs[system_count] = {0};
   {
     uint32_t i = 0;
@@ -208,6 +220,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_view_system_descriptor(&system_descs[i++], &view_system_desc);
     tb_render_system_descriptor(&system_descs[i++], &render_system_desc);
     tb_camera_system_descriptor(&system_descs[i++], &camera_system_desc);
+    tb_render_target_system_descriptor(&system_descs[i++],
+                                       &render_target_system_desc);
+    tb_render_pipeline_system_descriptor(&system_descs[i++],
+                                         &render_pipeline_system_desc);
     TB_CHECK(i == system_count, "Incorrect number of systems");
   }
 
@@ -220,6 +236,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = ViewSystemId;
     init_order[i++] = RenderObjectSystemId;
     init_order[i++] = TextureSystemId;
+    init_order[i++] = RenderTargetSystemId;
+    init_order[i++] = RenderPipelineSystemId;
     init_order[i++] = MaterialSystemId;
     init_order[i++] = MeshSystemId;
     init_order[i++] = SkySystemId;
@@ -245,6 +263,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = OceanSystemId;
     tick_order[i++] = SkySystemId;
     tick_order[i++] = ImGuiSystemId;
+    tick_order[i++] = RenderTargetSystemId;
+    tick_order[i++] = RenderPipelineSystemId;
     tick_order[i++] = RenderSystemId;
     TB_CHECK(i == system_count, "Incorrect number of systems");
   }
