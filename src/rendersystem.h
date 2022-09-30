@@ -133,6 +133,7 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image);
 
+void tb_rnd_destroy_image_view(RenderSystem *self, VkImageView view);
 void tb_rnd_destroy_framebuffer(RenderSystem *self, VkFramebuffer framebuffer);
 void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass);
 void tb_rnd_destroy_sampler(RenderSystem *self, VkSampler sampler);

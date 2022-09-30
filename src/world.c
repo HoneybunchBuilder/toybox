@@ -132,15 +132,16 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
       bool system_created = false;
 
       // Calculate the init order
-      uint32_t *idxs = tb_alloc_nm_tp(tmp_alloc, desc->system_count, uint32_t);
+      world->init_order =
+          tb_alloc_nm_tp(std_alloc, desc->system_count, uint32_t);
       for (uint32_t i = 0; i < desc->system_count; ++i) {
-        idxs[i] = find_system_idx_by_id(desc->system_descs, desc->system_count,
-                                        desc->init_order[i]);
+        world->init_order[i] = find_system_idx_by_id(
+            desc->system_descs, desc->system_count, desc->init_order[i]);
       }
 
       // Create in given init order
       for (uint32_t i = 0; i < desc->system_count; ++i) {
-        uint32_t system_idx = idxs[i];
+        uint32_t system_idx = world->init_order[i];
         const SystemDescriptor *sys_desc = &desc->system_descs[system_idx];
 
         system_created = create_system(world, &systems[system_idx], sys_desc);
@@ -417,8 +418,10 @@ void tb_destroy_world(World *world) {
   }
 
   if (world->system_count > 0) {
-    for (uint32_t i = 0; i < world->system_count; ++i) {
-      System *system = &world->systems[i];
+    // Shutdown in reverse init order
+    for (int32_t i = world->system_count - 1; i >= 0; --i) {
+      const uint32_t idx = world->init_order[i];
+      System *system = &world->systems[idx];
       system->destroy(system->self);
       tb_free(world->std_alloc, system->self);
     }
