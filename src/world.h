@@ -200,6 +200,7 @@ typedef struct World {
 
   uint32_t system_count;
   System *systems;
+  uint32_t *init_order;
   uint32_t *tick_order;
 
 } World;

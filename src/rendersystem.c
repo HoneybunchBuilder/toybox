@@ -642,6 +642,11 @@ void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
   vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
 }
 
+void tb_rnd_destroy_image_view(RenderSystem *self, VkImageView view) {
+  vkDestroyImageView(self->render_thread->device, view,
+                     &self->vk_host_alloc_cb);
+}
+
 void tb_rnd_destroy_framebuffer(RenderSystem *self, VkFramebuffer framebuffer) {
   vkDestroyFramebuffer(self->render_thread->device, framebuffer,
                        &self->vk_host_alloc_cb);
