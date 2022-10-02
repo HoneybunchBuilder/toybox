@@ -136,7 +136,8 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
-    const CommonViewData *data = &self->view_data[view_idx];
+    const View *view = &self->views[view_idx];
+    const CommonViewData *data = &view->view_data;
     TbHostBuffer *buffer = &buffers[view_idx];
 
     // Write view data into the tmp buffer we know will wind up on the GPU
@@ -192,40 +193,47 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
   };
 }
 
-TbViewId tb_view_system_create_view(ViewSystem *self) {
-  TbViewId view = self->view_count;
+TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
+                                    uint32_t pass_count,
+                                    const VkRenderPass *passes) {
+  TB_CHECK_RETURN(self, "Invalid self object", InvalidViewId);
+  TB_CHECK_RETURN(pass_count, "Invalid pass count", InvalidViewId);
+  TB_CHECK_RETURN(pass_count < TB_MAX_PASSES_PER_VIEW, "Pass count too big",
+                  InvalidViewId);
+  TB_CHECK_RETURN(passes, "Invalid passes", InvalidViewId);
+
+  TbViewId id = self->view_count;
   uint32_t new_count = self->view_count + 1;
   if (new_count > self->view_max) {
-    // Reallocate collections
+    // Reallocate collection
     const uint32_t new_max = new_count * 2;
 
-    Allocator alloc = self->std_alloc;
-
-    self->view_ids = tb_realloc_nm_tp(alloc, self->view_ids, new_max, TbViewId);
-    self->view_data =
-        tb_realloc_nm_tp(alloc, self->view_data, new_max, CommonViewData);
-    self->view_frustums =
-        tb_realloc_nm_tp(alloc, self->view_frustums, new_max, Frustum);
-    self->view_max = new_max;
+    self->views = tb_realloc_nm_tp(self->std_alloc, self->views, new_max, View);
   }
+  self->view_count = new_count;
 
-  self->view_data[view] = (CommonViewData){
+  View *view = &self->views[id];
+
+  view->view_data = (CommonViewData){
       .view_pos = {0},
   };
+  CommonViewData *view_data = &view->view_data;
+
   // Supply a really basic view projection matrix for default
   float4x4 view_mat = {.row0 = {0}};
   look_forward(&view_mat, (float3){0, 0, 0}, (float3){0, 0, 1},
                (float3){0, 1, 0});
   float4x4 proj_mat = {.row0 = {0}};
   perspective(&proj_mat, PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
-  mulmf44(&proj_mat, &view_mat, &self->view_data[view].vp);
+  mulmf44(&proj_mat, &view_mat, &view_data->vp);
 
-  self->view_data[view].inv_vp = inv_mf44(self->view_data[view].vp);
-  self->view_frustums[view] = frustum_from_view_proj(&self->view_data[view].vp);
+  view_data->inv_vp = inv_mf44(view_data->vp);
+  view->frustum = frustum_from_view_proj(&view_data->vp);
+  view->target = target;
+  view->pass_count = pass_count;
+  SDL_memcpy(view->passes, passes, sizeof(VkRenderPass) * pass_count);
 
-  self->view_count = new_count;
-
-  return view;
+  return id;
 }
 
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
@@ -233,7 +241,7 @@ void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
   if (view >= self->view_count) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->view_data[view] = *data;
+  self->views[view].view_data = *data;
 }
 
 void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
@@ -241,7 +249,7 @@ void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
   if (view >= self->view_count) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->view_frustums[view] = *frust;
+  self->views[view].frustum = *frust;
 }
 
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
@@ -252,16 +260,9 @@ VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
   return self->frame_states[self->render_system->frame_idx].sets[view];
 }
 
-const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view) {
+const View *tb_get_view(ViewSystem *self, TbViewId view) {
   if (view >= self->view_count) {
     TB_CHECK_RETURN(false, "View Id out of range", NULL);
   }
-  return &self->view_data[view];
-}
-
-const Frustum *tb_view_system_get_frustum(ViewSystem *self, TbViewId view) {
-  if (view >= self->view_count) {
-    TB_CHECK_RETURN(false, "View Id out of range", NULL);
-  }
-  return &self->view_frustums[view];
+  return &self->views[view];
 }

@@ -773,12 +773,13 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     const CameraComponent *camera =
         tb_get_component(camera_store, cam_idx, CameraComponent);
 
+    const View *view = tb_get_view(self->view_system, camera->view_id);
+
     // Get camera descriptor set
     VkDescriptorSet view_set =
         tb_view_system_get_descriptor(self->view_system, camera->view_id);
 
-    const Frustum *frustum =
-        tb_view_system_get_frustum(self->view_system, camera->view_id);
+    const Frustum *frustum = &view->frustum;
 
     uint32_t visible_mesh_count = 0;
 

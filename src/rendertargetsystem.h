@@ -6,8 +6,8 @@
 
 #define RenderTargetSystemId 0xB0BABABE
 
-typedef uint64_t TbRenderTargetId;
-static const TbRenderTargetId InvalidRenderTargetId = SDL_MAX_UINT64;
+typedef uint32_t TbRenderTargetId;
+static const TbRenderTargetId InvalidRenderTargetId = SDL_MAX_UINT32;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTarget RenderTarget;
