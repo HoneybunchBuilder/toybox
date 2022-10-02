@@ -11,8 +11,19 @@ bool create_camera_component(CameraComponent *comp,
                              System *const *system_deps) {
   ViewSystem *view_system =
       tb_get_system(system_deps, system_dep_count, ViewSystem);
+
+  // We might be able to paramaterize this further but for now camera views want
+  // to render to the depth prepass, opaque pass, transparent pass and any post
+  // processing passes
+  const uint32_t pass_count = 1;
+  VkRenderPass passes[pass_count] = {0};
+
+  // We can also assume that they want to render to the primary render target
+  TbRenderTargetId target = 0;
+
   *comp = (CameraComponent){
-      .view_id = tb_view_system_create_view(view_system),
+      .view_id =
+          tb_view_system_create_view(view_system, target, pass_count, passes),
       .aspect_ratio = desc->aspect_ratio,
       .fov = desc->yfov,
       .near = desc->znear,

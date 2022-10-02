@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "common.hlsli"
 #include "tbrendercommon.h"
 
 #define ViewSystemId 0xFEE1DEAD
@@ -10,10 +11,10 @@ typedef struct SystemDescriptor SystemDescriptor;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
-typedef struct CommonViewData CommonViewData;
 
-typedef uint64_t TbViewId;
-static const uint64_t InvalidViewId = SDL_MAX_UINT64;
+typedef uint32_t TbViewId;
+typedef uint32_t TbRenderTargetId;
+static const TbViewId InvalidViewId = SDL_MAX_UINT32;
 
 typedef struct ViewSystemDescriptor {
   Allocator std_alloc;
@@ -26,6 +27,18 @@ typedef struct ViewSystemFrameState {
   VkDescriptorSet *sets;
 } ViewSystemFrameState;
 
+#define TB_MAX_PASSES_PER_VIEW 4
+
+typedef struct View {
+  TbRenderTargetId target;
+
+  CommonViewData view_data;
+  Frustum frustum;
+
+  uint32_t pass_count;
+  VkRenderPass passes[TB_MAX_PASSES_PER_VIEW];
+} View;
+
 typedef struct ViewSystem {
   RenderSystem *render_system;
   Allocator std_alloc;
@@ -35,21 +48,19 @@ typedef struct ViewSystem {
   ViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   uint32_t view_count;
-  TbViewId *view_ids;
-  CommonViewData *view_data;
-  Frustum *view_frustums;
+  View *views;
   uint32_t view_max;
-
 } ViewSystem;
 
 void tb_view_system_descriptor(SystemDescriptor *desc,
                                const ViewSystemDescriptor *view_desc);
 
-TbViewId tb_view_system_create_view(ViewSystem *self);
+TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
+                                    uint32_t pass_count,
+                                    const VkRenderPass *passes);
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data);
 void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
                                      const Frustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);
-const CommonViewData *tb_view_system_get_data(ViewSystem *self, TbViewId view);
-const Frustum *tb_view_system_get_frustum(ViewSystem *self, TbViewId view);
+const View *tb_get_view(ViewSystem *self, TbViewId view);

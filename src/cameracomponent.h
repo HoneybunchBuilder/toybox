@@ -6,7 +6,7 @@
 
 #define CameraComponentId 0xDEADC0DE
 
-typedef uint64_t TbViewId;
+typedef uint32_t TbViewId;
 
 typedef struct ComponentDescriptor ComponentDescriptor;
 
