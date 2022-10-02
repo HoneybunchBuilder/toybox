@@ -7,6 +7,7 @@
 #include "ocean.hlsli"
 #include "oceancomponent.h"
 #include "profiling.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
@@ -437,9 +438,15 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       tb_get_system(system_deps, system_dep_count, ViewSystem);
   TB_CHECK_RETURN(mesh_system,
                   "Failed to find view system which ocean depends on", false);
+  RenderPipelineSystem *render_pipe_system =
+      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
+  TB_CHECK_RETURN(
+      render_pipe_system,
+      "Failed to find render pipeline system which ocean depends on", false);
 
   *self = (OceanSystem){
       .render_system = render_system,
+      .render_pipe_system = render_pipe_system,
       .mesh_system = mesh_system,
       .view_system = view_system,
       .tmp_alloc = desc->tmp_alloc,
@@ -597,146 +604,18 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", false);
   }
 
-  // Create depth copy pass
+  // Retrieve passes
   {
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments =
-            &(VkAttachmentDescription){
-                .format = VK_FORMAT_R32_SFLOAT,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
-        .subpassCount = 1,
-        .pSubpasses =
-            &(VkSubpassDescription){
-                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                .colorAttachmentCount = 1,
-                .pColorAttachments =
-                    &(VkAttachmentReference){
-                        0,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    },
-            },
-        .pDependencies =
-            &(VkSubpassDependency){
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            },
-    };
-    err = tb_rnd_create_render_pass(render_system, &create_info,
-                                    "Depth Copy Pass", &self->depth_copy_pass);
-    TB_VK_CHECK_RET(err, "Failed to create depth copy pass", false);
-  }
+    self->depth_copy_pass = tb_render_pipeline_get_pass(
+        self->render_pipe_system, self->render_pipe_system->depth_copy_pass);
 
-  // Create depth pre pass for the ocean
-  {
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments =
-            &(VkAttachmentDescription){
-                .format = VK_FORMAT_D32_SFLOAT,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            },
-        .subpassCount = 1,
-        .pSubpasses =
-            &(VkSubpassDescription){
-                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                .pDepthStencilAttachment =
-                    &(VkAttachmentReference){
-                        0,
-                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                    },
-            },
-        .pDependencies =
-            &(VkSubpassDependency){
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            },
-    };
-    err = tb_rnd_create_render_pass(render_system, &create_info,
-                                    "Ocean Pre Pass", &self->ocean_prepass);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pre pass", false);
-  }
+    self->ocean_prepass = tb_render_pipeline_get_pass(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_depth_pass);
 
-  // Create render pass for the ocean
-  {
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 2,
-        .pAttachments =
-            (VkAttachmentDescription[2]){
-                {
-                    .format = render_system->render_thread->swapchain.format,
-                    .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                    .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                },
-                {
-                    .format = VK_FORMAT_D32_SFLOAT,
-                    .samples = VK_SAMPLE_COUNT_1_BIT,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                    .initialLayout =
-                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                    .finalLayout =
-                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                },
-            },
-        .subpassCount = 1,
-        .pSubpasses =
-            &(VkSubpassDescription){
-                .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                .colorAttachmentCount = 1,
-                .pColorAttachments =
-                    &(VkAttachmentReference){
-                        0,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    },
-                .pDepthStencilAttachment =
-                    &(VkAttachmentReference){
-                        1,
-                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                    },
-            },
-        .pDependencies =
-            &(VkSubpassDependency){
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            },
-    };
-    err = tb_rnd_create_render_pass(render_system, &create_info, "Ocean Pass",
-                                    &self->ocean_pass);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pass", false);
+    self->ocean_pass = tb_render_pipeline_get_pass(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_color_pass);
   }
 
   err = create_depth_pipeline(render_system, self->depth_copy_pass,
@@ -855,7 +734,6 @@ void destroy_ocean_system(OceanSystem *self) {
 
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
 
-  tb_rnd_destroy_render_pass(self->render_system, self->depth_copy_pass);
   tb_rnd_destroy_pipe_layout(self->render_system, self->depth_pipe_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->depth_set_layout);
 
@@ -863,8 +741,6 @@ void destroy_ocean_system(OceanSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->prepass_pipeline);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
 
-  tb_rnd_destroy_render_pass(self->render_system, self->ocean_pass);
-  tb_rnd_destroy_render_pass(self->render_system, self->ocean_prepass);
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
@@ -1150,10 +1026,11 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .dep_count = 2,
       .deps[0] = {2, {OceanComponentId, TransformComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 3,
+      .system_dep_count = 4,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,
       .system_deps[2] = ViewSystemId,
+      .system_deps[3] = RenderPipelineSystemId,
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,
