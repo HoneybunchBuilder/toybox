@@ -14,6 +14,7 @@
 #include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "profiling.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "shadercommon.h"
 #include "tbcommon.h"
@@ -274,72 +275,35 @@ void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
-  TB_CHECK_RETURN(system_dep_count == 1,
+  TB_CHECK_RETURN(system_dep_count == 2,
                   "Different than expected number of system dependencies",
-                  VK_ERROR_UNKNOWN);
-  TB_CHECK_RETURN(desc, "Invalid descriptor", VK_ERROR_UNKNOWN);
+                  false);
+  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
-  // Find the render system
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
+  // Find necessary systems
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which imgui depends on",
-                  VK_ERROR_UNKNOWN);
+                  "Failed to find render system which imgui depends on", false);
+  RenderPipelineSystem *render_pipe_system =
+      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
+  TB_CHECK_RETURN(
+      render_pipe_system,
+      "Failed to find render pipeline system which imgui depends on", false);
 
   *self = (ImGuiSystem){
       .render_system = render_system,
+      .render_pipe_system = render_pipe_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
 
   VkResult err = VK_SUCCESS;
 
-  // Create imgui render pass
-  // Will render directly to the swapchain
+  // Look up UI pipeline
   {
-    VkAttachmentDescription color_attachment = {
-        .format = render_system->render_thread->swapchain.format,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-    VkAttachmentDescription attachments[1] = {
-        color_attachment,
-    };
-    VkAttachmentReference color_attachment_ref = {
-        0,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-    VkAttachmentReference attachment_refs[1] = {
-        color_attachment_ref,
-    };
-    VkSubpassDescription subpass = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = attachment_refs,
-    };
-    VkSubpassDependency subpass_dep = {
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    };
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = attachments,
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .pDependencies = &subpass_dep,
-    };
-    err = tb_rnd_create_render_pass(render_system, &create_info, "ImGui Pass",
-                                    &self->pass);
-    TB_VK_CHECK_RET(err, "Failed to create imgui render pass", err);
+    self->pass = tb_render_pipeline_get_pass(self->render_pipe_system,
+                                             self->render_pipe_system->ui_pass);
   }
 
   // Create Immutable Sampler
@@ -403,8 +367,6 @@ void destroy_imgui_system(ImGuiSystem *self) {
     tb_rnd_destroy_descriptor_pool(render_system,
                                    self->frame_states[i].set_pool);
   }
-
-  tb_rnd_destroy_render_pass(render_system, self->pass);
 
   tb_rnd_destroy_sampler(render_system, self->sampler);
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
@@ -764,8 +726,9 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
       .count = 1,
       .dependent_ids = {ImGuiComponentId},
   };
-  desc->system_dep_count = 1;
+  desc->system_dep_count = 2;
   desc->system_deps[0] = RenderSystemId;
+  desc->system_deps[1] = RenderPipelineSystemId;
   desc->create = tb_create_imgui_system;
   desc->destroy = tb_destroy_imgui_system;
   desc->tick = tb_tick_imgui_system;
