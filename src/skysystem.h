@@ -6,6 +6,7 @@
 #define SkySystemId 0xDEADFEED
 
 typedef struct RenderSystem RenderSystem;
+typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct SystemDescriptor SystemDescriptor;
 
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
@@ -23,6 +24,7 @@ typedef struct SkySystemFrameState {
 
 typedef struct SkySystem {
   RenderSystem *render_system;
+  RenderPipelineSystem *render_pipe_system;
   Allocator std_alloc;
   Allocator tmp_alloc;
 

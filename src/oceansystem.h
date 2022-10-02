@@ -8,6 +8,7 @@
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct MeshSystem MeshSystem;
 typedef struct ViewSystem ViewSystem;
+typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
@@ -20,6 +21,7 @@ typedef struct OceanSystemDescriptor {
 
 typedef struct OceanSystem {
   RenderSystem *render_system;
+  RenderPipelineSystem *render_pipe_system;
   MeshSystem *mesh_system;
   ViewSystem *view_system;
   Allocator tmp_alloc;

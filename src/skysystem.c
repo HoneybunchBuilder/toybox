@@ -14,6 +14,7 @@
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "sky.hlsli"
 #include "skycomponent.h"
@@ -255,84 +256,31 @@ void sky_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
 bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                        uint32_t system_dep_count, System *const *system_deps) {
-  // Find the render system
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
+  // Find necessary systems
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which imgui depends on",
                   VK_ERROR_UNKNOWN);
+  RenderPipelineSystem *render_pipe_system =
+      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
+  TB_CHECK_RETURN(
+      render_pipe_system,
+      "Failed to find render pipeline system which imgui depends on", false);
 
   *self = (SkySystem){
       .render_system = render_system,
+      .render_pipe_system = render_pipe_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
 
   VkResult err = VK_SUCCESS;
 
-  // Create sky render pass
-  // Lazy and rendering directly to the swapchain for now
+  // Get sky pass
   {
-    const uint32_t attachment_count = 2;
-    VkAttachmentDescription attachments[attachment_count] = {
-        {
-            .format = render_system->render_thread->swapchain.format,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        },
-        {
-            .format = VK_FORMAT_D32_SFLOAT,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            // HACK: We know that the depth copy in the ocean system comes
-            // after this and we want to read the depth buffer there
-            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        },
-    };
-    const uint32_t color_ref_count = 1;
-    VkAttachmentReference color_refs[color_ref_count] = {
-        {
-            0,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        },
-    };
-    VkSubpassDescription subpass = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = color_ref_count,
-        .pColorAttachments = color_refs,
-        .pDepthStencilAttachment =
-            &(VkAttachmentReference){
-                1,
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            },
-    };
-    VkSubpassDependency subpass_dep = {
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    };
-    VkRenderPassCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = attachment_count,
-        .pAttachments = attachments,
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .pDependencies = &subpass_dep,
-    };
-    err = tb_rnd_create_render_pass(render_system, &create_info, "Sky Pass",
-                                    &self->pass);
-    TB_VK_CHECK_RET(err, "Failed to create sky render pass", err);
+    self->pass = tb_render_pipeline_get_pass(
+        self->render_pipe_system, self->render_pipe_system->sky_pass);
   }
 
   // Create sky pipeline
@@ -431,8 +379,6 @@ void destroy_sky_system(SkySystem *self) {
 
   vmaDestroyBuffer(render_system->vma_alloc, self->sky_geom_gpu_buffer.buffer,
                    self->sky_geom_gpu_buffer.alloc);
-
-  tb_rnd_destroy_render_pass(render_system, self->pass);
 
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
@@ -664,8 +610,9 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
       .count = 2,
       .dependent_ids = {CameraComponentId, TransformComponentId},
   };
-  desc->system_dep_count = 1;
+  desc->system_dep_count = 2;
   desc->system_deps[0] = RenderSystemId;
+  desc->system_deps[1] = RenderPipelineSystemId;
   desc->create = tb_create_sky_system;
   desc->destroy = tb_destroy_sky_system;
   desc->tick = tb_tick_sky_system;
