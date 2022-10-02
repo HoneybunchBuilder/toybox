@@ -8,6 +8,7 @@
 #include "meshcomponent.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -461,9 +462,14 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                   "Failed to find view system which meshes depend on", false);
   RenderObjectSystem *render_object_system =
       tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
-  TB_CHECK_RETURN(material_system,
+  TB_CHECK_RETURN(render_object_system,
                   "Failed to find render object system which meshes depend on",
                   false);
+  RenderPipelineSystem *render_pipe_system =
+      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
+  TB_CHECK_RETURN(
+      render_pipe_system,
+      "Failed to find render pipeline system which meshes depend on", false);
 
   *self = (MeshSystem){
       .tmp_alloc = desc->tmp_alloc,
@@ -472,73 +478,18 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .material_system = material_system,
       .view_system = view_system,
       .render_object_system = render_object_system,
+      .render_pipe_system = render_pipe_system,
   };
 
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
 
-    // Create render pass for opaque meshes
+    // Look up opaque pass
     {
-      const uint32_t attachment_count = 2;
-      VkAttachmentDescription attachments[attachment_count] = {
-          {
-              .format = render_system->render_thread->swapchain.format,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          },
-          {
-              .format = VK_FORMAT_D32_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-              .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-          },
-      };
-      const uint32_t color_ref_count = 1;
-      VkAttachmentReference color_refs[color_ref_count] = {
-          {
-              0,
-              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          },
-      };
-      VkSubpassDescription subpass = {
-          .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-          .colorAttachmentCount = color_ref_count,
-          .pColorAttachments = color_refs,
-          .pDepthStencilAttachment =
-              &(VkAttachmentReference){
-                  1,
-                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              },
-      };
-      VkSubpassDependency subpass_dep = {
-          .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-          .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                           VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = attachment_count,
-          .pAttachments = attachments,
-          .subpassCount = 1,
-          .pSubpasses = &subpass,
-          .pDependencies = &subpass_dep,
-      };
-      err = tb_rnd_create_render_pass(render_system, &create_info,
-                                      "Opaque Mesh Pass", &self->opaque_pass);
-      TB_VK_CHECK_RET(err, "Failed to create opaque mesh render pass", false);
+      self->opaque_pass = tb_render_pipeline_get_pass(
+          self->render_pipe_system,
+          self->render_pipe_system->opaque_color_pass);
     }
 
     // Get descriptor set layouts from related systems
@@ -618,7 +569,6 @@ void destroy_mesh_system(MeshSystem *self) {
   }
 
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_render_pass(render_system, self->opaque_pass);
 
   for (uint32_t i = 0; i < self->mesh_count; ++i) {
     if (self->mesh_ref_counts[i] != 0) {
@@ -922,11 +872,12 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
       .count = 2,
       .dependent_ids = {MeshComponentId, TransformComponentId},
   };
-  desc->system_dep_count = 4;
+  desc->system_dep_count = 5;
   desc->system_deps[0] = RenderSystemId;
   desc->system_deps[1] = MaterialSystemId;
   desc->system_deps[2] = ViewSystemId;
   desc->system_deps[3] = RenderObjectSystemId;
+  desc->system_deps[4] = RenderPipelineSystemId;
   desc->create = tb_create_mesh_system;
   desc->destroy = tb_destroy_mesh_system;
   desc->tick = tb_tick_mesh_system;
