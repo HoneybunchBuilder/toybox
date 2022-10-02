@@ -7,6 +7,7 @@
 #define ImGuiSystemId 0xDEADFA11
 
 typedef struct RenderSystem RenderSystem;
+typedef struct RenderPipelineSystem RenderPipelineSystem;
 
 typedef struct VkRenderPass_T *VkRenderPass;
 typedef struct VkSampler_T *VkSampler;
@@ -31,6 +32,7 @@ typedef struct ImGuiSystem {
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
+  RenderPipelineSystem *render_pipe_system;
 
   ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 
