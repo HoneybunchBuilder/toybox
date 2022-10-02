@@ -31,11 +31,6 @@ typedef struct FrameDescriptorPool {
   VkDescriptorSet *sets;
 } FrameDescriptorPool;
 
-typedef struct RenderPass {
-  VkRenderPass pass;
-  tb_pass_record *record_cb;
-} RenderPass;
-
 typedef struct RenderSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -53,10 +48,6 @@ typedef struct RenderSystem {
 
   uint32_t frame_idx;
   RenderSystemFrameState frame_states[3];
-
-  uint32_t pass_record_count;
-  RenderPass *pass_record_cbs;
-  uint32_t pass_record_max;
 } RenderSystem;
 
 void tb_render_system_descriptor(SystemDescriptor *desc,

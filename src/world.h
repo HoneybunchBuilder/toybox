@@ -51,7 +51,7 @@ typedef uint32_t ComponentId;
 #define MAX_COMPONENT_DEP_COUNT 4
 #define MAX_COLUMN_COUNT MAX_COMPONENT_DEP_COUNT
 #define MAX_DEPENDENCY_SET_COUNT 4
-#define MAX_SYSTEM_DEP_COUNT 4
+#define MAX_SYSTEM_DEP_COUNT 8
 #define MAX_OUTPUT_SET_COUNT 4
 
 typedef uint32_t Entity;

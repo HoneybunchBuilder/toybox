@@ -207,8 +207,8 @@ TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
   if (new_count > self->view_max) {
     // Reallocate collection
     const uint32_t new_max = new_count * 2;
-
     self->views = tb_realloc_nm_tp(self->std_alloc, self->views, new_max, View);
+    self->view_max = new_max;
   }
   self->view_count = new_count;
 
