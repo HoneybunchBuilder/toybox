@@ -38,6 +38,7 @@ typedef struct RenderPipelineSystem {
 
   uint32_t pass_count;
   RenderPass *render_passes;
+  uint32_t *pass_order;
   uint32_t pass_max;
 } RenderPipelineSystem;
 
