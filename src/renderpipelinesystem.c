@@ -17,6 +17,8 @@ typedef struct RenderPass {
 
 TbRenderPassId create_render_pass(RenderPipelineSystem *self,
                                   const VkRenderPassCreateInfo *create_info,
+                                  uint32_t dep_count,
+                                  const TbRenderTargetId *deps,
                                   const char *name) {
   TbRenderPassId id = self->pass_count;
   uint32_t new_count = self->pass_count + 1;
@@ -35,6 +37,13 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
   err = tb_rnd_create_render_pass(self->render_system, create_info, name,
                                   &pass->pass);
   TB_VK_CHECK_RET(err, "Failed to create render pass", InvalidRenderPassId);
+
+  pass->dep_count = dep_count;
+  SDL_memset(pass->deps, InvalidRenderPassId,
+             sizeof(TbRenderTargetId) * MaxRenderPassDependencies);
+  if (dep_count > 0) {
+    SDL_memcpy(pass->deps, deps, sizeof(TbRenderTargetId) * dep_count);
+  }
 
   return id;
 }
@@ -107,7 +116,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 
       TbRenderPassId id =
-          create_render_pass(self, &create_info, "Opaque Depth Pass");
+          create_render_pass(self, &create_info, 0, NULL, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
@@ -169,8 +178,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, "Opaque Color Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->opaque_depth_pass, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);
       self->opaque_color_pass = id;
@@ -231,7 +240,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(self, &create_info, "Sky Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 2,
+          (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
+          "Sky Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
       self->sky_pass = id;
@@ -274,8 +286,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, "Depth Copy Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->opaque_depth_pass, "Depth Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
@@ -319,8 +331,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, "Transparent Depth Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->sky_pass, "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;
@@ -382,8 +394,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, "Transparent Color Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info, 1,
+                                             &self->transparent_depth_pass,
+                                             "Transparent Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent color pass", false);
       self->transparent_color_pass = id;
@@ -427,10 +440,91 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(self, &create_info, "UI Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->transparent_color_pass, "UI Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
                       false);
       self->ui_pass = id;
+    }
+  }
+
+  // Calculate pass order
+  self->pass_order =
+      tb_alloc_nm_tp(self->std_alloc, self->pass_count, uint32_t);
+
+  // Stack to keep track of what child ids we need to process next
+  // Worst case size is the same as the size of all passes
+  int32_t pass_stack_head = 0;
+  TbRenderPassId *pass_stack =
+      tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, TbRenderPassId);
+
+  uint32_t pass_order_idx = 0;
+  TbRenderPassId current_id = self->opaque_depth_pass;
+  while (pass_order_idx < self->pass_count) {
+    // Ensure that all dependent passes have already been scheduled
+    bool deps_met = true;
+    {
+      const RenderPass *pass = &self->render_passes[current_id];
+      for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
+        bool dep_found = false;
+        for (uint32_t i = 0; i < pass_order_idx + 1; ++i) {
+          if (self->pass_order[i] == pass->deps[dep_idx]) {
+            dep_found = true;
+            break;
+          }
+        }
+        if (!dep_found) {
+          deps_met = false;
+          break;
+        }
+      }
+    }
+
+    // If dependencies were met, add this pass to the order and push its
+    // children onto the stack
+    if (deps_met) {
+      self->pass_order[pass_order_idx++] = current_id;
+
+      // Find all passes that depend on this pass
+      uint32_t child_pass_count = 0;
+      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+        const RenderPass *pass = &self->render_passes[pass_idx];
+        for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
+          if (pass->deps[dep_idx] == current_id) {
+            child_pass_count++;
+            break;
+          }
+        }
+      }
+
+      // Push children onto the stack to evaluate next
+      if (child_pass_count > 0) {
+        for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+          const RenderPass *pass = &self->render_passes[pass_idx];
+          for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
+            if (pass->deps[dep_idx] == current_id) {
+              pass_stack[pass_stack_head++] = (TbRenderPassId)pass_idx;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Pop the next child off the stack to process
+    if (pass_stack_head > 0) {
+      pass_stack_head--;
+      TbRenderPassId prev_id = current_id;
+      current_id = pass_stack[pass_stack_head];
+
+      // If dependecies were not met, after we've selected the next pass to
+      // process, push the one that just failed back onto the stack to try again
+      // next time
+      if (!deps_met) {
+        pass_stack[pass_stack_head++] = prev_id;
+      }
+    } else {
+      TB_CHECK(deps_met, "unexpected outcome");
     }
   }
 
@@ -444,6 +538,7 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
     tb_rnd_destroy_render_pass(self->render_system, pass->pass);
   }
   tb_free(self->std_alloc, self->render_passes);
+  tb_free(self->std_alloc, self->pass_order);
 
   *self = (RenderPipelineSystem){0};
 }
