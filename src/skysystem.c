@@ -288,7 +288,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
       render_system->pipeline_cache, self->pass, &self->pipe_layout,
       &self->set_layout, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
+  TB_VK_CHECK_RET(err, "Failed to create sky pipeline", err);
 
   // Create framebuffers that associate the sky pass with the swapchain target
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
