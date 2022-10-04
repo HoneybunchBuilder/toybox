@@ -5,6 +5,7 @@
 #include "world.h"
 
 typedef struct RenderTarget {
+  VkExtent3D extent;
   TbImage images[TB_MAX_FRAME_STATES];
   VkImageView views[TB_MAX_FRAME_STATES];
 } RenderTarget;
@@ -28,10 +29,12 @@ bool create_render_target_system(RenderTargetSystem *self,
 
   // Create some default render targets
   {
-    const uint32_t width = self->render_system->render_thread->swapchain.width;
-    const uint32_t height =
-        self->render_system->render_thread->swapchain.height;
+    const Swapchain *swapchain = &render_system->render_thread->swapchain;
+    const VkFormat swap_format = swapchain->format;
+    const uint32_t width = swapchain->width;
+    const uint32_t height = swapchain->height;
 
+    // Create depth targets
     {
       RenderTargetDescriptor rt_desc = {
           .format = VK_FORMAT_D32_SFLOAT,
@@ -43,6 +46,40 @@ bool create_render_target_system(RenderTargetSystem *self,
               },
       };
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
+      self->transparent_depth_buffer = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create depth copy target which has a different format
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = VK_FORMAT_R32_SFLOAT,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+      };
+      self->depth_buffer_copy = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Import swapchain target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = swap_format,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+      };
+      VkImage images[TB_MAX_FRAME_STATES] = {0};
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        images[i] =
+            render_system->render_thread->frame_states[i].swapchain_image;
+      }
+      self->swapchain = tb_import_render_target(self, &rt_desc, images);
     }
   }
 
@@ -90,10 +127,7 @@ void tb_render_target_system_descriptor(
   };
 }
 
-TbRenderTargetId
-tb_create_render_target(RenderTargetSystem *self,
-                        const RenderTargetDescriptor *rt_desc) {
-
+TbRenderTargetId alloc_render_target(RenderTargetSystem *self) {
   TbRenderTargetId id = self->rt_count;
   // Must resize
   if (self->rt_count + 1 > self->rt_max) {
@@ -103,6 +137,13 @@ tb_create_render_target(RenderTargetSystem *self,
     self->rt_max = new_max;
   }
   self->rt_count++;
+  return id;
+};
+
+TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
+                                         const RenderTargetDescriptor *rt_desc,
+                                         const VkImage *images) {
+  TbRenderTargetId id = alloc_render_target(self);
 
   VkResult err = VK_SUCCESS;
 
@@ -114,6 +155,47 @@ tb_create_render_target(RenderTargetSystem *self,
     usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
+
+  rt->extent = rt_desc->extent;
+
+  // When importing, the images are already created, just create relevant views
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = rt_desc->format,
+        .image = images[i],
+        .subresourceRange = {aspect, 0, 1, 0, 1},
+    };
+    err =
+        tb_rnd_create_image_view(self->render_system, &create_info,
+                                 "Imported Render Target View", &rt->views[i]);
+    TB_VK_CHECK_RET(err,
+                    "Failed to create image view for imported render target",
+                    InvalidRenderTargetId);
+  }
+
+  return id;
+}
+
+TbRenderTargetId
+tb_create_render_target(RenderTargetSystem *self,
+                        const RenderTargetDescriptor *rt_desc) {
+
+  TbRenderTargetId id = alloc_render_target(self);
+
+  VkResult err = VK_SUCCESS;
+
+  RenderTarget *rt = &self->render_targets[id];
+
+  VkImageUsageFlagBits usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+  if (rt_desc->format == VK_FORMAT_D32_SFLOAT) {
+    usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+  }
+
+  rt->extent = rt_desc->extent;
 
   // Allocate images and create views for each frame
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -152,4 +234,20 @@ tb_create_render_target(RenderTargetSystem *self,
   }
 
   return id;
+}
+
+VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
+                                       TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", (VkExtent3D){0});
+  }
+  return self->render_targets[rt].extent;
+}
+
+VkImageView tb_render_target_get_view(RenderTargetSystem *self,
+                                      uint32_t frame_idx, TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", VK_NULL_HANDLE);
+  }
+  return self->render_targets[rt].views[frame_idx];
 }

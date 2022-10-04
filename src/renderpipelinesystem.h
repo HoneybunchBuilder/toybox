@@ -12,7 +12,7 @@ typedef uint32_t TbRenderPassId;
 static const TbRenderPassId InvalidRenderPassId = SDL_MAX_UINT32;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
-typedef struct TextureSystem TextureSystem;
+typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct RenderPass RenderPass;
 typedef struct VkRenderPass_T *VkRenderPass;
 
@@ -26,7 +26,7 @@ typedef struct RenderPipelineSystem {
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
-  TextureSystem *texture_system;
+  RenderTargetSystem *render_target_system;
 
   TbRenderPassId opaque_depth_pass;
   TbRenderPassId opaque_color_pass;
@@ -47,3 +47,6 @@ void tb_render_pipeline_system_descriptor(
 
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass_id);
+
+TbRenderPassId tb_render_pipeline_get_ordered_pass(RenderPipelineSystem *self,
+                                                   uint32_t idx);

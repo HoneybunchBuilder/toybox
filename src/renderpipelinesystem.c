@@ -2,24 +2,25 @@
 
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
-#include "texturesystem.h"
+#include "tbcommon.h"
 #include "world.h"
 
 static const uint32_t MaxRenderPassDependencies = 4;
+static const uint32_t MaxRenderPassAttachments = 4;
 
 typedef struct RenderPass {
   uint32_t dep_count;
   TbRenderTargetId deps[MaxRenderPassDependencies];
   VkRenderPass pass;
   uint32_t attach_count;
-  TbRenderTargetId attachments[MaxRenderPassDependencies];
+  TbRenderTargetId attachments[MaxRenderPassAttachments];
+  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 } RenderPass;
 
-TbRenderPassId create_render_pass(RenderPipelineSystem *self,
-                                  const VkRenderPassCreateInfo *create_info,
-                                  uint32_t dep_count,
-                                  const TbRenderTargetId *deps,
-                                  const char *name) {
+TbRenderPassId create_render_pass(
+    RenderPipelineSystem *self, const VkRenderPassCreateInfo *create_info,
+    uint32_t dep_count, const TbRenderTargetId *deps, uint32_t attach_count,
+    const TbRenderTargetId *attachments, const char *name) {
   TbRenderPassId id = self->pass_count;
   uint32_t new_count = self->pass_count + 1;
   if (new_count > self->pass_max) {
@@ -38,11 +39,52 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
                                   &pass->pass);
   TB_VK_CHECK_RET(err, "Failed to create render pass", InvalidRenderPassId);
 
+  // Copy dependencies
   pass->dep_count = dep_count;
   SDL_memset(pass->deps, InvalidRenderPassId,
-             sizeof(TbRenderTargetId) * MaxRenderPassDependencies);
+             sizeof(TbRenderPassId) * MaxRenderPassDependencies);
   if (dep_count > 0) {
-    SDL_memcpy(pass->deps, deps, sizeof(TbRenderTargetId) * dep_count);
+    SDL_memcpy(pass->deps, deps, sizeof(TbRenderPassId) * dep_count);
+  }
+
+  // Copy attachments
+  pass->attach_count = attach_count;
+  SDL_memset(pass->attachments, InvalidRenderTargetId,
+             sizeof(TbRenderTargetId) * MaxRenderPassAttachments);
+  if (attach_count > 0) {
+    SDL_memcpy(pass->attachments, attachments,
+               sizeof(TbRenderTargetId) * attach_count);
+  }
+
+  // Create framebuffers for render target based on attachments
+  {
+    RenderTargetSystem *rt_sys = self->render_target_system;
+    // HACK: Assume all attachments have the same extents
+    const VkExtent3D extent =
+        tb_render_target_get_extent(rt_sys, attachments[0]);
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      VkImageView attach_views[MaxRenderPassAttachments] = {0};
+
+      for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
+        attach_views[attach_idx] =
+            tb_render_target_get_view(rt_sys, i, attachments[attach_idx]);
+      }
+
+      VkFramebufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .renderPass = pass->pass,
+          .attachmentCount = attach_count,
+          .pAttachments = attach_views,
+          .width = extent.width,
+          .height = extent.height,
+          .layers = extent.depth,
+      };
+      err =
+          tb_rnd_create_framebuffer(self->render_system, &create_info,
+                                    "Pass Framebuffer", &pass->framebuffers[i]);
+      TB_VK_CHECK_RET(err, "Failed to create pass framebuffer",
+                      InvalidRenderPassId);
+    }
   }
 
   return id;
@@ -53,29 +95,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                    uint32_t system_dep_count,
                                    System *const *system_deps) {
   // Find necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(
       render_system,
       "Failed to find render system which the render pipeline depends on",
       false);
-  TextureSystem *texture_system =
-      (TextureSystem *)tb_find_system_dep_self_by_id(
-          system_deps, system_dep_count, TextureSystemId);
-  TB_CHECK_RETURN(
-      texture_system,
-      "Failed to find texture system which the render pipeline depends on",
-      false);
+  RenderTargetSystem *render_target_system =
+      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
+  TB_CHECK_RETURN(render_target_system,
+                  "Failed to find render target system which the render "
+                  "pipeline depends on",
+                  false);
 
   *self = (RenderPipelineSystem){
       .render_system = render_system,
-      .texture_system = texture_system,
+      .render_target_system = render_target_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
 
   // Create some default passes
   {
+    // Look up the render targets we know will be needed
+    const TbRenderTargetId opaque_depth = render_target_system->depth_buffer;
+    const TbRenderTargetId depth_copy = render_target_system->depth_buffer_copy;
+    const TbRenderTargetId color_target = render_target_system->swapchain;
+    const TbRenderTargetId transparent_depth =
+        render_target_system->transparent_depth_buffer;
+
     // Create opaque depth pass
     {
       VkRenderPassCreateInfo create_info = {
@@ -115,8 +163,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 0, NULL, "Opaque Depth Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 0, NULL, 1, &opaque_depth, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
@@ -178,8 +226,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->opaque_depth_pass, "Opaque Color Pass");
+      TbRenderPassId id =
+          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 2,
+                             (TbRenderTargetId[2]){color_target, opaque_depth},
+                             "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);
       self->opaque_color_pass = id;
@@ -243,7 +293,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
-          "Sky Pass");
+          2, (TbRenderTargetId[2]){color_target, opaque_depth}, "Sky Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
       self->sky_pass = id;
@@ -286,8 +336,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->opaque_depth_pass, "Depth Copy Pass");
+      TbRenderPassId id =
+          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 1,
+                             &depth_copy, "Depth Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
@@ -332,7 +383,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->sky_pass, "Transparent Depth Pass");
+          self, &create_info, 1, &self->transparent_depth_pass, 1,
+          &transparent_depth, "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;
@@ -394,9 +446,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(self, &create_info, 1,
-                                             &self->transparent_depth_pass,
-                                             "Transparent Color Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->transparent_color_pass, 2,
+          (TbRenderTargetId[2]){color_target, transparent_depth},
+          "Transparent Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent color pass", false);
       self->transparent_color_pass = id;
@@ -440,8 +493,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
               },
       };
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_color_pass, "UI Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info, 1,
+                                             &self->transparent_color_pass, 1,
+                                             &color_target, "UI Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
                       false);
       self->ui_pass = id;
@@ -536,6 +590,9 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
     RenderPass *pass = &self->render_passes[pass_idx];
     tb_rnd_destroy_render_pass(self->render_system, pass->pass);
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      tb_rnd_destroy_framebuffer(self->render_system, pass->framebuffers[i]);
+    }
   }
   tb_free(self->std_alloc, self->render_passes);
   tb_free(self->std_alloc, self->pass_order);
@@ -565,7 +622,7 @@ void tb_render_pipeline_system_descriptor(
       .dep_count = 0,
       .system_dep_count = 2,
       .system_deps[0] = RenderSystemId,
-      .system_deps[1] = TextureSystemId,
+      .system_deps[1] = RenderTargetSystemId,
       .create = tb_create_render_pipeline_system,
       .destroy = tb_destroy_render_pipeline_system,
       .tick = tb_tick_render_pipeline_system,
@@ -575,7 +632,16 @@ void tb_render_pipeline_system_descriptor(
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass) {
   if (pass >= self->pass_count) {
-    TB_CHECK_RETURN(false, "Pass Id out of range", NULL);
+    TB_CHECK_RETURN(false, "Pass Id out of range", VK_NULL_HANDLE);
   }
   return self->render_passes[pass].pass;
+}
+
+TbRenderPassId tb_render_pipeline_get_ordered_pass(RenderPipelineSystem *self,
+                                                   uint32_t idx) {
+  if (idx >= self->pass_count) {
+    TB_CHECK_RETURN(false, "Ordered pass index out of range",
+                    InvalidRenderPassId);
+  }
+  return (TbRenderPassId)self->pass_order[idx];
 }
