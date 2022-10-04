@@ -35,10 +35,21 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
   TbRenderTargetId depth_buffer_copy;
+  TbRenderTargetId transparent_depth_buffer;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(
     SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc);
 
+TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
+                                         const RenderTargetDescriptor *rt_desc,
+                                         const VkImage *images);
+
 TbRenderTargetId tb_create_render_target(RenderTargetSystem *self,
                                          const RenderTargetDescriptor *rt_desc);
+
+VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
+                                       TbRenderTargetId rt);
+
+VkImageView tb_render_target_get_view(RenderTargetSystem *self,
+                                      uint32_t frame_idx, TbRenderTargetId rt);
