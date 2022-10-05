@@ -1269,6 +1269,37 @@ void resize_swapchain(void) {
   // TODO
 }
 
+void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
+  const uint32_t clear_value_count = pass->attachment_count;
+  TB_CHECK(clear_value_count < 4, "Unexpected");
+  VkClearValue clear_values[4] = {0};
+
+  VkRenderPassBeginInfo begin_info = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass = pass->pass,
+      .framebuffer = pass->framebuffer,
+      .renderArea =
+          {
+              .extent =
+                  {
+                      .width = pass->width,
+                      .height = pass->height,
+                  },
+          },
+      .clearValueCount = clear_value_count,
+      .pClearValues = clear_values,
+  };
+
+  // TODO: Perform any necessary image transitions
+
+  vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void record_pass_end(VkCommandBuffer buffer, PassContext *pass) {
+  // TODO: Perform any necessary image transitions
+  vkCmdEndRenderPass(buffer);
+}
+
 void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkResult err = VK_SUCCESS;
 
@@ -1496,6 +1527,26 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           ctx->record_cb(command_buffer, ctx->batch_count, ctx->batches);
 
           vkCmdEndRenderPass(command_buffer);
+        }
+        TracyCZoneEnd(pass_ctx);
+      }
+
+      // Draw registered passes
+      {
+        TracyCZoneN(pass_ctx, "Record Passes2", true);
+        for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
+          PassContext *pass = &state->pass_contexts[pass_idx];
+          record_pass_begin(command_buffer, pass);
+
+          for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
+               ++draw_idx) {
+            DrawContext *draw = &state->draw_contexts[draw_idx];
+            if (draw->pass_id == pass->id) {
+              draw->record_fn(command_buffer, draw->batch_count, draw->batches);
+            }
+          }
+
+          record_pass_end(command_buffer, pass);
         }
         TracyCZoneEnd(pass_ctx);
       }
