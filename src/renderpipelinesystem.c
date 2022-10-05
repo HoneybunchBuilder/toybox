@@ -1,5 +1,6 @@
 #include "renderpipelinesystem.h"
 
+#include "profiling.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
@@ -16,6 +17,38 @@ typedef struct RenderPass {
   TbRenderTargetId attachments[MaxRenderPassAttachments];
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 } RenderPass;
+
+void register_pass(RenderPipelineSystem *self, RenderThread *thread,
+                   TbRenderPassId id) {
+  RenderPass *pass = &self->render_passes[id];
+  Allocator std_alloc = self->std_alloc;
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state = &thread->frame_states[frame_idx];
+
+    const uint32_t new_count = state->pass_ctx_count + 1;
+    if (new_count > state->pass_ctx_max) {
+      const uint32_t new_max = new_count * 2;
+      state->pass_contexts = tb_realloc_nm_tp(std_alloc, state->pass_contexts,
+                                              new_max, PassContext);
+      state->pass_ctx_max = new_max;
+    }
+
+    VkFramebuffer framebuffer = pass->framebuffers[frame_idx];
+    TbRenderTargetId target_id = pass->attachments[0];
+    VkExtent3D target_ext =
+        tb_render_target_get_extent(self->render_target_system, target_id);
+
+    state->pass_contexts[state->pass_ctx_count] = (PassContext){
+        .id = id,
+        .pass = pass->pass,
+        .attachment_count = pass->attach_count,
+        .framebuffer = framebuffer,
+        .width = target_ext.width,
+        .height = target_ext.height,
+    };
+    state->pass_ctx_count = new_count;
+  }
+}
 
 TbRenderPassId create_render_pass(
     RenderPipelineSystem *self, const VkRenderPassCreateInfo *create_info,
@@ -582,6 +615,13 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
   }
 
+  // Register passes in execution order
+
+  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+    const uint32_t idx = self->pass_order[pass_idx];
+    register_pass(self, self->render_system->render_thread, idx);
+  }
+
   return true;
 }
 
@@ -629,6 +669,12 @@ void tb_render_pipeline_system_descriptor(
   };
 }
 
+void tb_render_pipeline_register_draw_context(
+    RenderPipelineSystem *self, const DrawContextDescriptor *desc) {
+  (void)self;
+  (void)desc;
+}
+
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass) {
   if (pass >= self->pass_count) {
@@ -644,4 +690,13 @@ TbRenderPassId tb_render_pipeline_get_ordered_pass(RenderPipelineSystem *self,
                     InvalidRenderPassId);
   }
   return (TbRenderPassId)self->pass_order[idx];
+}
+
+const VkFramebuffer *
+tb_render_pipeline_get_pass_framebuffers(RenderPipelineSystem *self,
+                                         TbRenderPassId pass) {
+  if (pass >= self->pass_count) {
+    TB_CHECK_RETURN(false, "Pass Id out of range", VK_NULL_HANDLE);
+  }
+  return self->render_passes[pass].framebuffers;
 }

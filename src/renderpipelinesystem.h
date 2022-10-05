@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "tbrendercommon.h"
 #include <SDL2/SDL_stdinc.h>
 
 #define RenderPipelineSystemId 0xDABBAD00
@@ -15,6 +16,13 @@ typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct RenderPass RenderPass;
 typedef struct VkRenderPass_T *VkRenderPass;
+typedef struct VkFramebuffer_T *VkFramebuffer;
+
+typedef struct DrawContextDescriptor {
+  TbRenderPassId pass_id;
+  uint64_t batch_size;
+  tb_record_draw_batch *draw_fn;
+} DrawContextDescriptor;
 
 typedef struct RenderPipelineSystemDescriptor {
   Allocator std_alloc;
@@ -44,6 +52,9 @@ typedef struct RenderPipelineSystem {
 
 void tb_render_pipeline_system_descriptor(
     SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc);
+
+void tb_render_pipeline_register_draw_context(
+    RenderPipelineSystem *self, const DrawContextDescriptor *desc);
 
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass_id);

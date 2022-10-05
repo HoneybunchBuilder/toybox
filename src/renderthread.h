@@ -19,11 +19,30 @@ typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaPool_T *VmaPool;
 
+typedef uint32_t TbRenderPassId;
+
 typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
 
 #define TB_VMA_TMP_GPU_MB 256
+
+typedef struct PassContext {
+  TbRenderPassId id;
+  VkRenderPass pass;
+  uint32_t attachment_count;
+  VkFramebuffer framebuffer;
+  uint32_t width;
+  uint32_t height;
+} PassContext;
+
+typedef struct DrawContext {
+  TbRenderPassId pass_id;
+  tb_record_draw_batch *record_fn;
+  uint32_t batch_count;
+  uint32_t batch_size;
+  const void *batches;
+} DrawContext;
 
 typedef struct PassDrawCtx {
   VkRenderPass pass;
@@ -72,6 +91,14 @@ typedef struct FrameState {
   uint32_t pass_count;
   PassDrawCtx *pass_draw_contexts;
   uint32_t pass_max;
+
+  uint32_t pass_ctx_count;
+  PassContext *pass_contexts;
+  uint32_t pass_ctx_max;
+
+  uint32_t draw_ctx_count;
+  DrawContext *draw_contexts;
+  uint32_t draw_ctx_max;
 
 } FrameState;
 

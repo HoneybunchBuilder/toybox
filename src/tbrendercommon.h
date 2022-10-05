@@ -53,3 +53,6 @@ typedef struct TbImage {
 
 typedef void tb_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                             const void *batches);
+
+typedef void tb_record_draw_batch(VkCommandBuffer buffer, uint32_t batch_count,
+                                  const void *batches);

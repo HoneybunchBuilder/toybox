@@ -138,7 +138,7 @@ TbRenderTargetId alloc_render_target(RenderTargetSystem *self) {
   }
   self->rt_count++;
   return id;
-};
+}
 
 TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
                                          const RenderTargetDescriptor *rt_desc,
@@ -149,10 +149,8 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
 
   RenderTarget *rt = &self->render_targets[id];
 
-  VkImageUsageFlagBits usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
   if (rt_desc->format == VK_FORMAT_D32_SFLOAT) {
-    usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
