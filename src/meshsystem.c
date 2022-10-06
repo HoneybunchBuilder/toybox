@@ -481,16 +481,15 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .render_pipe_system = render_pipe_system,
   };
 
+  TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
+
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
 
     // Look up opaque pass
-    {
-      self->opaque_pass = tb_render_pipeline_get_pass(
-          self->render_pipe_system,
-          self->render_pipe_system->opaque_color_pass);
-    }
+    self->opaque_pass =
+        tb_render_pipeline_get_pass(self->render_pipe_system, opaque_pass_id);
 
     // Get descriptor set layouts from related systems
     {
@@ -554,6 +553,14 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                        render_system->render_thread->swapchain.width,
                        render_system->render_thread->swapchain.height,
                        opaque_pass_record);
+
+  // Register drawing with the pipeline
+  self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = opaque_pass_record,
+                              .pass_id = opaque_pass_id,
+                          });
 
   return true;
 }

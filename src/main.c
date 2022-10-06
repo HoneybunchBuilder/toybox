@@ -251,6 +251,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SystemId tick_order[system_count];
   {
     uint32_t i = 0;
+    tick_order[i++] = RenderPipelineSystemId;
     tick_order[i++] = InputSystemId;
     tick_order[i++] = NoClipControllerSystemId;
     tick_order[i++] = CoreUISystemId;
@@ -264,7 +265,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = SkySystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;
-    tick_order[i++] = RenderPipelineSystemId;
     tick_order[i++] = RenderSystemId;
     TB_CHECK(i == system_count, "Incorrect number of systems");
   }

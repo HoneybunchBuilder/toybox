@@ -643,10 +643,23 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
 void tick_render_pipeline_system(RenderPipelineSystem *self,
                                  const SystemInput *input, SystemOutput *output,
                                  float delta_seconds) {
-  (void)self;
   (void)input;
   (void)output;
   (void)delta_seconds;
+  TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
+               true);
+
+  const uint32_t frame_idx = self->render_system->frame_idx;
+
+  // Clear all of this frame's draw batches
+  FrameState *state =
+      &self->render_system->render_thread->frame_states[frame_idx];
+
+  for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
+    state->draw_contexts[i].batch_count = 0;
+  }
+
+  TracyCZoneEnd(ctx);
 }
 
 TB_DEFINE_SYSTEM(render_pipeline, RenderPipelineSystem,
@@ -669,34 +682,76 @@ void tb_render_pipeline_system_descriptor(
   };
 }
 
-void tb_render_pipeline_register_draw_context(
-    RenderPipelineSystem *self, const DrawContextDescriptor *desc) {
-  (void)self;
-  (void)desc;
+TbDrawContextId
+tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
+                                         const DrawContextDescriptor *desc) {
+  Allocator std_alloc = self->std_alloc;
+  RenderThread *thread = self->render_system->render_thread;
+  TbDrawContextId id = thread->frame_states[0].draw_ctx_count;
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state = &thread->frame_states[frame_idx];
+
+    const uint32_t new_count = state->draw_ctx_count + 1;
+    if (new_count > state->draw_ctx_max) {
+      const uint32_t new_max = new_count * 2;
+      state->draw_contexts = tb_realloc_nm_tp(std_alloc, state->draw_contexts,
+                                              new_max, DrawContext);
+      state->draw_ctx_max = new_max;
+    }
+    state->draw_ctx_count = new_count;
+
+    state->draw_contexts[id] = (DrawContext){
+        .pass_id = desc->pass_id,
+        .batch_size = desc->batch_size,
+        .record_fn = desc->draw_fn,
+    };
+  }
+  return id;
 }
 
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass) {
-  if (pass >= self->pass_count) {
-    TB_CHECK_RETURN(false, "Pass Id out of range", VK_NULL_HANDLE);
-  }
-  return self->render_passes[pass].pass;
-}
+  TB_CHECK_RETURN(pass < self->pass_count, "Pass Id out of range",
+                  VK_NULL_HANDLE);
 
-TbRenderPassId tb_render_pipeline_get_ordered_pass(RenderPipelineSystem *self,
-                                                   uint32_t idx) {
-  if (idx >= self->pass_count) {
-    TB_CHECK_RETURN(false, "Ordered pass index out of range",
-                    InvalidRenderPassId);
-  }
-  return (TbRenderPassId)self->pass_order[idx];
+  return self->render_passes[pass].pass;
 }
 
 const VkFramebuffer *
 tb_render_pipeline_get_pass_framebuffers(RenderPipelineSystem *self,
                                          TbRenderPassId pass) {
-  if (pass >= self->pass_count) {
-    TB_CHECK_RETURN(false, "Pass Id out of range", VK_NULL_HANDLE);
-  }
+  TB_CHECK_RETURN(pass < self->pass_count, "Pass Id out of range",
+                  VK_NULL_HANDLE);
+
   return self->render_passes[pass].framebuffers;
+}
+
+void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
+                                         uint32_t frame_idx,
+                                         TbDrawContextId draw_ctx,
+                                         uint32_t batch_count,
+                                         const void *batches) {
+  RenderThread *thread = self->render_system->render_thread;
+  FrameState *state = &thread->frame_states[frame_idx];
+  if (draw_ctx >= state->draw_ctx_count) {
+    TB_CHECK(false, "Draw Context Id out of range");
+    return;
+  }
+
+  DrawContext *ctx = &state->draw_contexts[draw_ctx];
+
+  const uint32_t write_head = ctx->batch_count;
+  const uint32_t new_count = ctx->batch_count + batch_count;
+  if (new_count > ctx->batch_max) {
+    const uint32_t new_max = new_count * 2;
+    ctx->batches =
+        tb_realloc(self->std_alloc, ctx->batches, new_max * ctx->batch_size);
+    ctx->batch_max = new_max;
+  }
+
+  // Copy batches into frame state's batch list
+  void *dst = ((uint8_t *)ctx->batches) + (write_head * ctx->batch_size);
+  SDL_memcpy(dst, batches, batch_count * ctx->batch_size);
+
+  ctx->batch_count = new_count;
 }
