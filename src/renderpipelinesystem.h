@@ -8,9 +8,10 @@
 
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
 
-typedef uint64_t TbTextureId;
 typedef uint32_t TbRenderPassId;
 static const TbRenderPassId InvalidRenderPassId = SDL_MAX_UINT32;
+typedef uint32_t TbDrawContextId;
+static const TbDrawContextId InvalidDrawContextId = SDL_MAX_UINT32;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
@@ -23,6 +24,7 @@ typedef struct DrawContextDescriptor {
   uint64_t batch_size;
   tb_record_draw_batch *draw_fn;
 } DrawContextDescriptor;
+typedef struct DrawContext DrawContext;
 
 typedef struct RenderPipelineSystemDescriptor {
   Allocator std_alloc;
@@ -53,11 +55,15 @@ typedef struct RenderPipelineSystem {
 void tb_render_pipeline_system_descriptor(
     SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc);
 
-void tb_render_pipeline_register_draw_context(
-    RenderPipelineSystem *self, const DrawContextDescriptor *desc);
+TbDrawContextId
+tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
+                                         const DrawContextDescriptor *desc);
 
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass_id);
 
-TbRenderPassId tb_render_pipeline_get_ordered_pass(RenderPipelineSystem *self,
-                                                   uint32_t idx);
+void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
+                                         TbDrawContextId draw_ctx,
+                                         uint32_t frame_idx,
+                                         uint32_t batch_count,
+                                         const void *batches);

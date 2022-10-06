@@ -41,7 +41,8 @@ typedef struct DrawContext {
   tb_record_draw_batch *record_fn;
   uint32_t batch_count;
   uint32_t batch_size;
-  const void *batches;
+  void *batches;
+  uint32_t batch_max;
 } DrawContext;
 
 typedef struct PassDrawCtx {

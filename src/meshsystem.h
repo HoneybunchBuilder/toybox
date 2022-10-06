@@ -20,6 +20,7 @@ typedef struct MeshComponent MeshComponent;
 
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialPerm;
+typedef uint32_t TbDrawContextId;
 static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
 typedef struct MeshSystemDescriptor {
@@ -73,6 +74,8 @@ typedef struct MeshSystem {
 
   VkRenderPass opaque_pass;
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+
+  TbDrawContextId opaque_draw_ctx;
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
