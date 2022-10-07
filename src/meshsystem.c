@@ -516,43 +516,12 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                                           &self->pipe_layout);
     }
 
-    // Create framebuffers that associate opaque pass with swapchain and depth
-    // targets
-
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      const uint32_t attachment_count = 2;
-      // TODO: Figure out a way to do this without referencing the render thread
-      // directly
-      VkImageView attachments[attachment_count] = {
-          render_system->render_thread->frame_states[i].swapchain_image_view,
-          render_system->render_thread->frame_states[i].depth_buffer_view,
-      };
-
-      VkFramebufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-          .renderPass = self->opaque_pass,
-          .attachmentCount = attachment_count,
-          .pAttachments = attachments,
-          .width = render_system->render_thread->swapchain.width,
-          .height = render_system->render_thread->swapchain.height,
-          .layers = 1,
-      };
-      err = tb_rnd_create_framebuffer(render_system, &create_info,
-                                      "Opaque Pass Framebuffer",
-                                      &self->framebuffers[i]);
-    }
-
     err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
                                 self->std_alloc, self->opaque_pass,
                                 self->pipe_layout, &self->pipe_count,
                                 &self->pipelines);
     TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
   }
-  // Register the render pass
-  tb_rnd_register_pass(render_system, self->opaque_pass, self->framebuffers,
-                       render_system->render_thread->swapchain.width,
-                       render_system->render_thread->swapchain.height,
-                       opaque_pass_record);
 
   // Register drawing with the pipeline
   self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
@@ -568,9 +537,6 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 void destroy_mesh_system(MeshSystem *self) {
   RenderSystem *render_system = self->render_system;
 
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
-  }
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->pipelines[i]);
   }
@@ -843,8 +809,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   // Submit batches
-  tb_rnd_issue_draw_batch(self->render_system, self->opaque_pass, batch_count,
-                          sizeof(MeshDrawBatch), batches);
+  tb_render_pipeline_issue_draw_batch(
+      self->render_pipe_system, self->render_system->frame_idx,
+      self->opaque_draw_ctx, batch_count, batches);
 
   // Output potential transform updates
   {

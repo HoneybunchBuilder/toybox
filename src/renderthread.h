@@ -65,13 +65,6 @@ typedef struct FrameState {
   void *tracy_gpu_context;
 
   VkImage swapchain_image;
-  VkImageView swapchain_image_view;
-
-  TbImage depth_buffer;
-  VkImageView depth_buffer_view;
-
-  TbImage depth_buffer_copy;
-  VkImageView depth_copy_view;
 
   VkSemaphore img_acquired_sem;
   VkSemaphore swapchain_image_sem;
@@ -88,10 +81,6 @@ typedef struct FrameState {
   BufferImageCopyQueue buf_img_copy_queue;
 
   ArenaAllocator tmp_alloc;
-
-  uint32_t pass_count;
-  PassDrawCtx *pass_draw_contexts;
-  uint32_t pass_max;
 
   uint32_t pass_ctx_count;
   PassContext *pass_contexts;

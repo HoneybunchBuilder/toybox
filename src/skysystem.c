@@ -278,10 +278,8 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   VkResult err = VK_SUCCESS;
 
   // Get sky pass
-  {
-    self->pass = tb_render_pipeline_get_pass(
-        self->render_pipe_system, self->render_pipe_system->sky_pass);
-  }
+  TbRenderPassId pass_id = self->render_pipe_system->sky_pass;
+  self->pass = tb_render_pipeline_get_pass(self->render_pipe_system, pass_id);
 
   // Create sky pipeline
   err = create_sky_pipeline2(
@@ -290,38 +288,13 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
       &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create sky pipeline", err);
 
-  // Create framebuffers that associate the sky pass with the swapchain target
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    const uint32_t attachment_count = 2;
-    // TODO: Figure out a way to do this without referencing the render thread
-    // directly
-    VkImageView attachments[attachment_count] = {
-        render_system->render_thread->frame_states[i].swapchain_image_view,
-        render_system->render_thread->frame_states[i].depth_buffer_view,
-    };
-
-    VkFramebufferCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = self->pass,
-        .attachmentCount = attachment_count,
-        .pAttachments = attachments,
-        .width = render_system->render_thread->swapchain.width,
-        .height = render_system->render_thread->swapchain.height,
-        .layers = 1,
-    };
-    err = vkCreateFramebuffer(render_system->render_thread->device,
-                              &create_info, &render_system->vk_host_alloc_cb,
-                              &self->framebuffers[i]);
-    TB_VK_CHECK_RET(err, "Failed to create sky framebuffer", err);
-    SET_VK_NAME(render_system->render_thread->device, self->framebuffers[i],
-                VK_OBJECT_TYPE_FRAMEBUFFER, "Sky Pass Framebuffer");
-  }
-
   // Register pass with the render system
-  tb_rnd_register_pass(render_system, self->pass, self->framebuffers,
-                       render_system->render_thread->swapchain.width,
-                       render_system->render_thread->swapchain.height,
-                       sky_pass_record);
+  self->sky_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(SkyDrawBatch),
+                              .draw_fn = sky_pass_record,
+                              .pass_id = pass_id,
+                          });
 
   // Create sky box geometry
   {
@@ -372,7 +345,6 @@ void destroy_sky_system(SkySystem *self) {
   RenderSystem *render_system = self->render_system;
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_framebuffer(render_system, self->framebuffers[i]);
     tb_rnd_destroy_descriptor_pool(render_system,
                                    self->frame_states[i].set_pool);
   }
@@ -577,8 +549,9 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
     }
 
-    tb_rnd_issue_draw_batch(self->render_system, self->pass, batch_count,
-                            sizeof(SkyDrawBatch), batches);
+    tb_render_pipeline_issue_draw_batch(
+        self->render_pipe_system, self->render_system->frame_idx,
+        self->sky_draw_ctx, batch_count, batches);
 
     // Report output (we've updated the time on the sky component)
     output->set_count = 1;
