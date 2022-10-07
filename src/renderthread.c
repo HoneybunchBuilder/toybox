@@ -335,158 +335,6 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       state->swapchain_image = swapchain_images[i];
       SET_VK_NAME(device, state->swapchain_image, VK_OBJECT_TYPE_IMAGE,
                   "Frame State Swapchain Image");
-
-      VkImageViewCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .viewType = VK_IMAGE_VIEW_TYPE_2D,
-          .format = swapchain->format,
-          .image = state->swapchain_image,
-          .components =
-              (VkComponentMapping){
-                  VK_COMPONENT_SWIZZLE_R,
-                  VK_COMPONENT_SWIZZLE_G,
-                  VK_COMPONENT_SWIZZLE_B,
-                  VK_COMPONENT_SWIZZLE_A,
-              },
-          .subresourceRange =
-              (VkImageSubresourceRange){
-                  VK_IMAGE_ASPECT_COLOR_BIT,
-                  0,
-                  1,
-                  0,
-                  1,
-              },
-      };
-      err = vkCreateImageView(device, &create_info, vk_alloc,
-                              &state->swapchain_image_view);
-      TB_VK_CHECK_RET(err, "Failed to create frame state swapchain image view",
-                      false);
-      SET_VK_NAME(device, state->swapchain_image_view,
-                  VK_OBJECT_TYPE_IMAGE_VIEW,
-                  "Frame State Swapchain Image View");
-    }
-
-    // Create depth buffer
-    {
-      VkImageCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-          .imageType = VK_IMAGE_TYPE_2D,
-          .format = VK_FORMAT_D32_SFLOAT,
-          .extent =
-              {
-                  .width = swapchain->width,
-                  .height = swapchain->height,
-                  .depth = 1,
-              },
-          .mipLevels = 1,
-          .arrayLayers = 1,
-          .samples = VK_SAMPLE_COUNT_1_BIT,
-          .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT,
-      };
-      VmaAllocationCreateInfo alloc_create_info = {
-          .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-      };
-      err =
-          vmaCreateImage(vma_alloc, &create_info, &alloc_create_info,
-                         &state->depth_buffer.image, &state->depth_buffer.alloc,
-                         &state->depth_buffer.info);
-      TB_VK_CHECK_RET(err, "Failed to create frame state depth buffer", false);
-      SET_VK_NAME(device, state->depth_buffer.image, VK_OBJECT_TYPE_IMAGE,
-                  "Frame State Depth Buffer");
-    }
-
-    // Create depth buffer view
-    {
-      VkImageViewCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .viewType = VK_IMAGE_VIEW_TYPE_2D,
-          .format = VK_FORMAT_D32_SFLOAT,
-          .image = state->depth_buffer.image,
-          .components =
-              (VkComponentMapping){
-                  VK_COMPONENT_SWIZZLE_R,
-                  VK_COMPONENT_SWIZZLE_G,
-                  VK_COMPONENT_SWIZZLE_B,
-                  VK_COMPONENT_SWIZZLE_A,
-              },
-          .subresourceRange =
-              (VkImageSubresourceRange){
-                  VK_IMAGE_ASPECT_DEPTH_BIT,
-                  0,
-                  1,
-                  0,
-                  1,
-              },
-      };
-      err = vkCreateImageView(device, &create_info, vk_alloc,
-                              &state->depth_buffer_view);
-      TB_VK_CHECK_RET(err, "Failed to create frame state depth image view",
-                      false);
-      SET_VK_NAME(device, state->depth_buffer_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                  "Frame State Depth Image View");
-    }
-
-    // Create depth buffer copy
-    {
-      VkImageCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-          .imageType = VK_IMAGE_TYPE_2D,
-          .format = VK_FORMAT_R32_SFLOAT,
-          .extent =
-              {
-                  .width = swapchain->width,
-                  .height = swapchain->height,
-                  .depth = 1,
-              },
-          .mipLevels = 1,
-          .arrayLayers = 1,
-          .samples = VK_SAMPLE_COUNT_1_BIT,
-          .usage =
-              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-      };
-      VmaAllocationCreateInfo alloc_create_info = {
-          .usage = VMA_MEMORY_USAGE_GPU_ONLY,
-      };
-      err = vmaCreateImage(vma_alloc, &create_info, &alloc_create_info,
-                           &state->depth_buffer_copy.image,
-                           &state->depth_buffer_copy.alloc,
-                           &state->depth_buffer_copy.info);
-      TB_VK_CHECK_RET(err, "Failed to create frame state depth buffer copy",
-                      false);
-      SET_VK_NAME(device, state->depth_buffer_copy.image, VK_OBJECT_TYPE_IMAGE,
-                  "Frame State Depth Buffer Copy");
-    }
-
-    // Create depth copy view
-    {
-      VkImageViewCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .viewType = VK_IMAGE_VIEW_TYPE_2D,
-          .format = VK_FORMAT_R32_SFLOAT,
-          .image = state->depth_buffer_copy.image,
-          .components =
-              (VkComponentMapping){
-                  VK_COMPONENT_SWIZZLE_R,
-                  VK_COMPONENT_SWIZZLE_G,
-                  VK_COMPONENT_SWIZZLE_B,
-                  VK_COMPONENT_SWIZZLE_A,
-              },
-          .subresourceRange =
-              (VkImageSubresourceRange){
-                  VK_IMAGE_ASPECT_COLOR_BIT,
-                  0,
-                  1,
-                  0,
-                  1,
-              },
-      };
-      err = vkCreateImageView(device, &create_info, vk_alloc,
-                              &state->depth_copy_view);
-      TB_VK_CHECK_RET(err, "Failed to create frame state depth Copy view",
-                      false);
-      SET_VK_NAME(device, state->depth_copy_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                  "Frame State Depth Copy View");
     }
 
     {
@@ -602,14 +450,6 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
 
-    vmaDestroyImage(vma_alloc, state->depth_buffer_copy.image,
-                    state->depth_buffer_copy.alloc);
-    vkDestroyImageView(device, state->depth_copy_view, vk_alloc);
-
-    vmaDestroyImage(vma_alloc, state->depth_buffer.image,
-                    state->depth_buffer.alloc);
-    vkDestroyImageView(device, state->depth_buffer_view, vk_alloc);
-
     vkFreeCommandBuffers(device, state->command_pool, 1,
                          &state->command_buffer);
     vkDestroyCommandPool(device, state->command_pool, vk_alloc);
@@ -618,7 +458,6 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     // swapchain_image is owned by the KHR swapchain and doesn't need to be
     // freed
-    vkDestroyImageView(device, state->swapchain_image_view, vk_alloc);
 
     vkDestroySemaphore(device, state->img_acquired_sem, vk_alloc);
     vkDestroySemaphore(device, state->swapchain_image_sem, vk_alloc);
@@ -1296,6 +1135,7 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
 }
 
 void record_pass_end(VkCommandBuffer buffer, PassContext *pass) {
+  (void)pass;
   // TODO: Perform any necessary image transitions
   vkCmdEndRenderPass(buffer);
 }
@@ -1492,49 +1332,11 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         TracyCZoneEnd(swap_trans_e);
       }
 
-      // Draw user registered passes
-      {
-        TracyCZoneN(pass_ctx, "Record Passes", true);
-        for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
-          PassDrawCtx *ctx = &state->pass_draw_contexts[pass_idx];
-
-          const uint32_t clear_value_count = 2;
-          VkClearValue clear_values[clear_value_count] = {
-              {.color.float32 = {0}},
-              {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
-          };
-
-          // TODO: Fix assumption that we want the pass to target the swapchain
-          VkRenderPassBeginInfo begin_info = {
-              .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-              .renderPass = ctx->pass,
-              .framebuffer = ctx->framebuffer,
-              .renderArea =
-                  {
-                      .extent =
-                          {
-                              .width = ctx->width,
-                              .height = ctx->height,
-                          },
-                  },
-              .clearValueCount = 2,
-              .pClearValues = clear_values,
-          };
-
-          vkCmdBeginRenderPass(command_buffer, &begin_info,
-                               VK_SUBPASS_CONTENTS_INLINE);
-
-          ctx->record_cb(command_buffer, ctx->batch_count, ctx->batches);
-
-          vkCmdEndRenderPass(command_buffer);
-        }
-        TracyCZoneEnd(pass_ctx);
-      }
-
       // Draw registered passes
       {
-        TracyCZoneN(pass_ctx, "Record Passes2", true);
-        for (uint32_t pass_idx = 0; pass_idx < state->pass_count; ++pass_idx) {
+        TracyCZoneN(pass_ctx, "Record Passes", true);
+        for (uint32_t pass_idx = 0; pass_idx < state->pass_ctx_count;
+             ++pass_idx) {
           PassContext *pass = &state->pass_contexts[pass_idx];
           record_pass_begin(command_buffer, pass);
 

@@ -15,6 +15,7 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkFramebuffer_T *VkFramebuffer;
+typedef uint32_t TbDrawContextId;
 
 typedef struct ImGuiSystemDescriptor {
   Allocator std_alloc;
@@ -37,7 +38,7 @@ typedef struct ImGuiSystem {
   ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkRenderPass pass;
-  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+  TbDrawContextId imgui_draw_ctx;
 
   VkSampler sampler;
   VkDescriptorSetLayout set_layout;

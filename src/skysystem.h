@@ -8,7 +8,7 @@
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct SystemDescriptor SystemDescriptor;
-
+typedef uint32_t TbDrawContextId;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 
 typedef struct SkySystemDescriptor {
@@ -31,7 +31,7 @@ typedef struct SkySystem {
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   VkRenderPass pass;
-  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+  TbDrawContextId sky_draw_ctx;
 
   VkSampler sampler;
   VkDescriptorSetLayout set_layout;
