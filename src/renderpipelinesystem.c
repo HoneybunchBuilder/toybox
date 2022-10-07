@@ -18,6 +18,70 @@ typedef struct RenderPass {
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 } RenderPass;
 
+// For dependency graph construction
+typedef struct PassNode PassNode;
+typedef struct PassNode {
+  TbRenderPassId id;
+  uint32_t child_count;
+  PassNode **children;
+} PassNode;
+
+void sort_passes_recursive(PassNode *node, uint32_t *pass_order,
+                           uint32_t *pass_idx) {
+  if (node) {
+    // Make sure id isn't already in the order
+    bool exists = false;
+    for (uint32_t i = 0; i < *pass_idx; ++i) {
+      if (pass_order[i] == node->id) {
+        exists = true;
+        break;
+      }
+    }
+
+    if (!exists) {
+      pass_order[(*pass_idx)++] = (uint32_t)node->id;
+    }
+
+    for (uint32_t child_idx = 0; child_idx < node->child_count; ++child_idx) {
+      sort_passes_recursive(node->children[child_idx], pass_order, pass_idx);
+    }
+  }
+}
+
+void sort_pass_graph(RenderPipelineSystem *self) {
+  // Build a graph of pass nodes to determine ordering
+  PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, PassNode);
+  // All nodes have worst case pass_count children
+  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+    nodes[pass_idx].id = (TbRenderPassId)pass_idx;
+    nodes[pass_idx].children =
+        tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, PassNode *);
+  }
+
+  // Build graph
+  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+    TbRenderPassId pass_id = (TbRenderPassId)pass_idx;
+    PassNode *node = &nodes[pass_idx];
+
+    // Search all other passes for children
+    for (uint32_t i = 0; i < self->pass_count; ++i) {
+      const RenderPass *pass = &self->render_passes[i];
+      if (i != pass_idx) {
+        for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
+          if (pass->deps[dep_idx] == pass_id) {
+            node->children[node->child_count++] = &nodes[i];
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // A pre-order traversal of the graph should get us a reasonable pass order
+  uint32_t pass_idx = 0;
+  sort_passes_recursive(&nodes[0], self->pass_order, &pass_idx);
+}
+
 void register_pass(RenderPipelineSystem *self, RenderThread *thread,
                    TbRenderPassId id) {
   RenderPass *pass = &self->render_passes[id];
@@ -539,84 +603,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   self->pass_order =
       tb_alloc_nm_tp(self->std_alloc, self->pass_count, uint32_t);
 
-  // Stack to keep track of what child ids we need to process next
-  // Worst case size is the same as the size of all passes
-  int32_t pass_stack_head = 0;
-  TbRenderPassId *pass_stack =
-      tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, TbRenderPassId);
-
-  uint32_t pass_order_idx = 0;
-  TbRenderPassId current_id = self->opaque_depth_pass;
-  while (pass_order_idx < self->pass_count) {
-    // Ensure that all dependent passes have already been scheduled
-    bool deps_met = true;
-    {
-      const RenderPass *pass = &self->render_passes[current_id];
-      for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
-        bool dep_found = false;
-        for (uint32_t i = 0; i < pass_order_idx + 1; ++i) {
-          if (self->pass_order[i] == pass->deps[dep_idx]) {
-            dep_found = true;
-            break;
-          }
-        }
-        if (!dep_found) {
-          deps_met = false;
-          break;
-        }
-      }
-    }
-
-    // If dependencies were met, add this pass to the order and push its
-    // children onto the stack
-    if (deps_met) {
-      self->pass_order[pass_order_idx++] = current_id;
-
-      // Find all passes that depend on this pass
-      uint32_t child_pass_count = 0;
-      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-        const RenderPass *pass = &self->render_passes[pass_idx];
-        for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
-          if (pass->deps[dep_idx] == current_id) {
-            child_pass_count++;
-            break;
-          }
-        }
-      }
-
-      // Push children onto the stack to evaluate next
-      if (child_pass_count > 0) {
-        for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-          const RenderPass *pass = &self->render_passes[pass_idx];
-          for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
-            if (pass->deps[dep_idx] == current_id) {
-              pass_stack[pass_stack_head++] = (TbRenderPassId)pass_idx;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Pop the next child off the stack to process
-    if (pass_stack_head > 0) {
-      pass_stack_head--;
-      TbRenderPassId prev_id = current_id;
-      current_id = pass_stack[pass_stack_head];
-
-      // If dependecies were not met, after we've selected the next pass to
-      // process, push the one that just failed back onto the stack to try again
-      // next time
-      if (!deps_met) {
-        pass_stack[pass_stack_head++] = prev_id;
-      }
-    } else {
-      TB_CHECK(deps_met, "unexpected outcome");
-    }
-  }
+  sort_pass_graph(self);
 
   // Register passes in execution order
-
   for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
     const uint32_t idx = self->pass_order[pass_idx];
     register_pass(self, self->render_system->render_thread, idx);
