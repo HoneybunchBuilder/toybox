@@ -50,6 +50,16 @@ typedef struct RenderPipelineSystem {
   RenderPass *render_passes;
   uint32_t *pass_order;
   uint32_t pass_max;
+
+  // Some default draw contexts
+  TbDrawContextId depth_copy_ctx;
+
+  // Depth Copy resources
+  VkSampler sampler;
+  VkDescriptorSetLayout depth_set_layout;
+  VkPipelineLayout depth_copy_pipe_layout;
+  VkPipeline depth_copy_pipe;
+
 } RenderPipelineSystem;
 
 void tb_render_pipeline_system_descriptor(
@@ -63,7 +73,6 @@ VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass_id);
 
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
-                                         uint32_t frame_idx,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
                                          const void *batches);

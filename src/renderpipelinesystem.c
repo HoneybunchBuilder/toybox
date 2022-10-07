@@ -6,6 +6,16 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+#include "depthcopy_frag.h"
+#include "depthcopy_vert.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 static const uint32_t MaxRenderPassDependencies = 4;
 static const uint32_t MaxRenderPassAttachments = 4;
 
@@ -80,6 +90,140 @@ void sort_pass_graph(RenderPipelineSystem *self) {
   // A pre-order traversal of the graph should get us a reasonable pass order
   uint32_t pass_idx = 0;
   sort_passes_recursive(&nodes[0], self->pass_order, &pass_idx);
+}
+
+// For interally driven passes
+typedef struct DepthCopyBatch {
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+} DepthCopyBatch;
+
+VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
+                               VkPipelineLayout pipe_layout,
+                               VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule depth_vert_mod = VK_NULL_HANDLE;
+  VkShaderModule depth_frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(depthcopy_vert);
+    create_info.pCode = (const uint32_t *)depthcopy_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Vert",
+                               &depth_vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ocean vert shader module", err);
+
+    create_info.codeSize = sizeof(depthcopy_frag);
+    create_info.pCode = (const uint32_t *)depthcopy_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Frag",
+                               &depth_frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load depth frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = depth_vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = depth_frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+      .renderPass = pass,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Depth Copy Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, depth_vert_mod);
+  tb_rnd_destroy_shader(render_system, depth_frag_mod);
+
+  return err;
+}
+
+void record_depth_copy(VkCommandBuffer buffer, uint32_t batch_count,
+                       const void *batches) {
+  TracyCZoneNC(ctx, "Depth Copy Record", TracyCategoryColorRendering, true);
+
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  const DepthCopyBatch *copy_batch = (const DepthCopyBatch *)batches;
+
+  TracyCZoneEnd(ctx);
 }
 
 void register_pass(RenderPipelineSystem *self, RenderThread *thread,
@@ -611,10 +755,101 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     register_pass(self, self->render_system->render_thread, idx);
   }
 
+  // Construct additional objects for handling draws that this system is
+  // responsible for
+  {
+    VkResult err = VK_SUCCESS;
+
+    // Depth Copy
+    {
+      {
+        VkSamplerCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .anisotropyEnable = VK_FALSE,
+            .maxAnisotropy = 1.0f,
+            .maxLod = 1.0f,
+            .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+        };
+        err = tb_rnd_create_sampler(render_system, &create_info,
+                                    "Depth Copy Sampler", &self->sampler);
+        TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
+      }
+
+      {
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = (VkDescriptorSetLayoutBinding[2]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->sampler,
+                },
+            }};
+        err = tb_rnd_create_set_layout(render_system, &create_info,
+                                       "Depth Copy Descriptor Set Layout",
+                                       &self->depth_set_layout);
+        TB_VK_CHECK_RET(
+            err, "Failed to create depth copy descriptor set layout", false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->depth_set_layout,
+                },
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "Depth Copy Pipeline Layout",
+                                            &self->depth_copy_pipe_layout);
+        TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
+      }
+
+      err = create_depth_pipeline(
+          self->render_system, self->render_passes[self->depth_copy_pass].pass,
+          self->depth_copy_pipe_layout, &self->depth_copy_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create depth pipeline", false);
+
+      {
+        DrawContextDescriptor desc = {
+            .batch_size = sizeof(DepthCopyBatch),
+            .draw_fn = record_depth_copy,
+            .pass_id = self->depth_copy_pass,
+        };
+        self->depth_copy_ctx =
+            tb_render_pipeline_register_draw_context(self, &desc);
+        TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
+                        "Failed to create depth copy draw context", false);
+      }
+    }
+  }
+
   return true;
 }
 
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
+  tb_rnd_destroy_sampler(self->render_system, self->sampler);
+  tb_rnd_destroy_set_layout(self->render_system, self->depth_set_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->depth_copy_pipe_layout);
+  tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
+
   // Clean up all render passes
   for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
     RenderPass *pass = &self->render_passes[pass_idx];
@@ -646,6 +881,18 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
 
   for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
     state->draw_contexts[i].batch_count = 0;
+  }
+
+  // A few passes will be driven from here because an external system
+  // has no need to directly drive these passes
+
+  // Issue draw for draw copy pass
+  {
+    DepthCopyBatch batch = {
+        .layout = self->depth_copy_pipe_layout,
+        .pipeline = self->depth_copy_pipe,
+    };
+    tb_render_pipeline_issue_draw_batch(self, self->depth_copy_ctx, 1, &batch);
   }
 
   TracyCZoneEnd(ctx);
@@ -716,12 +963,11 @@ tb_render_pipeline_get_pass_framebuffers(RenderPipelineSystem *self,
 }
 
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
-                                         uint32_t frame_idx,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
                                          const void *batches) {
   RenderThread *thread = self->render_system->render_thread;
-  FrameState *state = &thread->frame_states[frame_idx];
+  FrameState *state = &thread->frame_states[self->render_system->frame_idx];
   if (draw_ctx >= state->draw_ctx_count) {
     TB_CHECK(false, "Draw Context Id out of range");
     return;

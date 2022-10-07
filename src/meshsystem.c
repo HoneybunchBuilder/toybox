@@ -810,8 +810,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
   // Submit batches
   tb_render_pipeline_issue_draw_batch(
-      self->render_pipe_system, self->render_system->frame_idx,
-      self->opaque_draw_ctx, batch_count, batches);
+      self->render_pipe_system, self->opaque_draw_ctx, batch_count, batches);
 
   // Output potential transform updates
   {

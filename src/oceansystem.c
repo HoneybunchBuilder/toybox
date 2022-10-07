@@ -19,8 +19,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
-#include "depthcopy_frag.h"
-#include "depthcopy_vert.h"
 #include "ocean_frag.h"
 #include "ocean_vert.h"
 #include "oceanprepass_frag.h"
@@ -73,119 +71,6 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
   TracyCZoneEnd(ctx);
-}
-
-VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
-                               VkPipelineLayout pipe_layout,
-                               VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-
-  VkShaderModule depth_vert_mod = VK_NULL_HANDLE;
-  VkShaderModule depth_frag_mod = VK_NULL_HANDLE;
-
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(depthcopy_vert);
-    create_info.pCode = (const uint32_t *)depthcopy_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Vert",
-                               &depth_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ocean vert shader module", err);
-
-    create_info.codeSize = sizeof(depthcopy_frag);
-    create_info.pCode = (const uint32_t *)depthcopy_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Frag",
-                               &depth_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load depth frag shader module", err);
-  }
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .stageCount = 2,
-      .pStages =
-          (VkPipelineShaderStageCreateInfo[2]){
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = depth_vert_mod,
-                  .pName = "vert",
-              },
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = depth_frag_mod,
-                  .pName = "frag",
-              },
-          },
-      .pVertexInputState =
-          &(VkPipelineVertexInputStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-          },
-      .pInputAssemblyState =
-          &(VkPipelineInputAssemblyStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-          },
-      .pViewportState =
-          &(VkPipelineViewportStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-              .viewportCount = 1,
-              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
-              .scissorCount = 1,
-              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
-          },
-      .pRasterizationState =
-          &(VkPipelineRasterizationStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-              .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-              .lineWidth = 1.0f,
-          },
-      .pMultisampleState =
-          &(VkPipelineMultisampleStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-          },
-      .pColorBlendState =
-          &(VkPipelineColorBlendStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-              .attachmentCount = 1,
-              .pAttachments =
-                  &(VkPipelineColorBlendAttachmentState){
-                      .blendEnable = VK_FALSE,
-                      .colorWriteMask =
-                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                  },
-          },
-      .pDepthStencilState =
-          &(VkPipelineDepthStencilStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-          },
-      .pDynamicState =
-          &(VkPipelineDynamicStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
-              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                    VK_DYNAMIC_STATE_SCISSOR},
-          },
-      .layout = pipe_layout,
-      .renderPass = pass,
-  };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
-                                         "Depth Copy Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", err);
-
-  tb_rnd_destroy_shader(render_system, depth_vert_mod);
-  tb_rnd_destroy_shader(render_system, depth_frag_mod);
-
-  return err;
 }
 
 VkResult create_ocean_pipelines(RenderSystem *render_system,
@@ -750,12 +635,12 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     }
 
     // Draw to the prepass and the ocean pass
-    tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->render_system->frame_idx,
-        self->trans_depth_draw_ctx, batch_count, prepass_batches);
-    tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->render_system->frame_idx,
-        self->trans_color_draw_ctx, batch_count, batches);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->trans_depth_draw_ctx, batch_count,
+                                        prepass_batches);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->trans_color_draw_ctx, batch_count,
+                                        batches);
 
     // Report output (we've updated the time on the ocean component)
     output->set_count = 1;
