@@ -679,8 +679,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
       // Issue draw batches
       tb_render_pipeline_issue_draw_batch(
-          self->render_pipe_system, self->render_system->frame_idx,
-          self->imgui_draw_ctx, batch_count, batches);
+          self->render_pipe_system, self->imgui_draw_ctx, batch_count, batches);
 
       igNewFrame();
     }

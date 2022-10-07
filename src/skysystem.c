@@ -550,8 +550,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     }
 
     tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->render_system->frame_idx,
-        self->sky_draw_ctx, batch_count, batches);
+        self->render_pipe_system, self->sky_draw_ctx, batch_count, batches);
 
     // Report output (we've updated the time on the sky component)
     output->set_count = 1;
