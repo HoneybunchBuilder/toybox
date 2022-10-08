@@ -9,6 +9,7 @@
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -287,12 +288,18 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   TB_CHECK_RETURN(
       render_pipe_system,
       "Failed to find render pipeline system which ocean depends on", false);
+  RenderTargetSystem *render_target_system =
+      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
+  TB_CHECK_RETURN(render_target_system,
+                  "Failed to find render target system which ocean depends on",
+                  false);
 
   *self = (OceanSystem){
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .mesh_system = mesh_system,
       .view_system = view_system,
+      .render_target_system = render_target_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -515,12 +522,16 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         tb_alloc_nm_tp(self->tmp_alloc, write_count, VkWriteDescriptorSet);
     VkDescriptorBufferInfo *buffer_info =
         tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorBufferInfo);
+    VkDescriptorImageInfo *image_info =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorImageInfo);
     TbHostBuffer *buffers =
         tb_alloc_nm_tp(self->tmp_alloc, ocean_count, TbHostBuffer);
     for (uint32_t oc_idx = 0; oc_idx < ocean_count; ++oc_idx) {
       const OceanComponent *ocean_comp =
           tb_get_component(oceans, oc_idx, OceanComponent);
       TbHostBuffer *buffer = &buffers[oc_idx];
+
+      const uint32_t write_idx = oc_idx * 2;
 
       OceanData data = {
           .wave_count = ocean_comp->wave_count,
@@ -548,8 +559,17 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .range = sizeof(OceanData),
       };
 
+      VkImageView view = tb_render_target_get_view(
+          self->render_target_system, self->render_system->frame_idx,
+          self->render_target_system->depth_buffer_copy);
+
+      image_info[oc_idx] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = view,
+      };
+
       // Construct write descriptors
-      writes[oc_idx + 0] = (VkWriteDescriptorSet){
+      writes[write_idx + 0] = (VkWriteDescriptorSet){
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .dstSet = ocean_set,
           .dstBinding = 0,
@@ -557,6 +577,15 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .descriptorCount = 1,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .pBufferInfo = &buffer_info[oc_idx],
+      };
+      writes[write_idx + 1] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = ocean_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo = &image_info[oc_idx],
       };
     }
     vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
@@ -667,11 +696,12 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .dep_count = 2,
       .deps[0] = {2, {OceanComponentId, TransformComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 4,
+      .system_dep_count = 5,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,
       .system_deps[2] = ViewSystemId,
       .system_deps[3] = RenderPipelineSystemId,
+      .system_deps[4] = RenderTargetSystemId,
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,

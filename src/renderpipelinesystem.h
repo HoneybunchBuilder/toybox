@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "rendersystem.h"
 #include "tbrendercommon.h"
 #include <SDL2/SDL_stdinc.h>
 
@@ -60,6 +61,7 @@ typedef struct RenderPipelineSystem {
   VkPipelineLayout depth_copy_pipe_layout;
   VkPipeline depth_copy_pipe;
 
+  FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
 } RenderPipelineSystem;
 
 void tb_render_pipeline_system_descriptor(

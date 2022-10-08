@@ -9,6 +9,7 @@ typedef struct SystemDescriptor SystemDescriptor;
 typedef struct MeshSystem MeshSystem;
 typedef struct ViewSystem ViewSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
+typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
@@ -25,6 +26,7 @@ typedef struct OceanSystem {
   RenderPipelineSystem *render_pipe_system;
   MeshSystem *mesh_system;
   ViewSystem *view_system;
+  RenderTargetSystem *render_target_system;
   Allocator tmp_alloc;
   Allocator std_alloc;
 
@@ -42,7 +44,6 @@ typedef struct OceanSystem {
   VkRenderPass ocean_pass;
   TbDrawContextId trans_color_draw_ctx;
 
-  FrameDescriptorPool depth_pools[TB_MAX_FRAME_STATES];
   FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
 
   VkDescriptorSetLayout set_layout;

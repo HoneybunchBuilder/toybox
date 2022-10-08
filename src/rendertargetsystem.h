@@ -35,7 +35,6 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
   TbRenderTargetId depth_buffer_copy;
-  TbRenderTargetId transparent_depth_buffer;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(
