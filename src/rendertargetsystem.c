@@ -46,7 +46,6 @@ bool create_render_target_system(RenderTargetSystem *self,
               },
       };
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
-      self->transparent_depth_buffer = tb_create_render_target(self, &rt_desc);
     }
 
     // Create depth copy target which has a different format
