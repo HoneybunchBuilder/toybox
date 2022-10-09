@@ -1129,15 +1129,14 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
       .pClearValues = clear_values,
   };
 
-  // TODO: Perform any necessary image transitions
+  // Perform any necessary image transitions
+  if (pass->barrier_count > 0) {
+    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0,
+                         NULL, pass->barrier_count, pass->barriers);
+  }
 
   vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void record_pass_end(VkCommandBuffer buffer, PassContext *pass) {
-  (void)pass;
-  // TODO: Perform any necessary image transitions
-  vkCmdEndRenderPass(buffer);
 }
 
 void tick_render_thread(RenderThread *thread, FrameState *state) {
@@ -1348,7 +1347,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
             }
           }
 
-          record_pass_end(command_buffer, pass);
+          vkCmdEndRenderPass(command_buffer);
         }
         TracyCZoneEnd(pass_ctx);
       }

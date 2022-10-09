@@ -52,3 +52,5 @@ VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
 
 VkImageView tb_render_target_get_view(RenderTargetSystem *self,
                                       uint32_t frame_idx, TbRenderTargetId rt);
+VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
+                                   TbRenderTargetId rt);

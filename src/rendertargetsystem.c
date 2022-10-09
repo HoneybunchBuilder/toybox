@@ -5,6 +5,7 @@
 #include "world.h"
 
 typedef struct RenderTarget {
+  bool imported;
   VkExtent3D extent;
   TbImage images[TB_MAX_FRAME_STATES];
   VkImageView views[TB_MAX_FRAME_STATES];
@@ -90,7 +91,10 @@ void destroy_render_target_system(RenderTargetSystem *self) {
   for (uint32_t rt_idx = 0; rt_idx < self->rt_count; ++rt_idx) {
     RenderTarget *rt = &self->render_targets[rt_idx];
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      tb_rnd_free_gpu_image(self->render_system, &rt->images[i]);
+      if (!rt->imported) {
+        // Imported targets are supposed to be cleaned up externally
+        tb_rnd_free_gpu_image(self->render_system, &rt->images[i]);
+      }
       tb_rnd_destroy_image_view(self->render_system, rt->views[i]);
     }
   }
@@ -154,8 +158,18 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
   }
 
   rt->extent = rt_desc->extent;
+  rt->imported = true;
 
-  // When importing, the images are already created, just create relevant views
+  // When importing, the images are already created but we still want to record
+  // them here in case some api caller wants to get the VkImage for memory
+  // barrier or something
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    rt->images[i] = (TbImage){
+        .image = images[i],
+    };
+  }
+
+  // Then just create relevant views
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     VkImageViewCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -247,4 +261,12 @@ VkImageView tb_render_target_get_view(RenderTargetSystem *self,
     TB_CHECK_RETURN(false, "Render target index out of range", VK_NULL_HANDLE);
   }
   return self->render_targets[rt].views[frame_idx];
+}
+
+VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
+                                   TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", VK_NULL_HANDLE);
+  }
+  return self->render_targets[rt].images[frame_idx].image;
 }

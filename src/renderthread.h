@@ -34,6 +34,9 @@ typedef struct PassContext {
   VkFramebuffer framebuffer;
   uint32_t width;
   uint32_t height;
+
+  uint32_t barrier_count;
+  VkImageMemoryBarrier barriers[4];
 } PassContext;
 
 typedef struct DrawContext {
@@ -44,17 +47,6 @@ typedef struct DrawContext {
   void *batches;
   uint32_t batch_max;
 } DrawContext;
-
-typedef struct PassDrawCtx {
-  VkRenderPass pass;
-  VkFramebuffer framebuffer;
-  uint32_t width;
-  uint32_t height;
-  tb_pass_record *record_cb;
-  uint32_t batch_count;
-  uint32_t batch_size;
-  const void *batches;
-} PassDrawCtx;
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
