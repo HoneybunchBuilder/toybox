@@ -38,6 +38,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create depth target
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "Depth Buffer",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
               {
@@ -45,6 +46,8 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .mip_count = 1,
+          .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
@@ -53,6 +56,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create hdr color target
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "HDR Color",
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
@@ -60,6 +64,8 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .mip_count = 1,
+          .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->hdr_color = tb_create_render_target(self, &rt_desc);
@@ -68,6 +74,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create depth copy target which has a different format
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "Depth Copy",
           .format = VK_FORMAT_R32_SFLOAT,
           .extent =
               {
@@ -75,6 +82,8 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .mip_count = 1,
+          .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->depth_buffer_copy = tb_create_render_target(self, &rt_desc);
@@ -83,6 +92,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create color copy target
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "Color Copy",
           .format = swap_format,
           .extent =
               {
@@ -90,14 +100,35 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .mip_count = 1,
+          .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->color_copy = tb_create_render_target(self, &rt_desc);
     }
 
+    // Create sky capture cube
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Sky Cubemap Capture",
+          .format = swap_format,
+          .extent =
+              {
+                  .width = 256,
+                  .height = 256,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 6,
+          .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
+      };
+      self->cube_capture = tb_create_render_target(self, &rt_desc);
+    }
+
     // Import swapchain target
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "Swapchain",
           .format = swap_format,
           .extent =
               {
@@ -105,6 +136,8 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .mip_count = 1,
+          .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       VkImage images[TB_MAX_FRAME_STATES] = {0};
@@ -241,21 +274,29 @@ tb_create_render_target(RenderTargetSystem *self,
 
   rt->extent = rt_desc->extent;
 
+  // Must set a special flag if we want to make a cubemap
+  VkImageCreateFlags create_flags = 0;
+  if (rt_desc->view_type == VK_IMAGE_VIEW_TYPE_CUBE ||
+      rt_desc->view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY) {
+    create_flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+  }
+
   // Allocate images and create views for each frame
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     {
       VkImageCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+          .flags = create_flags,
           .imageType = VK_IMAGE_TYPE_2D,
           .format = rt_desc->format,
           .extent = rt_desc->extent,
           .mipLevels = 1,
-          .arrayLayers = 1,
+          .arrayLayers = rt_desc->layer_count,
           .samples = VK_SAMPLE_COUNT_1_BIT,
           .usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT,
       };
       err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info,
-                                       "Render Target", &rt->images[i]);
+                                       rt_desc->name, &rt->images[i]);
       TB_VK_CHECK_RET(err, "Failed to allocate image for render target",
                       InvalidRenderTargetId);
 
@@ -263,15 +304,20 @@ tb_create_render_target(RenderTargetSystem *self,
     }
 
     {
+      static const uint32_t name_max = 100;
+      char view_name[name_max] = {0};
+      SDL_snprintf(view_name, name_max, "%s View", rt_desc->name);
+
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           .viewType = rt_desc->view_type,
           .format = rt_desc->format,
           .image = rt->images[i].image,
-          .subresourceRange = {aspect, 0, 1, 0, 1},
+          .subresourceRange = {aspect, 0, rt_desc->mip_count, 0,
+                               rt_desc->layer_count},
       };
       err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                     "Render Target View", &rt->views[i]);
+                                     view_name, &rt->views[i]);
       TB_VK_CHECK_RET(err, "Failed to create image view for render target",
                       InvalidRenderTargetId);
     }

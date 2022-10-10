@@ -18,8 +18,11 @@ typedef struct RenderTargetSystemDescriptor {
 } RenderTargetSystemDescriptor;
 
 typedef struct RenderTargetDescriptor {
+  const char *name;
   VkFormat format;
   VkExtent3D extent;
+  uint32_t mip_count;
+  uint32_t layer_count;
   VkImageViewType view_type;
 } RenderTargetDescriptor;
 
@@ -38,6 +41,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId hdr_color;
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;
+  TbRenderTargetId cube_capture;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(
