@@ -132,7 +132,7 @@ void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);
 VkResult
 tb_rnd_frame_desc_pool_tick(RenderSystem *self,
                             const VkDescriptorPoolCreateInfo *pool_info,
-                            const VkDescriptorSetLayout *layouts,
+                            VkDescriptorSetLayout layout,
                             FrameDescriptorPool *pools, uint32_t set_count);
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(RenderSystem *self,
                                                FrameDescriptorPool *pools,

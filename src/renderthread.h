@@ -27,6 +27,12 @@ typedef struct RenderThreadDescriptor {
 
 #define TB_VMA_TMP_GPU_MB 256
 
+typedef struct ImageTransition {
+  VkPipelineStageFlags src_flags;
+  VkPipelineStageFlags dst_flags;
+  VkImageMemoryBarrier barrier;
+} ImageTransition;
+
 typedef struct PassContext {
   TbRenderPassId id;
   VkRenderPass pass;
@@ -36,7 +42,7 @@ typedef struct PassContext {
   uint32_t height;
 
   uint32_t barrier_count;
-  VkImageMemoryBarrier barriers[4];
+  ImageTransition barriers[4];
 } PassContext;
 
 typedef struct DrawContext {
