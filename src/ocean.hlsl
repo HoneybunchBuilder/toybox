@@ -13,7 +13,7 @@ float linear_depth(float depth, float near, float far)
 
 float depth_from_clip_z(float z, float near, float far)
 {
-  return max(((1.0-(z)/near)*far),0);
+  return max((1.0 - z / near) * far, 0);
 }
 
 float4 frag(Interpolators i) : SV_TARGET

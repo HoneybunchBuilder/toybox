@@ -34,7 +34,7 @@ struct Interpolators
 
 float4 clip_to_screen(float4 clip)
 {
-  float4 o = clip * 0.5f + 0.5f;
+  float4 o = clip * 0.5f;
   o.xy += o.w;
   o.zw = clip.zw;
   return o;
@@ -71,11 +71,11 @@ float3 gerstner_wave(OceanWave wave, float3 p, inout float3 tangent, inout float
 
 Interpolators vert(VertexIn i)
 {
-  OceanWave wave_0 = {0.24, 32, float2(0.8, -1)};
-  OceanWave wave_1 = {0.28, 19, float2(-1, 0.6)};
-  OceanWave wave_2 = {0.18, 23, float2(0.2, 3)};
-  OceanWave wave_3 = {0.21, 20, float2(0.5, 1.7)};
-  OceanWave wave_4 = {0.24, 16, float2(-0.6, .84)};
+  OceanWave wave_0 = {0.4, 64, float2(0.8, -1)};
+  OceanWave wave_1 = {0.3, 24, float2(-1, 0.6)};
+  OceanWave wave_2 = {0.25, 16, float2(0.2, 3)};
+  OceanWave wave_3 = {0.2, 10, float2(0.5, 1.7)};
+  OceanWave wave_4 = {0.15, 8, float2(-0.6, .84)};
 
   float3 tangent = float3(1, 0, 0);
   float3 binormal = float3(0, 0, 1);
