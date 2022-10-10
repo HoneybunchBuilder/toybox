@@ -317,7 +317,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Load starter scene into world
-  int32_t scene_idx = 3;
+  int32_t scene_idx = 0;
   const char *scene_path = scene_asset_paths[scene_idx];
   success = tb_world_load_scene(&world, scene_path);
   TB_CHECK_RETURN(success, "Failed to load scene.", -1);
@@ -347,7 +347,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false;
       TracyCZoneEnd(trcy_ctx);
-      TracyCFrameMarkEnd("Frame");
+      TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
 

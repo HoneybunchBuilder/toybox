@@ -135,6 +135,10 @@ void tick_render_object_system(RenderObjectSystem *self,
 
   // Just upload and write all objects for now, they tend to be important
   // anyway
+  // NOTE: This is currently a hot spot. Since all objects in the scene have
+  // their object data written, this can often take a sizeable amount of
+  // time on the main thread. This should only process objects after view
+  // culling.
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
       self->tmp_alloc, self->render_object_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
