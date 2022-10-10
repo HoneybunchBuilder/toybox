@@ -5,9 +5,10 @@
 
 ConstantBuffer<OceanData> ocean_data : register(b0, space0); // Vertex Stage Only
 Texture2D depth_map : register(t1, space0); // Fragment Stage Only
-sampler static_sampler : register(s2, space0); // Immutable Sampler
+Texture2D color_map : register(t2, space0); // Fragment Stage Only
+sampler static_sampler : register(s3, space0); // Immutable Sampler
 [[vk::push_constant]] 
-ConstantBuffer<OceanPushConstants> consts : register(b3, space0); // Vertex Stage Only
+ConstantBuffer<OceanPushConstants> consts : register(b4, space0); // Vertex Stage Only
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data: register(b0, space1);
@@ -23,7 +24,7 @@ struct Interpolators
   float4 clip_pos : SV_POSITION;
   #ifndef OCEAN_PREPASS
   float3 world_pos: POSITION0;
-  //float4 screen_pos : POSITION1;
+  float4 screen_pos : POSITION1;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   //float2 uv: TEXCOORD0;
@@ -94,7 +95,7 @@ Interpolators vert(VertexIn i)
   float4 world_pos = float4(pos, 1.0);
 
   o.world_pos = world_pos.xyz;
-  //o.screen_pos = clip_to_screen(clip_pos);
+  o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
   //o.uv = i.uv;

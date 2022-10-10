@@ -188,7 +188,7 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
               .attachmentCount = 1,
               .pAttachments =
                   &(VkPipelineColorBlendAttachmentState){
-                      .blendEnable = VK_TRUE,
+                      .blendEnable = VK_FALSE,
                       .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
                       .dstColorBlendFactor =
                           VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
@@ -362,8 +362,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 3,
-        .pBindings = (VkDescriptorSetLayoutBinding[3]){
+        .bindingCount = 4,
+        .pBindings = (VkDescriptorSetLayoutBinding[4]){
             {
                 .binding = 0,
                 .descriptorCount = 1,
@@ -378,6 +378,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
             },
             {
                 .binding = 2,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+            {
+                .binding = 3,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -514,12 +520,14 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     }
 
     // Just upload and write all views for now, they tend to be important anyway
-    const uint32_t write_count = ocean_count * 2;
+    const uint32_t write_count = ocean_count * 3;
     VkWriteDescriptorSet *writes =
         tb_alloc_nm_tp(self->tmp_alloc, write_count, VkWriteDescriptorSet);
     VkDescriptorBufferInfo *buffer_info =
         tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorBufferInfo);
-    VkDescriptorImageInfo *image_info =
+    VkDescriptorImageInfo *depth_info =
+        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorImageInfo);
+    VkDescriptorImageInfo *color_info =
         tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorImageInfo);
     TbHostBuffer *buffers =
         tb_alloc_nm_tp(self->tmp_alloc, ocean_count, TbHostBuffer);
@@ -528,7 +536,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           tb_get_component(oceans, oc_idx, OceanComponent);
       TbHostBuffer *buffer = &buffers[oc_idx];
 
-      const uint32_t write_idx = oc_idx * 2;
+      const uint32_t write_idx = oc_idx * 3;
 
       OceanData data = {
           .wave_count = ocean_comp->wave_count,
@@ -556,13 +564,22 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .range = sizeof(OceanData),
       };
 
-      VkImageView view = tb_render_target_get_view(
+      VkImageView depth_view = tb_render_target_get_view(
           self->render_target_system, self->render_system->frame_idx,
           self->render_target_system->depth_buffer_copy);
 
-      image_info[oc_idx] = (VkDescriptorImageInfo){
+      VkImageView color_view = tb_render_target_get_view(
+          self->render_target_system, self->render_system->frame_idx,
+          self->render_target_system->color_copy);
+
+      depth_info[oc_idx] = (VkDescriptorImageInfo){
           .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = view,
+          .imageView = depth_view,
+      };
+
+      color_info[oc_idx] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = color_view,
       };
 
       // Construct write descriptors
@@ -582,7 +599,16 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .dstArrayElement = 0,
           .descriptorCount = 1,
           .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .pImageInfo = &image_info[oc_idx],
+          .pImageInfo = &depth_info[oc_idx],
+      };
+      writes[write_idx + 2] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = ocean_set,
+          .dstBinding = 2,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo = &color_info[oc_idx],
       };
     }
     vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
