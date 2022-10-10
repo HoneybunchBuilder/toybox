@@ -506,13 +506,10 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
                   .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               },
       };
-      VkDescriptorSetLayout *layouts =
-          tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < ocean_count; ++i) {
-        layouts[i] = self->set_layout;
-      }
-      err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
-                                        self->ocean_pools, ocean_count);
+
+      err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info,
+                                        self->set_layout, self->ocean_pools,
+                                        ocean_count);
       TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
     }
 

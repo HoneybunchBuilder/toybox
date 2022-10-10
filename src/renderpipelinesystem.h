@@ -42,9 +42,11 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId opaque_depth_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;
+  TbRenderPassId color_copy_pass;
   TbRenderPassId sky_pass;
   TbRenderPassId transparent_depth_pass;
   TbRenderPassId transparent_color_pass;
+  TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
   uint32_t pass_count;
@@ -54,12 +56,16 @@ typedef struct RenderPipelineSystem {
 
   // Some default draw contexts
   TbDrawContextId depth_copy_ctx;
+  TbDrawContextId color_copy_ctx;
+  TbDrawContextId tonemap_ctx;
 
-  // Depth Copy resources
+  // Copy resources
   VkSampler sampler;
-  VkDescriptorSetLayout depth_set_layout;
-  VkPipelineLayout depth_copy_pipe_layout;
+  VkDescriptorSetLayout copy_set_layout;
+  VkPipelineLayout copy_pipe_layout;
   VkPipeline depth_copy_pipe;
+  VkPipeline color_copy_pipe;
+  VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
 } RenderPipelineSystem;

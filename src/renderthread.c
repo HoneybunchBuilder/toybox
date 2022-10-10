@@ -1130,10 +1130,10 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
   };
 
   // Perform any necessary image transitions
-  if (pass->barrier_count > 0) {
-    vkCmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0,
-                         NULL, pass->barrier_count, pass->barriers);
+  for (uint32_t i = 0; i < pass->barrier_count; ++i) {
+    const ImageTransition *barrier = &pass->barriers[i];
+    vkCmdPipelineBarrier(buffer, barrier->src_flags, barrier->dst_flags, 0, 0,
+                         NULL, 0, NULL, 1, &barrier->barrier);
   }
 
   vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);

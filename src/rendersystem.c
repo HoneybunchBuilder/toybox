@@ -640,7 +640,7 @@ void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool) {
 VkResult
 tb_rnd_frame_desc_pool_tick(RenderSystem *self,
                             const VkDescriptorPoolCreateInfo *pool_info,
-                            const VkDescriptorSetLayout *layouts,
+                            VkDescriptorSetLayout layout,
                             FrameDescriptorPool *pools, uint32_t set_count) {
   VkResult err = VK_SUCCESS;
   FrameDescriptorPool *pool = &pools[self->frame_idx];
@@ -660,6 +660,12 @@ tb_rnd_frame_desc_pool_tick(RenderSystem *self,
   pool->set_count = set_count;
   pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
                                 VkDescriptorSet);
+
+  VkDescriptorSetLayout *layouts =
+      tb_alloc_nm_tp(self->tmp_alloc, pool->set_count, VkDescriptorSetLayout);
+  for (uint32_t i = 0; i < pool->set_count; ++i) {
+    layouts[i] = layout;
+  }
 
   VkDescriptorSetAllocateInfo alloc_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,

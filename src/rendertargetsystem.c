@@ -35,7 +35,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     const uint32_t width = swapchain->width;
     const uint32_t height = swapchain->height;
 
-    // Create depth targets
+    // Create depth target
     {
       RenderTargetDescriptor rt_desc = {
           .format = VK_FORMAT_D32_SFLOAT,
@@ -47,6 +47,20 @@ bool create_render_target_system(RenderTargetSystem *self,
               },
       };
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create hdr color target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+      };
+      self->hdr_color = tb_create_render_target(self, &rt_desc);
     }
 
     // Create depth copy target which has a different format
@@ -61,6 +75,20 @@ bool create_render_target_system(RenderTargetSystem *self,
               },
       };
       self->depth_buffer_copy = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create color copy target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = swap_format,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+      };
+      self->color_copy = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target
