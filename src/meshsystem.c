@@ -63,6 +63,12 @@ typedef struct MeshDrawBatch {
   MeshDrawView *views;
 } MeshDrawBatch;
 
+typedef struct VisibleSet {
+  TbViewId view;
+  uint32_t mesh_count;
+  MeshComponent const **meshes;
+} VisibleSet;
+
 VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                                Allocator std_alloc, VkRenderPass pass,
                                VkPipelineLayout pipe_layout,
@@ -593,6 +599,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     return;
   }
 
+  TB_PROF_MESSAGE("Camera Count: %d", camera_count);
+
   // Since we want to update the world matrix dirty flag on the transform
   // component, we need to write the components back out
   EntityId *out_entity_ids = tb_get_column_entity_ids(input, 1);
@@ -604,26 +612,72 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Update each mesh's render object data while also collecting world space
   // AABBs for culling later
   AABB *world_space_aabbs = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, AABB);
-  for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-    const MeshComponent *mesh_comp =
-        tb_get_component(mesh_store, mesh_idx, MeshComponent);
+  {
+    TracyCZoneN(ctx, "Calc World Space AABBs", true);
+    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+      const MeshComponent *mesh_comp =
+          tb_get_component(mesh_store, mesh_idx, MeshComponent);
 
-    // Convert the transform to a matrix for rendering
-    CommonObjectData data = {.m = {.row0 = {0}}};
-    tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
+      // Convert the transform to a matrix for rendering
+      CommonObjectData data = {.m = {.row0 = {0}}};
+      tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
 
-    const float3 translation = out_trans[mesh_idx].transform.position;
-    const float3 scale = out_trans[mesh_idx].transform.scale;
+      const float3 translation = out_trans[mesh_idx].transform.position;
+      const float3 scale = out_trans[mesh_idx].transform.scale;
 
-    world_space_aabbs[mesh_idx] = mesh_comp->local_aabb;
-    // Manually add translation and scale to min and max of AABB
-    world_space_aabbs[mesh_idx].min += translation;
-    world_space_aabbs[mesh_idx].max += translation;
-    world_space_aabbs[mesh_idx].min *= scale;
-    world_space_aabbs[mesh_idx].max *= scale;
+      world_space_aabbs[mesh_idx] = mesh_comp->local_aabb;
+      // Manually add translation and scale to min and max of AABB
+      world_space_aabbs[mesh_idx].min += translation;
+      world_space_aabbs[mesh_idx].max += translation;
+      world_space_aabbs[mesh_idx].min *= scale;
+      world_space_aabbs[mesh_idx].max *= scale;
 
-    tb_render_object_system_set_object_data(self->render_object_system,
-                                            mesh_comp->object_id, &data);
+      tb_render_object_system_set_object_data(self->render_object_system,
+                                              mesh_comp->object_id, &data);
+    }
+    TracyCZoneEnd(ctx);
+  }
+
+  // Figure out which meshes are visible
+  // Worst case *everything* is visible so alloc for that off the tmp allocator
+  VisibleSet *visible_sets =
+      tb_alloc_nm_tp(self->tmp_alloc, camera_count, VisibleSet);
+  {
+    TracyCZoneN(ctx, "View Culling", true);
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      const CameraComponent *camera =
+          tb_get_component(camera_store, cam_idx, CameraComponent);
+
+      visible_sets[cam_idx] = (VisibleSet){
+          .view = camera->view_id,
+          .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
+                                   const MeshComponent *),
+      };
+    }
+
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      VisibleSet *visible_set = &visible_sets[cam_idx];
+
+      const View *view = tb_get_view(self->view_system, visible_set->view);
+      const Frustum *frustum = &view->frustum;
+
+      for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
+        const AABB *world_aabb = &world_space_aabbs[mesh_idx];
+        if (!frustum_test_aabb(frustum, world_aabb)) {
+          continue;
+        }
+        const MeshComponent *mesh_comp =
+            tb_get_component(mesh_store, mesh_idx, MeshComponent);
+
+        const uint32_t idx = visible_set->mesh_count;
+        visible_set->meshes[idx] = mesh_comp;
+        visible_set->mesh_count++;
+      }
+
+      TB_PROF_MESSAGE("Visible Mesh Count: %d", visible_set->mesh_count);
+    }
+    TracyCZoneEnd(ctx);
   }
 
   Allocator tmp_alloc = self->render_system->render_thread
@@ -635,24 +689,29 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
   SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
   {
-    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-      const MeshComponent *mesh_comp =
-          tb_get_component(mesh_store, mesh_idx, MeshComponent);
-      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
-           ++sub_idx) {
-        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-        TbMaterialPerm mat_perm =
-            tb_mat_system_get_perm(self->material_system, submesh->material);
-        uint32_t pipe_idx = get_pipeline_for_input_and_mat(
-            self, submesh->vertex_input, mat_perm);
+    TracyCZoneN(ctx, "Batch Culling", true);
+    for (uint32_t view_idx = 0; view_idx < camera_count; ++view_idx) {
+      const VisibleSet *visible_set = &visible_sets[view_idx];
+      for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
+           ++mesh_idx) {
+        const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
+        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+             ++sub_idx) {
+          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+          TbMaterialPerm mat_perm =
+              tb_mat_system_get_perm(self->material_system, submesh->material);
+          uint32_t pipe_idx = get_pipeline_for_input_and_mat(
+              self, submesh->vertex_input, mat_perm);
 
-        if (pipe_idxs[pipe_idx] == 0) {
-          pipe_idxs[pipe_idx] = pipe_count;
-          pipe_count++;
-          TB_CHECK(pipe_count <= max_pipe_count, "Unexpected # of pipelines");
+          if (pipe_idxs[pipe_idx] == 0) {
+            pipe_idxs[pipe_idx] = pipe_count;
+            pipe_count++;
+            TB_CHECK(pipe_count <= max_pipe_count, "Unexpected # of pipelines");
+          }
         }
       }
     }
+    TracyCZoneEnd(ctx);
   }
 
   // Just collect a batch for every known used pipeline
@@ -674,13 +733,15 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
       for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
         MeshDrawView *view = &batch->views[cam_idx];
-        // Each view could see each mesh
+        // Each view already knows how many meshes it should see
         // Each mesh could have TB_SUBMESH_MAX # of submeshes
         *view = (MeshDrawView){0};
-        view->draws = tb_alloc_nm_tp(tmp_alloc, mesh_count, MeshDraw);
+        view->draws = tb_alloc_nm_tp(
+            tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
         view->draw_count = 0;
 
-        SDL_memset(view->draws, 0, sizeof(MeshDraw) * mesh_count);
+        SDL_memset(view->draws, 0,
+                   sizeof(MeshDraw) * visible_sets[cam_idx].mesh_count);
       }
     }
     TracyCZoneEnd(batch_ctx);
@@ -690,31 +751,16 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   const uint32_t width = self->render_system->render_thread->swapchain.width;
   const uint32_t height = self->render_system->render_thread->swapchain.height;
 
-  TB_PROF_MESSAGE("Camera Count: %d", camera_count);
-
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-    const CameraComponent *camera =
-        tb_get_component(camera_store, cam_idx, CameraComponent);
-
-    const View *view = tb_get_view(self->view_system, camera->view_id);
+    const VisibleSet *visible_set = &visible_sets[cam_idx];
 
     // Get camera descriptor set
     VkDescriptorSet view_set =
-        tb_view_system_get_descriptor(self->view_system, camera->view_id);
+        tb_view_system_get_descriptor(self->view_system, visible_set->view);
 
-    const Frustum *frustum = &view->frustum;
-
-    uint32_t visible_mesh_count = 0;
-
-    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-      const MeshComponent *mesh_comp =
-          tb_get_component(mesh_store, mesh_idx, MeshComponent);
-
-      // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
-      const AABB *world_aabb = &world_space_aabbs[mesh_idx];
-      if (!frustum_test_aabb(frustum, world_aabb)) {
-        continue;
-      }
+    for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
+         ++mesh_idx) {
+      const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
 
       // Get mesh descriptor set
       VkDescriptorSet obj_set = tb_render_object_system_get_descriptor(
@@ -749,13 +795,13 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           view->view_set = view_set;
           view->viewport = (VkViewport){0, 0, width, height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
-          view->draw_count = visible_mesh_count + 1;
-          MeshDraw *draw = &view->draws[visible_mesh_count];
+          view->draw_count = visible_set->mesh_count;
+          MeshDraw *draw = &view->draws[mesh_idx];
           draw->geom_buffer = geom_buffer;
           draw->obj_set = obj_set;
           draw->submesh_draw_count = submesh_draw_idx + 1;
           SubMeshDraw *sub_draw =
-              &view->draws[visible_mesh_count].submesh_draws[submesh_draw_idx];
+              &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
           *sub_draw = (SubMeshDraw){
               .mat_set = material_set,
               .index_type = submesh->index_type,
@@ -802,10 +848,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           }
         }
       }
-
-      visible_mesh_count++;
     }
-    TB_PROF_MESSAGE("Visible Mesh Count: %d", visible_mesh_count);
   }
 
   // Submit batches
