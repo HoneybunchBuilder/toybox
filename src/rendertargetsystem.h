@@ -20,6 +20,7 @@ typedef struct RenderTargetSystemDescriptor {
 typedef struct RenderTargetDescriptor {
   VkFormat format;
   VkExtent3D extent;
+  VkImageViewType view_type;
 } RenderTargetDescriptor;
 
 typedef struct RenderTargetSystem {
