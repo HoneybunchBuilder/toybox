@@ -45,6 +45,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
     }
@@ -59,6 +60,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->hdr_color = tb_create_render_target(self, &rt_desc);
     }
@@ -73,6 +75,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->depth_buffer_copy = tb_create_render_target(self, &rt_desc);
     }
@@ -87,6 +90,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->color_copy = tb_create_render_target(self, &rt_desc);
     }
@@ -101,6 +105,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       VkImage images[TB_MAX_FRAME_STATES] = {0};
       for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -260,7 +265,7 @@ tb_create_render_target(RenderTargetSystem *self,
     {
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .viewType = rt_desc->view_type,
           .format = rt_desc->format,
           .image = rt->images[i].image,
           .subresourceRange = {aspect, 0, 1, 0, 1},
