@@ -228,6 +228,7 @@ void sky_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                      uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
+  cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
 
   const SkyDrawBatch *sky_batches = (SkyDrawBatch *)batches;
 
@@ -252,6 +253,7 @@ void sky_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }

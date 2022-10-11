@@ -240,6 +240,7 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 1, true);
+  cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
   const ImGuiDrawBatch *imgui_batches = (ImGuiDrawBatch *)batches;
 
@@ -271,6 +272,7 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
   }
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
