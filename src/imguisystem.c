@@ -236,10 +236,11 @@ VkResult create_imgui_pipeline2(VkDevice device,
   return err;
 }
 
-void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
-                       const void *batches) {
-  TracyCZoneN(ctx, "ImGui Record", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 1, true);
+
   const ImGuiDrawBatch *imgui_batches = (ImGuiDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -269,6 +270,8 @@ void imgui_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
       }
     }
   }
+
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 

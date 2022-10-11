@@ -1343,7 +1343,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                ++draw_idx) {
             DrawContext *draw = &state->draw_contexts[draw_idx];
             if (draw->pass_id == pass->id) {
-              draw->record_fn(command_buffer, draw->batch_count, draw->batches);
+              draw->record_fn(gpu_ctx, command_buffer, draw->batch_count,
+                              draw->batches);
             }
           }
 

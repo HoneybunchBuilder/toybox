@@ -43,13 +43,10 @@ typedef struct OceanDrawBatch {
   uint64_t uv_offset;
 } OceanDrawBatch;
 
-void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
-                       const void *batches) {
-  TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
-
-  const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
+void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
+                  const OceanDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const OceanDrawBatch *batch = &ocean_batches[batch_idx];
+    const OceanDrawBatch *batch = &batches[batch_idx];
     VkPipelineLayout layout = batch->layout;
     VkBuffer geom_buffer = batch->geom_buffer;
 
@@ -71,6 +68,29 @@ void ocean_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
 
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
+}
+
+void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                          uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 1, true);
+
+  const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
+  ocean_record(buffer, batch_count, ocean_batches);
+
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 1, true);
+
+  const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
+  ocean_record(buffer, batch_count, ocean_batches);
+
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
@@ -438,7 +458,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   self->trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
-                              .draw_fn = ocean_pass_record,
+                              .draw_fn = ocean_prepass_record,
                               .pass_id = depth_id,
                           });
 
