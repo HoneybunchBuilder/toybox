@@ -382,9 +382,10 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
   return err;
 }
 
-void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
-                        const void *batches) {
+void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
 
   const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
 
@@ -395,6 +396,8 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
       TracyCZoneEnd(batch_ctx);
       continue;
     }
+
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
@@ -404,6 +407,7 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
         TracyCZoneEnd(view_ctx);
         continue;
       }
+      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
@@ -416,6 +420,7 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
           TracyCZoneEnd(draw_ctx);
           continue;
         }
+        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                                 1, 1, &draw->obj_set, 0, NULL);
         VkBuffer geom_buffer = draw->geom_buffer;
@@ -426,6 +431,8 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                        true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
+            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
+                              true);
             vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     layout, 0, 1, &submesh->mat_set, 0, NULL);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
@@ -437,16 +444,22 @@ void opaque_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
             }
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+            TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
+        TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
+      TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
+
+    TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 

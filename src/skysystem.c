@@ -224,10 +224,10 @@ VkResult create_sky_pipeline2(VkDevice device,
   return err;
 }
 
-void sky_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
-                     const void *batches) {
-  TracyCZoneN(ctx, "Sky Record", true);
-  TracyCZoneColor(ctx, TracyCategoryColorRendering);
+void sky_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                     uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
 
   const SkyDrawBatch *sky_batches = (SkyDrawBatch *)batches;
 
@@ -251,6 +251,8 @@ void sky_pass_record(VkCommandBuffer buffer, uint32_t batch_count,
                            &batch->vertex_offset);
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
+
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 

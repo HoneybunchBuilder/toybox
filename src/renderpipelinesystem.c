@@ -473,10 +473,10 @@ void record_fullscreen(VkCommandBuffer buffer, const FullscreenBatch *batch) {
   vkCmdDrawIndexed(buffer, 3, 1, 0, 0, 0);
 }
 
-void record_depth_copy(VkCommandBuffer buffer, uint32_t batch_count,
-                       const void *batches) {
+void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Depth Copy Record", TracyCategoryColorRendering, true);
-
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Depth Copy", 1, true);
   // Only expecting one draw per pass
   if (batch_count != 1) {
     TracyCZoneEnd(ctx);
@@ -486,12 +486,14 @@ void record_depth_copy(VkCommandBuffer buffer, uint32_t batch_count,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
-void record_color_copy(VkCommandBuffer buffer, uint32_t batch_count,
-                       const void *batches) {
+void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Color Copy Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Color Copy", 1, true);
 
   // Only expecting one draw per pass
   if (batch_count != 1) {
@@ -502,12 +504,14 @@ void record_color_copy(VkCommandBuffer buffer, uint32_t batch_count,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
-void record_tonemapping(VkCommandBuffer buffer, uint32_t batch_count,
-                        const void *batches) {
+void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Tonemapping Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Tonemapping", 1, true);
 
   // Only expecting one draw per pass
   if (batch_count != 1) {
@@ -518,6 +522,7 @@ void record_tonemapping(VkCommandBuffer buffer, uint32_t batch_count,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 

@@ -51,5 +51,8 @@ typedef struct TbImage {
   VmaAllocationInfo info;
 } TbImage;
 
-typedef void tb_record_draw_batch(VkCommandBuffer buffer, uint32_t batch_count,
+typedef struct TracyCGPUContext TracyCGPUContext;
+
+typedef void tb_record_draw_batch(TracyCGPUContext *gpu_ctx,
+                                  VkCommandBuffer buffer, uint32_t batch_count,
                                   const void *batches);
