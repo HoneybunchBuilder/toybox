@@ -1411,7 +1411,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           .pSignalSemaphores = &render_complete_sem,
       };
 
-      queue_begin_label(graphics_queue, "raster",
+      queue_begin_label(graphics_queue, "Raster",
                         (float4){1.0f, 0.1f, 0.1f, 1.0f});
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, state->fence);
       queue_end_label(graphics_queue);

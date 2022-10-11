@@ -74,10 +74,12 @@ void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                           uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 1, true);
+  cmd_begin_label(buffer, "Ocean Prepass", (float4){0.0f, 0.4f, 0.4f, 1.0f});
 
   const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
   ocean_record(buffer, batch_count, ocean_batches);
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
@@ -86,10 +88,12 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 1, true);
+  cmd_begin_label(buffer, "Ocean", (float4){0.0f, 0.8f, 0.8f, 1.0f});
 
   const OceanDrawBatch *ocean_batches = (const OceanDrawBatch *)batches;
   ocean_record(buffer, batch_count, ocean_batches);
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }

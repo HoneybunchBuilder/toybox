@@ -477,6 +477,8 @@ void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Depth Copy Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Depth Copy", 1, true);
+  cmd_begin_label(buffer, "Depth Copy", (float4){0.8f, 0.0f, 0.4f, 1.0f});
+
   // Only expecting one draw per pass
   if (batch_count != 1) {
     TracyCZoneEnd(ctx);
@@ -486,6 +488,7 @@ void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
@@ -494,6 +497,7 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Color Copy Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Color Copy", 1, true);
+  cmd_begin_label(buffer, "Color Copy", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   // Only expecting one draw per pass
   if (batch_count != 1) {
@@ -504,6 +508,7 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
@@ -512,6 +517,7 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Tonemapping Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Tonemapping", 1, true);
+  cmd_begin_label(buffer, "Tonemapping", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
   // Only expecting one draw per pass
   if (batch_count != 1) {
@@ -522,6 +528,7 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   const FullscreenBatch *batch = (const FullscreenBatch *)batches;
   record_fullscreen(buffer, batch);
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }

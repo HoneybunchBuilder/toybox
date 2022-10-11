@@ -12,6 +12,7 @@
 #include "rendersystem.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
+#include "vkdbg.h"
 #include "world.h"
 
 // Ignore some warnings for the generated headers
@@ -398,6 +399,8 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
+
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
@@ -408,6 +411,7 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
       TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
@@ -421,6 +425,7 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           continue;
         }
         TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                                 1, 1, &draw->obj_set, 0, NULL);
         VkBuffer geom_buffer = draw->geom_buffer;
@@ -448,13 +453,16 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           }
           TracyCZoneEnd(submesh_ctx);
         }
+        cmd_end_label(buffer);
         TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
+      cmd_end_label(buffer);
       TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
+    cmd_end_label(buffer);
     TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
