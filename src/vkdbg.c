@@ -2,6 +2,8 @@
 
 #include "tbvk.h"
 
+#ifndef FINAL
+
 void queue_begin_label(VkQueue queue, const char *label, float4 color) {
   if (vkQueueBeginDebugUtilsLabelEXT) {
     VkDebugUtilsLabelEXT info = {
@@ -63,3 +65,5 @@ void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
     vkSetDebugUtilsObjectTagEXT(device, &info);
   }
 }
+
+#endif
