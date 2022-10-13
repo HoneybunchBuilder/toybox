@@ -520,9 +520,10 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 
     uint32_t component_idx = 0;
     {
-      {
-        const cgltf_camera *camera = node->camera;
+      if (node->camera) {
+        cgltf_camera *camera = tb_alloc_tp(tmp_alloc, cgltf_camera);
         if (camera) {
+          SDL_memcpy(camera, node->camera, sizeof(cgltf_camera));
           const cgltf_camera_type type = camera->type;
 
           if (type == cgltf_camera_type_perspective) {
@@ -537,8 +538,9 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
         }
       }
       if (node->light) {
-        const cgltf_light *light = node->light;
+        cgltf_light *light = tb_alloc_tp(tmp_alloc, cgltf_light);
         if (light) {
+          SDL_memcpy(light, node->light, sizeof(cgltf_light));
           const cgltf_light_type type = light->type;
           if (type == cgltf_light_type_directional) {
             // Add component to entity
@@ -720,6 +722,7 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
   }
   EntityId entity_id = world->entity_count;
   Entity *entity = &world->entities[entity_id];
+  *entity = 0; // Must initialize the entity
   world->entity_count++;
 
   for (uint32_t store_idx = 0; store_idx < world->component_store_count;
@@ -729,8 +732,10 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
     // Determine if this component store will be referenced by this entity
     for (uint32_t comp_idx = 0; comp_idx < desc->component_count; ++comp_idx) {
       if (desc->component_ids[comp_idx] == store->id) {
+
         // Mark this store as being used by the entity
         (*entity) |= (1 << store_idx);
+
         store->count++;
 
         uint32_t system_dep_count = 0;

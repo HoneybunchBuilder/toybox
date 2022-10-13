@@ -24,7 +24,7 @@ void destroy_coreui_component(CoreUIComponent *self, uint32_t system_dep_count,
 TB_DEFINE_COMPONENT(coreui, CoreUIComponent, void)
 
 void tb_coreui_component_descriptor(ComponentDescriptor *desc) {
-  desc->name = "Input";
+  desc->name = "CoreUI";
   desc->size = sizeof(CoreUIComponent);
   desc->id = CoreUIComponentId;
   desc->create = tb_create_coreui_component;
