@@ -1153,6 +1153,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     }
 
     self->mesh_ids[index] = id;
+    self->mesh_ref_counts[index] =
+        0; // Must initialize this or it could be garbage
     self->mesh_count++;
   }
 
