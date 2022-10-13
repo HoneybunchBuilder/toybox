@@ -66,4 +66,8 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf) {
 }
 }
 
+#else
+
+void ___tracy_set_thread_name(const char *name) { (void)name; }
+
 #endif

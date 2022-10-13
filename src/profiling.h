@@ -8,7 +8,9 @@
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #endif
 
+#ifdef TRACY_ENABLE
 #define TRACY_VK_C_ENABLE
+#endif
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
@@ -68,8 +70,8 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 #endif
 #else
 
-#define TracyCGPUContext int
-#define TracyCGPUScope int
+typedef struct TracyCGPUContext TracyCGPUContext;
+typedef struct TracyCGPUScope TracyCGPUScope;
 
 #define TracyCVkContextExt(...) 0
 #define TracyCVkContext(...)

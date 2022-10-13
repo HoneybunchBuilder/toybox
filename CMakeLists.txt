@@ -25,6 +25,7 @@ project(toybox
         DESCRIPTION "A personal game engine toybox project"
         LANGUAGES C CXX)
 
+option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
 
@@ -283,6 +284,10 @@ target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
 #target_compile_definitions(toybox PRIVATE "-D_DISABLE_STRING_ANNOTATION" "-D_DISABLE_VECTOR_ANNOTATION")
 #target_compile_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer")
 #target_link_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer" "-fuse-ld=lld")
+
+if(FINAL)
+  target_compile_definitions(toybox PRIVATE "-DFINAL")
+endif()
 
 if(STATIC)
   target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
