@@ -280,6 +280,10 @@ target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${conf
 target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
 
+#target_compile_definitions(toybox PRIVATE "-D_DISABLE_STRING_ANNOTATION" "-D_DISABLE_VECTOR_ANNOTATION")
+#target_compile_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer")
+#target_link_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer" "-fuse-ld=lld")
+
 if(STATIC)
   target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
   set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
