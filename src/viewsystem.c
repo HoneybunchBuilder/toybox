@@ -4,6 +4,7 @@
 #include "common.hlsli"
 #include "profiling.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "world.h"
@@ -15,27 +16,68 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
       tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
                   "Failed to find render system which view depends on", false);
+  RenderTargetSystem *render_target_system =
+      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
+  TB_CHECK_RETURN(render_target_system,
+                  "Failed to find render target system which view depends on",
+                  false);
 
   *self = (ViewSystem){
       .render_system = render_system,
+      .render_target_system = render_target_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
 
   VkResult err = VK_SUCCESS;
 
+  // Create Immutable Sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info,
+                                "Irradiance Sampler", &self->sampler);
+    TB_VK_CHECK_RET(err, "Failed to create irradiance sampler", err);
+  }
+
   // Create view descriptor set layout
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
+        .bindingCount = 3,
         .pBindings =
-            &(VkDescriptorSetLayoutBinding){
-                .binding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags =
-                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            (VkDescriptorSetLayoutBinding[3]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->sampler,
+                },
             },
     };
     err = tb_rnd_create_set_layout(render_system, &create_info,
@@ -49,6 +91,7 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 
 void destroy_view_system(ViewSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
+  tb_rnd_destroy_sampler(self->render_system, self->sampler);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     ViewSystemFrameState *state = &self->frame_states[i];
@@ -90,11 +133,17 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
       VkDescriptorPoolCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
           .maxSets = self->view_count,
-          .poolSizeCount = 1,
+          .poolSizeCount = 2,
           .pPoolSizes =
-              &(VkDescriptorPoolSize){
-                  .descriptorCount = self->view_count,
-                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              (VkDescriptorPoolSize[2]){
+                  {
+                      .descriptorCount = self->view_count,
+                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                  },
+                  {
+                      .descriptorCount = self->view_count,
+                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                  },
               },
           .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
       };
@@ -129,10 +178,12 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   }
 
   // Just upload and write all views for now, they tend to be important anyway
-  VkWriteDescriptorSet *writes =
-      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkWriteDescriptorSet);
+  VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
+      self->tmp_alloc, self->view_count * 2, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkDescriptorBufferInfo);
+  VkDescriptorImageInfo *image_info =
+      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkDescriptorImageInfo);
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
@@ -157,8 +208,15 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .range = sizeof(CommonViewData),
     };
 
+    image_info[view_idx] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_render_target_get_view(
+            self->render_target_system, self->render_system->frame_idx,
+            self->render_target_system->irradiance_map),
+    };
+
     // Construct a write descriptor
-    writes[view_idx] = (VkWriteDescriptorSet){
+    writes[view_idx + 0] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 0,
@@ -167,9 +225,18 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &buffer_info[view_idx],
     };
+    writes[view_idx + 1] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 1,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[view_idx],
+    };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count, writes, 0, NULL);
+                         self->view_count * 2, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }
@@ -185,8 +252,9 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
       .desc = (InternalDescriptor)view_desc,
       .dep_count = 1,
       .deps[0] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 1,
+      .system_dep_count = 2,
       .system_deps[0] = RenderSystemId,
+      .system_deps[1] = RenderTargetSystemId,
       .create = tb_create_view_system,
       .destroy = tb_destroy_view_system,
       .tick = tb_tick_view_system,

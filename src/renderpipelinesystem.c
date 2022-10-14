@@ -905,8 +905,33 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       },
               },
       };
+
+      // Transition irradiance map
+      PassTransition transition = {
+          .render_target = self->render_target_system->irradiance_map,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .levelCount = 1,
+                              .layerCount = 6,
+                          },
+                  },
+          }};
+
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 2,
+          self, &create_info, 1, &self->opaque_depth_pass, 1, &transition, 2,
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);

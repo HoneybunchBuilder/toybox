@@ -233,10 +233,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     uint32_t i = 0;
     init_order[i++] = RenderSystemId;
     init_order[i++] = InputSystemId;
+    init_order[i++] = RenderTargetSystemId;
     init_order[i++] = ViewSystemId;
     init_order[i++] = RenderObjectSystemId;
     init_order[i++] = TextureSystemId;
-    init_order[i++] = RenderTargetSystemId;
     init_order[i++] = RenderPipelineSystemId;
     init_order[i++] = MaterialSystemId;
     init_order[i++] = MeshSystemId;
