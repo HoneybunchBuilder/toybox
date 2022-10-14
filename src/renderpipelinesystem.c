@@ -690,6 +690,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   // Create some default passes
   {
     // Look up the render targets we know will be needed
+    const TbRenderTargetId env_cube = render_target_system->env_cube;
     const TbRenderTargetId opaque_depth = render_target_system->depth_buffer;
     const TbRenderTargetId hdr_color = render_target_system->hdr_color;
     const TbRenderTargetId depth_copy = render_target_system->depth_buffer_copy;
@@ -698,6 +699,54 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
 
+    // Create env capture pass
+    {
+      // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
+      const uint32_t view_mask = 0x0000003F; // 0b00111111
+      const uint32_t correlation_mask = 0;
+
+      VkRenderPassMultiviewCreateInfo multiview_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
+          .subpassCount = 1,
+          .pViewMasks = &view_mask,
+          .correlationMaskCount = 1,
+          .pCorrelationMasks = &correlation_mask,
+      };
+      VkRenderPassCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+          .pNext = &multiview_info,
+          .attachmentCount = 1,
+          .pAttachments =
+              &(VkAttachmentDescription){
+                  .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                  .samples = VK_SAMPLE_COUNT_1_BIT,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              },
+          .subpassCount = 1,
+          .pSubpasses =
+              &(VkSubpassDescription){
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .colorAttachmentCount = 1,
+                  .pColorAttachments =
+                      &(VkAttachmentReference){
+                          0,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      },
+              },
+      };
+
+      TbRenderPassId id =
+          create_render_pass(self, &create_info, 0, NULL, 0, NULL, 1, &env_cube,
+                             "Env Capture Pass");
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create env capture pass", false);
+      self->env_capture_pass = id;
+    }
     // Create opaque depth pass
     {
       VkRenderPassCreateInfo create_info = {
@@ -728,8 +777,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 
       TbRenderPassId id =
-          create_render_pass(self, &create_info, 0, NULL, 0, NULL, 1,
-                             &opaque_depth, "Opaque Depth Pass");
+          create_render_pass(self, &create_info, 1, &self->env_capture_pass, 0,
+                             NULL, 1, &opaque_depth, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;

@@ -2372,10 +2372,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
 
   // Create Env Map Pipeline
   VkPipeline sky_cube_pipeline = VK_NULL_HANDLE;
-  err = (VkResult)(create_sky_cube_pipeline(
-      device, vk_alloc, pipeline_cache, env_map_pass, ENV_CUBEMAP_DIM,
-      ENV_CUBEMAP_DIM, sky_cube_layout, &sky_cube_pipeline));
-  assert(err == VK_SUCCESS);
 
   // Create Irradiance Cubemaps
   const uint32_t irradiance_mip_count =

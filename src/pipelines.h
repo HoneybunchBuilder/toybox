@@ -45,12 +45,6 @@ uint32_t create_shadow_pipeline(VkDevice device,
                                 uint32_t w, uint32_t h, VkPipelineLayout layout,
                                 VkPipeline *pipe);
 
-uint32_t create_sky_cube_pipeline(VkDevice device,
-                                  const VkAllocationCallbacks *vk_alloc,
-                                  VkPipelineCache cache, VkRenderPass pass,
-                                  uint32_t w, uint32_t h,
-                                  VkPipelineLayout layout, VkPipeline *pipe);
-
 uint32_t create_env_filter_pipeline(VkDevice device,
                                     const VkAllocationCallbacks *vk_alloc,
                                     VkPipelineCache cache, VkRenderPass pass,

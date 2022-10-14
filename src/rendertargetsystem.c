@@ -111,7 +111,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "Sky Cubemap Capture",
-          .format = swap_format,
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
                   .width = 256,
@@ -122,7 +122,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
-      self->cube_capture = tb_create_render_target(self, &rt_desc);
+      self->env_cube = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target
