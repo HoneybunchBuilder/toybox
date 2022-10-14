@@ -42,6 +42,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;
   TbRenderTargetId env_cube;
+  TbRenderTargetId irradiance_map;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

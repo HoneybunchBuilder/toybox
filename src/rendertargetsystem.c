@@ -125,6 +125,24 @@ bool create_render_target_system(RenderTargetSystem *self,
       self->env_cube = tb_create_render_target(self, &rt_desc);
     }
 
+    // Create irradiance map
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Irradiance Map",
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .extent =
+              {
+                  .width = 128,
+                  .height = 128,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 6,
+          .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
+      };
+      self->irradiance_map = tb_create_render_target(self, &rt_desc);
+    }
+
     // Import swapchain target
     {
       RenderTargetDescriptor rt_desc = {

@@ -48,3 +48,26 @@ typedef struct CommonObjectData {
 #define VA_INPUT_PERM_TANGENT 0x00000010
 #define VA_INPUT_PERM_COLOR 0x00000020
 #define VA_INPUT_PERM_COUNT 6
+
+// If a shader, provide some helper functions
+#ifdef __HLSL_VERSION
+
+float4 clip_to_screen(float4 clip)
+{
+  float4 o = clip * 0.5f;
+  o.xy += o.w;
+  o.zw = clip.zw;
+  return o;
+}
+
+float linear_depth(float depth, float near, float far)
+{
+  return near * far / (far + depth * (near - far));
+}
+
+float depth_from_clip_z(float z, float near, float far)
+{
+  return max((1.0 - z / near) * far, 0);
+}
+
+#endif
