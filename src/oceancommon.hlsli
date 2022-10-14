@@ -32,14 +32,6 @@ struct Interpolators
   #endif
 };
 
-float4 clip_to_screen(float4 clip)
-{
-  float4 o = clip * 0.5f;
-  o.xy += o.w;
-  o.zw = clip.zw;
-  return o;
-}
-
 float3 gerstner_wave(OceanWave wave, float3 p, inout float3 tangent, inout float3 binormal)
 {
   float steepness = wave.steepness;

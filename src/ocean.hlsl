@@ -6,16 +6,6 @@
 // Contains the vertex stage
 #include "oceancommon.hlsli"
 
-float linear_depth(float depth, float near, float far)
-{
-  return near * far / (far + depth * (near - far));
-}
-
-float depth_from_clip_z(float z, float near, float far)
-{
-  return max((1.0 - z / near) * far, 0);
-}
-
 float4 frag(Interpolators i) : SV_TARGET
 {
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
