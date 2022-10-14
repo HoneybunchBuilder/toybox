@@ -41,7 +41,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId hdr_color;
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;
-  TbRenderTargetId cube_capture;
+  TbRenderTargetId env_cube;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

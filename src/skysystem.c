@@ -5,6 +5,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
+#include "sky_cube_frag.h"
+#include "sky_cube_vert.h"
 #include "sky_frag.h"
 #include "sky_vert.h"
 #ifdef __clang__
@@ -41,54 +43,9 @@ typedef struct SkyDrawBatch {
   uint64_t vertex_offset;
 } SkyDrawBatch;
 
-VkResult create_sky_pipeline2(VkDevice device,
-                              const VkAllocationCallbacks *vk_alloc,
-                              VkPipelineCache cache, VkRenderPass pass,
-                              VkPipelineLayout *pipe_layout,
-                              VkDescriptorSetLayout *set_layout,
-                              VkPipeline *pipeline) {
+VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
+                              VkPipelineLayout layout, VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
-
-  // Create Descriptor Set Layout
-  {
-    VkDescriptorSetLayoutBinding bindings[1] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         NULL},
-    };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-        .bindingCount = 1,
-        .pBindings = bindings,
-
-    };
-    err =
-        vkCreateDescriptorSetLayout(device, &create_info, vk_alloc, set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create sky descriptor set layout", err);
-    SET_VK_NAME(device, *set_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-                "Sky DS Layout");
-  }
-
-  // Create Pipeline Layout
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges =
-            &(VkPushConstantRange){
-                VK_SHADER_STAGE_ALL_GRAPHICS,
-                0,
-                sizeof(SkyPushConstants),
-            },
-    };
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc, pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create sky pipeline layout", err);
-    SET_VK_NAME(device, *pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-                "Sky Pipeline Layout");
-  }
 
   // Create Sky Pipeline
   {
@@ -102,12 +59,12 @@ VkResult create_sky_pipeline2(VkDevice device,
 
       create_info.codeSize = sizeof(sky_vert);
       create_info.pCode = (const uint32_t *)sky_vert;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
+      tb_rnd_create_shader(render_system, &create_info, "sky vert", &vert_mod);
       TB_VK_CHECK_RET(err, "Failed to load sky vert shader module", err);
 
       create_info.codeSize = sizeof(sky_frag);
       create_info.pCode = (const uint32_t *)sky_frag;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
+      tb_rnd_create_shader(render_system, &create_info, "sky frag", &frag_mod);
       TB_VK_CHECK_RET(err, "Failed to load sky frag shader module", err);
     }
 
@@ -208,32 +165,165 @@ VkResult create_sky_pipeline2(VkDevice device,
         .pColorBlendState = &color_blend_state,
         .pDepthStencilState = &depth_state,
         .pDynamicState = &dynamic_state,
-        .layout = *pipe_layout,
+        .layout = layout,
         .renderPass = pass,
     };
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
-                                    pipeline);
+    err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                           "Sky Pipeline", pipeline);
     TB_VK_CHECK_RET(err, "Failed to create sky pipeline", err);
-    SET_VK_NAME(device, *pipeline, VK_OBJECT_TYPE_PIPELINE, "Sky Pipeline");
 
     // Can safely dispose of shader module objects
-    vkDestroyShaderModule(device, vert_mod, vk_alloc);
-    vkDestroyShaderModule(device, frag_mod, vk_alloc);
+    tb_rnd_destroy_shader(render_system, vert_mod);
+    tb_rnd_destroy_shader(render_system, frag_mod);
   }
 
   return err;
 }
 
-void sky_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                     uint32_t batch_count, const void *batches) {
-  TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
-  cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
+VkResult create_env_capture_pipeline(RenderSystem *render_system,
+                                     VkRenderPass pass, VkPipelineLayout layout,
+                                     VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
 
-  const SkyDrawBatch *sky_batches = (SkyDrawBatch *)batches;
+  // Create Sky Pipeline
+  {
+    // Load Shaders
+    VkShaderModule vert_mod = VK_NULL_HANDLE;
+    VkShaderModule frag_mod = VK_NULL_HANDLE;
+    {
+      VkShaderModuleCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      };
 
+      create_info.codeSize = sizeof(sky_cube_vert);
+      create_info.pCode = (const uint32_t *)sky_cube_vert;
+      tb_rnd_create_shader(render_system, &create_info, "env capture vert",
+                           &vert_mod);
+      TB_VK_CHECK_RET(err, "Failed to load env capture vert shader module",
+                      err);
+
+      create_info.codeSize = sizeof(sky_cube_frag);
+      create_info.pCode = (const uint32_t *)sky_cube_frag;
+      tb_rnd_create_shader(render_system, &create_info, "env capture frag",
+                           &frag_mod);
+      TB_VK_CHECK_RET(err, "Failed to load env capture frag shader module",
+                      err);
+    }
+
+    VkGraphicsPipelineCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages =
+            (VkPipelineShaderStageCreateInfo[2]){
+                {
+                    .sType =
+                        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                    .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                    .module = vert_mod,
+                    .pName = "vert",
+                },
+                {
+                    .sType =
+                        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .module = frag_mod,
+                    .pName = "frag",
+                },
+            },
+        .pVertexInputState =
+            &(VkPipelineVertexInputStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                .vertexBindingDescriptionCount = 1,
+                .pVertexBindingDescriptions =
+                    &(VkVertexInputBindingDescription){
+                        .binding = 0,
+                        .stride = sizeof(float3),
+                        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                    },
+                .vertexAttributeDescriptionCount = 1,
+                .pVertexAttributeDescriptions =
+                    &(VkVertexInputAttributeDescription){
+                        .binding = 0,
+                        .location = 0,
+                        .format = VK_FORMAT_R32G32B32_SFLOAT,
+                        .offset = 0,
+                    },
+            },
+        .pInputAssemblyState =
+            &(VkPipelineInputAssemblyStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            },
+        .pViewportState =
+            &(VkPipelineViewportStateCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .viewportCount = 1,
+                .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+                .scissorCount = 1,
+                .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+            },
+        .pRasterizationState =
+            &(VkPipelineRasterizationStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .polygonMode = VK_POLYGON_MODE_FILL,
+                .cullMode = VK_CULL_MODE_NONE,
+                .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                .lineWidth = 1.0f,
+            },
+        .pMultisampleState =
+            &(VkPipelineMultisampleStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            },
+        .pColorBlendState =
+            &(VkPipelineColorBlendStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .attachmentCount = 1,
+                .pAttachments =
+                    &(VkPipelineColorBlendAttachmentState){
+                        .blendEnable = VK_FALSE,
+                        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                          VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT |
+                                          VK_COLOR_COMPONENT_A_BIT,
+                    },
+            },
+        .pDepthStencilState =
+            &(VkPipelineDepthStencilStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            },
+        .pDynamicState =
+            &(VkPipelineDynamicStateCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                .dynamicStateCount = 2,
+                .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                      VK_DYNAMIC_STATE_SCISSOR},
+            },
+        .layout = layout,
+        .renderPass = pass,
+    };
+    err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                           "Env Capture Pipeline", pipeline);
+    TB_VK_CHECK_RET(err, "Failed to env capture pipeline", err);
+
+    // Can safely dispose of shader module objects
+    tb_rnd_destroy_shader(render_system, vert_mod);
+    tb_rnd_destroy_shader(render_system, frag_mod);
+  }
+
+  return err;
+}
+
+void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
+                       const SkyDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const SkyDrawBatch *batch = &sky_batches[batch_idx];
+    const SkyDrawBatch *batch = &batches[batch_idx];
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
@@ -252,6 +342,28 @@ void sky_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                            &batch->vertex_offset);
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
+}
+
+void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
+  cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
+
+  record_sky_common(buffer, batch_count, (SkyDrawBatch *)batches);
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 1, true);
+  cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
+
+  record_sky_common(buffer, batch_count, (SkyDrawBatch *)batches);
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -281,23 +393,74 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
 
   VkResult err = VK_SUCCESS;
 
-  // Get sky pass
-  TbRenderPassId pass_id = self->render_pipe_system->sky_pass;
-  self->pass = tb_render_pipeline_get_pass(self->render_pipe_system, pass_id);
+  // Get passes
+  TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
+  TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
+  self->sky_pass =
+      tb_render_pipeline_get_pass(self->render_pipe_system, sky_pass_id);
+  self->env_capture_pass =
+      tb_render_pipeline_get_pass(self->render_pipe_system, env_cap_id);
+
+  // Create Descriptor Set Layout
+  {
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .bindingCount = 1,
+        .pBindings = bindings,
+
+    };
+    err = tb_rnd_create_set_layout(render_system, &create_info,
+                                   "Sky Set Layout", &self->set_layout);
+    TB_VK_CHECK_RET(err, "Failed to create sky descriptor set layout", err);
+  }
+
+  // Create Pipeline Layout
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &self->set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                VK_SHADER_STAGE_ALL_GRAPHICS,
+                0,
+                sizeof(SkyPushConstants),
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(
+        render_system, &create_info, "Sky Pipeline Layout", &self->pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create sky pipeline layout", err);
+  }
 
   // Create sky pipeline
-  err = create_sky_pipeline2(
-      render_system->render_thread->device, &render_system->vk_host_alloc_cb,
-      render_system->pipeline_cache, self->pass, &self->pipe_layout,
-      &self->set_layout, &self->pipeline);
+  err = create_sky_pipeline2(render_system, self->sky_pass, self->pipe_layout,
+                             &self->sky_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create sky pipeline", err);
 
-  // Register pass with the render system
+  // Create env capture pipeline
+  err = create_env_capture_pipeline(render_system, self->env_capture_pass,
+                                    self->pipe_layout, &self->env_pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create env capture pipeline", err);
+
+  // Register passes with the render system
   self->sky_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(SkyDrawBatch),
-                              .draw_fn = sky_pass_record,
-                              .pass_id = pass_id,
+                              .draw_fn = record_sky,
+                              .pass_id = sky_pass_id,
+                          });
+  self->env_capture_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(SkyDrawBatch),
+                              .draw_fn = record_env_capture,
+                              .pass_id = env_cap_id,
                           });
 
   // Create sky box geometry
@@ -358,7 +521,8 @@ void destroy_sky_system(SkySystem *self) {
 
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_pipeline(render_system, self->pipeline);
+  tb_rnd_destroy_pipeline(render_system, self->sky_pipeline);
+  tb_rnd_destroy_pipeline(render_system, self->env_pipeline);
 
   *self = (SkySystem){0};
 }
@@ -500,11 +664,14 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
                            writes, 0, NULL);
 
     uint32_t batch_count = 0;
-    SkyDrawBatch *batches =
-        tb_alloc_nm_tp(self->render_system->render_thread
-                           ->frame_states[self->render_system->frame_idx]
-                           .tmp_alloc.alloc,
-                       sky_count * camera_count, SkyDrawBatch);
+    const size_t batch_bytes = sky_count * camera_count;
+    Allocator tmp_alloc = self->render_system->render_thread
+                              ->frame_states[self->render_system->frame_idx]
+                              .tmp_alloc.alloc;
+    SkyDrawBatch *sky_batches =
+        tb_alloc_nm_tp(tmp_alloc, batch_bytes, SkyDrawBatch);
+    SkyDrawBatch *env_batches =
+        tb_alloc_nm_tp(tmp_alloc, batch_bytes, SkyDrawBatch);
 
     // Submit a sky draw for each camera, for each sky
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
@@ -530,9 +697,9 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
-        batches[batch_count] = (SkyDrawBatch){
+        sky_batches[batch_count] = (SkyDrawBatch){
             .layout = self->pipe_layout,
-            .pipeline = self->pipeline,
+            .pipeline = self->sky_pipeline,
             .viewport = {0, 0, width, height, 0, 1},
             .scissor = {{0, 0}, {width, height}},
             .const_range =
@@ -549,12 +716,19 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
         };
+        env_batches[batch_count] = sky_batches[batch_count];
+        env_batches[batch_count].pipeline = self->env_pipeline;
+        env_batches[batch_count].viewport = (VkViewport){0, 0, 256, 256, 0, 1};
+        env_batches[batch_count].scissor = (VkRect2D){{0, 0}, {256, 256}};
         batch_count++;
       }
     }
 
     tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->sky_draw_ctx, batch_count, batches);
+        self->render_pipe_system, self->sky_draw_ctx, batch_count, sky_batches);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->env_capture_ctx, batch_count,
+                                        env_batches);
 
     // Report output (we've updated the time on the sky component)
     output->set_count = 1;

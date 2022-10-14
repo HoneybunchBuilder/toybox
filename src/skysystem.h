@@ -30,13 +30,16 @@ typedef struct SkySystem {
 
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
-  VkRenderPass pass;
+  VkRenderPass sky_pass;
+  VkRenderPass env_capture_pass;
   TbDrawContextId sky_draw_ctx;
+  TbDrawContextId env_capture_ctx;
 
   VkSampler sampler;
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+  VkPipeline sky_pipeline;
+  VkPipeline env_pipeline;
 
   TbBuffer sky_geom_gpu_buffer;
 } SkySystem;
