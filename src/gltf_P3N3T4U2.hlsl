@@ -15,6 +15,7 @@ ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
 
 // Per-view data
 ConstantBuffer<CommonViewData> camera_data: register(b0, space2); // Frag Only
+TextureCube irradiance_map : register(t1, space2); // Fragment Stage Only
 //ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert & Frag
 //Texture2D shadow_map : register(t2, space2); // Frag Only
 //SamplerState shadow_sampler : register(s2, space2);
@@ -153,7 +154,17 @@ float4 frag(Interpolators i) : SV_TARGET
             out_color += pbr_lighting(light, N, V, NdotV);
         }
 
-        // TODO: Ambient IBL
+        // Ambient IBL
+        {
+          const float ao = 1.0f;
+          float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
+          float3 kD = 1.0 - kS;
+          float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+          float3 diffuse    = irradiance * base_color;
+          float3 ambient    = (kD * diffuse) * ao;
+
+          out_color += ambient;
+        }
 
         // TODO: Ambient Occlusion
 
@@ -181,10 +192,6 @@ float4 frag(Interpolators i) : SV_TARGET
     float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler, NdotL);
     out_color *= shadow;
     */
-
-    // Want to add ambient term after shadowing
-    float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
-    out_color += ambient;
 
     return float4(out_color, 1);
 }

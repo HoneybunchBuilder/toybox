@@ -17,6 +17,12 @@ float3 specularReflection(float3 reflectance_0, float3 reflectance_90, float Vdo
   return reflectance_0 + (reflectance_90, - reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
 }
 
+float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness)
+{
+  float r = 1.0 - roughness;
+  return F0 + (max(float3(r, r, r), F0) - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+} 
+
 // This calculates the specular geometric attenuation (aka G()),
 // where rougher material will reflect less light back to the viewer.
 float geometricOcclusion(float NdotL, float NdotV, float alpha_roughness)
