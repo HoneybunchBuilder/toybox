@@ -160,6 +160,9 @@ float4 frag(Interpolators i) : SV_TARGET
           float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
           float3 kD = 1.0 - kS;
           float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+          float exposure = 4.5f; // TODO: pass in as a parameter
+          irradiance = tonemap(irradiance * exposure);
+          irradiance *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
           float3 diffuse    = irradiance * base_color;
           float3 ambient    = (kD * diffuse) * ao;
 
