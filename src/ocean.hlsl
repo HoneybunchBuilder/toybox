@@ -6,6 +6,8 @@
 // Contains the vertex stage
 #include "oceancommon.hlsli"
 
+TextureCube irradiance_map : register(t1, space1); // Fragment Stage Only
+
 float4 frag(Interpolators i) : SV_TARGET
 {
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
@@ -76,11 +78,18 @@ float4 frag(Interpolators i) : SV_TARGET
 
       color += pbr_lighting(light, N, V, NdotV);
     }
-  }
 
-  // Want to add ambient term after shadowing
-  float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
-  color += ambient;
+    // Ambient IBL
+    {
+      const float ao = 1.0f;
+      float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
+      float3 kD = 1.0 - kS;
+      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+      float3 diffuse    = irradiance * base_color;
+      float3 ambient    = (kD * diffuse) * ao;
+      color += ambient;
+    }
+  }
 
   return float4(color, 1);
 }
