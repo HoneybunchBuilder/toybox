@@ -450,6 +450,241 @@ Transform calc_transform_from_gltf(const cgltf_node *node) {
   return transform;
 }
 
+void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
+                 const char *root_scene_path, Allocator tmp_alloc,
+                 EntityId parent, const cgltf_node *node) {
+  // Get extras
+  cgltf_size extra_size = 0;
+  char *extra_json = NULL;
+  if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
+    extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
+    extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
+    if (cgltf_copy_extras_json(data, &node->extras, extra_json, &extra_size) !=
+        cgltf_result_success) {
+      extra_size = 0;
+      extra_json = NULL;
+    }
+  }
+
+  // Get component count
+  uint32_t component_count = 0;
+  {
+    if (node->camera) {
+      component_count++;
+    }
+    if (node->light) {
+      component_count++;
+    }
+    if (node->mesh) {
+      component_count++;
+    }
+    if (node->skin) {
+    }
+    // Only nodes with a non-zero scale have transforms
+    if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
+        node->scale[2] != 0.0f) {
+      component_count++;
+    }
+    // Find custom components
+    if (extra_json) {
+      json_object *json =
+          json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
+      if (json) {
+        json_object_object_foreach(json, key, value) {
+          if (SDL_strncmp(key, "id", 2) == 0) {
+            const int32_t id_len = json_object_get_string_len(value);
+            const char *id_str = json_object_get_string(value);
+            if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
+              component_count++;
+              break;
+            } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
+              component_count++;
+              break;
+            } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
+              component_count++;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ComponentId *component_ids =
+      tb_alloc_nm_tp(tmp_alloc, component_count, ComponentId);
+  InternalDescriptor *component_descriptors =
+      tb_alloc_nm_tp(tmp_alloc, component_count, InternalDescriptor);
+
+  EntityDescriptor entity_desc = {
+      .component_count = component_count,
+      .component_ids = component_ids,
+      .component_descriptors = component_descriptors,
+      .name = node->name, // Do we want to copy this onto some string pool?
+  };
+
+  uint32_t component_idx = 0;
+  {
+    if (node->camera) {
+      cgltf_camera *camera = tb_alloc_tp(tmp_alloc, cgltf_camera);
+      if (camera) {
+        SDL_memcpy(camera, node->camera, sizeof(cgltf_camera));
+        const cgltf_camera_type type = camera->type;
+
+        if (type == cgltf_camera_type_perspective) {
+          // Add component to entity
+          component_ids[component_idx] = CameraComponentId;
+          component_descriptors[component_idx] = &camera->data.perspective;
+          component_idx++;
+        } else {
+          // TODO: Handle ortho camera / invalid camera
+          SDL_TriggerBreakpoint();
+        }
+      }
+    }
+    if (node->light) {
+      cgltf_light *light = tb_alloc_tp(tmp_alloc, cgltf_light);
+      if (light) {
+        SDL_memcpy(light, node->light, sizeof(cgltf_light));
+        const cgltf_light_type type = light->type;
+        if (type == cgltf_light_type_directional) {
+          // Add component to entity
+          component_ids[component_idx] = DirectionalLightComponentId;
+          component_descriptors[component_idx] = light;
+          component_idx++;
+        } else {
+          // TODO: Handle other light types
+          SDL_TriggerBreakpoint();
+        }
+      }
+    }
+    if (node->mesh) {
+      MeshComponentDescriptor *mesh_desc =
+          tb_alloc_tp(tmp_alloc, MeshComponentDescriptor);
+      node->mesh->name = node->parent->name; // HACK: gltfpack strips mesh names
+      *mesh_desc = (MeshComponentDescriptor){
+          .mesh = node->mesh,
+          .source_path = root_scene_path,
+      };
+
+      // Add component to entity
+      component_ids[component_idx] = MeshComponentId;
+      component_descriptors[component_idx] = mesh_desc;
+      component_idx++;
+    }
+    if (node->skin) {
+    }
+    if (node->has_rotation || node->has_scale || node->has_translation) {
+      Transform transform = calc_transform_from_gltf(node);
+      EntityId parent = InvalidEntityId;
+
+      TransformComponentDescriptor *transform_desc =
+          tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
+      transform_desc->transform = transform;
+      transform_desc->parent = parent;
+
+      // Add component to entity
+      component_ids[component_idx] = TransformComponentId;
+      component_descriptors[component_idx] = transform_desc;
+      component_idx++;
+    }
+
+    // Add extra components to entity
+    if (extra_json) {
+      json_object *json =
+          json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
+      if (json) {
+        ComponentId comp_id = 0;
+        json_object_object_foreach(json, key, value) {
+          if (SDL_strcmp(key, "id") == 0) {
+            const int32_t id_len = json_object_get_string_len(value);
+            const char *id_str = json_object_get_string(value);
+            if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
+              comp_id = NoClipComponentId;
+              break;
+            } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
+              comp_id = SkyComponentId;
+              break;
+            } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
+              comp_id = OceanComponentId;
+              break;
+            }
+          }
+        }
+
+        if (comp_id == NoClipComponentId) {
+          NoClipComponentDescriptor *comp_desc =
+              tb_alloc_tp(tmp_alloc, NoClipComponentDescriptor);
+          *comp_desc = (NoClipComponentDescriptor){0};
+
+          // Find move_speed and look_speed
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strcmp(key, "move_speed") == 0) {
+              comp_desc->move_speed = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "look_speed") == 0) {
+              comp_desc->look_speed = (float)json_object_get_double(value);
+            }
+          }
+
+          // Add component to entity
+          component_ids[component_idx] = NoClipComponentId;
+          component_descriptors[component_idx] = comp_desc;
+          component_idx++;
+        } else if (comp_id == SkyComponentId) {
+          SkyComponentDescriptor *comp_desc =
+              tb_alloc_tp(tmp_alloc, SkyComponentDescriptor);
+          *comp_desc = (SkyComponentDescriptor){0};
+
+          // Find properties
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strcmp(key, "cirrus") == 0) {
+              comp_desc->cirrus = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "cumulus") == 0) {
+              comp_desc->cumulus = (float)json_object_get_double(value);
+            }
+          }
+          comp_desc->sun_dir = (float3){0.0f, 1.0f, 0.0f}; // TMP HACK
+
+          // Add component to entity
+          component_ids[component_idx] = SkyComponentId;
+          component_descriptors[component_idx] = comp_desc;
+          component_idx++;
+        } else if (comp_id == OceanComponentId) {
+          OceanComponentDescriptor *comp_desc =
+              tb_alloc_tp(tmp_alloc, OceanComponentDescriptor);
+          *comp_desc = (OceanComponentDescriptor){
+              .wave_count = 1,
+          };
+          OceanWave *wave = &comp_desc->waves[0];
+          // Find properties for the first wave
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strcmp(key, "steepness") == 0) {
+              wave->steepness = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "wavelength") == 0) {
+              wave->wavelength = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "direction_x") == 0) {
+              wave->direction[0] = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "direction_y") == 0) {
+              wave->direction[1] = (float)json_object_get_double(value);
+            }
+          }
+
+          // Add component to entity
+          component_ids[component_idx] = OceanComponentId;
+          component_descriptors[component_idx] = comp_desc;
+          component_idx++;
+        }
+      }
+    }
+  }
+  EntityId id = tb_world_add_entity(world, &entity_desc);
+
+  // Load all children
+  for (uint32_t i = 0; i < node->children_count; ++i) {
+    const cgltf_node *child = node->children[i];
+    load_entity(world, tok, data, root_scene_path, tmp_alloc, id, child);
+  }
+}
+
 bool tb_world_load_scene(World *world, const char *scene_path) {
   Allocator std_alloc = world->std_alloc;
   Allocator tmp_alloc = world->tmp_alloc;
@@ -464,237 +699,9 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   json_tokener *tok = json_tokener_new();
 
   // Create an entity for each node
-  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
-    const cgltf_node *node = &data->nodes[i];
-
-    // Get extras
-    cgltf_size extra_size = 0;
-    char *extra_json = NULL;
-    if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
-      extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
-      extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
-      if (cgltf_copy_extras_json(data, &node->extras, extra_json,
-                                 &extra_size) != cgltf_result_success) {
-        extra_size = 0;
-        extra_json = NULL;
-      }
-    }
-
-    // Get component count
-    uint32_t component_count = 0;
-    {
-      if (node->camera) {
-        component_count++;
-      }
-      if (node->light) {
-        component_count++;
-      }
-      if (node->mesh) {
-        component_count++;
-      }
-      if (node->skin) {
-      }
-      // Only nodes with a non-zero scale have transforms
-      if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
-          node->scale[2] != 0.0f) {
-        component_count++;
-      }
-      // Find custom components
-      if (extra_json) {
-        json_object *json =
-            json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
-        if (json) {
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strncmp(key, "id", 2) == 0) {
-              const int32_t id_len = json_object_get_string_len(value);
-              const char *id_str = json_object_get_string(value);
-              if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
-                component_count++;
-                break;
-              } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
-                component_count++;
-                break;
-              } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) ==
-                         0) {
-                component_count++;
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    ComponentId *component_ids =
-        tb_alloc_nm_tp(tmp_alloc, component_count, ComponentId);
-    InternalDescriptor *component_descriptors =
-        tb_alloc_nm_tp(tmp_alloc, component_count, InternalDescriptor);
-
-    EntityDescriptor entity_desc = {
-        .component_count = component_count,
-        .component_ids = component_ids,
-        .component_descriptors = component_descriptors,
-        .name = node->name, // Do we want to copy this onto some string pool?
-    };
-
-    uint32_t component_idx = 0;
-    {
-      if (node->camera) {
-        cgltf_camera *camera = tb_alloc_tp(tmp_alloc, cgltf_camera);
-        if (camera) {
-          SDL_memcpy(camera, node->camera, sizeof(cgltf_camera));
-          const cgltf_camera_type type = camera->type;
-
-          if (type == cgltf_camera_type_perspective) {
-            // Add component to entity
-            component_ids[component_idx] = CameraComponentId;
-            component_descriptors[component_idx] = &camera->data.perspective;
-            component_idx++;
-          } else {
-            // TODO: Handle ortho camera / invalid camera
-            SDL_TriggerBreakpoint();
-          }
-        }
-      }
-      if (node->light) {
-        cgltf_light *light = tb_alloc_tp(tmp_alloc, cgltf_light);
-        if (light) {
-          SDL_memcpy(light, node->light, sizeof(cgltf_light));
-          const cgltf_light_type type = light->type;
-          if (type == cgltf_light_type_directional) {
-            // Add component to entity
-            component_ids[component_idx] = DirectionalLightComponentId;
-            component_descriptors[component_idx] = light;
-            component_idx++;
-          } else {
-            // TODO: Handle other light types
-            SDL_TriggerBreakpoint();
-          }
-        }
-      }
-      if (node->mesh) {
-        MeshComponentDescriptor *mesh_desc =
-            tb_alloc_tp(tmp_alloc, MeshComponentDescriptor);
-        node->mesh->name =
-            node->parent->name; // HACK: gltfpack strips mesh names
-        *mesh_desc = (MeshComponentDescriptor){
-            .mesh = node->mesh,
-            .source_path = scene_path,
-        };
-
-        // Add component to entity
-        component_ids[component_idx] = MeshComponentId;
-        component_descriptors[component_idx] = mesh_desc;
-        component_idx++;
-      }
-      if (node->skin) {
-      }
-      if (node->scale[0] != 0.0f && node->scale[1] != 0.0f &&
-          node->scale[2] != 0.0f) {
-        // TODO: Children and hierarchy
-        Transform transform = calc_transform_from_gltf(node);
-
-        TransformComponentDescriptor *transform_desc =
-            tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
-        transform_desc->transform = transform;
-
-        // Add component to entity
-        component_ids[component_idx] = TransformComponentId;
-        component_descriptors[component_idx] = transform_desc;
-        component_idx++;
-      }
-
-      // Add extra components to entity
-      if (extra_json) {
-        json_object *json =
-            json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
-        if (json) {
-          ComponentId comp_id = 0;
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strcmp(key, "id") == 0) {
-              const int32_t id_len = json_object_get_string_len(value);
-              const char *id_str = json_object_get_string(value);
-              if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
-                comp_id = NoClipComponentId;
-                break;
-              } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
-                comp_id = SkyComponentId;
-                break;
-              } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) ==
-                         0) {
-                comp_id = OceanComponentId;
-                break;
-              }
-            }
-          }
-
-          if (comp_id == NoClipComponentId) {
-            NoClipComponentDescriptor *comp_desc =
-                tb_alloc_tp(tmp_alloc, NoClipComponentDescriptor);
-            *comp_desc = (NoClipComponentDescriptor){0};
-
-            // Find move_speed and look_speed
-            json_object_object_foreach(json, key, value) {
-              if (SDL_strcmp(key, "move_speed") == 0) {
-                comp_desc->move_speed = (float)json_object_get_double(value);
-              } else if (SDL_strcmp(key, "look_speed") == 0) {
-                comp_desc->look_speed = (float)json_object_get_double(value);
-              }
-            }
-
-            // Add component to entity
-            component_ids[component_idx] = NoClipComponentId;
-            component_descriptors[component_idx] = comp_desc;
-            component_idx++;
-          } else if (comp_id == SkyComponentId) {
-            SkyComponentDescriptor *comp_desc =
-                tb_alloc_tp(tmp_alloc, SkyComponentDescriptor);
-            *comp_desc = (SkyComponentDescriptor){0};
-
-            // Find properties
-            json_object_object_foreach(json, key, value) {
-              if (SDL_strcmp(key, "cirrus") == 0) {
-                comp_desc->cirrus = (float)json_object_get_double(value);
-              } else if (SDL_strcmp(key, "cumulus") == 0) {
-                comp_desc->cumulus = (float)json_object_get_double(value);
-              }
-            }
-            comp_desc->sun_dir = (float3){0.0f, 1.0f, 0.0f}; // TMP HACK
-
-            // Add component to entity
-            component_ids[component_idx] = SkyComponentId;
-            component_descriptors[component_idx] = comp_desc;
-            component_idx++;
-          } else if (comp_id == OceanComponentId) {
-            OceanComponentDescriptor *comp_desc =
-                tb_alloc_tp(tmp_alloc, OceanComponentDescriptor);
-            *comp_desc = (OceanComponentDescriptor){
-                .wave_count = 1,
-            };
-            OceanWave *wave = &comp_desc->waves[0];
-            // Find properties for the first wave
-            json_object_object_foreach(json, key, value) {
-              if (SDL_strcmp(key, "steepness") == 0) {
-                wave->steepness = (float)json_object_get_double(value);
-              } else if (SDL_strcmp(key, "wavelength") == 0) {
-                wave->wavelength = (float)json_object_get_double(value);
-              } else if (SDL_strcmp(key, "direction_x") == 0) {
-                wave->direction[0] = (float)json_object_get_double(value);
-              } else if (SDL_strcmp(key, "direction_y") == 0) {
-                wave->direction[1] = (float)json_object_get_double(value);
-              }
-            }
-
-            // Add component to entity
-            component_ids[component_idx] = OceanComponentId;
-            component_descriptors[component_idx] = comp_desc;
-            component_idx++;
-          }
-        }
-      }
-    }
-
-    tb_world_add_entity(world, &entity_desc);
+  for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
+    const cgltf_node *node = data->scene->nodes[i];
+    load_entity(world, tok, data, scene_path, tmp_alloc, InvalidEntityId, node);
   }
 
   json_tokener_free(tok);

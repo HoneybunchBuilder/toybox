@@ -11,6 +11,7 @@ bool create_transform_component(TransformComponent *comp,
   *comp = (TransformComponent){
       .dirty = true,
       .transform = desc->transform,
+      .parent = desc->parent,
   };
 
   return true;
@@ -29,8 +30,7 @@ void destroy_transform_component(TransformComponent *comp,
               .scale = (float3){0},
               .rotation = (float3){0},
           },
-      .child_count = 0,
-      .children = NULL,
+      .parent = InvalidEntityId,
   };
 }
 
