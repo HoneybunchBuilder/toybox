@@ -347,7 +347,7 @@ void translate(Transform *t, float3 p) {
 }
 void scale(Transform *t, float3 s) {
   assert(t);
-  t->scale += s;
+  t->scale *= s;
 }
 void rotate(Transform *t, float3 r) {
   assert(t);

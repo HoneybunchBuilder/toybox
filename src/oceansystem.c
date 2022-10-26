@@ -168,14 +168,14 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
               .vertexBindingDescriptionCount = 1,
               .pVertexBindingDescriptions =
                   (VkVertexInputBindingDescription[2]){
-                      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-                      {1, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+                      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
                   },
               .vertexAttributeDescriptionCount = 1,
               .pVertexAttributeDescriptions =
                   (VkVertexInputAttributeDescription[2]){
-                      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
-                      {1, 1, VK_FORMAT_R32G32_SFLOAT, 0},
+                      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+                      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
                   },
           },
       .pInputAssemblyState =
@@ -291,6 +291,9 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
   return err;
 }
 
+// HACK: this lives in world.c
+extern Transform calc_transform_from_gltf(const cgltf_node *node);
+
 bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
@@ -338,7 +341,10 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Parse expected mesh from glb
   {
-    const cgltf_mesh *ocean_mesh = &data->meshes[0];
+    cgltf_mesh *ocean_mesh = &data->meshes[0];
+    ocean_mesh->name = "Ocean";
+
+    self->ocean_transform = calc_transform_from_gltf(&data->nodes[0]);
 
     self->ocean_index_type = ocean_mesh->primitives->indices->stride == 2
                                  ? VK_INDEX_TYPE_UINT16
@@ -350,7 +356,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     uint64_t index_size =
         self->ocean_index_count *
         (self->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
-    uint64_t idx_padding = index_size % (sizeof(float) * 3);
+    uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
     self->ocean_pos_offset = index_size + idx_padding;
     self->ocean_uv_offset =
         self->ocean_pos_offset +
@@ -565,6 +571,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       OceanData data = {
           .wave_count = ocean_comp->wave_count,
       };
+      transform_to_matrix(&data.m, &self->ocean_transform);
       SDL_memcpy(data.wave, ocean_comp->waves,
                  data.wave_count * sizeof(OceanWave));
 
@@ -718,7 +725,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
                                         self->trans_color_draw_ctx, batch_count,
                                         batches);
 
-    // Report output (we've updated the time on the ocean component)
+    // Report output (we've updated the time on the ocean component and the
+    // world transform state)
     output->set_count = 1;
     output->write_sets[0] = (SystemWriteSet){
         .id = OceanComponentId,

@@ -14,6 +14,7 @@ typedef struct TransformComponent {
   bool dirty;
   float4x4 world_matrix;
   Transform transform;
+  ComponentId parent;
   uint64_t child_count;
   ComponentId *children;
 } TransformComponent;

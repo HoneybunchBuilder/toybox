@@ -15,8 +15,8 @@ ConstantBuffer<CommonViewData> camera_data: register(b0, space1);
 
 struct VertexIn
 {
-    float3 local_pos : SV_POSITION;
-    //float2 uv: TEXCOORD0;
+  int3 local_pos : SV_POSITION;
+  //float2 uv: TEXCOORD0;
 };
 
 struct Interpolators
@@ -71,14 +71,15 @@ Interpolators vert(VertexIn i)
 
   float3 tangent = float3(1, 0, 0);
   float3 binormal = float3(0, 0, 1);
-  float3 pos = i.local_pos;
+  float3 pos = mul(float4(i.local_pos, 1), ocean_data.m).xyz;
+
   pos += gerstner_wave(wave_0, pos, tangent, binormal);
   pos += gerstner_wave(wave_1, pos, tangent, binormal);
   pos += gerstner_wave(wave_2, pos, tangent, binormal);
   pos += gerstner_wave(wave_3, pos, tangent, binormal);
   pos += gerstner_wave(wave_4, pos, tangent, binormal);
 
-  float4 clip_pos = mul(float4(pos, 1.0), camera_data.vp);
+  float4 clip_pos = mul(float4(pos, 1), camera_data.vp);
 
   Interpolators o;
   o.clip_pos = clip_pos;

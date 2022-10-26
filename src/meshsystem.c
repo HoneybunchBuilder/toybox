@@ -15,6 +15,8 @@
 #include "vkdbg.h"
 #include "world.h"
 
+#include "meshoptimizer.h"
+
 // Ignore some warnings for the generated headers
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -81,39 +83,39 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
   // VI 3: Position & Normal & Tangent & Texcoord0 - P3N3T4U2
 
   VkVertexInputBindingDescription vert_bindings_P3N3[2] = {
-      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
   };
 
   VkVertexInputBindingDescription vert_bindings_P3N3U2[3] = {
-      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-      {2, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {2, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
   };
 
   VkVertexInputBindingDescription vert_bindings_P3N3T4U2[4] = {
-      {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
-      {2, sizeof(float) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-      {3, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {2, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+      {3, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
-      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
-      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
+      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
-      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
-      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
-      {2, 2, VK_FORMAT_R32G32_SFLOAT, 0},
+      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
+      {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3T4U2[4] = {
-      {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
-      {1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0},
-      {2, 2, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
-      {3, 3, VK_FORMAT_R32G32_SFLOAT, 0},
+      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
+      {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
+      {3, 3, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3 = {
@@ -835,33 +837,34 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           const uint64_t base_vert_offset = submesh->vertex_offset;
           const uint32_t vertex_count = submesh->vertex_count;
 
-          static const uint64_t float3_size = sizeof(float) * 3;
+          static const uint64_t pos_stride = sizeof(uint16_t) * 4;
+          static const uint64_t attr_stride = sizeof(uint16_t) * 2;
 
           switch (submesh->vertex_input) {
           case VI_P3N3:
             sub_draw->vertex_binding_count = 2;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
             sub_draw->vertex_binding_offsets[1] =
-                base_vert_offset + (vertex_count * float3_size);
+                base_vert_offset + (vertex_count * pos_stride);
             break;
           case VI_P3N3U2:
             sub_draw->vertex_binding_count = 3;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
             sub_draw->vertex_binding_offsets[1] =
-                base_vert_offset + (vertex_count * float3_size);
+                base_vert_offset + (vertex_count * pos_stride);
             sub_draw->vertex_binding_offsets[2] =
-                base_vert_offset + (vertex_count * float3_size * 2);
+                base_vert_offset + (vertex_count * (pos_stride + attr_stride));
             break;
           case VI_P3N3T4U2:
             sub_draw->vertex_binding_count = 4;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
             sub_draw->vertex_binding_offsets[1] =
-                base_vert_offset + (vertex_count * float3_size * 1);
+                base_vert_offset + (vertex_count * pos_stride);
             sub_draw->vertex_binding_offsets[2] =
-                base_vert_offset + (vertex_count * float3_size * 2);
+                base_vert_offset + (vertex_count * (pos_stride + attr_stride));
             sub_draw->vertex_binding_offsets[3] =
                 base_vert_offset +
-                (vertex_count * ((float3_size * 2) + sizeof(float4)));
+                (vertex_count * (pos_stride + (attr_stride * 2)));
             break;
           default:
             TB_CHECK(false, "Unexepcted vertex input");
@@ -930,6 +933,71 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
   return SDL_MAX_UINT32;
 }
 
+// Based on an example from this cgltf commit message:
+// https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
+static cgltf_result decompress_buffer_view(Allocator alloc,
+                                           cgltf_buffer_view *view) {
+  if (!view->has_meshopt_compression || view->data != NULL) {
+    return cgltf_result_success;
+  }
+
+  const cgltf_meshopt_compression *mc = &view->meshopt_compression;
+  uint8_t *data = (uint8_t *)mc->buffer->data;
+  TB_CHECK_RETURN(data, "Invalid data", cgltf_result_invalid_gltf);
+
+  data += mc->offset;
+
+  uint8_t *result = tb_alloc(alloc, mc->count * mc->stride);
+  TB_CHECK_RETURN(result, "Failed to allocate space for decoded buffer view",
+                  cgltf_result_out_of_memory);
+
+  int32_t res = -1;
+  switch (mc->mode) {
+  default:
+  case cgltf_meshopt_compression_mode_invalid:
+    break;
+
+  case cgltf_meshopt_compression_mode_attributes:
+    res = meshopt_decodeVertexBuffer(result, mc->count, mc->stride, data,
+                                     mc->size);
+    break;
+
+  case cgltf_meshopt_compression_mode_triangles:
+    res = meshopt_decodeIndexBuffer(result, mc->count, mc->stride, data,
+                                    mc->size);
+    break;
+
+  case cgltf_meshopt_compression_mode_indices:
+    res = meshopt_decodeIndexSequence(result, mc->count, mc->stride, data,
+                                      mc->size);
+    break;
+  }
+  TB_CHECK_RETURN(res == 0, "Failed to decode buffer view",
+                  cgltf_result_io_error);
+
+  switch (mc->filter) {
+  default:
+  case cgltf_meshopt_compression_filter_none:
+    break;
+
+  case cgltf_meshopt_compression_filter_octahedral:
+    meshopt_decodeFilterOct(result, mc->count, mc->stride);
+    break;
+
+  case cgltf_meshopt_compression_filter_quaternion:
+    meshopt_decodeFilterQuat(result, mc->count, mc->stride);
+    break;
+
+  case cgltf_meshopt_compression_filter_exponential:
+    meshopt_decodeFilterExp(result, mc->count, mc->stride);
+    break;
+  }
+
+  view->data = result;
+
+  return cgltf_result_success;
+}
+
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_mesh *mesh) {
   // Hash the mesh's path and gltf name to get the id
@@ -964,8 +1032,6 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     // Determine how big this mesh is
     uint64_t geom_size = 0;
     uint64_t vertex_offset = 0;
-    uint32_t attrib_count = 0;
-    uint64_t vertex_input = 0;
     {
       uint64_t index_size = 0;
       uint64_t vertex_size = 0;
@@ -974,7 +1040,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         cgltf_primitive *prim = &mesh->primitives[prim_idx];
         cgltf_accessor *indices = prim->indices;
 
-        index_size += indices->buffer_view->size;
+        index_size += (indices->count * indices->stride);
 
         for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
              ++attr_idx) {
@@ -988,18 +1054,6 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
               index == 0) {
             cgltf_accessor *attr = prim->attributes[attr_idx].data;
             vertex_size += attr->count * attr->stride;
-
-            if (type == cgltf_attribute_type_position) {
-              vertex_input |= VA_INPUT_PERM_POSITION;
-            } else if (type == cgltf_attribute_type_normal) {
-              vertex_input |= VA_INPUT_PERM_NORMAL;
-            } else if (type == cgltf_attribute_type_tangent) {
-              vertex_input |= VA_INPUT_PERM_TANGENT;
-            } else if (type == cgltf_attribute_type_texcoord) {
-              vertex_input |= VA_INPUT_PERM_TEXCOORD0;
-            }
-
-            attrib_count++;
           }
         }
 
@@ -1008,7 +1062,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         // Otherwise we'll get a validation error.
         // The vertex content needs to start that the correct attribAddress
         // which must be a multiple of the size of the first attribute
-        uint64_t idx_padding = index_size % (sizeof(float) * 3);
+        uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
         vertex_offset = index_size + idx_padding;
         geom_size = vertex_offset + vertex_size;
       }
@@ -1070,71 +1124,33 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         {
           cgltf_accessor *indices = prim->indices;
           cgltf_buffer_view *view = indices->buffer_view;
-          cgltf_size src_offset = indices->offset + view->offset;
-          cgltf_size index_size = view->size;
+          cgltf_size src_offset = indices->offset;
+          cgltf_size index_size = indices->count * indices->stride;
 
-          void *src = ((uint8_t *)view->buffer->data) + src_offset;
+          // Decode the buffer
+          cgltf_result res = decompress_buffer_view(self->tmp_alloc, view);
+          TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+          void *src = ((uint8_t *)view->data) + src_offset;
           void *dst = ((uint8_t *)(host_buf->ptr)) + idx_offset;
           SDL_memcpy(dst, src, index_size);
           idx_offset += index_size;
         }
 
-        // Reorder attributes
-        uint32_t *attr_order =
-            tb_alloc(self->tmp_alloc, sizeof(uint32_t) * attrib_count);
-        uint32_t reordered_attr_count = 0;
-        for (uint32_t i = 0; i < (uint32_t)prim->attributes_count; ++i) {
-          cgltf_attribute_type attr_type = prim->attributes[i].type;
-          int32_t attr_idx = prim->attributes[i].index;
-          if (attr_type == cgltf_attribute_type_position) {
-            attr_order[0] = i;
-            reordered_attr_count++;
-          } else if (attr_type == cgltf_attribute_type_normal) {
-            attr_order[1] = i;
-            reordered_attr_count++;
-          } else if (attr_type == cgltf_attribute_type_tangent) {
-            attr_order[2] = i;
-            reordered_attr_count++;
-          } else if (attr_type == cgltf_attribute_type_texcoord &&
-                     attr_idx == 0) {
-            if (vertex_input & VA_INPUT_PERM_TANGENT) {
-              attr_order[3] = i;
-              reordered_attr_count++;
-            } else {
-              attr_order[2] = i;
-              reordered_attr_count++;
-            }
-          }
-        }
-
-        for (cgltf_size attr_idx = 0; attr_idx < reordered_attr_count;
+        for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
              ++attr_idx) {
-          cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
+          cgltf_attribute *attr = &prim->attributes[attr_idx];
           cgltf_accessor *accessor = attr->data;
           cgltf_buffer_view *view = accessor->buffer_view;
 
-          size_t attr_offset = view->offset + accessor->offset;
+          size_t attr_offset = accessor->offset;
           size_t attr_size = accessor->stride * accessor->count;
 
-          // TODO: Figure out how to handle when an object can't use the
-          // expected pipeline
-          if (SDL_strcmp(attr->name, "NORMAL") == 0) {
-            if (attr_idx + 1 < prim->attributes_count) {
-              cgltf_attribute *next =
-                  &prim->attributes[attr_order[attr_idx + 1]];
-              if (vertex_input & VA_INPUT_PERM_TANGENT) {
-                if (SDL_strcmp(next->name, "TANGENT") != 0) {
-                  SDL_TriggerBreakpoint();
-                }
-              } else {
-                if (SDL_strcmp(next->name, "TEXCOORD_0") != 0) {
-                  SDL_TriggerBreakpoint();
-                }
-              }
-            }
-          }
+          // Decode the buffer
+          cgltf_result res = decompress_buffer_view(self->tmp_alloc, view);
+          TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
-          void *src = ((uint8_t *)view->buffer->data) + attr_offset;
+          void *src = ((uint8_t *)view->data) + attr_offset;
           void *dst = ((uint8_t *)(host_buf->ptr)) + vtx_offset;
           SDL_memcpy(dst, src, attr_size);
           vtx_offset += attr_size;

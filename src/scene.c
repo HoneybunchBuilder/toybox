@@ -22,7 +22,7 @@ sdl_read_gltf(const struct cgltf_memory_options *memory_options,
   cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
   (void)path;
 
-  void *mem = memory_options->alloc(memory_options->user_data, file_size);
+  void *mem = memory_options->alloc_func(memory_options->user_data, file_size);
   if (mem == NULL) {
     assert(0);
     return cgltf_result_out_of_memory;
@@ -43,7 +43,7 @@ static void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
                              void *data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
 
-  memory_options->free(memory_options->user_data, data);
+  memory_options->free_func(memory_options->user_data, data);
 
   if (SDL_RWclose(file) != 0) {
     assert(0);
@@ -81,8 +81,8 @@ int32_t scene_append_gltf(Scene *s, const char *filename) {
                              .memory =
                                  {
                                      .user_data = std_alloc.user_data,
-                                     .alloc = std_alloc.alloc,
-                                     .free = std_alloc.free,
+                                     .alloc_func = std_alloc.alloc,
+                                     .free_func = std_alloc.free,
                                  },
                              .file = {
                                  .read = sdl_read_gltf,

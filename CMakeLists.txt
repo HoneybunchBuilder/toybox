@@ -125,6 +125,7 @@ if(UNIX)
   endif()
 endif()
 find_package(json-c CONFIG REQUIRED)
+find_package(meshoptimizer CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -141,6 +142,9 @@ find_program(DXC dxc
   REQUIRED)
 find_program(TOKTX toktx
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
+  REQUIRED)
+find_program(GLTFPACK gltfpack
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
   REQUIRED)
 
 # Compile Shaders
@@ -258,7 +262,7 @@ else()
 endif()
 #set_property(TARGET toybox PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 target_link_libraries(toybox PRIVATE ${library_list})
 
@@ -350,7 +354,7 @@ foreach(texture ${source_textures})
 endforeach()
 add_custom_target(textures DEPENDS ${ktx_textures})
 
-# TODO: Cook scenes
+# Cook scenes
 file(GLOB_RECURSE source_scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
 foreach(scene ${source_scenes})
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${scene})
@@ -361,7 +365,7 @@ foreach(scene ${source_scenes})
   add_custom_command(
     OUTPUT ${packed_scene}
     COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${CMAKE_COMMAND} -E copy ${scene} ${packed_scene}
+    COMMAND ${GLTFPACK} -c -kn -km -ke -i ${scene} -o ${packed_scene}
     MAIN_DEPENDENCY ${scene}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
   )
