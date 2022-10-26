@@ -31,6 +31,7 @@ typedef struct OceanSystem {
   Allocator std_alloc;
 
   TbMeshId ocean_patch_mesh;
+  Transform ocean_transform;
   uint32_t ocean_index_type;
   uint32_t ocean_index_count;
   uint64_t ocean_pos_offset;

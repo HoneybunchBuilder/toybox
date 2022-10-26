@@ -64,11 +64,11 @@ bool create_mesh_component(MeshComponent *self,
       TB_CHECK_RETURN(self->submeshes[prim_idx].material,
                       "Failed to load material", false);
 
-      offset += indices->buffer_view->size;
+      offset += (indices->count * indices->stride);
     }
     // Provide padding between vertex and index sections of the buffer
     // to ensure alignment is correct
-    offset += offset % (sizeof(float) * 3);
+    offset += offset % (sizeof(uint16_t) * 4);
 
     // While we determine the vertex offset we'll also calculate the local space
     // AABB for this mesh across all primitives
@@ -129,27 +129,26 @@ bool create_mesh_component(MeshComponent *self,
         }
       }
 
-      // Add mesh positions to the AABB
+      // Read AABB from gltf
       {
+
         const cgltf_attribute *pos_attr = &prim->attributes[attr_order[0]];
+
         TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
                  "Unexpected vertex attribute type");
-        const cgltf_accessor *accessor = pos_attr->data;
-        const cgltf_buffer_view *view = accessor->buffer_view;
-        const cgltf_buffer *buffer = view->buffer;
-        // Can't just interpret buffer data as float3 since for optimization
-        // reasons float3 is actually 16 bytes wide, not 12
-        const float *pos_data =
-            (const float *)&((uint8_t *)buffer->data)[view->offset];
-        for (uint32_t pos_idx = 0; pos_idx < accessor->count; ++pos_idx) {
-          const uint32_t float_idx = pos_idx * 3;
-          float3 pos = {
-              pos_data[float_idx + 0],
-              pos_data[float_idx + 1],
-              pos_data[float_idx + 2],
-          };
-          aabb_add_point(&self->local_aabb, pos);
-        }
+
+        float *min = pos_attr->data->min;
+        float *max = pos_attr->data->max;
+
+        self->local_aabb.min = (float3){min[0], min[1], min[2]};
+        self->local_aabb.max = (float3){max[0], max[1], max[2]};
+
+        // Must dequantize min and max
+        TB_CHECK(pos_attr->data->component_type == cgltf_component_type_r_16u,
+                 "Unexpected format");
+
+        self->local_aabb.min /= SDL_MAX_UINT16;
+        self->local_aabb.max /= SDL_MAX_UINT16;
       }
 
       // Decode vertex attributes into full vertex input layouts

@@ -125,7 +125,8 @@ VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
 
 TbTextureId calc_tex_id(const char *path, const char *name) {
   TbTextureId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
+  // TODO: Come back to this
+  // id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
   return id;
 }
 

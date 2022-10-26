@@ -11,6 +11,7 @@ typedef struct OceanWave {
 typedef struct OceanData {
   int32_t wave_count;
   OceanWave wave[TB_WAVE_MAX];
+  float4x4 m;
 } OceanData;
 
 typedef struct OceanPushConstants {
