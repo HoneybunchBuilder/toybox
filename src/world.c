@@ -575,12 +575,12 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
     }
     if (node->has_rotation || node->has_scale || node->has_translation) {
       Transform transform = calc_transform_from_gltf(node);
-      EntityId parent = InvalidEntityId;
 
       TransformComponentDescriptor *transform_desc =
           tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
       transform_desc->transform = transform;
       transform_desc->parent = parent;
+      transform_desc->world = world;
 
       // Add component to entity
       component_ids[component_idx] = TransformComponentId;
