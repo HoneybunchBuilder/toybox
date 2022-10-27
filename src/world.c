@@ -573,7 +573,8 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
     }
     if (node->skin) {
     }
-    if (node->has_rotation || node->has_scale || node->has_translation) {
+    if (node->scale[0] != 0.0f || node->scale[1] != 0.0f ||
+        node->scale[2] != 0.0f) {
       Transform transform = calc_transform_from_gltf(node);
 
       TransformComponentDescriptor *transform_desc =
