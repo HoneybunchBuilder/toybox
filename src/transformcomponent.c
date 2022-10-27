@@ -61,7 +61,7 @@ void get_parent_transform_matrix(ComponentStore *store, EntityId parent,
                                  float4x4 *world) {
   TracyCZoneNC(ctx, "transform component get parent matrix",
                TracyCategoryColorCore, true);
-  if (parent == InvalidEntityId) {
+  if (parent == InvalidEntityId && parent & (1 << store->id)) {
     TracyCZoneEnd(ctx);
     return;
   }
