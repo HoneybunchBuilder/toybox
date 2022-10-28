@@ -131,7 +131,6 @@ bool create_mesh_component(MeshComponent *self,
 
       // Read AABB from gltf
       {
-
         const cgltf_attribute *pos_attr = &prim->attributes[attr_order[0]];
 
         TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
@@ -142,13 +141,6 @@ bool create_mesh_component(MeshComponent *self,
 
         self->local_aabb.min = (float3){min[0], min[1], min[2]};
         self->local_aabb.max = (float3){max[0], max[1], max[2]};
-
-        // Must dequantize min and max
-        TB_CHECK(pos_attr->data->component_type == cgltf_component_type_r_16u,
-                 "Unexpected format");
-
-        self->local_aabb.min /= SDL_MAX_UINT16;
-        self->local_aabb.max /= SDL_MAX_UINT16;
       }
 
       // Decode vertex attributes into full vertex input layouts

@@ -102,19 +102,19 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 
   VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
       {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
       {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
       {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3T4U2[4] = {
       {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
-      {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
+      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
+      {2, 2, VK_FORMAT_R8G8B8A8_SNORM, 0},
       {3, 3, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
@@ -645,15 +645,19 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       CommonObjectData data = {.m = {.row0 = {0}}};
       tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
 
-      const float3 translation = out_trans[mesh_idx].transform.position;
-      const float3 scale = out_trans[mesh_idx].transform.scale;
+      // Transform local aabb into world space
+      AABB aabb = aabb_init();
+      {
+        float4 min = f3tof4(mesh_comp->local_aabb.min, 1.0f);
+        float4 max = f3tof4(mesh_comp->local_aabb.max, 1.0f);
 
-      world_space_aabbs[mesh_idx] = mesh_comp->local_aabb;
-      // Manually add translation and scale to min and max of AABB
-      world_space_aabbs[mesh_idx].min += translation;
-      world_space_aabbs[mesh_idx].max += translation;
-      world_space_aabbs[mesh_idx].min *= scale;
-      world_space_aabbs[mesh_idx].max *= scale;
+        min = mulf44(data.m, min);
+        max = mulf44(data.m, max);
+
+        aabb_add_point(&aabb, f4tof3(min));
+        aabb_add_point(&aabb, f4tof3(max));
+      }
+      world_space_aabbs[mesh_idx] = aabb;
 
       tb_render_object_system_set_object_data(self->render_object_system,
                                               mesh_comp->object_id, &data);
