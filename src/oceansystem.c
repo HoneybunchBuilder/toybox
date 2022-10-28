@@ -174,7 +174,7 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
               .vertexAttributeDescriptionCount = 1,
               .pVertexAttributeDescriptions =
                   (VkVertexInputAttributeDescription[2]){
-                      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
                       {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
                   },
           },
@@ -534,11 +534,11 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     {
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = ocean_count,
+          .maxSets = ocean_count * 8,
           .poolSizeCount = 1,
           .pPoolSizes =
               &(VkDescriptorPoolSize){
-                  .descriptorCount = ocean_count,
+                  .descriptorCount = ocean_count * 8,
                   .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               },
       };

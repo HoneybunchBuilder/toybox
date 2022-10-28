@@ -101,18 +101,18 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
-      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
       {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
-      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
       {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
       {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
   };
 
   VkVertexInputAttributeDescription vert_attrs_P3N3T4U2[4] = {
-      {0, 0, VK_FORMAT_R16G16B16_SINT, 0},
+      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
       {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
       {2, 2, VK_FORMAT_R16G16_SFLOAT, 0},
       {3, 3, VK_FORMAT_R16G16_SFLOAT, 0},
