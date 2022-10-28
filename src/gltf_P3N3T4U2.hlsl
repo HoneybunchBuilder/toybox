@@ -24,8 +24,8 @@ TextureCube irradiance_map : register(t1, space2); // Fragment Stage Only
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
-  half2 normal : NORMAL0;
-  half2 tangent : TANGENT0;
+  half3 normal : NORMAL0;
+  half4 tangent : TANGENT0;
   half2 uv : TEXCOORD0;
 };
 
@@ -48,9 +48,9 @@ Interpolators vert(VertexIn i) {
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
-  // o.normal = normalize(mul(i.normal, orientation)); // convert to world-space
-  // normal o.tangent = normalize(mul(orientation, i.tangent.xyz)); o.binormal =
-  // cross(o.tangent, o.normal) * i.tangent.w;
+  o.normal = normalize(mul(i.normal, orientation)); // convert to world-space
+  o.tangent = normalize(mul(orientation, i.tangent.xyz));
+  o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
   o.uv = i.uv;
   // o.shadowcoord = mul(world_pos, light_data.light_vp);
 

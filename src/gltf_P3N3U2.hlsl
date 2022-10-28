@@ -25,7 +25,7 @@ TextureCube irradiance_map : register(t1, space2); // Fragment Stage Only
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
-  half2 normal : NORMAL0;
+  half3 normal : NORMAL0;
   half2 uv : TEXCOORD0;
 };
 

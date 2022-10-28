@@ -332,6 +332,13 @@ float4x4 quat_to_trans(Quaternion quat) {
   return (float4x4){.row0 = {0}};
 }
 
+AABB aabb_init(void) {
+  return (AABB){
+      .min = {FLT_MAX, FLT_MAX, FLT_MAX},
+      .max = {-FLT_MAX, -FLT_MAX, -FLT_MAX},
+  };
+}
+
 void aabb_add_point(AABB *aabb, float3 point) {
   aabb->min[0] = SDL_min(aabb->min[0], point[0]);
   aabb->min[1] = SDL_min(aabb->min[1], point[1]);
