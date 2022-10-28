@@ -549,6 +549,10 @@ bool init_gpu(VkInstance instance, Allocator std_alloc, Allocator tmp_alloc,
 
   vkGetPhysicalDeviceMemoryProperties(*gpu, gpu_mem_props);
 
+  VkFormatProperties props = {0};
+  vkGetPhysicalDeviceFormatProperties(*gpu, VK_FORMAT_R16G16B16A16_SINT,
+                                      &props);
+
   return true;
 }
 

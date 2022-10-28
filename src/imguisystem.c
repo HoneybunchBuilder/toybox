@@ -414,11 +414,11 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
         VkDescriptorPoolCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = imgui_entity_count,
+            .maxSets = imgui_entity_count * 8,
             .poolSizeCount = 1,
             .pPoolSizes =
                 &(VkDescriptorPoolSize){
-                    .descriptorCount = imgui_entity_count,
+                    .descriptorCount = imgui_entity_count * 8,
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 },
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,

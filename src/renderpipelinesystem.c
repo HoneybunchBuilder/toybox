@@ -1594,11 +1594,11 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       const uint32_t set_count = 2;
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = set_count,
+          .maxSets = set_count * 2,
           .poolSizeCount = 1,
           .pPoolSizes =
               &(VkDescriptorPoolSize){
-                  .descriptorCount = 1,
+                  .descriptorCount = set_count * 2,
                   .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
               },
       };
