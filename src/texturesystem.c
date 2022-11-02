@@ -4,6 +4,7 @@
 #include "common.hlsli"
 #include "hash.h"
 #include "rendersystem.h"
+#include "tbktx.h"
 #include "world.h"
 
 uint32_t find_tex_by_id(TextureSystem *self, TbTextureId id) {
@@ -134,7 +135,7 @@ uint32_t alloc_tex(TextureSystem *self) {
   // Resize collection if necessary
   const uint32_t new_count = self->tex_count + 1;
   if (new_count > self->tex_max) {
-    // Re-allocate space for meshes
+    // Re-allocate space for textures
     const uint32_t new_max = new_count * 2;
 
     Allocator alloc = self->std_alloc;
@@ -156,6 +157,43 @@ uint32_t alloc_tex(TextureSystem *self) {
   const uint32_t index = self->tex_count;
   self->tex_count++;
   return index;
+}
+
+static VkImageType get_ktx2_image_type(const ktxTexture2 *t) {
+  return (VkImageType)(t->numDimensions - 1);
+}
+
+static VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
+  const VkImageType img_type = get_ktx2_image_type(t);
+
+  const bool cube = t->isCubemap;
+  const bool array = t->isArray;
+
+  if (img_type == VK_IMAGE_TYPE_1D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_1D;
+    }
+  } else if (img_type == VK_IMAGE_TYPE_2D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_2D;
+    }
+
+  } else if (img_type == VK_IMAGE_TYPE_3D) {
+    // No such thing as a 3D array
+    return VK_IMAGE_VIEW_TYPE_3D;
+  } else if (cube) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    }
+    return VK_IMAGE_VIEW_TYPE_CUBE;
+  }
+
+  TB_CHECK(false, "Invalid");
+  return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 }
 
 TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
@@ -275,6 +313,157 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
                           .height = height,
                           .depth = 1,
                       },
+              },
+          .range =
+              {
+                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  .baseArrayLayer = 0,
+                  .baseMipLevel = 0,
+                  .layerCount = 1,
+                  .levelCount = 1,
+              },
+      };
+      // Will handle transitioning the image's layout to shader read only
+      tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
+    }
+  }
+
+  self->tex_ids[index] = id;
+  self->tex_ref_counts[index]++;
+
+  return id;
+}
+
+TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
+                                              const char *path,
+                                              const char *name,
+                                              ktxTexture2 *ktx) {
+  TbTextureId id = calc_tex_id(path, name);
+  uint32_t index = find_tex_by_id(self, id);
+
+  // Index was found, we can just inc the ref count and early out
+  if (index != SDL_MAX_UINT32) {
+    self->tex_ref_counts[index]++;
+    return id;
+  }
+
+  // If texture wasn't found, load it now
+  VkResult err = VK_SUCCESS;
+  RenderSystem *render_system = self->render_system;
+
+  index = alloc_tex(self);
+
+  // Load texture
+  {
+    size_t host_buffer_size = ktx->dataSize;
+    uint32_t width = ktx->baseWidth;
+    uint32_t height = ktx->baseHeight;
+    uint32_t depth = ktx->baseDepth;
+    uint32_t layers = ktx->numLayers;
+    uint32_t mip_levels = ktx->numLevels;
+    VkFormat format = (VkFormat)ktx->vkFormat;
+
+    TB_CHECK_RETURN(ktx->generateMipmaps == false,
+                    "Not expecting to have to generate mips", InvalidTextureId);
+
+    // Get host buffer
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = host_buffer_size,
+          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      };
+      err = tb_rnd_sys_alloc_host_buffer(render_system, &create_info, name,
+                                         &self->tex_host_buffers[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture",
+                      InvalidTextureId);
+
+      // Copy data to the host buffer
+      SDL_memcpy(self->tex_host_buffers[index].ptr, ktx->pData,
+                 host_buffer_size);
+    }
+
+    // Allocate gpu image
+    {
+      VkImageCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+          .arrayLayers = layers,
+          .extent =
+              (VkExtent3D){
+                  .width = width,
+                  .height = height,
+                  .depth = depth,
+              },
+          .format = format,
+          .imageType = get_ktx2_image_type(ktx),
+          .mipLevels = mip_levels,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      };
+      err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, name,
+                                       &self->tex_gpu_images[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
+                      InvalidTextureId);
+    }
+
+    // Create image view
+    {
+      VkImageViewCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .image = self->tex_gpu_images[index].image,
+          .viewType = get_ktx2_image_view_type(ktx),
+          .format = format,
+          .components =
+              {
+                  VK_COMPONENT_SWIZZLE_R,
+                  VK_COMPONENT_SWIZZLE_G,
+                  VK_COMPONENT_SWIZZLE_B,
+                  VK_COMPONENT_SWIZZLE_A,
+              },
+          .subresourceRange =
+              {
+                  VK_IMAGE_ASPECT_COLOR_BIT,
+                  0,
+                  mip_levels,
+                  0,
+                  layers,
+              },
+      };
+      char view_name[100] = {0};
+      SDL_snprintf(view_name, 100, "%s Image View", name);
+      err = tb_rnd_create_image_view(render_system, &create_info, view_name,
+                                     &self->tex_image_views[index]);
+      TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
+                      InvalidTextureId);
+    }
+
+    // Issue upload
+    {
+      BufferImageCopy upload = {
+          .src = self->tex_host_buffers[index].buffer,
+          .dst = self->tex_gpu_images[index].image,
+          .region =
+              {
+                  .bufferOffset = self->tex_host_buffers[index].offset,
+                  .imageSubresource =
+                      {
+                          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                          .layerCount = layers,
+                      },
+                  .imageExtent =
+                      {
+                          .width = width,
+                          .height = height,
+                          .depth = depth,
+                      },
+              },
+          .range =
+              {
+                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  .baseArrayLayer = 0,
+                  .baseMipLevel = 0,
+                  .layerCount = layers,
+                  .levelCount = mip_levels,
               },
       };
       // Will handle transitioning the image's layout to shader read only
@@ -407,23 +596,13 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
   return id;
 }
 
-SDL_Surface *parse_and_transform_image2(uint8_t *data, int32_t size) {
-  SDL_RWops *ops = SDL_RWFromMem((void *)data, size);
-  SDL_Surface *img = IMG_Load_RW(ops, 0);
-  TB_CHECK_RETURN(img, "Failed to load image", NULL);
-
-  SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
-
-  SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
-  SDL_FreeSurface(img);
-
-  return opt_img;
-}
-
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
-                                       TbTextureUsage usage,
                                        const cgltf_texture *texture) {
-  const cgltf_image *image = texture->image;
+  // Must use basisu image
+  TB_CHECK_RETURN(texture->has_basisu, "Expecting basisu image",
+                  InvalidTextureId);
+
+  const cgltf_image *image = texture->basisu_image;
   const char *name = image->name;
   const cgltf_buffer_view *image_view = image->buffer_view;
   const cgltf_buffer *image_data = image_view->buffer;
@@ -433,20 +612,30 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
   const int32_t raw_size = (int32_t)image_view->size;
 
   TB_CHECK_RETURN(image->buffer_view->buffer->uri == NULL,
-                  "Not setup to load data from uri", false);
+                  "Not setup to load data from uri", InvalidTextureId);
 
-  // Transform the buffer to raw pixels
-  SDL_Surface *surf = parse_and_transform_image2(raw_data, raw_size);
-  uint32_t width = (uint32_t)surf->w;
-  uint32_t height = (uint32_t)surf->h;
-  uint8_t *pixels = surf->pixels;
-  uint64_t size = (uint32_t)surf->pitch * height;
+  // Load the ktx texture
+  ktxTexture2 *ktx = NULL;
+  {
+    ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
 
-  TbTextureId tex = tb_tex_system_create_texture(self, path, name, usage, width,
-                                                 height, pixels, size);
+    ktx_error_code_e err =
+        ktxTexture2_CreateFromMemory(raw_data, raw_size, flags, &ktx);
+    TB_CHECK_RETURN(err == KTX_SUCCESS,
+                    "Failed to create KTX texture from memory",
+                    InvalidTextureId);
 
-  SDL_FreeSurface(surf);
+    bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
+    if (needs_transcoding) {
+      // TODO: pre-calculate the best format for the platform
+      err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
+      TB_CHECK_RETURN(err == KTX_SUCCESS, "Failed transcode basis texture",
+                      InvalidTextureId);
+    }
+  }
 
+  // Create texture from ktx2 texture
+  TbTextureId tex = tb_tex_system_create_texture_ktx2(self, path, name, ktx);
   return tex;
 }
 

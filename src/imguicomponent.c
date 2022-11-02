@@ -88,6 +88,12 @@ bool create_imgui_component(ImGuiComponent *self,
                         .depth = 1,
                     },
             },
+        .range =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .layerCount = 1,
+                .levelCount = 1,
+            },
 
     };
     tb_rnd_upload_buffer_to_image(render_system, &upload, 1);

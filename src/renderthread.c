@@ -1244,15 +1244,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           {
             VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange =
-                    {
-                        .baseArrayLayer =
-                            up->region.imageSubresource.baseArrayLayer,
-                        .baseMipLevel = up->region.imageSubresource.mipLevel,
-                        .levelCount = 1,
-                        .layerCount = up->region.imageSubresource.layerCount,
-                        .aspectMask = up->region.imageSubresource.aspectMask,
-                    },
+                .subresourceRange = up->range,
                 .srcAccessMask = 0,
                 .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1274,15 +1266,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           {
             VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange =
-                    {
-                        .baseArrayLayer =
-                            up->region.imageSubresource.baseArrayLayer,
-                        .baseMipLevel = up->region.imageSubresource.mipLevel,
-                        .levelCount = 1,
-                        .layerCount = up->region.imageSubresource.layerCount,
-                        .aspectMask = up->region.imageSubresource.aspectMask,
-                    },
+                .subresourceRange = up->range,
                 .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
                 .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                 .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

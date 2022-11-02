@@ -402,39 +402,6 @@ static VkImageType get_ktx2_image_type(const ktxTexture2 *t) {
   return (VkImageType)(t->numDimensions - 1);
 }
 
-static VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
-  VkImageType img_type = get_ktx2_image_type(t);
-
-  bool cube = t->isCubemap;
-  bool array = t->isArray;
-
-  if (img_type == VK_IMAGE_TYPE_1D) {
-    if (array) {
-      return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
-    } else {
-      return VK_IMAGE_VIEW_TYPE_1D;
-    }
-  } else if (img_type == VK_IMAGE_TYPE_2D) {
-    if (array) {
-      return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    } else {
-      return VK_IMAGE_VIEW_TYPE_2D;
-    }
-
-  } else if (img_type == VK_IMAGE_TYPE_3D) {
-    // No such thing as a 3D array
-    return VK_IMAGE_VIEW_TYPE_3D;
-  } else if (cube) {
-    if (array) {
-      return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-    }
-    return VK_IMAGE_VIEW_TYPE_CUBE;
-  }
-
-  assert(0);
-  return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
-}
-
 typedef struct KTX2CbData {
   VkBufferImageCopy *region; // Specify destination region in final image.
   VkDeviceSize offset;       // Offset of current level in staging buffer
@@ -610,7 +577,7 @@ GPUTexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     VkImageViewCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = device_image.image;
-    create_info.viewType = get_ktx2_image_view_type(ktx);
+    // create_info.viewType = get_ktx2_image_view_type(ktx);
     create_info.format = format;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, layers};

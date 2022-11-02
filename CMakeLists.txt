@@ -344,7 +344,7 @@ endforeach()
 add_custom_target(scenes DEPENDS ${packed_scenes})
 
 # Generate asset database
-set(source_assets ${ktx_textures} ${packed_scenes})
+set(source_assets ${packed_scenes})
 list(LENGTH source_assets ASSET_NUM)
 set(generated_manifest "${config_include_dir}/assetmanifest.h")
 # Add all assets to asset list
