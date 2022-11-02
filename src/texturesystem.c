@@ -126,8 +126,7 @@ VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
 
 TbTextureId calc_tex_id(const char *path, const char *name) {
   TbTextureId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  // TODO: Come back to this
-  // id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
+  id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
   return id;
 }
 
@@ -646,13 +645,13 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
 }
 
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
+                                       const char *name,
                                        const cgltf_texture *texture) {
   // Must use basisu image
   TB_CHECK_RETURN(texture->has_basisu, "Expecting basisu image",
                   InvalidTextureId);
 
   const cgltf_image *image = texture->basisu_image;
-  const char *name = image->name;
   const cgltf_buffer_view *image_view = image->buffer_view;
   const cgltf_buffer *image_data = image_view->buffer;
 
