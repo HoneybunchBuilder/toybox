@@ -400,6 +400,10 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
       // Determine feature permutations and load textures
       {
+        // GLTFpack strips image names so we have to synthesize something
+        // ourselves
+        char image_name[100] = {0};
+
         uint64_t feat_perm = 0;
         if (mat->has_pbr_metallic_roughness) {
           feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
@@ -411,16 +415,18 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           if (mat->pbr_metallic_roughness.metallic_roughness_texture.texture !=
               NULL) {
             feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
+            SDL_snprintf(image_name, 100, "%s_metal", mat->name);
             metal_rough_id = tb_tex_system_load_texture(
-                self->texture_system, path,
+                self->texture_system, path, image_name,
                 mat->pbr_metallic_roughness.metallic_roughness_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, metal_rough_id);
           }
           if (mat->pbr_metallic_roughness.base_color_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
+            SDL_snprintf(image_name, 100, "%s_color", mat->name);
             color_id = tb_tex_system_load_texture(
-                self->texture_system, path,
+                self->texture_system, path, image_name,
                 mat->pbr_metallic_roughness.base_color_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
@@ -434,8 +440,9 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           TbTextureId color_id = self->texture_system->default_color_tex;
           if (mat->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
+            SDL_snprintf(image_name, 100, "%s_color", mat->name);
             color_id = tb_tex_system_load_texture(
-                self->texture_system, path,
+                self->texture_system, path, image_name,
                 mat->pbr_metallic_roughness.base_color_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
@@ -466,8 +473,10 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         TbTextureId normal_id = self->texture_system->default_normal_tex;
         if (mat->normal_texture.texture != NULL) {
           feat_perm |= GLTF_PERM_NORMAL_MAP;
-          normal_id = tb_tex_system_load_texture(self->texture_system, path,
-                                                 mat->normal_texture.texture);
+          SDL_snprintf(image_name, 100, "%s_normal", mat->name);
+          normal_id =
+              tb_tex_system_load_texture(self->texture_system, path, image_name,
+                                         mat->normal_texture.texture);
         } else {
           tb_tex_system_take_tex_ref(self->texture_system, normal_id);
         }
