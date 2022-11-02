@@ -412,7 +412,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
               NULL) {
             feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
             metal_rough_id = tb_tex_system_load_texture(
-                self->texture_system, path, TB_TEX_USAGE_METAL_ROUGH,
+                self->texture_system, path,
                 mat->pbr_metallic_roughness.metallic_roughness_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, metal_rough_id);
@@ -420,7 +420,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           if (mat->pbr_metallic_roughness.base_color_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
             color_id = tb_tex_system_load_texture(
-                self->texture_system, path, TB_TEX_USAGE_COLOR,
+                self->texture_system, path,
                 mat->pbr_metallic_roughness.base_color_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
@@ -435,7 +435,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           if (mat->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
             color_id = tb_tex_system_load_texture(
-                self->texture_system, path, TB_TEX_USAGE_COLOR,
+                self->texture_system, path,
                 mat->pbr_metallic_roughness.base_color_texture.texture);
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
@@ -467,7 +467,6 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         if (mat->normal_texture.texture != NULL) {
           feat_perm |= GLTF_PERM_NORMAL_MAP;
           normal_id = tb_tex_system_load_texture(self->texture_system, path,
-                                                 TB_TEX_USAGE_NORMAL,
                                                  mat->normal_texture.texture);
         } else {
           tb_tex_system_take_tex_ref(self->texture_system, normal_id);

@@ -56,7 +56,6 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
                                          uint32_t width, uint32_t height,
                                          const uint8_t *pixels, uint64_t size);
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
-                                       TbTextureUsage usage,
                                        const cgltf_texture *texture);
 bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id);
 void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex);

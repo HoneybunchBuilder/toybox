@@ -16,6 +16,7 @@ typedef struct BufferImageCopy {
   VkBuffer src;
   VkImage dst;
   VkBufferImageCopy region;
+  VkImageSubresourceRange range;
 } BufferImageCopy;
 
 typedef struct BufferCopyQueue {
