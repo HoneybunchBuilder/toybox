@@ -334,6 +334,55 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
   return id;
 }
 
+typedef struct KTX2IterData {
+  VkBuffer buffer;
+  VkImage image;
+  BufferImageCopy *uploads;
+  uint64_t offset;
+} KTX2IterData;
+
+static ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
+                                            int32_t width, int32_t height,
+                                            int32_t depth,
+                                            uint64_t face_lod_size,
+                                            void *pixels, void *userdata) {
+  (void)pixels;
+  KTX2IterData *user_data = (KTX2IterData *)userdata;
+
+  user_data->uploads[mip_level] = (BufferImageCopy){
+      .src = user_data->buffer,
+      .dst = user_data->image,
+      .region =
+          {
+              .bufferOffset = user_data->offset,
+              .imageSubresource =
+                  {
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .layerCount = 1,
+                      .baseArrayLayer = face,
+                      .mipLevel = mip_level,
+                  },
+              .imageExtent =
+                  {
+                      .width = width,
+                      .height = height,
+                      .depth = depth,
+                  },
+          },
+      .range =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseArrayLayer = face,
+              .baseMipLevel = mip_level,
+              .layerCount = 1,
+              .levelCount = 1,
+          },
+  };
+
+  user_data->offset += face_lod_size;
+  return KTX_SUCCESS;
+}
+
 TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
                                               const char *path,
                                               const char *name,
@@ -439,35 +488,35 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
 
     // Issue upload
     {
-      BufferImageCopy upload = {
-          .src = self->tex_host_buffers[index].buffer,
-          .dst = self->tex_gpu_images[index].image,
-          .region =
-              {
-                  .bufferOffset = self->tex_host_buffers[index].offset,
-                  .imageSubresource =
-                      {
-                          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                          .layerCount = layers,
-                      },
-                  .imageExtent =
-                      {
-                          .width = width,
-                          .height = height,
-                          .depth = depth,
-                      },
-              },
-          .range =
-              {
-                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                  .baseArrayLayer = 0,
-                  .baseMipLevel = 0,
-                  .layerCount = layers,
-                  .levelCount = mip_levels,
-              },
+      BufferImageCopy *uploads =
+          tb_alloc_nm_tp(render_system->tmp_alloc, mip_levels, BufferImageCopy);
+
+      KTX2IterData iter_data = {
+          .buffer = self->tex_host_buffers[index].buffer,
+          .image = self->tex_gpu_images[index].image,
+          .offset = self->tex_host_buffers[index].offset,
+          .uploads = uploads,
       };
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
+#endif
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
+#endif
+      // Iterate over texture levels to fill out upload requests
+      ktxTexture_IterateLevels(ktx, iterate_ktx2_levels, &iter_data);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
       // Will handle transitioning the image's layout to shader read only
-      tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
+      tb_rnd_upload_buffer_to_image(render_system, uploads, mip_levels);
     }
   }
 
