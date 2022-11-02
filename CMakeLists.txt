@@ -140,9 +140,6 @@ endif()
 find_program(DXC dxc
   PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}
   REQUIRED)
-find_program(TOKTX toktx
-  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
-  REQUIRED)
 find_program(GLTFPACK gltfpack
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
   REQUIRED)
@@ -326,34 +323,6 @@ else()
           LIBRARY DESTINATION ".")
 endif()
 
-# Compress Textures
-file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
-
-if(platform STREQUAL "android")
-  set(resize "1024x1024")
-else()
-  set(resize "2048x2048")
-endif()
-
-set(UASTC_LEVEL $<$<CONFIG:Debug>:0>$<$<NOT:$<CONFIG:Debug>>:3>)
-foreach(texture ${source_textures})
-  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
-  get_filename_component(relpath ${relpath} DIRECTORY)
-  get_filename_component(filename ${texture} NAME_WE)
-  set(ktx_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
-
-  add_custom_command(
-    OUTPUT ${ktx_texture}
-    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${TOKTX} --t2 --genmipmap --resize ${resize} --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
-    MAIN_DEPENDENCY ${texture}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
-  )
-
-  list(APPEND ktx_textures ${ktx_texture})
-endforeach()
-add_custom_target(textures DEPENDS ${ktx_textures})
-
 # Cook scenes
 file(GLOB_RECURSE source_scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
 foreach(scene ${source_scenes})
@@ -365,7 +334,7 @@ foreach(scene ${source_scenes})
   add_custom_command(
     OUTPUT ${packed_scene}
     COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${GLTFPACK} -c -kn -km -ke -i ${scene} -o ${packed_scene}
+    COMMAND ${GLTFPACK} -c -kn -km -ke -tc -i ${scene} -o ${packed_scene}
     MAIN_DEPENDENCY ${scene}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
   )
@@ -402,7 +371,7 @@ add_custom_target(asset_manifest DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
 if(COOK_ASSETS)
-  add_dependencies(toybox scenes textures asset_manifest)
+  add_dependencies(toybox scenes asset_manifest)
 
   # Add assets to bundle
   #[[ TODO: Figure out how to get this to work with xcode
@@ -412,20 +381,12 @@ if(COOK_ASSETS)
       set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
       target_sources(toybox PRIVATE ${scene})
     endforeach()
-    foreach(texture ${ktx_textures})
-      set_source_files_properties(${texture} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/textures")
-      target_sources(toybox PRIVATE ${texture})
-    endforeach()
   endif()
   #]]
 
   # Install cooked assets
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
                     DESTINATION ${assets_dest})
-
-  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
-                    DESTINATION ${assets_dest}
-                    FILES_MATCHING PATTERN "*.ktx2")
 endif()
 
 # Install dlls on dynamic builds
