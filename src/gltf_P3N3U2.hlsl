@@ -2,7 +2,7 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-// Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
+// Per-material data - Fragment & Vertex Stages
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
 Texture2D base_color_map : register(t1, space0); // Fragment Stage Only
 Texture2D normal_map
@@ -26,7 +26,7 @@ TextureCube irradiance_map : register(t1, space2); // Fragment Stage Only
 struct VertexIn {
   int3 local_pos : SV_POSITION;
   half3 normal : NORMAL0;
-  half2 uv : TEXCOORD0;
+  int2 uv : TEXCOORD0;
 };
 
 struct Interpolators {
@@ -46,7 +46,7 @@ Interpolators vert(VertexIn i) {
   o.clip_pos = clip_pos;
   o.world_pos = world_pos;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
-  o.uv = i.uv;
+  o.uv = uv_transform(i.uv, material_data.tex_transform);
   return o;
 }
 

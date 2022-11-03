@@ -62,8 +62,8 @@ bool create_material_system(MaterialSystem *self,
   // Create descriptor set layout for materials
   {
     VkDescriptorSetLayoutBinding bindings[5] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         NULL},
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, NULL},
         {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          NULL},
         {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -350,11 +350,37 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                         InvalidMaterialId);
       }
 
+      // Find a suitable texture transform from the material
+      const cgltf_texture_transform *tex_trans = NULL;
+      {
+        // Expecting that all textures in the material share the same texture
+        // transform
+        if (mat->has_pbr_metallic_roughness) {
+          tex_trans = &mat->pbr_metallic_roughness.base_color_texture.transform;
+        } else if (mat->has_pbr_specular_glossiness) {
+          tex_trans = &mat->pbr_specular_glossiness.diffuse_texture.transform;
+        } else if (mat->normal_texture.texture) {
+          tex_trans = &mat->normal_texture.transform;
+        }
+      }
+
       // Gather uniform buffer data and copy to the tmp host buffer
       TbHostBuffer host_buf = {0};
       {
         GLTFMaterialData data = {.clearcoat_factor = 0};
         {
+          data.tex_transform = (TextureTransform){
+              .offset =
+                  (float2){
+                      tex_trans->offset[0],
+                      tex_trans->offset[1],
+                  },
+              .scale =
+                  (float2){
+                      tex_trans->scale[0],
+                      tex_trans->scale[1],
+                  },
+          };
           SDL_memcpy(&data.pbr_metallic_roughness.base_color_factor,
                      mat->pbr_metallic_roughness.base_color_factor,
                      sizeof(float) * 4);
