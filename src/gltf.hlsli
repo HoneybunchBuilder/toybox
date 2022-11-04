@@ -65,8 +65,8 @@ typedef struct GLTFMaterialData {
 float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   // Must dequantize UV from integer to float before applying the transform
   float2 uv = float2(quant_uv) / 65535.0f;
-  uv += trans.offset;
   uv *= trans.scale;
+  uv += trans.offset;
   return uv;
 }
 #endif
