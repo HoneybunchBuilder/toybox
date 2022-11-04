@@ -334,7 +334,7 @@ foreach(scene ${source_scenes})
   add_custom_command(
     OUTPUT ${packed_scene}
     COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${GLTFPACK} -c -kn -km -ke -tc -i ${scene} -o ${packed_scene}
+    COMMAND ${GLTFPACK} -cc -kn -km -ke -tc -i ${scene} -o ${packed_scene}
     MAIN_DEPENDENCY ${scene}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
   )
