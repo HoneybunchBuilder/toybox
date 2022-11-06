@@ -57,19 +57,13 @@ void tb_transform_component_descriptor(ComponentDescriptor *desc) {
   desc->destroy = tb_destroy_transform_component;
 }
 
-void get_parent_transform_matrix(ComponentStore *store, EntityId parent,
-                                 float4x4 *world) {
-  TracyCZoneNC(ctx, "transform component get parent matrix",
-               TracyCategoryColorCore, true);
+TransformComponent *tb_transform_get_parent(TransformComponent *self) {
+  EntityId parent = self->parent;
+  ComponentStore *store = self->transform_store;
   if (parent == InvalidEntityId && parent & (1 << store->id)) {
-    TracyCZoneEnd(ctx);
-    return;
+    return NULL;
   }
-  TransformComponent *trans_comp =
-      &((TransformComponent *)store->components)[parent];
-  tb_transform_get_world_matrix(trans_comp, world);
-
-  TracyCZoneEnd(ctx);
+  return &((TransformComponent *)store->components)[parent];
 }
 
 void tb_transform_get_world_matrix(TransformComponent *self, float4x4 *world) {
@@ -81,9 +75,11 @@ void tb_transform_get_world_matrix(TransformComponent *self, float4x4 *world) {
     if (self->parent != InvalidEntityId) {
       float4x4 parent_mat = {.row0 = {0}};
       mf44_identity(&parent_mat);
-      get_parent_transform_matrix(self->transform_store, self->parent,
-                                  &parent_mat);
-      mulmf44(&parent_mat, &self->world_matrix, &self->world_matrix);
+      TransformComponent *parent_comp = tb_transform_get_parent(self);
+      if (parent_comp) {
+        tb_transform_get_world_matrix(parent_comp, &parent_mat);
+        mulmf44(&parent_mat, &self->world_matrix, &self->world_matrix);
+      }
     }
     self->dirty = false;
   }
