@@ -1,5 +1,5 @@
-#include "common.hlsli"
 #include "gltf.hlsli"
+#include "common.hlsli"
 #include "lighting.hlsli"
 
 // Heavily based off
@@ -15,28 +15,28 @@ struct Meshlet {
 };
 
 // Per-material data - Fragment & Mesh Stages
-ConstantBuffer<GLTFMaterialData> material_data  : register(b0, space0);
+ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
 // Fragment Stage Only
-Texture2D base_color_map                        : register(t1, space0);
-Texture2D normal_map                            : register(t2, space0);
-Texture2D metal_rough_map                       : register(t3, space0);
+Texture2D base_color_map : register(t1, space0);
+Texture2D normal_map : register(t2, space0);
+Texture2D metal_rough_map : register(t3, space0);
 // Texture2D emissive_map                       : register(t4, space0);
 // Immutable sampler
-sampler static_sampler                          : register(s4, space0);
+sampler static_sampler : register(s4, space0);
 
 // Per-object data - Mesh Stage Only
-ConstantBuffer<CommonObjectData> object_data  : register(b0, space1);
-StructuredBuffer<int3> positions              : register(t1, space1);
-StructuredBuffer<half3> normals               : register(t2, space1);
-StructuredBuffer<half4> tangents              : register(t3, space1);
-StructuredBuffer<int2> uvs                    : register(t3, space1);
-StructuredBuffer<Meshlet> meshlets            : register(t4, space1);
-ByteAddressBuffer unique_vert_indices         : register(t5, space1);
-StructuredBuffer<uint> primitive_indices      : register(t6, space1);
+ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
+StructuredBuffer<int3> positions : register(t1, space1);
+StructuredBuffer<half3> normals : register(t2, space1);
+StructuredBuffer<half4> tangents : register(t3, space1);
+StructuredBuffer<int2> uvs : register(t3, space1);
+StructuredBuffer<Meshlet> meshlets : register(t4, space1);
+ByteAddressBuffer unique_vert_indices : register(t5, space1);
+StructuredBuffer<uint> primitive_indices : register(t6, space1);
 
 // Per-view data - Fragment Stage Only
-ConstantBuffer<CommonViewData> camera_data    : register(b0, space2);
-TextureCube irradiance_map                    : register(t1, space2);
+ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
+TextureCube irradiance_map : register(t1, space2);
 // ConstantBuffer<CommonLightData> light_data : register(b1, space2);
 // Texture2D shadow_map                       : register(t2, space2);
 // SamplerState shadow_sampler                : register(s2, space2);
@@ -81,16 +81,16 @@ struct FragmentInput {
 uint3 get_primitive(Meshlet m, uint index) {
   uint primitive = primitive_indices[m.prim_offset + index];
   // Unpacks a 10 bits per index triangle from a 32-bit uint.
-  return uint3(primitive & 0x3FF, (primitive >> 10) & 0x3FF, (primitive >> 20) & 0x3FF);
+  return uint3(primitive & 0x3FF, (primitive >> 10) & 0x3FF,
+               (primitive >> 20) & 0x3FF);
 }
 
 uint get_vert_index(Meshlet m, uint local_index) {
   local_index += m.vert_offset;
 
-  if(object_data.index_bytes == 4) {
+  if (object_data.index_bytes == 4) {
     return unique_vert_indices.Load(local_index * 4);
-  }
-  else {
+  } else {
     // Byte address must be 4-byte aligned.
     uint word_offset = (local_index & 0x1);
     uint byte_offset = (local_index / 2) * 4;
@@ -112,19 +112,19 @@ VertexAttributes index_vert(uint32_t meshlet_index, uint vertex_index) {
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
 
-  if(MeshFlags & VA_INPUT_PERM_NORMAL || MeshFlags & VA_INPUT_PERM_TANGENT) {
+  if (MeshFlags & VA_INPUT_PERM_NORMAL || MeshFlags & VA_INPUT_PERM_TANGENT) {
     float3x3 orientation = (float3x3)object_data.m;
-    if(MeshFlags & VA_INPUT_PERM_NORMAL) {
+    if (MeshFlags & VA_INPUT_PERM_NORMAL) {
       half3 normal = normals[vertex_index];
       o.normal = normalize(mul(normal, orientation)); // convert to world-space
     }
-    if(MeshFlags & VA_INPUT_PERM_TANGENT){
+    if (MeshFlags & VA_INPUT_PERM_TANGENT) {
       half4 tangent = tangents[vertex_index];
       o.tangent = normalize(mul(orientation, tangent.xyz));
       o.binormal = cross(o.tangent, o.normal) * tangent.w;
     }
   }
-  if(MeshFlags & VA_INPUT_PERM_TEXCOORD0){
+  if (MeshFlags & VA_INPUT_PERM_TEXCOORD0) {
     int2 uv = uvs[vertex_index];
     o.uv = uv_transform(uv, material_data.tex_transform);
   }
