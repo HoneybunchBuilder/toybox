@@ -159,8 +159,29 @@ foreach(shader ${shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T vs_6_1 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
-      COMMAND ${DXC} -T ps_6_1 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      MAIN_DEPENDENCY ${shader}
+      DEPENDS ${shader_includes}
+  )
+  list(APPEND shader_headers ${out_paths})
+endforeach()
+
+file(GLOB mesh_shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.m")
+foreach(shader ${mesh_shader_files})
+  get_filename_component(filename ${shader} NAME_WLE)
+  get_filename_component(filename ${filename} NAME_WLE)
+  set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+  set(mesh_out_path "${shader_out_path}/${filename}_mesh.h")
+  set(frag_out_path "${shader_out_path}/${filename}_frag.h")
+  set(out_paths "${mesh_out_path};${frag_out_path}")
+
+  add_custom_command(
+      OUTPUT ${out_paths}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+      COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${mesh_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -181,9 +202,9 @@ foreach(shader ${rt_shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
