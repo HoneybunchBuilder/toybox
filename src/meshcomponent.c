@@ -139,8 +139,8 @@ bool create_mesh_component(MeshComponent *self,
         float *min = pos_attr->data->min;
         float *max = pos_attr->data->max;
 
-        self->local_aabb.min = (float3){min[0], min[1], min[2]};
-        self->local_aabb.max = (float3){max[0], max[1], max[2]};
+        aabb_add_point(&self->local_aabb, (float3){min[0], min[1], min[2]});
+        aabb_add_point(&self->local_aabb, (float3){max[0], max[1], max[2]});
       }
 
       // Decode vertex attributes into full vertex input layouts

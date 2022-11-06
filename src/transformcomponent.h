@@ -23,4 +23,6 @@ typedef struct TransformComponent {
 
 void tb_transform_component_descriptor(ComponentDescriptor *desc);
 
+TransformComponent *tb_transform_get_parent(TransformComponent *self);
+
 void tb_transform_get_world_matrix(TransformComponent *self, float4x4 *world);
