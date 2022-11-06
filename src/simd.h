@@ -77,6 +77,9 @@ typedef struct AABB {
   float3 max;
 } AABB;
 
+// Must forward declare this for helper function;
+typedef struct cgltf_node cgltf_node;
+
 static const AABB InvalidAABB = {
     .min = {FLT_MAX, FLT_MAX, FLT_MAX},
     .max = {FLT_MIN, FLT_MIN, FLT_MIN},
@@ -139,6 +142,7 @@ void scale(Transform *t, float3 s);
 void rotate(Transform *t, EulerAngles r);
 
 void transform_to_matrix(float4x4 *m, const Transform *t);
+Transform tb_transform_from_node(const cgltf_node *node);
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);

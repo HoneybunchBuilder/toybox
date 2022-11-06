@@ -48,8 +48,6 @@ TextureCube irradiance_map : register(t1, space2);
 #define THREADS_Y 1
 #define THREADS_Z 1
 
-#define NUM_THREADS (THREADS_X * THREADS_Y * THREADS_Z)
-
 #define MAX_VERTS 252
 #define MAX_PRIMS (MAX_VERTS / 3)
 
@@ -155,121 +153,129 @@ void mesh(in uint group_thread_id: SV_GroupThreadID,
 }
 
 float4 frag(FragmentInput i) : SV_TARGET {
-  // Sample textures up-front
   float3 base_color = float3(0.5, 0.5, 0.5);
-
-  // World-space normal
-  float3 N = normalize(i.normal);
-  if (PermutationFlags & GLTF_PERM_NORMAL_MAP) {
-    // Construct TBN
-    float3x3 tbn = float3x3(normalize(i.tangent), normalize(i.binormal),
-                            normalize(i.normal));
-
-    // Convert from tangent space to world space
-    float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
-    tangentSpaceNormal =
-        normalize(tangentSpaceNormal * 2 - 1); // Must unpack normal
-    N = normalize(mul(tangentSpaceNormal, tbn));
-  }
-
-  // Per view calcs
-  float3 V = normalize(camera_data.view_pos - i.world_pos);
-  float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
-  float3 reflection = -normalize(reflect(V, N));
-  reflection.y *= -1.0;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
-  float3 light_dir = normalize(float3(0.707, 0.707, 0));
+  // Technically we shouldn't need a normal channel to be able to 
+  // do some unlit vertex colors but ignore that for now
+  if(MeshFlags & VA_INPUT_PERM_NORMAL)
+  {
+    // World-space normal
+    float3 N = normalize(i.normal);
+    if (PermutationFlags & GLTF_PERM_NORMAL_MAP &&
+        MeshFlags & VA_INPUT_PERM_TANGENT &&
+        MeshFlags & VA_INPUT_PERM_TEXCOORD0) {
+      // Construct TBN
+      float3x3 tbn = float3x3(normalize(i.tangent), normalize(i.binormal),
+                              normalize(i.normal));
 
-  if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
-    float metallic = material_data.pbr_metallic_roughness.metallic_factor;
-    float roughness = material_data.pbr_metallic_roughness.roughness_factor;
+      // Convert from tangent space to world space
+      float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
+      tangentSpaceNormal =
+          normalize(tangentSpaceNormal * 2 - 1); // Must unpack normal
+      N = normalize(mul(tangentSpaceNormal, tbn));
+    }
 
-    // TODO: Handle alpha masking
-    {
-      float4 pbr_base_color =
-          material_data.pbr_metallic_roughness.base_color_factor;
-      if (PermutationFlags & GLTF_PERM_BASE_COLOR_MAP) {
-        pbr_base_color *= base_color_map.Sample(static_sampler, i.uv);
+    // Per view calcs
+    float3 V = normalize(camera_data.view_pos - i.world_pos);
+    float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+    float3 reflection = -normalize(reflect(V, N));
+    reflection.y *= -1.0;
+
+    float3 light_dir = normalize(float3(0.707, 0.707, 0));
+
+    if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
+      float metallic = material_data.pbr_metallic_roughness.metallic_factor;
+      float roughness = material_data.pbr_metallic_roughness.roughness_factor;
+
+      // TODO: Handle alpha masking
+      {
+        float4 pbr_base_color =
+            material_data.pbr_metallic_roughness.base_color_factor;
+        if (PermutationFlags & GLTF_PERM_BASE_COLOR_MAP && 
+            MeshFlags & VA_INPUT_PERM_TEXCOORD0) {
+          pbr_base_color *= base_color_map.Sample(static_sampler, i.uv);
+        }
+
+        base_color = pbr_base_color.rgb;
       }
 
-      base_color = pbr_base_color.rgb;
-    }
+      if (PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX && 
+          MeshFlags & VA_INPUT_PERM_TEXCOORD0) {
+        // The red channel of this texture *may* store occlusion.
+        // TODO: Check the perm for occlusion
+        float4 mr_sample = metal_rough_map.Sample(static_sampler, i.uv);
+        roughness = mr_sample.g * roughness;
+        metallic = mr_sample.b * metallic;
+      }
 
-    if (PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
-      // The red channel of this texture *may* store occlusion.
-      // TODO: Check the perm for occlusion
-      float4 mr_sample = metal_rough_map.Sample(static_sampler, i.uv);
-      roughness = mr_sample.g * roughness;
-      metallic = mr_sample.b * metallic;
-    }
+      float alpha_roughness = roughness * roughness;
 
-    float alpha_roughness = roughness * roughness;
+      float3 f0 = float3(0.4, 0.4, 0.4);
 
-    float3 f0 = float3(0.4, 0.4, 0.4);
+      float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
+      diffuse_color *= 1.0 - metallic;
 
-    float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
-    diffuse_color *= 1.0 - metallic;
+      float3 specular_color = lerp(f0, base_color, metallic);
+      float reflectance =
+          max(max(specular_color.r, specular_color.g), specular_color.b);
 
-    float3 specular_color = lerp(f0, base_color, metallic);
-    float reflectance =
-        max(max(specular_color.r, specular_color.g), specular_color.b);
+      // For typical incident reflectance range (between 4% to 100%) set the
+      // grazing reflectance to 100% for typical fresnel effect. For very low
+      // reflectance range on highly diffuse objects (below 4%), incrementally
+      // reduce grazing reflecance to 0%.
+      float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
+      float3 specular_environment_R0 = specular_color;
+      float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
-    // For typical incident reflectance range (between 4% to 100%) set the
-    // grazing reflectance to 100% for typical fresnel effect. For very low
-    // reflectance range on highly diffuse objects (below 4%), incrementally
-    // reduce grazing reflecance to 0%.
-    float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
-    float3 specular_environment_R0 = specular_color;
-    float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
+      // for each light
+      {
+        float3 light_color = float3(1, 1, 1);
+        float3 L = light_dir;
 
-    // for each light
+        PBRLight light = {
+            light_color,
+            L,
+            specular_environment_R0,
+            specular_environment_R90,
+            alpha_roughness,
+            diffuse_color,
+        };
+
+        out_color += pbr_lighting(light, N, V, NdotV);
+      }
+
+      // Ambient IBL
+      {
+        const float ao = 1.0f;
+        float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
+        float3 kD = 1.0 - kS;
+        float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+        float exposure = 4.5f; // TODO: pass in as a parameter
+        irradiance = tonemap(irradiance * exposure);
+        irradiance *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
+        float3 diffuse = irradiance * base_color;
+        float3 ambient = (kD * diffuse) * ao;
+
+        out_color += ambient;
+      }
+
+      // TODO: Ambient Occlusion
+
+      // TODO: Emissive Texture
+    } else // Phong fallback
     {
-      float3 light_color = float3(1, 1, 1);
-      float3 L = light_dir;
+      float gloss = 0.5;
 
-      PBRLight light = {
-          light_color,
-          L,
-          specular_environment_R0,
-          specular_environment_R90,
-          alpha_roughness,
-          diffuse_color,
-      };
+      // for each light
+      {
+        float3 L = light_dir;
+        float3 H = normalize(V + L);
 
-      out_color += pbr_lighting(light, N, V, NdotV);
-    }
-
-    // Ambient IBL
-    {
-      const float ao = 1.0f;
-      float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
-      float3 kD = 1.0 - kS;
-      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float exposure = 4.5f; // TODO: pass in as a parameter
-      irradiance = tonemap(irradiance * exposure);
-      irradiance *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
-      float3 diffuse = irradiance * base_color;
-      float3 ambient = (kD * diffuse) * ao;
-
-      out_color += ambient;
-    }
-
-    // TODO: Ambient Occlusion
-
-    // TODO: Emissive Texture
-  } else // Phong fallback
-  {
-    float gloss = 0.5;
-
-    // for each light
-    {
-      float3 L = light_dir;
-      float3 H = normalize(V + L);
-
-      float3 light_color = float3(1, 1, 1);
-      out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
+        float3 light_color = float3(1, 1, 1);
+        out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
+      }
     }
   }
 

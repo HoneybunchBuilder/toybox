@@ -344,7 +344,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     cgltf_mesh *ocean_mesh = &data->meshes[0];
     ocean_mesh->name = "Ocean";
 
-    self->ocean_transform = calc_transform_from_gltf(&data->nodes[0]);
+    self->ocean_transform = tb_transform_from_node(&data->nodes[0]);
 
     self->ocean_index_type = ocean_mesh->primitives->indices->stride == 2
                                  ? VK_INDEX_TYPE_UINT16
@@ -363,7 +363,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         (vertex_count * (sizeof(float) * 6) + sizeof(float4));
 
     self->ocean_patch_mesh =
-        tb_mesh_system_load_mesh(mesh_system, asset_path, ocean_mesh);
+        tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
   }
 
   VkResult err = VK_SUCCESS;

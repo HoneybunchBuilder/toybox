@@ -10,6 +10,7 @@
 
 #include "pi.h"
 #include "profiling.h"
+#include "tbgltf.h"
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -393,6 +394,25 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   mulmf44(&temp, &s, m);
 
   TracyCZoneEnd(ctx);
+}
+
+Transform tb_transform_from_node(const cgltf_node *node) {
+  Transform transform = {.position = {0}};
+
+  transform.position = (float3){node->translation[0], node->translation[1],
+                                node->translation[2]};
+
+  Quaternion quat = {
+      node->rotation[0],
+      node->rotation[1],
+      node->rotation[2],
+      node->rotation[3],
+  };
+  transform.rotation = quat_to_euler(quat);
+
+  transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
+
+  return transform;
 }
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {

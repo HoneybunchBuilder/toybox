@@ -431,25 +431,6 @@ void tb_destroy_world(World *world) {
   *world = (World){0};
 }
 
-Transform calc_transform_from_gltf(const cgltf_node *node) {
-  Transform transform = {.position = {0}};
-
-  transform.position = (float3){node->translation[0], node->translation[1],
-                                node->translation[2]};
-
-  Quaternion quat = {
-      node->rotation[0],
-      node->rotation[1],
-      node->rotation[2],
-      node->rotation[3],
-  };
-  transform.rotation = quat_to_euler(quat);
-
-  transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
-
-  return transform;
-}
-
 void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
                  const char *root_scene_path, Allocator tmp_alloc,
                  EntityId parent, const cgltf_node *node) {
@@ -562,7 +543,7 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
           tb_alloc_tp(tmp_alloc, MeshComponentDescriptor);
       node->mesh->name = node->parent->name; // HACK: gltfpack strips mesh names
       *mesh_desc = (MeshComponentDescriptor){
-          .mesh = node->mesh,
+          .node = node,
           .source_path = root_scene_path,
       };
 
@@ -575,7 +556,7 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
     }
     if (node->scale[0] != 0.0f || node->scale[1] != 0.0f ||
         node->scale[2] != 0.0f) {
-      Transform transform = calc_transform_from_gltf(node);
+      Transform transform = tb_transform_from_node(node);
 
       TransformComponentDescriptor *transform_desc =
           tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
