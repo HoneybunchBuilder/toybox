@@ -26,13 +26,13 @@ bool create_mesh_component(MeshComponent *self,
                   "Failed to get render object system reference", false);
 
   TbMeshId id =
-      tb_mesh_system_load_mesh(mesh_system, desc->source_path, desc->mesh);
+      tb_mesh_system_load_mesh(mesh_system, desc->source_path, desc->node);
   TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
 
   TbRenderObjectId obj_id =
       tb_render_object_system_create(render_object_system);
 
-  const uint32_t submesh_count = desc->mesh->primitives_count;
+  const uint32_t submesh_count = desc->node->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
   *self = (MeshComponent){
@@ -45,7 +45,7 @@ bool create_mesh_component(MeshComponent *self,
   uint64_t offset = 0;
   {
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
-      const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
+      const cgltf_primitive *prim = &desc->node->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
 
       VkIndexType index_type = VK_INDEX_TYPE_UINT16;
@@ -76,7 +76,7 @@ bool create_mesh_component(MeshComponent *self,
 
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
-      const cgltf_primitive *prim = &desc->mesh->primitives[prim_idx];
+      const cgltf_primitive *prim = &desc->node->mesh->primitives[prim_idx];
 
       self->submeshes[prim_idx].vertex_offset = offset;
 

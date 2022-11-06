@@ -24,7 +24,7 @@ typedef enum TbVertexInput {
 
 typedef struct MeshComponentDescriptor {
   const char *source_path;
-  const cgltf_mesh *mesh;
+  const cgltf_node *node;
 } MeshComponentDescriptor;
 
 typedef struct SubMesh {

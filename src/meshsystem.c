@@ -1003,8 +1003,11 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
 }
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
-                                  const cgltf_mesh *mesh) {
+                                  const cgltf_node *node) {
   // Hash the mesh's path and gltf name to get the id
+  const cgltf_mesh *mesh = node->mesh;
+  TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
+
   TbMeshId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
   id = sdbm(id, (const uint8_t *)mesh->name, SDL_strlen(mesh->name));
 
@@ -1032,6 +1035,14 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     }
 
     index = self->mesh_count;
+
+    // Get the mesh node's transform so that we can dequanitze vertices
+    // in order to do meshlet generation
+    float4x4 dequant = {.row0 = {0}};
+    {
+      Transform transform = tb_transform_from_node(node);
+      transform_to_matrix(&dequant, &transform);
+    }
 
     // Determine how big this mesh is
     uint64_t geom_size = 0;
@@ -1110,12 +1121,6 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       TB_VK_CHECK_RET(err, "Failed to create gpu mesh buffer", false);
     }
 
-    if (SDL_strcmp(
-            mesh->name,
-            "Bistro_Research_Exterior_Paris_LiquorBottle_01A___0__6101") == 0) {
-      SDL_TriggerBreakpoint();
-    }
-
     // Read the cgltf mesh into the driver owned memory
     {
       TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
@@ -1128,14 +1133,13 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         {
           cgltf_accessor *indices = prim->indices;
           cgltf_buffer_view *view = indices->buffer_view;
-          cgltf_size src_offset = indices->offset;
           cgltf_size index_size = indices->count * indices->stride;
 
           // Decode the buffer
           cgltf_result res = decompress_buffer_view(self->tmp_alloc, view);
           TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
-          void *src = ((uint8_t *)view->data) + src_offset;
+          void *src = ((uint8_t *)view->data) + indices->offset;
           void *dst = ((uint8_t *)(host_buf->ptr)) + idx_offset;
           SDL_memcpy(dst, src, index_size);
           idx_offset += index_size;
@@ -1158,6 +1162,78 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           void *dst = ((uint8_t *)(host_buf->ptr)) + vtx_offset;
           SDL_memcpy(dst, src, attr_size);
           vtx_offset += attr_size;
+        }
+
+        // Build meshlets for primitive
+        {
+          // TODO: Should be GPU vendor specific
+          static const size_t max_vertices = 64;
+          static const size_t max_triangles = 124;
+          // Not doing cluster cone culling yet
+          static const float cone_weight = 0.0f;
+
+          cgltf_accessor *indices = prim->indices;
+          cgltf_buffer_view *view = indices->buffer_view;
+          uint8_t *index_data = ((uint8_t *)view->data) + indices->offset;
+
+          if (indices->stride != 4) {
+            // Must have 32-bit indices for meshopt, assume existing ones are
+            // 16-bit
+            uint16_t *old_index_data = (uint16_t *)index_data;
+            index_data = (uint8_t *)tb_alloc_nm_tp(self->tmp_alloc,
+                                                   indices->count, uint32_t);
+            for (cgltf_size i = 0; i < indices->count; ++i) {
+              ((uint32_t *)index_data)[i] = (uint32_t)old_index_data[i];
+            }
+          }
+
+          // Need vertex positions
+          float *vertex_positions = NULL;
+          size_t vert_count = 0;
+          size_t vert_stride = 0;
+          {
+            // First attribute should be positions
+            cgltf_accessor *positions = prim->attributes[0].data;
+            TB_CHECK(positions, "Failed to retrieve positions");
+
+            vert_count = positions->count;
+            vert_stride = sizeof(float) * 3;
+
+            // Must get vertex positions as floats which means we must
+            // dequantize the vertex positions
+            vertex_positions =
+                tb_alloc(self->tmp_alloc, vert_count * vert_stride);
+
+            uint8_t *quantized_positions =
+                ((uint8_t *)positions->buffer_view->data) + positions->offset;
+            for (size_t i = 0; i < vert_count; ++i) {
+              float *pos = &vertex_positions[i * 3];
+              uint16_t *pos_quant =
+                  (uint16_t *)&quantized_positions[i * positions->stride];
+
+              float4 to_transform = {pos_quant[0], pos_quant[1], pos_quant[2],
+                                     1.0f};
+              to_transform = mulf44(dequant, to_transform);
+              pos[0] = to_transform[0];
+              pos[1] = to_transform[1];
+              pos[2] = to_transform[2];
+            }
+          }
+
+          const size_t max_meshlets = meshopt_buildMeshletsBound(
+              indices->count, max_vertices, max_triangles);
+
+          struct meshopt_Meshlet *meshlets = tb_alloc_nm_tp(
+              self->tmp_alloc, max_meshlets, struct meshopt_Meshlet);
+          uint32_t *meshlet_verts = tb_alloc_nm_tp(
+              self->tmp_alloc, max_meshlets * max_vertices, uint32_t);
+          uint8_t *meshlet_triangles =
+              tb_alloc(self->tmp_alloc, max_meshlets * max_triangles * 3);
+          const size_t meshlet_count =
+              meshopt_buildMeshlets(meshlets, meshlet_verts, meshlet_triangles,
+                                    (uint32_t *)index_data, indices->count,
+                                    vertex_positions, vert_count, vert_stride,
+                                    max_vertices, max_triangles, cone_weight);
         }
       }
     }
