@@ -1044,12 +1044,21 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       transform_to_matrix(&dequant, &transform);
     }
 
+    // TODO: Should be GPU vendor specific
+    static const size_t max_vertices = 64;
+    static const size_t max_triangles = 124;
+    // Not doing cluster cone culling yet
+    static const float cone_weight = 0.0f;
+
     // Determine how big this mesh is
     uint64_t geom_size = 0;
     uint64_t vertex_offset = 0;
+    uint64_t meshlet_offset = 0;
     {
       uint64_t index_size = 0;
       uint64_t vertex_size = 0;
+      uint64_t meshlets_size = 0;
+
       for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
            ++prim_idx) {
         cgltf_primitive *prim = &mesh->primitives[prim_idx];
@@ -1072,15 +1081,26 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           }
         }
 
-        // Calculate the necessary padding between the index and vertex contents
-        // of the buffer.
-        // Otherwise we'll get a validation error.
-        // The vertex content needs to start that the correct attribAddress
-        // which must be a multiple of the size of the first attribute
-        uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
-        vertex_offset = index_size + idx_padding;
-        geom_size = vertex_offset + vertex_size;
+        // Calculate size based off max possible meshlets necessary for this
+        // primitive
+        meshlets_size += (meshopt_buildMeshletsBound(
+                              indices->count, max_vertices, max_triangles) *
+                          sizeof(struct meshopt_Meshlet));
       }
+
+      // Calculate the necessary padding between the index and vertex contents
+      // of the buffer.
+      // Otherwise we'll get a validation error.
+      // The vertex content needs to start that the correct attribAddress
+      // which must be a multiple of the size of the first attribute
+      uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
+      vertex_offset = index_size + idx_padding;
+
+      // Also need padding between vertices and meshlets
+      uint64_t vtx_padding = vertex_size % sizeof(struct meshopt_Meshlet);
+      meshlet_offset = vertex_offset + vertex_size + vtx_padding;
+
+      geom_size = meshlet_offset + meshlets_size;
     }
 
     VkResult err = VK_SUCCESS;
@@ -1126,6 +1146,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
       uint64_t idx_offset = 0;
       uint64_t vtx_offset = vertex_offset;
+      uint64_t ml_offset = meshlet_offset;
       for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
            ++prim_idx) {
         cgltf_primitive *prim = &mesh->primitives[prim_idx];
@@ -1166,12 +1187,6 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
         // Build meshlets for primitive
         {
-          // TODO: Should be GPU vendor specific
-          static const size_t max_vertices = 64;
-          static const size_t max_triangles = 124;
-          // Not doing cluster cone culling yet
-          static const float cone_weight = 0.0f;
-
           cgltf_accessor *indices = prim->indices;
           cgltf_buffer_view *view = indices->buffer_view;
           uint8_t *index_data = ((uint8_t *)view->data) + indices->offset;
@@ -1223,8 +1238,9 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           const size_t max_meshlets = meshopt_buildMeshletsBound(
               indices->count, max_vertices, max_triangles);
 
-          struct meshopt_Meshlet *meshlets = tb_alloc_nm_tp(
-              self->tmp_alloc, max_meshlets, struct meshopt_Meshlet);
+          struct meshopt_Meshlet *meshlets =
+              (struct meshopt_Meshlet *)(((uint8_t *)(host_buf->ptr)) +
+                                         ml_offset);
           uint32_t *meshlet_verts = tb_alloc_nm_tp(
               self->tmp_alloc, max_meshlets * max_vertices, uint32_t);
           uint8_t *meshlet_triangles =
@@ -1234,6 +1250,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                     (uint32_t *)index_data, indices->count,
                                     vertex_positions, vert_count, vert_stride,
                                     max_vertices, max_triangles, cone_weight);
+
+          ml_offset += (meshlet_count * sizeof(struct meshopt_Meshlet));
         }
       }
     }
