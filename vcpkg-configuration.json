@@ -8,9 +8,10 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "67bda5f2667124f15fd7734b05bc9e61ee119a65",
+      "baseline": "ce0f2764c2af4dbb9c49adf03a4413713e197c75",
       "packages": [
-        "meshoptimizer"
+        "meshoptimizer",
+        "volk"
       ]
     }
   ]
