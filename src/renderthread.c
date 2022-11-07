@@ -701,21 +701,25 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+    // Required for spirv 1.4
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count,
+                        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+
+    // Required for mesh shader
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+
+    // Need Mesh Shader support
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
     // Raytracing is optional
 #if defined(VK_KHR_ray_tracing_pipeline)
     if (optional_device_ext((const char **)&device_ext_names, &device_ext_count,
                             props, prop_count,
                             VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)) {
       ext.raytracing = true;
-
-      // Required for Spirv 1.4
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
-
-      // Required for VK_KHR_ray_tracing_pipeline
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 
       // Required for VK_KHR_acceleration_structure
       optional_device_ext((const char **)&device_ext_names, &device_ext_count,
