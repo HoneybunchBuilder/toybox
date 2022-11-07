@@ -20,6 +20,7 @@ jobs:
 
   deploy:
     name: Deploy
+    runs-on: [Windows, X64, self-hosted]
     steps:
       - uses: game-ci/steam-deploy@v1
         with:
