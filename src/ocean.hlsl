@@ -1,15 +1,14 @@
 // Adapted heavily from https://catlikecoding.com/unity/tutorials/flow/waves/
 
-#include "pbr.hlsli"
 #include "lighting.hlsli"
+#include "pbr.hlsli"
 
 // Contains the vertex stage
 #include "oceancommon.hlsli"
 
 TextureCube irradiance_map : register(t1, space1); // Fragment Stage Only
 
-float4 frag(Interpolators i) : SV_TARGET
-{
+float4 frag(Interpolators i) : SV_TARGET {
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
 
   // Calculate normal after interpolation
@@ -29,7 +28,8 @@ float4 frag(Interpolators i) : SV_TARGET
 
     const float2 uv = i.screen_pos.xy / i.screen_pos.w;
 
-    float background_depth = linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
+    float background_depth =
+        linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
     float surface_depth = depth_from_clip_z(i.screen_pos.z, near, far);
 
     float depth_diff = background_depth - surface_depth;
@@ -41,7 +41,7 @@ float4 frag(Interpolators i) : SV_TARGET
   }
 
   // PBR Lighting
-  float3 color = float3(0,0,0);
+  float3 color = float3(0, 0, 0);
   {
     float metallic = 0.0;
     float roughness = 0.5;
@@ -54,26 +54,29 @@ float4 frag(Interpolators i) : SV_TARGET
     diffuse_color *= 1.0 - metallic;
 
     float3 specular_color = lerp(f0, base_color, metallic);
-    float reflectance = max(max(specular_color.r, specular_color.g), specular_color.b);
+    float reflectance =
+        max(max(specular_color.r, specular_color.g), specular_color.b);
 
-    // For typical incident reflectance range (between 4% to 100%) set the grazing reflectance to 100% for typical fresnel effect.
-    // For very low reflectance range on highly diffuse objects (below 4%), incrementally reduce grazing reflecance to 0%.
+    // For typical incident reflectance range (between 4% to 100%) set the
+    // grazing reflectance to 100% for typical fresnel effect. For very low
+    // reflectance range on highly diffuse objects (below 4%), incrementally
+    // reduce grazing reflecance to 0%.
     float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
     float3 specular_environment_R0 = specular_color;
     float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
-    //for each light
+    // for each light
     {
       float3 light_color = float3(1, 1, 1);
       float3 L = light_dir;
 
       PBRLight light = {
-         light_color,
-         L,
-         specular_environment_R0,
-         specular_environment_R90,
-         alpha_roughness,
-         diffuse_color,
+          light_color,
+          L,
+          specular_environment_R0,
+          specular_environment_R90,
+          alpha_roughness,
+          diffuse_color,
       };
 
       color += pbr_lighting(light, N, V, NdotV);
@@ -85,8 +88,8 @@ float4 frag(Interpolators i) : SV_TARGET
       float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
       float3 kD = 1.0 - kS;
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float3 diffuse    = irradiance * base_color;
-      float3 ambient    = (kD * diffuse) * ao;
+      float3 diffuse = irradiance * base_color;
+      float3 ambient = (kD * diffuse) * ao;
       color += ambient;
     }
   }
