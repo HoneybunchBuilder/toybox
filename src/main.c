@@ -4,7 +4,6 @@
 #include "assetmanifest.h"
 #include "camera.h"
 #include "config.h"
-#include "demo.h"
 #include "pi.h"
 #include "profiling.h"
 #include "settings.h"
