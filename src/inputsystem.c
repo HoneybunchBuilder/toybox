@@ -60,6 +60,28 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   }
   input_comp.event_count = event_index;
 
+  // Check the frame's input events to check for game controllers that we want
+  // to track
+  for (uint32_t event_idx = 0; event_idx < input_comp.event_count;
+       ++event_idx) {
+    SDL_Event event = input_comp.events[event_idx];
+    if (event.type == SDL_CONTROLLERDEVICEADDED) {
+      if (self->controllers[event.cdevice.which] == NULL) {
+        SDL_GameController *controller =
+            SDL_GameControllerOpen(event.cdevice.which);
+        self->controllers[event.cdevice.which] = controller;
+      }
+    }
+
+    if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
+      SDL_GameController *controller = self->controllers[event.cdevice.which];
+      if (controller != NULL) {
+        SDL_GameControllerClose(controller);
+        self->controllers[event.cdevice.which] = NULL;
+      }
+    }
+  }
+
   // Write that input component to the output input component(s)
   // There should only be one but if there is more than one just write to them
   // and issue a warning that this isn't intended. Maybe in the future it could

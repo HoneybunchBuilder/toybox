@@ -73,7 +73,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   {
-    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
+    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
+                           SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC);
     if (res != 0) {
       const char *msg = SDL_GetError();
       SDL_Log("Failed to initialize SDL with error: %s", msg);
