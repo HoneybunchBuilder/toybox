@@ -574,6 +574,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
     }
 
     self->mat_ids[index] = id;
+    self->mat_ref_counts[index] =
+        0; // Must initialize this or it could be garbage
     self->mat_count++;
   } else {
     // If the material was already loaded, go through the textures and grab

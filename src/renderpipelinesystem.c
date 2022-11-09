@@ -534,11 +534,32 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void register_pass(RenderPipelineSystem *self, RenderThread *thread,
-                   TbRenderPassId id) {
+                   TbRenderPassId id, uint32_t *command_buffers,
+                   uint32_t command_buffer_count) {
   RenderPass *pass = &self->render_passes[id];
   Allocator std_alloc = self->std_alloc;
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &thread->frame_states[frame_idx];
+
+    state->pass_command_buffer_count = command_buffer_count;
+    {
+      TB_CHECK(state->pass_command_buffer_count < TB_MAX_COMMAND_BUFFERS,
+               "Too many command buffers");
+      VkCommandBufferAllocateInfo alloc_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+          .commandBufferCount =
+              state->pass_command_buffer_count + 1, // HACK: +1 for the base
+          .commandPool = state->command_pool,
+      };
+      VkResult err = vkAllocateCommandBuffers(thread->device, &alloc_info,
+                                              state->pass_command_buffers);
+      TB_VK_CHECK(err, "Failed to allocate pass command buffer");
+      for (uint32_t i = 0; i < state->pass_command_buffer_count; ++i) {
+        SET_VK_NAME(thread->device, state->pass_command_buffers[i],
+                    VK_OBJECT_TYPE_COMMAND_BUFFER, "Pass Command Buffer");
+      }
+    }
 
     const uint32_t new_count = state->pass_ctx_count + 1;
     if (new_count > state->pass_ctx_max) {
@@ -557,6 +578,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
 
     *pass_context = (PassContext){
         .id = id,
+        .command_buffer_index = command_buffers[id],
         .pass = pass->pass,
         .attachment_count = pass->attach_count,
         .barrier_count = pass->transition_count,
@@ -1401,20 +1423,14 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
   sort_pass_graph(self);
 
-  // Register passes in execution order
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-    const uint32_t idx = self->pass_order[pass_idx];
-    register_pass(self, self->render_system->render_thread, idx);
-  }
-
-  // Once we've sorted and registered passes, go through the passes
+  // Once we've sorted passes, go through the passes
   // in execution order and determine where full pipelines are used.
   // Every time we return to the top of the pipeline, we want to keep track
   // so we can use a different command buffer.
   {
     uint32_t command_buffer_count = 0; // Treated as an index while builiding
     // Worst case each pass needs its own command buffer
-    uint32_t *command_buffer_records =
+    uint32_t *command_buffer_indices =
         tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, uint32_t);
 
     {
@@ -1440,9 +1456,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           current_pass_flags = trans->barrier.dst_flags;
         }
 
-        command_buffer_records[pass_idx] = command_buffer_count;
+        command_buffer_indices[pass_idx] = command_buffer_count;
       }
       command_buffer_count++;
+
+      // Register passes in execution order
+      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+        const uint32_t idx = self->pass_order[pass_idx];
+        register_pass(self, self->render_system->render_thread, idx,
+                      command_buffer_indices, command_buffer_count);
+      }
+
+      // After we register the passes, kick the render thread to make sure
+      // it has command buffers allocated
     }
 
     // TODO: Inform the render thread how many command buffers we need
