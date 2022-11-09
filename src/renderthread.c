@@ -327,12 +327,12 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
           .commandBufferCount = 1,
           .commandPool = state->command_pool,
       };
-      err =
-          vkAllocateCommandBuffers(device, &alloc_info, &state->command_buffer);
+      err = vkAllocateCommandBuffers(device, &alloc_info,
+                                     &state->base_command_buffer);
       TB_VK_CHECK_RET(err, "Failed to create frame state command buffer",
                       false);
-      SET_VK_NAME(device, state->command_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                  "Frame State Command Buffer");
+      SET_VK_NAME(device, state->base_command_buffer,
+                  VK_OBJECT_TYPE_COMMAND_BUFFER, "Frame State Command Buffer");
     }
 
     {
@@ -378,10 +378,10 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     }
 
     {
-      TracyCGPUContext *gpu_ctx =
-          TracyCVkContextExt(gpu, device, graphics_queue, state->command_buffer,
-                             vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
-                             vkGetCalibratedTimestampsEXT);
+      TracyCGPUContext *gpu_ctx = TracyCVkContextExt(
+          gpu, device, graphics_queue, state->base_command_buffer,
+          vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+          vkGetCalibratedTimestampsEXT);
       const char *name = "Frame State GPU Context";
       TracyCVkContextName(gpu_ctx, name, SDL_strlen(name));
       state->tracy_gpu_context = gpu_ctx;
@@ -455,7 +455,10 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
     SDL_DestroySemaphore(state->signal_sem);
 
     vkFreeCommandBuffers(device, state->command_pool, 1,
-                         &state->command_buffer);
+                         &state->base_command_buffer);
+    vkFreeCommandBuffers(device, state->command_pool,
+                         state->pass_command_buffer_count,
+                         state->pass_command_buffers);
     vkDestroyCommandPool(device, state->command_pool, vk_alloc);
 
     TracyCVkContextDestroy(state->tracy_gpu_context);
@@ -1164,7 +1167,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkSemaphore swapchain_image_sem = state->swapchain_image_sem;
   VkFence fence = state->fence;
 
-  VkCommandBuffer command_buffer = state->command_buffer;
+  VkCommandBuffer command_buffer = state->base_command_buffer;
 
   // Ensure the frame state we're about to use isn't being handled by the GPU
   {
