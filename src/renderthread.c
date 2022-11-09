@@ -262,6 +262,10 @@ bool init_debug_messenger(VkInstance instance,
       vkCreateDebugUtilsMessengerEXT(instance, &ext_info, vk_alloc, debug);
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create debug utils messenger",
                   false);
+#else
+  (void)instance;
+  (void)vk_alloc;
+  (void)debug;
 #endif
   return true;
 }
