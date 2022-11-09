@@ -1407,6 +1407,48 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     register_pass(self, self->render_system->render_thread, idx);
   }
 
+  // Once we've sorted and registered passes, go through the passes
+  // in execution order and determine where full pipelines are used.
+  // Every time we return to the top of the pipeline, we want to keep track
+  // so we can use a different command buffer.
+  {
+    uint32_t command_buffer_count = 0; // Treated as an index while builiding
+    // Worst case each pass needs its own command buffer
+    uint32_t *command_buffer_records =
+        tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, uint32_t);
+
+    {
+      uint32_t current_pass_flags = 0;
+      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+        const uint32_t idx = self->pass_order[pass_idx];
+        RenderPass *pass = &self->render_passes[idx];
+
+        for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
+             ++trans_idx) {
+          PassTransition *trans = &pass->transitions[trans_idx];
+
+          // If we can tell that the transition indicates a pipeline flush
+          // we want to record that work onto a different command buffer so
+          // we can submit previous work before continuing to record.
+          // This way we can reduce GPU pipeline stalls
+          if (trans->barrier.src_flags < current_pass_flags ||
+              trans->barrier.src_flags > trans->barrier.dst_flags) {
+            command_buffer_count++;
+          }
+
+          // Either way, record that the pass flags are different
+          current_pass_flags = trans->barrier.dst_flags;
+        }
+
+        command_buffer_records[pass_idx] = command_buffer_count;
+      }
+      command_buffer_count++;
+    }
+
+    // TODO: Inform the render thread how many command buffers we need
+    // and which passes use which command buffers
+  }
+
   // Construct additional objects for handling draws that this system is
   // responsible for
   {
