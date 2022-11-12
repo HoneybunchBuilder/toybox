@@ -2,17 +2,6 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "0321a8422e786e4c35f3abbc1f03acbcfae35758"
-  },
-  "registries": [
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "ce0f2764c2af4dbb9c49adf03a4413713e197c75",
-      "packages": [
-        "meshoptimizer",
-        "volk"
-      ]
-    }
-  ]
+    "baseline": "6f7ffeb18f99796233b958aaaf14ec7bd4fb64b2"
+  }
 }
