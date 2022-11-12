@@ -11,7 +11,7 @@
 #ifdef TRACY_ENABLE
 #define TRACY_VK_C_ENABLE
 #endif
-#include <TracyC.h>
+#include <tracy/TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
 #define TracyCategoryColorRendering 0x7fff00
