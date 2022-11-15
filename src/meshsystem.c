@@ -1186,6 +1186,9 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         }
 
         // Build meshlets for primitive
+        (void)ml_offset;
+        (void)cone_weight;
+        /* Revisit when HLSL support is more mature
         {
           cgltf_accessor *indices = prim->indices;
           cgltf_buffer_view *view = indices->buffer_view;
@@ -1253,6 +1256,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
           ml_offset += (meshlet_count * sizeof(struct meshopt_Meshlet));
         }
+        */
       }
     }
 
