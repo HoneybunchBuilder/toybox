@@ -186,14 +186,15 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
       .attachmentCount = 1,
       .pAttachments = &attachment_state,
   };
-  const uint32_t dyn_state_count = 2;
-  VkDynamicState dyn_states[dyn_state_count] = {VK_DYNAMIC_STATE_VIEWPORT,
+#define DYN_STATE_COUNT 2
+  VkDynamicState dyn_states[DYN_STATE_COUNT] = {VK_DYNAMIC_STATE_VIEWPORT,
                                                 VK_DYNAMIC_STATE_SCISSOR};
   VkPipelineDynamicStateCreateInfo dynamic_state = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = dyn_state_count,
+      .dynamicStateCount = DYN_STATE_COUNT,
       .pDynamicStates = dyn_states,
   };
+#undef DYN_STATE_COUNT
 
   // Load Shader Modules
   VkShaderModule vert_mod_P3N3 = VK_NULL_HANDLE;
@@ -528,8 +529,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 
     // Create pipeline layout
     {
-      const uint32_t layout_count = 3;
-      VkDescriptorSetLayout layouts[layout_count] = {
+#define LAYOUT_COUNT 3
+      VkDescriptorSetLayout layouts[LAYOUT_COUNT] = {
           material_system->set_layout,
           self->obj_set_layout,
           self->view_set_layout,
@@ -537,9 +538,10 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = layout_count,
+          .setLayoutCount = LAYOUT_COUNT,
           .pSetLayouts = layouts,
       };
+#undef LAYOUT_COUNT
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                           "GLTF Pipeline Layout",
                                           &self->pipe_layout);
@@ -1113,9 +1115,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       };
 
-      const uint32_t name_max = 100;
-      char name[name_max] = {0};
-      SDL_snprintf(name, name_max, "%s Host Geom Buffer", mesh->name);
+      char name[100] = {0};
+      SDL_snprintf(name, 100, "%s Host Geom Buffer", mesh->name);
 
       err = tb_rnd_sys_alloc_host_buffer(self->render_system, &create_info,
                                          name, &self->mesh_host_buffers[index]);
@@ -1132,9 +1133,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
       };
 
-      const uint32_t name_max = 100;
-      char name[name_max] = {0};
-      SDL_snprintf(name, name_max, "%s GPU Geom Buffer", mesh->name);
+      char name[100] = {0};
+      SDL_snprintf(name, 100, "%s GPU Geom Buffer", mesh->name);
 
       err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info, name,
                                         &self->mesh_gpu_buffers[index]);

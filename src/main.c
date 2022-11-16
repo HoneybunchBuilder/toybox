@@ -113,9 +113,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
            "Failed to start render thread");
 
-  // Order does not matter
-  const uint32_t component_count = 10;
-  ComponentDescriptor component_descs[component_count] = {0};
+// Order does not matter
+#define COMP_COUNT 10
+  ComponentDescriptor component_descs[COMP_COUNT] = {0};
   tb_transform_component_descriptor(&component_descs[0]);
   tb_camera_component_descriptor(&component_descs[1]);
   tb_directional_light_component_descriptor(&component_descs[2]);
@@ -201,9 +201,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
-  // Order doesn't matter here
-  const uint32_t system_count = 15;
-  SystemDescriptor system_descs[system_count] = {0};
+// Order doesn't matter here
+#define SYSTEM_COUNT 15
+  SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
     tb_input_system_descriptor(&system_descs[i++], &input_system_desc);
@@ -225,11 +225,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                                        &render_target_system_desc);
     tb_render_pipeline_system_descriptor(&system_descs[i++],
                                          &render_pipeline_system_desc);
-    TB_CHECK(i == system_count, "Incorrect number of systems");
+    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
   // But it does matter here
-  SystemId init_order[system_count];
+  SystemId init_order[SYSTEM_COUNT];
   {
     uint32_t i = 0;
     init_order[i++] = RenderSystemId;
@@ -247,9 +247,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = ImGuiSystemId;
     init_order[i++] = NoClipControllerSystemId;
     init_order[i++] = CoreUISystemId;
-    TB_CHECK(i == system_count, "Incorrect number of systems");
+    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
-  SystemId tick_order[system_count];
+  SystemId tick_order[SYSTEM_COUNT];
   {
     uint32_t i = 0;
     tick_order[i++] = RenderPipelineSystemId;
@@ -267,19 +267,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;
     tick_order[i++] = RenderSystemId;
-    TB_CHECK(i == system_count, "Incorrect number of systems");
+    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
       .tmp_alloc = arena.alloc,
-      .component_count = component_count,
+      .component_count = COMP_COUNT,
       .component_descs = component_descs,
-      .system_count = system_count,
+      .system_count = SYSTEM_COUNT,
       .system_descs = system_descs,
       .init_order = init_order,
       .tick_order = tick_order,
   };
+#undef COMP_COUNT
+#undef SYSTEM_COUNT
 
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);

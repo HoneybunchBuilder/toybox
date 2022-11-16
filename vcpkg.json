@@ -12,6 +12,9 @@
       ]
     },
     {
+      "name": "meshoptimizer"
+    },
+    {
       "name": "meshoptimizer",
       "host": true,
       "features": [
