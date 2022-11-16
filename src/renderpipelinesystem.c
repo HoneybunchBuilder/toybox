@@ -20,9 +20,9 @@
 #pragma clang diagnostic pop
 #endif
 
-static const uint32_t MaxRenderPassDependencies = 4;
-static const uint32_t MaxRenderPassTransitions = 4;
-static const uint32_t MaxRenderPassAttachments = 4;
+#define MAX_RENDER_PASS_DEPS 4
+#define MAX_RENDER_PASS_TRANS 4
+#define MAX_RENDER_PASS_ATTACH 4
 
 typedef struct PassTransition {
   TbRenderTargetId render_target;
@@ -31,15 +31,15 @@ typedef struct PassTransition {
 
 typedef struct RenderPass {
   uint32_t dep_count;
-  TbRenderPassId deps[MaxRenderPassDependencies];
+  TbRenderPassId deps[MAX_RENDER_PASS_DEPS];
 
   uint32_t transition_count;
-  PassTransition transitions[MaxRenderPassTransitions];
+  PassTransition transitions[MAX_RENDER_PASS_TRANS];
 
   VkRenderPass pass;
 
   uint32_t attach_count;
-  TbRenderTargetId attachments[MaxRenderPassAttachments];
+  TbRenderTargetId attachments[MAX_RENDER_PASS_ATTACH];
 
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
 } RenderPass;
@@ -627,7 +627,7 @@ TbRenderPassId create_render_pass(
   // Copy dependencies
   pass->dep_count = dep_count;
   SDL_memset(pass->deps, InvalidRenderPassId,
-             sizeof(TbRenderPassId) * MaxRenderPassDependencies);
+             sizeof(TbRenderPassId) * MAX_RENDER_PASS_DEPS);
   if (dep_count > 0) {
     SDL_memcpy(pass->deps, deps, sizeof(TbRenderPassId) * dep_count);
   }
@@ -635,7 +635,7 @@ TbRenderPassId create_render_pass(
   // Copy attachments
   pass->attach_count = attach_count;
   SDL_memset(pass->attachments, InvalidRenderTargetId,
-             sizeof(TbRenderTargetId) * MaxRenderPassAttachments);
+             sizeof(TbRenderTargetId) * MAX_RENDER_PASS_ATTACH);
   if (attach_count > 0) {
     SDL_memcpy(pass->attachments, attachments,
                sizeof(TbRenderTargetId) * attach_count);
@@ -644,7 +644,7 @@ TbRenderPassId create_render_pass(
   // Copy pass transitions
   pass->transition_count = trans_count;
   SDL_memset(pass->transitions, 0,
-             sizeof(PassTransition) * MaxRenderPassTransitions);
+             sizeof(PassTransition) * MAX_RENDER_PASS_TRANS);
   if (trans_count > 0) {
     SDL_memcpy(pass->transitions, transitions,
                sizeof(PassTransition) * trans_count);
@@ -657,7 +657,7 @@ TbRenderPassId create_render_pass(
     const VkExtent3D extent =
         tb_render_target_get_extent(rt_sys, attachments[0]);
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      VkImageView attach_views[MaxRenderPassAttachments] = {0};
+      VkImageView attach_views[MAX_RENDER_PASS_ATTACH] = {0};
 
       for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
         attach_views[attach_idx] =
@@ -883,8 +883,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create opaque color pass
     {
-      const uint32_t attachment_count = 2;
-      VkAttachmentDescription attachments[attachment_count] = {
+#define ATTACH_COUNT 2
+      VkAttachmentDescription attachments[ATTACH_COUNT] = {
           {
               .format = VK_FORMAT_R16G16B16A16_SFLOAT,
               .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -908,7 +908,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       VkRenderPassCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = attachment_count,
+          .attachmentCount = ATTACH_COUNT,
           .pAttachments = attachments,
           .subpassCount = 1,
           .pSubpasses =
@@ -927,6 +927,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       },
               },
       };
+#undef ATTACH_COUNT
 
       // Transition irradiance map
       PassTransition transition = {
@@ -961,8 +962,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create Sky Pass
     {
-      const uint32_t attachment_count = 2;
-      VkAttachmentDescription attachments[attachment_count] = {
+#define ATTACH_COUNT 2
+      VkAttachmentDescription attachments[ATTACH_COUNT] = {
           {
               .format = VK_FORMAT_R16G16B16A16_SFLOAT,
               .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -986,7 +987,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       VkRenderPassCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = attachment_count,
+          .attachmentCount = ATTACH_COUNT,
           .pAttachments = attachments,
           .subpassCount = 1,
           .pSubpasses =
@@ -1036,6 +1037,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
               },
       };
+#undef ATTACH_COUNT
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
@@ -1223,8 +1225,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create transparent color pass
     {
-      const uint32_t attachment_count = 2;
-      VkAttachmentDescription attachments[attachment_count] = {
+#define ATTACH_COUNT 2
+      VkAttachmentDescription attachments[ATTACH_COUNT] = {
           {
               .format = VK_FORMAT_R16G16B16A16_SFLOAT,
               .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -1248,7 +1250,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       VkRenderPassCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = attachment_count,
+          .attachmentCount = ATTACH_COUNT,
           .pAttachments = attachments,
           .subpassCount = 1,
           .pSubpasses =
@@ -1267,6 +1269,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       },
               },
       };
+#undef ATTACH_COUNT
 
       PassTransition transition = {
           .render_target = self->render_target_system->hdr_color,
@@ -1688,9 +1691,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->hdr_color);
 
-    // Write the descriptor set
-    const uint32_t write_count = 2;
-    VkWriteDescriptorSet writes[write_count] = {
+// Write the descriptor set
+#define WRITE_COUNT 2
+    VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = depth_set,
@@ -1719,7 +1722,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         },
     };
     vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                           write_count, writes, 0, NULL);
+                           WRITE_COUNT, writes, 0, NULL);
+#undef WRITE_COUNT
   }
 
   // Issue draws for full screen passes

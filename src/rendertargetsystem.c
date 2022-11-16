@@ -322,9 +322,8 @@ tb_create_render_target(RenderTargetSystem *self,
     }
 
     {
-      static const uint32_t name_max = 100;
-      char view_name[name_max] = {0};
-      SDL_snprintf(view_name, name_max, "%s View", rt_desc->name);
+      char view_name[100] = {0};
+      SDL_snprintf(view_name, 100, "%s View", rt_desc->name);
 
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
