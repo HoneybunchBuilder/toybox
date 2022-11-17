@@ -7,6 +7,7 @@
 
 typedef struct ComponentDescriptor ComponentDescriptor;
 
+#define TbMaxControllers 4
 #define InputComponentMaxEvents 5
 
 typedef enum TBButtonBits {
@@ -39,6 +40,42 @@ typedef enum TBButtonBits {
 } TBButtonBits;
 typedef uint32_t TBButtons;
 
+typedef struct TBKeyboard {
+  uint8_t key_A : 1;
+  uint8_t key_B : 1;
+  uint8_t key_C : 1;
+  uint8_t key_D : 1;
+  uint8_t key_E : 1;
+  uint8_t key_F : 1;
+  uint8_t key_G : 1;
+  uint8_t key_H : 1;
+  uint8_t key_I : 1;
+  uint8_t key_J : 1;
+  uint8_t key_K : 1;
+  uint8_t key_L : 1;
+  uint8_t key_M : 1;
+  uint8_t key_N : 1;
+  uint8_t key_O : 1;
+  uint8_t key_P : 1;
+  uint8_t key_Q : 1;
+  uint8_t key_R : 1;
+  uint8_t key_S : 1;
+  uint8_t key_T : 1;
+  uint8_t key_U : 1;
+  uint8_t key_V : 1;
+  uint8_t key_W : 1;
+  uint8_t key_X : 1;
+  uint8_t key_Y : 1;
+  uint8_t key_Z : 1;
+} TBKeyboard;
+
+typedef struct TBMouse {
+  uint8_t left : 1;
+  uint8_t middle : 1;
+  uint8_t right : 1;
+  float2 axis;
+} TBMouse;
+
 typedef struct TBGameControllerState {
   float2 left_stick;
   float2 right_stick;
@@ -51,8 +88,11 @@ typedef struct InputComponent {
   uint32_t event_count;
   SDL_Event events[InputComponentMaxEvents];
 
+  TBKeyboard keyboard;
+  TBMouse mouse;
+
   uint32_t controller_count;
-  TBGameControllerState *controller_states;
+  TBGameControllerState controller_states[TbMaxControllers];
 } InputComponent;
 
 void tb_input_component_descriptor(ComponentDescriptor *desc);
