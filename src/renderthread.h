@@ -62,7 +62,7 @@ typedef struct FrameState {
   SDL_semaphore *signal_sem;
 
   VkCommandPool command_pool;
-  VkCommandBuffer base_command_buffer;
+  VkCommandBuffer base_command_buffers[2];
   uint32_t pass_command_buffer_count;
   VkCommandBuffer pass_command_buffers[TB_MAX_COMMAND_BUFFERS];
   void *tracy_gpu_context;
@@ -71,7 +71,9 @@ typedef struct FrameState {
 
   VkSemaphore img_acquired_sem;
   VkSemaphore swapchain_image_sem;
+  VkSemaphore upload_complete_sem;
   VkSemaphore render_complete_sem;
+  VkSemaphore frame_complete_sem;
   VkFence fence;
 
   VmaAllocation tmp_gpu_alloc;
