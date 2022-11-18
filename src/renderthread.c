@@ -324,15 +324,17 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       VkCommandBufferAllocateInfo alloc_info = {
           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
           .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-          .commandBufferCount = 1,
+          .commandBufferCount = 2,
           .commandPool = state->command_pool,
       };
       err = vkAllocateCommandBuffers(device, &alloc_info,
-                                     &state->base_command_buffer);
+                                     state->base_command_buffers);
       TB_VK_CHECK_RET(err, "Failed to create frame state command buffer",
                       false);
-      SET_VK_NAME(device, state->base_command_buffer,
-                  VK_OBJECT_TYPE_COMMAND_BUFFER, "Frame State Command Buffer");
+      SET_VK_NAME(device, state->base_command_buffers[0],
+                  VK_OBJECT_TYPE_COMMAND_BUFFER, "Starting Command Buffer");
+      SET_VK_NAME(device, state->base_command_buffers[1],
+                  VK_OBJECT_TYPE_COMMAND_BUFFER, "Ending Command Buffer");
     }
 
     {
@@ -360,10 +362,22 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                   "Frame State Swapchain Image Sem");
 
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &state->upload_complete_sem);
+      TB_VK_CHECK_RET(err, "Failed to create upload complete semaphore", false);
+      SET_VK_NAME(device, state->upload_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
+                  "Frame State Upload Complete Sem");
+
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &state->render_complete_sem);
       TB_VK_CHECK_RET(err, "Failed to create render complete semaphore", false);
       SET_VK_NAME(device, state->render_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
                   "Frame State Render Complete Sem");
+
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
+                              &state->frame_complete_sem);
+      TB_VK_CHECK_RET(err, "Failed to create Frame complete semaphore", false);
+      SET_VK_NAME(device, state->frame_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
+                  "Frame State Frame Complete Sem");
     }
 
     {
@@ -379,7 +393,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
 
     {
       TracyCGPUContext *gpu_ctx = TracyCVkContextExt(
-          gpu, device, graphics_queue, state->base_command_buffer,
+          gpu, device, graphics_queue, state->base_command_buffers[0],
           vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
           vkGetCalibratedTimestampsEXT);
       const char *name = "Frame State GPU Context";
@@ -454,8 +468,8 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
 
-    vkFreeCommandBuffers(device, state->command_pool, 1,
-                         &state->base_command_buffer);
+    vkFreeCommandBuffers(device, state->command_pool, 2,
+                         state->base_command_buffers);
     vkFreeCommandBuffers(device, state->command_pool,
                          state->pass_command_buffer_count,
                          state->pass_command_buffers);
@@ -468,7 +482,9 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     vkDestroySemaphore(device, state->img_acquired_sem, vk_alloc);
     vkDestroySemaphore(device, state->swapchain_image_sem, vk_alloc);
+    vkDestroySemaphore(device, state->upload_complete_sem, vk_alloc);
     vkDestroySemaphore(device, state->render_complete_sem, vk_alloc);
+    vkDestroySemaphore(device, state->frame_complete_sem, vk_alloc);
 
     vkDestroyFence(device, state->fence, vk_alloc);
 
@@ -1163,11 +1179,14 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkQueue present_queue = thread->present_queue;
 
   VkSemaphore img_acquired_sem = state->img_acquired_sem;
+  VkSemaphore upload_complete_sem = state->upload_complete_sem;
   VkSemaphore render_complete_sem = state->render_complete_sem;
+  VkSemaphore frame_complete_sem = state->frame_complete_sem;
   VkSemaphore swapchain_image_sem = state->swapchain_image_sem;
   VkFence fence = state->fence;
 
-  VkCommandBuffer command_buffer = state->base_command_buffer;
+  VkCommandBuffer start_buffer = state->base_command_buffers[0];
+  VkCommandBuffer end_buffer = state->base_command_buffers[1];
 
   // Ensure the frame state we're about to use isn't being handled by the GPU
   {
@@ -1221,26 +1240,26 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneN(draw_ctx, "Draw", true);
     TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
 
+    TracyCGPUContext *gpu_ctx = (TracyCGPUContext *)state->tracy_gpu_context;
+
+    // Start Upload Record
     {
       VkCommandBufferBeginInfo begin_info = {
           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       };
-      err = vkBeginCommandBuffer(command_buffer, &begin_info);
+      err = vkBeginCommandBuffer(start_buffer, &begin_info);
       TB_VK_CHECK(err, "Failed to begin command buffer");
     }
-
-    TracyCGPUContext *gpu_ctx = (TracyCGPUContext *)state->tracy_gpu_context;
 
     // Upload
     {
       TracyCZoneN(up_ctx, "Record Upload", true);
-      TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Upload", 1,
-                        true);
+      TracyCVkNamedZone(gpu_ctx, frame_scope, start_buffer, "Upload", 1, true);
       // Upload all buffer requests
       if (state->buf_copy_queue.req_count > 0) {
         for (int32_t i = state->buf_copy_queue.req_count - 1; i >= 0; i--) {
           const BufferCopy *up = &state->buf_copy_queue.reqs[i];
-          vkCmdCopyBuffer(command_buffer, up->src, up->dst, 1, &up->region);
+          vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
         }
 
         state->buf_copy_queue.req_count = 0;
@@ -1262,14 +1281,14 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                 .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 .image = up->dst,
             };
-            vkCmdPipelineBarrier(command_buffer,
+            vkCmdPipelineBarrier(start_buffer,
                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                  VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0,
                                  NULL, 1, &barrier);
           }
 
           // Perform the copy
-          vkCmdCopyBufferToImage(command_buffer, up->src, up->dst,
+          vkCmdCopyBufferToImage(start_buffer, up->src, up->dst,
                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                  &up->region);
 
@@ -1284,7 +1303,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                 .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .image = up->dst,
             };
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(start_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
                                  NULL, 0, NULL, 1, &barrier);
           }
@@ -1295,11 +1314,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
       TracyCVkZoneEnd(frame_scope);
       TracyCZoneEnd(up_ctx);
-    }
-
-    {
-      TracyCVkNamedZone(gpu_ctx, frame_scope, command_buffer, "Render", 1,
-                        true);
 
       // Transition swapchain image to color attachment output
       {
@@ -1323,101 +1337,238 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
             .subresourceRange.layerCount = 1,
         };
 
-        vkCmdPipelineBarrier(command_buffer,
+        vkCmdPipelineBarrier(start_buffer,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
         TracyCZoneEnd(swap_trans_e);
       }
+    }
 
-      // Draw registered passes
+    // End upload record
+    {
+      TracyCVkCollect(gpu_ctx, start_buffer);
+
+      err = vkEndCommandBuffer(start_buffer);
+      TB_VK_CHECK(err, "Failed to end upload command buffer");
+    }
+
+    // Submit upload work
+    {
+      TracyCZoneN(submit_ctx, "Submit Upload", true);
+      TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+      uint32_t wait_sem_count = 0;
+      VkSemaphore wait_sems[16] = {0};
+      VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+      wait_sems[wait_sem_count] = img_acquired_sem;
+      wait_stage_flags[wait_sem_count++] =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
       {
-        TracyCZoneN(pass_ctx, "Record Passes", true);
-        for (uint32_t pass_idx = 0; pass_idx < state->pass_ctx_count;
-             ++pass_idx) {
-          PassContext *pass = &state->pass_contexts[pass_idx];
-          record_pass_begin(command_buffer, pass);
+        VkSubmitInfo submit_info = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = wait_sem_count,
+            .pWaitSemaphores = wait_sems,
+            .pWaitDstStageMask = wait_stage_flags,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &start_buffer,
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = &upload_complete_sem,
+        };
 
-          for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
-               ++draw_idx) {
-            DrawContext *draw = &state->draw_contexts[draw_idx];
-            if (draw->pass_id == pass->id) {
-              draw->record_fn(gpu_ctx, command_buffer, draw->batch_count,
-                              draw->batches);
+        queue_begin_label(graphics_queue, "Upload",
+                          (float4){1.0f, 0.1f, 0.1f, 1.0f});
+        err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+        queue_end_label(graphics_queue);
+        TB_VK_CHECK(err, "Failed to submit upload work");
+      }
+
+      TracyCZoneEnd(submit_ctx);
+    }
+
+    // Record registered passes
+    VkSemaphore pre_final_sem = upload_complete_sem;
+    if (state->pass_ctx_count > 0) {
+      TracyCZoneN(pass_ctx, "Record Passes", true);
+      pre_final_sem = render_complete_sem;
+      uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
+      for (uint32_t pass_idx = 0; pass_idx < state->pass_ctx_count;
+           ++pass_idx) {
+        PassContext *pass = &state->pass_contexts[pass_idx];
+
+        VkCommandBuffer pass_buffer =
+            state->pass_command_buffers[pass->command_buffer_index];
+        if (pass->command_buffer_index != last_pass_buffer_idx) {
+          // Submit previous command buffer
+          if (last_pass_buffer_idx != 0xFFFFFFFF) {
+            vkEndCommandBuffer(
+                state->pass_command_buffers[last_pass_buffer_idx]);
+
+            // Submit pass work
+            {
+              TracyCZoneN(submit_ctx, "Submit Passes", true);
+              TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+              uint32_t wait_sem_count = 0;
+              VkSemaphore wait_sems[16] = {0};
+              VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+              if (last_pass_buffer_idx == 0) {
+                wait_sems[wait_sem_count] = upload_complete_sem;
+                wait_stage_flags[wait_sem_count++] =
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+              }
+
+              {
+                VkSubmitInfo submit_info = {
+                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .waitSemaphoreCount = wait_sem_count,
+                    .pWaitSemaphores = wait_sems,
+                    .pWaitDstStageMask = wait_stage_flags,
+                    .commandBufferCount = 1,
+                    .pCommandBuffers =
+                        &state->pass_command_buffers[last_pass_buffer_idx],
+                };
+
+                queue_begin_label(graphics_queue, "Passes",
+                                  (float4){1.0f, 0.1f, 0.1f, 1.0f});
+                err = vkQueueSubmit(graphics_queue, 1, &submit_info,
+                                    VK_NULL_HANDLE);
+                queue_end_label(graphics_queue);
+                TB_VK_CHECK(err, "Failed to submit pass work");
+              }
+
+              TracyCZoneEnd(submit_ctx);
             }
           }
 
-          vkCmdEndRenderPass(command_buffer);
+          VkCommandBufferBeginInfo begin_info = {
+              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+          };
+          vkBeginCommandBuffer(pass_buffer, &begin_info);
         }
-        TracyCZoneEnd(pass_ctx);
-      }
 
-      // Transition swapchain image back to presentable
+        record_pass_begin(pass_buffer, pass);
+
+        for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
+             ++draw_idx) {
+          DrawContext *draw = &state->draw_contexts[draw_idx];
+          if (draw->pass_id == pass->id) {
+            draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
+                            draw->batches);
+          }
+        }
+
+        vkCmdEndRenderPass(pass_buffer);
+
+        last_pass_buffer_idx = pass->command_buffer_index;
+      }
+      vkEndCommandBuffer(state->pass_command_buffers[last_pass_buffer_idx]);
+
+      // Submit last pass work
       {
-        TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
-        VkImageMemoryBarrier barrier = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .image = state->swapchain_image,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .subresourceRange.levelCount = 1,
-            .subresourceRange.layerCount = 1,
-        };
-        vkCmdPipelineBarrier(
-            command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
-        TracyCZoneEnd(swap_trans_e);
+        TracyCZoneN(submit_ctx, "Submit Passes", true);
+        TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+        uint32_t wait_sem_count = 0;
+        VkSemaphore wait_sems[16] = {0};
+        VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+        {
+          VkSubmitInfo submit_info = {
+              .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+              .waitSemaphoreCount = wait_sem_count,
+              .pWaitSemaphores = wait_sems,
+              .pWaitDstStageMask = wait_stage_flags,
+              .commandBufferCount = 1,
+              .pCommandBuffers =
+                  &state->pass_command_buffers[last_pass_buffer_idx],
+              .signalSemaphoreCount = 1,
+              .pSignalSemaphores = &render_complete_sem,
+          };
+
+          queue_begin_label(graphics_queue, "Passes",
+                            (float4){1.0f, 0.1f, 0.1f, 1.0f});
+          err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+          queue_end_label(graphics_queue);
+          TB_VK_CHECK(err, "Failed to submit pass work");
+        }
+
+        TracyCZoneEnd(submit_ctx);
       }
 
-      TracyCVkZoneEnd(frame_scope);
+      TracyCZoneEnd(pass_ctx);
+    }
 
-      TracyCVkCollect(gpu_ctx, command_buffer);
+    // Record finalization work
+    {
+      VkCommandBufferBeginInfo begin_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      };
+      err = vkBeginCommandBuffer(end_buffer, &begin_info);
+      TB_VK_CHECK(err, "Failed to begin command buffer");
 
-      err = vkEndCommandBuffer(command_buffer);
-      TB_VK_CHECK(err, "Failed to end command buffer");
+      TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
+      VkImageMemoryBarrier barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+          .image = state->swapchain_image,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .subresourceRange.levelCount = 1,
+          .subresourceRange.layerCount = 1,
+      };
+      vkCmdPipelineBarrier(
+          end_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+
+      vkEndCommandBuffer(end_buffer);
+
+      TracyCZoneEnd(swap_trans_e);
+    }
+
+    // Submit finalization work
+    {
+      TracyCZoneN(submit_ctx, "Submit Ending", true);
+      TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+
+      uint32_t wait_sem_count = 0;
+      VkSemaphore wait_sems[16] = {0};
+      VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+      wait_sems[wait_sem_count] = pre_final_sem;
+      wait_stage_flags[wait_sem_count++] =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+      {
+        VkSubmitInfo submit_info = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = wait_sem_count,
+            .pWaitSemaphores = wait_sems,
+            .pWaitDstStageMask = wait_stage_flags,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &end_buffer,
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = &frame_complete_sem,
+        };
+
+        queue_begin_label(graphics_queue, "Finalize",
+                          (float4){1.0f, 0.1f, 0.1f, 1.0f});
+        err = vkQueueSubmit(graphics_queue, 1, &submit_info, state->fence);
+        queue_end_label(graphics_queue);
+        TB_VK_CHECK(err, "Failed to submit ending work");
+      }
+
+      TracyCZoneEnd(submit_ctx);
     }
 
     TracyCZoneEnd(draw_ctx);
-  }
-
-  // Submit
-  {
-    TracyCZoneN(submit_ctx, "Submit", true);
-    TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
-
-    uint32_t wait_sem_count = 0;
-    VkSemaphore wait_sems[16] = {0};
-    VkPipelineStageFlags wait_stage_flags[16] = {0};
-
-    wait_sems[wait_sem_count] = img_acquired_sem;
-    wait_stage_flags[wait_sem_count++] =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-    {
-      VkSubmitInfo submit_info = {
-          .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-          .waitSemaphoreCount = wait_sem_count,
-          .pWaitSemaphores = wait_sems,
-          .pWaitDstStageMask = wait_stage_flags,
-          .commandBufferCount = 1,
-          .pCommandBuffers = &command_buffer,
-          .signalSemaphoreCount = 1,
-          .pSignalSemaphores = &render_complete_sem,
-      };
-
-      queue_begin_label(graphics_queue, "Raster",
-                        (float4){1.0f, 0.1f, 0.1f, 1.0f});
-      err = vkQueueSubmit(graphics_queue, 1, &submit_info, state->fence);
-      queue_end_label(graphics_queue);
-      TB_VK_CHECK(err, "Failed to submit raster work");
-    }
-
-    TracyCZoneEnd(submit_ctx);
   }
 
   // Present
@@ -1425,7 +1576,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneN(present_ctx, "Present", true);
     TracyCZoneColor(present_ctx, TracyCategoryColorRendering);
 
-    VkSemaphore wait_sem = render_complete_sem;
+    VkSemaphore wait_sem = frame_complete_sem;
     if (thread->present_queue_family_index !=
         thread->graphics_queue_family_index) {
       // If we are using separate queues, change image ownership to the
@@ -1434,7 +1585,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       // finished
       VkSubmitInfo submit_info = {
           .waitSemaphoreCount = 1,
-          .pWaitSemaphores = &render_complete_sem,
+          .pWaitSemaphores = &frame_complete_sem,
           .signalSemaphoreCount = 1,
           .pSignalSemaphores = &swapchain_image_sem,
       };
