@@ -59,6 +59,8 @@ float3 crossf3(float3 x, float3 y) {
   };
 }
 
+float magf2(float2 v) { return sqrtf((v[0] * v[0]) + (v[1] * v[1])); }
+
 float magf3(float3 v) {
   return sqrtf((v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]));
 }
@@ -75,9 +77,31 @@ float magsqf4(float4 v) {
   return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]) + (v[3] * v[3]);
 }
 
+float2 normf2(float2 v) {
+  float inv_sum = 1 / magf2(v);
+  return (float2){
+      v[0] * inv_sum,
+      v[1] * inv_sum,
+  };
+}
+
 float3 normf3(float3 v) {
-  float invSum = 1 / magf3(v);
-  return (float3){v[0] * invSum, v[1] * invSum, v[2] * invSum};
+  float inv_sum = 1 / magf3(v);
+  return (float3){
+      v[0] * inv_sum,
+      v[1] * inv_sum,
+      v[2] * inv_sum,
+  };
+}
+
+float4 normf4(float3 v) {
+  float inv_sum = 1 / magf4(v);
+  return (float3){
+      v[0] * inv_sum,
+      v[1] * inv_sum,
+      v[2] * inv_sum,
+      v[3] * inv_sum,
+  };
 }
 
 float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }

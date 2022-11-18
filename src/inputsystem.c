@@ -99,8 +99,8 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
       if (event.type == SDL_MOUSEMOTION) {
         const SDL_MouseMotionEvent *mouse_motion = &event.motion;
         input_comp.mouse.axis = (float2){
-            (float)mouse_motion->xrel / (float)10,
-            (float)mouse_motion->yrel / (float)10,
+            (float)mouse_motion->xrel / 5,
+            (float)mouse_motion->yrel / 5,
         };
       }
       if (event.type == SDL_MOUSEBUTTONDOWN ||
