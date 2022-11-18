@@ -16,7 +16,6 @@ jobs:
     - name: Build Release
       run: cmake --build --preset release-x64-windows-ninja-llvm
     - uses: game-ci/steam-deploy@v1
-      shell: bash
       with:
         username: ${{ secrets.STEAM_USERNAME }}
         password: ${{ secrets.STEAM_PASSWORD }}
