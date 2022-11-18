@@ -44,8 +44,9 @@ void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
 #define set_vk_name(...)
 #define set_vk_tag(...)
 
-#define SET_VK_NAME(device, object, type, name)
-#define TB_VK_CHECK(err, message)
-#define TB_VK_CHECK_RET(err, message, ret)
+#define SET_VK_NAME(device, object, type, name)                                \
+  (void)device, (void)object, (void)type, (void)name
+#define TB_VK_CHECK(err, message) (void)err, (void)message
+#define TB_VK_CHECK_RET(err, message, ret) (void)err, (void)message, (void)ret
 
 #endif

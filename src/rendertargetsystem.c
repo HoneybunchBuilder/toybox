@@ -114,8 +114,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = 256,
-                  .height = 256,
+                  .width = 128,
+                  .height = 128,
                   .depth = 1,
               },
           .mip_count = 1,
@@ -132,8 +132,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = 64,
-                  .height = 64,
+                  .width = 32,
+                  .height = 32,
                   .depth = 1,
               },
           .mip_count = 1,
@@ -322,9 +322,8 @@ tb_create_render_target(RenderTargetSystem *self,
     }
 
     {
-      static const uint32_t name_max = 100;
-      char view_name[name_max] = {0};
-      SDL_snprintf(view_name, name_max, "%s View", rt_desc->name);
+      char view_name[100] = {0};
+      SDL_snprintf(view_name, 100, "%s View", rt_desc->name);
 
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

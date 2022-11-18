@@ -35,6 +35,7 @@ typedef struct ImageTransition {
 
 typedef struct PassContext {
   TbRenderPassId id;
+  uint32_t command_buffer_index;
   VkRenderPass pass;
   uint32_t attachment_count;
   VkFramebuffer framebuffer;
@@ -54,19 +55,25 @@ typedef struct DrawContext {
   uint32_t batch_max;
 } DrawContext;
 
+#define TB_MAX_COMMAND_BUFFERS 16
+
 typedef struct FrameState {
   SDL_semaphore *wait_sem;
   SDL_semaphore *signal_sem;
 
   VkCommandPool command_pool;
-  VkCommandBuffer command_buffer;
+  VkCommandBuffer base_command_buffers[2];
+  uint32_t pass_command_buffer_count;
+  VkCommandBuffer pass_command_buffers[TB_MAX_COMMAND_BUFFERS];
   void *tracy_gpu_context;
 
   VkImage swapchain_image;
 
   VkSemaphore img_acquired_sem;
   VkSemaphore swapchain_image_sem;
+  VkSemaphore upload_complete_sem;
   VkSemaphore render_complete_sem;
+  VkSemaphore frame_complete_sem;
   VkFence fence;
 
   VmaAllocation tmp_gpu_alloc;

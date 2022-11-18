@@ -11,7 +11,7 @@
 #ifdef TRACY_ENABLE
 #define TRACY_VK_C_ENABLE
 #endif
-#include <TracyC.h>
+#include <tracy/TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
 #define TracyCategoryColorRendering 0x7fff00
@@ -73,11 +73,17 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 typedef struct TracyCGPUContext TracyCGPUContext;
 typedef struct TracyCGPUScope TracyCGPUScope;
 
-#define TracyCVkContextExt(...) 0
+#define TracyCVkContextExt(gpu, device, queue, buffer, ext1, ext2)             \
+  0;                                                                           \
+  (void)gpu, (void)device, (void)queue, (void)buffer, (void)ext1, (void)ext2;
+
 #define TracyCVkContext(...)
 #define TracyCVkContextDestroy(...)
-#define TracyCVkContextName(...)
-#define TracyCVkNamedZone(...)
+#define TracyCVkContextName(ctx, name, len) (void)ctx, (void)name, (void)len
+#define TracyCVkNamedZone(ctx, var_name, cmd_buf, name, depth, active)         \
+  int var_name = 0;                                                            \
+  (void)ctx, (void)var_name, (void)cmd_buf, (void)name, (void)depth,           \
+      (void)active
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
 

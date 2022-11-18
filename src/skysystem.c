@@ -81,8 +81,8 @@ VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
     TB_VK_CHECK_RET(err, "Failed to load sky frag shader module", err);
   }
 
-  const uint32_t stage_count = 2;
-  VkPipelineShaderStageCreateInfo stages[stage_count] = {
+#define STAGE_COUNT 2
+  VkPipelineShaderStageCreateInfo stages[STAGE_COUNT] = {
       {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
           .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -168,7 +168,7 @@ VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .stageCount = stage_count,
+      .stageCount = STAGE_COUNT,
       .pStages = stages,
       .pVertexInputState = &vert_input_state,
       .pInputAssemblyState = &input_assembly_state,
@@ -181,6 +181,7 @@ VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
       .layout = layout,
       .renderPass = pass,
   };
+#undef STAGE_COUNT
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Sky Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create sky pipeline", err);

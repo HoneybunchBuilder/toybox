@@ -200,10 +200,10 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
         }
 
-        // NOTE: Due to behavior in AMD drivers we use max_sets for the
-        // descriptor count
-        const uint32_t pool_size_count = 2;
-        VkDescriptorPoolSize pool_sizes[pool_size_count] = {
+// NOTE: Due to behavior in AMD drivers we use max_sets for the
+// descriptor count
+#define POOL_SIZE_COUNT 2
+        VkDescriptorPoolSize pool_sizes[POOL_SIZE_COUNT] = {
             // One binding is a uniform buffer
             {
                 .descriptorCount = max_sets,
@@ -219,10 +219,11 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         VkDescriptorPoolCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             .maxSets = max_sets,
-            .poolSizeCount = pool_size_count,
+            .poolSizeCount = POOL_SIZE_COUNT,
             .pPoolSizes = pool_sizes,
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         };
+#undef POOL_SIZE_COUNT
         err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
                                      &self->mat_set_pool);
         TB_VK_CHECK(err, "Failed to create material descriptor pool");
@@ -340,9 +341,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
                      VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         };
-        const uint32_t name_max = 100;
-        char name[name_max] = {0};
-        SDL_snprintf(name, name_max, "%s Uniform Buffer", mat->name);
+        char name[100] = {0};
+        SDL_snprintf(name, 100, "%s Uniform Buffer", mat->name);
         err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
                                           name, &self->mat_gpu_buffers[index]);
         TB_VK_CHECK_RET(err,
@@ -574,6 +574,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
     }
 
     self->mat_ids[index] = id;
+    self->mat_ref_counts[index] =
+        0; // Must initialize this or it could be garbage
     self->mat_count++;
   } else {
     // If the material was already loaded, go through the textures and grab

@@ -107,11 +107,14 @@ float dotf3(float3 x, float3 y);
 float dotf4(float4 x, float4 y);
 float3 crossf3(float3 x, float3 y);
 
+float magf2(float2 v);
 float magf3(float3 v);
 float magf4(float4 v);
 float magsqf3(float3 v);
 float magsqf4(float4 v);
+float2 normf2(float2 v);
 float3 normf3(float3 v);
+float4 normf4(float4 v);
 
 float lenf3(float3 v);
 
