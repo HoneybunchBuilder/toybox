@@ -15,19 +15,15 @@ jobs:
       run: cmake --preset x64-windows-ninja-llvm -DFINAL=ON -DPROFILE_TRACY=OFF
     - name: Build Release
       run: cmake --build --preset release-x64-windows-ninja-llvm
-
-    - name: Deploy
-      runs-on: [Windows, X64, self-hosted]
-      steps:
-        - uses: game-ci/steam-deploy@v1
-          with:
-            username: ${{ secrets.STEAM_USERNAME }}
-            password: ${{ secrets.STEAM_PASSWORD }}
-            configVdf: ${{ secrets.STEAM_CONFIG_VDF}}
-            ssfnFileName: ${{ secrets.STEAM_SSFN_FILE_NAME }}
-            ssfnFileContents: ${{ secrets.STEAM_SSFN_FILE_CONTENTS }}
-            appId: 2213960
-            buildDescription: v0.1.0
-            rootPath: build/x64/windows
-            depot1Path: Release
-            releaseBranch: steam-prerelease
+    - uses: game-ci/steam-deploy@v1
+      with:
+        username: ${{ secrets.STEAM_USERNAME }}
+        password: ${{ secrets.STEAM_PASSWORD }}
+        configVdf: ${{ secrets.STEAM_CONFIG_VDF}}
+        ssfnFileName: ${{ secrets.STEAM_SSFN_FILE_NAME }}
+        ssfnFileContents: ${{ secrets.STEAM_SSFN_FILE_CONTENTS }}
+        appId: 2213960
+        buildDescription: v0.1.0
+        rootPath: build/x64/windows
+        depot1Path: Release
+        releaseBranch: steam-prerelease
