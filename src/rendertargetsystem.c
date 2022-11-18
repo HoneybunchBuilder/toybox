@@ -114,8 +114,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = 256,
-                  .height = 256,
+                  .width = 128,
+                  .height = 128,
                   .depth = 1,
               },
           .mip_count = 1,
@@ -132,8 +132,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = 64,
-                  .height = 64,
+                  .width = 32,
+                  .height = 32,
                   .depth = 1,
               },
           .mip_count = 1,
