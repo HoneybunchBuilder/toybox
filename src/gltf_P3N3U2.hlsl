@@ -86,20 +86,19 @@ float4 frag(Interpolators i) : SV_TARGET {
     float alpha_roughness = roughness * roughness;
 
     float3 f0 = float3(0.4, 0.4, 0.4);
+    f0 = lerp(f0, base_color, metallic);
 
     float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
     diffuse_color *= 1.0 - metallic;
 
-    float3 specular_color = lerp(f0, base_color, metallic);
-    float reflectance =
-        max(max(specular_color.r, specular_color.g), specular_color.b);
+    float reflectance = max(max(f0.r, f0.g), f0.b);
 
     // For typical incident reflectance range (between 4% to 100%) set the
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
     // reduce grazing reflecance to 0%.
     float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
-    float3 specular_environment_R0 = specular_color;
+    float3 specular_environment_R0 = f0;
     float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
     // for each light
@@ -118,6 +117,19 @@ float4 frag(Interpolators i) : SV_TARGET {
 
       out_color += pbr_lighting(light, N, V, NdotV);
     }
+
+    // Ambient IBL
+    {
+      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+      float3 diffuse = irradiance * base_color;
+
+      float3 kS = fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
+      float3 kD = (1.0 - kS);
+      kD *= 1.0f - metallic;
+      float3 ambient = (kD * diffuse);
+      
+      out_color += ambient;
+    }
   } else // Phong fallback
   {
     float gloss = 0.5;
@@ -131,12 +143,6 @@ float4 frag(Interpolators i) : SV_TARGET {
       out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
     }
   }
-
-  // Gamma correct
-  out_color = pow(out_color, float3(0.4545, 0.4545, 0.4545));
-
-  float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
-  out_color += ambient;
 
   return float4(out_color, 1.0);
 }

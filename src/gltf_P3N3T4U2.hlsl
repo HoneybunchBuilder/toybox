@@ -78,8 +78,6 @@ float4 frag(Interpolators i) : SV_TARGET {
   // Per view calcs
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
-  float3 reflection = -normalize(reflect(V, N));
-  reflection.y *= -1.0;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
@@ -111,20 +109,19 @@ float4 frag(Interpolators i) : SV_TARGET {
     float alpha_roughness = roughness * roughness;
 
     float3 f0 = float3(0.4, 0.4, 0.4);
+    f0 = lerp(f0, base_color, metallic);
 
     float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
     diffuse_color *= 1.0 - metallic;
 
-    float3 specular_color = lerp(f0, base_color, metallic);
-    float reflectance =
-        max(max(specular_color.r, specular_color.g), specular_color.b);
+    float reflectance = max(max(f0.r, f0.g), f0.b);
 
     // For typical incident reflectance range (between 4% to 100%) set the
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
     // reduce grazing reflecance to 0%.
     float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
-    float3 specular_environment_R0 = specular_color;
+    float3 specular_environment_R0 = f0;
     float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
 
     // for each light
@@ -146,16 +143,14 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // Ambient IBL
     {
-      const float ao = 1.0f;
-      float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
-      float3 kD = 1.0 - kS;
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float exposure = 4.5f; // TODO: pass in as a parameter
-      irradiance = tonemap(irradiance * exposure);
-      irradiance *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
       float3 diffuse = irradiance * base_color;
-      float3 ambient = (kD * diffuse) * ao;
 
+      float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
+      float3 kD = (1.0 - kS);
+      kD *= 1.0f - metallic;
+      float3 ambient = (kD * diffuse);
+      
       out_color += ambient;
     }
 
