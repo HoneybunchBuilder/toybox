@@ -578,6 +578,9 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
   return true;
 }
 
+float tb_deg_to_rad(float d) { return d * (M_PI / 180.0f); }
+float tb_rad_to_deg(float r) { return r * (180 / M_PI); }
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

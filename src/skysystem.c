@@ -978,8 +978,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         };
         env_batches[batch_count] = sky_batches[batch_count];
         env_batches[batch_count].pipeline = self->env_pipeline;
-        env_batches[batch_count].viewport = (VkViewport){0, 0, 256, 256, 0, 1};
-        env_batches[batch_count].scissor = (VkRect2D){{0, 0}, {256, 256}};
+        env_batches[batch_count].viewport = (VkViewport){0, 0, 512, 512, 0, 1};
+        env_batches[batch_count].scissor = (VkRect2D){{0, 0}, {512, 512}};
         batch_count++;
       }
     }
@@ -991,8 +991,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       *irradiance_batch = (IrradianceBatch){
           .layout = self->irr_pipe_layout,
           .pipeline = self->irradiance_pipeline,
-          .viewport = {0, 0, 64, 64, 0, 1},
-          .scissor = {{0, 0}, {64, 64}},
+          .viewport = {0, 0, 32, 32, 0, 1},
+          .scissor = {{0, 0}, {32, 32}},
           .set = state->sets[state->set_count - 1],
           .geom_buffer = self->sky_geom_gpu_buffer.buffer,
           .index_count = get_skydome_index_count(),

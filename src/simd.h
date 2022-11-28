@@ -155,3 +155,6 @@ void orthographic(float4x4 *m, float width, float height, float zn, float zf);
 Frustum frustum_from_view_proj(const float4x4 *vp);
 
 bool frustum_test_aabb(const Frustum *frust, const AABB *aabb);
+
+float tb_deg_to_rad(float d);
+float tb_rad_to_deg(float r);
