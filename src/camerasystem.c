@@ -75,23 +75,6 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     // Calculate view projection matrix
     mulmf44(&proj, &view, &data.vp);
 
-    // DEBUG
-    {
-      float3 f = {0, -1, 0};
-      float3 u = {1, 0, 0};
-      float4x4 tmp_v = {.row0 = {0}};
-      look_forward(&tmp_v, (float3){0}, f, u);
-
-      float fov = tb_deg_to_rad(90.0f);
-
-      float4x4 tmp_p = {.row0 = {0}};
-      perspective(&tmp_p, fov, 1.0f, 0.1f, 512.0f);
-
-      float4x4 tmp_vp;
-      mulmf44(&tmp_p, &tmp_v, &tmp_vp);
-      // SDL_TriggerBreakpoint();
-    }
-
     // Inverse
     data.inv_vp = inv_mf44(data.vp);
 

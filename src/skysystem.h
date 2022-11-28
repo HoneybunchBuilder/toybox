@@ -35,6 +35,7 @@ typedef struct SkySystem {
   VkRenderPass sky_pass;
   VkRenderPass env_capture_pass;
   VkRenderPass irradiance_pass;
+  VkRenderPass prefilter_pass;
   TbDrawContextId sky_draw_ctx;
   TbDrawContextId env_capture_ctx;
   TbDrawContextId irradiance_ctx;
@@ -47,6 +48,7 @@ typedef struct SkySystem {
   VkPipeline sky_pipeline;
   VkPipeline env_pipeline;
   VkPipeline irradiance_pipeline;
+  VkPipeline prefilter_pipeline;
 
   TbBuffer sky_geom_gpu_buffer;
 } SkySystem;

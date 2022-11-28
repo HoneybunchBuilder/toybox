@@ -5,6 +5,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
+#include "env_filter_frag.h"
+#include "env_filter_vert.h"
 #include "irradiance_frag.h"
 #include "irradiance_vert.h"
 #include "sky_cube_frag.h"
@@ -57,6 +59,20 @@ typedef struct IrradianceBatch {
   uint32_t index_count;
   uint64_t vertex_offset;
 } IrradianceBatch;
+
+typedef struct PrefilterBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+
+  VkViewport viewport;
+  VkRect2D scissor;
+
+  VkDescriptorSet set;
+
+  VkBuffer geom_buffer;
+  uint32_t index_count;
+  uint64_t vertex_offset;
+} PrefilterBatch;
 
 VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
                               VkPipelineLayout layout, VkPipeline *pipeline) {
@@ -453,6 +469,138 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
   return err;
 }
 
+VkResult create_prefilter_pipeline(RenderSystem *render_system,
+                                   VkRenderPass pass, VkPipelineLayout layout,
+                                   VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  // Load Shaders
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+
+    create_info.codeSize = sizeof(env_filter_vert);
+    create_info.pCode = (const uint32_t *)env_filter_vert;
+    tb_rnd_create_shader(render_system, &create_info, "Env Filter vert",
+                         &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load env prefilter vert shader module",
+                    err);
+
+    create_info.codeSize = sizeof(env_filter_frag);
+    create_info.pCode = (const uint32_t *)env_filter_frag;
+    tb_rnd_create_shader(render_system, &create_info, "Env Filter frag",
+                         &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load env prefilter frag shader module",
+                    err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 1,
+              .pVertexBindingDescriptions =
+                  &(VkVertexInputBindingDescription){
+                      .binding = 0,
+                      .stride = sizeof(float3),
+                      .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                  },
+              .vertexAttributeDescriptionCount = 1,
+              .pVertexAttributeDescriptions =
+                  &(VkVertexInputAttributeDescription){
+                      .binding = 0,
+                      .location = 0,
+                      .format = VK_FORMAT_R32G32B32_SFLOAT,
+                      .offset = 0,
+                  },
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = layout,
+      .renderPass = pass,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Prefilter Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", err);
+
+  // Can safely dispose of shader module objects
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
+
+  return err;
+}
+
 void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
                        const SkyDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -564,12 +712,15 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
   TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
   TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
+  TbRenderPassId prefilter_pass_id = self->render_pipe_system->prefilter_pass;
   self->sky_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, sky_pass_id);
   self->env_capture_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, env_cap_id);
   self->irradiance_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, irr_pass_id);
+  self->prefilter_pass =
+      tb_render_pipeline_get_pass(self->render_pipe_system, prefilter_pass_id);
 
   // Create immutable sampler
   {
@@ -672,6 +823,12 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                                    self->irr_pipe_layout,
                                    &self->irradiance_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
+
+  // Create prefilter pipeline
+  err = create_prefilter_pipeline(render_system, self->prefilter_pass,
+                                  self->irr_pipe_layout,
+                                  &self->prefilter_pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
 
   // Register passes with the render system
   self->sky_draw_ctx = tb_render_pipeline_register_draw_context(
@@ -993,6 +1150,22 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
           .pipeline = self->irradiance_pipeline,
           .viewport = {0, 0, 32, 32, 0, 1},
           .scissor = {{0, 0}, {32, 32}},
+          .set = state->sets[state->set_count - 1],
+          .geom_buffer = self->sky_geom_gpu_buffer.buffer,
+          .index_count = get_skydome_index_count(),
+          .vertex_offset = get_skydome_vert_offset(),
+      };
+    }
+
+    // Generate batch for prefiltering the environment map
+    PrefilterBatch *prefilter_batch =
+        tb_alloc_nm_tp(tmp_alloc, sizeof(PrefilterBatch), PrefilterBatch);
+    {
+      *prefilter_batch = (PrefilterBatch){
+          .layout = self->irr_pipe_layout,
+          .pipeline = self->prefilter_pipeline,
+          .viewport = {0, 0, 512, 512, 0, 1},
+          .scissor = {{0, 0}, {512, 512}},
           .set = state->sets[state->set_count - 1],
           .geom_buffer = self->sky_geom_gpu_buffer.buffer,
           .index_count = get_skydome_index_count(),

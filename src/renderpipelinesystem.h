@@ -41,6 +41,7 @@ typedef struct RenderPipelineSystem {
 
   TbRenderPassId env_capture_pass;
   TbRenderPassId irradiance_pass;
+  TbRenderPassId prefilter_pass;
   TbRenderPassId opaque_depth_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;
