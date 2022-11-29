@@ -39,6 +39,7 @@ typedef struct RenderPass {
   VkRenderPass pass;
 
   uint32_t attach_count;
+  uint32_t attach_mips[MAX_RENDER_PASS_ATTACH];
   TbRenderTargetId attachments[MAX_RENDER_PASS_ATTACH];
 
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
@@ -571,8 +572,8 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
 
     VkFramebuffer framebuffer = pass->framebuffers[frame_idx];
     TbRenderTargetId target_id = pass->attachments[0];
-    VkExtent3D target_ext =
-        tb_render_target_get_extent(self->render_target_system, target_id);
+    VkExtent3D target_ext = tb_render_target_get_mip_extent(
+        self->render_target_system, pass->attach_mips[0], target_id);
 
     PassContext *pass_context = &state->pass_contexts[state->pass_ctx_count];
 
@@ -601,11 +602,13 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
   }
 }
 
-TbRenderPassId create_render_pass(
-    RenderPipelineSystem *self, const VkRenderPassCreateInfo *create_info,
-    uint32_t dep_count, const TbRenderTargetId *deps, uint32_t trans_count,
-    const PassTransition *transitions, uint32_t attach_count,
-    const TbRenderTargetId *attachments, const char *name) {
+TbRenderPassId
+create_render_pass(RenderPipelineSystem *self,
+                   const VkRenderPassCreateInfo *create_info,
+                   uint32_t dep_count, const TbRenderTargetId *deps,
+                   uint32_t trans_count, const PassTransition *transitions,
+                   uint32_t attach_count, const uint32_t *attach_mips,
+                   const TbRenderTargetId *attachments, const char *name) {
   TbRenderPassId id = self->pass_count;
   uint32_t new_count = self->pass_count + 1;
   if (new_count > self->pass_max) {
@@ -637,6 +640,7 @@ TbRenderPassId create_render_pass(
   SDL_memset(pass->attachments, InvalidRenderTargetId,
              sizeof(TbRenderTargetId) * MAX_RENDER_PASS_ATTACH);
   if (attach_count > 0) {
+    SDL_memcpy(pass->attach_mips, attach_mips, sizeof(uint32_t) * attach_count);
     SDL_memcpy(pass->attachments, attachments,
                sizeof(TbRenderTargetId) * attach_count);
   }
@@ -655,13 +659,13 @@ TbRenderPassId create_render_pass(
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent =
-        tb_render_target_get_extent(rt_sys, attachments[0]);
+        tb_render_target_get_mip_extent(rt_sys, attach_mips[0], attachments[0]);
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       VkImageView attach_views[MAX_RENDER_PASS_ATTACH] = {0};
 
       for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-        attach_views[attach_idx] =
-            tb_render_target_get_view(rt_sys, i, attachments[attach_idx]);
+        attach_views[attach_idx] = tb_render_target_get_mip_view(
+            rt_sys, attach_mips[attach_idx], i, attachments[attach_idx]);
       }
 
       VkFramebufferCreateInfo create_info = {
@@ -725,6 +729,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
 
+    const uint32_t default_mip = 0;
+
     // Create opaque depth pass
     {
       VkRenderPassCreateInfo create_info = {
@@ -756,7 +762,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id =
           create_render_pass(self, &create_info, 0, NULL, 0, NULL, 1,
-                             &opaque_depth, "Opaque Depth Pass");
+                             &default_mip, &opaque_depth, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
@@ -802,9 +808,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 0,
-                             NULL, 1, &env_cube, "Env Capture Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
+          &default_mip, &env_cube, "Env Capture Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create env capture pass", false);
       self->env_capture_pass = id;
@@ -878,12 +884,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->env_capture_pass, 1, &transition, 1,
-          &irradiance_map, "Irradiance Pass");
+          &default_mip, &irradiance_map, "Irradiance Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create irradiance pass", false);
       self->irradiance_pass = id;
     }
-    // Create environment prefiltering pass
+    // Create environment prefiltering passes
     {
       // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
       const uint32_t view_mask = 0x0000003F; // 0b00111111
@@ -924,38 +930,14 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
-      // Need to read the environment map
-      PassTransition transition = {
-          .render_target = prefiltered_cube,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 6,
-                              },
-                      },
-              },
-      };
-
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->env_capture_pass, 1, &transition, 1,
-          &prefiltered_cube, "Prefilter Pass");
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create prefilter pass", false);
-      self->prefilter_pass = id;
+      for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+        TbRenderPassId id = create_render_pass(
+            self, &create_info, 1, &self->env_capture_pass, 0, NULL, 1, &i,
+            &prefiltered_cube, "Prefilter Pass");
+        TB_CHECK_RETURN(id != InvalidRenderPassId,
+                        "Failed to create prefilter pass", false);
+        self->prefilter_passes[i] = id;
+      }
     }
     // Create opaque color pass
     {
@@ -1031,6 +1013,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->opaque_depth_pass, 1, &transition, 2,
+          (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);
@@ -1117,8 +1100,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
-          0, NULL, 2, (TbRenderTargetId[2]){hdr_color, opaque_depth},
-          "Sky Pass");
+          0, NULL, 2, (uint32_t[2]){default_mip, default_mip},
+          (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Sky Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
       self->sky_pass = id;
@@ -1177,9 +1160,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           }};
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->depth_copy_pass, 1,
-                             &transition, 1, &depth_copy, "Depth Copy Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->depth_copy_pass, 1, &transition, 1,
+          &default_mip, &depth_copy, "Depth Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
@@ -1237,9 +1220,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           }};
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->color_copy_pass, 1,
-                             &transition, 1, &color_copy, "Color Copy Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->color_copy_pass, 1, &transition, 1,
+          &default_mip, &color_copy, "Color Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create color copy pass", false);
       self->color_copy_pass = id;
@@ -1294,7 +1277,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_depth_pass, 0, NULL, 1,
-          &transparent_depth, "Transparent Depth Pass");
+          &default_mip, &transparent_depth, "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;
@@ -1372,7 +1355,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          2, (TbRenderTargetId[2]){hdr_color, transparent_depth},
+          2, (uint32_t[2]){default_mip, default_mip},
+          (TbRenderTargetId[2]){hdr_color, transparent_depth},
           "Transparent Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent color pass", false);
@@ -1431,7 +1415,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }};
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          1, &swapchain_target, "Tonemap Pass");
+          1, &default_mip, &swapchain_target, "Tonemap Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create tonemap pass", false);
       self->tonemap_pass = id;
@@ -1487,9 +1471,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->tonemap_pass, 1,
-                             &transition, 1, &swapchain_target, "UI Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 1, &self->tonemap_pass, 1, &transition, 1,
+          &default_mip, &swapchain_target, "UI Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
                       false);
       self->ui_pass = id;

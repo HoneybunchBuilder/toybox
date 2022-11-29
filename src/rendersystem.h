@@ -8,6 +8,7 @@
 #define RenderSystemId 0xABADBABE
 
 #define TB_VMA_TMP_HOST_MB 256
+#define TB_MAX_MIPS 16
 
 typedef struct SystemDescriptor SystemDescriptor;
 

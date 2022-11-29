@@ -4,11 +4,17 @@
 #include "tbcommon.h"
 #include "world.h"
 
+typedef struct RenderTargetMipView {
+  VkExtent3D extent;
+  VkImageView views[TB_MAX_FRAME_STATES];
+} RenderTargetMipView;
+
 typedef struct RenderTarget {
   bool imported;
-  VkExtent3D extent;
   TbImage images[TB_MAX_FRAME_STATES];
   VkImageView views[TB_MAX_FRAME_STATES];
+  uint32_t mip_count;
+  RenderTargetMipView mip_views[TB_MAX_MIPS];
 } RenderTarget;
 
 bool create_render_target_system(RenderTargetSystem *self,
@@ -145,6 +151,7 @@ bool create_render_target_system(RenderTargetSystem *self,
 
     // Create prefiltered env cubemap
     {
+      const uint32_t mip_count = (uint32_t)(floorf(log2f(512.0f))) + 1u;
       RenderTargetDescriptor rt_desc = {
           .name = "Prefiltered Environment Map",
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -154,7 +161,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = 512,
                   .depth = 1,
               },
-          .mip_count = 1,
+          .mip_count = mip_count,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
@@ -198,6 +205,12 @@ void destroy_render_target_system(RenderTargetSystem *self) {
         tb_rnd_free_gpu_image(self->render_system, &rt->images[i]);
       }
       tb_rnd_destroy_image_view(self->render_system, rt->views[i]);
+    }
+    for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        RenderTargetMipView *mip_view = &rt->mip_views[mip_idx];
+        tb_rnd_destroy_image_view(self->render_system, mip_view->views[i]);
+      }
     }
   }
 
@@ -259,7 +272,6 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
     aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
-  rt->extent = rt_desc->extent;
   rt->imported = true;
 
   // When importing, the images are already created but we still want to record
@@ -272,6 +284,9 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
   }
 
   // Then just create relevant views
+  // Assume only one mip
+  rt->mip_count = 1;
+  rt->mip_views[0].extent = rt_desc->extent;
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     VkImageViewCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -280,12 +295,13 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
         .image = images[i],
         .subresourceRange = {aspect, 0, 1, 0, 1},
     };
-    err =
-        tb_rnd_create_image_view(self->render_system, &create_info,
-                                 "Imported Render Target View", &rt->views[i]);
+    err = tb_rnd_create_image_view(self->render_system, &create_info,
+                                   "Imported Render Target View",
+                                   &rt->mip_views[0].views[i]);
     TB_VK_CHECK_RET(err,
                     "Failed to create image view for imported render target",
                     InvalidRenderTargetId);
+    rt->views[i] = rt->mip_views[0].views[i];
   }
 
   return id;
@@ -308,8 +324,6 @@ tb_create_render_target(RenderTargetSystem *self,
     aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
-  rt->extent = rt_desc->extent;
-
   // Must set a special flag if we want to make a cubemap
   VkImageCreateFlags create_flags = 0;
   if (rt_desc->view_type == VK_IMAGE_VIEW_TYPE_CUBE ||
@@ -317,16 +331,16 @@ tb_create_render_target(RenderTargetSystem *self,
     create_flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
   }
 
-  // Allocate images and create views for each frame
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    {
+  // Allocate images for each frame
+  {
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       VkImageCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
           .flags = create_flags,
           .imageType = VK_IMAGE_TYPE_2D,
           .format = rt_desc->format,
           .extent = rt_desc->extent,
-          .mipLevels = 1,
+          .mipLevels = rt_desc->mip_count,
           .arrayLayers = rt_desc->layer_count,
           .samples = VK_SAMPLE_COUNT_1_BIT,
           .usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -339,7 +353,7 @@ tb_create_render_target(RenderTargetSystem *self,
       rt->images[i].layout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
-    {
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       char view_name[100] = {0};
       SDL_snprintf(view_name, 100, "%s View", rt_desc->name);
 
@@ -356,6 +370,34 @@ tb_create_render_target(RenderTargetSystem *self,
       TB_VK_CHECK_RET(err, "Failed to create image view for render target",
                       InvalidRenderTargetId);
     }
+
+    // Create views for each mip and each frame
+    rt->mip_count = rt_desc->mip_count;
+    for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
+      RenderTargetMipView *mip_view = &rt->mip_views[mip_idx];
+
+      mip_view->extent.width = rt_desc->extent.width * SDL_powf(0.5f, mip_idx);
+      mip_view->extent.height =
+          rt_desc->extent.height * SDL_powf(0.5f, mip_idx);
+      mip_view->extent.depth = rt_desc->extent.depth;
+
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        char view_name[100] = {0};
+        SDL_snprintf(view_name, 100, "%s Mip %d View", rt_desc->name, mip_idx);
+
+        VkImageViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .viewType = rt_desc->view_type,
+            .format = rt_desc->format,
+            .image = rt->images[i].image,
+            .subresourceRange = {aspect, mip_idx, 1, 0, rt_desc->layer_count},
+        };
+        err = tb_rnd_create_image_view(self->render_system, &create_info,
+                                       view_name, &mip_view->views[i]);
+        TB_VK_CHECK_RET(err, "Failed to create image view for render target",
+                        InvalidRenderTargetId);
+      }
+    }
   }
 
   return id;
@@ -366,7 +408,15 @@ VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
   if (rt >= self->rt_count) {
     TB_CHECK_RETURN(false, "Render target index out of range", (VkExtent3D){0});
   }
-  return self->render_targets[rt].extent;
+  return self->render_targets[rt].mip_views[0].extent;
+}
+
+VkExtent3D tb_render_target_get_mip_extent(RenderTargetSystem *self,
+                                           uint32_t mip, TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", (VkExtent3D){0});
+  }
+  return self->render_targets[rt].mip_views[mip].extent;
 }
 
 VkImageView tb_render_target_get_view(RenderTargetSystem *self,
@@ -375,6 +425,15 @@ VkImageView tb_render_target_get_view(RenderTargetSystem *self,
     TB_CHECK_RETURN(false, "Render target index out of range", VK_NULL_HANDLE);
   }
   return self->render_targets[rt].views[frame_idx];
+}
+
+VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
+                                          uint32_t mip, uint32_t frame_idx,
+                                          TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", VK_NULL_HANDLE);
+  }
+  return self->render_targets[rt].mip_views[mip].views[frame_idx];
 }
 
 VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,

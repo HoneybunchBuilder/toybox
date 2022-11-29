@@ -23,6 +23,8 @@ typedef struct SkySystemFrameState {
   VkDescriptorSet *sets;
 } SkySystemFrameState;
 
+#define PREFILTER_PASS_COUNT 10
+
 typedef struct SkySystem {
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
@@ -35,16 +37,18 @@ typedef struct SkySystem {
   VkRenderPass sky_pass;
   VkRenderPass env_capture_pass;
   VkRenderPass irradiance_pass;
-  VkRenderPass prefilter_pass;
+  VkRenderPass prefilter_passes[PREFILTER_PASS_COUNT];
   TbDrawContextId sky_draw_ctx;
   TbDrawContextId env_capture_ctx;
   TbDrawContextId irradiance_ctx;
+  TbDrawContextId prefilter_ctxs[PREFILTER_PASS_COUNT];
 
   VkSampler sampler;
   VkDescriptorSetLayout sky_set_layout;
   VkPipelineLayout sky_pipe_layout;
   VkDescriptorSetLayout irr_set_layout;
   VkPipelineLayout irr_pipe_layout;
+  VkPipelineLayout prefilter_pipe_layout;
   VkPipeline sky_pipeline;
   VkPipeline env_pipeline;
   VkPipeline irradiance_pipeline;

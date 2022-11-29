@@ -55,7 +55,7 @@ typedef struct DrawContext {
   uint32_t batch_max;
 } DrawContext;
 
-#define TB_MAX_COMMAND_BUFFERS 16
+#define TB_MAX_COMMAND_BUFFERS 32
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;

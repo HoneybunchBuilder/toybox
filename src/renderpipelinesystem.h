@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "rendersystem.h"
+#include "skysystem.h"
 #include "tbrendercommon.h"
 #include <SDL2/SDL_stdinc.h>
 
@@ -41,7 +42,7 @@ typedef struct RenderPipelineSystem {
 
   TbRenderPassId env_capture_pass;
   TbRenderPassId irradiance_pass;
-  TbRenderPassId prefilter_pass;
+  TbRenderPassId prefilter_passes[PREFILTER_PASS_COUNT];
   TbRenderPassId opaque_depth_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;

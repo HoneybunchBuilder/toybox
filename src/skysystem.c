@@ -67,6 +67,7 @@ typedef struct PrefilterBatch {
   VkViewport viewport;
   VkRect2D scissor;
 
+  EnvFilterConstants consts;
   VkDescriptorSet set;
 
   VkBuffer geom_buffer;
@@ -653,7 +654,6 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const void *batches) {
-
   TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 1, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
@@ -671,6 +671,37 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
     vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
                            &batch->vertex_offset);
+    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+  }
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 1, true);
+  cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
+
+  if (batch_count > 0) {
+    const PrefilterBatch *batch = (const PrefilterBatch *)batches;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            batch->layout, 0, 1, &batch->set, 0, NULL);
+
+    vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
+                           &batch->vertex_offset);
+
+    vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                       sizeof(EnvFilterConstants), &batch->consts);
+
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
     vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
   }
 
@@ -712,15 +743,17 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
   TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
   TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
-  TbRenderPassId prefilter_pass_id = self->render_pipe_system->prefilter_pass;
   self->sky_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, sky_pass_id);
   self->env_capture_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, env_cap_id);
   self->irradiance_pass =
       tb_render_pipeline_get_pass(self->render_pipe_system, irr_pass_id);
-  self->prefilter_pass =
-      tb_render_pipeline_get_pass(self->render_pipe_system, prefilter_pass_id);
+  for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+    self->prefilter_passes[i] = tb_render_pipeline_get_pass(
+        self->render_pipe_system,
+        self->render_pipe_system->prefilter_passes[i]);
+  }
 
   // Create immutable sampler
   {
@@ -777,7 +810,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                     false);
   }
 
-  // Create Pipeline Layout
+  // Create Pipeline Layouts
   {
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -807,6 +840,23 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                                         &self->irr_pipe_layout);
     TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline layout", false);
   }
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &self->irr_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                .size = sizeof(EnvFilterConstants),
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Prefilter Pipeline Layout",
+                                        &self->prefilter_pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline layout", false);
+  }
 
   // Create sky pipeline
   err = create_sky_pipeline2(render_system, self->sky_pass,
@@ -825,8 +875,8 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
 
   // Create prefilter pipeline
-  err = create_prefilter_pipeline(render_system, self->prefilter_pass,
-                                  self->irr_pipe_layout,
+  err = create_prefilter_pipeline(render_system, self->prefilter_passes[0],
+                                  self->prefilter_pipe_layout,
                                   &self->prefilter_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
 
@@ -849,6 +899,15 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                               .draw_fn = record_irradiance,
                               .pass_id = irr_pass_id,
                           });
+  for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+    self->prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system,
+        &(DrawContextDescriptor){
+            .batch_size = sizeof(PrefilterBatch),
+            .draw_fn = record_env_filter,
+            .pass_id = self->render_pipe_system->prefilter_passes[i],
+        });
+  }
 
   // Create sky box geometry
   {
@@ -1158,19 +1217,30 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     }
 
     // Generate batch for prefiltering the environment map
-    PrefilterBatch *prefilter_batch =
+    PrefilterBatch *prefilter_batches =
         tb_alloc_nm_tp(tmp_alloc, sizeof(PrefilterBatch), PrefilterBatch);
     {
-      *prefilter_batch = (PrefilterBatch){
-          .layout = self->irr_pipe_layout,
-          .pipeline = self->prefilter_pipeline,
-          .viewport = {0, 0, 512, 512, 0, 1},
-          .scissor = {{0, 0}, {512, 512}},
-          .set = state->sets[state->set_count - 1],
-          .geom_buffer = self->sky_geom_gpu_buffer.buffer,
-          .index_count = get_skydome_index_count(),
-          .vertex_offset = get_skydome_vert_offset(),
-      };
+      const float dim = 512;
+      const uint32_t mip_count = (uint32_t)(SDL_floorf(log2f(dim))) + 1u;
+      for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+        const float mip_dim = dim * SDL_powf(0.5f, i);
+
+        prefilter_batches[i] = (PrefilterBatch){
+            .layout = self->prefilter_pipe_layout,
+            .pipeline = self->prefilter_pipeline,
+            .viewport = {0, 0, mip_dim, mip_dim, 0, 1},
+            .scissor = {{0, 0}, {mip_dim, mip_dim}},
+            .set = state->sets[state->set_count - 1],
+            .geom_buffer = self->sky_geom_gpu_buffer.buffer,
+            .index_count = get_skydome_index_count(),
+            .vertex_offset = get_skydome_vert_offset(),
+            .consts =
+                {
+                    .roughness = (float)i / (float)(mip_count - 1),
+                    .sample_count = 32,
+                },
+        };
+      }
     }
 
     tb_render_pipeline_issue_draw_batch(
@@ -1180,6 +1250,11 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
                                         env_batches);
     tb_render_pipeline_issue_draw_batch(
         self->render_pipe_system, self->irradiance_ctx, 1, irradiance_batch);
+    for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+      tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                          self->prefilter_ctxs[i], 1,
+                                          &prefilter_batches[i]);
+    }
 
     // Report output (we've updated the time on the sky component)
     output->set_count = 1;

@@ -3,7 +3,7 @@
 #include "cube_view_lut.hlsli"
 
 TextureCube env_texture : register(t0, space0);  // Fragment Stage Only
-SamplerState env_sampler : register(s0, space0); // Fragment Stage Only
+SamplerState env_sampler : register(s1, space0); // Fragment Stage Only
 
 [[vk::push_constant]] ConstantBuffer<EnvFilterConstants> consts
     : register(b1, space0); // Fragment Stage Only
@@ -23,7 +23,6 @@ Interpolators vert(VertexIn i) {
 
   Interpolators o;
   o.view_pos = i.local_pos;
-  o.view_pos.xy *= -1.0;
   o.clip_pos = mul(float4(i.local_pos, 1.0), vp);
   return o;
 }
@@ -68,7 +67,7 @@ float3 importance_sample_ggx(float2 Xi, float roughness, float3 normal) {
   float3 tan_y = normalize(cross(normal, tan_x));
 
   // Convert to world Space
-  return normalize(tan_x * H.x + tan_y * H.y + tan_y * H.z);
+  return normalize(tan_x * H.x + tan_y * H.y + normal * H.z);
 }
 
 // Normal Distribution function
