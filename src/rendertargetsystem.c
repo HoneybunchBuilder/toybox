@@ -206,10 +206,12 @@ void destroy_render_target_system(RenderTargetSystem *self) {
       }
       tb_rnd_destroy_image_view(self->render_system, rt->views[i]);
     }
-    for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
-      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-        RenderTargetMipView *mip_view = &rt->mip_views[mip_idx];
-        tb_rnd_destroy_image_view(self->render_system, mip_view->views[i]);
+    if (!rt->imported) {
+      for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
+        for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+          RenderTargetMipView *mip_view = &rt->mip_views[mip_idx];
+          tb_rnd_destroy_image_view(self->render_system, mip_view->views[i]);
+        }
       }
     }
   }

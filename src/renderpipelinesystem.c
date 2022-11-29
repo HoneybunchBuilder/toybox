@@ -987,8 +987,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 #undef ATTACH_COUNT
 
-      // Transition irradiance map
-      PassTransition transition = {
+      // Transition irradiance map and prefiltered env map
+      PassTransition irr_trans = {
           .render_target = self->render_target_system->irradiance_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1010,9 +1010,32 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
+      PassTransition filter_trans = {
+          .render_target = self->render_target_system->prefiltered_cube,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .levelCount = PREFILTER_PASS_COUNT,
+                              .layerCount = 6,
+                          },
+                  },
+          }};
 
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->opaque_depth_pass, 1, &transition, 2,
+          self, &create_info, 1, &self->opaque_depth_pass, 2,
+          (PassTransition[2]){irr_trans, filter_trans}, 2,
           (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,

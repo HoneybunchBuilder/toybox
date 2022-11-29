@@ -969,10 +969,12 @@ void destroy_sky_system(SkySystem *self) {
   tb_rnd_destroy_pipe_layout(render_system, self->sky_pipe_layout);
   tb_rnd_destroy_set_layout(render_system, self->irr_set_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->irr_pipe_layout);
+  tb_rnd_destroy_pipe_layout(render_system, self->prefilter_pipe_layout);
   tb_rnd_destroy_sampler(render_system, self->sampler);
   tb_rnd_destroy_pipeline(render_system, self->sky_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->env_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->irradiance_pipeline);
+  tb_rnd_destroy_pipeline(render_system, self->prefilter_pipeline);
 
   *self = (SkySystem){0};
 }
