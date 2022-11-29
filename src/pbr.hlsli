@@ -25,6 +25,17 @@ float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
                   pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
+float3 prefiltered_reflection(TextureCube map, SamplerState s,  float3 R, float roughness) {
+  const float MAX_REFLECTION_LOD = 9.0; // todo: param/const
+  float lod = roughness * MAX_REFLECTION_LOD;
+  float lodf = floor(lod);
+  float lodc = ceil(lod);
+  float3 a = map.SampleLevel(s, R, lodf).rgb;
+  float3 b = map.SampleLevel(s, R, lodc).rgb;
+  return lerp(a, b, lod - lodf);
+}
+
+
 // This calculates the specular geometric attenuation (aka G()),
 // where rougher material will reflect less light back to the viewer.
 float geometricOcclusion(float NdotL, float NdotV, float alpha_roughness) {

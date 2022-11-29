@@ -18,7 +18,8 @@ ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
-TextureCube irradiance_map : register(t1, space2); // Fragment Stage Only
+TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
+TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 // ConstantBuffer<CommonLightData> light_data : register(b1, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;

@@ -7,6 +7,7 @@
 #include "oceancommon.hlsli"
 
 TextureCube irradiance_map : register(t1, space1); // Fragment Stage Only
+TextureCube prefiltered_map : register(t2, space1); // Fragment Stage Only
 
 float4 frag(Interpolators i) : SV_TARGET {
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
@@ -84,12 +85,23 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // Ambient IBL
     {
-      const float ao = 1.0f;
-      float3 kS = fresnel_schlick_roughness(NdotV, f0, roughness);
-      float3 kD = 1.0 - kS;
+      float3 R = reflect(-V, N);
+
+      float3 reflection =
+          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
       float3 diffuse = irradiance * base_color;
-      float3 ambient = (kD * diffuse) * ao;
+
+      float3 kS =
+          fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
+
+      float2 brdf = float2(1, 0); // TODO
+      float3 specular = reflection * (kS * brdf.x + brdf.y);
+
+      float3 kD = (1.0 - kS);
+      kD *= 1.0f - metallic;
+      float3 ambient = (kD * diffuse) + specular;
+
       color += ambient;
     }
   }

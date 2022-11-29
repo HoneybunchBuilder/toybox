@@ -21,9 +21,11 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float4x4 vp = view_proj_lut[i.view_idx];
 
+  float3 pos = i.local_pos;
+
   Interpolators o;
-  o.view_pos = i.local_pos;
-  o.clip_pos = mul(float4(i.local_pos, 1.0), vp);
+  o.view_pos = pos;
+  o.clip_pos = mul(float4(pos, 1.0), vp);
   return o;
 }
 
