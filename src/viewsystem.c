@@ -6,6 +6,7 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
+#include "texturesystem.h"
 #include "transformcomponent.h"
 #include "world.h"
 
@@ -21,10 +22,15 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
   TB_CHECK_RETURN(render_target_system,
                   "Failed to find render target system which view depends on",
                   false);
+  TextureSystem *texture_system =
+      tb_get_system(system_deps, system_dep_count, TextureSystem);
+  TB_CHECK_RETURN(texture_system,
+                  "Failed to find texture system which view depends on", false);
 
   *self = (ViewSystem){
       .render_system = render_system,
       .render_target_system = render_target_system,
+      .texture_system = texture_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -55,9 +61,9 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 4,
+        .bindingCount = 5,
         .pBindings =
-            (VkDescriptorSetLayoutBinding[4]){
+            (VkDescriptorSetLayoutBinding[5]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -79,6 +85,12 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                 },
                 {
                     .binding = 3,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 4,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -185,11 +197,11 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
 
   // Just upload and write all views for now, they tend to be important anyway
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 3, VkWriteDescriptorSet);
+      self->tmp_alloc, self->view_count * 4, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 2, VkDescriptorImageInfo);
+      self->tmp_alloc, self->view_count * 3, VkDescriptorImageInfo);
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
@@ -226,6 +238,10 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
             self->render_target_system, self->render_system->frame_idx,
             self->render_target_system->prefiltered_cube),
     };
+    image_info[view_idx + 2] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_tex_system_get_image_view(
+            self->texture_system, self->texture_system->brdf_tex)};
 
     // Construct a write descriptor
     writes[view_idx + 0] = (VkWriteDescriptorSet){
@@ -255,9 +271,18 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
         .pImageInfo = &image_info[view_idx + 1],
     };
+    writes[view_idx + 3] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 3,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[view_idx + 2],
+    };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count * 3, writes, 0, NULL);
+                         self->view_count * 4, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }
@@ -273,9 +298,10 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
       .desc = (InternalDescriptor)view_desc,
       .dep_count = 1,
       .deps[0] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 2,
+      .system_dep_count = 3,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = RenderTargetSystemId,
+      .system_deps[2] = TextureSystemId,
       .create = tb_create_view_system,
       .destroy = tb_destroy_view_system,
       .tick = tb_tick_view_system,

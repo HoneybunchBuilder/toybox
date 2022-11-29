@@ -7,6 +7,7 @@
 #define ViewSystemId 0xFEE1DEAD
 
 typedef struct RenderSystem RenderSystem;
+typedef struct TextureSystem TextureSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
@@ -43,6 +44,7 @@ typedef struct View {
 typedef struct ViewSystem {
   RenderSystem *render_system;
   RenderTargetSystem *render_target_system;
+  TextureSystem *texture_system;
   Allocator std_alloc;
   Allocator tmp_alloc;
 

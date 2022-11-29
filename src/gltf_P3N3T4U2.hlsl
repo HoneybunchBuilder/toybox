@@ -17,6 +17,7 @@ ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2); // Frag Only
 TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
+Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 // ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert &
 // Frag Texture2D shadow_map : register(t2, space2); // Frag Only SamplerState
 // shadow_sampler : register(s2, space2);
@@ -146,14 +147,15 @@ float4 frag(Interpolators i) : SV_TARGET {
     {
       float3 R = reflect(-V, N);
 
-      float3 reflection = prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
+      float3 reflection =
+          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
       float3 diffuse = irradiance * base_color;
 
       float3 kS =
           fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
 
-      float2 brdf = float2(1, 0); // TODO
+      float2 brdf = brdf_lut.Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness)).rg;
       float3 specular = reflection * (kS * brdf.x + brdf.y);
 
       float3 kD = (1.0 - kS);

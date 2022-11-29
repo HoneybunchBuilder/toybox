@@ -364,8 +364,28 @@ foreach(scene ${source_scenes})
 endforeach()
 add_custom_target(scenes DEPENDS ${packed_scenes})
 
+# Copy textures
+file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.ktx2")
+foreach(texture ${source_textures})
+  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
+  get_filename_component(relpath ${relpath} DIRECTORY)
+  get_filename_component(filename ${texture} NAME_WE)
+  set(packed_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
+
+  add_custom_command(
+    OUTPUT ${packed_texture}
+    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+    COMMAND ${CMAKE_COMMAND} -E copy ${texture} ${packed_texture}
+    MAIN_DEPENDENCY ${texture}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+  )
+
+  list(APPEND packed_textures ${packed_texture})
+endforeach()
+add_custom_target(textures DEPENDS ${packed_textures})
+
 # Generate asset database
-set(source_assets ${packed_scenes})
+set(source_assets ${packed_scenes} ${packed_textures})
 list(LENGTH source_assets ASSET_NUM)
 set(generated_manifest "${config_include_dir}/assetmanifest.h")
 # Add all assets to asset list
@@ -392,7 +412,7 @@ add_custom_target(asset_manifest DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
 if(COOK_ASSETS)
-  add_dependencies(toybox scenes asset_manifest)
+  add_dependencies(toybox scenes textures asset_manifest)
 
   # Add assets to bundle
   #[[ TODO: Figure out how to get this to work with xcode

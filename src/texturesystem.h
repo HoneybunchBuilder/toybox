@@ -20,6 +20,7 @@ typedef enum TbTextureUsage {
   TB_TEX_USAGE_COLOR,
   TB_TEX_USAGE_NORMAL,
   TB_TEX_USAGE_METAL_ROUGH,
+  TB_TEX_USAGE_BRDF,
 } TbTextureUsage;
 
 typedef struct TextureSystemDescriptor {
@@ -44,6 +45,7 @@ typedef struct TextureSystem {
   TbTextureId default_color_tex;
   TbTextureId default_normal_tex;
   TbTextureId default_metal_rough_tex;
+  TbTextureId brdf_tex;
 } TextureSystem;
 
 void tb_texture_system_descriptor(SystemDescriptor *desc,

@@ -43,6 +43,8 @@ float3x4 m44tom34(float4x4 m) {
   };
 }
 
+float dotf2(float2 x, float2 y) { return (x[0] * y[0]) + (x[1] * y[1]); }
+
 float dotf3(float3 x, float3 y) {
   return (x[0] * y[0]) + (x[1] * y[1]) + (x[2] * y[2]);
 }

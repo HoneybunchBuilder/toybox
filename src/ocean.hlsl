@@ -6,8 +6,9 @@
 // Contains the vertex stage
 #include "oceancommon.hlsli"
 
-TextureCube irradiance_map : register(t1, space1); // Fragment Stage Only
+TextureCube irradiance_map : register(t1, space1);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space1); // Fragment Stage Only
+Texture2D brdf_lut : register(t3, space1);          // Fragment Stage Only
 
 float4 frag(Interpolators i) : SV_TARGET {
   float3 light_dir = normalize(float3(0.707, 0.707, 0));
@@ -95,7 +96,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 kS =
           fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
 
-      float2 brdf = float2(1, 0); // TODO
+      float2 brdf = brdf_lut.Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness)).rg;
       float3 specular = reflection * (kS * brdf.x + brdf.y);
 
       float3 kD = (1.0 - kS);
