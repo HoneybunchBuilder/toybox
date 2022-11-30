@@ -87,7 +87,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     float alpha_roughness = roughness * roughness;
 
-    float3 f0 = float3(0.4, 0.4, 0.4);
+    float3 f0 = float3(0.04, 0.04, 0.04);
     f0 = lerp(f0, base_color, metallic);
 
     float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
@@ -139,6 +139,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 ambient = (kD * diffuse) + specular;
 
       out_color += ambient;
+      //out_color += ambient;
     }
   } else // Phong fallback
   {

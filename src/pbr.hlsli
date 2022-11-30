@@ -20,9 +20,7 @@ float3 specularReflection(float3 reflectance_0, float3 reflectance_90,
 }
 
 float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
-  float r = 1.0 - roughness;
-  return F0 + (max(float3(r, r, r), F0) - F0) *
-                  pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+  return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(1.0 - cos_theta, 5.0);
 }
 
 float3 prefiltered_reflection(TextureCube map, SamplerState s,  float3 R, float roughness) {

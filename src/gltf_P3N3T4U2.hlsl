@@ -110,7 +110,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     float alpha_roughness = roughness * roughness;
 
-    float3 f0 = float3(0.4, 0.4, 0.4);
+    float3 f0 = float3(0.04, 0.04, 0.04);
     f0 = lerp(f0, base_color, metallic);
 
     float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
@@ -155,7 +155,10 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 kS =
           fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
 
-      float2 brdf = brdf_lut.Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness)).rg;
+      float2 brdf =
+          brdf_lut
+              .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
+              .rg;
       float3 specular = reflection * (kS * brdf.x + brdf.y);
 
       float3 kD = (1.0 - kS);

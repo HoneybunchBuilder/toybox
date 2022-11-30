@@ -1085,11 +1085,16 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
       SkyComponent *comp = &out_skys[sky_idx];
       comp->time += delta_seconds;
+
+      float3 sun_dir = comp->sun_dir;
+      sun_dir[0] = SDL_cosf(comp->time * 0.1f);
+      sun_dir[1] = SDL_sinf(comp->time * 0.1f);
+
       SkyData data = {
           .time = comp->time,
           .cirrus = comp->cirrus,
           .cumulus = comp->cumulus,
-          .sun_dir = comp->sun_dir,
+          .sun_dir = sun_dir,
       };
       TbHostBuffer *buffer = &buffers[sky_idx];
 

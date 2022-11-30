@@ -213,7 +213,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
 
       float alpha_roughness = roughness * roughness;
 
-      float3 f0 = float3(0.4, 0.4, 0.4);
+      float3 f0 = float3(0.04, 0.04, 0.04);
 
       float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
       diffuse_color *= 1.0 - metallic;
