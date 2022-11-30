@@ -18,8 +18,8 @@ ConstantBuffer<CommonViewData> camera_data : register(b0, space2); // Frag Only
 TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
-// ConstantBuffer<CommonLightData> light_data : register(b1, space2); // Vert &
-// Frag Texture2D shadow_map : register(t2, space2); // Frag Only SamplerState
+ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
+// Texture2D shadow_map : register(t2, space2); // Frag Only SamplerState
 // shadow_sampler : register(s2, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
@@ -83,7 +83,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
-  float3 light_dir = normalize(float3(0.707, 0.707, 0));
+  float3 light_dir = light_data.light_dir;
 
   if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic = material_data.pbr_metallic_roughness.metallic_factor;

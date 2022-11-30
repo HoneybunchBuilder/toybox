@@ -28,6 +28,7 @@
 #include "skydome.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
+#include "viewsystem.h"
 #include "world.h"
 
 typedef struct SkyDrawBatch {
@@ -75,8 +76,8 @@ typedef struct PrefilterBatch {
   uint64_t vertex_offset;
 } PrefilterBatch;
 
-VkResult create_sky_pipeline2(RenderSystem *render_system, VkRenderPass pass,
-                              VkPipelineLayout layout, VkPipeline *pipeline) {
+VkResult create_sky_pipeline(RenderSystem *render_system, VkRenderPass pass,
+                             VkPipelineLayout layout, VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Load Shaders
@@ -728,11 +729,16 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TB_CHECK_RETURN(render_target_system,
                   "Failed to find render target system which sky depends on",
                   false);
+  ViewSystem *view_system =
+      tb_get_system(system_deps, system_dep_count, ViewSystem);
+  TB_CHECK_RETURN(view_system,
+                  "Failed to find view system which sky depends on", false);
 
   *self = (SkySystem){
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .render_target_system = render_target_system,
+      .view_system = view_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -859,8 +865,8 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   }
 
   // Create sky pipeline
-  err = create_sky_pipeline2(render_system, self->sky_pass,
-                             self->sky_pipe_layout, &self->sky_pipeline);
+  err = create_sky_pipeline(render_system, self->sky_pass,
+                            self->sky_pipe_layout, &self->sky_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create sky pipeline", false);
 
   // Create env capture pipeline
@@ -1090,6 +1096,13 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       sun_dir[0] = SDL_cosf(comp->time * 0.1f);
       sun_dir[1] = SDL_sinf(comp->time * 0.1f);
 
+      // HACK Also send this lighting data to the view
+      CommonLightData light_data = {
+          .light_dir = sun_dir,
+      };
+      tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
+                                    &light_data);
+
       SkyData data = {
           .time = comp->time,
           .cirrus = comp->cirrus,
@@ -1294,10 +1307,11 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
               .count = 2,
               .dependent_ids = {CameraComponentId, TransformComponentId},
           },
-      .system_dep_count = 3,
+      .system_dep_count = 4,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = RenderPipelineSystemId,
       .system_deps[2] = RenderTargetSystemId,
+      .system_deps[3] = ViewSystemId,
       .create = tb_create_sky_system,
       .destroy = tb_destroy_sky_system,
       .tick = tb_tick_sky_system,

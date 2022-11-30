@@ -8,6 +8,7 @@
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
+typedef struct ViewSystem ViewSystem;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef uint32_t TbDrawContextId;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
@@ -29,6 +30,7 @@ typedef struct SkySystem {
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
   RenderTargetSystem *render_target_system;
+  ViewSystem *view_system;
   Allocator std_alloc;
   Allocator tmp_alloc;
 

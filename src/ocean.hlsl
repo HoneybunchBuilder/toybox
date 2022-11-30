@@ -9,9 +9,10 @@
 TextureCube irradiance_map : register(t1, space1);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space1); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space1);          // Fragment Stage Only
+ConstantBuffer<CommonLightData> light_data : register(b4, space1); // Frag Only
 
 float4 frag(Interpolators i) : SV_TARGET {
-  float3 light_dir = normalize(float3(0.707, 0.707, 0));
+  float3 light_dir = light_data.light_dir;
 
   // Calculate normal after interpolation
   float3 N = normalize(cross(normalize(i.binormal), normalize(i.tangent)));

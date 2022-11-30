@@ -35,6 +35,7 @@ typedef struct View {
   TbRenderTargetId target;
 
   CommonViewData view_data;
+  CommonLightData light_data;
   Frustum frustum;
 
   uint32_t pass_count;
@@ -65,6 +66,8 @@ TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
                                     const VkRenderPass *passes);
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data);
+void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
+                                   const CommonLightData *data);
 void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
                                      const Frustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);

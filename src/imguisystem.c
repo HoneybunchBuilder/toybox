@@ -44,13 +44,12 @@ typedef struct ImGuiDrawBatch {
   ImGuiDraw *draws;
 } ImGuiDrawBatch;
 
-VkResult create_imgui_pipeline2(VkDevice device,
-                                const VkAllocationCallbacks *vk_alloc,
-                                VkPipelineCache cache, VkRenderPass pass,
-                                VkSampler sampler,
-                                VkPipelineLayout *pipe_layout,
-                                VkDescriptorSetLayout *set_layout,
-                                VkPipeline *pipeline) {
+VkResult create_imgui_pipeline(VkDevice device,
+                               const VkAllocationCallbacks *vk_alloc,
+                               VkPipelineCache cache, VkRenderPass pass,
+                               VkSampler sampler, VkPipelineLayout *pipe_layout,
+                               VkDescriptorSetLayout *set_layout,
+                               VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Create Descriptor Set Layout
@@ -330,7 +329,7 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   }
 
   // Create imgui pipeline
-  err = create_imgui_pipeline2(
+  err = create_imgui_pipeline(
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
       render_system->pipeline_cache, self->pass, self->sampler,
       &self->pipe_layout, &self->set_layout, &self->pipeline);

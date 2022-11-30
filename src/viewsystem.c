@@ -61,9 +61,9 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 5,
+        .bindingCount = 6,
         .pBindings =
-            (VkDescriptorSetLayoutBinding[5]){
+            (VkDescriptorSetLayoutBinding[6]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -91,6 +91,13 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                 },
                 {
                     .binding = 4,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 5,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -197,33 +204,44 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
 
   // Just upload and write all views for now, they tend to be important anyway
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 4, VkWriteDescriptorSet);
-  VkDescriptorBufferInfo *buffer_info =
-      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, VkDescriptorBufferInfo);
+      self->tmp_alloc, self->view_count * 5, VkWriteDescriptorSet);
+  VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
+      self->tmp_alloc, self->view_count * 2, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
       self->tmp_alloc, self->view_count * 3, VkDescriptorImageInfo);
   TbHostBuffer *buffers =
-      tb_alloc_nm_tp(self->tmp_alloc, self->view_count, TbHostBuffer);
+      tb_alloc_nm_tp(self->tmp_alloc, self->view_count * 2, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
     const View *view = &self->views[view_idx];
-    const CommonViewData *data = &view->view_data;
-    TbHostBuffer *buffer = &buffers[view_idx];
+    const CommonViewData *view_data = &view->view_data;
+    const CommonLightData *light_data = &view->light_data;
+    TbHostBuffer *view_buffer = &buffers[view_idx + 0];
+    TbHostBuffer *light_buffer = &buffers[view_idx + 1];
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     err = tb_rnd_sys_alloc_tmp_host_buffer(
-        render_system, sizeof(CommonViewData), 0x40, buffer);
+        render_system, sizeof(CommonViewData), 0x40, view_buffer);
+    TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
+    err = tb_rnd_sys_alloc_tmp_host_buffer(
+        render_system, sizeof(CommonLightData), 0x40, light_buffer);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
 
-    // Copy view data to the allocated buffer
-    SDL_memcpy(buffer->ptr, data, sizeof(CommonViewData));
+    // Copy view data to the allocated buffers
+    SDL_memcpy(view_buffer->ptr, view_data, sizeof(CommonViewData));
+    SDL_memcpy(light_buffer->ptr, light_data, sizeof(CommonLightData));
 
     // Get the descriptor we want to write to
     VkDescriptorSet view_set = state->sets[view_idx];
 
-    buffer_info[view_idx] = (VkDescriptorBufferInfo){
+    buffer_info[view_idx + 0] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
-        .offset = buffer->offset,
+        .offset = view_buffer->offset,
         .range = sizeof(CommonViewData),
+    };
+    buffer_info[view_idx + 1] = (VkDescriptorBufferInfo){
+        .buffer = tmp_gpu_buffer,
+        .offset = light_buffer->offset,
+        .range = sizeof(CommonLightData),
     };
 
     image_info[view_idx + 0] = (VkDescriptorImageInfo){
@@ -251,7 +269,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &buffer_info[view_idx],
+        .pBufferInfo = &buffer_info[view_idx + 0],
     };
     writes[view_idx + 1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -280,9 +298,18 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
         .pImageInfo = &image_info[view_idx + 2],
     };
+    writes[view_idx + 4] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 4,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &buffer_info[view_idx + 1],
+    };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count * 4, writes, 0, NULL);
+                         self->view_count * 5, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }
@@ -357,6 +384,14 @@ void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
     TB_CHECK(false, "View Id out of range");
   }
   self->views[view].view_data = *data;
+}
+
+void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
+                                   const CommonLightData *data) {
+  if (view >= self->view_count) {
+    TB_CHECK(false, "View Id out of range");
+  }
+  self->views[view].light_data = *data;
 }
 
 void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
