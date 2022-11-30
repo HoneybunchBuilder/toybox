@@ -62,7 +62,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
-  float3 light_dir = light_data.light_dir;
+  float3 L = light_data.light_dir;
 
   if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic = material_data.pbr_metallic_roughness.metallic_factor;
@@ -106,7 +106,6 @@ float4 frag(Interpolators i) : SV_TARGET {
     // for each light
     {
       float3 light_color = float3(1, 1, 1);
-      float3 L = light_dir;
 
       PBRLight light = {
           light_color,
@@ -147,7 +146,6 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // for each light
     {
-      float3 L = light_dir;
       float3 H = normalize(V + L);
 
       float3 light_color = float3(1, 1, 1);

@@ -12,7 +12,7 @@ Texture2D brdf_lut : register(t3, space1);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space1); // Frag Only
 
 float4 frag(Interpolators i) : SV_TARGET {
-  float3 light_dir = light_data.light_dir;
+  float3 L = light_data.light_dir;
 
   // Calculate normal after interpolation
   float3 N = normalize(cross(normalize(i.binormal), normalize(i.tangent)));
@@ -71,7 +71,6 @@ float4 frag(Interpolators i) : SV_TARGET {
     // for each light
     {
       float3 light_color = float3(1, 1, 1);
-      float3 L = light_dir;
 
       PBRLight light = {
           light_color,

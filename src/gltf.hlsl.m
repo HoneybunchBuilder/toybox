@@ -37,8 +37,10 @@ StructuredBuffer<uint> primitive_indices : register(t6, space1);
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
-TextureCube irradiance_map : register(t1, space2);
-// ConstantBuffer<CommonLightData> light_data : register(b1, space2);
+TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
+TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
+Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
+ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
 // Texture2D shadow_map                       : register(t2, space2);
 // SamplerState shadow_sampler                : register(s2, space2);
 
@@ -184,7 +186,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
     float3 reflection = -normalize(reflect(V, N));
     reflection.y *= -1.0;
 
-    float3 light_dir = normalize(float3(0.707, 0.707, 0));
+    float3 L = light_data.light_dir;
 
     if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
       float metallic = material_data.pbr_metallic_roughness.metallic_factor;
@@ -233,7 +235,6 @@ float4 frag(FragmentInput i) : SV_TARGET {
       // for each light
       {
         float3 light_color = float3(1, 1, 1);
-        float3 L = light_dir;
 
         PBRLight light = {
             light_color,
@@ -267,7 +268,6 @@ float4 frag(FragmentInput i) : SV_TARGET {
 
       // for each light
       {
-        float3 L = light_dir;
         float3 H = normalize(V + L);
 
         float3 light_color = float3(1, 1, 1);
