@@ -135,7 +135,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "Irradiance Map",
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
           .extent =
               {
                   .width = 32,
