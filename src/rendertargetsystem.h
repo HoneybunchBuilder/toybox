@@ -44,6 +44,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId env_cube;
   TbRenderTargetId irradiance_map;
   TbRenderTargetId prefiltered_cube;
+  TbRenderTargetId shadow_map;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

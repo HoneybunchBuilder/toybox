@@ -1,6 +1,7 @@
 #include "rendertargetsystem.h"
 
 #include "rendersystem.h"
+#include "shadowsystem.h"
 #include "tbcommon.h"
 #include "world.h"
 
@@ -166,6 +167,24 @@ bool create_render_target_system(RenderTargetSystem *self,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
       self->prefiltered_cube = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create shadow map
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Shadow Map",
+          .format = VK_FORMAT_R32_SFLOAT,
+          .extent =
+              {
+                  .width = TB_SHADOW_MAP_DIM,
+                  .height = TB_SHADOW_MAP_DIM,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->shadow_map = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target

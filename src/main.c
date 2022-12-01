@@ -39,6 +39,7 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "shadowsystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
 #include "viewsystem.h"
@@ -201,8 +202,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  ShadowSystemDescriptor shadow_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
 // Order doesn't matter here
-#define SYSTEM_COUNT 15
+#define SYSTEM_COUNT 16
   SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
@@ -225,6 +231,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                                        &render_target_system_desc);
     tb_render_pipeline_system_descriptor(&system_descs[i++],
                                          &render_pipeline_system_desc);
+    tb_shadow_system_descriptor(&system_descs[i++], &shadow_system_desc);
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
@@ -237,6 +244,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = RenderTargetSystemId;
     init_order[i++] = TextureSystemId;
     init_order[i++] = ViewSystemId;
+    init_order[i++] = ShadowSystemId;
     init_order[i++] = RenderObjectSystemId;
     init_order[i++] = RenderPipelineSystemId;
     init_order[i++] = MaterialSystemId;
@@ -264,6 +272,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = MeshSystemId;
     tick_order[i++] = OceanSystemId;
     tick_order[i++] = SkySystemId;
+    tick_order[i++] = ShadowSystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;
     tick_order[i++] = RenderSystemId;

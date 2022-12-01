@@ -59,6 +59,11 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
 
   InputComponent input_comp = *incoming_comp;
   input_comp.mouse.axis = (float2){0}; // Must always clear mouse axis
+  input_comp.controller_count = 0;
+  input_comp.controller_states[0] = (TBGameControllerState){.buttons = 0};
+  input_comp.controller_states[1] = (TBGameControllerState){.buttons = 0};
+  input_comp.controller_states[2] = (TBGameControllerState){.buttons = 0};
+  input_comp.controller_states[3] = (TBGameControllerState){.buttons = 0};
 
   // Read up-to InputSystemMaxEvents events from SDL and store them
   // in a buffer
