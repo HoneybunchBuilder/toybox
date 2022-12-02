@@ -6,6 +6,8 @@
 
 #define RenderTargetSystemId 0xB0BABABE
 
+#define TB_SHADOW_MAP_DIM 2048
+
 typedef uint32_t TbRenderTargetId;
 static const TbRenderTargetId InvalidRenderTargetId = SDL_MAX_UINT32;
 typedef struct SystemDescriptor SystemDescriptor;

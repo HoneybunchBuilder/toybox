@@ -1,7 +1,6 @@
 #include "rendertargetsystem.h"
 
 #include "rendersystem.h"
-#include "shadowsystem.h"
 #include "tbcommon.h"
 #include "world.h"
 
