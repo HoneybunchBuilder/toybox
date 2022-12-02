@@ -78,7 +78,7 @@ typedef struct ShadowSubDraw {
 } ShadowSubDraw;
 
 typedef struct ShadowDraw {
-  VkDescriptorSet obj_set;
+  ShadowDrawConstants consts;
   VkBuffer geom_buffer;
   uint32_t submesh_draw_count;
   ShadowSubDraw submesh_draws[TB_SUBMESH_MAX];
@@ -87,7 +87,7 @@ typedef struct ShadowDraw {
 typedef struct ShadowDrawView {
   VkViewport viewport;
   VkRect2D scissor;
-  ShadowPushConstants consts;
+  ShadowViewConstants consts;
   uint32_t draw_count;
   ShadowDraw *draws;
 } ShadowDrawView;
@@ -567,9 +567,6 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
-      vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                         sizeof(ShadowPushConstants), &view->consts);
-
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         const ShadowDraw *draw = &view->draws[draw_idx];
@@ -580,6 +577,13 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         VkBuffer geom_buffer = draw->geom_buffer;
+
+        ShadowConstants consts = {
+            .vp = view->consts.vp,
+            .m = draw->consts.m,
+        };
+        vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(ShadowConstants), &consts);
 
         for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
              ++sub_idx) {
@@ -793,7 +797,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           .pPushConstantRanges =
               (VkPushConstantRange[1]){
                   {
-                      .size = sizeof(ShadowPushConstants),
+                      .size = sizeof(ShadowConstants),
                       .offset = 0,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
@@ -1221,12 +1225,16 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
     const VisibleSet *visible_set = &visible_sets[light_idx];
 
+    const View *view = tb_get_view(self->view_system, visible_set->view);
+
     for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
          ++mesh_idx) {
       const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
 
       VkBuffer geom_buffer =
           tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
+      const CommonObjectData *mesh_data = tb_render_object_system_get_data(
+          self->render_object_system, mesh_comp->object_id);
 
       uint32_t submesh_draw_idx = 0;
 
@@ -1237,15 +1245,17 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         shadow_batch.pipeline = self->shadow_pipeline;
         shadow_batch.layout = self->shadow_pipe_layout;
         shadow_batch.view_count = dir_light_count;
-        ShadowDrawView *view = &shadow_batch.views[light_idx];
-        view->viewport = (VkViewport){0, 0, width, height, 0, 1};
-        view->scissor = (VkRect2D){{0, 0}, {width, height}};
-        view->draw_count = visible_set->mesh_count;
-        ShadowDraw *draw = &view->draws[mesh_idx];
+        ShadowDrawView *draw_view = &shadow_batch.views[light_idx];
+        draw_view->viewport = (VkViewport){0, 0, width, height, 0, 1};
+        draw_view->scissor = (VkRect2D){{0, 0}, {width, height}};
+        draw_view->draw_count = visible_set->mesh_count;
+        draw_view->consts = (ShadowViewConstants){view->view_data.vp};
+        ShadowDraw *draw = &draw_view->draws[mesh_idx];
+        draw->consts.m = mesh_data->m;
         draw->geom_buffer = geom_buffer;
         draw->submesh_draw_count = submesh_draw_idx + 1;
         ShadowSubDraw *sub_draw =
-            &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
+            &draw_view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
         *sub_draw = (ShadowSubDraw){
             .index_type = submesh->index_type,
             .index_count = submesh->index_count,

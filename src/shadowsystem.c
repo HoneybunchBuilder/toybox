@@ -64,12 +64,17 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
     const float3 forward = f4tof3(model.row2);
     const float3 up = f4tof3(model.row1);
 
+    // Readjust transform position based on the forward direction
+    // so that we can pretend to project from an infinite distance
+    const float distance = 1000.0f;
+    const float3 displacement = forward * -(distance / 2.0f);
+    transform.position += displacement;
+
     float4x4 view = {.row0 = {0}};
     look_forward(&view, transform.position, forward, up);
 
     float4x4 proj = {.row0 = {0}};
-    orthographic(&proj, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, -1000.0f,
-                 1000.0f);
+    orthographic(&proj, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0.01f, distance);
 
     // Calculate view projection matrix
     mulmf44(&proj, &view, &data.vp);
