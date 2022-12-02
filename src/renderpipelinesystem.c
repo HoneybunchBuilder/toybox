@@ -728,6 +728,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId swapchain_target = render_target_system->swapchain;
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
+    const TbRenderTargetId shadow_map = render_target_system->shadow_map;
 
     const uint32_t default_mip = 0;
 
@@ -939,6 +940,45 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         self->prefilter_passes[i] = id;
       }
     }
+    // Create shadow pass
+    {
+      VkRenderPassCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+          .attachmentCount = 1,
+          .pAttachments =
+              &(VkAttachmentDescription){
+                  .format = VK_FORMAT_R32_SFLOAT,
+                  .samples = VK_SAMPLE_COUNT_1_BIT,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              },
+          .subpassCount = 1,
+          .pSubpasses =
+              &(VkSubpassDescription){
+                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                  .colorAttachmentCount = 1,
+                  .pColorAttachments =
+                      &(VkAttachmentReference){
+                          0,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      },
+              },
+      };
+
+      // Note: this doesn't actually depend on the opaque depth pass,
+      // but for now the pass dependencies system only has one starter node,
+      // so everything must be a child of that
+      TbRenderPassId id =
+          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 0,
+                             NULL, 1, &default_mip, &shadow_map, "Shadow Pass");
+      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create shadow pass",
+                      false);
+      self->shadow_pass = id;
+    }
     // Create opaque color pass
     {
 #define ATTACH_COUNT 2
@@ -987,7 +1027,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 #undef ATTACH_COUNT
 
-      // Transition irradiance map and prefiltered env map
+      // Transition irradiance map, prefiltered env map and shadow map
       PassTransition irr_trans = {
           .render_target = self->render_target_system->irradiance_map,
           .barrier = {
@@ -1032,10 +1072,33 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
+      PassTransition shadow_trans = {
+          .render_target = shadow_map,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .levelCount = 1,
+                              .layerCount = 1,
+                          },
+                  },
+          }};
 
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->opaque_depth_pass, 2,
-          (PassTransition[2]){irr_trans, filter_trans}, 2,
+          self, &create_info, 2,
+          (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_pass}, 3,
+          (PassTransition[3]){irr_trans, filter_trans, shadow_trans}, 2,
           (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
