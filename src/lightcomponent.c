@@ -2,7 +2,7 @@
 
 #include "tbcommon.h"
 #include "tbgltf.h"
-
+#include "viewsystem.h"
 #include "world.h"
 
 bool create_directional_light_component(DirectionalLightComponent *comp,
@@ -16,10 +16,13 @@ bool create_directional_light_component(DirectionalLightComponent *comp,
                   "Creating directional light with incorrect descriptor.",
                   false);
 
+  ViewSystem *view_system =
+      tb_get_system(system_deps, system_dep_count, ViewSystem);
+
   *comp = (DirectionalLightComponent){
       .color = {desc->color[0], desc->color[1], desc->color[2]},
       .intensity = desc->intensity,
-  };
+      .view = tb_view_system_create_view(view_system)};
   return true;
 }
 
@@ -36,6 +39,8 @@ TB_DEFINE_COMPONENT(directional_light, DirectionalLightComponent, cgltf_light)
 void tb_directional_light_component_descriptor(ComponentDescriptor *desc) {
   desc->name = "Directional Light";
   desc->size = sizeof(DirectionalLightComponent);
+  desc->system_dep_count = 1;
+  desc->system_deps[0] = ViewSystemId;
   desc->id = DirectionalLightComponentId;
   desc->create = tb_create_directional_light_component;
   desc->destroy = tb_destroy_directional_light_component;

@@ -230,82 +230,87 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
     SDL_memcpy(view_buffer->ptr, view_data, sizeof(CommonViewData));
     SDL_memcpy(light_buffer->ptr, light_data, sizeof(CommonLightData));
 
+    uint32_t buffer_idx = view_idx * 2;
+    uint32_t image_idx = view_idx * 3;
+    uint32_t write_idx = view_idx * 5;
+
     // Get the descriptor we want to write to
     VkDescriptorSet view_set = state->sets[view_idx];
 
-    buffer_info[view_idx + 0] = (VkDescriptorBufferInfo){
+    buffer_info[buffer_idx + 0] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = view_buffer->offset,
         .range = sizeof(CommonViewData),
     };
-    buffer_info[view_idx + 1] = (VkDescriptorBufferInfo){
+    buffer_info[buffer_idx + 1] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = light_buffer->offset,
         .range = sizeof(CommonLightData),
     };
 
-    image_info[view_idx + 0] = (VkDescriptorImageInfo){
+    image_info[image_idx + 0] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_render_target_get_view(
             self->render_target_system, self->render_system->frame_idx,
             self->render_target_system->irradiance_map),
     };
-    image_info[view_idx + 1] = (VkDescriptorImageInfo){
+    image_info[image_idx + 1] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_render_target_get_view(
             self->render_target_system, self->render_system->frame_idx,
             self->render_target_system->prefiltered_cube),
     };
-    image_info[view_idx + 2] = (VkDescriptorImageInfo){
+    image_info[image_idx + 2] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_tex_system_get_image_view(
             self->texture_system, self->texture_system->brdf_tex)};
 
     // Construct a write descriptor
-    writes[view_idx + 0] = (VkWriteDescriptorSet){
+
+    writes[write_idx + 0] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &buffer_info[view_idx + 0],
+        .pBufferInfo = &buffer_info[buffer_idx + 0],
     };
-    writes[view_idx + 1] = (VkWriteDescriptorSet){
+    writes[write_idx + 1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 1,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[view_idx + 0],
+        .pImageInfo = &image_info[image_idx + 0],
     };
-    writes[view_idx + 2] = (VkWriteDescriptorSet){
+    writes[write_idx + 2] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 2,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[view_idx + 1],
+        .pImageInfo = &image_info[image_idx + 1],
     };
-    writes[view_idx + 3] = (VkWriteDescriptorSet){
+    writes[write_idx + 3] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 3,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[view_idx + 2],
+        .pImageInfo = &image_info[image_idx + 2],
     };
-    writes[view_idx + 4] = (VkWriteDescriptorSet){
+    writes[write_idx + 4] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 4,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &buffer_info[view_idx + 1],
+        .pBufferInfo = &buffer_info[buffer_idx + 1],
     };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
@@ -335,14 +340,8 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
   };
 }
 
-TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
-                                    uint32_t pass_count,
-                                    const VkRenderPass *passes) {
+TbViewId tb_view_system_create_view(ViewSystem *self) {
   TB_CHECK_RETURN(self, "Invalid self object", InvalidViewId);
-  TB_CHECK_RETURN(pass_count, "Invalid pass count", InvalidViewId);
-  TB_CHECK_RETURN(pass_count < TB_MAX_PASSES_PER_VIEW, "Pass count too big",
-                  InvalidViewId);
-  TB_CHECK_RETURN(passes, "Invalid passes", InvalidViewId);
 
   TbViewId id = self->view_count;
   uint32_t new_count = self->view_count + 1;
@@ -371,9 +370,6 @@ TbViewId tb_view_system_create_view(ViewSystem *self, TbRenderTargetId target,
 
   view_data->inv_vp = inv_mf44(view_data->vp);
   view->frustum = frustum_from_view_proj(&view_data->vp);
-  view->target = target;
-  view->pass_count = pass_count;
-  SDL_memcpy(view->passes, passes, sizeof(VkRenderPass) * pass_count);
 
   return id;
 }

@@ -3,7 +3,7 @@
 #include <SDL2/SDL_stdinc.h>
 
 #define _USE_MATH_DEFINES
-#include <assert.h>
+#include <SDL_assert.h>
 #include <math.h>
 
 #include <stdbool.h>
@@ -109,7 +109,7 @@ float4 normf4(float3 v) {
 float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }
 
 void mf33_identity(float3x3 *m) {
-  assert(m);
+  SDL_assert(m);
   *m = (float3x3){
       (float3){1, 0, 0},
       (float3){0, 1, 0},
@@ -118,7 +118,7 @@ void mf33_identity(float3x3 *m) {
 }
 
 void mf34_identity(float3x4 *m) {
-  assert(m);
+  SDL_assert(m);
   *m = (float3x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
@@ -127,7 +127,7 @@ void mf34_identity(float3x4 *m) {
 }
 
 void mf44_identity(float4x4 *m) {
-  assert(m);
+  SDL_assert(m);
   *m = (float4x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
@@ -137,7 +137,7 @@ void mf44_identity(float4x4 *m) {
 }
 
 void mulf33(float3x3 *m, float3 v) {
-  assert(m);
+  SDL_assert(m);
   unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
     float s = v[i];
     m->row0[i] *= s;
@@ -147,7 +147,7 @@ void mulf33(float3x3 *m, float3 v) {
 }
 
 void mulf34(float3x4 *m, float4 v) {
-  assert(m);
+  SDL_assert(m);
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     float s = v[i];
     m->row0[i] *= s;
@@ -173,9 +173,9 @@ float4 mulf44(float4x4 m, float4 v) {
 }
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
-  assert(x);
-  assert(y);
-  assert(o);
+  SDL_assert(x);
+  SDL_assert(y);
+  SDL_assert(o);
   unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
@@ -193,9 +193,9 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
 void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
   TracyCZoneN(ctx, "mulmf44", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  assert(x);
-  assert(y);
-  assert(o);
+  SDL_assert(x);
+  SDL_assert(y);
+  SDL_assert(o);
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
@@ -377,23 +377,23 @@ void aabb_add_point(AABB *aabb, float3 point) {
 }
 
 void translate(Transform *t, float3 p) {
-  assert(t);
+  SDL_assert(t);
   t->position += p;
 }
 void scale(Transform *t, float3 s) {
-  assert(t);
+  SDL_assert(t);
   t->scale *= s;
 }
 void rotate(Transform *t, float3 r) {
-  assert(t);
+  SDL_assert(t);
   t->rotation += r;
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
   TracyCZoneN(ctx, "transform_to_matrix", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  assert(m);
-  assert(t);
+  SDL_assert(m);
+  SDL_assert(t);
 
   // Position matrix
   float4x4 p = {
@@ -444,7 +444,7 @@ Transform tb_transform_from_node(const cgltf_node *node) {
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
   TracyCZoneN(ctx, "look_forward", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  assert(m);
+  SDL_assert(m);
 
   forward = normf3(forward);
   float3 right = normf3(crossf3(normf3(up), forward));
@@ -461,7 +461,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
 
 // Left-Handed
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
-  assert(m);
+  SDL_assert(m);
 
   float3 forward = pos - target;
   look_forward(m, pos, forward, up);
@@ -469,7 +469,7 @@ void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
 
 // Left Handed
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
-  assert(m);
+  SDL_assert(m);
   float focal_length = 1.0f / tanf(fovy * 0.5f);
 
   float m00 = focal_length / aspect;
@@ -487,7 +487,7 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
 
 // Left Handed
 void orthographic(float4x4 *m, float width, float height, float zn, float zf) {
-  assert(m);
+  SDL_assert(m);
 
   *m = (float4x4){
       (float4){2.0f / (width), 0, 0, 0},

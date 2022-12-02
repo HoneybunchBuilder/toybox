@@ -4,6 +4,7 @@
 #include "cgltf.h"
 #include "common.hlsli"
 #include "hash.h"
+#include "lightcomponent.h"
 #include "materialsystem.h"
 #include "meshcomponent.h"
 #include "profiling.h"
@@ -68,6 +69,35 @@ typedef struct MeshDrawBatch {
   uint32_t view_count;
   MeshDrawView *views;
 } MeshDrawBatch;
+
+typedef struct ShadowSubDraw {
+  VkIndexType index_type;
+  uint32_t index_count;
+  uint64_t index_offset;
+  uint64_t vertex_binding_offset;
+} ShadowSubDraw;
+
+typedef struct ShadowDraw {
+  VkDescriptorSet obj_set;
+  VkBuffer geom_buffer;
+  uint32_t submesh_draw_count;
+  ShadowSubDraw submesh_draws[TB_SUBMESH_MAX];
+} ShadowDraw;
+
+typedef struct ShadowDrawView {
+  VkViewport viewport;
+  VkRect2D scissor;
+  ShadowPushConstants consts;
+  uint32_t draw_count;
+  ShadowDraw *draws;
+} ShadowDrawView;
+
+typedef struct ShadowDrawBatch {
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+  uint32_t view_count;
+  ShadowDrawView *views;
+} ShadowDrawBatch;
 
 typedef struct VisibleSet {
   TbViewId view;
@@ -511,11 +541,11 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 1, true);
 
-  const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
+  const ShadowDrawBatch *shadow_batches = (const ShadowDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    const MeshDrawBatch *batch = &mesh_batches[batch_idx];
+    const ShadowDrawBatch *batch = &shadow_batches[batch_idx];
     if (batch->view_count == 0) {
       TracyCZoneEnd(batch_ctx);
       continue;
@@ -524,11 +554,10 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
-    VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      const MeshDrawView *view = &batch->views[view_idx];
+      const ShadowDrawView *view = &batch->views[view_idx];
       if (view->draw_count == 0) {
         TracyCZoneEnd(view_ctx);
         continue;
@@ -538,36 +567,32 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
-      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                              2, 1, &view->view_set, 0, NULL);
+      vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                         sizeof(ShadowPushConstants), &view->consts);
+
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        const MeshDraw *draw = &view->draws[draw_idx];
+        const ShadowDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
           TracyCZoneEnd(draw_ctx);
           continue;
         }
         TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                                1, 1, &draw->obj_set, 0, NULL);
         VkBuffer geom_buffer = draw->geom_buffer;
 
         for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
              ++sub_idx) {
           TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
                        true);
-          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
+          const ShadowSubDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
             TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
                               true);
-            vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    layout, 0, 1, &submesh->mat_set, 0, NULL);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);
-            // Only bind position buffer
             vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
-                                   &submesh->vertex_binding_offsets[0]);
+                                   &submesh->vertex_binding_offset);
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
             TracyCVkZoneEnd(submesh_scope);
@@ -853,11 +878,15 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   const PackedComponentStore *camera_store =
       tb_get_column_check_id(input, 0, 0, CameraComponentId);
 
-  const uint32_t mesh_count = tb_get_column_component_count(input, 1);
+  const uint32_t dir_light_count = tb_get_column_component_count(input, 1);
+  const PackedComponentStore *dir_light_store =
+      tb_get_column_check_id(input, 1, 0, DirectionalLightComponentId);
+
+  const uint32_t mesh_count = tb_get_column_component_count(input, 2);
   const PackedComponentStore *mesh_store =
-      tb_get_column_check_id(input, 1, 0, MeshComponentId);
+      tb_get_column_check_id(input, 2, 0, MeshComponentId);
   const PackedComponentStore *mesh_transform_store =
-      tb_get_column_check_id(input, 1, 1, TransformComponentId);
+      tb_get_column_check_id(input, 2, 1, TransformComponentId);
 
   if (mesh_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
@@ -865,10 +894,11 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   TB_PROF_MESSAGE("Camera Count: %d", camera_count);
+  TB_PROF_MESSAGE("Directional Light Count: %d", dir_light_count);
 
   // Since we want to update the world matrix dirty flag on the transform
   // component, we need to write the components back out
-  EntityId *out_entity_ids = tb_get_column_entity_ids(input, 1);
+  EntityId *out_entity_ids = tb_get_column_entity_ids(input, 2);
   TransformComponent *out_trans =
       tb_alloc_nm_tp(self->tmp_alloc, mesh_count, TransformComponent);
   SDL_memcpy(out_trans, mesh_transform_store->components,
@@ -949,6 +979,46 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     TracyCZoneEnd(ctx);
   }
 
+  VisibleSet *lit_sets =
+      tb_alloc_nm_tp(self->tmp_alloc, dir_light_count, VisibleSet);
+  {
+    TracyCZoneN(ctx, "View Culling", true);
+    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
+      const DirectionalLightComponent *light = tb_get_component(
+          dir_light_store, light_idx, DirectionalLightComponent);
+
+      lit_sets[light_idx] = (VisibleSet){
+          .view = light->view,
+          .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
+                                   const MeshComponent *),
+      };
+    }
+
+    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
+      VisibleSet *visible_set = &visible_sets[light_idx];
+
+      const View *view = tb_get_view(self->view_system, visible_set->view);
+      const Frustum *frustum = &view->frustum;
+
+      for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
+        const AABB *world_aabb = &world_space_aabbs[mesh_idx];
+        if (!frustum_test_aabb(frustum, world_aabb)) {
+          continue;
+        }
+        const MeshComponent *mesh_comp =
+            tb_get_component(mesh_store, mesh_idx, MeshComponent);
+
+        const uint32_t idx = visible_set->mesh_count;
+        visible_set->meshes[idx] = mesh_comp;
+        visible_set->mesh_count++;
+      }
+
+      TB_PROF_MESSAGE("Lit Mesh Count: %d", visible_set->mesh_count);
+    }
+    TracyCZoneEnd(ctx);
+  }
+
   Allocator tmp_alloc = self->render_system->render_thread
                             ->frame_states[self->render_system->frame_idx]
                             .tmp_alloc.alloc;
@@ -1014,6 +1084,28 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       }
     }
     TracyCZoneEnd(batch_ctx);
+  }
+
+  // Create one batch for shadows
+  ShadowDrawBatch shadow_batch = {0};
+  {
+    // Batch could use each light
+    shadow_batch.views =
+        tb_alloc_nm_tp(tmp_alloc, dir_light_count, ShadowDrawView);
+    shadow_batch.view_count = 0;
+
+    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
+      ShadowDrawView *view = &shadow_batch.views[light_idx];
+      // Each view already knows how many meshes it should see
+      // Each mesh could have TB_SUBMESH_MAX # of submeshes
+      *view = (ShadowDrawView){0};
+      view->draws = tb_alloc_nm_tp(
+          tmp_alloc, visible_sets[light_idx].mesh_count, ShadowDraw);
+      view->draw_count = 0;
+
+      SDL_memset(view->draws, 0,
+                 sizeof(ShadowDraw) * visible_sets[light_idx].mesh_count);
+    }
   }
 
   // TODO: Make this less hacky
@@ -1125,6 +1217,50 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   tb_render_pipeline_issue_draw_batch(
       self->render_pipe_system, self->opaque_draw_ctx, batch_count, batches);
 
+  // Similar process for shadow batch
+  for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
+    const VisibleSet *visible_set = &visible_sets[light_idx];
+
+    for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
+         ++mesh_idx) {
+      const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
+
+      VkBuffer geom_buffer =
+          tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
+
+      uint32_t submesh_draw_idx = 0;
+
+      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+           ++sub_idx) {
+        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+
+        shadow_batch.pipeline = self->shadow_pipeline;
+        shadow_batch.layout = self->shadow_pipe_layout;
+        shadow_batch.view_count = dir_light_count;
+        ShadowDrawView *view = &shadow_batch.views[light_idx];
+        view->viewport = (VkViewport){0, 0, width, height, 0, 1};
+        view->scissor = (VkRect2D){{0, 0}, {width, height}};
+        view->draw_count = visible_set->mesh_count;
+        ShadowDraw *draw = &view->draws[mesh_idx];
+        draw->geom_buffer = geom_buffer;
+        draw->submesh_draw_count = submesh_draw_idx + 1;
+        ShadowSubDraw *sub_draw =
+            &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
+        *sub_draw = (ShadowSubDraw){
+            .index_type = submesh->index_type,
+            .index_count = submesh->index_count,
+            .index_offset = submesh->index_offset,
+            .vertex_binding_offset = submesh->vertex_offset,
+        };
+
+        submesh_draw_idx++;
+      }
+    }
+  }
+
+  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                      self->shadow_draw_ctx, 1, &shadow_batch);
+
   // Output potential transform updates
   {
     output->set_count = 1;
@@ -1149,12 +1285,16 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
   desc->desc = (InternalDescriptor)mesh_desc;
   SDL_memset(desc->deps, 0,
              sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 2;
+  desc->dep_count = 3;
   desc->deps[0] = (SystemComponentDependencies){
       .count = 2,
       .dependent_ids = {CameraComponentId, TransformComponentId},
   };
   desc->deps[1] = (SystemComponentDependencies){
+      .count = 1,
+      .dependent_ids = {DirectionalLightComponentId},
+  };
+  desc->deps[2] = (SystemComponentDependencies){
       .count = 2,
       .dependent_ids = {MeshComponentId, TransformComponentId},
   };
