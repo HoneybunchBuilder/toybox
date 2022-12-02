@@ -10,6 +10,7 @@
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "shadow.hlsli"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "vkdbg.h"
@@ -22,6 +23,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
+#include "depth_frag.h"
+#include "depth_vert.h"
 #include "gltf_P3N3T4U2_frag.h"
 #include "gltf_P3N3T4U2_vert.h"
 #include "gltf_P3N3U2_frag.h"
@@ -71,6 +74,123 @@ typedef struct VisibleSet {
   uint32_t mesh_count;
   MeshComponent const **meshes;
 } VisibleSet;
+
+VkResult create_shadow_pipeline(RenderSystem *render_system, VkRenderPass pass,
+                                VkPipelineLayout pipe_layout,
+                                VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(depth_vert);
+    create_info.pCode = (const uint32_t *)depth_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Vert",
+                               &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load shadow vert shader module", err);
+
+    create_info.codeSize = sizeof(depth_frag);
+    create_info.pCode = (const uint32_t *)depth_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Frag",
+                               &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load shadow frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 1,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[1]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX}},
+              .vertexAttributeDescriptionCount = 1,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[1]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0}},
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .maxDepthBounds = 1.0f,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+      .renderPass = pass,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Shadow Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
+
+  return err;
+}
 
 VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                                Allocator std_alloc, VkRenderPass pass,
@@ -386,6 +506,92 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
   return err;
 }
 
+void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 1, true);
+
+  const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
+    const MeshDrawBatch *batch = &mesh_batches[batch_idx];
+    if (batch->view_count == 0) {
+      TracyCZoneEnd(batch_ctx);
+      continue;
+    }
+
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
+
+    VkPipelineLayout layout = batch->layout;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+    for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
+      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
+      const MeshDrawView *view = &batch->views[view_idx];
+      if (view->draw_count == 0) {
+        TracyCZoneEnd(view_ctx);
+        continue;
+      }
+      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
+      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
+      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
+
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              2, 1, &view->view_set, 0, NULL);
+      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
+        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
+        const MeshDraw *draw = &view->draws[draw_idx];
+        if (draw->submesh_draw_count == 0) {
+          TracyCZoneEnd(draw_ctx);
+          continue;
+        }
+        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
+        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                                1, 1, &draw->obj_set, 0, NULL);
+        VkBuffer geom_buffer = draw->geom_buffer;
+
+        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
+             ++sub_idx) {
+          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
+                       true);
+          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
+          if (submesh->index_count > 0) {
+            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
+                              true);
+            vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    layout, 0, 1, &submesh->mat_set, 0, NULL);
+            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
+                                 submesh->index_type);
+            // Only bind position buffer
+            vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
+                                   &submesh->vertex_binding_offsets[0]);
+
+            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+            TracyCVkZoneEnd(submesh_scope);
+          }
+          TracyCZoneEnd(submesh_ctx);
+        }
+        cmd_end_label(buffer);
+        TracyCVkZoneEnd(mesh_scope);
+        TracyCZoneEnd(draw_ctx);
+      }
+      cmd_end_label(buffer);
+      TracyCVkZoneEnd(view_scope);
+      TracyCZoneEnd(view_ctx);
+    }
+
+    cmd_end_label(buffer);
+    TracyCVkZoneEnd(batch_scope);
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
 void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const void *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
@@ -512,14 +718,17 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   };
 
   TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
+  TbRenderPassId shadow_pass_id = self->render_pipe_system->shadow_pass;
 
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
 
-    // Look up opaque pass
-    self->opaque_pass =
+    // Look up passes
+    VkRenderPass opaque_pass =
         tb_render_pipeline_get_pass(self->render_pipe_system, opaque_pass_id);
+    VkRenderPass shadow_pass =
+        tb_render_pipeline_get_pass(self->render_pipe_system, shadow_pass_id);
 
     // Get descriptor set layouts from related systems
     {
@@ -548,10 +757,33 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
     }
 
     err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
-                                self->std_alloc, self->opaque_pass,
-                                self->pipe_layout, &self->pipe_count,
-                                &self->pipelines);
+                                self->std_alloc, opaque_pass, self->pipe_layout,
+                                &self->pipe_count, &self->pipelines);
     TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
+
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .pushConstantRangeCount = 1,
+          .pPushConstantRanges =
+              (VkPushConstantRange[1]){
+                  {
+                      .size = sizeof(ShadowPushConstants),
+                      .offset = 0,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "Shadow Pipeline Layout",
+                                          &self->shadow_pipe_layout);
+      TB_VK_CHECK_RET(err, "Failed to create shadow pipeline layout", false);
+    }
+
+    err = create_shadow_pipeline(self->render_system, shadow_pass,
+                                 self->shadow_pipe_layout,
+                                 &self->shadow_pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", false);
   }
 
   // Register drawing with the pipeline
@@ -561,6 +793,12 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                               .draw_fn = opaque_pass_record,
                               .pass_id = opaque_pass_id,
                           });
+  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = shadow_pass_record,
+                              .pass_id = render_pipe_system->shadow_pass,
+                          });
 
   return true;
 }
@@ -568,10 +806,12 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 void destroy_mesh_system(MeshSystem *self) {
   RenderSystem *render_system = self->render_system;
 
+  tb_rnd_destroy_pipeline(render_system, self->shadow_pipeline);
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->pipelines[i]);
   }
 
+  tb_rnd_destroy_pipe_layout(render_system, self->shadow_pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
 
   for (uint32_t i = 0; i < self->mesh_count; ++i) {

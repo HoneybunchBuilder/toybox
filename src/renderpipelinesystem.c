@@ -947,24 +947,24 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           .attachmentCount = 1,
           .pAttachments =
               &(VkAttachmentDescription){
-                  .format = VK_FORMAT_R32_SFLOAT,
+                  .format = VK_FORMAT_D32_SFLOAT,
                   .samples = VK_SAMPLE_COUNT_1_BIT,
                   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                   .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                   .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  .finalLayout =
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
               },
           .subpassCount = 1,
           .pSubpasses =
               &(VkSubpassDescription){
                   .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
+                  .pDepthStencilAttachment =
                       &(VkAttachmentReference){
                           0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                       },
               },
       };
@@ -1082,13 +1082,14 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                       .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      .oldLayout =
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
                               .levelCount = 1,
                               .layerCount = 1,
                           },

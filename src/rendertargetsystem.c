@@ -172,7 +172,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "Shadow Map",
-          .format = VK_FORMAT_R32_SFLOAT,
+          .format = VK_FORMAT_D32_SFLOAT,
           .extent =
               {
                   .width = TB_SHADOW_MAP_DIM,

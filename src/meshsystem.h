@@ -72,10 +72,8 @@ typedef struct MeshSystem {
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
 
-  VkRenderPass opaque_pass;
-  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
-
   TbDrawContextId opaque_draw_ctx;
+  TbDrawContextId shadow_draw_ctx;
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
@@ -83,6 +81,9 @@ typedef struct MeshSystem {
 
   uint32_t pipe_count;
   VkPipeline *pipelines;
+
+  VkPipelineLayout shadow_pipe_layout;
+  VkPipeline shadow_pipeline;
 
   uint32_t mesh_count;
 
