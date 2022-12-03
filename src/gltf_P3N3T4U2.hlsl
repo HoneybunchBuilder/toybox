@@ -19,8 +19,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-// Texture2D shadow_map : register(t2, space2); // Frag Only SamplerState
-// shadow_sampler : register(s2, space2);
+Texture2D shadow_map : register(t5, space2);                       // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -38,7 +37,7 @@ struct Interpolators {
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   float2 uv : TEXCOORD0;
-  // float4 shadowcoord : TEXCOORD1;
+  float4 shadowcoord : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i) {
@@ -54,7 +53,7 @@ Interpolators vert(VertexIn i) {
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
   o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
   o.uv = uv_transform(i.uv, material_data.tex_transform);
-  // o.shadowcoord = mul(world_pos, light_data.light_vp);
+  o.shadowcoord = mul(float4(world_pos, 1), light_data.light_vp);
 
   return o;
 }
@@ -167,6 +166,14 @@ float4 frag(Interpolators i) : SV_TARGET {
       out_color += ambient;
     }
 
+    // Shadow hack
+    {
+      float NdotL = clamp(dot(N, L), 0.001, 1.0);
+      float shadow =
+          pcf_filter(i.shadowcoord, AMBIENT, shadow_map, static_sampler, NdotL);
+      out_color *= shadow;
+    }
+
     // TODO: Ambient Occlusion
 
     // TODO: Emissive Texture
@@ -182,15 +189,6 @@ float4 frag(Interpolators i) : SV_TARGET {
       out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
     }
   }
-
-  // Shadow hack
-  /*
-  float3 L = normalize(light_data.light_dir);
-  float NdotL = clamp(dot(N, L), 0.001, 1.0);
-
-  float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler,
-  NdotL); out_color *= shadow;
-  */
 
   return float4(out_color, 1);
 }

@@ -492,8 +492,8 @@ void orthographic(float4x4 *m, float width, float height, float zn, float zf) {
   *m = (float4x4){
       (float4){2.0f / (width), 0, 0, 0},
       (float4){0, 2.0f / (height), 0, 0},
-      (float4){0, 0, 1 / (zn - zf), zn / (zn - zf)},
-      (float4){0, 0, 0, 1},
+      (float4){0, 0, 1 / (zn - zf), 0},
+      (float4){0, 0, zn / (zn - zf), 1},
   };
 }
 

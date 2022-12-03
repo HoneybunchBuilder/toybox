@@ -22,6 +22,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2); // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
+Texture2D shadow_map : register(t5, space2);                       // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -36,6 +37,7 @@ struct Interpolators {
   float3 world_pos : POSITION0;
   float3 normal : NORMAL0;
   float2 uv : TEXCOORD0;
+  float4 shadowcoord : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i) {
@@ -49,6 +51,7 @@ Interpolators vert(VertexIn i) {
   o.world_pos = world_pos;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
   o.uv = uv_transform(i.uv, material_data.tex_transform);
+  o.shadowcoord = mul(float4(world_pos, 1), light_data.light_vp);
   return o;
 }
 
@@ -138,7 +141,14 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 ambient = (kD * diffuse) + specular;
 
       out_color += ambient;
-      //out_color += ambient;
+    }
+
+    // Shadow hack
+    {
+      float NdotL = clamp(dot(N, L), 0.001, 1.0);
+      float shadow =
+          pcf_filter(i.shadowcoord, AMBIENT, shadow_map, static_sampler, NdotL);
+      out_color *= shadow;
     }
   } else // Phong fallback
   {

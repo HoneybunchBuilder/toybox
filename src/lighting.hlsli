@@ -2,7 +2,7 @@
 
 #include "pbr.hlsli"
 
-#define AMBIENT 0.2
+#define AMBIENT 0.1
 
 typedef struct PBRLight {
   float3 color;
@@ -65,7 +65,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient, Texture2D 
   
   float sampled_depth = shadow_map.Sample(samp, proj_coord.xy + offset).r;
 
-  return sampled_depth > proj_coord.z + bias ? 1.0 : ambient;
+  return sampled_depth < proj_coord.z + bias ? 1.0 : ambient;
 }
 
 float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map, sampler samp, float NdotL)

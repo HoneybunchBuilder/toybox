@@ -22,6 +22,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
+Texture2D shadow_map : register(t5, space2);                       // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -34,6 +35,7 @@ struct Interpolators {
   float4 clip_pos : SV_POSITION;
   float3 world_pos : POSITION0;
   float3 normal : NORMAL0;
+  float4 shadowcoord : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -46,6 +48,7 @@ Interpolators vert(VertexIn i) {
   o.clip_pos = clip_pos;
   o.world_pos = world_pos;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
+  o.shadowcoord = mul(float4(world_pos, 1), light_data.light_vp);
   return o;
 }
 
@@ -100,6 +103,39 @@ float4 frag(Interpolators i) : SV_TARGET {
 
       out_color += pbr_lighting(light, N, V, NdotV);
     }
+
+    // Ambient IBL
+    {
+      float3 R = reflect(-V, N);
+
+      float3 reflection =
+          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
+      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+      float3 diffuse = irradiance * base_color;
+
+      float3 kS =
+          fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
+
+      float2 brdf =
+          brdf_lut
+              .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
+              .rg;
+      float3 specular = reflection * (kS * brdf.x + brdf.y);
+
+      float3 kD = (1.0 - kS);
+      kD *= 1.0f - metallic;
+      float3 ambient = (kD * diffuse) + specular;
+
+      out_color += ambient;
+    }
+
+    // Shadow hack
+    {
+      float NdotL = clamp(dot(N, L), 0.001, 1.0);
+      float shadow =
+          pcf_filter(i.shadowcoord, AMBIENT, shadow_map, static_sampler, NdotL);
+      out_color *= shadow;
+    }
   } else // Phong fallback
   {
     float gloss = 0.5f;
@@ -112,13 +148,6 @@ float4 frag(Interpolators i) : SV_TARGET {
       out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
     }
   }
-
-  // Gamma correct
-  out_color = pow(out_color, float3(0.4545, 0.4545, 0.4545));
-
-  // Ambient
-  float3 ambient = float3(AMBIENT, AMBIENT, AMBIENT) * base_color;
-  out_color += ambient;
 
   return float4(out_color, 1.0);
 }

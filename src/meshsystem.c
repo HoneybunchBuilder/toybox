@@ -11,6 +11,7 @@
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 #include "shadow.hlsli"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -999,9 +1000,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     }
 
     for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-      VisibleSet *visible_set = &visible_sets[light_idx];
+      VisibleSet *lit_set = &lit_sets[light_idx];
 
-      const View *view = tb_get_view(self->view_system, visible_set->view);
+      const View *view = tb_get_view(self->view_system, lit_set->view);
       const Frustum *frustum = &view->frustum;
 
       for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
@@ -1013,12 +1014,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         const MeshComponent *mesh_comp =
             tb_get_component(mesh_store, mesh_idx, MeshComponent);
 
-        const uint32_t idx = visible_set->mesh_count;
-        visible_set->meshes[idx] = mesh_comp;
-        visible_set->mesh_count++;
+        const uint32_t idx = lit_set->mesh_count;
+        lit_set->meshes[idx] = mesh_comp;
+        lit_set->mesh_count++;
       }
 
-      TB_PROF_MESSAGE("Lit Mesh Count: %d", visible_set->mesh_count);
+      TB_PROF_MESSAGE("Lit Mesh Count: %d", lit_set->mesh_count);
     }
     TracyCZoneEnd(ctx);
   }
@@ -1103,12 +1104,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       // Each view already knows how many meshes it should see
       // Each mesh could have TB_SUBMESH_MAX # of submeshes
       *view = (ShadowDrawView){0};
-      view->draws = tb_alloc_nm_tp(
-          tmp_alloc, visible_sets[light_idx].mesh_count, ShadowDraw);
+      view->draws =
+          tb_alloc_nm_tp(tmp_alloc, lit_sets[light_idx].mesh_count, ShadowDraw);
       view->draw_count = 0;
 
       SDL_memset(view->draws, 0,
-                 sizeof(ShadowDraw) * visible_sets[light_idx].mesh_count);
+                 sizeof(ShadowDraw) * lit_sets[light_idx].mesh_count);
     }
   }
 
@@ -1223,13 +1224,12 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
   // Similar process for shadow batch
   for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-    const VisibleSet *visible_set = &visible_sets[light_idx];
+    const VisibleSet *lit_set = &lit_sets[light_idx];
 
-    const View *view = tb_get_view(self->view_system, visible_set->view);
+    const View *view = tb_get_view(self->view_system, lit_set->view);
 
-    for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
-         ++mesh_idx) {
-      const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
+    for (uint32_t mesh_idx = 0; mesh_idx < lit_set->mesh_count; ++mesh_idx) {
+      const MeshComponent *mesh_comp = lit_set->meshes[mesh_idx];
 
       VkBuffer geom_buffer =
           tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
@@ -1246,9 +1246,11 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         shadow_batch.layout = self->shadow_pipe_layout;
         shadow_batch.view_count = dir_light_count;
         ShadowDrawView *draw_view = &shadow_batch.views[light_idx];
-        draw_view->viewport = (VkViewport){0, 0, width, height, 0, 1};
-        draw_view->scissor = (VkRect2D){{0, 0}, {width, height}};
-        draw_view->draw_count = visible_set->mesh_count;
+        draw_view->viewport =
+            (VkViewport){0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1};
+        draw_view->scissor =
+            (VkRect2D){{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
+        draw_view->draw_count = lit_set->mesh_count;
         draw_view->consts = (ShadowViewConstants){view->view_data.vp};
         ShadowDraw *draw = &draw_view->draws[mesh_idx];
         draw->consts.m = mesh_data->m;

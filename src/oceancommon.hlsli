@@ -13,6 +13,7 @@ sampler static_sampler : register(s3, space0); // Immutable Sampler
 
 // Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+ConstantBuffer<CommonLightData> light_data : register(b4, space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -26,8 +27,7 @@ struct Interpolators {
   float4 screen_pos : POSITION1;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
-// float2 uv: TEXCOORD0;
-// float4 shadowcoord : TEXCOORD1;
+  float4 shadowcoord : TEXCOORD0;
 #endif
 };
 
@@ -79,7 +79,7 @@ Interpolators vert(VertexIn i) {
   o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
-// o.uv = i.uv;
+  o.shadowcoord = mul(world_pos, light_data.light_vp);
 #endif
 
   return o;

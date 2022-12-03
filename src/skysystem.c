@@ -19,6 +19,7 @@
 
 #include "cameracomponent.h"
 #include "common.hlsli"
+#include "lightcomponent.h"
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
@@ -997,6 +998,11 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
   const PackedComponentStore *transforms =
       tb_get_column_check_id(input, 1, 1, TransformComponentId);
   const uint32_t camera_count = tb_get_column_component_count(input, 1);
+  const PackedComponentStore *dir_lights =
+      tb_get_column_check_id(input, 2, 0, DirectionalLightComponentId);
+  const uint32_t dir_light_count = tb_get_column_component_count(input, 2);
+  const PackedComponentStore *dir_light_transforms =
+      tb_get_column_check_id(input, 2, 1, TransformComponentId);
 
   if (skys == NULL || cameras == NULL || transforms == NULL) {
     return;
@@ -1006,12 +1012,16 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
   const uint32_t width = self->render_system->render_thread->swapchain.width;
   const uint32_t height = self->render_system->render_thread->swapchain.height;
 
-  if (camera_count > 0 && sky_count > 0) {
+  if (camera_count > 0 && sky_count > 0 && dir_light_count > 0) {
     const CameraComponent *camera_comps =
         (const CameraComponent *)cameras->components;
     const TransformComponent *transform_comps =
         (const TransformComponent *)transforms->components;
     const SkyComponent *sky_comps = (const SkyComponent *)skys->components;
+    const DirectionalLightComponent *dir_light =
+        tb_get_component(dir_lights, 0, DirectionalLightComponent);
+    const TransformComponent *dir_light_trans =
+        tb_get_component(dir_light_transforms, 0, TransformComponent);
 
     VkResult err = VK_SUCCESS;
     RenderSystem *render_system = self->render_system;
@@ -1092,14 +1102,14 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       SkyComponent *comp = &out_skys[sky_idx];
       comp->time += delta_seconds;
 
-      float3 sun_dir = comp->sun_dir;
-      sun_dir[0] = SDL_cosf(comp->time * 0.1f);
-      sun_dir[1] = SDL_sinf(comp->time * 0.1f);
+      float4x4 rot_mat = euler_to_trans(dir_light_trans->transform.rotation);
+      float3 sun_dir = f4tof3(rot_mat.row2);
+
+      const View *light_view = tb_get_view(self->view_system, dir_light->view);
 
       // HACK Also send this lighting data to the view
-      CommonLightData light_data = {
-          .light_dir = sun_dir,
-      };
+      CommonLightData light_data = {.light_dir = sun_dir,
+                                    .light_vp = light_view->view_data.vp};
       tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
                                     &light_data);
 
@@ -1296,7 +1306,7 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(SkySystem),
       .id = SkySystemId,
       .desc = (InternalDescriptor)sky_desc,
-      .dep_count = 2,
+      .dep_count = 3,
       .deps[0] =
           {
               .count = 1,
@@ -1306,6 +1316,12 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
           {
               .count = 2,
               .dependent_ids = {CameraComponentId, TransformComponentId},
+          },
+      .deps[2] =
+          {
+              .count = 2,
+              .dependent_ids = {DirectionalLightComponentId,
+                                TransformComponentId},
           },
       .system_dep_count = 4,
       .system_deps[0] = RenderSystemId,
