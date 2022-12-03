@@ -2,15 +2,15 @@
 
 #ifdef TRACY_VK_C_ENABLE
 
-#include "Tracy.hpp"
 #include "client/TracyCallstack.hpp"
 #include "client/TracyProfiler.hpp"
+#include "tracy/Tracy.hpp"
 #include <assert.h>
 #include <stdlib.h>
 
 #include "tbvk.h"
 
-#include "TracyVulkan.hpp"
+#include "tracy/TracyVulkan.hpp"
 
 extern "C" {
 
@@ -65,5 +65,9 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf) {
   tracy_ctx->Collect(cmd_buf);
 }
 }
+
+#else
+
+void ___tracy_set_thread_name(const char *name) { (void)name; }
 
 #endif

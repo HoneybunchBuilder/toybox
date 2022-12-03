@@ -1,20 +1,7 @@
 {
-    "default-registry": {
-        "kind": "git",
-        "repository": "https://github.com/Microsoft/vcpkg",
-        "baseline": "9ba75e6e174b30b97afc5c8c3170c5d25c548b32"
-    },
-    "registries": [
-        {
-            "kind": "git",
-            "repository": "https://github.com/Honeybunch/vcpkg",
-            "baseline": "8612258ef55307e81fc581190cdf27c9ba3a0d60",
-            "packages": [
-                "mimalloc",
-                "tracy",
-                "volk",
-                "vulkan-headers"
-            ]
-        }
-    ]
+  "default-registry": {
+    "kind": "git",
+    "repository": "https://github.com/Microsoft/vcpkg",
+    "baseline": "6f7ffeb18f99796233b958aaaf14ec7bd4fb64b2"
+  }
 }

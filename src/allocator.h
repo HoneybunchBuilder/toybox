@@ -22,7 +22,7 @@ typedef void free_fn(void *user_data, void *ptr);
   (T *)(a).realloc((a).user_data, (orig), (n) * sizeof(T))
 #define tb_realloc_aligned(a, orig, size, align)                               \
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
-#define tb_free(a, ptr) a.free(a.user_data, (ptr))
+#define tb_free(a, ptr) (a).free((a).user_data, (ptr))
 
 typedef struct Allocator {
   void *user_data;
@@ -33,6 +33,7 @@ typedef struct Allocator {
 } Allocator;
 
 typedef struct ArenaAllocator {
+  const char *name;
   mi_heap_t *heap;
   size_t size;
   size_t max_size;
@@ -41,7 +42,8 @@ typedef struct ArenaAllocator {
   bool grow;
 } ArenaAllocator;
 
-void create_arena_allocator(ArenaAllocator *a, size_t max_size);
+void create_arena_allocator(const char *name, ArenaAllocator *a,
+                            size_t max_size);
 ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow);
 void destroy_arena_allocator(ArenaAllocator a);
 

@@ -25,6 +25,7 @@ project(toybox
         DESCRIPTION "A personal game engine toybox project"
         LANGUAGES C CXX)
 
+option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
 
@@ -119,11 +120,12 @@ if(PROFILE_TRACY)
   find_package(Tracy CONFIG REQUIRED)
 endif()
 if(UNIX)
-  find_package(Threads REQUIRED)
   if(NOT ANDROID)
     add_library(zstd::zstd ALIAS zstd::libzstd_static)
   endif()
 endif()
+find_package(json-c CONFIG REQUIRED)
+find_package(meshoptimizer CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -138,8 +140,8 @@ endif()
 find_program(DXC dxc
   PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}
   REQUIRED)
-find_program(TOKTX toktx
-  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/ktx
+find_program(GLTFPACK gltfpack
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
   REQUIRED)
 
 # Compile Shaders
@@ -157,8 +159,29 @@ foreach(shader ${shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T vs_6_1 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
-      COMMAND ${DXC} -T ps_6_1 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      MAIN_DEPENDENCY ${shader}
+      DEPENDS ${shader_includes}
+  )
+  list(APPEND shader_headers ${out_paths})
+endforeach()
+
+file(GLOB mesh_shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.m")
+foreach(shader ${mesh_shader_files})
+  get_filename_component(filename ${shader} NAME_WLE)
+  get_filename_component(filename ${filename} NAME_WLE)
+  set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+  set(mesh_out_path "${shader_out_path}/${filename}_mesh.h")
+  set(frag_out_path "${shader_out_path}/${filename}_frag.h")
+  set(out_paths "${mesh_out_path};${frag_out_path}")
+
+  add_custom_command(
+      OUTPUT ${out_paths}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+      COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${mesh_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -179,9 +202,9 @@ foreach(shader ${rt_shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
-      COMMAND ${DXC} -T lib_6_4 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -196,7 +219,7 @@ file(GLOB source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/
 if(WIN32)
   if(MINGW)
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
-    target_link_libraries(toybox PRIVATE mingw32)
+    target_link_libraries(toybox PRIVATE mingw32 pthread)
     target_link_options(toybox PRIVATE -mwindows)
   else()
     add_executable(toybox WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
@@ -215,6 +238,9 @@ if(WIN32)
     target_compile_options(toybox PRIVATE -Wno-reserved-id-macro)
     target_compile_options(toybox PRIVATE -Wno-documentation)
   endif()
+
+  # Folding VLAs to constant arrays is desired
+  target_compile_options(toybox PRIVATE -Wno-gnu-folding-constant)
 
 elseif(ANDROID)
   add_library(toybox SHARED ${source})
@@ -254,7 +280,7 @@ else()
 endif()
 #set_property(TARGET toybox PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 target_link_libraries(toybox PRIVATE ${library_list})
 
@@ -276,6 +302,14 @@ target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${conf
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
+
+#target_compile_definitions(toybox PRIVATE "-D_DISABLE_STRING_ANNOTATION" "-D_DISABLE_VECTOR_ANNOTATION")
+#target_compile_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer")
+#target_link_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer" "-fuse-ld=lld")
+
+if(FINAL)
+  target_compile_definitions(toybox PRIVATE "-DFINAL")
+endif()
 
 if(STATIC)
   target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
@@ -310,35 +344,7 @@ else()
           LIBRARY DESTINATION ".")
 endif()
 
-# Compress Textures
-file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
-
-if(platform STREQUAL "android")
-  set(resize "1024x1024")
-else()
-  set(resize "2048x2048")
-endif()
-
-set(UASTC_LEVEL $<$<CONFIG:Debug>:0>$<$<NOT:$<CONFIG:Debug>>:3>)
-foreach(texture ${source_textures})
-  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
-  get_filename_component(relpath ${relpath} DIRECTORY)
-  get_filename_component(filename ${texture} NAME_WE)
-  set(ktx_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
-
-  add_custom_command(
-    OUTPUT ${ktx_texture}
-    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${TOKTX} --t2 --genmipmap --resize ${resize} --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
-    MAIN_DEPENDENCY ${texture}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
-  )
-
-  list(APPEND ktx_textures ${ktx_texture})
-endforeach()
-add_custom_target(textures DEPENDS ${ktx_textures})
-
-# TODO: Cook scenes
+# Cook scenes
 file(GLOB_RECURSE source_scenes "${CMAKE_CURRENT_LIST_DIR}/assets/scenes/*.glb")
 foreach(scene ${source_scenes})
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${scene})
@@ -349,7 +355,7 @@ foreach(scene ${source_scenes})
   add_custom_command(
     OUTPUT ${packed_scene}
     COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-    COMMAND ${CMAKE_COMMAND} -E copy ${scene} ${packed_scene}
+    COMMAND ${GLTFPACK} -cc -kn -km -ke -tc -i ${scene} -o ${packed_scene}
     MAIN_DEPENDENCY ${scene}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
   )
@@ -358,8 +364,28 @@ foreach(scene ${source_scenes})
 endforeach()
 add_custom_target(scenes DEPENDS ${packed_scenes})
 
+# Copy textures
+file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.ktx2")
+foreach(texture ${source_textures})
+  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
+  get_filename_component(relpath ${relpath} DIRECTORY)
+  get_filename_component(filename ${texture} NAME_WE)
+  set(packed_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
+
+  add_custom_command(
+    OUTPUT ${packed_texture}
+    COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+    COMMAND ${CMAKE_COMMAND} -E copy ${texture} ${packed_texture}
+    MAIN_DEPENDENCY ${texture}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+  )
+
+  list(APPEND packed_textures ${packed_texture})
+endforeach()
+add_custom_target(textures DEPENDS ${packed_textures})
+
 # Generate asset database
-set(source_assets ${ktx_textures} ${packed_scenes})
+set(source_assets ${packed_scenes} ${packed_textures})
 list(LENGTH source_assets ASSET_NUM)
 set(generated_manifest "${config_include_dir}/assetmanifest.h")
 # Add all assets to asset list
@@ -396,20 +422,12 @@ if(COOK_ASSETS)
       set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
       target_sources(toybox PRIVATE ${scene})
     endforeach()
-    foreach(texture ${ktx_textures})
-      set_source_files_properties(${texture} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/textures")
-      target_sources(toybox PRIVATE ${texture})
-    endforeach()
   endif()
   #]]
 
   # Install cooked assets
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
                     DESTINATION ${assets_dest})
-
-  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
-                    DESTINATION ${assets_dest}
-                    FILES_MATCHING PATTERN "*.ktx2")
 endif()
 
 # Install dlls on dynamic builds

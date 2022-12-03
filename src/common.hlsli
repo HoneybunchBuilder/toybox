@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef __HLSL_VERSION
+#include "simd.h" // If not a shader, we need simd types
+#endif
+
 #include "pi.h"
 
 // Push Constants Data for a fullscreen pass
@@ -18,11 +22,11 @@ typedef struct EnvFilterConstants{
 }EnvFilterConstants;
 
 // Constant per-view Camera Data
-typedef struct CommonCameraData {
+typedef struct CommonViewData {
   float4x4 vp;
   float4x4 inv_vp;
   float3 view_pos;
-} CommonCameraData;
+} CommonViewData;
 
 // Constant per-view Light Data
 typedef struct CommonLightData {
@@ -32,8 +36,10 @@ typedef struct CommonLightData {
 
 // Constant per-object Object Data for common objects
 typedef struct CommonObjectData {
-  float4x4 mvp;
   float4x4 m;
+  // Optional parameters for mesh shaders
+  unsigned int index_bytes;
+  unsigned int meshlet_offset;
 } CommonObjectData;
 
 // Common input layout info and permutation settings
@@ -44,3 +50,27 @@ typedef struct CommonObjectData {
 #define VA_INPUT_PERM_TEXCOORD1 0x00000008
 #define VA_INPUT_PERM_TANGENT 0x00000010
 #define VA_INPUT_PERM_COLOR 0x00000020
+#define VA_INPUT_PERM_COUNT 6
+
+// If a shader, provide some helper functions
+#ifdef __HLSL_VERSION
+
+float4 clip_to_screen(float4 clip)
+{
+  float4 o = clip * 0.5f;
+  o.xy += o.w;
+  o.zw = clip.zw;
+  return o;
+}
+
+float linear_depth(float depth, float near, float far)
+{
+  return near * far / (far + depth * (near - far));
+}
+
+float depth_from_clip_z(float z, float near, float far)
+{
+  return max((1.0 - z / near) * far, 0);
+}
+
+#endif

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL2/SDL_stdinc.h>
 #include <stdbool.h>
 
 #if defined(__clang__)
@@ -7,8 +8,10 @@
 #pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
 #endif
 
-//#define TRACY_VK_C_ENABLE
-#include <TracyC.h>
+#ifdef TRACY_ENABLE
+#define TRACY_VK_C_ENABLE
+#endif
+#include <tracy/TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
 #define TracyCategoryColorRendering 0x7fff00
@@ -17,6 +20,7 @@
 #define TracyCategoryColorInput 0xffb5c5
 #define TracyCategoryColorMemory 0xff8c69
 #define TracyCategoryColorWait 0xff0000
+#define TracyCategoryColorGame 0x0022ff
 
 #ifdef TRACY_VK_C_ENABLE
 #define VK_NO_PROTOTYPES
@@ -54,21 +58,36 @@ void TracyCVkZoneEnd(TracyCGPUScope *scope);
 
 void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 
+#define TB_PROF_MESSAGE(string, ...)                                           \
+  {                                                                            \
+    char message[100] = {0};                                                   \
+    SDL_snprintf(message, 100, string, __VA_ARGS__);                           \
+    TracyCMessage(message, SDL_strlen(message));                               \
+  }
+
 #ifdef __cplusplus
 }
 #endif
 #else
 
-#define TracyCGPUContext int
-#define TracyCGPUScope int
+typedef struct TracyCGPUContext TracyCGPUContext;
+typedef struct TracyCGPUScope TracyCGPUScope;
 
-#define TracyCVkContextExt(...) 0
+#define TracyCVkContextExt(gpu, device, queue, buffer, ext1, ext2)             \
+  0;                                                                           \
+  (void)gpu, (void)device, (void)queue, (void)buffer, (void)ext1, (void)ext2;
+
 #define TracyCVkContext(...)
 #define TracyCVkContextDestroy(...)
-#define TracyCVkContextName(...)
-#define TracyCVkNamedZone(...)
+#define TracyCVkContextName(ctx, name, len) (void)ctx, (void)name, (void)len
+#define TracyCVkNamedZone(ctx, var_name, cmd_buf, name, depth, active)         \
+  int var_name = 0;                                                            \
+  (void)ctx, (void)var_name, (void)cmd_buf, (void)name, (void)depth,           \
+      (void)active
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
+
+#define TB_PROF_MESSAGE(string, ...)
 
 #endif
 

@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include <SDL2/SDL_assert.h>
 #include <mimalloc.h>
 
 #include "profiling.h"
@@ -19,7 +20,17 @@ static void *arena_alloc(void *user_data, size_t size) {
     return NULL;
   }
   void *ptr = &arena->data[cur_size];
-  arena->size += size;
+
+  // Always 16 byte aligned
+  intptr_t padding = 0;
+  if ((intptr_t)ptr % 16 != 0) {
+    padding = (16 - (intptr_t)ptr % 16);
+  }
+  ptr = (void *)((intptr_t)ptr + padding);
+
+  SDL_assert((intptr_t)ptr % 16 == 0);
+
+  arena->size += (size + padding);
   TracyCZoneEnd(ctx);
   return ptr;
 }
@@ -46,14 +57,16 @@ static void arena_free(void *user_data, void *ptr) {
   (void)ptr;
 }
 
-void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
+void create_arena_allocator(const char *name, ArenaAllocator *a,
+                            size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
   void *data = mi_heap_recalloc(heap, NULL, 1, max_size);
-  TracyCAllocN(data, max_size, "Arena");
+  TracyCAllocN(data, max_size, name);
   assert(data);
 
   (*a) = (ArenaAllocator){
+      .name = name,
       .max_size = max_size,
       .heap = heap,
       .data = data,
@@ -76,9 +89,9 @@ ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
     a.max_size *= 2;
 
     a.grow = false;
-    TracyCFreeN(a.data, "Arena") a.data =
+    TracyCFreeN(a.data, a.name) a.data =
         mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
-    TracyCAllocN(a.data, a.max_size, "Arena")
+    TracyCAllocN(a.data, a.max_size, a.name)
   }
 
   a.size = 0;
@@ -89,7 +102,7 @@ ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
 }
 
 void destroy_arena_allocator(ArenaAllocator a) {
-  TracyCFreeN(a.data, "Arena");
+  TracyCFreeN(a.data, a.name);
   mi_free(a.data);
   mi_heap_destroy(a.heap);
 }

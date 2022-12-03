@@ -13,6 +13,12 @@
 #define GLTF_PERM_SHEEN 0x000000400
 #define GLTF_PERM_UNLIT 0x00000800
 
+// Omitting texture rotation because it's not widely used
+typedef struct TextureTransform {
+  float2 offset;
+  float2 scale;
+} TextureTransform;
+
 typedef struct PBRMetallicRoughness {
   float4 base_color_factor;
   float metallic_factor;
@@ -42,6 +48,7 @@ typedef struct Volume {
 } Volume;
 
 typedef struct GLTFMaterialData {
+  TextureTransform tex_transform;
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
   float clearcoat_factor;
@@ -52,3 +59,14 @@ typedef struct GLTFMaterialData {
   float transmission_factor;
   Volume volume;
 } GLTFMaterialData;
+
+// If a shader, provide some helper functions
+#ifdef __HLSL_VERSION
+float2 uv_transform(int2 quant_uv, TextureTransform trans) {
+  // Must dequantize UV from integer to float before applying the transform
+  float2 uv = float2(quant_uv) / 65535.0f;
+  uv *= trans.scale;
+  uv += trans.offset;
+  return uv;
+}
+#endif
