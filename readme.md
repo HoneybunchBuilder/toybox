@@ -25,7 +25,7 @@ Make sure to have the following available on your path:
 * cmake 3.20+
 * clang or gcc (lowest tested are llvm 10 and gcc 9)
 * dxc [via the Vulkan SDK](https://vulkan.lunarg.com/)
-* vcpkg
+* vcpkg - latest version from git; more details below
 
 You will also need the following environment variables defined:
 * `VCPKG_ROOT` - should point to your local vcpkg install
@@ -77,6 +77,6 @@ See the github actions page for build status and a quick overview of the support
 ## Additional Notes
 This project relies on semantics provided by clang/gcc because I was lazy and didn't want to write out SSE/NEON intrinsics for some basic math. See `src/simd.h` & `src/simd.c` for more details.
 
-A custom vcpkg registry can be foujnd in `vcpkg-configuration.json`. It is necessary for some extra patches to `mimalloc`, `volk` and `tracy`. I am working to get these upstreamed.
+For best results, use the latest version of vcpkg. I have had to contribute a variety of changes upstream (latest change is as-of Dec 3rd 2022) so using a version sourced from your package manager may not be new enough. Yet. In the near future you should be able to use any 2023+ version of vcpkg and it should work out of the box with this project across all platforms.
 
 The `CMakePresets` for `x64-windows-ninja-llvm` and `x64-windows-static-ninja-llvm` has to specify `CMAKE_RC_COMPILER` as `llvm-rc` or else it may fail if run inside of a Visual Studio command prompt. CMake will default to using the msvc `rc` compiler and that will cause failures only in RelWithDebInfo / Release builds.
