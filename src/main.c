@@ -42,6 +42,7 @@
 #include "shadowsystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
+#include "timeofdaysystem.h"
 #include "viewsystem.h"
 
 #include "renderthread.h"
@@ -207,8 +208,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  TimeOfDaySystemDescriptor tod_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
 // Order doesn't matter here
-#define SYSTEM_COUNT 16
+#define SYSTEM_COUNT 17
   SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
@@ -232,6 +238,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_render_pipeline_system_descriptor(&system_descs[i++],
                                          &render_pipeline_system_desc);
     tb_shadow_system_descriptor(&system_descs[i++], &shadow_system_desc);
+    tb_time_of_day_system_descriptor(&system_descs[i++], &tod_system_desc);
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
@@ -255,6 +262,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = ImGuiSystemId;
     init_order[i++] = NoClipControllerSystemId;
     init_order[i++] = CoreUISystemId;
+    init_order[i++] = TimeOfDaySystemId;
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
   SystemId tick_order[SYSTEM_COUNT];
@@ -272,6 +280,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = MaterialSystemId;
     tick_order[i++] = MeshSystemId;
     tick_order[i++] = OceanSystemId;
+    tick_order[i++] = TimeOfDaySystemId;
     tick_order[i++] = SkySystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;

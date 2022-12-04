@@ -988,8 +988,8 @@ void destroy_sky_system(SkySystem *self) {
 
 void tick_sky_system(SkySystem *self, const SystemInput *input,
                      SystemOutput *output, float delta_seconds) {
-  EntityId *entities = tb_get_column_entity_ids(input, 0);
-
+  (void)output;
+  (void)delta_seconds;
   const PackedComponentStore *skys =
       tb_get_column_check_id(input, 0, 0, SkyComponentId);
   const uint32_t sky_count = tb_get_column_component_count(input, 0);
@@ -1001,8 +1001,6 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
   const PackedComponentStore *dir_lights =
       tb_get_column_check_id(input, 2, 0, DirectionalLightComponentId);
   const uint32_t dir_light_count = tb_get_column_component_count(input, 2);
-  const PackedComponentStore *dir_light_transforms =
-      tb_get_column_check_id(input, 2, 1, TransformComponentId);
 
   if (skys == NULL || cameras == NULL || transforms == NULL) {
     return;
@@ -1017,20 +1015,12 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         (const CameraComponent *)cameras->components;
     const TransformComponent *transform_comps =
         (const TransformComponent *)transforms->components;
-    const SkyComponent *sky_comps = (const SkyComponent *)skys->components;
     const DirectionalLightComponent *dir_light =
         tb_get_component(dir_lights, 0, DirectionalLightComponent);
-    const TransformComponent *dir_light_trans =
-        tb_get_component(dir_light_transforms, 0, TransformComponent);
 
     VkResult err = VK_SUCCESS;
     RenderSystem *render_system = self->render_system;
     VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
-
-    // Copy the sky component for output
-    SkyComponent *out_skys =
-        tb_alloc_nm_tp(self->tmp_alloc, sky_count, SkyComponent);
-    SDL_memcpy(out_skys, sky_comps, sky_count * sizeof(SkyComponent));
 
     const uint32_t write_count = sky_count + 1; // +1 for irradiance pass
 
@@ -1099,26 +1089,22 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     TbHostBuffer *buffers =
         tb_alloc_nm_tp(self->tmp_alloc, sky_count, TbHostBuffer);
     for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
-      SkyComponent *comp = &out_skys[sky_idx];
-      comp->time += delta_seconds;
-
-      float4x4 rot_mat = euler_to_trans(dir_light_trans->transform.rotation);
-      float3 sun_dir = f4tof3(rot_mat.row2);
-
-      const View *light_view = tb_get_view(self->view_system, dir_light->view);
-
-      // HACK Also send this lighting data to the view
-      CommonLightData light_data = {.light_dir = sun_dir,
-                                    .light_vp = light_view->view_data.vp};
-      tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
-                                    &light_data);
-
+      const SkyComponent *comp = tb_get_component(skys, sky_idx, SkyComponent);
       SkyData data = {
           .time = comp->time,
           .cirrus = comp->cirrus,
           .cumulus = comp->cumulus,
-          .sun_dir = sun_dir,
+          .sun_dir = comp->sun_dir,
       };
+
+      const View *light_view = tb_get_view(self->view_system, dir_light->view);
+
+      // HACK: Also send this lighting data to the view
+      CommonLightData light_data = {.light_dir = data.sun_dir,
+                                    .light_vp = light_view->view_data.vp};
+      tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
+                                    &light_data);
+
       TbHostBuffer *buffer = &buffers[sky_idx];
 
       // Write view data into the tmp buffer we know will wind up on the GPU
@@ -1285,15 +1271,6 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
                                           self->prefilter_ctxs[i], 1,
                                           &prefilter_batches[i]);
     }
-
-    // Report output (we've updated the time on the sky component)
-    output->set_count = 1;
-    output->write_sets[0] = (SystemWriteSet){
-        .id = SkyComponentId,
-        .count = sky_count,
-        .components = (uint8_t *)out_skys,
-        .entities = entities,
-    };
   }
 }
 

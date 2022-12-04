@@ -19,8 +19,7 @@ typedef struct SkyComponent {
   float time;
   float cirrus;
   float cumulus;
-  float3 sun_dir; // TODO: decouple this and instead reference this data from a
-                  // directional light component
+  float3 sun_dir;
 } SkyComponent;
 
 void tb_sky_component_descriptor(ComponentDescriptor *desc);
