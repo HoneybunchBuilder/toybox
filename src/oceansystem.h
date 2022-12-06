@@ -42,10 +42,14 @@ typedef struct OceanSystem {
 
   VkRenderPass ocean_prepass;
   TbDrawContextId trans_depth_draw_ctx;
+  VkRenderPass shadow_pass;
+  TbDrawContextId shadow_draw_ctx;
   VkRenderPass ocean_pass;
   TbDrawContextId trans_color_draw_ctx;
 
   FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
+
+  VkPipeline shadow_pipeline;
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;

@@ -1,16 +1,55 @@
 // Adapted heavily from https://catlikecoding.com/unity/tutorials/flow/waves/
 
+#include "common.hlsli"
 #include "lighting.hlsli"
+#include "ocean.hlsli"
 #include "pbr.hlsli"
 
-// Contains the vertex stage
-#include "oceancommon.hlsli"
+ConstantBuffer<OceanData> ocean_data
+    : register(b0, space0);                    // Vertex Stage Only
+Texture2D depth_map : register(t1, space0);    // Fragment Stage Only
+Texture2D color_map : register(t2, space0);    // Fragment Stage Only
+sampler static_sampler : register(s3, space0); // Immutable Sampler
 
-TextureCube irradiance_map : register(t1, space1);  // Fragment Stage Only
-TextureCube prefiltered_map : register(t2, space1); // Fragment Stage Only
-Texture2D brdf_lut : register(t3, space1);          // Fragment Stage Only
+// Per-view data
+ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+TextureCube irradiance_map : register(t1, space1);
+TextureCube prefiltered_map : register(t2, space1);
+Texture2D brdf_lut : register(t3, space1);
+ConstantBuffer<CommonLightData> light_data : register(b4, space1);
+Texture2D shadow_map : register(t5, space1);
 
-Texture2D shadow_map : register(t5, space1); // Frag Only
+struct VertexIn {
+  int3 local_pos : SV_POSITION;
+};
+
+struct Interpolators {
+  float4 clip_pos : SV_POSITION;
+  float3 world_pos : POSITION0;
+  float4 screen_pos : POSITION1;
+  float3 tangent : TANGENT0;
+  float3 binormal : BINORMAL0;
+  float4 shadowcoord : TEXCOORD0;
+};
+
+Interpolators vert(VertexIn i) {
+  float3 tangent = float3(1, 0, 0);
+  float3 binormal = float3(0, 0, 1);
+  float3 pos = calc_wave_pos(i.local_pos, ocean_data.m, ocean_data.time,
+                             tangent, binormal);
+  float4 clip_pos = mul(float4(pos, 1), camera_data.vp);
+  float4 world_pos = float4(pos, 1.0);
+
+  Interpolators o;
+  o.clip_pos = clip_pos;
+  o.world_pos = world_pos.xyz;
+  o.screen_pos = clip_to_screen(clip_pos);
+  o.tangent = tangent;
+  o.binormal = binormal;
+  o.shadowcoord = mul(world_pos, light_data.light_vp);
+
+  return o;
+}
 
 float4 frag(Interpolators i) : SV_TARGET {
   float3 L = light_data.light_dir;

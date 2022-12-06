@@ -1,11 +1,10 @@
-#include "common.hlsli"
 #include "ocean.hlsli"
+#include "shadow.hlsli"
 
 // Per-object data: Vertex Stage Only
 ConstantBuffer<OceanData> ocean_data : register(b0, space0);
 
-// Per-view data: Fragment Stage Only
-ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+[[vk::push_constant]] ConstantBuffer<ShadowConstants> consts : register(b0);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -18,9 +17,9 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float3 tangent = float3(1, 0, 0);
   float3 binormal = float3(0, 0, 1);
-  float3 pos = calc_wave_pos(i.local_pos, ocean_data.m, ocean_data.time,
-                             tangent, binormal);
-  float4 clip_pos = mul(float4(pos, 1), camera_data.vp);
+  float3 pos =
+      calc_wave_pos(i.local_pos, consts.m, ocean_data.time, tangent, binormal);
+  float4 clip_pos = mul(float4(pos, 1), consts.vp);
 
   Interpolators o;
   o.clip_pos = clip_pos;
