@@ -65,7 +65,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
 
     // Readjust transform position based on the forward direction
     // so that we can pretend to project from an infinite distance
-    const float distance = 350.0f;
+    const float distance = 500.0f;
     const float3 displacement = forward * (-distance / 2.0f);
 
     float4x4 view = {.row0 = {0}};
