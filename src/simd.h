@@ -159,3 +159,5 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb);
 
 float tb_deg_to_rad(float d);
 float tb_rad_to_deg(float r);
+
+float tb_lerpf(float v0, float v1, float a);

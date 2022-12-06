@@ -21,7 +21,6 @@ bool create_directional_light_component(DirectionalLightComponent *comp,
 
   *comp = (DirectionalLightComponent){
       .color = {desc->color[0], desc->color[1], desc->color[2]},
-      .intensity = desc->intensity,
       .view = tb_view_system_create_view(view_system)};
   return true;
 }

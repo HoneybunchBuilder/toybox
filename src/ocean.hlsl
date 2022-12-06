@@ -71,7 +71,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // for each light
     {
-      float3 light_color = float3(1, 1, 1);
+      float3 light_color = light_data.color;
 
       PBRLight light = {
           light_color,

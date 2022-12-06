@@ -30,6 +30,7 @@ typedef struct CommonViewData {
 
 // Constant per-view Light Data
 typedef struct CommonLightData {
+  float3 color;
   float3 light_dir;
   float4x4 light_vp;
 } CommonLightData;

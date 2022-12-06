@@ -20,7 +20,7 @@ ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
 TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
-Texture2D brdf_lut : register(t3, space2); // Fragment Stage Only
+Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
 Texture2D shadow_map : register(t5, space2);                       // Frag Only
 
@@ -108,7 +108,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // for each light
     {
-      float3 light_color = float3(1, 1, 1);
+      float3 light_color = light_data.color;
 
       PBRLight light = {
           light_color,
@@ -126,14 +126,18 @@ float4 frag(Interpolators i) : SV_TARGET {
     {
       float3 R = reflect(-V, N);
 
-      float3 reflection = prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
+      float3 reflection =
+          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
       float3 diffuse = irradiance * base_color;
 
       float3 kS =
           fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
 
-      float2 brdf = brdf_lut.Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness)).rg;
+      float2 brdf =
+          brdf_lut
+              .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
+              .rg;
       float3 specular = reflection * (kS * brdf.x + brdf.y);
 
       float3 kD = (1.0 - kS);
@@ -158,7 +162,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     {
       float3 H = normalize(V + L);
 
-      float3 light_color = float3(1, 1, 1);
+      float3 light_color = light_data.color;
       out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
     }
   }

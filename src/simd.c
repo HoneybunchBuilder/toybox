@@ -583,6 +583,9 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
 float tb_deg_to_rad(float d) { return d * (M_PI / 180.0f); }
 float tb_rad_to_deg(float r) { return r * (180 / M_PI); }
 
+// https://en.wikipedia.org/wiki/Linear_interpolation
+float tb_lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

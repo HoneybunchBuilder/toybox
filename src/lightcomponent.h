@@ -9,7 +9,6 @@ typedef uint32_t TbViewId;
 
 typedef struct DirectionalLightComponent {
   float3 color;
-  float intensity;
   TbViewId view;
 } DirectionalLightComponent;
 

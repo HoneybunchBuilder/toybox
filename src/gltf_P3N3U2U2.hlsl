@@ -108,7 +108,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     // for each light
     /*
     {
-        float3 light_color = float3(1, 1, 1);
+        float3 light_color = light_data.color;
         float3 L = normalize(light_data.light_dir);
 
         PBRLight light = {
@@ -133,7 +133,7 @@ float4 frag(Interpolators i) : SV_TARGET {
         float3 L = normalize(light_data.light_dir);
         float3 H = normalize(V + L);
 
-        float3 light_color = float3(1, 1, 1);
+        float3 light_color = light_data.color;
         out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
     }*/
   }

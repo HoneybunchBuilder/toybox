@@ -234,7 +234,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
 
       // for each light
       {
-        float3 light_color = float3(1, 1, 1);
+        float3 light_color = light_data.color;
 
         PBRLight light = {
             light_color,
@@ -270,7 +270,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
       {
         float3 H = normalize(V + L);
 
-        float3 light_color = float3(1, 1, 1);
+        float3 light_color = light_data.color;
         out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
       }
     }
