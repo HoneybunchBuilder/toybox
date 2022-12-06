@@ -3,6 +3,7 @@
 #include "assets.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
+#include "lightcomponent.h"
 #include "meshsystem.h"
 #include "ocean.hlsli"
 #include "oceancomponent.h"
@@ -25,6 +26,8 @@
 #include "ocean_vert.h"
 #include "oceanprepass_frag.h"
 #include "oceanprepass_vert.h"
+#include "oceanshadow_frag.h"
+#include "oceanshadow_vert.h"
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -48,7 +51,7 @@ typedef struct OceanShadowBatch {
   VkViewport viewport;
   VkRect2D scissor;
   VkDescriptorSet ocean_set;
-  ShadowConstants shadow_consts;
+  ShadowViewConstants shadow_consts;
   VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
@@ -67,10 +70,10 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            1, &batch->view_set, 0, NULL);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             1, &batch->ocean_set, 0, NULL);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
+                            1, &batch->view_set, 0, NULL);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, batch->index_type);
     vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->pos_offset);
@@ -124,8 +127,10 @@ void ocean_shadow_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                            1, &batch->ocean_set, 0, NULL);
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(ShadowConstants), &batch->shadow_consts);
+                       sizeof(ShadowViewConstants), &batch->shadow_consts);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, batch->index_type);
     vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer, &batch->pos_offset);
@@ -207,15 +212,13 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
               .vertexBindingDescriptionCount = 1,
               .pVertexBindingDescriptions =
-                  (VkVertexInputBindingDescription[2]){
+                  (VkVertexInputBindingDescription[1]){
                       {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-                      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
                   },
               .vertexAttributeDescriptionCount = 1,
               .pVertexAttributeDescriptions =
-                  (VkVertexInputAttributeDescription[2]){
+                  (VkVertexInputAttributeDescription[1]){
                       {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-                      {1, 1, VK_FORMAT_R16G16_SFLOAT, 0},
                   },
           },
       .pInputAssemblyState =
@@ -331,8 +334,126 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
   return err;
 }
 
-// HACK: this lives in world.c
-extern Transform calc_transform_from_gltf(const cgltf_node *node);
+VkResult create_ocean_shadow_pipeline(RenderSystem *render_system,
+                                      VkRenderPass pass,
+                                      VkPipelineLayout pipe_layout,
+                                      VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+
+    create_info.codeSize = sizeof(oceanshadow_vert);
+    create_info.pCode = (const uint32_t *)oceanshadow_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Shadow Vert",
+                               &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ocean shadow vert shader module", err);
+
+    create_info.codeSize = sizeof(oceanshadow_frag);
+    create_info.pCode = (const uint32_t *)oceanshadow_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Shadow Frag",
+                               &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ocean shadow frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 1,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[1]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+                  },
+              .vertexAttributeDescriptionCount = 1,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[1]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
+                  },
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .maxDepthBounds = 1.0f,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+      .renderPass = pass,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Ocean Shadow Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create ocean shadow pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
+
+  return err;
+}
 
 bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                          uint32_t system_dep_count,
@@ -461,6 +582,31 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean descriptor set layout", false);
   }
 
+  // Create ocean shadow pipeline layout
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts =
+            (VkDescriptorSetLayout[1]){
+                self->set_layout,
+            },
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            (VkPushConstantRange[1]){
+                {
+                    .size = sizeof(ShadowViewConstants),
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                },
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Ocean Shadow Pipeline Layout",
+                                        &self->shadow_pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create ocean shadow pipeline layout",
+                    false);
+  }
+
   // Create ocean pipeline layout
   {
     VkPipelineLayoutCreateInfo create_info = {
@@ -493,6 +639,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         tb_render_pipeline_get_pass(self->render_pipe_system, color_id);
   }
 
+  err = create_ocean_shadow_pipeline(render_system, self->shadow_pass,
+                                     self->shadow_pipe_layout,
+                                     &self->shadow_pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create ocean shadow pipeline", false);
+
   err = create_ocean_pipelines(render_system, self->ocean_prepass,
                                self->ocean_pass, self->pipe_layout,
                                &self->prepass_pipeline, &self->pipeline);
@@ -507,7 +658,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(OceanDrawBatch),
+                              .batch_size = sizeof(OceanShadowBatch),
                               .draw_fn = ocean_shadow_record,
                               .pass_id = shadow_id,
                           });
@@ -539,7 +690,9 @@ void destroy_ocean_system(OceanSystem *self) {
 
   tb_rnd_destroy_pipeline(self->render_system, self->prepass_pipeline);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
+  tb_rnd_destroy_pipeline(self->render_system, self->shadow_pipeline);
 
+  tb_rnd_destroy_pipe_layout(self->render_system, self->shadow_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
@@ -560,7 +713,11 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   const PackedComponentStore *cameras =
       tb_get_column_check_id(input, 1, 0, CameraComponentId);
 
-  if (ocean_count == 0 || camera_count == 0) {
+  const uint32_t dir_light_count = tb_get_column_component_count(input, 2);
+  const PackedComponentStore *dir_light_store =
+      tb_get_column_check_id(input, 2, 0, DirectionalLightComponentId);
+
+  if (ocean_count == 0 || camera_count == 0 || dir_light_count == 0) {
     TracyCZoneEnd(ctx);
     return;
   }
@@ -704,6 +861,15 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
 
   // Draw the ocean
   {
+    // Look up the shadow caster's relevant view info
+    ShadowViewConstants shadow_consts = {.vp = {.row0 = {0}}};
+    {
+      const DirectionalLightComponent *light =
+          tb_get_component(dir_light_store, 0, DirectionalLightComponent);
+      const View *view = tb_get_view(self->view_system, light->view);
+      shadow_consts.vp = view->view_data.vp;
+    }
+
     // Max camera * ocean draw batches are required
     uint32_t batch_count = 0;
     const uint32_t batch_max = ocean_count * camera_count;
@@ -711,8 +877,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
     OceanDrawBatch *prepass_batches =
         tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
-    OceanDrawBatch *shadow_batches =
-        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
+    OceanShadowBatch *shadow_batches =
+        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanShadowBatch);
 
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
       const CameraComponent *camera =
@@ -750,11 +916,13 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
             .index_count = self->ocean_index_count,
             .pos_offset = self->ocean_pos_offset,
         };
-        shadow_batches[batch_count] = (OceanDrawBatch){
+        shadow_batches[batch_count] = (OceanShadowBatch){
             .pipeline = self->shadow_pipeline,
-            .layout = self->pipe_layout,
+            .layout = self->shadow_pipe_layout,
             .viewport = {0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1},
             .scissor = {{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}},
+            .ocean_set = ocean_set,
+            .shadow_consts = shadow_consts,
             .geom_buffer = self->ocean_geom_buffer,
             .index_type = (VkIndexType)self->ocean_index_type,
             .index_count = self->ocean_index_count,
@@ -768,9 +936,9 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                         self->trans_depth_draw_ctx, batch_count,
                                         prepass_batches);
-    // tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-    //                                     self->shadow_draw_ctx, batch_count,
-    //                                     shadow_batches);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->shadow_draw_ctx, batch_count,
+                                        shadow_batches);
     tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                         self->trans_color_draw_ctx, batch_count,
                                         batches);
@@ -798,9 +966,10 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(OceanSystem),
       .id = OceanSystemId,
       .desc = (InternalDescriptor)ocean_desc,
-      .dep_count = 2,
+      .dep_count = 3,
       .deps[0] = {1, {OceanComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
+      .deps[2] = {1, {DirectionalLightComponentId}},
       .system_dep_count = 5,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,

@@ -1323,11 +1323,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               &(VkAttachmentDescription){
                   .format = VK_FORMAT_D32_SFLOAT,
                   .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                  .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                   .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                   .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .initialLayout =
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   .finalLayout =
                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
               },
@@ -1362,9 +1363,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
+      // Must transition back to depth so that we can load the contents
+      PassTransition transition = {
+          .render_target = self->render_target_system->depth_buffer,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                      .dstAccessMask =
+                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .newLayout =
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                              .levelCount = 1,
+                              .layerCount = 1,
+                          },
+                  },
+          }};
+
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_depth_pass, 0, NULL, 1,
-          &default_mip, &transparent_depth, "Transparent Depth Pass");
+          self, &create_info, 1, &self->transparent_depth_pass, 1, &transition,
+          1, &default_mip, &transparent_depth, "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;

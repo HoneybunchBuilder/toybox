@@ -49,6 +49,7 @@ typedef struct OceanSystem {
 
   FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
 
+  VkPipelineLayout shadow_pipe_layout;
   VkPipeline shadow_pipeline;
 
   VkDescriptorSetLayout set_layout;
