@@ -63,10 +63,9 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     float4x4 model = {.row0 = {0}};
     transform_to_matrix(&model, &transform);
     const float3 forward = f4tof3(model.row2);
-    const float3 up = f4tof3(model.row1);
 
     float4x4 view = {.row0 = {0}};
-    look_forward(&view, transform.position, forward, up);
+    look_forward(&view, transform.position, forward, (float3){0, 1, 0});
 
     float4x4 proj = {.row0 = {0}};
     perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio, cam_comp->near,
