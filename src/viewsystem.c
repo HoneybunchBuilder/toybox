@@ -274,7 +274,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_render_target_get_view(
             self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_map),
+            self->render_target_system->shadow_maps[0]),
     };
 
     // Construct a write descriptor

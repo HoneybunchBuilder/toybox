@@ -21,7 +21,7 @@
 #endif
 
 #define MAX_RENDER_PASS_DEPS 4
-#define MAX_RENDER_PASS_TRANS 4
+#define MAX_RENDER_PASS_TRANS 8
 #define MAX_RENDER_PASS_ATTACH 4
 
 typedef struct PassTransition {
@@ -576,7 +576,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
         self->render_target_system, pass->attach_mips[0], target_id);
 
     PassContext *pass_context = &state->pass_contexts[state->pass_ctx_count];
-
+    TB_CHECK(pass->transition_count < TB_MAX_BARRIERS, "Out of range");
     *pass_context = (PassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
@@ -637,6 +637,8 @@ create_render_pass(RenderPipelineSystem *self,
 
   // Copy attachments
   pass->attach_count = attach_count;
+  TB_CHECK_RETURN(pass->attach_count < MAX_RENDER_PASS_ATTACH, "Out of range",
+                  InvalidRenderPassId);
   SDL_memset(pass->attachments, InvalidRenderTargetId,
              sizeof(TbRenderTargetId) * MAX_RENDER_PASS_ATTACH);
   if (attach_count > 0) {
@@ -647,6 +649,8 @@ create_render_pass(RenderPipelineSystem *self,
 
   // Copy pass transitions
   pass->transition_count = trans_count;
+  TB_CHECK_RETURN(pass->transition_count < MAX_RENDER_PASS_TRANS,
+                  "Out of range", InvalidRenderPassId);
   SDL_memset(pass->transitions, 0,
              sizeof(PassTransition) * MAX_RENDER_PASS_TRANS);
   if (trans_count > 0) {
@@ -728,7 +732,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId swapchain_target = render_target_system->swapchain;
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
-    const TbRenderTargetId shadow_map = render_target_system->shadow_map;
+    const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
 
     const uint32_t default_mip = 0;
 
@@ -972,12 +976,14 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // Note: this doesn't actually depend on the opaque depth pass,
       // but for now the pass dependencies system only has one starter node,
       // so everything must be a child of that
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 0,
-                             NULL, 1, &default_mip, &shadow_map, "Shadow Pass");
-      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create shadow pass",
-                      false);
-      self->shadow_pass = id;
+      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        TbRenderPassId id = create_render_pass(
+            self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
+            &default_mip, &shadow_maps[i], "Shadow Pass");
+        TB_CHECK_RETURN(id != InvalidRenderPassId,
+                        "Failed to create shadow pass", false);
+        self->shadow_passes[i] = id;
+      }
     }
     // Create opaque color pass
     {
@@ -1072,8 +1078,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      PassTransition shadow_trans = {
-          .render_target = shadow_map,
+
+      PassTransition shadow_trans_base = {
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1096,10 +1102,18 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           }};
 
+      PassTransition transitions[TB_CASCADE_COUNT + 2] = {0};
+      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        transitions[i] = shadow_trans_base;
+        transitions[i].render_target = shadow_maps[i];
+      }
+      transitions[4] = irr_trans;
+      transitions[5] = filter_trans;
+
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
-          (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_pass}, 3,
-          (PassTransition[3]){irr_trans, filter_trans, shadow_trans}, 2,
+          (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_passes[3]},
+          TB_CASCADE_COUNT + 2, transitions, 2,
           (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,

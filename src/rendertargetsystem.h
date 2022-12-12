@@ -6,6 +6,7 @@
 
 #define RenderTargetSystemId 0xB0BABABE
 
+#define TB_CASCADE_COUNT 4
 #define TB_SHADOW_MAP_DIM 4096
 
 typedef uint32_t TbRenderTargetId;
@@ -46,7 +47,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId env_cube;
   TbRenderTargetId irradiance_map;
   TbRenderTargetId prefiltered_cube;
-  TbRenderTargetId shadow_map;
+  TbRenderTargetId shadow_maps[TB_CASCADE_COUNT];
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

@@ -626,14 +626,14 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
   // Retrieve passes
   TbRenderPassId depth_id = self->render_pipe_system->transparent_depth_pass;
-  TbRenderPassId shadow_id = self->render_pipe_system->shadow_pass;
+  const TbRenderPassId *shadow_ids = self->render_pipe_system->shadow_passes;
   TbRenderPassId color_id = self->render_pipe_system->transparent_color_pass;
   {
     self->ocean_prepass =
         tb_render_pipeline_get_pass(self->render_pipe_system, depth_id);
 
     self->shadow_pass =
-        tb_render_pipeline_get_pass(self->render_pipe_system, shadow_id);
+        tb_render_pipeline_get_pass(self->render_pipe_system, shadow_ids[0]);
 
     self->ocean_pass =
         tb_render_pipeline_get_pass(self->render_pipe_system, color_id);
@@ -660,7 +660,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanShadowBatch),
                               .draw_fn = ocean_shadow_record,
-                              .pass_id = shadow_id,
+                              .pass_id = shadow_ids[0],
                           });
 
   self->trans_color_draw_ctx = tb_render_pipeline_register_draw_context(

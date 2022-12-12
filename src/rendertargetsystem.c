@@ -168,10 +168,10 @@ bool create_render_target_system(RenderTargetSystem *self,
       self->prefiltered_cube = tb_create_render_target(self, &rt_desc);
     }
 
-    // Create shadow map
+    // Create shadow maps
     {
       RenderTargetDescriptor rt_desc = {
-          .name = "Shadow Map",
+          .name = "Shadow Cascade 0",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
               {
@@ -183,7 +183,9 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->shadow_map = tb_create_render_target(self, &rt_desc);
+      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        self->shadow_maps[i] = tb_create_render_target(self, &rt_desc);
+      }
     }
 
     // Import swapchain target

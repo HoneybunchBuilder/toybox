@@ -748,7 +748,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   };
 
   TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
-  TbRenderPassId shadow_pass_id = self->render_pipe_system->shadow_pass;
+  const TbRenderPassId *shadow_pass_ids =
+      self->render_pipe_system->shadow_passes;
 
   // Setup mesh system for rendering
   {
@@ -757,8 +758,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
     // Look up passes
     VkRenderPass opaque_pass =
         tb_render_pipeline_get_pass(self->render_pipe_system, opaque_pass_id);
-    VkRenderPass shadow_pass =
-        tb_render_pipeline_get_pass(self->render_pipe_system, shadow_pass_id);
+    VkRenderPass shadow_pass = tb_render_pipeline_get_pass(
+        self->render_pipe_system, shadow_pass_ids[0]);
 
     // Get descriptor set layouts from related systems
     {
@@ -827,7 +828,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
                               .draw_fn = shadow_pass_record,
-                              .pass_id = render_pipe_system->shadow_pass,
+                              .pass_id = render_pipe_system->shadow_passes[0],
                           });
 
   return true;
