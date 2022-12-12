@@ -82,9 +82,8 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   float4x4 inv_cam_vp = inv_mf44(cam_vp);
 
   // TODO: Handle more cascades
-  const uint32_t cascade_count = 1;
   const float cascade_split_lambda = 0.95f;
-  float cascade_splits[1] = {camera_component->far / 4};
+  float cascade_splits[TB_CASCADE_COUNT] = {0};
 
   float clip_range = camera_component->far - camera_component->near;
 
@@ -97,12 +96,12 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   // Calculate split depths based on view camera frustum
   // Based on method presented in
   // https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch10.html
-  for (uint32_t i = 0; i < cascade_count; i++) {
-    float p = (i + 1) / (float)cascade_count;
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; i++) {
+    float p = (i + 1) / (float)TB_CASCADE_COUNT;
     float log = min_z * SDL_powf(ratio, p);
     float uniform = min_z + range * p;
     float d = cascade_split_lambda * (log - uniform) + uniform;
-    // cascade_splits[i] = (d - camera_component->near) / clip_range;
+    cascade_splits[i] = (d - camera_component->near) / clip_range;
   }
 
   for (uint32_t light_idx = 0; light_idx < light_count; ++light_idx) {
@@ -118,8 +117,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
     };
 
     float last_split_dist = 0.0f;
-    for (uint32_t cascade_idx = 0; cascade_idx < cascade_count; ++cascade_idx) {
-      float split_dist = cascade_splits[cascade_idx];
+    for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+         ++cascade_idx) {
+      float split_dist = cascade_splits[cascade_idx] * camera_component->far;
 
       float3 frustum_corners[8] = {
           {-1.0f, 1.0f, -1.0f},  {1.0f, 1.0f, -1.0f},  {1.0f, -1.0f, -1.0f},
@@ -183,10 +183,13 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
 
       Frustum frustum = frustum_from_view_proj(&data.vp);
 
-      tb_view_system_set_view_data(view_system, dir_light->view, &data);
-      tb_view_system_set_view_frustum(view_system, dir_light->view, &frustum);
+      tb_view_system_set_view_data(
+          view_system, dir_light->cascade_views[cascade_idx], &data);
+      tb_view_system_set_view_frustum(
+          view_system, dir_light->cascade_views[cascade_idx], &frustum);
 
-      // TODO: Store cascade info
+      // Store cascade info
+      // dir_light->cascade_splits[cascade_idx] = split_dist;
 
       last_split_dist = split_dist;
     }

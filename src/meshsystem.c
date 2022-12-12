@@ -997,7 +997,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
          ++cascade_idx) {
 
       lit_sets[cascade_idx] = (VisibleSet){
-          .view = light->view, // TODO: Get cascade view
+          .view = light->cascade_views[cascade_idx],
           .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
                                    const MeshComponent *),
       };

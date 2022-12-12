@@ -21,7 +21,10 @@ bool create_directional_light_component(DirectionalLightComponent *comp,
 
   *comp = (DirectionalLightComponent){
       .color = {desc->color[0], desc->color[1], desc->color[2]},
-      .view = tb_view_system_create_view(view_system)};
+  };
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    comp->cascade_views[i] = tb_view_system_create_view(view_system);
+  }
   return true;
 }
 
@@ -30,7 +33,7 @@ void destroy_directional_light_component(DirectionalLightComponent *comp,
                                          System *const *system_deps) {
   (void)system_dep_count;
   (void)system_deps;
-  *comp = (DirectionalLightComponent){0};
+  *comp = (DirectionalLightComponent){.color = {0}};
 }
 
 TB_DEFINE_COMPONENT(directional_light, DirectionalLightComponent, cgltf_light)

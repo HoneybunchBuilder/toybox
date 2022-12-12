@@ -1097,11 +1097,16 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
           .sun_dir = comp->sun_dir,
       };
 
-      const View *light_view = tb_get_view(self->view_system, dir_light->view);
-
       // HACK: Also send this lighting data to the view
       CommonLightData light_data = {.light_dir = data.sun_dir,
-                                    .light_vp = light_view->view_data.vp};
+                                    .cascade_splits =
+                                        dir_light->cascade_splits};
+      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        const View *cascade_view =
+            tb_get_view(self->view_system, dir_light->cascade_views[i]);
+        light_data.cascade_vps[i] = cascade_view->view_data.vp;
+      }
+      light_data.light_vp = light_data.cascade_vps[0]; // TODO: Remove
       tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
                                     &light_data);
 

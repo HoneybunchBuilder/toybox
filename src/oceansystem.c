@@ -625,21 +625,22 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   }
 
   // Retrieve passes
-  TbRenderPassId depth_id = self->render_pipe_system->transparent_depth_pass;
   const TbRenderPassId *shadow_ids = self->render_pipe_system->shadow_passes;
+  TbRenderPassId depth_id = self->render_pipe_system->transparent_depth_pass;
   TbRenderPassId color_id = self->render_pipe_system->transparent_color_pass;
   {
+    for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+      self->shadow_passes[i] =
+          tb_render_pipeline_get_pass(self->render_pipe_system, shadow_ids[i]);
+    }
+
     self->ocean_prepass =
         tb_render_pipeline_get_pass(self->render_pipe_system, depth_id);
-
-    self->shadow_pass =
-        tb_render_pipeline_get_pass(self->render_pipe_system, shadow_ids[0]);
-
     self->ocean_pass =
         tb_render_pipeline_get_pass(self->render_pipe_system, color_id);
   }
 
-  err = create_ocean_shadow_pipeline(render_system, self->shadow_pass,
+  err = create_ocean_shadow_pipeline(render_system, self->shadow_passes[0],
                                      self->shadow_pipe_layout,
                                      &self->shadow_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean shadow pipeline", false);
@@ -649,20 +650,20 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                                &self->prepass_pipeline, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
 
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    self->shadow_draw_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system, &(DrawContextDescriptor){
+                                .batch_size = sizeof(OceanShadowBatch),
+                                .draw_fn = ocean_shadow_record,
+                                .pass_id = shadow_ids[i],
+                            });
+  }
   self->trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
                               .draw_fn = ocean_prepass_record,
                               .pass_id = depth_id,
                           });
-
-  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(OceanShadowBatch),
-                              .draw_fn = ocean_shadow_record,
-                              .pass_id = shadow_ids[0],
-                          });
-
   self->trans_color_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
@@ -862,12 +863,15 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   // Draw the ocean
   {
     // Look up the shadow caster's relevant view info
-    ShadowViewConstants shadow_consts = {.vp = {.row0 = {0}}};
+    ShadowViewConstants shadow_consts[TB_CASCADE_COUNT] = {0};
     {
       const DirectionalLightComponent *light =
           tb_get_component(dir_light_store, 0, DirectionalLightComponent);
-      const View *view = tb_get_view(self->view_system, light->view);
-      shadow_consts.vp = view->view_data.vp;
+      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        const View *view =
+            tb_get_view(self->view_system, light->cascade_views[i]);
+        shadow_consts[i].vp = view->view_data.vp;
+      }
     }
 
     // Max camera * ocean draw batches are required
@@ -877,8 +881,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
     OceanDrawBatch *prepass_batches =
         tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
-    OceanShadowBatch *shadow_batches =
-        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanShadowBatch);
+    OceanShadowBatch *shadow_batches = tb_alloc_nm_tp(
+        self->tmp_alloc, batch_max * TB_CASCADE_COUNT, OceanShadowBatch);
 
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
       const CameraComponent *camera =
@@ -916,29 +920,33 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
             .index_count = self->ocean_index_count,
             .pos_offset = self->ocean_pos_offset,
         };
-        shadow_batches[batch_count] = (OceanShadowBatch){
-            .pipeline = self->shadow_pipeline,
-            .layout = self->shadow_pipe_layout,
-            .viewport = {0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1},
-            .scissor = {{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}},
-            .ocean_set = ocean_set,
-            .shadow_consts = shadow_consts,
-            .geom_buffer = self->ocean_geom_buffer,
-            .index_type = (VkIndexType)self->ocean_index_type,
-            .index_count = self->ocean_index_count,
-            .pos_offset = self->ocean_pos_offset,
-        };
+        for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+          shadow_batches[batch_count + i] = (OceanShadowBatch){
+              .pipeline = self->shadow_pipeline,
+              .layout = self->shadow_pipe_layout,
+              .viewport = {0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1},
+              .scissor = {{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}},
+              .ocean_set = ocean_set,
+              .shadow_consts = shadow_consts[i],
+              .geom_buffer = self->ocean_geom_buffer,
+              .index_type = (VkIndexType)self->ocean_index_type,
+              .index_count = self->ocean_index_count,
+              .pos_offset = self->ocean_pos_offset,
+          };
+        }
         batch_count++;
       }
     }
 
     // Draw to the prepass and the ocean pass
+    for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+      tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                          self->shadow_draw_ctxs[i],
+                                          batch_count, &shadow_batches[i]);
+    }
     tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                         self->trans_depth_draw_ctx, batch_count,
                                         prepass_batches);
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->shadow_draw_ctx, batch_count,
-                                        shadow_batches);
     tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                         self->trans_color_draw_ctx, batch_count,
                                         batches);

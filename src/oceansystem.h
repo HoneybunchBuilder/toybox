@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 
 #define OceanSystemId 0xB000DEAD
 
@@ -42,8 +43,8 @@ typedef struct OceanSystem {
 
   VkRenderPass ocean_prepass;
   TbDrawContextId trans_depth_draw_ctx;
-  VkRenderPass shadow_pass;
-  TbDrawContextId shadow_draw_ctx;
+  VkRenderPass shadow_passes[TB_CASCADE_COUNT];
+  TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
   VkRenderPass ocean_pass;
   TbDrawContextId trans_color_draw_ctx;
 
