@@ -824,12 +824,14 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                               .draw_fn = opaque_pass_record,
                               .pass_id = opaque_pass_id,
                           });
-  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = shadow_pass_record,
-                              .pass_id = render_pipe_system->shadow_passes[0],
-                          });
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    self->shadow_draw_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system, &(DrawContextDescriptor){
+                                .batch_size = sizeof(MeshDrawBatch),
+                                .draw_fn = shadow_pass_record,
+                                .pass_id = render_pipe_system->shadow_passes[i],
+                            });
+  }
 
   return true;
 }
@@ -986,22 +988,24 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   VisibleSet *lit_sets =
-      tb_alloc_nm_tp(self->tmp_alloc, dir_light_count, VisibleSet);
+      tb_alloc_nm_tp(self->tmp_alloc, TB_CASCADE_COUNT, VisibleSet);
   {
     TracyCZoneN(ctx, "View Culling", true);
-    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-      const DirectionalLightComponent *light = tb_get_component(
-          dir_light_store, light_idx, DirectionalLightComponent);
+    const DirectionalLightComponent *light =
+        tb_get_component(dir_light_store, 0, DirectionalLightComponent);
+    for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+         ++cascade_idx) {
 
-      lit_sets[light_idx] = (VisibleSet){
-          .view = light->view,
+      lit_sets[cascade_idx] = (VisibleSet){
+          .view = light->view, // TODO: Get cascade view
           .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
                                    const MeshComponent *),
       };
     }
 
-    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-      VisibleSet *lit_set = &lit_sets[light_idx];
+    for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+         ++cascade_idx) {
+      VisibleSet *lit_set = &lit_sets[cascade_idx];
 
       const View *view = tb_get_view(self->view_system, lit_set->view);
       const Frustum *frustum = &view->frustum;
@@ -1092,26 +1096,22 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     TracyCZoneEnd(batch_ctx);
   }
 
-  // Create one batch for shadows
-  ShadowDrawBatch shadow_batch = {0};
-  {
+  // Create one batch for each shadow cascade
+  ShadowDrawBatch shadow_batches[TB_CASCADE_COUNT] = {0};
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
     // Batch could use each light
-    shadow_batch.views =
+    shadow_batches[i].views =
         tb_alloc_nm_tp(tmp_alloc, dir_light_count, ShadowDrawView);
-    shadow_batch.view_count = 0;
+    shadow_batches[i].view_count = 0;
 
-    for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-      ShadowDrawView *view = &shadow_batch.views[light_idx];
-      // Each view already knows how many meshes it should see
-      // Each mesh could have TB_SUBMESH_MAX # of submeshes
-      *view = (ShadowDrawView){0};
-      view->draws =
-          tb_alloc_nm_tp(tmp_alloc, lit_sets[light_idx].mesh_count, ShadowDraw);
-      view->draw_count = 0;
+    ShadowDrawView *view = &shadow_batches[i].views[0];
+    // Each view already knows how many meshes it should see
+    // Each mesh could have TB_SUBMESH_MAX # of submeshes
+    *view = (ShadowDrawView){0};
+    view->draws = tb_alloc_nm_tp(tmp_alloc, lit_sets[i].mesh_count, ShadowDraw);
+    view->draw_count = 0;
 
-      SDL_memset(view->draws, 0,
-                 sizeof(ShadowDraw) * lit_sets[light_idx].mesh_count);
-    }
+    SDL_memset(view->draws, 0, sizeof(ShadowDraw) * lit_sets[i].mesh_count);
   }
 
   // TODO: Make this less hacky
@@ -1224,8 +1224,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       self->render_pipe_system, self->opaque_draw_ctx, batch_count, batches);
 
   // Similar process for shadow batch
-  for (uint32_t light_idx = 0; light_idx < dir_light_count; ++light_idx) {
-    const VisibleSet *lit_set = &lit_sets[light_idx];
+  for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+       ++cascade_idx) {
+    const VisibleSet *lit_set = &lit_sets[cascade_idx];
 
     const View *view = tb_get_view(self->view_system, lit_set->view);
 
@@ -1243,10 +1244,10 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
            ++sub_idx) {
         const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
 
-        shadow_batch.pipeline = self->shadow_pipeline;
-        shadow_batch.layout = self->shadow_pipe_layout;
-        shadow_batch.view_count = dir_light_count;
-        ShadowDrawView *draw_view = &shadow_batch.views[light_idx];
+        shadow_batches[cascade_idx].pipeline = self->shadow_pipeline;
+        shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
+        shadow_batches[cascade_idx].view_count = dir_light_count;
+        ShadowDrawView *draw_view = &shadow_batches[cascade_idx].views[0];
         draw_view->viewport =
             (VkViewport){0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1};
         draw_view->scissor =
@@ -1271,8 +1272,11 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     }
   }
 
-  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                      self->shadow_draw_ctx, 1, &shadow_batch);
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->shadow_draw_ctxs[i], 1,
+                                        &shadow_batches[i]);
+  }
 
   // Output potential transform updates
   {

@@ -2,6 +2,7 @@
 
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
+#include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
@@ -73,7 +74,7 @@ typedef struct MeshSystem {
   RenderPipelineSystem *render_pipe_system;
 
   TbDrawContextId opaque_draw_ctx;
-  TbDrawContextId shadow_draw_ctx;
+  TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;

@@ -171,7 +171,6 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create shadow maps
     {
       RenderTargetDescriptor rt_desc = {
-          .name = "Shadow Cascade 0",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
               {
@@ -184,6 +183,9 @@ bool create_render_target_system(RenderTargetSystem *self,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        char name[100] = {0};
+        SDL_snprintf(name, 100, "Shadow Cascade %d", i);
+        rt_desc.name = name;
         self->shadow_maps[i] = tb_create_render_target(self, &rt_desc);
       }
     }
