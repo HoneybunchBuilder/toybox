@@ -49,7 +49,7 @@ Interpolators vert(VertexIn i) {
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos;
-  o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
+  o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
   o.uv = uv_transform(i.uv, material_data.tex_transform);
   return o;
@@ -151,7 +151,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     {
       uint cascade_idx = 0;
       for (uint c = 0; c < 3; ++c) {
-        if (i.view_pos.z < light_data.cascade_splits[c]) {
+        if (i.view_pos.z > light_data.cascade_splits[c]) {
           cascade_idx = c + 1;
         }
       }

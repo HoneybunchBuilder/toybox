@@ -34,8 +34,8 @@ struct VertexIn {
 struct Interpolators {
   float4 clip_pos : SV_POSITION;
   float3 world_pos : POSITION0;
+  float3 view_pos : POSITION1;
   float3 normal : NORMAL0;
-  float4 shadowcoord : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -47,8 +47,8 @@ Interpolators vert(VertexIn i) {
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos;
+  o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
-  o.shadowcoord = mul(float4(world_pos, 1), light_data.light_vp);
   return o;
 }
 
@@ -129,11 +129,21 @@ float4 frag(Interpolators i) : SV_TARGET {
       out_color += ambient;
     }
 
-    // Shadow hack
+    // Shadow cascades
     {
+      uint cascade_idx = 0;
+      for (uint c = 0; c < 3; ++c) {
+        if (i.view_pos.z > light_data.cascade_splits[c]) {
+          cascade_idx = c + 1;
+        }
+      }
+
+      float4 shadow_coord =
+          mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+
       float NdotL = clamp(dot(N, L), 0.001, 1.0);
-      float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_maps,
-                                static_sampler, NdotL, 0);
+      float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
+                                static_sampler, NdotL, cascade_idx);
       out_color *= shadow;
     }
   } else // Phong fallback

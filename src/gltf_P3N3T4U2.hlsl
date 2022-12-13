@@ -53,7 +53,7 @@ Interpolators vert(VertexIn i) {
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
   o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
   o.uv = uv_transform(i.uv, material_data.tex_transform);
-  o.shadowcoord = mul(float4(world_pos, 1), light_data.light_vp);
+  o.shadowcoord = mul(float4(world_pos, 1), light_data.cascade_vps[0]);
 
   return o;
 }

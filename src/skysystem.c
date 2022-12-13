@@ -1106,7 +1106,6 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             tb_get_view(self->view_system, dir_light->cascade_views[i]);
         light_data.cascade_vps[i] = cascade_view->view_data.vp;
       }
-      light_data.light_vp = light_data.cascade_vps[0]; // TODO: Remove
       tb_view_system_set_light_data(self->view_system, camera_comps->view_id,
                                     &light_data);
 

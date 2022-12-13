@@ -35,6 +35,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   (void)delta_seconds;
   TracyCZoneNC(ctx, "Shadow System Tick", TracyCategoryColorRendering, true);
 
+  const EntityId *light_entities = tb_get_column_entity_ids(input, 0);
   const uint32_t light_count = tb_get_column_component_count(input, 0);
   const PackedComponentStore *dir_lights =
       tb_get_column_check_id(input, 0, 0, DirectionalLightComponentId);
@@ -50,6 +51,16 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   if (light_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
     return;
+  }
+
+  // Copy directional lights for output; we want to write the cacscade splits
+  DirectionalLightComponent *out_lights =
+      tb_alloc_nm_tp(self->tmp_alloc, light_count, DirectionalLightComponent);
+  {
+    const DirectionalLightComponent *in_lights =
+        tb_get_component(dir_lights, 0, DirectionalLightComponent);
+    SDL_memcpy(out_lights, in_lights,
+               light_count * sizeof(DirectionalLightComponent));
   }
 
   ViewSystem *view_system = self->view_system;
@@ -189,10 +200,21 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
           view_system, dir_light->cascade_views[cascade_idx], &frustum);
 
       // Store cascade info
-      // dir_light->cascade_splits[cascade_idx] = split_dist;
+      out_lights->cascade_splits[cascade_idx] = split_dist;
 
       last_split_dist = split_dist;
     }
+  }
+
+  // Write out the directional light components so we store the cascade splits
+  {
+    output->set_count = 1;
+    output->write_sets[0] = (SystemWriteSet){
+        .components = (uint8_t *)out_lights,
+        .count = light_count,
+        .entities = light_entities,
+        .id = DirectionalLightComponentId,
+    };
   }
 
   TracyCZoneEnd(ctx);

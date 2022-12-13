@@ -47,7 +47,7 @@ Interpolators vert(VertexIn i) {
   o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
-  o.shadowcoord = mul(world_pos, light_data.light_vp);
+  o.shadowcoord = mul(world_pos, light_data.cascade_vps[0]);
 
   return o;
 }
