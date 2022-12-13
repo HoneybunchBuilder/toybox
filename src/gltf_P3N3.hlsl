@@ -133,7 +133,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     {
       uint cascade_idx = 0;
       for (uint c = 0; c < 3; ++c) {
-        if (i.view_pos.z > light_data.cascade_splits[c]) {
+        if (i.view_pos.z < -light_data.cascade_splits[c]) {
           cascade_idx = c + 1;
         }
       }
@@ -145,6 +145,24 @@ float4 frag(Interpolators i) : SV_TARGET {
       float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
                                 static_sampler, NdotL, cascade_idx);
       out_color *= shadow;
+
+      /*
+      switch(cascade_idx)
+      {
+        case 0:
+          out_color.rgb *= float3(1.0f, 0.25f, 0.25f);
+        break;
+        case 1:
+          out_color.rgb *= float3(0.25f, 1.0f, 0.25f);
+        break;
+        case 2:
+          out_color.rgb *= float3(0.25f, 0.25f, 1.0f);
+        break;
+        case 3:
+          out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
+        break;
+      }
+      */
     }
   } else // Phong fallback
   {
