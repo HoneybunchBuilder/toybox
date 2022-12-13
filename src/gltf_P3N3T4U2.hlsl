@@ -19,7 +19,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-Texture2D shadow_map : register(t5, space2);                       // Frag Only
+Texture2D shadow_maps[4] : register(t5, space2);                   // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -169,8 +169,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     // Shadow hack
     {
       float NdotL = clamp(dot(N, L), 0.001, 1.0);
-      float shadow =
-          pcf_filter(i.shadowcoord, AMBIENT, shadow_map, static_sampler, NdotL);
+      float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_maps,
+                                static_sampler, NdotL, 0);
       out_color *= shadow;
     }
 

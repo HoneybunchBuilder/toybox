@@ -98,7 +98,7 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                 },
                 {
                     .binding = 5,
-                    .descriptorCount = 1,
+                    .descriptorCount = TB_CASCADE_COUNT,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
@@ -210,11 +210,11 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
 
   // Just upload and write all views for now, they tend to be important anyway
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 6, VkWriteDescriptorSet);
+      self->tmp_alloc, self->view_count * 9, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
       self->tmp_alloc, self->view_count * 2, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 4, VkDescriptorImageInfo);
+      self->tmp_alloc, self->view_count * 7, VkDescriptorImageInfo);
   TbHostBuffer *buffers =
       tb_alloc_nm_tp(self->tmp_alloc, self->view_count * 2, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
@@ -237,8 +237,8 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
     SDL_memcpy(light_buffer->ptr, light_data, sizeof(CommonLightData));
 
     uint32_t buffer_idx = view_idx * 2;
-    uint32_t image_idx = view_idx * 4;
-    uint32_t write_idx = view_idx * 6;
+    uint32_t image_idx = view_idx * 7;
+    uint32_t write_idx = view_idx * 9;
 
     // Get the descriptor we want to write to
     VkDescriptorSet view_set = state->sets[view_idx];
@@ -275,6 +275,24 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .imageView = tb_render_target_get_view(
             self->render_target_system, self->render_system->frame_idx,
             self->render_target_system->shadow_maps[0]),
+    };
+    image_info[image_idx + 4] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_render_target_get_view(
+            self->render_target_system, self->render_system->frame_idx,
+            self->render_target_system->shadow_maps[1]),
+    };
+    image_info[image_idx + 5] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_render_target_get_view(
+            self->render_target_system, self->render_system->frame_idx,
+            self->render_target_system->shadow_maps[2]),
+    };
+    image_info[image_idx + 6] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_render_target_get_view(
+            self->render_target_system, self->render_system->frame_idx,
+            self->render_target_system->shadow_maps[3]),
     };
 
     // Construct a write descriptor
@@ -333,9 +351,36 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
         .pImageInfo = &image_info[image_idx + 3],
     };
+    writes[write_idx + 6] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 5,
+        .dstArrayElement = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[image_idx + 4],
+    };
+    writes[write_idx + 7] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 5,
+        .dstArrayElement = 2,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[image_idx + 5],
+    };
+    writes[write_idx + 8] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 5,
+        .dstArrayElement = 3,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[image_idx + 6],
+    };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count * 6, writes, 0, NULL);
+                         self->view_count * 9, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }

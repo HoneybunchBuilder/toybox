@@ -17,7 +17,7 @@ TextureCube irradiance_map : register(t1, space1);
 TextureCube prefiltered_map : register(t2, space1);
 Texture2D brdf_lut : register(t3, space1);
 ConstantBuffer<CommonLightData> light_data : register(b4, space1);
-Texture2D shadow_map : register(t5, space1);
+Texture2D shadow_maps[4] : register(t5, space1); // Frag Only
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -26,7 +26,8 @@ struct VertexIn {
 struct Interpolators {
   float4 clip_pos : SV_POSITION;
   float3 world_pos : POSITION0;
-  float4 screen_pos : POSITION1;
+  // float3 view_pos : POSITION1;
+  float4 screen_pos : POSITION2;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   float4 shadowcoord : TEXCOORD0;
@@ -153,8 +154,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   // Shadow hack
   {
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
-    float shadow =
-        pcf_filter(i.shadowcoord, AMBIENT, shadow_map, static_sampler, NdotL);
+    float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_maps,
+                              static_sampler, NdotL, 0);
     color *= shadow;
   }
 
