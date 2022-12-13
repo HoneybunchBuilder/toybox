@@ -179,9 +179,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       {
         float4x4 model = {.row0 = {0}};
         transform_to_matrix(&model, &transform);
-        const float3 forward = f4tof3(model.row2);
+        const float3 forward = normf3(f4tof3(model.row2));
 
-        float3 offset = center - forward * -min[2];
+        float3 offset = center - (forward * -min[2]);
 
         look_at(&light_view_mat, offset, center, (float3){0, 1, 0});
       }
@@ -200,7 +200,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
           view_system, dir_light->cascade_views[cascade_idx], &frustum);
 
       // Store cascade info
-      out_lights->cascade_splits[cascade_idx] = split_dist;
+      out_lights->cascade_splits[cascade_idx] =
+          (camera_component->near + cascade_splits[cascade_idx] * clip_range) *
+          -1.0f;
 
       last_split_dist = split_dist;
     }
