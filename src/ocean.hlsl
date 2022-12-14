@@ -26,11 +26,10 @@ struct VertexIn {
 struct Interpolators {
   float4 clip_pos : SV_POSITION;
   float3 world_pos : POSITION0;
-  // float3 view_pos : POSITION1;
+  float3 view_pos : POSITION1;
   float4 screen_pos : POSITION2;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
-  float4 shadowcoord : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -44,10 +43,10 @@ Interpolators vert(VertexIn i) {
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
+  o.view_pos = mul(world_pos, camera_data.v).xyz;
   o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
-  o.shadowcoord = mul(world_pos, light_data.cascade_vps[0]);
 
   return o;
 }
@@ -151,11 +150,21 @@ float4 frag(Interpolators i) : SV_TARGET {
     }
   }
 
-  // Shadow hack
+  // Shadow cascades
   {
+    uint cascade_idx = 0;
+    for (uint c = 0; c < 3; ++c) {
+      if (i.view_pos.z < light_data.cascade_splits[c]) {
+        cascade_idx = c + 1;
+      }
+    }
+
+    float4 shadow_coord =
+        mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
-    float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_maps,
-                              static_sampler, NdotL, 0);
+    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
+                              static_sampler, NdotL, cascade_idx);
     color *= shadow;
   }
 
