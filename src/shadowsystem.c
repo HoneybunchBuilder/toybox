@@ -45,8 +45,6 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const uint32_t camera_count = tb_get_column_component_count(input, 1);
   const PackedComponentStore *camera_components =
       tb_get_column_check_id(input, 1, 0, CameraComponentId);
-  const PackedComponentStore *camera_transforms =
-      tb_get_column_check_id(input, 1, 1, TransformComponentId);
 
   if (light_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
@@ -70,36 +68,28 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   // Assume just one view for now
   const CameraComponent *camera_component =
       tb_get_component(camera_components, 0, CameraComponent);
-  const TransformComponent *camera_transform =
-      tb_get_component(camera_transforms, 0, TransformComponent);
 
   // Calculate the vp and inverse vp matrices
   float4x4 cam_vp = {.row0 = {0}};
+  float4x4 inv_cam_vp = cam_vp;
   {
-    const Transform *transform = &camera_transform->transform;
-    float4x4 model = {.row0 = {0}};
-    transform_to_matrix(&model, transform);
-    const float3 forward = f4tof3(model.row2);
-
-    float4x4 view = {.row0 = {0}};
-    look_forward(&view, transform->position, forward, (float3){0, 1, 0});
-
-    float4x4 proj = {.row0 = {0}};
-    perspective(&proj, camera_component->fov, camera_component->aspect_ratio,
-                camera_component->near, camera_component->far);
-
-    mulmf44(&proj, &view, &cam_vp);
+    const View *view =
+        tb_get_view(self->view_system, camera_component->view_id);
+    cam_vp = view->view_data.vp;
+    inv_cam_vp = view->view_data.inv_vp;
   }
-  float4x4 inv_cam_vp = inv_mf44(cam_vp);
 
   // TODO: Handle more cascades
   const float cascade_split_lambda = 0.95f;
   float cascade_splits[TB_CASCADE_COUNT] = {0};
 
-  float clip_range = camera_component->far - camera_component->near;
+  float near = camera_component->near;
+  float far = camera_component->far;
 
-  float min_z = camera_component->near;
-  float max_z = camera_component->near + clip_range;
+  float clip_range = far - near;
+
+  float min_z = near;
+  float max_z = near + clip_range;
 
   float range = max_z - min_z;
   float ratio = max_z / min_z;
@@ -112,7 +102,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
     float log = min_z * SDL_powf(ratio, p);
     float uniform = min_z + range * p;
     float d = cascade_split_lambda * (log - uniform) + uniform;
-    cascade_splits[i] = (d - camera_component->near) / clip_range;
+    cascade_splits[i] = (d - near) / clip_range;
   }
 
   for (uint32_t light_idx = 0; light_idx < light_count; ++light_idx) {
@@ -130,19 +120,21 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
     float last_split_dist = 0.0f;
     for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
          ++cascade_idx) {
-      float split_dist = cascade_splits[cascade_idx] * camera_component->far;
+      float split_dist = cascade_splits[cascade_idx];
 
+      // Note: We always use reverse depth
       float3 frustum_corners[8] = {
-          {-1.0f, 1.0f, -1.0f},  {1.0f, 1.0f, -1.0f},  {1.0f, -1.0f, -1.0f},
-          {-1.0f, -1.0f, -1.0f}, {-1.0f, 1.0f, 1.0f},  {1.0f, 1.0f, 1.0f},
-          {1.0f, -1.0f, 1.0f},   {-1.0f, -1.0f, 1.0f},
+          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Near
+          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
+          {-1.0f, 1.0f, 0},    {1.0f, 1.0f, 0}, // Far
+          {1.0f, -1.0f, 0},    {-1.0f, -1.0f, 0},
       };
 
       // Project into world space
       for (uint32_t i = 0; i < 8; ++i) {
         const float3 corner = frustum_corners[i];
-        float4 inv_corner =
-            mulf44(inv_cam_vp, (float4){corner[0], corner[1], corner[2], 1.0f});
+        float4 inv_corner = mul4f44f(
+            (float4){corner[0], corner[1], corner[2], 1.0f}, inv_cam_vp);
         frustum_corners[i] = inv_corner / inv_corner[3];
       }
       for (uint32_t i = 0; i < 4; i++) {
@@ -170,9 +162,8 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       const float3 min = -max;
 
       // Calculate projection
-      float4x4 proj = {.row0 = {0}};
-      orthographic(&proj, max[0] - min[0], max[1] - min[1], 0.0f,
-                   max[2] - min[2]);
+      float4x4 proj =
+          ortho(max[0], min[0], max[1], min[1], 0.0f, max[2] - min[2]);
 
       // Calc view matrix
       float4x4 light_view_mat = {.row0 = {0}};
@@ -201,8 +192,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
 
       // Store cascade info
       out_lights->cascade_splits[cascade_idx] =
-          (camera_component->near + cascade_splits[cascade_idx] * clip_range) *
-          -1.0f;
+          (near + split_dist * clip_range) * -1.0f;
 
       last_split_dist = split_dist;
     }

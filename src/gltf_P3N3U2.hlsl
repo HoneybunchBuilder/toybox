@@ -22,7 +22,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-Texture2D shadow_maps[4] : register(t5, space2);                 // Frag Only
+Texture2D shadow_maps[4] : register(t5, space2);                   // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -156,13 +156,15 @@ float4 frag(Interpolators i) : SV_TARGET {
         }
       }
 
-      float4 shadow_coord = mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+      float4 shadow_coord =
+          mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
 
       float NdotL = clamp(dot(N, L), 0.001, 1.0);
-      float shadow =
-          pcf_filter(shadow_coord, AMBIENT, shadow_maps, static_sampler, NdotL, cascade_idx);
+      float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
+                                static_sampler, NdotL, cascade_idx);
       out_color *= shadow;
 
+      /*
       switch(cascade_idx)
       {
         case 0:
@@ -178,6 +180,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
         break;
       }
+      */
     }
   } else // Phong fallback
   {

@@ -125,7 +125,9 @@ void mf44_identity(float4x4 *m);
 
 void mulf33(float3x3 *m, float3 v);
 void mulf34(float3x4 *m, float4 v);
+
 float4 mulf44(float4x4 m, float4 v);
+float4 mul4f44f(float4 v, float4x4 m);
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);
 void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o);
@@ -152,6 +154,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf);
 void orthographic(float4x4 *m, float width, float height, float zn, float zf);
+float4x4 ortho(float r, float l, float t, float b, float zn, float zf);
 
 Frustum frustum_from_view_proj(const float4x4 *vp);
 

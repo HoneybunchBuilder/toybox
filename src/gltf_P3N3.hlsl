@@ -146,6 +146,7 @@ float4 frag(Interpolators i) : SV_TARGET {
                                 static_sampler, NdotL, cascade_idx);
       out_color *= shadow;
 
+      /*
       switch(cascade_idx)
       {
         case 0:
@@ -161,6 +162,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
         break;
       }
+      */
     }
   } else // Phong fallback
   {

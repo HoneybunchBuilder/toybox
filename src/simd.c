@@ -156,9 +156,21 @@ void mulf34(float3x4 *m, float4 v) {
   }
 }
 
-// UNTESTED
-
 float4 mulf44(float4x4 m, float4 v) {
+  float4 out = {0};
+
+  unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
+    float sum = 0.0f;
+    unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
+      sum += m.rows[ii][i] * v[ii];
+    }
+    out[i] = sum;
+  }
+
+  return out;
+}
+
+float4 mul4f44f(float4 v, float4x4 m) {
   float4 out = {0};
 
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
@@ -475,7 +487,7 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   float m00 = focal_length / aspect;
   float m11 = -focal_length;
   float m22 = zn / (zf - zn);
-  float m23 = zf * m22;
+  float m23 = zf * zn / (zf - zn);
 
   *m = (float4x4){
       (float4){m00, 0, 0, 0},
@@ -494,6 +506,15 @@ void orthographic(float4x4 *m, float width, float height, float zn, float zf) {
       (float4){0, 2.0f / (height), 0, 0},
       (float4){0, 0, 1 / (zn - zf), 0},
       (float4){0, 0, zn / (zn - zf), 1},
+  };
+}
+
+float4x4 ortho(float r, float l, float t, float b, float zn, float zf) {
+  return (float4x4){
+      (float4){2.0f / (r - l), 0, 0, 0},
+      (float4){0, 2.0f / (t - b), 0, 0},
+      (float4){0, 0, 1 / (zn - zf), 0},
+      (float4){-(r + l) / (r - l), -(t + b) / (t - b), zn / (zn - zf), 1},
   };
 }
 
