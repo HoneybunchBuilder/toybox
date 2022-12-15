@@ -96,6 +96,8 @@ uint32_t alloc_tex(TextureSystem *self) {
   }
 
   const uint32_t index = self->tex_count;
+  // Must initialize this or it could be garbage
+  self->tex_ref_counts[index] = 0;
   self->tex_count++;
   return index;
 }

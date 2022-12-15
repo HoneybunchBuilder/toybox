@@ -1403,6 +1403,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         if (pass->command_buffer_index != last_pass_buffer_idx) {
           // Submit previous command buffer
           if (last_pass_buffer_idx != 0xFFFFFFFF) {
+            TracyCVkCollect(gpu_ctx,
+                            state->pass_command_buffers[last_pass_buffer_idx]);
             vkEndCommandBuffer(
                 state->pass_command_buffers[last_pass_buffer_idx]);
 
@@ -1465,6 +1467,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }
+      TracyCVkCollect(gpu_ctx,
+                      state->pass_command_buffers[last_pass_buffer_idx]);
       vkEndCommandBuffer(state->pass_command_buffers[last_pass_buffer_idx]);
 
       // Submit last pass work
@@ -1528,6 +1532,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           end_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
           VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
 
+      TracyCVkCollect(gpu_ctx, end_buffer);
       vkEndCommandBuffer(end_buffer);
 
       TracyCZoneEnd(swap_trans_e);
