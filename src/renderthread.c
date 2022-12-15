@@ -1678,5 +1678,9 @@ int32_t render_thread(void *data) {
   destroy_frame_states(thread->device, thread->vma_alloc, &thread->vk_alloc,
                        thread->frame_states);
 
+  // Also must destroy swapchain and a few other primitives here
+  vkDestroySwapchainKHR(thread->device, thread->swapchain.swapchain,
+                        &thread->vk_alloc);
+
   return 0;
 }

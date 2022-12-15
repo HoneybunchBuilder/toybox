@@ -9,7 +9,7 @@
 typedef struct ComponentDescriptor ComponentDescriptor;
 typedef struct cgltf_mesh cgltf_mesh;
 
-#define TB_SUBMESH_MAX 16
+#define TB_SUBMESH_MAX 32
 #define TB_VERTEX_BINDING_MAX 4
 
 typedef uint64_t TbMeshId;

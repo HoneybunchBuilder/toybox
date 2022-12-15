@@ -274,6 +274,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = CoreUISystemId;
     tick_order[i++] = CameraSystemId;
     tick_order[i++] = ShadowSystemId;
+    tick_order[i++] = SkySystemId;
     tick_order[i++] = ViewSystemId;
     tick_order[i++] = RenderObjectSystemId;
     tick_order[i++] = TextureSystemId;
@@ -281,7 +282,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = MeshSystemId;
     tick_order[i++] = OceanSystemId;
     tick_order[i++] = TimeOfDaySystemId;
-    tick_order[i++] = SkySystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;
     tick_order[i++] = RenderSystemId;
@@ -338,7 +338,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Load starter scene into world
-  int32_t scene_idx = 7;
+  int32_t scene_idx = 8;
   const char *scene_path = scene_asset_paths[scene_idx];
   success = tb_world_load_scene(&world, scene_path);
   TB_CHECK_RETURN(success, "Failed to load scene.", -1);
