@@ -71,14 +71,13 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient, Texture2D 
 float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[4], sampler samp, float NdotL, uint cascade_idx)
 {
   int2 tex_dim;
-  shadow_maps[0].GetDimensions(tex_dim.x, tex_dim.y);
+  shadow_maps[cascade_idx].GetDimensions(tex_dim.x, tex_dim.y);
 
-  float scale = 1.5;
+  float scale = 0.75f;
   float dx = scale * (1.0 / float(tex_dim.x));
   float dy = scale * (1.0 / float(tex_dim.y));
 
   float shadow_factor = 0.0;
-
   uint count = 0;
   int range = 1;
 

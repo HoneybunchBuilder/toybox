@@ -16,8 +16,8 @@ bool create_camera_component(CameraComponent *comp,
       .view_id = tb_view_system_create_view(view_system),
       .aspect_ratio = desc->aspect_ratio,
       .fov = desc->yfov,
-      .near = 0.1f,
-      .far = 500.0f,
+      .near = desc->znear,
+      .far = desc->zfar,
   };
   return true;
 }

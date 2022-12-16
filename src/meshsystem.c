@@ -183,6 +183,9 @@ VkResult create_shadow_pipeline(RenderSystem *render_system, VkRenderPass pass,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .depthBiasEnable = VK_TRUE,
+              .depthBiasConstantFactor = 1.25f,
+              .depthBiasSlopeFactor = 1.75f,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -1563,9 +1566,36 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           idx_offset += index_size;
         }
 
+        // Determine the order of attributes
+        cgltf_size attr_order[4] = {0};
+        {
+          const cgltf_attribute_type req_order[4] = {
+              cgltf_attribute_type_position,
+              cgltf_attribute_type_normal,
+              cgltf_attribute_type_tangent,
+              cgltf_attribute_type_texcoord,
+          };
+          cgltf_size attr_target_idx = 0;
+          for (uint32_t i = 0; i < 4; ++i) {
+            bool found = false;
+            for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+                 ++attr_idx) {
+              cgltf_attribute *attr = &prim->attributes[attr_idx];
+              if (attr->type == req_order[i]) {
+                attr_order[attr_target_idx] = attr_idx;
+                attr_target_idx++;
+                found = true;
+              }
+              if (found) {
+                break;
+              }
+            }
+          }
+        }
+
         for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
              ++attr_idx) {
-          cgltf_attribute *attr = &prim->attributes[attr_idx];
+          cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
           cgltf_accessor *accessor = attr->data;
           cgltf_buffer_view *view = accessor->buffer_view;
 
