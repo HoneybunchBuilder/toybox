@@ -1928,13 +1928,6 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
       draw_ctx->batch_count = 0;
     }
   }
-
-  self->render_system->frame_idx = 0;
-  SDL_Log("Resizing swapchain");
-
-  // Let the render thread know we're done handling the resize on the main
-  // thread
-  SDL_SemPost(self->render_system->render_thread->resized);
 }
 
 void tick_render_pipeline_system(RenderPipelineSystem *self,

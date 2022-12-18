@@ -158,7 +158,6 @@ typedef struct RenderThread {
 
   uint32_t frame_idx;
   uint64_t frame_count;
-  uint64_t last_resize_frame;
   FrameState frame_states[TB_MAX_FRAME_STATES];
 
   uint8_t stop_signal;

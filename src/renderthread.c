@@ -31,13 +31,16 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
+  SDL_Log("Main Thread Signaling Frame %d", frame_idx);
   SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
+  SDL_Log("Main Thread Waiting For Frame %d", frame_idx);
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
+  SDL_Log("Main Thread Waiting For GPU %d", frame_idx);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
   TracyCZoneEnd(gpu_ctx);
@@ -1682,17 +1685,16 @@ int32_t render_thread(void *data) {
     // If the swapchain was resized, wait for the main thread to report that
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
+      SDL_Log("Render Thread Waiting on resize completion");
       SDL_SemWait(thread->resized);
 
-      // Keep track of the resize frame so that we know how to transition
-      // swapchain images
-      thread->last_resize_frame = thread->frame_count;
       thread->frame_count = 0;
-      thread->frame_idx = 0; // MUST reset frame idx
+      thread->frame_idx = 0;
 
       thread->swapchain_resize_signal = 0;
     } else {
       // Wait for normal signal
+      SDL_Log("Render Thread Waiting on Signal for %d", thread->frame_idx);
       FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
       TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
@@ -1711,20 +1713,20 @@ int32_t render_thread(void *data) {
 
     FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
-    SDL_Log("Ticking %d", thread->frame_idx);
-
     tick_render_thread(thread, frame_state);
 
-    SDL_Log("Ticked %d", thread->frame_idx);
+    if (thread->swapchain_resize_signal) {
+      SDL_Log("Render Thread Notifying Resize Event on Frame %d",
+              thread->frame_idx);
+    }
+
+    SDL_Log("Render Thread Notifying Frame %d Complete", thread->frame_idx);
+    // Signal frame done
+    SDL_SemPost(frame_state->signal_sem);
 
     // Increment frame count when done
     thread->frame_count++;
-    SDL_Log("Incremented to %d", thread->frame_count);
     thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
-    SDL_Log("Next frame: %d", thread->frame_idx);
-
-    // Signal frame done
-    SDL_SemPost(frame_state->signal_sem);
 
     TracyCZoneEnd(ctx);
   }
