@@ -23,6 +23,7 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
   TB_CHECK_RETURN(desc, "Invalid RenderThreadDescriptor", false);
   thread->window = desc->window;
   thread->initialized = SDL_CreateSemaphore(0);
+  thread->resized = SDL_CreateSemaphore(0);
   thread->thread = SDL_CreateThread(render_thread, "Render Thread", thread);
   TB_CHECK_RETURN(thread->thread, "Failed to create render thread", false);
   return true;
@@ -281,7 +282,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   VkResult err = VK_SUCCESS;
 
   uint32_t swap_img_count = 0;
-  vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count, NULL);
+  err = vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
+                                NULL);
   TB_VK_CHECK_RET(err, "Failed to get swapchain image count", false);
   TB_CHECK_RETURN(swap_img_count >= TB_MAX_FRAME_STATES,
                   "Fewer than required swapchain images", false);
@@ -290,8 +292,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   }
 
   VkImage swapchain_images[TB_MAX_FRAME_STATES] = {0};
-  vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
-                          swapchain_images);
+  err = vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
+                                swapchain_images);
   TB_VK_CHECK_RET(err, "Failed to get swapchain images", false);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -1135,8 +1137,33 @@ bool init_render_thread(RenderThread *thread) {
   return true;
 }
 
-void resize_swapchain(void) {
-  // TODO
+void resize_swapchain(RenderThread *thread) {
+  VkSwapchainKHR old_swapchain = thread->swapchain.swapchain;
+
+  Allocator tmp_alloc = thread->render_arena.alloc;
+  const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
+  TB_CHECK(init_swapchain(thread->window, thread->device, thread->gpu,
+                          thread->surface, tmp_alloc, vk_alloc,
+                          &thread->swapchain),
+           "Failed to resize swapchain");
+
+  VkImage swapchain_images[TB_MAX_FRAME_STATES] = {0};
+  VkResult err =
+      vkGetSwapchainImagesKHR(thread->device, thread->swapchain.swapchain,
+                              &thread->swapchain.image_count, swapchain_images);
+  TB_VK_CHECK(err, "Failed to get swapchain images");
+
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    FrameState *state = &thread->frame_states[i];
+    state->swapchain_image = swapchain_images[i];
+    SET_VK_NAME(thread->device, state->swapchain_image, VK_OBJECT_TYPE_IMAGE,
+                "Frame State Swapchain Image");
+  }
+
+  // Notify the main thread that the swapchain has been resized
+  thread->swapchain_resize_signal = 1;
+
+  vkDestroySwapchainKHR(thread->device, old_swapchain, vk_alloc);
 }
 
 void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
@@ -1202,13 +1229,15 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   {
     TracyCZoneN(acquire_ctx, "Acquired Next Swapchain Image", true);
     do {
+      uint32_t idx = 0xFFFFFFFF;
       err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
                                   SDL_MIN_UINT64, img_acquired_sem,
-                                  VK_NULL_HANDLE, &thread->frame_idx);
+                                  VK_NULL_HANDLE, &idx);
+      TB_CHECK(idx == thread->frame_idx, "Error acquiring image");
       if (err == VK_ERROR_OUT_OF_DATE_KHR) {
         // swapchain is out of date (e.g. the window was resized) and
         // must be recreated:
-        resize_swapchain();
+        resize_swapchain(thread);
       } else if (err == VK_SUBOPTIMAL_KHR) {
         // swapchain is not as optimal as it could be, but the
         // platform's presentation engine will still present the image
@@ -1614,7 +1643,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     if (err == VK_ERROR_OUT_OF_DATE_KHR) {
       // swapchain is out of date (e.g. the window was resized) and
       // must be recreated:
-      resize_swapchain();
+      resize_swapchain(thread);
     } else if (err == VK_SUBOPTIMAL_KHR) {
       // Swapchain is not as optimal as it could be, but the
       // platform's presentation engine will still present the image
@@ -1649,10 +1678,23 @@ int32_t render_thread(void *data) {
   while (true) {
     TracyCZoneN(ctx, "Render Frame", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
-    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
-    // Wait for signal
-    {
+    // If the swapchain was resized, wait for the main thread to report that
+    // it's all done handling the resize
+    if (thread->swapchain_resize_signal) {
+      SDL_SemWait(thread->resized);
+
+      // Keep track of the resize frame so that we know how to transition
+      // swapchain images
+      thread->last_resize_frame = thread->frame_count;
+      thread->frame_count = 0;
+      thread->frame_idx = 0; // MUST reset frame idx
+
+      thread->swapchain_resize_signal = 0;
+    } else {
+      // Wait for normal signal
+      FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+
       TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
       TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
 
@@ -1667,11 +1709,19 @@ int32_t render_thread(void *data) {
       break;
     }
 
-    tick_render_thread(thread, &thread->frame_states[thread->frame_idx]);
+    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+
+    SDL_Log("Ticking %d", thread->frame_idx);
+
+    tick_render_thread(thread, frame_state);
+
+    SDL_Log("Ticked %d", thread->frame_idx);
 
     // Increment frame count when done
     thread->frame_count++;
+    SDL_Log("Incremented to %d", thread->frame_count);
     thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
+    SDL_Log("Next frame: %d", thread->frame_idx);
 
     // Signal frame done
     SDL_SemPost(frame_state->signal_sem);

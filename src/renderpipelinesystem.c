@@ -1789,6 +1789,16 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   return true;
 }
 
+void destroy_render_passes(RenderPipelineSystem *self) {
+  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+    RenderPass *pass = &self->render_passes[pass_idx];
+    tb_rnd_destroy_render_pass(self->render_system, pass->pass);
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      tb_rnd_destroy_framebuffer(self->render_system, pass->framebuffers[i]);
+    }
+  }
+}
+
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
@@ -1798,13 +1808,7 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
   // Clean up all render passes
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-    RenderPass *pass = &self->render_passes[pass_idx];
-    tb_rnd_destroy_render_pass(self->render_system, pass->pass);
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      tb_rnd_destroy_framebuffer(self->render_system, pass->framebuffers[i]);
-    }
-  }
+  destroy_render_passes(self);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
@@ -1815,6 +1819,122 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_free(self->std_alloc, self->pass_order);
 
   *self = (RenderPipelineSystem){0};
+}
+
+void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
+  RenderPass *rp = &self->render_passes[id];
+
+  // Destroy the old framebuffers
+  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+    tb_rnd_destroy_framebuffer(self->render_system, rp->framebuffers[i]);
+  }
+
+  {
+    VkResult err = VK_SUCCESS;
+
+    RenderTargetSystem *rt_sys = self->render_target_system;
+    // HACK: Assume all attachments have the same extents
+    const VkExtent3D extent = tb_render_target_get_mip_extent(
+        rt_sys, rp->attach_mips[0], rp->attachments[0]);
+
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      VkImageView attach_views[MAX_RENDER_PASS_ATTACH] = {0};
+
+      for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
+           ++attach_idx) {
+        attach_views[attach_idx] =
+            tb_render_target_get_mip_view(rt_sys, rp->attach_mips[attach_idx],
+                                          i, rp->attachments[attach_idx]);
+      }
+
+      VkFramebufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .renderPass = rp->pass,
+          .attachmentCount = rp->attach_count,
+          .pAttachments = attach_views,
+          .width = extent.width,
+          .height = extent.height,
+          .layers = extent.depth,
+      };
+      err = tb_rnd_create_framebuffer(self->render_system, &create_info,
+                                      "Pass Framebuffer", &rp->framebuffers[i]);
+      TB_VK_CHECK(err, "Failed to create pass framebuffer");
+
+      // Update the pass context on each frame index
+      {
+        FrameState *state =
+            &self->render_system->render_thread->frame_states[i];
+        PassContext *context = &state->pass_contexts[id];
+        context->framebuffer = rp->framebuffers[i];
+        context->width = extent.width;
+        context->height = extent.height;
+      }
+    }
+  }
+}
+
+void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
+  // Called by the core system as a hack when the swapchain resizes
+  // This is where, on the main thread, we have to adjust to any render passes
+  // and render targets to stay up to date with the latest swapchain
+
+  // Reimport the swapchain target and resize all default targets
+  // The render thread should have created the necessary resources before
+  // signaling the main thread
+  tb_reimport_swapchain(self->render_target_system);
+
+  // Render target system is up to date, now we just have to re-create all
+  // render passes
+  {
+    reimport_render_pass(self, self->opaque_depth_pass);
+    reimport_render_pass(self, self->opaque_color_pass);
+    reimport_render_pass(self, self->depth_copy_pass);
+    reimport_render_pass(self, self->color_copy_pass);
+    reimport_render_pass(self, self->sky_pass);
+    reimport_render_pass(self, self->transparent_depth_pass);
+    reimport_render_pass(self, self->transparent_color_pass);
+    reimport_render_pass(self, self->tonemap_pass);
+    reimport_render_pass(self, self->ui_pass);
+  }
+
+  // We now need to patch every pass's transitions so that their targets point
+  // at the right VkImages
+  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+    RenderPass *pass = &self->render_passes[pass_idx];
+    for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
+         ++trans_idx) {
+      for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
+           ++frame_idx) {
+        PassContext *context =
+            &self->render_system->render_thread->frame_states[frame_idx]
+                 .pass_contexts[pass_idx];
+        const PassTransition *transition = &pass->transitions[trans_idx];
+        ImageTransition *barrier = &context->barriers[trans_idx];
+        *barrier = transition->barrier;
+        barrier->barrier.image = tb_render_target_get_image(
+            self->render_target_system, frame_idx, transition->render_target);
+      }
+    }
+  }
+
+  // Also clear out any draws that were in flight on the render thread
+  // Any draws that had descriptors that point to these re-created resources
+  // are invalid
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state =
+        &self->render_system->render_thread->frame_states[frame_idx];
+    for (uint32_t ctx_idx = 0; ctx_idx < state->draw_ctx_count; ++ctx_idx) {
+      DrawContext *draw_ctx = &state->draw_contexts[ctx_idx];
+      draw_ctx->batch_count = 0;
+    }
+  }
+
+  self->render_system->frame_idx = 0;
+  SDL_Log("Resizing swapchain");
+
+  // Let the render thread know we're done handling the resize on the main
+  // thread
+  SDL_SemPost(self->render_system->render_thread->resized);
 }
 
 void tick_render_pipeline_system(RenderPipelineSystem *self,

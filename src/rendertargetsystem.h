@@ -53,6 +53,8 @@ typedef struct RenderTargetSystem {
 void tb_render_target_system_descriptor(
     SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc);
 
+void tb_reimport_swapchain(RenderTargetSystem *self);
+
 TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
                                          const RenderTargetDescriptor *rt_desc,
                                          const VkImage *images);

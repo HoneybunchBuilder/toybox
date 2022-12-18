@@ -119,6 +119,7 @@ typedef struct RenderThread {
   SDL_Window *window;
   SDL_Thread *thread;
   SDL_semaphore *initialized;
+  SDL_semaphore *resized;
 
   StandardAllocator std_alloc;
   ArenaAllocator render_arena;
@@ -157,9 +158,11 @@ typedef struct RenderThread {
 
   uint32_t frame_idx;
   uint64_t frame_count;
+  uint64_t last_resize_frame;
   FrameState frame_states[TB_MAX_FRAME_STATES];
 
-  uint32_t stop_signal;
+  uint8_t stop_signal;
+  uint8_t swapchain_resize_signal;
 } RenderThread;
 
 bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);

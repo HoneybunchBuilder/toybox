@@ -21,6 +21,7 @@
 #include "transformcomponent.h"
 
 #include "inputsystem.h"
+#include "renderpipelinesystem.h"
 #include "rendersystem.h"
 
 void create_component_store(ComponentStore *store,
@@ -178,9 +179,18 @@ bool tb_tick_world(World *world, float delta_seconds) {
                                             RenderSystemId);
       if (system) {
         RenderSystem *render_system = (RenderSystem *)system->self;
+
+        // Check for signal that the render thread got a resize event
+        if (render_system->render_thread->swapchain_resize_signal) {
+          System *rp_sys = tb_find_system_by_id(
+              world->systems, world->system_count, RenderPipelineSystemId);
+          tb_rnd_on_swapchain_resize((RenderPipelineSystem *)rp_sys->self);
+        }
+
         TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
                      true);
         TracyCZoneValue(wait_ctx, render_system->frame_idx);
+        SDL_Log("Waiting on Render Thread %d", render_system->frame_idx);
         tb_wait_render(render_system->render_thread, render_system->frame_idx);
         TracyCZoneEnd(wait_ctx);
       }

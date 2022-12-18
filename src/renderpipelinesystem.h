@@ -79,6 +79,8 @@ typedef struct RenderPipelineSystem {
 void tb_render_pipeline_system_descriptor(
     SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc);
 
+void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self);
+
 TbDrawContextId
 tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
                                          const DrawContextDescriptor *desc);
