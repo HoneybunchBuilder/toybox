@@ -110,6 +110,10 @@ void resize_render_target(RenderTargetSystem *self, RenderTarget *render_target,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_free_gpu_image(self->render_system, &render_target->images[i]);
     tb_rnd_destroy_image_view(self->render_system, render_target->views[i]);
+    for (uint32_t mip_idx = 0; mip_idx < render_target->mip_count; ++mip_idx) {
+      tb_rnd_destroy_image_view(self->render_system,
+                                render_target->mip_views[mip_idx].views[i]);
+    }
   }
 
   // Re-create render target
@@ -127,7 +131,10 @@ void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
 
   // Clean up old views
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_image_view(self->render_system, rt->mip_views[0].views[i]);
+    for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
+      tb_rnd_destroy_image_view(self->render_system,
+                                rt->mip_views[mip_idx].views[i]);
+    }
   }
 
   rt->mip_count = 1;

@@ -31,16 +31,13 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
-  SDL_Log("Main Thread Signaling Frame %d", frame_idx);
   SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
-  SDL_Log("Main Thread Waiting For Frame %d", frame_idx);
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
-  SDL_Log("Main Thread Waiting For GPU %d", frame_idx);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
   TracyCZoneEnd(gpu_ctx);
@@ -305,10 +302,10 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     create_arena_allocator("Render Thread Frame State Tmp Alloc",
                            &state->tmp_alloc, 128 * 1024 * 1024);
 
-    state->wait_sem = SDL_CreateSemaphore(1);
+    state->wait_sem = SDL_CreateSemaphore(0);
     TB_CHECK_RETURN(state->wait_sem,
                     "Failed to create frame state wait semaphore", false);
-    state->signal_sem = SDL_CreateSemaphore(0);
+    state->signal_sem = SDL_CreateSemaphore(1);
     TB_CHECK_RETURN(state->signal_sem,
                     "Failed to create frame state signal semaphore", false);
 
@@ -1691,7 +1688,6 @@ int32_t render_thread(void *data) {
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
       TracyCZoneNC(resize_ctx, "Resize", TracyCategoryColorWait, true);
-      SDL_Log("Render Thread Waiting on resize completion");
       SDL_SemWait(thread->resized);
 
       thread->frame_count = 0;
@@ -1703,7 +1699,6 @@ int32_t render_thread(void *data) {
 
     {
       // Wait for signal from main thread that there's a frame ready to process
-      SDL_Log("Render Thread Waiting on Signal for %d", thread->frame_idx);
       FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
       TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
@@ -1724,12 +1719,6 @@ int32_t render_thread(void *data) {
 
     tick_render_thread(thread, frame_state);
 
-    if (thread->swapchain_resize_signal) {
-      SDL_Log("Render Thread Notifying Resize Event on Frame %d",
-              thread->frame_idx);
-    }
-
-    SDL_Log("Render Thread Notifying Frame %d Complete", thread->frame_idx);
     // Signal frame done
     SDL_SemPost(frame_state->signal_sem);
 

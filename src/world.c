@@ -205,7 +205,6 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
           // Let the render thread know we're done handling the resize on the
           // main thread
-          SDL_Log("Main Thread Handled Resize Event");
           SDL_SemPost(render_system->render_thread->resized);
 
           // Let the render thread process frame index 0
