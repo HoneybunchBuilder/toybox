@@ -187,19 +187,31 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
         // Check for signal that the render thread got a resize event
         if (render_system->render_thread->swapchain_resize_signal) {
+          TracyCZoneN(resize_ctx, "Resize", true);
           System *rp_sys = tb_find_system_by_id(
               world->systems, world->system_count, RenderPipelineSystemId);
           tb_rnd_on_swapchain_resize((RenderPipelineSystem *)rp_sys->self);
 
           render_system->frame_idx = 0;
 
+          // Re-create all render thread semaphores
+          for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
+               ++frame_idx) {
+            SDL_DestroySemaphore(
+                render_system->render_thread->frame_states[frame_idx].wait_sem);
+            render_system->render_thread->frame_states[frame_idx].wait_sem =
+                SDL_CreateSemaphore(1);
+          }
+
           // Let the render thread know we're done handling the resize on the
           // main thread
           SDL_Log("Main Thread Handled Resize Event");
           SDL_SemPost(render_system->render_thread->resized);
 
+          // Let the render thread process frame index 0
           tb_wait_render(render_system->render_thread,
                          render_system->frame_idx);
+          TracyCZoneEnd(resize_ctx);
         }
       }
     }

@@ -1679,12 +1679,18 @@ int32_t render_thread(void *data) {
 
   // Main thread loop
   while (true) {
-    TracyCZoneN(ctx, "Render Frame", true);
+    TracyCZone(ctx, true);
+    {
+      char frame_name[100] = {0};
+      SDL_snprintf(frame_name, 100, "Render Frame %d", thread->frame_idx);
+      TracyCZoneName(ctx, frame_name, SDL_strlen(frame_name));
+    }
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
     // If the swapchain was resized, wait for the main thread to report that
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
+      TracyCZoneNC(resize_ctx, "Resize", TracyCategoryColorWait, true);
       SDL_Log("Render Thread Waiting on resize completion");
       SDL_SemWait(thread->resized);
 
@@ -1692,8 +1698,11 @@ int32_t render_thread(void *data) {
       thread->frame_idx = 0;
 
       thread->swapchain_resize_signal = 0;
-    } else {
-      // Wait for normal signal
+      TracyCZoneEnd(resize_ctx);
+    }
+
+    {
+      // Wait for signal from main thread that there's a frame ready to process
       SDL_Log("Render Thread Waiting on Signal for %d", thread->frame_idx);
       FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
