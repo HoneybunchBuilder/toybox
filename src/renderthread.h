@@ -25,9 +25,6 @@ typedef struct RenderThreadDescriptor {
   SDL_Window *window;
 } RenderThreadDescriptor;
 
-#define TB_VMA_TMP_GPU_MB 256
-#define TB_MAX_BARRIERS 8
-
 typedef struct ImageTransition {
   VkPipelineStageFlags src_flags;
   VkPipelineStageFlags dst_flags;
@@ -39,12 +36,17 @@ typedef struct PassContext {
   uint32_t command_buffer_index;
   VkRenderPass pass;
   uint32_t attachment_count;
+  VkClearValue clear_values[TB_MAX_ATTACHMENTS];
   VkFramebuffer framebuffer;
   uint32_t width;
   uint32_t height;
 
   uint32_t barrier_count;
   ImageTransition barriers[TB_MAX_BARRIERS];
+
+#ifdef TRACY_ENABLE
+  char label[TB_RP_LABEL_LEN];
+#endif
 } PassContext;
 
 typedef struct DrawContext {

@@ -1167,9 +1167,10 @@ void resize_swapchain(RenderThread *thread) {
 }
 
 void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
+  cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
+
   const uint32_t clear_value_count = pass->attachment_count;
-  TB_CHECK(clear_value_count < 4, "Unexpected");
-  VkClearValue clear_values[4] = {0};
+  TB_CHECK(clear_value_count < TB_MAX_ATTACHMENTS, "Unexpected");
 
   VkRenderPassBeginInfo begin_info = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1184,7 +1185,7 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
                   },
           },
       .clearValueCount = clear_value_count,
-      .pClearValues = clear_values,
+      .pClearValues = pass->clear_values,
   };
 
   // Perform any necessary image transitions
@@ -1463,7 +1464,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                         &state->pass_command_buffers[last_pass_buffer_idx],
                 };
 
-                queue_begin_label(graphics_queue, "Passes",
+                queue_begin_label(graphics_queue, "Render Passes",
                                   (float4){1.0f, 0.1f, 0.1f, 1.0f});
                 err = vkQueueSubmit(graphics_queue, 1, &submit_info,
                                     VK_NULL_HANDLE);
@@ -1492,6 +1493,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           }
         }
 
+        cmd_end_label(pass_buffer);
         vkCmdEndRenderPass(pass_buffer);
 
         last_pass_buffer_idx = pass->command_buffer_index;
@@ -1522,7 +1524,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               .pSignalSemaphores = &render_complete_sem,
           };
 
-          queue_begin_label(graphics_queue, "Passes",
+          queue_begin_label(graphics_queue, "Render Passes",
                             (float4){1.0f, 0.1f, 0.1f, 1.0f});
           err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
           queue_end_label(graphics_queue);

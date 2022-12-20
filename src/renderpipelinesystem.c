@@ -20,10 +20,6 @@
 #pragma clang diagnostic pop
 #endif
 
-#define MAX_RENDER_PASS_DEPS 4
-#define MAX_RENDER_PASS_TRANS 8
-#define MAX_RENDER_PASS_ATTACH 4
-
 typedef struct PassTransition {
   TbRenderTargetId render_target;
   ImageTransition barrier;
@@ -31,18 +27,23 @@ typedef struct PassTransition {
 
 typedef struct RenderPass {
   uint32_t dep_count;
-  TbRenderPassId deps[MAX_RENDER_PASS_DEPS];
+  TbRenderPassId deps[TB_MAX_RENDER_PASS_DEPS];
 
   uint32_t transition_count;
-  PassTransition transitions[MAX_RENDER_PASS_TRANS];
+  PassTransition transitions[TB_MAX_RENDER_PASS_TRANS];
 
   VkRenderPass pass;
 
   uint32_t attach_count;
-  uint32_t attach_mips[MAX_RENDER_PASS_ATTACH];
-  TbRenderTargetId attachments[MAX_RENDER_PASS_ATTACH];
+  VkClearValue clear_values[TB_MAX_ATTACHMENTS];
+  uint32_t attach_mips[TB_MAX_ATTACHMENTS];
+  TbRenderTargetId attachments[TB_MAX_ATTACHMENTS];
 
   VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
+
+#ifdef TRACY_ENABLE
+  char label[TB_RP_LABEL_LEN];
+#endif
 } RenderPass;
 
 // For dependency graph construction
@@ -587,6 +588,11 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
         .width = target_ext.width,
         .height = target_ext.height,
     };
+    TB_COPY(pass_context->clear_values, pass->clear_values, pass->attach_count,
+            VkClearValue);
+#ifdef TRACY_ENABLE
+    SDL_strlcpy(pass_context->label, pass->label, TB_RP_LABEL_LEN);
+#endif
 
     // Construct barriers
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
@@ -602,13 +608,12 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
   }
 }
 
-TbRenderPassId
-create_render_pass(RenderPipelineSystem *self,
-                   const VkRenderPassCreateInfo *create_info,
-                   uint32_t dep_count, const TbRenderTargetId *deps,
-                   uint32_t trans_count, const PassTransition *transitions,
-                   uint32_t attach_count, const uint32_t *attach_mips,
-                   const TbRenderTargetId *attachments, const char *name) {
+TbRenderPassId create_render_pass(
+    RenderPipelineSystem *self, const VkRenderPassCreateInfo *create_info,
+    uint32_t dep_count, const TbRenderTargetId *deps, uint32_t trans_count,
+    const PassTransition *transitions, uint32_t attach_count,
+    const VkClearValue *clear_values, const uint32_t *attach_mips,
+    const TbRenderTargetId *attachments, const char *name) {
   TbRenderPassId id = self->pass_count;
   uint32_t new_count = self->pass_count + 1;
   if (new_count > self->pass_max) {
@@ -622,6 +627,12 @@ create_render_pass(RenderPipelineSystem *self,
 
   RenderPass *pass = &self->render_passes[id];
 
+#ifdef TRACY_ENABLE
+  SDL_strlcpy(pass->label, name, TB_RP_LABEL_LEN);
+#endif
+
+  TB_COPY(pass->clear_values, clear_values, attach_count, VkClearValue);
+
   VkResult err = VK_SUCCESS;
   err = tb_rnd_create_render_pass(self->render_system, create_info, name,
                                   &pass->pass);
@@ -630,17 +641,17 @@ create_render_pass(RenderPipelineSystem *self,
   // Copy dependencies
   pass->dep_count = dep_count;
   SDL_memset(pass->deps, InvalidRenderPassId,
-             sizeof(TbRenderPassId) * MAX_RENDER_PASS_DEPS);
+             sizeof(TbRenderPassId) * TB_MAX_RENDER_PASS_DEPS);
   if (dep_count > 0) {
     SDL_memcpy(pass->deps, deps, sizeof(TbRenderPassId) * dep_count);
   }
 
   // Copy attachments
   pass->attach_count = attach_count;
-  TB_CHECK_RETURN(pass->attach_count < MAX_RENDER_PASS_ATTACH, "Out of range",
+  TB_CHECK_RETURN(pass->attach_count < TB_MAX_ATTACHMENTS, "Out of range",
                   InvalidRenderPassId);
   SDL_memset(pass->attachments, InvalidRenderTargetId,
-             sizeof(TbRenderTargetId) * MAX_RENDER_PASS_ATTACH);
+             sizeof(TbRenderTargetId) * TB_MAX_ATTACHMENTS);
   if (attach_count > 0) {
     SDL_memcpy(pass->attach_mips, attach_mips, sizeof(uint32_t) * attach_count);
     SDL_memcpy(pass->attachments, attachments,
@@ -649,10 +660,10 @@ create_render_pass(RenderPipelineSystem *self,
 
   // Copy pass transitions
   pass->transition_count = trans_count;
-  TB_CHECK_RETURN(pass->transition_count < MAX_RENDER_PASS_TRANS,
+  TB_CHECK_RETURN(pass->transition_count < TB_MAX_RENDER_PASS_TRANS,
                   "Out of range", InvalidRenderPassId);
   SDL_memset(pass->transitions, 0,
-             sizeof(PassTransition) * MAX_RENDER_PASS_TRANS);
+             sizeof(PassTransition) * TB_MAX_RENDER_PASS_TRANS);
   if (trans_count > 0) {
     SDL_memcpy(pass->transitions, transitions,
                sizeof(PassTransition) * trans_count);
@@ -665,7 +676,7 @@ create_render_pass(RenderPipelineSystem *self,
     const VkExtent3D extent =
         tb_render_target_get_mip_extent(rt_sys, attach_mips[0], attachments[0]);
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      VkImageView attach_views[MAX_RENDER_PASS_ATTACH] = {0};
+      VkImageView attach_views[TB_MAX_ATTACHMENTS] = {0};
 
       for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
         attach_views[attach_idx] = tb_render_target_get_mip_view(
@@ -765,9 +776,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 0, NULL, 0, NULL, 1,
-                             &default_mip, &opaque_depth, "Opaque Depth Pass");
+      TbRenderPassId id = create_render_pass(
+          self, &create_info, 0, NULL, 0, NULL, 1, &(VkClearValue){0},
+          &default_mip, &opaque_depth, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
@@ -815,7 +826,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
-          &default_mip, &env_cube, "Env Capture Pass");
+          &(VkClearValue){0}, &default_mip, &env_cube, "Env Capture Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create env capture pass", false);
       self->env_capture_pass = id;
@@ -889,7 +900,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->env_capture_pass, 1, &transition, 1,
-          &default_mip, &irradiance_map, "Irradiance Pass");
+          &(VkClearValue){0}, &default_mip, &irradiance_map, "Irradiance Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create irradiance pass", false);
       self->irradiance_pass = id;
@@ -937,8 +948,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
         TbRenderPassId id = create_render_pass(
-            self, &create_info, 1, &self->env_capture_pass, 0, NULL, 1, &i,
-            &prefiltered_cube, "Prefilter Pass");
+            self, &create_info, 1, &self->env_capture_pass, 0, NULL, 1,
+            &(VkClearValue){0}, &i, &prefiltered_cube, "Prefilter Pass");
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create prefilter pass", false);
         self->prefilter_passes[i] = id;
@@ -979,7 +990,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         TbRenderPassId id = create_render_pass(
             self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
-            &default_mip, &shadow_maps[i], "Shadow Pass");
+            &(VkClearValue){0}, &default_mip, &shadow_maps[i], "Shadow Pass");
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create shadow pass", false);
         self->shadow_passes[i] = id;
@@ -1113,7 +1124,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_passes[3]},
-          TB_CASCADE_COUNT + 2, transitions, 2,
+          TB_CASCADE_COUNT + 2, transitions, 2, (VkClearValue[2]){{0}, {0}},
           (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
@@ -1201,7 +1212,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
-          0, NULL, 2, (uint32_t[2]){default_mip, default_mip},
+          0, NULL, 2, (VkClearValue[2]){0},
+          (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Sky Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
@@ -1263,7 +1275,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->depth_copy_pass, 1, &transition, 1,
-          &default_mip, &depth_copy, "Depth Copy Pass");
+          &(VkClearValue){0}, &default_mip, &depth_copy, "Depth Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
@@ -1323,7 +1335,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->color_copy_pass, 1, &transition, 1,
-          &default_mip, &color_copy, "Color Copy Pass");
+          &(VkClearValue){0}, &default_mip, &color_copy, "Color Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create color copy pass", false);
       self->color_copy_pass = id;
@@ -1405,7 +1417,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_depth_pass, 1, &transition,
-          1, &default_mip, &transparent_depth, "Transparent Depth Pass");
+          1, &(VkClearValue){0}, &default_mip, &transparent_depth,
+          "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;
@@ -1483,7 +1496,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          2, (uint32_t[2]){default_mip, default_mip},
+          2, (VkClearValue[2]){0}, (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, transparent_depth},
           "Transparent Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
@@ -1543,7 +1556,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }};
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          1, &default_mip, &swapchain_target, "Tonemap Pass");
+          1, &(VkClearValue){0}, &default_mip, &swapchain_target,
+          "Tonemap Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create tonemap pass", false);
       self->tonemap_pass = id;
@@ -1601,7 +1615,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }};
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->tonemap_pass, 1, &transition, 1,
-          &default_mip, &swapchain_target, "UI Pass");
+          &(VkClearValue){0}, &default_mip, &swapchain_target, "UI Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
                       false);
       self->ui_pass = id;
@@ -1838,7 +1852,7 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
         rt_sys, rp->attach_mips[0], rp->attachments[0]);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      VkImageView attach_views[MAX_RENDER_PASS_ATTACH] = {0};
+      VkImageView attach_views[TB_MAX_ATTACHMENTS] = {0};
 
       for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
            ++attach_idx) {
