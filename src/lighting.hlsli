@@ -60,13 +60,12 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient, Texture2D 
 
   float4 proj_coord = shadow_coord;
 
-  proj_coord.xy = proj_coord.xy * 0.5 + 0.5; 
+  proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
   proj_coord = proj_coord / proj_coord.w;
 
   float sampled_depth = shadow_maps[cascade_idx].Sample(samp, float2(proj_coord.xy + offset)).r;
 
-  return sampled_depth < proj_coord.z - bias ? ambient : 1.0f;
-  //return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? ambient : 1.0f;
+  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? ambient : 1.0f;
 }
 
 float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[4], sampler samp, float NdotL, uint cascade_idx)

@@ -517,18 +517,17 @@ void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
 }
 
 // Left Handed
-void orthographic(float4x4 *m, float width, float height, float zn, float zf) {
-  SDL_assert(m);
-
-  *m = (float4x4){
-      (float4){2.0f / (width), 0, 0, 0},
-      (float4){0, 2.0f / (height), 0, 0},
-      (float4){0, 0, 1 / (zn - zf), 0},
-      (float4){0, 0, zn / (zn - zf), 1},
+float4x4 ortho(float r, float l, float t, float b, float zn, float zf) {
+  return (float4x4){
+      (float4){2.0f / (r - l), 0, 0, 0},
+      (float4){0, 2.0f / (t - b), 0, 0},
+      (float4){0, 0, 1 / (zf - zn), 0},
+      (float4){-(r + l) / (r - l), -(t + b) / (t - b), zn / (zf - zn), 1},
   };
 }
 
-float4x4 ortho(float r, float l, float t, float b, float zn, float zf) {
+// Left Handed
+float4x4 reverse_ortho(float r, float l, float t, float b, float zn, float zf) {
   return (float4x4){
       (float4){2.0f / (r - l), 0, 0, 0},
       (float4){0, 2.0f / (t - b), 0, 0},
