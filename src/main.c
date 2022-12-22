@@ -98,7 +98,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SDL_Window *window =
       SDL_CreateWindow("Toybox", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                       1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+                       1280, 800, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     const char *msg = SDL_GetError();
     SDL_Log("Failed to open window with error: %s", msg);
@@ -338,7 +338,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Load starter scene into world
-  int32_t scene_idx = 0;
+  int32_t scene_idx = 7;
   const char *scene_path = scene_asset_paths[scene_idx];
   success = tb_world_load_scene(&world, scene_path);
   TB_CHECK_RETURN(success, "Failed to load scene.", -1);
