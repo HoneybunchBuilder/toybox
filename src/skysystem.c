@@ -1178,7 +1178,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       float4x4 vp = {.row0 = {0}};
       {
         float4x4 proj = {.row0 = {0}};
-        perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
+        reverse_perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
                     camera->far);
 
         float4x4 model = {.row0 = {0}};

@@ -486,6 +486,25 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
 
   float m00 = focal_length / aspect;
   float m11 = -focal_length;
+  float m22 = zf / (zf - zn);
+  float m23 = (-zn * zf) / (zf - zn);
+
+  *m = (float4x4){
+      (float4){m00, 0, 0, 0},
+      (float4){0, m11, 0, 0},
+      (float4){0, 0, m22, m23},
+      (float4){0, 0, 1, 0},
+  };
+}
+
+// Left Handed
+void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
+                         float zf) {
+  SDL_assert(m);
+  float focal_length = 1.0f / tanf(fovy * 0.5f);
+
+  float m00 = focal_length / aspect;
+  float m11 = -focal_length;
   float m22 = zn / (zf - zn);
   float m23 = zf * zn / (zf - zn);
 

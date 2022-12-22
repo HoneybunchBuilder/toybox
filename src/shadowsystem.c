@@ -45,6 +45,8 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const uint32_t camera_count = tb_get_column_component_count(input, 1);
   const PackedComponentStore *camera_components =
       tb_get_column_check_id(input, 1, 0, CameraComponentId);
+  const PackedComponentStore *cam_transforms =
+      tb_get_column_check_id(input, 1, 1, TransformComponentId);
 
   if (light_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
@@ -68,23 +70,39 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   // Assume just one view for now
   const CameraComponent *camera_component =
       tb_get_component(camera_components, 0, CameraComponent);
+  const TransformComponent *cam_transform =
+      tb_get_component(cam_transforms, 0, TransformComponent);
+
+  const float near = camera_component->near;
+  const float far = camera_component->far;
 
   // Calculate the vp and inverse vp matrices
-  float4x4 cam_vp = {.row0 = {0}};
-  float4x4 inv_cam_vp = cam_vp;
+  float4x4 inv_cam_vp = {.row0 = {0}};
   {
-    const View *view =
-        tb_get_view(self->view_system, camera_component->view_id);
-    cam_vp = view->view_data.vp;
-    inv_cam_vp = view->view_data.inv_vp;
+    float4x4 model = {.row0 = {0}};
+    transform_to_matrix(&model, &cam_transform->transform);
+    const float3 forward = f4tof3(model.row2);
+
+    float4x4 view = {.row0 = {0}};
+    look_forward(&view, cam_transform->transform.position, forward,
+                 (float3){0, 1, 0});
+
+    // Re-calculate the camera's VP matrix with 0 to 1 depth rather than
+    // reversed depth
+    float4x4 proj = {.row0 = {0}};
+    perspective(&proj, camera_component->fov, camera_component->aspect_ratio,
+                near, far);
+
+    // Calculate view projection matrix
+    float4x4 cam_vp = {.row0 = {0}};
+    mulmf44(&proj, &view, &cam_vp);
+
+    // Inverse
+    inv_cam_vp = inv_mf44(cam_vp);
   }
 
-  // TODO: Handle more cascades
   const float cascade_split_lambda = 0.95f;
   float cascade_splits[TB_CASCADE_COUNT] = {0};
-
-  float near = camera_component->near;
-  float far = camera_component->far;
 
   float clip_range = far - near;
 
@@ -122,12 +140,11 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
          ++cascade_idx) {
       float split_dist = cascade_splits[cascade_idx];
 
-      // Note: We always use reverse depth
       float3 frustum_corners[8] = {
-          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Near
-          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
-          {-1.0f, 1.0f, 0},    {1.0f, 1.0f, 0}, // Far
-          {1.0f, -1.0f, 0},    {-1.0f, -1.0f, 0},
+          {-1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, -1.0f}, // Near
+          {1.0f, -1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
+          {-1.0f, 1.0f, 1.0f},  {1.0f, 1.0f, 1.0f}, // Far
+          {1.0f, -1.0f, 1.0f},  {-1.0f, -1.0f, 1.0f},
       };
 
       // Project into world space

@@ -69,7 +69,7 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     data.v = view;
 
     float4x4 proj = {.row0 = {0}};
-    perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio, cam_comp->near,
+    reverse_perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio, cam_comp->near,
                 cam_comp->far);
 
     // Calculate view projection matrix

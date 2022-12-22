@@ -431,7 +431,7 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
   look_forward(&view_mat, (float3){0, 0, 0}, (float3){0, 0, 1},
                (float3){0, 1, 0});
   float4x4 proj_mat = {.row0 = {0}};
-  perspective(&proj_mat, PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
+  reverse_perspective(&proj_mat, PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
   mulmf44(&proj_mat, &view_mat, &view_data->vp);
 
   view_data->inv_vp = inv_mf44(view_data->vp);

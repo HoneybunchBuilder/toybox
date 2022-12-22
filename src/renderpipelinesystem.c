@@ -990,7 +990,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         TbRenderPassId id = create_render_pass(
             self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
-            &(VkClearValue){0}, &default_mip, &shadow_maps[i], "Shadow Pass");
+            &(VkClearValue){.depthStencil = {.depth = 1.0f, .stencil = 0u}},
+            &default_mip, &shadow_maps[i], "Shadow Pass");
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create shadow pass", false);
         self->shadow_passes[i] = id;

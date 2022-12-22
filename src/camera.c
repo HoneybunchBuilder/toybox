@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 void camera_projection(const Camera *c, float4x4 *p) {
-  perspective(p, c->fov, c->aspect, c->near, c->far);
+  reverse_perspective(p, c->fov, c->aspect, c->near, c->far);
 }
 
 void camera_view(const Camera *c, float4x4 *v) {
