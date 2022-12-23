@@ -88,7 +88,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 color = float3(0, 0, 0);
   {
     float metallic = 0.0;
-    float roughness = 0.5;
+    float roughness = 0.0;
 
     // Lighting
     {
