@@ -487,7 +487,7 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   float m00 = focal_length / aspect;
   float m11 = -focal_length;
   float m22 = zf / (zf - zn);
-  float m23 = (-zn * zf) / (zf - zn);
+  float m23 = -(zn * zf) / (zf - zn);
 
   *m = (float4x4){
       (float4){m00, 0, 0, 0},
@@ -522,7 +522,7 @@ float4x4 ortho(float r, float l, float t, float b, float zn, float zf) {
       (float4){2.0f / (r - l), 0, 0, 0},
       (float4){0, 2.0f / (t - b), 0, 0},
       (float4){0, 0, 1 / (zf - zn), 0},
-      (float4){-(r + l) / (r - l), -(t + b) / (t - b), zn / (zf - zn), 1},
+      (float4){-(r + l) / (r - l), -(t + b) / (t - b), -zn / (zf - zn), 1},
   };
 }
 
