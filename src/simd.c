@@ -482,10 +482,10 @@ void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
 // Left Handed
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   SDL_assert(m);
-  float focal_length = 1.0f / tanf(fovy * 0.5f);
+  float focal_length = 1.0f / SDL_tanf(fovy * 0.5f);
 
   float m00 = focal_length / aspect;
-  float m11 = -focal_length;
+  float m11 = focal_length;
   float m22 = zf / (zf - zn);
   float m23 = -(zn * zf) / (zf - zn);
 
@@ -501,10 +501,10 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
 void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
                          float zf) {
   SDL_assert(m);
-  float focal_length = 1.0f / tanf(fovy * 0.5f);
+  float focal_length = 1.0f / SDL_tanf(fovy * 0.5f);
 
   float m00 = focal_length / aspect;
-  float m11 = -focal_length;
+  float m11 = focal_length;
   float m22 = zn / (zf - zn);
   float m23 = zf * zn / (zf - zn);
 

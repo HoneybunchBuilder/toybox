@@ -1163,7 +1163,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           batch->view_count = camera_count;
           MeshDrawView *view = &batch->views[cam_idx];
           view->view_set = view_set;
-          view->viewport = (VkViewport){0, 0, width, height, 0, 1};
+          view->viewport = (VkViewport){0, height, width, -(float)height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
           view->draw_count = visible_set->mesh_count;
           MeshDraw *draw = &view->draws[mesh_idx];
@@ -1251,8 +1251,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
         shadow_batches[cascade_idx].view_count = dir_light_count;
         ShadowDrawView *draw_view = &shadow_batches[cascade_idx].views[0];
-        draw_view->viewport =
-            (VkViewport){0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1};
+        draw_view->viewport = (VkViewport){
+            0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, -TB_SHADOW_MAP_DIM, 0, 1};
         draw_view->scissor =
             (VkRect2D){{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
         draw_view->draw_count = lit_set->mesh_count;

@@ -1178,8 +1178,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       float4x4 vp = {.row0 = {0}};
       {
         float4x4 proj = {.row0 = {0}};
-        reverse_perspective(&proj, camera->fov, camera->aspect_ratio, camera->near,
-                    camera->far);
+        reverse_perspective(&proj, camera->fov, camera->aspect_ratio,
+                            camera->near, camera->far);
 
         float4x4 model = {.row0 = {0}};
         transform_to_matrix(&model, &transform->transform);
@@ -1196,7 +1196,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         sky_batches[batch_count] = (SkyDrawBatch){
             .layout = self->sky_pipe_layout,
             .pipeline = self->sky_pipeline,
-            .viewport = {0, 0, width, height, 0, 1},
+            .viewport = {0, height, width, -(float)height, 0, 1},
             .scissor = {{0, 0}, {width, height}},
             .const_range =
                 (VkPushConstantRange){
@@ -1214,7 +1214,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         };
         env_batches[batch_count] = sky_batches[batch_count];
         env_batches[batch_count].pipeline = self->env_pipeline;
-        env_batches[batch_count].viewport = (VkViewport){0, 0, 512, 512, 0, 1};
+        env_batches[batch_count].viewport =
+            (VkViewport){0, 512, 512, -512, 0, 1};
         env_batches[batch_count].scissor = (VkRect2D){{0, 0}, {512, 512}};
         batch_count++;
       }
@@ -1227,7 +1228,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       *irradiance_batch = (IrradianceBatch){
           .layout = self->irr_pipe_layout,
           .pipeline = self->irradiance_pipeline,
-          .viewport = {0, 0, 32, 32, 0, 1},
+          .viewport = {0, 32, 32, -32, 0, 1},
           .scissor = {{0, 0}, {32, 32}},
           .set = state->sets[state->set_count - 1],
           .geom_buffer = self->sky_geom_gpu_buffer.buffer,
@@ -1248,7 +1249,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         prefilter_batches[i] = (PrefilterBatch){
             .layout = self->prefilter_pipe_layout,
             .pipeline = self->prefilter_pipeline,
-            .viewport = {0, 0, mip_dim, mip_dim, 0, 1},
+            .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
             .scissor = {{0, 0}, {mip_dim, mip_dim}},
             .set = state->sets[state->set_count - 1],
             .geom_buffer = self->sky_geom_gpu_buffer.buffer,

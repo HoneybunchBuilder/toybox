@@ -10,7 +10,7 @@ struct Interpolators
 Interpolators vert(uint i : SV_VERTEXID)
 {
     Interpolators o;
-    o.uv0 = float2((i << 1) & 2, i & 2);
-    o.pos = float4(o.uv0 * 2.0f + -1.0f, 0.5f, 1.0f);
+    o.uv0 = float2(uint2(i, i << 1) & 2);
+    o.pos = float4(lerp(float2(-1, 1), float2(1, -1), o.uv0), 0.5f, 1.0f);
     return o;
 }

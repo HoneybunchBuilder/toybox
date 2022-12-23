@@ -661,16 +661,8 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                     },
                 .consts =
                     {
-                        .scale =
-                            {
-                                scale_x,
-                                scale_y,
-                            },
-                        .translation =
-                            {
-                                -1.0f - draw_data->DisplayPos.x * scale_x,
-                                -1.0f - draw_data->DisplayPos.y * scale_y,
-                            },
+                        .scale = {scale_x, scale_y},
+                        .translation = {-1.0f, -1.0f},
                     },
                 .draw_count = imgui_draw_count,
                 .draws = draws,
