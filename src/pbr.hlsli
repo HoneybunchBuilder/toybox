@@ -19,6 +19,10 @@ float3 specularReflection(float3 reflectance_0, float3 reflectance_90,
          (reflectance_90, -reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
 }
 
+float3 fresnesl_schlick(float cos_theta, float3 f0){
+  return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+}
+
 float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
   return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(1.0 - cos_theta, 5.0);
 }
@@ -36,13 +40,12 @@ float3 prefiltered_reflection(TextureCube map, SamplerState s,  float3 R, float 
 
 // This calculates the specular geometric attenuation (aka G()),
 // where rougher material will reflect less light back to the viewer.
-float geometricOcclusion(float NdotL, float NdotV, float alpha_roughness) {
-  float r = alpha_roughness;
-  float attenuationL =
-      2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
-  float attenuationV =
-      2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
-  return attenuationL * attenuationV;
+float geometricOcclusion(float NdotL, float NdotV, float roughness) {
+  float r = roughness + 1;
+  float k = (r * r) / 8.0;
+  float GL = NdotL / (NdotL * (1.0 - k) + k);
+  float GV = NdotV / (NdotV * (1.0 - k) + k);
+  return GL * GV;
 }
 
 // The following equation(s) model the distribution of microfacet normals across
@@ -51,8 +54,8 @@ float geometricOcclusion(float NdotL, float NdotV, float alpha_roughness) {
 // Trowbridge, and K. P. Reitz
 float microfacetDistribution(float alpha_roughness, float NdotH) {
   float roughnessSq = alpha_roughness * alpha_roughness;
-  float f = (NdotH * roughnessSq - NdotH) * NdotH + 1.0;
-  return roughnessSq / (PI * f * f);
+  float denom = NdotH * NdotH * (roughnessSq - 1.0) + 1.0;
+  return roughnessSq / (PI * denom * denom);
 }
 
 // Uncharted2Tonemap From http://filmicgames.com/archives/75

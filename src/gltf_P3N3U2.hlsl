@@ -57,15 +57,14 @@ Interpolators vert(VertexIn i) {
 
 float4 frag(Interpolators i) : SV_TARGET {
   // Sample textures up-front
-  float3 base_color = base_color_map.Sample(static_sampler, i.uv).rgb;
+  float3 albedo = base_color_map.Sample(static_sampler, i.uv).rgb;
 
   float3 N = normalize(i.normal);
   float3 V = normalize(camera_data.view_pos - i.world_pos);
-  float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+  float3 R = reflect(-V, N);
+  float3 L = light_data.light_dir;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
-
-  float3 L = light_data.light_dir;
 
   if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic = material_data.pbr_metallic_roughness.metallic_factor;
@@ -77,7 +76,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           material_data.pbr_metallic_roughness.base_color_factor;
       float4 pbr_base_color =
           base_color_map.Sample(static_sampler, i.uv) * pbr_color_factor;
-      base_color = pbr_base_color.rgb;
+      albedo = pbr_base_color.rgb;
     }
 
     if (PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
@@ -88,102 +87,21 @@ float4 frag(Interpolators i) : SV_TARGET {
       metallic = mr_sample.b * metallic;
     }
 
-    float alpha_roughness = roughness * roughness;
-
-    float3 f0 = float3(0.04, 0.04, 0.04);
-    f0 = lerp(f0, base_color, metallic);
-
-    float3 diffuse_color = base_color * (float3(1.0, 1.0, 1.0) - f0);
-    diffuse_color *= 1.0 - metallic;
-
-    float reflectance = max(max(f0.r, f0.g), f0.b);
-
-    // For typical incident reflectance range (between 4% to 100%) set the
-    // grazing reflectance to 100% for typical fresnel effect. For very low
-    // reflectance range on highly diffuse objects (below 4%), incrementally
-    // reduce grazing reflecance to 0%.
-    float reflectance_90 = clamp(reflectance * 25.0, 0.0, 1.0);
-    float3 specular_environment_R0 = f0;
-    float3 specular_environment_R90 = float3(1.0, 1.0, 1.0) * reflectance_90;
-
-    // for each light
+    // Lighting
     {
-      float3 light_color = light_data.color;
-
-      PBRLight light = {
-          light_color,
-          L,
-          specular_environment_R0,
-          specular_environment_R90,
-          alpha_roughness,
-          diffuse_color,
-      };
-
-      out_color += pbr_lighting(light, N, V, NdotV);
-    }
-
-    // Ambient IBL
-    {
-      float3 R = reflect(-V, N);
-
-      float3 reflection =
-          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
-      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float3 diffuse = irradiance * base_color;
-
-      float3 kS =
-          fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
-
       float2 brdf =
           brdf_lut
               .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
               .rg;
-      float3 specular = reflection * (kS * brdf.x + brdf.y);
-
-      float3 kD = (1.0 - kS);
-      kD *= 1.0f - metallic;
-      float3 ambient = (kD * diffuse) + specular;
-
-      out_color += ambient;
+      float3 reflection =
+          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
+      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
+      out_color = pbr_lighting(albedo, metallic, roughness, brdf, reflection,
+                               irradiance, light_data.color, L, V, N);
     }
 
-    // Shadow cascades
-    {
-      uint cascade_idx = 0;
-      for (uint c = 0; c < 3; ++c) {
-        if (i.view_pos.z < light_data.cascade_splits[c]) {
-          cascade_idx = c + 1;
-        }
-      }
-
-      float4 shadow_coord =
-          mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
-
-      float NdotL = clamp(dot(N, L), 0.001, 1.0);
-      float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
-                                static_sampler, NdotL, cascade_idx);
-      out_color *= shadow;
-
-      /*
-      switch(cascade_idx)
-      {
-        case 0:
-          out_color.rgb *= float3(1.0f, 0.25f, 0.25f);
-        break;
-        case 1:
-          out_color.rgb *= float3(0.25f, 1.0f, 0.25f);
-        break;
-        case 2:
-          out_color.rgb *= float3(0.25f, 0.25f, 1.0f);
-        break;
-        case 3:
-          out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
-        break;
-      }
-      */
-    }
-  } else // Phong fallback
-  {
+  } else {
+    // Phong fallback
     float gloss = 0.5;
 
     // for each light
@@ -191,8 +109,44 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 H = normalize(V + L);
 
       float3 light_color = light_data.color;
-      out_color += phong_light(base_color, light_color, gloss, N, L, V, H);
+      out_color += phong_light(albedo, light_color, gloss, N, L, V, H);
     }
+  }
+
+  // Shadow cascades
+  {
+    uint cascade_idx = 0;
+    for (uint c = 0; c < 3; ++c) {
+      if (i.view_pos.z < light_data.cascade_splits[c]) {
+        cascade_idx = c + 1;
+      }
+    }
+
+    float4 shadow_coord =
+        mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+
+    float NdotL = clamp(dot(N, L), 0.001, 1.0);
+    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
+                              static_sampler, NdotL, cascade_idx);
+    out_color *= shadow;
+
+    /*
+    switch(cascade_idx)
+    {
+      case 0:
+        out_color.rgb *= float3(1.0f, 0.25f, 0.25f);
+      break;
+      case 1:
+        out_color.rgb *= float3(0.25f, 1.0f, 0.25f);
+      break;
+      case 2:
+        out_color.rgb *= float3(0.25f, 0.25f, 1.0f);
+      break;
+      case 3:
+        out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
+      break;
+    }
+    */
   }
 
   return float4(out_color, 1.0);

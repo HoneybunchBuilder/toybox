@@ -236,16 +236,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
       {
         float3 light_color = light_data.color;
 
-        PBRLight light = {
-            light_color,
-            L,
-            specular_environment_R0,
-            specular_environment_R90,
-            alpha_roughness,
-            diffuse_color,
-        };
-
-        out_color += pbr_lighting(light, N, V, NdotV);
+        //out_color += pbr_lighting(light, N, V, NdotV);
       }
 
       // Ambient IBL
