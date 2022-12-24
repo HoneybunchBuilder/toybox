@@ -17,7 +17,7 @@ bool create_camera_component(CameraComponent *comp,
       .aspect_ratio = desc->aspect_ratio,
       .fov = desc->yfov,
       .near = desc->znear,
-      .far = desc->zfar,
+      .far = 50.0f, // desc->zfar,
   };
   return true;
 }

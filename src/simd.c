@@ -517,22 +517,12 @@ void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
 }
 
 // Left Handed
-float4x4 ortho(float r, float l, float t, float b, float zn, float zf) {
+float4x4 orthographic(float r, float l, float t, float b, float zn, float zf) {
   return (float4x4){
       (float4){2.0f / (r - l), 0, 0, 0},
       (float4){0, 2.0f / (t - b), 0, 0},
       (float4){0, 0, 1 / (zf - zn), 0},
-      (float4){-(r + l) / (r - l), -(t + b) / (t - b), -zn / (zf - zn), 1},
-  };
-}
-
-// Left Handed
-float4x4 reverse_ortho(float r, float l, float t, float b, float zn, float zf) {
-  return (float4x4){
-      (float4){2.0f / (r - l), 0, 0, 0},
-      (float4){0, 2.0f / (t - b), 0, 0},
-      (float4){0, 0, 1 / (zn - zf), 0},
-      (float4){-(r + l) / (r - l), -(t + b) / (t - b), zn / (zn - zf), 1},
+      (float4){(l + r) / (l - r), (t + b) / (b - t), zn / (zn - zf), 1},
   };
 }
 
