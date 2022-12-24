@@ -79,12 +79,11 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   // Calculate the vp and inverse vp matrices
   float4x4 inv_cam_vp = {.row0 = {0}};
   {
-    float4x4 model = {.row0 = {0}};
-    transform_to_matrix(&model, &cam_transform->transform);
-    const float3 forward = f4tof3(model.row2);
+    float4x4 rot = euler_to_trans(cam_transform->transform.rotation);
+    const float3 forward = f4tof3(rot.row2);
 
     float4x4 view = {.row0 = {0}};
-    look_forward(&view, cam_transform->transform.position, forward,
+    look_forward(&view, cam_transform->transform.position, -forward,
                  (float3){0, 1, 0});
 
     // Re-calculate the camera's VP matrix with 0 to 1 depth rather than
@@ -99,6 +98,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
 
     // Inverse
     inv_cam_vp = inv_mf44(cam_vp);
+
+    // const View *v = tb_get_view(self->view_system,
+    // camera_component->view_id); inv_cam_vp = v->view_data.inv_vp;
   }
 
   const float cascade_split_lambda = 0.95f;
@@ -140,6 +142,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
          ++cascade_idx) {
       float split_dist = cascade_splits[cascade_idx];
 
+      // Inverse near and far because main camera uses reverse depth
       float3 frustum_corners[8] = {
           {-1.0f, 1.0f, -1.0f}, {1.0f, 1.0f, -1.0f}, // Near
           {1.0f, -1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
@@ -185,12 +188,10 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       // Calc view matrix
       float4x4 light_view_mat = {.row0 = {0}};
       {
-        float4x4 model = {.row0 = {0}};
-        transform_to_matrix(&model, &transform);
-
-        const float3 forward = normf3(f4tof3(model.row2));
+        float4x4 rot = euler_to_trans(transform.rotation);
+        const float3 forward = f4tof3(rot.row2);
         const float3 offset = center - (forward * -min[2]);
-        look_at(&light_view_mat, offset, center, (float3){0, 1, 0});
+        look_forward(&light_view_mat, offset, forward, (float3){0, 1, 0});
       }
 
       // Calculate view projection matrix

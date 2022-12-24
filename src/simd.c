@@ -475,7 +475,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
   SDL_assert(m);
 
-  float3 forward = pos - target;
+  float3 forward = target - pos;
   look_forward(m, pos, forward, up);
 }
 

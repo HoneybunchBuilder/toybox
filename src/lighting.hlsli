@@ -73,7 +73,7 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 // Shadowing
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
-                   Texture2D shadow_maps[4], sampler samp, float NdotL,
+                   Texture2D shadow_maps[CASCADE_COUNT], sampler samp, float NdotL,
                    uint cascade_idx) {
   float bias = max(0.005 * (1.0 - NdotL), 0.0005);
 
@@ -89,7 +89,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient,
                                                                    : 1.0f;
 }
 
-float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[4],
+float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[CASCADE_COUNT],
                  sampler samp, float NdotL, uint cascade_idx) {
   int2 tex_dim;
   shadow_maps[cascade_idx].GetDimensions(tex_dim.x, tex_dim.y);

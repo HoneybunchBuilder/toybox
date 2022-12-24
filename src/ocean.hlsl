@@ -17,7 +17,7 @@ TextureCube irradiance_map : register(t1, space1);
 TextureCube prefiltered_map : register(t2, space1);
 Texture2D brdf_lut : register(t3, space1);
 ConstantBuffer<CommonLightData> light_data : register(b4, space1);
-Texture2D shadow_maps[4] : register(t5, space1); // Frag Only
+Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space1); // Frag Only
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -107,7 +107,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   // Shadow cascades
   {
     uint cascade_idx = 0;
-    for (uint c = 0; c < 3; ++c) {
+    for (uint c = 0; c < (CASCADE_COUNT - 1); ++c) {
       if (i.view_pos.z < light_data.cascade_splits[c]) {
         cascade_idx = c + 1;
       }

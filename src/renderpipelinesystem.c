@@ -1119,8 +1119,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
       }
-      transitions[4] = irr_trans;
-      transitions[5] = filter_trans;
+      transitions[TB_CASCADE_COUNT + 0] = irr_trans;
+      transitions[TB_CASCADE_COUNT + 1] = filter_trans;
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,

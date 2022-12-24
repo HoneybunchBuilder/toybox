@@ -209,14 +209,18 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   }
 
   // Just upload and write all views for now, they tend to be important anyway
+  const uint32_t buf_count = 2;
+  const uint32_t img_count = 3 + TB_CASCADE_COUNT;
+  const uint32_t write_count = buf_count + img_count;
+
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 9, VkWriteDescriptorSet);
+      self->tmp_alloc, self->view_count * write_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 2, VkDescriptorBufferInfo);
+      self->tmp_alloc, self->view_count * buf_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * 7, VkDescriptorImageInfo);
-  TbHostBuffer *buffers =
-      tb_alloc_nm_tp(self->tmp_alloc, self->view_count * 2, TbHostBuffer);
+      self->tmp_alloc, self->view_count * img_count, VkDescriptorImageInfo);
+  TbHostBuffer *buffers = tb_alloc_nm_tp(
+      self->tmp_alloc, self->view_count * buf_count, TbHostBuffer);
   for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
     const View *view = &self->views[view_idx];
     const CommonViewData *view_data = &view->view_data;
@@ -236,9 +240,9 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
     SDL_memcpy(view_buffer->ptr, view_data, sizeof(CommonViewData));
     SDL_memcpy(light_buffer->ptr, light_data, sizeof(CommonLightData));
 
-    uint32_t buffer_idx = view_idx * 2;
-    uint32_t image_idx = view_idx * 7;
-    uint32_t write_idx = view_idx * 9;
+    uint32_t buffer_idx = view_idx * buf_count;
+    uint32_t image_idx = view_idx * img_count;
+    uint32_t write_idx = view_idx * write_count;
 
     // Get the descriptor we want to write to
     VkDescriptorSet view_set = state->sets[view_idx];
@@ -270,30 +274,15 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_tex_system_get_image_view(
             self->texture_system, self->texture_system->brdf_tex)};
-    image_info[image_idx + 3] = (VkDescriptorImageInfo){
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_maps[0]),
-    };
-    image_info[image_idx + 4] = (VkDescriptorImageInfo){
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_maps[1]),
-    };
-    image_info[image_idx + 5] = (VkDescriptorImageInfo){
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_maps[2]),
-    };
-    image_info[image_idx + 6] = (VkDescriptorImageInfo){
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_maps[3]),
-    };
+
+    for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+      image_info[image_idx + 3 + i] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = tb_render_target_get_view(
+              self->render_target_system, self->render_system->frame_idx,
+              self->render_target_system->shadow_maps[i]),
+      };
+    }
 
     // Construct a write descriptor
 
@@ -342,45 +331,20 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &buffer_info[buffer_idx + 1],
     };
-    writes[write_idx + 5] = (VkWriteDescriptorSet){
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
-        .dstBinding = 5,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 3],
-    };
-    writes[write_idx + 6] = (VkWriteDescriptorSet){
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
-        .dstBinding = 5,
-        .dstArrayElement = 1,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 4],
-    };
-    writes[write_idx + 7] = (VkWriteDescriptorSet){
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
-        .dstBinding = 5,
-        .dstArrayElement = 2,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 5],
-    };
-    writes[write_idx + 8] = (VkWriteDescriptorSet){
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
-        .dstBinding = 5,
-        .dstArrayElement = 3,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 6],
-    };
+    for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+      writes[write_idx + 5 + i] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = view_set,
+          .dstBinding = 5,
+          .dstArrayElement = i,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo = &image_info[image_idx + 3 + i],
+      };
+    }
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count * 9, writes, 0, NULL);
+                         self->view_count * write_count, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }

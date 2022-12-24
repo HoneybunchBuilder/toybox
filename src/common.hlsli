@@ -30,11 +30,12 @@ typedef struct CommonViewData {
 } CommonViewData;
 
 // Constant per-view Light Data
+#define CASCADE_COUNT 1
 typedef struct CommonLightData {
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
-  float4x4 cascade_vps[4];
+  float4x4 cascade_vps[CASCADE_COUNT];
 } CommonLightData;
 
 // Constant per-object Object Data for common objects

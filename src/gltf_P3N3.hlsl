@@ -22,7 +22,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-Texture2D shadow_maps[4] : register(t5, space2);                   // Frag Only
+Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);                   // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -96,7 +96,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   // Shadow cascades
   {
     uint cascade_idx = 0;
-    for (uint c = 0; c < 3; ++c) {
+    for (uint c = 0; c < (CASCADE_COUNT - 1); ++c) {
       if (i.view_pos.z < light_data.cascade_splits[c]) {
         cascade_idx = c + 1;
       }
@@ -109,7 +109,24 @@ float4 frag(Interpolators i) : SV_TARGET {
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps,
                               static_sampler, NdotL, cascade_idx);
     out_color *= shadow;
+
+    switch(cascade_idx)
+    {
+      case 0:
+        out_color.rgb *= float3(1.0f, 0.25f, 0.25f);
+      break;
+      case 1:
+        out_color.rgb *= float3(0.25f, 1.0f, 0.25f);
+      break;
+      case 2:
+        out_color.rgb *= float3(0.25f, 0.25f, 1.0f);
+      break;
+      case 3:
+        out_color.rgb *= float3(1.0f, 1.0f, 0.25f);
+      break;
+    }
   }
+  
 
   return float4(out_color, 1.0);
 }
