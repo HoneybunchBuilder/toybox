@@ -723,7 +723,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                   false);
   ViewSystem *view_system =
       tb_get_system(system_deps, system_dep_count, ViewSystem);
-  TB_CHECK_RETURN(material_system,
+  TB_CHECK_RETURN(view_system,
                   "Failed to find view system which meshes depend on", false);
   RenderObjectSystem *render_object_system =
       tb_get_system(system_deps, system_dep_count, RenderObjectSystem);

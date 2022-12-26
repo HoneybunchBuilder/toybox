@@ -18,6 +18,13 @@
   }
 
 #define TB_DEFINE_SYSTEM(lower_name, self_type, desc_type)                     \
+  bool create_##lower_name##_system(self_type *self, const desc_type *desc,    \
+                                    uint32_t system_dep_count,                 \
+                                    System *const *system_deps);               \
+  void destroy_##lower_name##_system(self_type *self);                         \
+  void tick_##lower_name##_system(self_type *self, const SystemInput *input,   \
+                                  SystemOutput *output, float delta_seconds);  \
+                                                                               \
   bool tb_create_##lower_name##_system(void *self, InternalDescriptor desc,    \
                                        uint32_t system_dep_count,              \
                                        System *const *system_deps) {           \
