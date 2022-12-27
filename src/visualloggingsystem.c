@@ -137,9 +137,19 @@ VLogDraw *vlog_acquire_frame_draw(VisualLoggingSystem *vlog) {
   return frame_acquire_draw(frame);
 }
 
-VkResult create_primitive_pipeline(VkPipelineLayout layout,
+VkResult create_primitive_pipeline(RenderSystem *render_system,
+                                   VkRenderPass pass, VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .renderPass = pass,
+      .layout = layout,
+  };
+
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Primitive Pipeline", pipeline);
 
   return err;
 }
@@ -192,8 +202,23 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
                                         &self->pipe_layout);
   }
 
-  err = create_primitive_pipeline(self->pipe_layout, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
+  {
+    VkRenderPass pass = tb_render_pipeline_get_pass(
+        render_pipe_system, render_pipe_system->transparent_color_pass);
+    err = create_primitive_pipeline(render_system, pass, self->pipe_layout,
+                                    &self->pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
+  }
+
+  {
+    DrawContextDescriptor desc = {
+        .batch_size = sizeof(VLogDrawBatch),
+        .draw_fn = vlog_draw_record,
+        .pass_id = render_pipe_system->transparent_color_pass,
+    };
+    self->draw_ctx =
+        tb_render_pipeline_register_draw_context(render_pipe_system, &desc);
+  }
 
 #endif
   return true;
@@ -201,6 +226,8 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
 
 void destroy_visual_logging_system(VisualLoggingSystem *self) {
 #ifndef FINAL
+  tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
+  tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
 #endif
   *self = (VisualLoggingSystem){0};
 }

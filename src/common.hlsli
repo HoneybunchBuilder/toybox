@@ -16,10 +16,14 @@ typedef struct SkyPushConstants {
   float4x4 vp;
 } SkyPushConstants;
 
-typedef struct EnvFilterConstants{
+typedef struct EnvFilterConstants {
   float roughness;
   uint32_t sample_count;
-}EnvFilterConstants;
+} EnvFilterConstants;
+
+typedef struct PrimitivePushConstants {
+  float4 color;
+} PrimitivePushConstants;
 
 // Constant per-view Camera Data
 typedef struct CommonViewData {
@@ -59,21 +63,18 @@ typedef struct CommonObjectData {
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 
-float4 clip_to_screen(float4 clip)
-{
+float4 clip_to_screen(float4 clip) {
   float4 o = clip * 0.5f;
   o.xy += o.w;
   o.zw = clip.zw;
   return o;
 }
 
-float linear_depth(float depth, float near, float far)
-{
+float linear_depth(float depth, float near, float far) {
   return near * far / (far + depth * (near - far));
 }
 
-float depth_from_clip_z(float z, float near, float far)
-{
+float depth_from_clip_z(float z, float near, float far) {
   return max((1.0 - z / near) * far, 0);
 }
 

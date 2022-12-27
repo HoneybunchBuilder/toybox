@@ -21,6 +21,7 @@ typedef struct RenderPipelineSystem RenderPipelineSystem;
 
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkPipeline_T *VkPipeline;
+typedef uint32_t TbDrawContextId;
 
 typedef struct VisualLoggingSystem {
   Allocator tmp_alloc;
@@ -33,6 +34,7 @@ typedef struct VisualLoggingSystem {
 
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
+  TbDrawContextId draw_ctx;
 
   bool logging;
   uint32_t log_frame_idx;

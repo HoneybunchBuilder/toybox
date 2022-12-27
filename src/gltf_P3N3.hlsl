@@ -16,7 +16,7 @@ sampler static_sampler : register(s4, space0); // Immutable sampler
 // Per-object data - Vertex Stage Only
 ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 
-// Per-view data - Fragment Stage Only
+// Per-view data
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
 TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
