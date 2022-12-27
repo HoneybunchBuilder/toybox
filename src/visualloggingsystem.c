@@ -36,7 +36,7 @@ typedef struct VLogDraw {
   VLogShape shape;
 } VLogDraw;
 
-#define TB_MAX_VLOG_DRAWS 1
+#define TB_MAX_VLOG_DRAWS 50
 
 typedef struct VLogFrame {
   float timestamp;
@@ -150,10 +150,40 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System", TracyCategoryColorCore, true);
 
-  // TODO: Shuffle memory so that frames are stored properly and the next frame
-  // always has a chunk of memory available for encoding draw commands
+  // UI for recording visual logs
+  if (igBegin("Visual Logger", NULL, 0)) {
+    igText("Recording: %s", self->recording ? "true" : "false");
 
-  // TODO: Construct an ImGUI UI for controlling recording & log drawing
+    if (self->recording) {
+      if (igButton("Stop", (ImVec2){0})) {
+        self->recording = false;
+      }
+    } else {
+      if (igButton("Start", (ImVec2){0})) {
+        self->recording = true;
+      }
+    }
+
+    if (self->recording) {
+      igText("Recording Frame %d", self->frame_count);
+    } else {
+      igText("Recorded %d Frames", self->frame_count);
+    }
+    igText("%d frames allocated", self->frame_max);
+    igEnd();
+  }
+
+  if (self->recording) {
+    // If we're recording make sure that we're properly keeping the frame
+    // collection large enough so that the next frame can issue draws
+    uint32_t next_frame_count = self->frame_count + 1;
+    if (next_frame_count >= self->frame_max) {
+      self->frame_max = next_frame_count * 2;
+      self->frames = tb_realloc_nm_tp(self->std_alloc, self->frames,
+                                      self->frame_max, VLogFrame);
+    }
+    self->frame_count = next_frame_count;
+  }
 
   TracyCZoneEnd(ctx);
 #endif
