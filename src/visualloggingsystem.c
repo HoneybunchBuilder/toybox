@@ -9,6 +9,17 @@
 #include "viewsystem.h"
 #include "world.h"
 
+// Ignore some warnings for the generated headers
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+#include "primitive_frag.h"
+#include "primitive_vert.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 typedef struct VLogLocation {
   float3 position;
   float radius;
@@ -142,14 +153,120 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(primitive_vert);
+    create_info.pCode = (const uint32_t *)primitive_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Primitive Vert",
+                               &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load primitive vert shader module", err);
+
+    create_info.codeSize = sizeof(primitive_frag);
+    create_info.pCode = (const uint32_t *)primitive_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Primitive Frag",
+                               &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load primitive frag shader module", err);
+  }
+
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .renderPass = pass,
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              }},
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 1,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[1]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX}},
+              .vertexAttributeDescriptionCount = 1,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[1]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0}},
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
       .layout = layout,
+      .renderPass = pass,
   };
 
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Primitive Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
 
   return err;
 }
@@ -196,10 +313,25 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   {
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            (VkPushConstantRange[1]){
+                {
+                    .size = sizeof(PrimitivePushConstants),
+                    .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                },
+            },
+        .setLayoutCount = 2,
+        .pSetLayouts =
+            (VkDescriptorSetLayout[2]){
+                render_object_system->set_layout,
+                view_system->set_layout,
+            },
     };
     err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                         "Primitive Pipeline Layout",
                                         &self->pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create primitive pipeline layout", false);
   }
 
   {

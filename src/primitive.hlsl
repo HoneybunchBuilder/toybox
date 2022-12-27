@@ -1,11 +1,8 @@
 #include "common.hlsli"
 
-[[vk::push_constant]] 
-ConstantBuffer<PrimitivePushConstants> consts : register(b0, space0);
-
-ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
-
-ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
+[[vk::push_constant]] ConstantBuffer<PrimitivePushConstants> consts : register(b0, space0);
+ConstantBuffer<CommonObjectData> object_data : register(b0, space0);
+ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
