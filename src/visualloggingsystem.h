@@ -19,6 +19,9 @@ typedef struct ViewSystem ViewSystem;
 typedef struct RenderObjectSystem RenderObjectSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 
+typedef struct VkPipelineLayout_T *VkPipelineLayout;
+typedef struct VkPipeline_T *VkPipeline;
+
 typedef struct VisualLoggingSystem {
   Allocator tmp_alloc;
   Allocator std_alloc;
@@ -28,8 +31,13 @@ typedef struct VisualLoggingSystem {
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
 
-  bool recording;
+  VkPipelineLayout pipe_layout;
+  VkPipeline pipeline;
 
+  bool logging;
+  uint32_t log_frame_idx;
+
+  bool recording;
   uint32_t frame_count;
   VLogFrame *frames;
   uint32_t frame_max;

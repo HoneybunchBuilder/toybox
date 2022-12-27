@@ -44,8 +44,57 @@ typedef struct VLogFrame {
   VLogDraw draws[TB_MAX_VLOG_DRAWS];
 } VLogFrame;
 
+typedef struct VLogDrawBatch {
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+  float4x4 vp_matrix;
+  uint32_t draw_count;
+  VLogDraw draws[TB_MAX_VLOG_DRAWS];
+} VLogDrawBatch;
+
 TB_DEFINE_SYSTEM(visual_logging, VisualLoggingSystem,
                  VisualLoggingSystemDescriptor)
+
+void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                      uint32_t batch_count, const void *batches) {
+  TracyCZoneNC(ctx, "Visual Logger Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 1, true);
+
+  const VLogDrawBatch *vlog_batches = (const VLogDrawBatch *)batches;
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    TracyCZoneNC(batch_ctx, "VLog Batch", TracyCategoryColorRendering, true);
+    const VLogDrawBatch *batch = &vlog_batches[batch_idx];
+    if (batch->draw_count == 0) {
+      TracyCZoneEnd(batch_ctx);
+      continue;
+    }
+
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "VLog Batch", 2, true);
+    cmd_begin_label(buffer, "VLog Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
+
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+      const VLogDraw *draw = &batch->draws[draw_idx];
+
+      // Set push constants for draw
+
+      if (draw->type == TB_VLOG_SHAPE_LOCATION) {
+        // draw->shape.location;
+      } else if (draw->type == TB_VLOG_SHAPE_LINE) {
+        // draw->shape.line;
+      }
+    }
+
+    cmd_end_label(buffer);
+    TracyCVkZoneEnd(batch_scope);
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
 
 void tb_visual_logging_system_descriptor(
     SystemDescriptor *desc, const VisualLoggingSystemDescriptor *vlog_desc) {
@@ -90,6 +139,13 @@ VLogDraw *vlog_acquire_frame_draw(VisualLoggingSystem *vlog) {
   return frame_acquire_draw(frame);
 }
 
+VkResult create_primitive_pipeline(VkPipelineLayout layout,
+                                   VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  return err;
+}
+
 bool create_visual_logging_system(VisualLoggingSystem *self,
                                   const VisualLoggingSystemDescriptor *desc,
                                   uint32_t system_dep_count,
@@ -128,6 +184,18 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   };
 
   // TODO: Load some default meshes, load some simple shader pipelines
+  VkResult err = VK_SUCCESS;
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Primitive Pipeline Layout",
+                                        &self->pipe_layout);
+  }
+
+  err = create_primitive_pipeline(self->pipe_layout, &self->pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
 
 #endif
   return true;
@@ -149,6 +217,13 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
 
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System", TracyCategoryColorCore, true);
+
+  // Render primitives from selected frame
+  if (self->logging) {
+    const VLogFrame *frame = &self->frames[self->log_frame_idx];
+
+    //
+  }
 
   // UI for recording visual logs
   if (igBegin("Visual Logger", NULL, 0)) {
@@ -178,7 +253,10 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
     // collection large enough so that the next frame can issue draws
     uint32_t next_frame_count = self->frame_count + 1;
     if (next_frame_count >= self->frame_max) {
-      self->frame_max = next_frame_count * 2;
+      // Add 128 frames of buffer at a time, this means we're not constantly
+      // allocating but we also won't be allocating any extremely large chunks
+      // which could result in a stall at later points
+      self->frame_max = next_frame_count + 127;
       self->frames = tb_realloc_nm_tp(self->std_alloc, self->frames,
                                       self->frame_max, VLogFrame);
     }

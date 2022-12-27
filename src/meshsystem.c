@@ -559,6 +559,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       const ShadowDrawView *view = &batch->views[view_idx];
       if (view->draw_count == 0) {
+        cmd_end_label(buffer);
         TracyCZoneEnd(view_ctx);
         continue;
       }
@@ -571,6 +572,8 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         const ShadowDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
+          cmd_end_label(buffer);
+          cmd_end_label(buffer);
           TracyCZoneEnd(draw_ctx);
           continue;
         }
