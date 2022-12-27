@@ -544,39 +544,32 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   const ShadowDrawBatch *shadow_batches = (const ShadowDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     const ShadowDrawBatch *batch = &shadow_batches[batch_idx];
     if (batch->view_count == 0) {
-      TracyCZoneEnd(batch_ctx);
       continue;
     }
-
+    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
-      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       const ShadowDrawView *view = &batch->views[view_idx];
       if (view->draw_count == 0) {
-        cmd_end_label(buffer);
-        TracyCZoneEnd(view_ctx);
         continue;
       }
+      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
-        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         const ShadowDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
-          cmd_end_label(buffer);
-          cmd_end_label(buffer);
-          TracyCZoneEnd(draw_ctx);
           continue;
         }
+        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         VkBuffer geom_buffer = draw->geom_buffer;

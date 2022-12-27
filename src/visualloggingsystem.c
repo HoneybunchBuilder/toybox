@@ -63,13 +63,11 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   const VLogDrawBatch *vlog_batches = (const VLogDrawBatch *)batches;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    TracyCZoneNC(batch_ctx, "VLog Batch", TracyCategoryColorRendering, true);
     const VLogDrawBatch *batch = &vlog_batches[batch_idx];
     if (batch->draw_count == 0) {
-      TracyCZoneEnd(batch_ctx);
       continue;
     }
-
+    TracyCZoneNC(batch_ctx, "VLog Batch", TracyCategoryColorRendering, true);
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "VLog Batch", 2, true);
     cmd_begin_label(buffer, "VLog Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
