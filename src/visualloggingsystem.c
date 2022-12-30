@@ -468,7 +468,8 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
     igSeparator();
 
     igText("Rendering Frame:");
-    igInputInt("Log Frame", &self->log_frame_idx, 1, 5, 0);
+    igSliderInt("Rendering Frame:", &self->log_frame_idx, 0, self->frame_max,
+                "%d", 0);
     if (self->log_frame_idx < 0 || self->frame_max == 0) {
       self->log_frame_idx = 0;
     } else if (self->frame_count > 0 &&
