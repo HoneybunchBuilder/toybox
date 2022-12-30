@@ -141,7 +141,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   // Helper for breaking when encountering a non-info message
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    SDL_TriggerBreakpoint();
+    // SDL_TriggerBreakpoint();
   }
 
   return false;
@@ -725,6 +725,11 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     // Need a swapchain
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+    // Required for relaxed vertex shader writes not being used by some frag
+    // permutations
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
 
     // Required for spirv 1.4
     required_device_ext((const char **)&device_ext_names, &device_ext_count,

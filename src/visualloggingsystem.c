@@ -1,10 +1,13 @@
 #include "visualloggingsystem.h"
 
+#include "assets.h"
+#include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "tbcommon.h"
+#include "tbgltf.h"
 #include "tbimgui.h"
 #include "viewsystem.h"
 #include "world.h"
@@ -42,17 +45,14 @@ typedef enum VLogShapeType {
   TB_VLOG_SHAPE_LINE,
 } VLogShapeType;
 
-typedef struct VLogDraw {
-  VLogShapeType type;
-  VLogShape shape;
-} VLogDraw;
-
-#define TB_MAX_VLOG_DRAWS 50
+#define TB_MAX_VLOG_DRAWS 25
 
 typedef struct VLogFrame {
   float timestamp;
-  uint32_t draw_count;
-  VLogDraw draws[TB_MAX_VLOG_DRAWS];
+  uint32_t loc_draw_count;
+  VLogLocation loc_draws[TB_MAX_VLOG_DRAWS];
+  uint32_t line_draw_count;
+  VLogLine line_draws[TB_MAX_VLOG_DRAWS];
 } VLogFrame;
 
 typedef struct VLogDrawBatch {
@@ -60,7 +60,11 @@ typedef struct VLogDrawBatch {
   VkPipelineLayout layout;
   float4x4 vp_matrix;
   uint32_t draw_count;
-  VLogDraw draws[TB_MAX_VLOG_DRAWS];
+  VkBuffer shape_geom_buffer;
+  uint32_t index_count;
+  uint32_t pos_offset;
+  VLogShapeType type;
+  VLogShape draws[TB_MAX_VLOG_DRAWS];
 } VLogDrawBatch;
 
 TB_DEFINE_SYSTEM(visual_logging, VisualLoggingSystem,
@@ -85,14 +89,14 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const VLogDraw *draw = &batch->draws[draw_idx];
+      const VLogShape *shape = &batch->draws[draw_idx];
 
       // Set push constants for draw
 
-      if (draw->type == TB_VLOG_SHAPE_LOCATION) {
-        // draw->shape.location;
-      } else if (draw->type == TB_VLOG_SHAPE_LINE) {
-        // draw->shape.line;
+      if (batch->type == TB_VLOG_SHAPE_LOCATION) {
+        // shape->location;
+      } else if (batch->type == TB_VLOG_SHAPE_LINE) {
+        // shape->line;
       }
     }
 
@@ -113,11 +117,12 @@ void tb_visual_logging_system_descriptor(
       .id = VisualLoggingSystemId,
       .desc = (InternalDescriptor)vlog_desc,
       .dep_count = 0,
-      .system_dep_count = 4,
+      .system_dep_count = 5,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = ViewSystemId,
       .system_deps[2] = RenderObjectSystemId,
       .system_deps[3] = RenderPipelineSystemId,
+      .system_deps[4] = MeshSystemId,
       .create = tb_create_visual_logging_system,
       .destroy = tb_destroy_visual_logging_system,
       .tick = tb_tick_visual_logging_system,
@@ -137,15 +142,28 @@ VLogFrame *get_current_frame(VisualLoggingSystem *vlog) {
   return frame;
 }
 
-VLogDraw *frame_acquire_draw(VLogFrame *frame) {
-  TB_CHECK_RETURN(frame->draw_count < TB_MAX_VLOG_DRAWS,
+VLogLocation *frame_acquire_location(VLogFrame *frame) {
+  TB_CHECK_RETURN(frame->loc_draw_count < TB_MAX_VLOG_DRAWS,
                   "Draw count exceeded frame max", NULL);
-  return &frame->draws[frame->draw_count++];
+  return &frame->loc_draws[frame->loc_draw_count++];
 }
 
-VLogDraw *vlog_acquire_frame_draw(VisualLoggingSystem *vlog) {
+VLogLine *frame_acquire_line(VLogFrame *frame) {
+  TB_CHECK_RETURN(frame->line_draw_count < TB_MAX_VLOG_DRAWS,
+                  "Draw count exceeded frame max", NULL);
+  return &frame->line_draws[frame->line_draw_count++];
+}
+
+VLogShape *vlog_acquire_frame_shape(VisualLoggingSystem *vlog,
+                                    VLogShapeType type) {
   VLogFrame *frame = get_current_frame(vlog);
-  return frame_acquire_draw(frame);
+  if (type == TB_VLOG_SHAPE_LOCATION) {
+    return (VLogShape *)frame_acquire_location(frame);
+  } else if (type == TB_VLOG_SHAPE_LINE) {
+    return (VLogShape *)frame_acquire_line(frame);
+  } else {
+    TB_CHECK_RETURN(false, "Invalid shape", NULL);
+  }
 }
 
 VkResult create_primitive_pipeline(RenderSystem *render_system,
@@ -298,6 +316,11 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       render_pipe_system,
       "Failed to find render pipeline system which visual logger depend on",
       false);
+  MeshSystem *mesh_system =
+      tb_get_system(system_deps, system_dep_count, MeshSystem);
+  TB_CHECK_RETURN(mesh_system,
+                  "Failed to find mesh system which visual logger depend on",
+                  false);
 
   *self = (VisualLoggingSystem){
       .tmp_alloc = desc->tmp_alloc,
@@ -306,10 +329,47 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       .view_system = view_system,
       .render_object_system = render_object_system,
       .render_pipe_system = render_pipe_system,
+      .mesh_system = mesh_system,
   };
 
-  // TODO: Load some default meshes, load some simple shader pipelines
+  // Load some default meshes, load some simple shader pipelines
   VkResult err = VK_SUCCESS;
+
+  {
+    // Load the known glb that has the ocean mesh
+    // Get qualified path to scene asset
+    char *asset_path =
+        tb_resolve_asset_path(self->tmp_alloc, "scenes/Sphere.glb");
+
+    // Load glb off disk
+    cgltf_data *data = tb_read_glb(self->std_alloc, asset_path);
+    TB_CHECK_RETURN(data, "Failed to load glb", false);
+
+    // Parse expected mesh from glbs
+    {
+      cgltf_mesh *sphere_mesh = &data->meshes[0];
+      sphere_mesh->name = "Sphere";
+      self->sphere_index_type = sphere_mesh->primitives->indices->stride == 2
+                                    ? VK_INDEX_TYPE_UINT16
+                                    : VK_INDEX_TYPE_UINT32;
+      self->sphere_index_count = sphere_mesh->primitives->indices->count;
+
+      uint64_t index_size =
+          self->sphere_index_count *
+          (self->sphere_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
+      uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
+      self->sphere_pos_offset = index_size + idx_padding;
+
+      self->sphere_mesh =
+          tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
+    }
+
+    self->sphere_geom_buffer =
+        tb_mesh_system_get_gpu_mesh(mesh_system, self->sphere_mesh);
+    TB_CHECK_RETURN(self->sphere_geom_buffer,
+                    "Failed to get gpu buffer for mesh", false);
+  }
+
   {
     VkPipelineLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -358,6 +418,8 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
 
 void destroy_visual_logging_system(VisualLoggingSystem *self) {
 #ifndef FINAL
+  tb_mesh_system_release_mesh_ref(self->mesh_system, self->sphere_mesh);
+
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
 #endif
@@ -402,6 +464,18 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
       igText("Recorded %d Frames", self->frame_count);
     }
     igText("%d frames allocated", self->frame_max);
+
+    igSeparator();
+
+    igText("Rendering Frame:");
+    igInputInt("Log Frame", &self->log_frame_idx, 1, 5, 0);
+    if (self->log_frame_idx < 0 || self->frame_max == 0) {
+      self->log_frame_idx = 0;
+    } else if (self->frame_count > 0 &&
+               self->log_frame_idx >= (int32_t)self->frame_count) {
+      self->log_frame_idx = (int32_t)self->frame_count - 1;
+    }
+
     igEnd();
   }
 
@@ -458,9 +532,8 @@ void tb_vlog_line(VisualLoggingSystem *vlog, float3 start, float3 end,
   if (!vlog->recording) {
     return;
   }
-  VLogDraw *draw = vlog_acquire_frame_draw(vlog);
-  draw->type = TB_VLOG_SHAPE_LINE;
-  draw->shape = (VLogShape){
+  VLogShape *draw = vlog_acquire_frame_shape(vlog, TB_VLOG_SHAPE_LINE);
+  *draw = (VLogShape){
       .line =
           {
               .start = start,
@@ -481,9 +554,8 @@ void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
   if (!vlog->recording) {
     return;
   }
-  VLogDraw *draw = vlog_acquire_frame_draw(vlog);
-  draw->type = TB_VLOG_SHAPE_LOCATION;
-  draw->shape = (VLogShape){
+  VLogShape *draw = vlog_acquire_frame_shape(vlog, TB_VLOG_SHAPE_LOCATION);
+  *draw = (VLogShape){
       .location =
           {
               .position = position,

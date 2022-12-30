@@ -18,10 +18,13 @@ typedef struct RenderSystem RenderSystem;
 typedef struct ViewSystem ViewSystem;
 typedef struct RenderObjectSystem RenderObjectSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
+typedef struct MeshSystem MeshSystem;
 
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkPipeline_T *VkPipeline;
+typedef struct VkBuffer_T *VkBuffer;
 typedef uint32_t TbDrawContextId;
+typedef uint64_t TbMeshId;
 
 typedef struct VisualLoggingSystem {
   Allocator tmp_alloc;
@@ -31,13 +34,20 @@ typedef struct VisualLoggingSystem {
   ViewSystem *view_system;
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
+  MeshSystem *mesh_system;
+
+  TbMeshId sphere_mesh;
+  uint32_t sphere_index_type;
+  uint32_t sphere_index_count;
+  uint32_t sphere_pos_offset;
+  VkBuffer sphere_geom_buffer;
 
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
   TbDrawContextId draw_ctx;
 
   bool logging;
-  uint32_t log_frame_idx;
+  int32_t log_frame_idx;
 
   bool recording;
   uint32_t frame_count;
