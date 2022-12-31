@@ -7,6 +7,7 @@
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
+#include "visualloggingsystem.h"
 #include "world.h"
 
 bool create_shadow_system(ShadowSystem *self,
@@ -18,9 +19,16 @@ bool create_shadow_system(ShadowSystem *self,
       system_deps, system_dep_count, ViewSystemId);
   TB_CHECK_RETURN(view_system,
                   "Failed to find view system which shadows depend on", false);
+  VisualLoggingSystem *vlog =
+      (VisualLoggingSystem *)tb_find_system_dep_self_by_id(
+          system_deps, system_dep_count, VisualLoggingSystemId);
+  TB_CHECK_RETURN(
+      vlog, "Failed to find visual logging system which shadows depend on",
+      false);
 
   *self = (ShadowSystem){
       .view_system = view_system,
+      .vlog = vlog,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -163,12 +171,19 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         frustum_corners[i] = frustum_corners[i] + (dist * last_split_dist);
       }
 
+      for (uint32_t i = 0; i < 8; ++i) {
+        tb_vlog_location(self->vlog, frustum_corners[i], 0.5f,
+                         (float3){0.8, 0.4, 0.4});
+      }
+
       // Calculate frustum center
       float3 center = {0};
       for (uint32_t i = 0; i < 8; i++) {
         center += frustum_corners[i];
       }
       center /= 8.0f;
+
+      tb_vlog_location(self->vlog, center, 0.5f, (float3){0.3, 0.3, 0.9});
 
       // Calculate radius
       float radius = 0.0f;
@@ -245,8 +260,9 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
                                     TransformComponentId}},
       .deps[1] = {.count = 2,
                   .dependent_ids = {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 1,
+      .system_dep_count = 2,
       .system_deps[0] = ViewSystemId,
+      .system_deps[1] = VisualLoggingSystemId,
       .create = tb_create_shadow_system,
       .destroy = tb_destroy_shadow_system,
       .tick = tb_tick_shadow_system,

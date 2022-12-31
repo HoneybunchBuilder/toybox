@@ -22,6 +22,8 @@ typedef struct EnvFilterConstants {
 } EnvFilterConstants;
 
 typedef struct PrimitivePushConstants {
+  float3 position;
+  float3 scale;
   float4 color;
 } PrimitivePushConstants;
 

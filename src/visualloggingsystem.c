@@ -1,6 +1,7 @@
 #include "visualloggingsystem.h"
 
 #include "assets.h"
+#include "cameracomponent.h"
 #include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
@@ -9,6 +10,7 @@
 #include "tbcommon.h"
 #include "tbgltf.h"
 #include "tbimgui.h"
+#include "transformcomponent.h"
 #include "viewsystem.h"
 #include "world.h"
 
@@ -58,11 +60,14 @@ typedef struct VLogFrame {
 typedef struct VLogDrawBatch {
   VkPipeline pipeline;
   VkPipelineLayout layout;
-  float4x4 vp_matrix;
+  VkViewport viewport;
+  VkRect2D scissor;
+  VkDescriptorSet view_set;
   uint32_t draw_count;
   VkBuffer shape_geom_buffer;
+  float3 shape_scale;
   uint32_t index_count;
-  uint32_t pos_offset;
+  uint64_t pos_offset;
   VLogShapeType type;
   VLogShape draws[TB_MAX_VLOG_DRAWS];
 } VLogDrawBatch;
@@ -92,12 +97,33 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       const VLogShape *shape = &batch->draws[draw_idx];
 
       // Set push constants for draw
-
       if (batch->type == TB_VLOG_SHAPE_LOCATION) {
-        // shape->location;
+        const float3 scale = batch->shape_scale * shape->location.radius;
+        PrimitivePushConstants consts = {
+            .position = shape->location.position,
+            .scale = scale,
+            .color = shape->location.color,
+        };
+        vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_ALL_GRAPHICS,
+                           0, sizeof(PrimitivePushConstants), &consts);
       } else if (batch->type == TB_VLOG_SHAPE_LINE) {
-        // shape->line;
+        // TODO: Set push constants for line drawing
       }
+
+      vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+      vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              batch->layout, 0, 1, &batch->view_set, 0, NULL);
+
+      vkCmdBindIndexBuffer(buffer, batch->shape_geom_buffer, 0,
+                           VK_INDEX_TYPE_UINT16);
+      vkCmdBindVertexBuffers(buffer, 0, 1, &batch->shape_geom_buffer,
+                             &batch->pos_offset);
+
+      // Note: This is probably better suited to instanced drawing
+      // Maybe a good first pass at instancing in the future
+      vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
     }
 
     cmd_end_label(buffer);
@@ -116,7 +142,9 @@ void tb_visual_logging_system_descriptor(
       .size = sizeof(VisualLoggingSystem),
       .id = VisualLoggingSystemId,
       .desc = (InternalDescriptor)vlog_desc,
-      .dep_count = 0,
+      .dep_count = 1,
+      .deps[0] = {.count = 2,
+                  .dependent_ids = {CameraComponentId, TransformComponentId}},
       .system_dep_count = 5,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = ViewSystemId,
@@ -304,12 +332,6 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   TB_CHECK_RETURN(view_system,
                   "Failed to find view system which visual logger depend on",
                   false);
-  RenderObjectSystem *render_object_system =
-      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
-  TB_CHECK_RETURN(
-      render_object_system,
-      "Failed to find render object system which visual logger depend on",
-      false);
   RenderPipelineSystem *render_pipe_system =
       tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
   TB_CHECK_RETURN(
@@ -327,7 +349,6 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       .std_alloc = desc->std_alloc,
       .render_system = render_system,
       .view_system = view_system,
-      .render_object_system = render_object_system,
       .render_pipe_system = render_pipe_system,
       .mesh_system = mesh_system,
   };
@@ -360,8 +381,13 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
       self->sphere_pos_offset = index_size + idx_padding;
 
+      const cgltf_node *node = &data->nodes[0];
       self->sphere_mesh =
-          tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
+          tb_mesh_system_load_mesh(mesh_system, asset_path, node);
+
+      TB_CHECK(node->has_scale, "Unexpected");
+      self->sphere_scale =
+          (float3){node->scale[0], node->scale[1], node->scale[2]};
     }
 
     self->sphere_geom_buffer =
@@ -381,10 +407,9 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
                     .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
                 },
             },
-        .setLayoutCount = 2,
+        .setLayoutCount = 1,
         .pSetLayouts =
-            (VkDescriptorSetLayout[2]){
-                render_object_system->set_layout,
+            (VkDescriptorSetLayout[1]){
                 view_system->set_layout,
             },
     };
@@ -438,10 +463,48 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
   TracyCZoneNC(ctx, "Visual Logging System", TracyCategoryColorCore, true);
 
   // Render primitives from selected frame
-  if (self->logging) {
+  if (self->logging && self->frame_max > 0) {
     const VLogFrame *frame = &self->frames[self->log_frame_idx];
 
-    //
+    // TODO: Make this less hacky
+    const uint32_t width = self->render_system->render_thread->swapchain.width;
+    const uint32_t height =
+        self->render_system->render_thread->swapchain.height;
+
+    // Get the vp matrix for the primary view
+    const PackedComponentStore *camera_store =
+        tb_get_column_check_id(input, 0, 0, CameraComponentId);
+    const CameraComponent *camera =
+        tb_get_component(camera_store, 0, CameraComponent);
+
+    for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
+      const VLogLine *line = &frame->line_draws[i];
+      (void)line;
+      // TODO: Encode line draws into the line batch
+    }
+
+    VLogDrawBatch *loc_batch = tb_alloc_tp(self->tmp_alloc, VLogDrawBatch);
+    *loc_batch = (VLogDrawBatch){
+        .draw_count = frame->loc_draw_count,
+        .index_count = self->sphere_index_count,
+        .layout = self->pipe_layout,
+        .pipeline = self->pipeline,
+        .pos_offset = self->sphere_pos_offset,
+        .shape_geom_buffer = self->sphere_geom_buffer,
+        .shape_scale = self->sphere_scale,
+        .type = TB_VLOG_SHAPE_LOCATION,
+        .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
+        .scissor = (VkRect2D){{0, 0}, {width, height}},
+        .view_set =
+            tb_view_system_get_descriptor(self->view_system, camera->view_id),
+    };
+
+    for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
+      loc_batch->draws[i].location = frame->loc_draws[i];
+    }
+
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->draw_ctx, 1, loc_batch);
   }
 
   // UI for recording visual logs
@@ -467,13 +530,17 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
 
     igSeparator();
 
-    igText("Rendering Frame:");
+    igText("Selected Frame:");
     igSliderInt("##frame", &self->log_frame_idx, 0, self->frame_max, "%d", 0);
     if (self->log_frame_idx < 0 || self->frame_max == 0) {
       self->log_frame_idx = 0;
     } else if (self->frame_count > 0 &&
                self->log_frame_idx >= (int32_t)self->frame_count) {
       self->log_frame_idx = (int32_t)self->frame_count - 1;
+    }
+    if (igButton(self->logging ? "Stop Rendering" : "Start Rendering",
+                 (ImVec2){0})) {
+      self->logging = !self->logging;
     }
 
     igEnd();

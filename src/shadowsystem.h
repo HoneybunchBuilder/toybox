@@ -7,6 +7,7 @@
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct ShadowSystem ShadowSystem;
 typedef struct ViewSystem ViewSystem;
+typedef struct VisualLoggingSystem VisualLoggingSystem;
 
 typedef struct ShadowSystemDescriptor {
   Allocator std_alloc;
@@ -18,6 +19,7 @@ typedef struct ShadowSystem {
   Allocator tmp_alloc;
 
   ViewSystem *view_system;
+  VisualLoggingSystem *vlog;
 } ShadowSystem;
 
 void tb_shadow_system_descriptor(SystemDescriptor *desc,

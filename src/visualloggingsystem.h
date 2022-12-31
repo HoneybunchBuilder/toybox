@@ -32,7 +32,6 @@ typedef struct VisualLoggingSystem {
 
   RenderSystem *render_system;
   ViewSystem *view_system;
-  RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
   MeshSystem *mesh_system;
 
@@ -40,6 +39,7 @@ typedef struct VisualLoggingSystem {
   uint32_t sphere_index_type;
   uint32_t sphere_index_count;
   uint32_t sphere_pos_offset;
+  float3 sphere_scale;
   VkBuffer sphere_geom_buffer;
 
   VkPipelineLayout pipe_layout;
