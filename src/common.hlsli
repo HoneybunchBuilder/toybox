@@ -36,7 +36,7 @@ typedef struct CommonViewData {
 } CommonViewData;
 
 // Constant per-view Light Data
-#define CASCADE_COUNT 1
+#define CASCADE_COUNT 4
 typedef struct CommonLightData {
   float3 color;
   float3 light_dir;

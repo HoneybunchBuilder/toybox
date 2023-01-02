@@ -84,29 +84,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const float near = camera_component->near;
   const float far = camera_component->far;
 
-  // Calculate the vp and inverse vp matrices
+  // Get inverse camera vp matrix from view system
   float4x4 inv_cam_vp = {.row0 = {0}};
   {
-    float4x4 rot = euler_to_trans(cam_transform->transform.rotation);
-    const float3 forward = f4tof3(rot.row2);
-
-    float4x4 view = {.row0 = {0}};
-    look_forward(&view, cam_transform->transform.position, forward,
-                 (float3){0, 1, 0});
-
-    // Re-calculate the camera's VP matrix with 0 to 1 depth rather than
-    // reversed depth
-    float4x4 proj = {.row0 = {0}};
-    perspective(&proj, camera_component->fov, camera_component->aspect_ratio,
-                near, far);
-
-    // Calculate view projection matrix
-    float4x4 cam_vp = {.row0 = {0}};
-    mulmf44(&proj, &view, &cam_vp);
-
-    // Inverse
-    // inv_cam_vp = inv_mf44(cam_vp);
-
     const View *v = tb_get_view(self->view_system, camera_component->view_id);
     inv_cam_vp = v->view_data.inv_vp;
   }
@@ -171,19 +151,12 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         frustum_corners[i] = frustum_corners[i] + (dist * last_split_dist);
       }
 
-      for (uint32_t i = 0; i < 8; ++i) {
-        tb_vlog_location(self->vlog, frustum_corners[i], 0.5f,
-                         (float3){0.8, 0.4, 0.4});
-      }
-
       // Calculate frustum center
       float3 center = {0};
       for (uint32_t i = 0; i < 8; i++) {
         center += frustum_corners[i];
       }
       center /= 8.0f;
-
-      tb_vlog_location(self->vlog, center, 0.5f, (float3){0.3, 0.3, 0.9});
 
       // Calculate radius
       float radius = 0.0f;
@@ -206,7 +179,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         float4x4 rot = euler_to_trans(transform.rotation);
         const float3 forward = f4tof3(rot.row2);
 
-        const float3 offset = center - (forward * -min[2]);
+        const float3 offset = center + (forward * -min[2]);
         look_at(&light_view_mat, offset, center, (float3){0, 1, 0});
       }
 

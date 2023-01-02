@@ -1174,7 +1174,9 @@ void resize_swapchain(RenderThread *thread) {
 }
 
 void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
+#ifdef TRACY_ENABLE
   cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
+#endif
 
   const uint32_t clear_value_count = pass->attachment_count;
   TB_CHECK(clear_value_count < TB_MAX_ATTACHMENTS, "Unexpected");
@@ -1500,7 +1502,9 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           }
         }
 
+#ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
+#endif
         vkCmdEndRenderPass(pass_buffer);
 
         last_pass_buffer_idx = pass->command_buffer_index;

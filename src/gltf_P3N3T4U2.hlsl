@@ -19,7 +19,7 @@ TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
 TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);                   // Frag Only
+Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);       // Frag Only
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 

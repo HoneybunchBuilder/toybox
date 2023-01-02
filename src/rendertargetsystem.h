@@ -6,7 +6,7 @@
 
 #define RenderTargetSystemId 0xB0BABABE
 
-#define TB_CASCADE_COUNT 1
+#define TB_CASCADE_COUNT 4
 #define TB_SHADOW_MAP_DIM 4096
 
 typedef uint32_t TbRenderTargetId;
