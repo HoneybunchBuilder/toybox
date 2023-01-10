@@ -12,20 +12,15 @@ jobs:
     - uses: actions/checkout@v2
       with:
         lfs: true
-    - name: lfs
-      uses: actions/checkout@v2
-    - run: git lfs pull
+    - uses: actions/checkout@v2
+    - name: Pull LFS
+      run: git lfs pull
     - name: Configure
       run: cmake --preset x64-windows-ninja-llvm -DFINAL=ON -DPROFILE_TRACY=OFF
     - name: Build Release
       run: cmake --build --preset release-x64-windows-ninja-llvm
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: [Windows, X64, self-hosted]
-    steps:
-      - uses: game-ci/steam-deploy@v1
+    - name: Deploy
+      uses: game-ci/steam-deploy@v1
         with:
           username: ${{ secrets.STEAM_USERNAME }}
           password: ${{ secrets.STEAM_PASSWORD }}
@@ -36,4 +31,4 @@ jobs:
           buildDescription: v0.1.0
           rootPath: build/x64/windows
           depot1Path: Release
-          releaseBranch: steam-prerelease
+          releaseBranch: main
