@@ -66,4 +66,4 @@ jobs:
         buildDescription: v0.1.0
         rootPath: build/x64/windows
         depot1Path: Release
-        releaseBranch: main
+        releaseBranch: prerelease
