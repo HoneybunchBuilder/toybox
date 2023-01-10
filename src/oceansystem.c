@@ -911,7 +911,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         prepass_batches[batch_count] = (OceanDrawBatch){
             .pipeline = self->prepass_pipeline,
             .layout = self->pipe_layout,
-            .viewport = {0, height, width, -height, 0, 1},
+            .viewport = {0, height, width, -(float)height, 0, 1},
             .scissor = {{0, 0}, {width, height}},
             .view_set = view_set,
             .ocean_set = ocean_set,

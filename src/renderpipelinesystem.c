@@ -2051,7 +2051,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       FullscreenBatch batch = {
           .layout = self->copy_pipe_layout,
           .pipeline = self->depth_copy_pipe,
-          .viewport = {0, height, width, -(float)height, 0, 1},
+          .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .set = depth_set,
       };
@@ -2063,7 +2063,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       FullscreenBatch batch = {
           .layout = self->copy_pipe_layout,
           .pipeline = self->color_copy_pipe,
-          .viewport = {0, height, width, -(float)height, 0, 1},
+          .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .set = color_set,
       };
