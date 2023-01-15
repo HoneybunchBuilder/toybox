@@ -117,7 +117,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
 // Order does not matter
-#define COMP_COUNT 13
+#define COMP_COUNT 14
   ComponentDescriptor component_descs[COMP_COUNT] = {0};
   {
     int32_t i = 0;
@@ -134,6 +134,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_wind_component_descriptor(&component_descs[i++]);
     tb_boat_movement_component_descriptor(&component_descs[i++]);
     tb_mast_component_descriptor(&component_descs[i++]);
+    tb_boat_camera_component_descriptor(&component_descs[i++]);
 
     TB_CHECK(i == COMP_COUNT, "Unexpected # of component descriptors");
   }

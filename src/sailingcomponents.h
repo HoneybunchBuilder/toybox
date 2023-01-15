@@ -8,6 +8,8 @@
 #define BoatMovementComponentIdStr "0xDEAD0001"
 #define MastComponentId 0xDEAD0002
 #define MastComponentIdStr "0xDEAD0002"
+#define BoatCameraComponentId 0xDEAD0003
+#define BoatCameraComponentIdStr "0xDEAD0003"
 
 // Tracks the state of the wind
 // Currently this is intended to mostly be a single use global component
@@ -52,8 +54,27 @@ typedef struct MastComponent {
   float3 target_heading;      // Direction we want the mast to face
 } MastComponent;
 
+typedef struct BoatCameraComponentDesc {
+  float min_dist;
+  float max_dist;
+  float move_speed;
+  float pitch_limit;
+} BoatCameraComponentDesc;
+
+typedef struct BoatCameraComponent {
+  float min_dist;
+  float max_dist;
+  float move_speed;
+  float pitch_limit;
+
+  float3 offset_dir;
+  float3 target_offset_dir;
+  float target_dist;
+} BoatCameraComponent;
+
 typedef struct ComponentDescriptor ComponentDescriptor;
 
 void tb_wind_component_descriptor(ComponentDescriptor *desc);
 void tb_boat_movement_component_descriptor(ComponentDescriptor *desc);
 void tb_mast_component_descriptor(ComponentDescriptor *desc);
+void tb_boat_camera_component_descriptor(ComponentDescriptor *desc);
