@@ -13,9 +13,9 @@ typedef enum TBMSAA {
 static const TBMSAA TBMSAAOptions[TBMSAAOptionCount] = {
     TBMSAA_Off, TBMSAA_x2, TBMSAA_x4, TBMSAA_x8, TBMSAA_x16,
 };
-static const char *TBMSAAOptionNames[TBMSAAOptionCount] = {
-    "Off", "x2", "x4", "x8", "x16",
-};
+// static const char *TBMSAAOptionNames[TBMSAAOptionCount] = {
+//     "Off", "x2", "x4", "x8", "x16",
+// };
 
 typedef enum TBWindowMode {
   TBWindowMode_Windowed,
@@ -28,11 +28,11 @@ static const TBWindowMode TBWindowModes[TBWindowMode_Count] = {
     TBWindowMode_Borderless,
     TBWindowMode_Fullscreen,
 };
-static const char *TBWindowModeNames[TBWindowMode_Count] = {
-    "Windowed",
-    "Borderless Fullscreen Window",
-    "Exclusive Fullscreen",
-};
+// static const char *TBWindowModeNames[TBWindowMode_Count] = {
+//     "Windowed",
+//     "Borderless Fullscreen Window",
+//     "Exclusive Fullscreen",
+// };
 
 typedef struct TBDisplayMode {
   uint32_t width;
@@ -51,11 +51,11 @@ static const TBVsyncMode TBVsyncModes[TBVsync_Count] = {
     TBVsync_Adaptive,
     TBVsync_On,
 };
-static const char *TBVsyncModeNames[TBVsync_Count] = {
-    "Off",
-    "Adaptive",
-    "On",
-};
+// static const char *TBVsyncModeNames[TBVsync_Count] = {
+//     "Off",
+//     "Adaptive",
+//     "On",
+// };
 
 typedef struct TBSettings {
   TBMSAA msaa;

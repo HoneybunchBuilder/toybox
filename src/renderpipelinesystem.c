@@ -1123,7 +1123,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_passes[3]},
-          TB_CASCADE_COUNT + 2, transitions, 2, (VkClearValue[2]){{0}, {0}},
+          TB_CASCADE_COUNT + 2, transitions, 2, (VkClearValue[2]){0},
           (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, opaque_depth}, "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
