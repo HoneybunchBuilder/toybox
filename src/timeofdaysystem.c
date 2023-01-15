@@ -178,10 +178,11 @@ void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
 
   self->time = self->time > TAU ? self->time - TAU : self->time;
   const float time_norm = self->time / TAU;
-  out_sun_trans->transform.rotation = (EulerAngles){self->time, 1.0f, 0.0f};
+  out_sun_trans->transform.rotation =
+      euler_to_quat((EulerAngles){self->time, 1.0f, 0.0f});
   out_sun_lights->color = lookup_sun_color(time_norm);
 
-  float4x4 rot_mat = euler_to_trans(out_sun_trans->transform.rotation);
+  float4x4 rot_mat = quat_to_trans(out_sun_trans->transform.rotation);
   float3 sun_dir = f4tof3(rot_mat.row2);
 
   // Update sky component's time and sun direction

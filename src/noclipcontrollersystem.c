@@ -122,8 +122,8 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
         float4x4 mat = {.row0 = {0}};
         transform_to_matrix(&mat, &transform->transform);
 
-        float3 right = f4tof3(mat.row0);
         float3 forward = f4tof3(mat.row2);
+        float3 right = normf3(crossf3((float3){0, 1, 0}, forward));
 
         float3 velocity = {0};
         {
@@ -133,15 +133,17 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           velocity += right * delta_move_speed * move_axis[0];
         }
 
-        float3 angular_velocity = {0};
+        Quaternion angular_velocity = {0};
         {
+          float3 av = {0};
           float delta_look_speed = noclip->look_speed * delta_seconds;
-          angular_velocity[0] = look_axis[1] * delta_look_speed;
-          angular_velocity[1] = look_axis[0] * delta_look_speed;
+          av[0] = look_axis[0] * -delta_look_speed;
+          av[1] = look_axis[1] * -delta_look_speed;
+          angular_velocity = euler_to_quat(av);
         }
 
-        transform->transform.position += velocity;
-        transform->transform.rotation += angular_velocity;
+        translate(&transform->transform, velocity);
+        rotate(&transform->transform, angular_velocity);
       }
 
       // Report output

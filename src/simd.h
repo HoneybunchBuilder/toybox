@@ -60,7 +60,7 @@ typedef float3 EulerAngles;
 typedef struct Transform {
   float3 position;
   float3 scale;
-  EulerAngles rotation;
+  Quaternion rotation;
 } Transform;
 
 typedef struct Plane {
@@ -147,7 +147,7 @@ void aabb_add_point(AABB *aabb, float3 point);
 
 void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
-void rotate(Transform *t, EulerAngles r);
+void rotate(Transform *t, Quaternion r);
 
 void transform_to_matrix(float4x4 *m, const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);

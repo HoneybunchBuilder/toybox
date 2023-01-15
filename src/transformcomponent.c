@@ -41,7 +41,7 @@ void destroy_transform_component(TransformComponent *comp,
       .transform =
           {
               .scale = (float3){0},
-              .rotation = (float3){0},
+              .rotation = (Quaternion){0, 0, 0, 1},
           },
       .parent = InvalidEntityId,
   };

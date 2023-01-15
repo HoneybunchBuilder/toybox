@@ -314,12 +314,12 @@ Quaternion euler_to_quat(EulerAngles xyz) {
 
   // See
   // https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-  const float cy = cosf(z * 0.5);
-  const float sy = sinf(z * 0.5);
-  const float cp = cosf(y * 0.5);
-  const float sp = sinf(y * 0.5);
-  const float cr = cosf(x * 0.5);
-  const float sr = sinf(x * 0.5);
+  const float cy = cosf(y * 0.5);
+  const float sy = sinf(y * 0.5);
+  const float cp = cosf(x * 0.5);
+  const float sp = sinf(x * 0.5);
+  const float cr = cosf(z * 0.5);
+  const float sr = sinf(z * 0.5);
 
   // Note: in the above conversion quat_to_euler we have to negate y axis and
   // not sure why... possibly may need to do some additional work here as this
@@ -400,10 +400,10 @@ float4x4 quat_to_trans(Quaternion q) {
 
 Quaternion mulq(Quaternion p, Quaternion q) {
   return (Quaternion){
-      (p[3] * q[3]) - (p[0] * q[0]) - (p[1] * q[1]) - (p[2] * q[2]),
       (p[3] * q[0]) + (p[0] * q[3]) + (p[1] * q[2]) - (p[2] * q[1]),
       (p[3] * q[1]) + (p[1] * q[3]) + (p[2] * q[0]) - (p[0] * q[2]),
       (p[3] * q[2]) + (p[2] * q[3]) + (p[0] * q[1]) - (p[1] * q[0]),
+      (p[3] * q[3]) - (p[0] * q[0]) - (p[1] * q[1]) - (p[2] * q[2]),
   };
 }
 
@@ -431,9 +431,9 @@ void scale(Transform *t, float3 s) {
   SDL_assert(t);
   t->scale *= s;
 }
-void rotate(Transform *t, float3 r) {
+void rotate(Transform *t, Quaternion r) {
   SDL_assert(t);
-  t->rotation += r;
+  t->rotation = mulq(r, t->rotation);
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
@@ -451,7 +451,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   };
 
   // Rotation matrix from euler angles
-  float4x4 r = euler_to_trans(t->rotation);
+  float4x4 r = quat_to_trans(t->rotation);
 
   // Scale matrix
   float4x4 s = {
@@ -475,13 +475,12 @@ Transform tb_transform_from_node(const cgltf_node *node) {
   transform.position = (float3){node->translation[0], node->translation[1],
                                 node->translation[2]};
 
-  Quaternion quat = {
+  transform.rotation = (Quaternion){
       node->rotation[0],
       node->rotation[1],
       node->rotation[2],
       node->rotation[3],
   };
-  transform.rotation = quat_to_euler(quat);
 
   transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
 
