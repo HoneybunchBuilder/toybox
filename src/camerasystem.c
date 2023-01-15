@@ -53,34 +53,34 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     const TransformComponent *trans_comp =
         tb_get_component(transforms, cam_idx, TransformComponent);
 
-    // TODO: Eval transform heirarchy
-    Transform transform = trans_comp->transform;
+    // Eval transform heirarchy
+    float4x4 model = {.row0 = {0}};
+    tb_transform_get_world_matrix((TransformComponent *)trans_comp, &model);
 
-    CommonViewData data = {
-        .view_pos = transform.position,
+    CommonViewData view_data = {
+        .view_pos = trans_comp->transform.position,
     };
 
-    float4x4 model = {.row0 = {0}};
-    transform_to_matrix(&model, &transform);
     const float3 forward = f4tof3(model.row2);
 
     float4x4 view = {.row0 = {0}};
-    look_forward(&view, transform.position, forward, (float3){0, 1, 0});
-    data.v = view;
+    look_forward(&view, trans_comp->transform.position, forward,
+                 (float3){0, 1, 0});
+    view_data.v = view;
 
     float4x4 proj = {.row0 = {0}};
-    reverse_perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio, cam_comp->near,
-                cam_comp->far);
+    reverse_perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio,
+                        cam_comp->near, cam_comp->far);
 
     // Calculate view projection matrix
-    mulmf44(&proj, &view, &data.vp);
+    mulmf44(&proj, &view, &view_data.vp);
 
     // Inverse
-    data.inv_vp = inv_mf44(data.vp);
+    view_data.inv_vp = inv_mf44(view_data.vp);
 
-    Frustum frustum = frustum_from_view_proj(&data.vp);
+    Frustum frustum = frustum_from_view_proj(&view_data.vp);
 
-    tb_view_system_set_view_data(view_system, cam_comp->view_id, &data);
+    tb_view_system_set_view_data(view_system, cam_comp->view_id, &view_data);
     tb_view_system_set_view_frustum(view_system, cam_comp->view_id, &frustum);
   }
 
