@@ -140,6 +140,8 @@ Quaternion euler_to_quat(EulerAngles xyz);
 float4x4 euler_to_trans(EulerAngles euler);
 float4x4 quat_to_trans(Quaternion quat);
 
+Quaternion mulq(Quaternion p, Quaternion q);
+
 AABB aabb_init(void);
 void aabb_add_point(AABB *aabb, float3 point);
 

@@ -367,9 +367,44 @@ float4x4 euler_to_trans(EulerAngles euler) {
   return r;
 }
 
-float4x4 quat_to_trans(Quaternion quat) {
-  (void)quat;
-  return (float4x4){.row0 = {0}};
+float4x4 quat_to_trans(Quaternion q) {
+  float qxx = q[0] * q[0];
+  float qyy = q[1] * q[1];
+  float qzz = q[2] * q[2];
+  float qxz = q[0] * q[2];
+  float qxy = q[0] * q[1];
+  float qyz = q[1] * q[2];
+  float qwx = q[3] * q[0];
+  float qwy = q[3] * q[1];
+  float qwz = q[3] * q[2];
+
+  float m00 = 1.0f - 2.0f * (qyy + qzz);
+  float m01 = 2.0f * (qxy + qwz);
+  float m02 = 2.0f * (qxz - qwy);
+
+  float m10 = 2.0f * (qxy - qwz);
+  float m11 = 1.0f - 2.0f * (qxx + qzz);
+  float m12 = 2.0f * (qyz + qwx);
+
+  float m20 = 2.0f * (qxz + qwy);
+  float m21 = 2.0f * (qyz - qwx);
+  float m22 = 1.0f - 2.0f * (qxx + qyy);
+
+  return (float4x4){
+      .row0 = {m00, m01, m02, 0.0f},
+      .row1 = {m10, m11, m12, 0.0f},
+      .row2 = {m20, m21, m22, 0.0f},
+      .row3 = {0.0f, 0.0f, 0.0f, 1.0f},
+  };
+}
+
+Quaternion mulq(Quaternion p, Quaternion q) {
+  return (Quaternion){
+      (p[3] * q[3]) - (p[0] * q[0]) - (p[1] * q[1]) - (p[2] * q[2]),
+      (p[3] * q[0]) + (p[0] * q[3]) + (p[1] * q[2]) - (p[2] * q[1]),
+      (p[3] * q[1]) + (p[1] * q[3]) + (p[2] * q[0]) - (p[0] * q[2]),
+      (p[3] * q[2]) + (p[2] * q[3]) + (p[0] * q[1]) - (p[1] * q[0]),
+  };
 }
 
 AABB aabb_init(void) {
