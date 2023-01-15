@@ -23,6 +23,7 @@
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "oceancomponent.h"
+#include "sailingcomponents.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
@@ -116,18 +117,26 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
 // Order does not matter
-#define COMP_COUNT 10
+#define COMP_COUNT 13
   ComponentDescriptor component_descs[COMP_COUNT] = {0};
-  tb_transform_component_descriptor(&component_descs[0]);
-  tb_camera_component_descriptor(&component_descs[1]);
-  tb_directional_light_component_descriptor(&component_descs[2]);
-  tb_noclip_component_descriptor(&component_descs[3]);
-  tb_input_component_descriptor(&component_descs[4]);
-  tb_coreui_component_descriptor(&component_descs[5]);
-  tb_imgui_component_descriptor(&component_descs[6]);
-  tb_sky_component_descriptor(&component_descs[7]);
-  tb_mesh_component_descriptor(&component_descs[8]);
-  tb_ocean_component_descriptor(&component_descs[9]);
+  {
+    int32_t i = 0;
+    tb_transform_component_descriptor(&component_descs[i++]);
+    tb_camera_component_descriptor(&component_descs[i++]);
+    tb_directional_light_component_descriptor(&component_descs[i++]);
+    tb_noclip_component_descriptor(&component_descs[i++]);
+    tb_input_component_descriptor(&component_descs[i++]);
+    tb_coreui_component_descriptor(&component_descs[i++]);
+    tb_imgui_component_descriptor(&component_descs[i++]);
+    tb_sky_component_descriptor(&component_descs[i++]);
+    tb_mesh_component_descriptor(&component_descs[i++]);
+    tb_ocean_component_descriptor(&component_descs[i++]);
+    tb_wind_component_descriptor(&component_descs[i++]);
+    tb_boat_movement_component_descriptor(&component_descs[i++]);
+    tb_mast_component_descriptor(&component_descs[i++]);
+
+    TB_CHECK(i == COMP_COUNT, "Unexpected # of component descriptors");
+  }
 
   InputSystemDescriptor input_system_desc = {
       .tmp_alloc = arena.alloc,
