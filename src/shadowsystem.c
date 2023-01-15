@@ -53,8 +53,6 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const uint32_t camera_count = tb_get_column_component_count(input, 1);
   const PackedComponentStore *camera_components =
       tb_get_column_check_id(input, 1, 0, CameraComponentId);
-  const PackedComponentStore *cam_transforms =
-      tb_get_column_check_id(input, 1, 1, TransformComponentId);
 
   if (light_count == 0 || camera_count == 0) {
     TracyCZoneEnd(ctx);
@@ -78,8 +76,6 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   // Assume just one view for now
   const CameraComponent *camera_component =
       tb_get_component(camera_components, 0, CameraComponent);
-  const TransformComponent *cam_transform =
-      tb_get_component(cam_transforms, 0, TransformComponent);
 
   const float near = camera_component->near;
   const float far = camera_component->far;
