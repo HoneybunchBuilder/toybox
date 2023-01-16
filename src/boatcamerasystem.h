@@ -14,5 +14,5 @@ typedef struct BoatCameraSystem {
   Allocator tmp_alloc;
 } BoatCameraSystem;
 
-void tb_noclip_controller_system_descriptor(
+void tb_boat_camera_system_descriptor(
     SystemDescriptor *desc, const BoatCameraSystemDescriptor *cam_desc);
