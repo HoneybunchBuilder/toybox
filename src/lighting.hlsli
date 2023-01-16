@@ -73,8 +73,7 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 // Shadowing
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
-                   Texture2D shadow_maps[CASCADE_COUNT], sampler samp, float NdotL,
-                   uint cascade_idx) {
+                   Texture2D shadow_map, sampler samp, float NdotL) {
   float bias = max(0.005 * (1.0 - NdotL), 0.0005);
 
   float4 proj_coord = shadow_coord;
@@ -83,16 +82,16 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient,
   proj_coord = proj_coord / proj_coord.w;
 
   float sampled_depth =
-      shadow_maps[cascade_idx].Sample(samp, float2(proj_coord.xy + offset)).r;
+      shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
 
   return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? ambient
                                                                    : 1.0f;
 }
 
-float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[CASCADE_COUNT],
-                 sampler samp, float NdotL, uint cascade_idx) {
+float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
+                 sampler samp, float NdotL) {
   int2 tex_dim;
-  shadow_maps[cascade_idx].GetDimensions(tex_dim.x, tex_dim.y);
+  shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
 
   float scale = 0.75f;
   float dx = scale * (1.0 / float(tex_dim.x));
@@ -105,8 +104,8 @@ float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_maps[CASCA
   for (int x = -range; x <= range; ++x) {
     for (int y = -range; y <= range; ++y) {
       float2 offset = float2(dx * x, dy * y);
-      shadow_factor += texture_proj(shadow_coord, offset, ambient, shadow_maps,
-                                    samp, NdotL, cascade_idx);
+      shadow_factor += texture_proj(shadow_coord, offset, ambient, shadow_map,
+                                    samp, NdotL);
       count++;
     }
   }

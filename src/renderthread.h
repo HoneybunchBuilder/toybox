@@ -154,8 +154,6 @@ typedef struct RenderThread {
 
   Swapchain swapchain;
 
-  VkPipelineCache pipeline_cache;
-
   VkSampler default_sampler;
 
   uint32_t frame_idx;

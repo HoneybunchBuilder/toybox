@@ -531,8 +531,8 @@ VkResult tb_rnd_create_graphics_pipelines(
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,
     VkPipeline *pipelines) {
   VkResult err = vkCreateGraphicsPipelines(
-      self->render_thread->device, self->render_thread->pipeline_cache,
-      create_info_count, create_info, &self->vk_host_alloc_cb, pipelines);
+      self->render_thread->device, self->pipeline_cache, create_info_count,
+      create_info, &self->vk_host_alloc_cb, pipelines);
   TB_VK_CHECK_RET(err, "Failed to create graphics pipeline", err);
   for (uint32_t i = 0; i < create_info_count; ++i) {
     SET_VK_NAME(self->render_thread->device, pipelines[i],
