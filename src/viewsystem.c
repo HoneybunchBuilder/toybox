@@ -163,16 +163,16 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
 
       VkDescriptorPoolCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = self->view_count * 4,
+          .maxSets = self->view_count * 16,
           .poolSizeCount = 2,
           .pPoolSizes =
               (VkDescriptorPoolSize[2]){
                   {
-                      .descriptorCount = self->view_count * 2,
+                      .descriptorCount = self->view_count * 8,
                       .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                   },
                   {
-                      .descriptorCount = self->view_count * 2,
+                      .descriptorCount = self->view_count * 8,
                       .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                   },
               },
