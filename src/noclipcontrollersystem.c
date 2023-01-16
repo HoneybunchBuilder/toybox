@@ -172,23 +172,16 @@ TB_DEFINE_SYSTEM(noclip, NoClipControllerSystem,
 void tb_noclip_controller_system_descriptor(
     SystemDescriptor *desc,
     const NoClipControllerSystemDescriptor *noclip_desc) {
-  desc->name = "NoClip";
-  desc->size = sizeof(NoClipControllerSystem);
-  desc->id = NoClipControllerSystemId;
-  desc->desc = (InternalDescriptor)noclip_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 2;
-  desc->deps[0] = (SystemComponentDependencies){2,
-                                                {
-                                                    TransformComponentId,
-                                                    NoClipComponentId,
-                                                }};
-  desc->deps[1] = (SystemComponentDependencies){1,
-                                                {
-                                                    InputComponentId,
-                                                }};
-  desc->create = tb_create_noclip_system;
-  desc->destroy = tb_destroy_noclip_system;
-  desc->tick = tb_tick_noclip_system;
+  *desc = (SystemDescriptor){
+      .name = "NoClip",
+      .size = sizeof(NoClipControllerSystem),
+      .id = NoClipControllerSystemId,
+      .desc = (InternalDescriptor)noclip_desc,
+      .dep_count = 2,
+      .deps[0] = {2, {TransformComponentId, NoClipComponentId}},
+      .deps[1] = {1, {InputComponentId}},
+      .create = tb_create_noclip_system,
+      .destroy = tb_destroy_noclip_system,
+      .tick = tb_tick_noclip_system,
+  };
 }
