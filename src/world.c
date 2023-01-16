@@ -17,6 +17,7 @@
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "oceancomponent.h"
+#include "sailingcomponents.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
@@ -513,6 +514,10 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
             } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
               component_count++;
               break;
+            } else if (SDL_strncmp(id_str, BoatCameraComponentIdStr, id_len) ==
+                       0) {
+              component_count++;
+              break;
             }
           }
         }
@@ -618,6 +623,10 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
             } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
               comp_id = OceanComponentId;
               break;
+            } else if (SDL_strncmp(id_str, BoatCameraComponentIdStr, id_len) ==
+                       0) {
+              comp_id = BoatCameraComponentId;
+              break;
             }
           }
         }
@@ -681,6 +690,28 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
 
           // Add component to entity
           component_ids[component_idx] = OceanComponentId;
+          component_descriptors[component_idx] = comp_desc;
+          component_idx++;
+        } else if (comp_id == BoatCameraComponentId) {
+          BoatCameraComponentDesc *comp_desc =
+              tb_alloc_tp(tmp_alloc, BoatCameraComponentDesc);
+          *comp_desc = (BoatCameraComponentDesc){0};
+
+          // Find move_speed and look_speed
+          json_object_object_foreach(json, key, value) {
+            if (SDL_strcmp(key, "min_dist") == 0) {
+              comp_desc->min_dist = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "max_dist") == 0) {
+              comp_desc->max_dist = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "move_speed") == 0) {
+              comp_desc->move_speed = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "pitch_limit") == 0) {
+              comp_desc->pitch_limit = (float)json_object_get_double(value);
+            }
+          }
+
+          // Add component to entity
+          component_ids[component_idx] = BoatCameraComponentId;
           component_descriptors[component_idx] = comp_desc;
           component_idx++;
         }
