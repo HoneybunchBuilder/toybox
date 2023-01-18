@@ -47,6 +47,9 @@ void tick_boat_camera_system(BoatCameraSystem *self, const SystemInput *input,
   const PackedComponentStore *input_store =
       tb_get_column_check_id(input, 1, 0, InputComponentId);
 
+  const InputComponent *input_comp =
+      tb_get_component(input_store, 0, InputComponent);
+
   // Copy the boat camera component for output
   BoatCameraComponent *out_boat_cams =
       tb_alloc_nm_tp(self->tmp_alloc, entity_count, BoatCameraComponent);
@@ -63,16 +66,30 @@ void tick_boat_camera_system(BoatCameraSystem *self, const SystemInput *input,
     // Get parent transform to determine where the parent boat hull is that we
     // want to focus on
     TransformComponent *transform_comp = &out_transforms[i];
+    BoatCameraComponent *boat_cam = &out_boat_cams[i];
 
     TransformComponent *hull_transform_comp =
         tb_transform_get_parent(transform_comp);
     float3 hull_pos = hull_transform_comp->transform.position;
-    (void)hull_pos;
 
     // Determine how far the camera wants to be from the boat
+    float3 pos_hull_diff = transform_comp->transform.position - hull_pos;
 
-    // Determine the unit vector that describes the direction the camera wants
-    // to be offset from the boat
+    float target_distance = boat_cam->target_dist;
+
+    target_distance += input_comp->mouse.wheel[1] * boat_cam->zoom_speed;
+    target_distance =
+        tb_clampf(target_distance, boat_cam->min_dist, boat_cam->max_dist);
+
+    // Determine the unit vector that describes the direction the camera
+    // wants to be offset from the boat
+    float3 pos_to_hull = normf3(pos_hull_diff);
+
+    transform_comp->transform.position =
+        tb_lerpf3(transform_comp->transform.position,
+                  pos_to_hull * target_distance, delta_seconds);
+
+    boat_cam->target_dist = target_distance;
   }
 
   (void)input_store;

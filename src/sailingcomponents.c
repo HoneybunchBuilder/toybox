@@ -68,6 +68,7 @@ bool create_boat_camera_component(BoatCameraComponent *comp,
       .min_dist = desc->min_dist,
       .max_dist = desc->max_dist,
       .move_speed = desc->move_speed,
+      .zoom_speed = desc->zoom_speed,
       .pitch_limit = desc->pitch_limit,
   };
   return true;

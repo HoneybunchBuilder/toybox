@@ -73,6 +73,7 @@ typedef struct TBMouse {
   uint8_t left : 1;
   uint8_t middle : 1;
   uint8_t right : 1;
+  float2 wheel;
   float2 axis;
 } TBMouse;
 

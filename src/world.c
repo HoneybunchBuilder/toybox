@@ -705,6 +705,8 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
               comp_desc->max_dist = (float)json_object_get_double(value);
             } else if (SDL_strcmp(key, "move_speed") == 0) {
               comp_desc->move_speed = (float)json_object_get_double(value);
+            } else if (SDL_strcmp(key, "zoom_speed") == 0) {
+              comp_desc->zoom_speed = (float)json_object_get_double(value);
             } else if (SDL_strcmp(key, "pitch_limit") == 0) {
               comp_desc->pitch_limit = (float)json_object_get_double(value);
             }

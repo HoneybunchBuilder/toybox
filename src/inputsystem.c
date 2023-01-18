@@ -58,7 +58,8 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   // Make a copy of the component we want to update
 
   InputComponent input_comp = *incoming_comp;
-  input_comp.mouse.axis = (float2){0}; // Must always clear mouse axis
+  input_comp.mouse.axis = (float2){0}; // Must always clear axes
+  input_comp.mouse.wheel = (float2){0};
   input_comp.controller_count = 0;
   input_comp.controller_states[0] = (TBGameControllerState){.buttons = 0};
   input_comp.controller_states[1] = (TBGameControllerState){.buttons = 0};
@@ -107,6 +108,10 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
             (float)mouse_motion->xrel / 5,
             (float)mouse_motion->yrel / 5,
         };
+      }
+      if (event.type == SDL_MOUSEWHEEL) {
+        input_comp.mouse.wheel =
+            (float2){event.wheel.preciseX, event.wheel.preciseY};
       }
       if (event.type == SDL_MOUSEBUTTONDOWN ||
           event.type == SDL_MOUSEBUTTONUP) {

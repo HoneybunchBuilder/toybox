@@ -58,6 +58,7 @@ typedef struct BoatCameraComponentDesc {
   float min_dist;
   float max_dist;
   float move_speed;
+  float zoom_speed;
   float pitch_limit;
 } BoatCameraComponentDesc;
 
@@ -65,6 +66,7 @@ typedef struct BoatCameraComponent {
   float min_dist;
   float max_dist;
   float move_speed;
+  float zoom_speed;
   float pitch_limit;
 
   float3 offset_dir;

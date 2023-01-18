@@ -648,6 +648,19 @@ float tb_rad_to_deg(float r) { return r * (180 / M_PI); }
 
 // https://en.wikipedia.org/wiki/Linear_interpolation
 float tb_lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
+float3 tb_lerpf3(float3 v0, float3 v1, float a) {
+  return ((1 - a) * v0) + (a * v1);
+}
+
+float tb_clampf(float v, float min, float max) {
+  if (v < min) {
+    return min;
+  }
+  if (v > max) {
+    return max;
+  }
+  return v;
+}
 
 #ifdef __clang__
 #pragma clang diagnostic pop
