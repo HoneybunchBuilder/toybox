@@ -1,0 +1,2 @@
+add_subdirectory(samplecore)
+add_subdirectory(bistro)

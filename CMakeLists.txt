@@ -135,7 +135,7 @@ if(platform MATCHES "windows")
 endif()
 # Prefer whatever dxc is in the vulkan SDK
 # If this picks up a windows kit dxc it may not have spirv support
-# but on linux a dxc on the default path will probably have spirv codegen 
+# but on linux a dxc on the default path will probably have spirv codegen
 # so *shrug*
 find_program(DXC dxc
   PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}
@@ -215,8 +215,11 @@ add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
 file(GLOB source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
+set(lib_source ${source})
+list(REMOVE_ITEM lib_source "${CMAKE_CURRENT_LIST_DIR}/src/main.c")
 
 if(WIN32)
+  add_library(libtoybox STATIC ${lib_source})
   if(MINGW)
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
     target_link_libraries(toybox PRIVATE mingw32 pthread)
@@ -237,17 +240,24 @@ if(WIN32)
   if(MSVC)
     target_compile_options(toybox PRIVATE -Wno-reserved-id-macro)
     target_compile_options(toybox PRIVATE -Wno-documentation)
+
+    target_compile_options(libtoybox PUBLIC -Wno-reserved-id-macro)
+    target_compile_options(libtoybox PUBLIC -Wno-documentation)
   endif()
 
   # Folding VLAs to constant arrays is desired
   target_compile_options(toybox PRIVATE -Wno-gnu-folding-constant)
+  target_compile_options(libtoybox PUBLIC -Wno-gnu-folding-constant)
 
 elseif(ANDROID)
+  add_library(libtoybox STATIC ${lib_source})
   add_library(toybox SHARED ${source})
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
     target_link_libraries(toybox PRIVATE KTX::astcenc-neon-static)
+    target_link_libraries(libtoybox PUBLIC KTX::astcenc-neon-static)
   elseif(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "x86")
     target_link_libraries(toybox PRIVATE KTX::astcenc-avx2-static)
+    target_link_libraries(libtoybox PUBLIC KTX::astcenc-avx2-static)
   endif()
 elseif(UNIX)
   if(APPLE)
@@ -262,7 +272,7 @@ elseif(UNIX)
       endif()
     else()
       # macOS
-      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")  
+      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
     endif()
   else()
     add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
@@ -283,9 +293,11 @@ endif()
 set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 target_link_libraries(toybox PRIVATE ${library_list})
+target_link_libraries(libtoybox PUBLIC ${library_list})
 
 if(PROFILE_TRACY)
   target_link_libraries(toybox PRIVATE "Tracy::TracyClient")
+  target_link_libraries(libtoybox PUBLIC "Tracy::TracyClient")
 endif()
 
 # Get the latest abbreviated commit hash of the working branch
@@ -302,6 +314,10 @@ target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${conf
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
+target_include_directories(libtoybox PUBLIC "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
+# Mingw generates warnings from generated shader headers. Include as a system directory to ignore
+target_include_directories(libtoybox SYSTEM PUBLIC "${CMAKE_CFG_INTDIR_ABS}/shaders")
+target_compile_definitions(libtoybox PUBLIC "-DTB_CONFIG=\"$<CONFIG>\"")
 
 #target_compile_definitions(toybox PRIVATE "-D_DISABLE_STRING_ANNOTATION" "-D_DISABLE_VECTOR_ANNOTATION")
 #target_compile_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer")
@@ -309,21 +325,30 @@ target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
 
 if(FINAL)
   target_compile_definitions(toybox PRIVATE "-DFINAL")
+  target_compile_definitions(libtoybox PUBLIC "-DFINAL")
 endif()
 
 if(STATIC)
   target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
+  target_link_libraries(libtoybox PRIVATE SDL2::SDL2-static)
   set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  set_property(TARGET libtoybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(toybox PRIVATE SDL2::SDL2)
+  target_link_libraries(libtoybox PUBLIC SDL2::SDL2)
 endif()
 
 target_compile_features(toybox PRIVATE c_std_11)
+target_compile_features(libtoybox PUBLIC c_std_11)
 
 # Turn on warnings
 target_compile_options(toybox PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
-  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic> 
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
+target_compile_options(libtoybox PUBLIC
+  $<$<CXX_COMPILER_ID:MSVC>:/W4>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
 )
 
 set(assets_dest "assets")
@@ -334,7 +359,7 @@ if(ANDROID)
           LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
 elseif(APPLE AND NOT IOS)
   # Have to do this or else it won't be placed in the right part of the app package
-  install(TARGETS toybox 
+  install(TARGETS toybox
     RUNTIME DESTINATION "./../MacOS/"
     BUNDLE DESTINATION "./../MacOS/")
 else()
@@ -519,3 +544,5 @@ else()
 
   include(CPack)
 endif()
+
+add_subdirectory(samples)
