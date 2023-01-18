@@ -662,6 +662,14 @@ float tb_clampf(float v, float min, float max) {
   return v;
 }
 
+float3 tb_clampf3(float3 v, float3 min, float3 max) {
+  return (float3){
+      tb_clampf(v[0], min[0], max[0]),
+      tb_clampf(v[1], min[1], max[1]),
+      tb_clampf(v[2], min[2], max[2]),
+  };
+}
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
