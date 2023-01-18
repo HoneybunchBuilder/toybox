@@ -110,8 +110,14 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
         };
       }
       if (event.type == SDL_MOUSEWHEEL) {
-        input_comp.mouse.wheel =
-            (float2){event.wheel.preciseX, event.wheel.preciseY};
+
+        if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+          input_comp.mouse.wheel =
+              (float2){event.wheel.preciseX, event.wheel.preciseY};
+        } else {
+          input_comp.mouse.wheel =
+              (float2){-event.wheel.preciseX, -event.wheel.preciseY};
+        }
       }
       if (event.type == SDL_MOUSEBUTTONDOWN ||
           event.type == SDL_MOUSEBUTTONUP) {

@@ -76,6 +76,9 @@ void tick_boat_camera_system(BoatCameraSystem *self, const SystemInput *input,
     float3 pos_hull_diff = transform_comp->transform.position - hull_pos;
 
     float target_distance = boat_cam->target_dist;
+    if (target_distance == 0.0f) {
+      target_distance = magf3(pos_hull_diff);
+    }
 
     target_distance += input_comp->mouse.wheel[1] * boat_cam->zoom_speed;
     target_distance =
