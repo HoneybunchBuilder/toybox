@@ -163,11 +163,11 @@ Frustum frustum_from_view_proj(const float4x4 *vp);
 
 bool frustum_test_aabb(const Frustum *frust, const AABB *aabb);
 
-float tb_deg_to_rad(float d);
-float tb_rad_to_deg(float r);
+float deg_to_rad(float d);
+float rad_to_deg(float r);
 
-float tb_lerpf(float v0, float v1, float a);
-float3 tb_lerpf3(float3 v0, float3 v1, float a);
+float lerpf(float v0, float v1, float a);
+float3 lerpf3(float3 v0, float3 v1, float a);
 
-float tb_clampf(float v, float min, float max);
-float3 tb_clampf3(float3 v, float3 min, float3 max);
+float clampf(float v, float min, float max);
+float3 clampf3(float3 v, float3 min, float3 max);

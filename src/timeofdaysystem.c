@@ -59,10 +59,10 @@ float3 lookup_sun_color(float norm) {
   float temperature = 0.0f;
   if (norm < 0.25f) {
     // As sun rises, so does the color temp
-    temperature = tb_lerpf(1000, 12000, norm * 4.0f);
+    temperature = lerpf(1000, 12000, norm * 4.0f);
   } else if (norm < 0.5f) {
     // As the sun sets, the color temp goes back down
-    temperature = tb_lerpf(12000, 1000, (norm - 0.25f) * 4.0f);
+    temperature = lerpf(12000, 1000, (norm - 0.25f) * 4.0f);
   } else {
     // When the sun is set, until it rises, we just bail as the sun should
     // not be providing any light

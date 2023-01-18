@@ -79,15 +79,15 @@ void tick_boat_camera_system(BoatCameraSystem *self, const SystemInput *input,
 
     target_distance += input_comp->mouse.wheel[1] * boat_cam->zoom_speed;
     target_distance =
-        tb_clampf(target_distance, boat_cam->min_dist, boat_cam->max_dist);
+        clampf(target_distance, boat_cam->min_dist, boat_cam->max_dist);
 
     // Determine the unit vector that describes the direction the camera
     // wants to be offset from the boat
     float3 pos_to_hull = normf3(pos_hull_diff);
 
     transform_comp->transform.position =
-        tb_lerpf3(transform_comp->transform.position,
-                  pos_to_hull * target_distance, delta_seconds);
+        lerpf3(transform_comp->transform.position,
+               pos_to_hull * target_distance, delta_seconds);
 
     boat_cam->target_dist = target_distance;
   }

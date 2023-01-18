@@ -643,16 +643,16 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
   return true;
 }
 
-float tb_deg_to_rad(float d) { return d * (M_PI / 180.0f); }
-float tb_rad_to_deg(float r) { return r * (180 / M_PI); }
+float deg_to_rad(float d) { return d * (M_PI / 180.0f); }
+float rad_to_deg(float r) { return r * (180 / M_PI); }
 
 // https://en.wikipedia.org/wiki/Linear_interpolation
-float tb_lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
-float3 tb_lerpf3(float3 v0, float3 v1, float a) {
+float lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
+float3 lerpf3(float3 v0, float3 v1, float a) {
   return ((1 - a) * v0) + (a * v1);
 }
 
-float tb_clampf(float v, float min, float max) {
+float clampf(float v, float min, float max) {
   if (v < min) {
     return min;
   }
@@ -662,11 +662,11 @@ float tb_clampf(float v, float min, float max) {
   return v;
 }
 
-float3 tb_clampf3(float3 v, float3 min, float3 max) {
+float3 clampf3(float3 v, float3 min, float3 max) {
   return (float3){
-      tb_clampf(v[0], min[0], max[0]),
-      tb_clampf(v[1], min[1], max[1]),
-      tb_clampf(v[2], min[2], max[2]),
+      clampf(v[0], min[0], max[0]),
+      clampf(v[1], min[1], max[1]),
+      clampf(v[2], min[2], max[2]),
   };
 }
 
