@@ -214,74 +214,73 @@ endforeach()
 add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
-file(GLOB source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
-set(lib_source ${source})
-list(REMOVE_ITEM lib_source "${CMAKE_CURRENT_LIST_DIR}/src/main.c")
+function(tb_add_app target_name source)
 
-if(WIN32)
-  add_library(libtoybox STATIC ${lib_source})
-  if(MINGW)
-    add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
-    target_link_libraries(toybox PRIVATE mingw32 pthread)
-    target_link_options(toybox PRIVATE -mwindows)
-  else()
-    add_executable(toybox WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/toybox.rc")
-    if(NOT MSVC)
-      target_link_options(toybox PRIVATE -Wl,/subsystem:windows)
+  if(WIN32)
+    if(MINGW)
+      add_executable(${target_name} ${source} "${CMAKE_CURRENT_LIST_DIR}/source/win32/${target_name}.rc")
+      target_link_libraries(${target_name}  PRIVATE mingw32 pthread)
+      target_link_options(${target_name} PRIVATE -mwindows)
+    else()
+      add_executable(${target_name} WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/source/win32/${target_name}.rc")
+      if(NOT MSVC)
+        target_link_options(${target_name} PRIVATE -Wl,/subsystem:windows)
+      endif()
+    endif()
+  elseif(ANDROID)
+    add_library(${target_name} SHARED ${source})
+  elseif(UNIX)
+    if(APPLE)
+      if(IOS)
+        # iOS
+        find_library(IMAGEIO ImageIO REQUIRED)
+        find_library(CORESERVICES CoreServices REQUIRED)
+        add_executable(${target_name} ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
+        target_link_libraries(${target_name} PRIVATE ${IMAGEIO} ${CORESERVICES})
+        if(CMAKE_GENERATOR MATCHES "Xcode")
+          set_target_properties(${target_name} PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.honeybunch.${target_name}")
+        endif()
+      else()
+        # macOS
+        add_executable(${target_name} ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
+      endif()
+    else()
+      add_executable(${target_name} ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
     endif()
   endif()
 
-  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT toybox)
-  set_property(TARGET toybox PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+  target_link_libraries(${target_name} PRIVATE libtoybox)
 
+  # Some helpers for Visual Studio
+  set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${target_name})
+  set_property(TARGET ${target_name} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+
+endfunction()
+
+file(GLOB lib_source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
+add_library(libtoybox STATIC ${lib_source})
+
+if(WIN32)
   # This really only matters for clang-cl
   # ${CMAKE_C_COMPILER_ID} being MSVC would fail the above check
   # So thing of this more as if(MSVC-style-compiler)
   if(MSVC)
-    target_compile_options(toybox PRIVATE -Wno-reserved-id-macro)
-    target_compile_options(toybox PRIVATE -Wno-documentation)
-
     target_compile_options(libtoybox PUBLIC -Wno-reserved-id-macro)
     target_compile_options(libtoybox PUBLIC -Wno-documentation)
   endif()
 
   # Folding VLAs to constant arrays is desired
-  target_compile_options(toybox PRIVATE -Wno-gnu-folding-constant)
   target_compile_options(libtoybox PUBLIC -Wno-gnu-folding-constant)
 
 elseif(ANDROID)
-  add_library(libtoybox STATIC ${lib_source})
-  add_library(toybox SHARED ${source})
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
-    target_link_libraries(toybox PRIVATE KTX::astcenc-neon-static)
     target_link_libraries(libtoybox PUBLIC KTX::astcenc-neon-static)
   elseif(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "x86")
-    target_link_libraries(toybox PRIVATE KTX::astcenc-avx2-static)
     target_link_libraries(libtoybox PUBLIC KTX::astcenc-avx2-static)
-  endif()
-elseif(UNIX)
-  if(APPLE)
-    if(IOS)
-      # iOS
-      find_library(IMAGEIO ImageIO REQUIRED)
-      find_library(CORESERVICES CoreServices REQUIRED)
-      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
-      target_link_libraries(toybox PRIVATE ${IMAGEIO} ${CORESERVICES})
-      if(CMAKE_GENERATOR MATCHES "Xcode")
-        set_target_properties(toybox PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.honeybunch.toybox")
-      endif()
-    else()
-      # macOS
-      add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
-    endif()
-  else()
-    add_executable(toybox ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
   endif()
 endif()
 
-add_dependencies(toybox shaders)
-
-target_sources(toybox PRIVATE ${rt_shader_files} ${shader_files} ${shader_headers})
+target_sources(libtoybox PRIVATE ${rt_shader_files} ${shader_files} ${shader_headers})
 
 if(isMultiConfig)
     get_filename_component(CMAKE_CFG_INTDIR_ABS "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>" ABSOLUTE)
@@ -292,11 +291,9 @@ endif()
 
 set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
-target_link_libraries(toybox PRIVATE ${library_list})
 target_link_libraries(libtoybox PUBLIC ${library_list})
 
 if(PROFILE_TRACY)
-  target_link_libraries(toybox PRIVATE "Tracy::TracyClient")
   target_link_libraries(libtoybox PUBLIC "Tracy::TracyClient")
 endif()
 
@@ -310,42 +307,25 @@ execute_process(COMMAND git log -1 --format=%h
 set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
 configure_file(src/config.h.in ${config_include_dir}/config.h @ONLY)
 
-target_include_directories(toybox PRIVATE "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
-# Mingw generates warnings from generated shader headers. Include as a system directory to ignore
-target_include_directories(toybox SYSTEM PRIVATE "${CMAKE_CFG_INTDIR_ABS}/shaders")
-target_compile_definitions(toybox PRIVATE "-DTB_CONFIG=\"$<CONFIG>\"")
 target_include_directories(libtoybox PUBLIC "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(libtoybox SYSTEM PUBLIC "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(libtoybox PUBLIC "-DTB_CONFIG=\"$<CONFIG>\"")
 
-#target_compile_definitions(toybox PRIVATE "-D_DISABLE_STRING_ANNOTATION" "-D_DISABLE_VECTOR_ANNOTATION")
-#target_compile_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer")
-#target_link_options(toybox PRIVATE "-fsanitize=address" "-fno-omit-frame-pointer" "-fuse-ld=lld")
-
 if(FINAL)
-  target_compile_definitions(toybox PRIVATE "-DFINAL")
   target_compile_definitions(libtoybox PUBLIC "-DFINAL")
 endif()
 
 if(STATIC)
-  target_link_libraries(toybox PRIVATE SDL2::SDL2-static)
-  target_link_libraries(libtoybox PRIVATE SDL2::SDL2-static)
-  set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  target_link_libraries(libtoybox PUBLIC SDL2::SDL2-static)
   set_property(TARGET libtoybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
-  target_link_libraries(toybox PRIVATE SDL2::SDL2)
   target_link_libraries(libtoybox PUBLIC SDL2::SDL2)
 endif()
 
-target_compile_features(toybox PRIVATE c_std_11)
 target_compile_features(libtoybox PUBLIC c_std_11)
 
 # Turn on warnings
-target_compile_options(toybox PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4>
-  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
-)
 target_compile_options(libtoybox PUBLIC
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
@@ -354,16 +334,16 @@ target_compile_options(libtoybox PUBLIC
 set(assets_dest "assets")
 if(ANDROID)
   set(assets_dest "$<CONFIG>/assets")
-  install(TARGETS toybox
+  install(TARGETS libtoybox
           RUNTIME DESTINATION "$<CONFIG>/lib/${arch}"
           LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
 elseif(APPLE AND NOT IOS)
   # Have to do this or else it won't be placed in the right part of the app package
-  install(TARGETS toybox
+  install(TARGETS libtoybox
     RUNTIME DESTINATION "./../MacOS/"
     BUNDLE DESTINATION "./../MacOS/")
 else()
-  install(TARGETS toybox
+  install(TARGETS libtoybox
           RUNTIME DESTINATION "."
           BUNDLE DESTINATION "."
           LIBRARY DESTINATION ".")
@@ -437,18 +417,7 @@ add_custom_target(asset_manifest DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
 if(COOK_ASSETS)
-  add_dependencies(toybox scenes textures asset_manifest)
-
-  # Add assets to bundle
-  #[[ TODO: Figure out how to get this to work with xcode
-            It currently fails because ${scene} resolves to a path with a generator expression
-  if(APPLE)
-    foreach(scene ${packed_scenes})
-      set_source_files_properties(${scene} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets/scenes")
-      target_sources(toybox PRIVATE ${scene})
-    endforeach()
-  endif()
-  #]]
+  add_dependencies(libtoybox scenes textures asset_manifest)
 
   # Install cooked assets
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
@@ -457,21 +426,21 @@ endif()
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)
-  install(FILES $<TARGET_FILE_DIR:toybox>/SDL2$<$<CONFIG:Debug>:d>.dll
+  install(FILES $<TARGET_FILE_DIR:libtoybox>/SDL2$<$<CONFIG:Debug>:d>.dll
         DESTINATION .)
-  install(FILES $<TARGET_FILE_DIR:toybox>/libpng16$<$<CONFIG:Debug>:d>.dll
+  install(FILES $<TARGET_FILE_DIR:libtoybox>/libpng16$<$<CONFIG:Debug>:d>.dll
         DESTINATION .)
-  install(FILES $<TARGET_FILE_DIR:toybox>/mimalloc-redirect.dll
+  install(FILES $<TARGET_FILE_DIR:libtoybox>/mimalloc-redirect.dll
         DESTINATION .)
   if(MINGW)
-    install(FILES $<TARGET_FILE_DIR:toybox>/libzlib$<$<CONFIG:Debug>:d>1.dll
+    install(FILES $<TARGET_FILE_DIR:libtoybox>/libzlib$<$<CONFIG:Debug>:d>1.dll
       DESTINATION .)
-    install(FILES $<TARGET_FILE_DIR:toybox>/libzstd.dll
+    install(FILES $<TARGET_FILE_DIR:libtoybox>/libzstd.dll
       DESTINATION .)
   else()
-    install(FILES $<TARGET_FILE_DIR:toybox>/zlib$<$<CONFIG:Debug>:d>1.dll
+    install(FILES $<TARGET_FILE_DIR:libtoybox>/zlib$<$<CONFIG:Debug>:d>1.dll
           DESTINATION .)
-    install(FILES $<TARGET_FILE_DIR:toybox>/zstd$<$<CONFIG:Debug>:d>.dll
+    install(FILES $<TARGET_FILE_DIR:libtoybox>/zstd$<$<CONFIG:Debug>:d>.dll
           DESTINATION .)
   endif()
 

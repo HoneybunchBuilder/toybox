@@ -1,12 +1,7 @@
-file(GLOB_RECURSE bistro_source "source/*.c")
+file(GLOB_RECURSE boat_source "source/*.c")
 
-if(WIN32)
-add_executable(tb_bistro WIN32 ${bistro_source})
-else()
-add_executable(tb_bistro ${bistro_source})
-endif()
-
-target_link_libraries(tb_bistro PRIVATE tb_samplecore)
+tb_add_app(tb_boat ${boat_source})
+target_link_libraries(tb_boat PRIVATE tb_samplecore)
 
 file(GLOB_RECURSE scenes CONFIGURE_DEPENDS "${CMAKE_BINARY_DIR}/*/assets/scenes/*.glb")
 file(GLOB_RECURSE textures CONFIGURE_DEPENDS "${CMAKE_BINARY_DIR}/*/assets/textures/*.ktx2")
@@ -37,5 +32,5 @@ foreach(engine_texture ${textures})
 
     list(APPEND engine_assets ${asset_copy})
 endforeach()
-add_custom_target(engine_asset_copy_bistro DEPENDS ${engine_assets})
-add_dependencies(tb_bistro engine_asset_copy_bistro)
+add_custom_target(engine_asset_copy_boat DEPENDS ${engine_assets})
+add_dependencies(tb_boat engine_asset_copy_boat)
