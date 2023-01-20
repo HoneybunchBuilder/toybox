@@ -1,17 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-if(NOT DEFINED ENV{VCPKG_ROOT})
-  message(FATAL_ERROR "Need VCPKG_ROOT environment variable defined")
-endif()
-set(VCPKG_ROOT $ENV{VCPKG_ROOT})
-
-message(STATUS "Using vcpkg root ${VCPKG_ROOT}")
-
-if(NOT CMAKE_TOOLCHAIN_FILE)
-  set(CMAKE_TOOLCHAIN_FILE ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
-    CACHE STRING "Vcpkg toolchain file")
-endif()
-
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)

@@ -11,6 +11,7 @@
       "displayName": "x64 Windows Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/windows",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_C_COMPILER": "clang",
@@ -29,6 +30,7 @@
       "displayName": "x64 Windows Static Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/windows-static",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_C_COMPILER": "clang",
@@ -47,6 +49,7 @@
       "displayName": "x64 Mingw Ninja GCC",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/mingw",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
         "CMAKE_C_COMPILER": "gcc",
@@ -64,6 +67,7 @@
       "displayName": "x64 Mingw Static Ninja GCC",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/mingw-static",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
         "CMAKE_C_COMPILER": "gcc",
@@ -81,6 +85,7 @@
       "displayName": "x64 Windows VS2022 LLVM",
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/x64/windows-clangcl",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "toolset": {
         "value": "ClangCL",
         "strategy": "set"
@@ -104,6 +109,7 @@
       "displayName": "x64 Windows Static VS2022 LLVM",
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build/x64/windows-static-clangcl",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "toolset": {
         "value": "ClangCL",
         "strategy": "set"
@@ -127,6 +133,7 @@
       "displayName": "arm64 Android Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/android",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-android",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
@@ -140,6 +147,7 @@
       "displayName": "x64 Linux Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/linux-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-linux",
         "CMAKE_C_COMPILER": "clang",
@@ -157,6 +165,7 @@
       "displayName": "x64 Linux Ninja GCC",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/x64/linux-gcc",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-linux",
         "CMAKE_C_COMPILER": "gcc",
@@ -174,6 +183,7 @@
       "displayName": "arm64 Linux Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/linux-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-linux",
         "CMAKE_C_COMPILER": "clang",
@@ -191,6 +201,7 @@
       "displayName": "arm64 Linux Ninja GCC",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/linux-gcc",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-linux",
         "CMAKE_C_COMPILER": "gcc",
@@ -208,6 +219,7 @@
       "displayName": "arm64 macOS Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/macos-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-osx",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -226,6 +238,7 @@
       "displayName": "arm64 macOS Xcode LLVM",
       "generator": "Xcode",
       "binaryDir": "${sourceDir}/build/arm64/macos-xcode-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-osx",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -244,6 +257,7 @@
       "displayName": "arm64 macOS Ninja GCC",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/macos-gcc",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-osx",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -262,6 +276,7 @@
       "displayName": "arm64 iOS Ninja LLVM",
       "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/arm64/iOS-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-ios",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
@@ -281,6 +296,7 @@
       "displayName": "arm64 iOS Xcode LLVM",
       "generator": "Xcode",
       "binaryDir": "${sourceDir}/build/arm64/iOS-xcode-llvm",
+      "toolchainFile": "${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-ios",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
