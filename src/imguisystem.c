@@ -688,25 +688,19 @@ TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
 
 void tb_imgui_system_descriptor(SystemDescriptor *desc,
                                 const ImGuiSystemDescriptor *imgui_desc) {
-  desc->name = "ImGui";
-  desc->size = sizeof(ImGuiSystem);
-  desc->id = ImGuiSystemId;
-  desc->desc = (InternalDescriptor)imgui_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 2;
-  desc->deps[0] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {InputComponentId},
+  *desc = (SystemDescriptor){
+      .name = "ImGui",
+      .size = sizeof(ImGuiSystem),
+      .id = ImGuiSystemId,
+      .desc = (InternalDescriptor)imgui_desc,
+      .dep_count = 2,
+      .deps[0] = (SystemComponentDependencies){1, {InputComponentId}},
+      .deps[1] = (SystemComponentDependencies){1, {ImGuiComponentId}},
+      .system_dep_count = 2,
+      .system_deps[0] = RenderSystemId,
+      .system_deps[1] = RenderPipelineSystemId,
+      .create = tb_create_imgui_system,
+      .destroy = tb_destroy_imgui_system,
+      .tick = tb_tick_imgui_system,
   };
-  desc->deps[1] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {ImGuiComponentId},
-  };
-  desc->system_dep_count = 2;
-  desc->system_deps[0] = RenderSystemId;
-  desc->system_deps[1] = RenderPipelineSystemId;
-  desc->create = tb_create_imgui_system;
-  desc->destroy = tb_destroy_imgui_system;
-  desc->tick = tb_tick_imgui_system;
 }

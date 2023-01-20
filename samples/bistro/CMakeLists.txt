@@ -1,11 +1,6 @@
 file(GLOB_RECURSE bistro_source "source/*.c")
 
-if(WIN32)
-add_executable(tb_bistro WIN32 ${bistro_source})
-else()
-add_executable(tb_bistro ${bistro_source})
-endif()
-
+tb_add_app(tb_bistro ${bistro_source})
 target_link_libraries(tb_bistro PRIVATE tb_samplecore)
 
 file(GLOB_RECURSE scenes CONFIGURE_DEPENDS "${CMAKE_BINARY_DIR}/*/assets/scenes/*.glb")
