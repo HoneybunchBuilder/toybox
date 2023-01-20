@@ -37,9 +37,12 @@ For Mingw you will just need a `gcc` install (tested with distributions from cho
 
 To build the dependency `ktx` you will need to have bash installed. The bash from git works just fine. If you have git installed from somewhere non-standard like `scoop` or `choco` you will also need it to be available from `C:\Program Files\Git` or else the `FindBash` module of `ktx` will not function properly in vcpkg's environment. I've tried passing bash through via `VCPKG_KEEP_ENV_VARS` to no avail.
 
-Packaging a .msi file requires the Wix Toolset. Its tools (candle, light, etc.) are expected to be available on your path.
-
 #### Android
+NOT PRIORITY
+Android's vulkan device story is pretty lame these days and it doesn't look like it's getting any shiny new features that I care about such as mesh shaders. So while CI builds android to verify that the C++ can build properly the tools to package apks and produce a proper application have been stripped as they had rotted.
+
+If you still feel like being brave:
+
 You will need the following installed from the android sdkmanager:
 * `build-tools;31.0.0` (anything 30+ works; try latest)
 * `ndk;23.0.7599858` (24.0.8215888 also works)
@@ -58,10 +61,12 @@ For DXC to work properly you may need libncurses5 installed. You can install tha
 
 Ubuntu with: `sudo apt install -y libncurses5`
 
-#### Macos / iOS
+#### macOS
 You should only need the xcode developer command line tools installed and the MoltenVK Vulkan SDK (primarily for `dxc`).
+Builds for macOS made by CI but they aren't regularly tested.
 
-These are somewhat untested. Builds for macOS do work and even package properly but iOS builds have not been setup to properly package .ipa files nor has it been tested on any devices.
+#### iOS
+iOS is similar to Android in that mobile is not generally a desired platform so while CI does build for iOS it remains untested and unsupported
 
 ### CLI Build
 Check `CMakePresets.json` for the various supported configuration and build presets
