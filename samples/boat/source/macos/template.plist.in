@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>Toybox</string>
+  <string>tb_boat</string>
   <key>CFBundleIconFile</key>
-  <string>toybox.icns</string>
+  <string>tb_boat.icns</string>
 </dict>
 </plist>

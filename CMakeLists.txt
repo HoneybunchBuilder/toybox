@@ -13,6 +13,7 @@ project(toybox
         DESCRIPTION "A personal game engine toybox project"
         LANGUAGES C CXX)
 
+option(TB_BUILD_SAMPLES "Compile samples" ON)
 option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
@@ -133,8 +134,8 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # Compile Shaders
-file(GLOB shader_includes "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsli")
-file(GLOB shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl")
+file(GLOB shader_includes "${CMAKE_CURRENT_LIST_DIR}/include/*.hlsli")
+file(GLOB shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
 
 foreach(shader ${shader_files})
   get_filename_component(filename ${shader} NAME_WLE)
@@ -155,7 +156,7 @@ foreach(shader ${shader_files})
   list(APPEND shader_headers ${out_paths})
 endforeach()
 
-file(GLOB mesh_shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.m")
+file(GLOB mesh_shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.m")
 foreach(shader ${mesh_shader_files})
   get_filename_component(filename ${shader} NAME_WLE)
   get_filename_component(filename ${filename} NAME_WLE)
@@ -176,7 +177,7 @@ foreach(shader ${mesh_shader_files})
   list(APPEND shader_headers ${out_paths})
 endforeach()
 
-file(GLOB rt_shader_files "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.rt")
+file(GLOB rt_shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.rt")
 foreach(shader ${rt_shader_files})
   get_filename_component(filename ${shader} NAME_WLE)
   get_filename_component(filename ${filename} NAME_WLE)
@@ -246,7 +247,7 @@ function(tb_add_app target_name source)
 
 endfunction()
 
-file(GLOB lib_source "${CMAKE_CURRENT_LIST_DIR}/src/*.c" "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/src/*.h")
+file(GLOB lib_source "${CMAKE_CURRENT_LIST_DIR}/source/*.c" "${CMAKE_CURRENT_LIST_DIR}/source/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/source/*.h")
 add_library(toybox STATIC ${lib_source})
 
 if(WIN32)
@@ -270,7 +271,7 @@ elseif(ANDROID)
 endif()
 
 if(NOT WIN32)
-  target_sources(toybox PRIVATE "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
+  target_sources(toybox PRIVATE "${CMAKE_CURRENT_LIST_DIR}/source/posix/entry.c")
 endif()
 
 target_sources(toybox PRIVATE ${rt_shader_files} ${shader_files} ${shader_headers})
@@ -295,9 +296,10 @@ execute_process(COMMAND git log -1 --format=%h
 
 # Generate config header
 set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-configure_file(src/config.h.in ${config_include_dir}/config.h @ONLY)
+configure_file(source/config.h.in ${config_include_dir}/config.h @ONLY)
 
-target_include_directories(toybox PUBLIC "src/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
+target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(toybox SYSTEM PUBLIC "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PUBLIC "-DTB_CONFIG=\"$<CONFIG>\"")
@@ -402,7 +404,7 @@ foreach(idx ${scene_index_list})
   string(APPEND SCENE_LIST "${idx},")
 endforeach()
 
-configure_file(src/assetmanifest.h.in ${generated_manifest})
+configure_file(source/assetmanifest.h.in ${generated_manifest})
 add_custom_target(asset_manifest DEPENDS ${generated_manifest})
 
 # Toybox needs assets cooked
@@ -454,4 +456,6 @@ if(NOT STATIC AND WIN32)
   endforeach()
 endif()
 
-add_subdirectory(samples)
+if(TB_BUILD_SAMPLES)
+  add_subdirectory(samples)
+endif()
