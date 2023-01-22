@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef TB_PBR_H
+#define TB_PBR_H
+
 #include "common.hlsli"
 
 // Constant normal incidence Fresnel factor for all dielectrics.
@@ -68,3 +71,5 @@ float3 tonemap(float3 x) {
   float F = 0.30;
   return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
+
+#endif

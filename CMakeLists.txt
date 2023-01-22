@@ -134,7 +134,8 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # Compile Shaders
-file(GLOB shader_includes "${CMAKE_CURRENT_LIST_DIR}/include/*.hlsli")
+set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
+file(GLOB shader_includes "${shader_include_dir}/*.hlsli")
 file(GLOB shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
 
 foreach(shader ${shader_files})
@@ -148,8 +149,8 @@ foreach(shader ${shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
-      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${vert_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -169,8 +170,8 @@ foreach(shader ${mesh_shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${mesh_out_path}
-      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
+      COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${mesh_out_path}
+      COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${frag_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -191,9 +192,9 @@ foreach(shader ${rt_shader_files})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T lib_6_5 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
-      COMMAND ${DXC} -T lib_6_5 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
-      COMMAND ${DXC} -T lib_6_5 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
+      COMMAND ${DXC} -T lib_6_5 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )

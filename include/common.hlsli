@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef TB_COMMON_H
+#define TB_COMMON_H
+
 #ifndef __HLSL_VERSION
 #include "simd.h" // If not a shader, we need simd types
 #endif
@@ -79,5 +82,7 @@ float linear_depth(float depth, float near, float far) {
 float depth_from_clip_z(float z, float near, float far) {
   return max((1.0 - z / near) * far, 0);
 }
+
+#endif
 
 #endif
