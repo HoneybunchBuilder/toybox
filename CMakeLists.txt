@@ -18,6 +18,8 @@ option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
 
+set(toybox_source_dir ${CMAKE_CURRENT_LIST_DIR})
+
 set(ENGINE_NAME "toybox")
 set(ENGINE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
 set(ENGINE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
@@ -293,7 +295,7 @@ function(cook_assets target_name out_assets_path)
     string(APPEND SCENE_LIST "${idx},")
   endforeach()
 
-  configure_file(${CMAKE_CURRENT_LIST_DIR}/source/assetmanifest.h.in ${generated_manifest})
+  configure_file(${toybox_source_dir}/source/assetmanifest.h.in ${generated_manifest})
   add_custom_target(${target_name}_asset_manifest DEPENDS ${generated_manifest})
 
   add_dependencies(${target_name} ${target_name}_scenes ${target_name}_textures ${target_name}_asset_manifest)
