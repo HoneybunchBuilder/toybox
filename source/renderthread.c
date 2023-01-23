@@ -6,8 +6,8 @@
 #include "allocator.h"
 #include "profiling.h"
 
-#include "config.h"
 #include "tbcommon.h"
+#include "tbengineconfig.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvkalloc.h"
@@ -215,8 +215,7 @@ bool init_instance(SDL_Window *window, Allocator tmp_alloc,
     VkApplicationInfo app_info = {0};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "Toybox";
-    app_info.applicationVersion = VK_MAKE_VERSION(
-        TB_GAME_VERSION_MAJOR, TB_GAME_VERSION_MINOR, TB_GAME_VERSION_PATCH);
+    app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
     app_info.pEngineName = TB_ENGINE_NAME;
     app_info.engineVersion =
         VK_MAKE_VERSION(TB_ENGINE_VERSION_MAJOR, TB_ENGINE_VERSION_MINOR,

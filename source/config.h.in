@@ -22,9 +22,3 @@
 #define TB_ARCH "@arch@"
 
 #define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
-
-#define TB_APP_INFO_STR                                                        \
-  TB_GAME_NAME                                                                 \
-  " - Version: " TB_GAME_VERSION "\n" TB_ENGINE_NAME                           \
-  " - Version: " TB_ENGINE_VERSION "\nPlatform: " TB_PLATFORM                  \
-  "\nArch: " TB_ARCH "\nCheckout: " GIT_COMMIT_HASH

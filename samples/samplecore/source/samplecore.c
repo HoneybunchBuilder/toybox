@@ -3,12 +3,12 @@
 #include <mimalloc.h>
 
 #include "allocator.h"
-#include "config.h"
 #include "pi.h"
 #include "profiling.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tbengineconfig.h"
 #include "world.h"
 
 #include "tbcommon.h"
@@ -56,7 +56,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SDL_Log("%s", "Entered SDL_main");
   {
-    const char *app_info = TB_APP_INFO_STR;
+    const char *app_info = "Debug";
     size_t app_info_len = strlen(app_info);
     TracyCAppInfo(app_info, app_info_len)(void) app_info_len;
 
