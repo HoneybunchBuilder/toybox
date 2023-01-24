@@ -17,7 +17,6 @@
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "oceancomponent.h"
-#include "sailingcomponents.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
@@ -29,11 +28,14 @@ void create_component_store(ComponentStore *store,
                             const ComponentDescriptor *desc) {
   store->name = desc->name;
   store->id = desc->id;
+  store->id_str = desc->id_str;
   store->size = desc->size;
+  store->desc_size = desc->desc_size;
   store->count = 0;
   store->components = NULL;
   store->desc = *desc;
   store->create = desc->create;
+  store->deserialize = desc->deserialize;
   store->destroy = desc->destroy;
 }
 
@@ -503,21 +505,16 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
       if (json) {
         json_object_object_foreach(json, key, value) {
           if (SDL_strncmp(key, "id", 2) == 0) {
-            const int32_t id_len = json_object_get_string_len(value);
             const char *id_str = json_object_get_string(value);
-            if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
-              component_count++;
-              break;
-            } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
-              component_count++;
-              break;
-            } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
-              component_count++;
-              break;
-            } else if (SDL_strncmp(id_str, BoatCameraComponentIdStr, id_len) ==
-                       0) {
-              component_count++;
-              break;
+
+            for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+                 ++comp_idx) {
+              const ComponentStore *store = &world->component_stores[comp_idx];
+              if (store->deserialize &&
+                  SDL_strcmp(store->id_str, id_str) == 0) {
+                component_count++;
+                break;
+              }
             }
           }
         }
@@ -609,113 +606,24 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
       json_object *json =
           json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
       if (json) {
-        ComponentId comp_id = 0;
         json_object_object_foreach(json, key, value) {
           if (SDL_strcmp(key, "id") == 0) {
-            const int32_t id_len = json_object_get_string_len(value);
             const char *id_str = json_object_get_string(value);
-            if (SDL_strncmp(id_str, NoClipComponentIdStr, id_len) == 0) {
-              comp_id = NoClipComponentId;
-              break;
-            } else if (SDL_strncmp(id_str, SkyComponentIdStr, id_len) == 0) {
-              comp_id = SkyComponentId;
-              break;
-            } else if (SDL_strncmp(id_str, OceanComponentIdStr, id_len) == 0) {
-              comp_id = OceanComponentId;
-              break;
-            } else if (SDL_strncmp(id_str, BoatCameraComponentIdStr, id_len) ==
-                       0) {
-              comp_id = BoatCameraComponentId;
-              break;
+
+            for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+                 ++comp_idx) {
+              const ComponentStore *store = &world->component_stores[comp_idx];
+              if (store->deserialize &&
+                  SDL_strcmp(store->id_str, id_str) == 0) {
+                void *comp_desc = tb_alloc(tmp_alloc, store->desc_size);
+                store->deserialize(json, comp_desc);
+                component_ids[component_idx] = store->id;
+                component_descriptors[component_idx] = comp_desc;
+                component_idx++;
+                break;
+              }
             }
           }
-        }
-
-        if (comp_id == NoClipComponentId) {
-          NoClipComponentDescriptor *comp_desc =
-              tb_alloc_tp(tmp_alloc, NoClipComponentDescriptor);
-          *comp_desc = (NoClipComponentDescriptor){0};
-
-          // Find move_speed and look_speed
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strcmp(key, "move_speed") == 0) {
-              comp_desc->move_speed = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "look_speed") == 0) {
-              comp_desc->look_speed = (float)json_object_get_double(value);
-            }
-          }
-
-          // Add component to entity
-          component_ids[component_idx] = NoClipComponentId;
-          component_descriptors[component_idx] = comp_desc;
-          component_idx++;
-        } else if (comp_id == SkyComponentId) {
-          SkyComponentDescriptor *comp_desc =
-              tb_alloc_tp(tmp_alloc, SkyComponentDescriptor);
-          *comp_desc = (SkyComponentDescriptor){0};
-
-          // Find properties
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strcmp(key, "cirrus") == 0) {
-              comp_desc->cirrus = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "cumulus") == 0) {
-              comp_desc->cumulus = (float)json_object_get_double(value);
-            }
-          }
-          comp_desc->sun_dir = (float3){0.0f, 1.0f, 0.0f}; // TMP HACK
-
-          // Add component to entity
-          component_ids[component_idx] = SkyComponentId;
-          component_descriptors[component_idx] = comp_desc;
-          component_idx++;
-        } else if (comp_id == OceanComponentId) {
-          OceanComponentDescriptor *comp_desc =
-              tb_alloc_tp(tmp_alloc, OceanComponentDescriptor);
-          *comp_desc = (OceanComponentDescriptor){
-              .wave_count = 1,
-          };
-          OceanWave *wave = &comp_desc->waves[0];
-          // Find properties for the first wave
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strcmp(key, "steepness") == 0) {
-              wave->steepness = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "wavelength") == 0) {
-              wave->wavelength = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "direction_x") == 0) {
-              wave->direction[0] = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "direction_y") == 0) {
-              wave->direction[1] = (float)json_object_get_double(value);
-            }
-          }
-
-          // Add component to entity
-          component_ids[component_idx] = OceanComponentId;
-          component_descriptors[component_idx] = comp_desc;
-          component_idx++;
-        } else if (comp_id == BoatCameraComponentId) {
-          BoatCameraComponentDesc *comp_desc =
-              tb_alloc_tp(tmp_alloc, BoatCameraComponentDesc);
-          *comp_desc = (BoatCameraComponentDesc){0};
-
-          // Find move_speed and look_speed
-          json_object_object_foreach(json, key, value) {
-            if (SDL_strcmp(key, "min_dist") == 0) {
-              comp_desc->min_dist = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "max_dist") == 0) {
-              comp_desc->max_dist = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "move_speed") == 0) {
-              comp_desc->move_speed = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "zoom_speed") == 0) {
-              comp_desc->zoom_speed = (float)json_object_get_double(value);
-            } else if (SDL_strcmp(key, "pitch_limit") == 0) {
-              comp_desc->pitch_limit = (float)json_object_get_double(value);
-            }
-          }
-
-          // Add component to entity
-          component_ids[component_idx] = BoatCameraComponentId;
-          component_descriptors[component_idx] = comp_desc;
-          component_idx++;
         }
       }
     }

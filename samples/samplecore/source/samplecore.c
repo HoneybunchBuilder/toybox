@@ -24,11 +24,9 @@
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "oceancomponent.h"
-#include "sailingcomponents.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 
-#include "boatcamerasystem.h"
 #include "camerasystem.h"
 #include "coreuisystem.h"
 #include "imguisystem.h"
@@ -119,7 +117,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
 // Order does not matter
-#define COMP_COUNT 14
+#define COMP_COUNT 10
   ComponentDescriptor component_descs[COMP_COUNT] = {0};
   {
     int32_t i = 0;
@@ -133,10 +131,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_sky_component_descriptor(&component_descs[i++]);
     tb_mesh_component_descriptor(&component_descs[i++]);
     tb_ocean_component_descriptor(&component_descs[i++]);
-    tb_wind_component_descriptor(&component_descs[i++]);
-    tb_boat_movement_component_descriptor(&component_descs[i++]);
-    tb_mast_component_descriptor(&component_descs[i++]);
-    tb_boat_camera_component_descriptor(&component_descs[i++]);
 
     TB_CHECK(i == COMP_COUNT, "Unexpected # of component descriptors");
   }
@@ -230,12 +224,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
-  BoatCameraSystemDescriptor boat_cam_system_desc = {
-      .tmp_alloc = arena.alloc,
-  };
-
 // Order doesn't matter here
-#define SYSTEM_COUNT 19
+#define SYSTEM_COUNT 18
   SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
@@ -261,7 +251,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_shadow_system_descriptor(&system_descs[i++], &shadow_system_desc);
     tb_time_of_day_system_descriptor(&system_descs[i++], &tod_system_desc);
     tb_visual_logging_system_descriptor(&system_descs[i++], &vlog_system_desc);
-    tb_boat_camera_system_descriptor(&system_descs[i++], &boat_cam_system_desc);
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
@@ -283,7 +272,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = SkySystemId;
     init_order[i++] = OceanSystemId;
     init_order[i++] = CameraSystemId;
-    init_order[i++] = BoatCameraSystemId;
     init_order[i++] = ImGuiSystemId;
     init_order[i++] = NoClipControllerSystemId;
     init_order[i++] = CoreUISystemId;
@@ -296,7 +284,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = RenderPipelineSystemId;
     tick_order[i++] = InputSystemId;
     tick_order[i++] = NoClipControllerSystemId;
-    tick_order[i++] = BoatCameraSystemId;
     tick_order[i++] = CoreUISystemId;
     tick_order[i++] = CameraSystemId;
     tick_order[i++] = ShadowSystemId;

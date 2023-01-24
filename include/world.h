@@ -2,6 +2,8 @@
 
 #include "allocator.h"
 
+typedef struct json_object json_object;
+
 #define TB_DEFINE_COMPONENT(lower_name, self_type, desc_type)                  \
   bool tb_create_##lower_name##_component(void *self, InternalDescriptor desc, \
                                           uint32_t system_dep_count,           \
@@ -76,30 +78,37 @@ typedef struct System System;
 typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc,
                                   uint32_t system_dep_count,
                                   System *const *system_deps);
+typedef bool (*ComponentDeserializeFn)(json_object *json, void *out_desc);
 typedef void (*ComponentDestroyFn)(void *self, uint32_t system_dep_count,
                                    System *const *system_deps);
 typedef struct ComponentDescriptor {
   const char *name;
   uint64_t size;
+  uint64_t desc_size;
+  const char *id_str;
   ComponentId id;
 
   uint32_t system_dep_count;
   SystemId system_deps[MAX_SYSTEM_DEP_COUNT];
 
   ComponentCreateFn create;
+  ComponentDeserializeFn deserialize;
   ComponentDestroyFn destroy;
 } ComponentDescriptor;
 
 typedef struct ComponentStore {
   const char *name;
+  const char *id_str;
   ComponentId id;
-  uint64_t size;       // size of the component element
+  uint64_t size; // size of the component element
+  uint64_t desc_size;
   uint32_t count;      // Number of components in
                        // the collection
   uint8_t *components; // Component storage in
                        // generic bytes
   ComponentDescriptor desc;
   ComponentCreateFn create;
+  ComponentDeserializeFn deserialize;
   ComponentDestroyFn destroy;
 } ComponentStore;
 
