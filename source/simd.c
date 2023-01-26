@@ -283,88 +283,14 @@ float4x4 inv_mf44(float4x4 m) {
   return out;
 }
 
-EulerAngles quat_to_euler(Quaternion quat) {
-  EulerAngles xyz;
-
-  const float sinr_cosp = 2.0f * (quat[3] * quat[0] + quat[1] * quat[2]);
-  const float cosr_cosp = 1.0f - 2.0f * (quat[0] * quat[0] + quat[1] * quat[1]);
-  xyz[0] = -atan2f(sinr_cosp, cosr_cosp);
-
-  const float sinp = 2.0f * (quat[3] * quat[1] - quat[2] * quat[0]);
-  if (fabsf(sinp) >= 1.0f) {
-    const float sign = sinp > 0 ? 1.0f : -1.0f;
-    xyz[1] = (PI / 2.0f) * (sinp == 0 ? 0.0f : sign);
-  } else {
-    // use 90 degrees if out of range
-    xyz[1] = asinf(sinp);
-  }
-  xyz[1] = -xyz[1]; // Why??
-
-  const float siny_cosp = 2.0f * (quat[3] * quat[2] + quat[0] * quat[1]);
-  const float cosy_cosp = 1.0f - 2.0f * (quat[1] * quat[1] + quat[2] * quat[2]);
-  xyz[2] = atan2f(siny_cosp, cosy_cosp);
-
-  return xyz;
-}
-
-Quaternion euler_to_quat(EulerAngles xyz) {
-  const float x = xyz[0];
-  const float y = xyz[1];
-  const float z = xyz[2];
-
-  // See
-  // https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-  const float cy = cosf(y * 0.5);
-  const float sy = sinf(y * 0.5);
-  const float cp = cosf(x * 0.5);
-  const float sp = sinf(x * 0.5);
-  const float cr = cosf(z * 0.5);
-  const float sr = sinf(z * 0.5);
-
-  // Note: in the above conversion quat_to_euler we have to negate y axis and
-  // not sure why... possibly may need to do some additional work here as this
-  // method is untested.
-
-  Quaternion q = {
-      sr * cp * cy - cr * sp * sy, // X
-      cr * sp * cy + sr * cp * sy, // Y
-      cr * cp * sy - sr * sp * cy, // Z
-      cr * cp * cy + sr * sp * sy, // W
+Quaternion angle_axis_to_quat(float4 angle_axis) {
+  float s = SDL_sinf(angle_axis[3] / 2);
+  return (Quaternion){
+      angle_axis[0] * s,
+      angle_axis[1] * s,
+      angle_axis[2] * s,
+      SDL_cosf(s),
   };
-  return q;
-}
-
-float4x4 euler_to_trans(EulerAngles euler) {
-  const float x_angle = euler[0];
-  const float y_angle = euler[1];
-  const float z_angle = euler[2];
-
-  float4x4 rx = {
-      (float4){1, 0, 0, 0},
-      (float4){0, cosf(x_angle), -sinf(x_angle), 0},
-      (float4){0, sinf(x_angle), cosf(x_angle), 0},
-      (float4){0, 0, 0, 1},
-  };
-  float4x4 ry = {
-      (float4){cosf(y_angle), 0, sinf(y_angle), 0},
-      (float4){0, 1, 0, 0},
-      (float4){-sinf(y_angle), 0, cosf(y_angle), 0},
-      (float4){0, 0, 0, 1},
-
-  };
-  float4x4 rz = {
-      (float4){cosf(z_angle), -sinf(z_angle), 0, 0},
-      (float4){sinf(z_angle), cosf(z_angle), 0, 0},
-      (float4){0, 0, 1, 0},
-      (float4){0, 0, 0, 1},
-  };
-
-  float4x4 temp = {.row0 = {0}};
-  float4x4 r = {.row0 = {0}};
-  mulmf44(&rx, &ry, &temp);
-  mulmf44(&temp, &rz, &r);
-
-  return r;
 }
 
 float4x4 quat_to_trans(Quaternion q) {

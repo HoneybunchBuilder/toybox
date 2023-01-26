@@ -179,7 +179,7 @@ void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
   self->time = self->time > TAU ? self->time - TAU : self->time;
   const float time_norm = self->time / TAU;
   out_sun_trans->transform.rotation =
-      euler_to_quat((EulerAngles){self->time, 1.0f, 0.0f});
+      angle_axis_to_quat((float4){0.0f, 1.0f, 0.0f, self->time});
   out_sun_lights->color = lookup_sun_color(time_norm);
 
   float4x4 rot_mat = quat_to_trans(out_sun_trans->transform.rotation);

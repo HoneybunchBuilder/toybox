@@ -55,7 +55,6 @@ typedef struct float3x3 {
 } float3x3;
 
 typedef float4 Quaternion;
-typedef float3 EulerAngles;
 
 typedef struct Transform {
   float3 position;
@@ -134,10 +133,7 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o);
 
 float4x4 inv_mf44(float4x4 m);
 
-EulerAngles quat_to_euler(Quaternion quat);
-Quaternion euler_to_quat(EulerAngles xyz);
-
-float4x4 euler_to_trans(EulerAngles euler);
+Quaternion angle_axis_to_quat(float4 angle_axis);
 float4x4 quat_to_trans(Quaternion quat);
 
 Quaternion mulq(Quaternion p, Quaternion q);
