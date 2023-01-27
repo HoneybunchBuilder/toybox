@@ -79,6 +79,14 @@ float magsqf4(float4 v) {
   return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]) + (v[3] * v[3]);
 }
 
+float norm_angle(float a) {
+  a = SDL_fmod(a, TAU);
+  if (a < 0.0f) {
+    a += TAU;
+  }
+  return a;
+}
+
 float2 normf2(float2 v) {
   float inv_sum = 1 / magf2(v);
   return (float2){
@@ -284,12 +292,12 @@ float4x4 inv_mf44(float4x4 m) {
 }
 
 Quaternion angle_axis_to_quat(float4 angle_axis) {
-  float s = SDL_sinf(angle_axis[3] / 2);
+  float s = SDL_sinf(angle_axis[3] * 0.5f);
   return (Quaternion){
       angle_axis[0] * s,
       angle_axis[1] * s,
       angle_axis[2] * s,
-      SDL_cosf(s),
+      SDL_cosf(angle_axis[3] * 0.5f),
   };
 }
 
@@ -324,6 +332,70 @@ float4x4 quat_to_trans(Quaternion q) {
   };
 }
 
+Quaternion trans_to_quat(float4x4 mat) {
+  // Only actually use the 3x3 section of the matrix
+  float four_x_squared_minus_1 =
+      mat.rows[0][0] - mat.rows[1][1] - mat.rows[2][2];
+  float four_y_squared_minus_1 =
+      mat.rows[1][1] - mat.rows[0][0] - mat.rows[2][2];
+  float four_z_squared_minus_1 =
+      mat.rows[2][2] - mat.rows[0][0] - mat.rows[1][1];
+  float four_w_squared_minus_1 =
+      mat.rows[0][0] + mat.rows[1][1] + mat.rows[2][2];
+
+  int32_t biggest_index = 0;
+  float four_biggest_squared_minus_1 = four_w_squared_minus_1;
+  if (four_x_squared_minus_1 > four_biggest_squared_minus_1) {
+    four_biggest_squared_minus_1 = four_x_squared_minus_1;
+    biggest_index = 1;
+  }
+  if (four_y_squared_minus_1 > four_biggest_squared_minus_1) {
+    four_biggest_squared_minus_1 = four_y_squared_minus_1;
+    biggest_index = 2;
+  }
+  if (four_z_squared_minus_1 > four_biggest_squared_minus_1) {
+    four_biggest_squared_minus_1 = four_z_squared_minus_1;
+    biggest_index = 3;
+  }
+
+  float biggest_val = SDL_sqrtf(four_biggest_squared_minus_1 + 1.0f) * 0.5f;
+  float mult = 0.25f / biggest_val;
+
+  switch (biggest_index) {
+  case 0:
+    return (Quaternion){
+        (mat.rows[1][2] - mat.rows[2][1]) * mult,
+        (mat.rows[2][0] - mat.rows[0][2]) * mult,
+        (mat.rows[0][1] - mat.rows[1][0]) * mult,
+        biggest_val,
+    };
+  case 1:
+    return (Quaternion){
+        biggest_val,
+        (mat.rows[0][1] + mat.rows[1][0]) * mult,
+        (mat.rows[2][0] + mat.rows[0][2]) * mult,
+        (mat.rows[1][2] - mat.rows[2][1]) * mult,
+    };
+  case 2:
+    return (Quaternion){
+        (mat.rows[0][1] + mat.rows[1][0]) * mult,
+        biggest_val,
+        (mat.rows[1][2] + mat.rows[2][1]) * mult,
+        (mat.rows[2][0] - mat.rows[0][2]) * mult,
+    };
+  case 3:
+    return (Quaternion){
+        (mat.rows[2][0] + mat.rows[0][2]) * mult,
+        (mat.rows[1][2] + mat.rows[2][1]) * mult,
+        biggest_val,
+        (mat.rows[0][1] - mat.rows[1][0]) * mult,
+    };
+  default:
+    SDL_assert(false);
+    return (Quaternion){0, 0, 0, 1};
+  }
+}
+
 Quaternion mulq(Quaternion p, Quaternion q) {
   return (Quaternion){
       (p[3] * q[0]) + (p[0] * q[3]) + (p[1] * q[2]) - (p[2] * q[1]),
@@ -331,6 +403,16 @@ Quaternion mulq(Quaternion p, Quaternion q) {
       (p[3] * q[2]) + (p[2] * q[3]) + (p[0] * q[1]) - (p[1] * q[0]),
       (p[3] * q[3]) - (p[0] * q[0]) - (p[1] * q[1]) - (p[2] * q[2]),
   };
+}
+
+// https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+float3 qrotf3(Quaternion q, float3 v) {
+  // Extract the vector and scalar parts of the quat
+  float3 u = {q[0], q[1], q[2]};
+  float s = q[3];
+
+  return (2.0f * dotf3(u, v) * u) + (((s * s) - dotf3(u, v)) * v) +
+         (2.0f * s * crossf3(u, v));
 }
 
 AABB aabb_init(void) {
@@ -376,7 +458,7 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
       (float4){0, 0, 0, 1},
   };
 
-  // Rotation matrix from euler angles
+  // Rotation matrix from quaternion
   float4x4 r = quat_to_trans(t->rotation);
 
   // Scale matrix
@@ -435,8 +517,19 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
   SDL_assert(m);
 
-  float3 forward = target - pos;
+  float3 forward = normf3(target - pos);
   look_forward(m, pos, forward, up);
+}
+
+Quaternion look_forward_quat(float3 forward, float3 up) {
+  float4x4 m = {.row0 = {0}};
+  look_forward(&m, (float3){0.0f, 0.0f, 0.0f}, forward, up);
+  return trans_to_quat(m);
+}
+
+Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
+  float3 forward = normf3(target - pos);
+  return look_forward_quat(forward, up);
 }
 
 // Left Handed
@@ -576,6 +669,40 @@ float rad_to_deg(float r) { return r * (180 / M_PI); }
 float lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
 float3 lerpf3(float3 v0, float3 v1, float a) {
   return ((1 - a) * v0) + (a * v1);
+}
+
+// https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm
+Quaternion slerp(Quaternion q1, Quaternion q2, float a) {
+  // Calc angle between quaternions
+  float cos_half_theta =
+      q1[3] * q2[3] + q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2];
+  // If q1=q2 or q1=-q2 then alpha = 0 and we can return q1
+  if (SDL_fabsf(cos_half_theta) >= 1.0f) {
+    return q1;
+  }
+
+  float half_theta = SDL_acosf(cos_half_theta);
+  float sin_half_theta = SDL_sqrtf(1.0f - cos_half_theta * cos_half_theta);
+  // if alpha = 180 degrees then result is not fully defined
+  // we could rotate around any axis normal to qa or qb
+  if (SDL_fabsf(sin_half_theta) < 0.001f) { // fabs is floating point absolute
+    return (Quaternion){
+        q1[0] * 0.5f + q2[0] * 0.5f,
+        q1[1] * 0.5f + q2[1] * 0.5f,
+        q1[2] * 0.5f + q2[2] * 0.5f,
+        q1[3] * 0.5f + q2[3] * 0.5f,
+    };
+  }
+
+  float ratio_a = SDL_sinf((1.0f - a) * half_theta) / sin_half_theta;
+  float ratio_b = SDL_sinf(a * half_theta) / sin_half_theta;
+
+  return (Quaternion){
+      q1[0] * ratio_a + q2[0] * ratio_b,
+      q1[1] * ratio_a + q2[1] * ratio_b,
+      q1[2] * ratio_a + q2[2] * ratio_b,
+      q1[3] * ratio_a + q2[3] * ratio_b,
+  };
 }
 
 float clampf(float v, float min, float max) {

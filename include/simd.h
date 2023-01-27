@@ -112,6 +112,7 @@ float magf3(float3 v);
 float magf4(float4 v);
 float magsqf3(float3 v);
 float magsqf4(float4 v);
+float norm_angle(float a);
 float2 normf2(float2 v);
 float3 normf3(float3 v);
 float4 normf4(float4 v);
@@ -135,8 +136,10 @@ float4x4 inv_mf44(float4x4 m);
 
 Quaternion angle_axis_to_quat(float4 angle_axis);
 float4x4 quat_to_trans(Quaternion quat);
+Quaternion trans_to_quat(float4x4 mat);
 
 Quaternion mulq(Quaternion p, Quaternion q);
+float3 qrotf3(Quaternion q, float3 v);
 
 AABB aabb_init(void);
 void aabb_add_point(AABB *aabb, float3 point);
@@ -150,6 +153,8 @@ Transform tb_transform_from_node(const cgltf_node *node);
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
+Quaternion look_forward_quat(float3 forward, float3 up);
+Quaternion look_at_quat(float3 pos, float3 target, float3 up);
 void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf);
 void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
                          float zf);
@@ -164,6 +169,8 @@ float rad_to_deg(float r);
 
 float lerpf(float v0, float v1, float a);
 float3 lerpf3(float3 v0, float3 v1, float a);
+
+Quaternion slerp(Quaternion q1, Quaternion q2, float a);
 
 float clampf(float v, float min, float max);
 float3 clampf3(float3 v, float3 min, float3 max);
