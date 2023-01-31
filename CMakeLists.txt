@@ -449,6 +449,10 @@ function(tb_add_app target_name source)
     add_dependencies(${target_name} ${target_name}_shaders)
   endif()
 
+  if(COOK_ASSETS)
+    cook_assets(${target_name} ${target_name}_assets_path)
+  endif()
+
   target_link_libraries(${target_name} PRIVATE ${library_list})
   target_link_libraries(${target_name} PRIVATE toybox)
   target_include_directories(${target_name} PRIVATE ${config_include_dir})
