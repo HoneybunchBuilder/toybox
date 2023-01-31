@@ -65,21 +65,20 @@ float4 frag(Interpolators i) : SV_TARGET {
     // HACK: Need to paramaterize these
     const float near = 0.1f;
     const float far = 1000.0f;
-    const float fog_density = 0.015f;
+    const float fog_density = 0.15f;
     const float3 fog_color = float3(0.305, 0.513, 0.662);
     const float refraction_strength = 0.25f;
 
     const float2 uv_offset = N.xy * refraction_strength;
     const float2 uv = (i.screen_pos.xy + uv_offset) / i.screen_pos.w;
 
-    float background_depth =
-        1.0f - linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
-    float surface_depth = 1.0f - depth_from_clip_z(i.screen_pos.z, near, far);
+    float background_depth = linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
+    float surface_depth = depth_from_clip_z(i.screen_pos.z, near, far);
 
     float depth_diff = surface_depth - background_depth;
 
     float3 background_color = color_map.Sample(static_sampler, uv).rgb;
-    float fog = exp2(fog_density * depth_diff);
+    float fog = exp2(-fog_density * depth_diff);
 
     albedo = lerp(fog_color, background_color, fog);
   }
