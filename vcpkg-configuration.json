@@ -3,6 +3,6 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "91dd61bd441a68b4017b61011d0350b2e6aeeccf"
+    "baseline": "86e220d184e9ce4c3bb608dd23a05297e5782e9c"
   }
 }
