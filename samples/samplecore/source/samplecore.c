@@ -85,15 +85,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       return -1;
     }
 
-    int32_t flags = IMG_INIT_PNG;
-    res = IMG_Init(flags);
-    if ((res & IMG_INIT_PNG) == 0) {
-      const char *msg = IMG_GetError();
-      SDL_Log("Failed to initialize SDL_Image with error: %s", msg);
-      SDL_TriggerBreakpoint();
-      return -1;
-    }
-
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
@@ -392,7 +383,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   render_thread = NULL;
   window = NULL;
 
-  IMG_Quit();
   SDL_Quit();
 
   destroy_arena_allocator(arena);

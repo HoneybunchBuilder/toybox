@@ -28,7 +28,6 @@
         "vulkan"
       ]
     },
-    "sdl2-image",
     "tracy",
     "volk",
     "vulkan-memory-allocator",
@@ -67,11 +66,6 @@
     {
       "name": "sdl2",
       "version": "2.26.1"
-    },
-    {
-      "name": "sdl2-image",
-      "version": "2.0.5",
-      "port-version": 6
     },
     {
       "name": "tracy",
