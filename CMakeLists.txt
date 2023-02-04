@@ -95,7 +95,6 @@ if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES and
 endif()
 
 find_package(SDL2 CONFIG REQUIRED)
-find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc CONFIG REQUIRED)
@@ -131,7 +130,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
+set(library_list "SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
