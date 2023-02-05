@@ -1189,7 +1189,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
                      (float3){0.0f, 1.0f, 0.0f});
 
-        mulmf44(&proj, &view, &vp);
+        vp = mulmf44(proj, view);
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {

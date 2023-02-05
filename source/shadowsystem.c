@@ -180,7 +180,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       }
 
       // Calculate view projection matrix
-      mulmf44(&proj, &light_view_mat, &data.vp);
+      data.vp = mulmf44(proj, light_view_mat);
 
       // Inverse
       data.inv_vp = inv_mf44(data.vp);

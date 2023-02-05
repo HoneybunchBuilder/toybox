@@ -10,8 +10,7 @@
     float4x4 view = {.row0 = {0}};
     look_forward(&view, (float3){0}, (float3){0, -1, 0}, (float3){1, 0, 0});
 
-    float4x4 vp = {.row0 = {0}};
-    mulmf44(&proj, &view, &vp);
+    float4x4 vp = mulmf44(proj, view);
 */
 static const float4x4 view_proj_lut[6] = {
     // X+

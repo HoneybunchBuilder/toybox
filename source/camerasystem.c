@@ -73,7 +73,7 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
                         cam_comp->near, cam_comp->far);
 
     // Calculate view projection matrix
-    mulmf44(&proj, &view, &view_data.vp);
+    view_data.vp = mulmf44(proj, view);
 
     // Inverse
     view_data.inv_vp = inv_mf44(view_data.vp);

@@ -123,15 +123,10 @@ float3x3 mf33_identity(void);
 float3x4 mf34_identity(void);
 float4x4 mf44_identity(void);
 
-void mulf33(float3x3 *m, float3 v);
-void mulf34(float3x4 *m, float4 v);
-
 float4 mulf44(float4x4 m, float4 v);
 float4 mul4f44f(float4 v, float4x4 m);
 
-void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);
-void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o);
-
+float4x4 mulmf44(float4x4 x, float4x4 y);
 float4x4 inv_mf44(float4x4 m);
 
 Quaternion angle_axis_to_quat(float4 angle_axis);

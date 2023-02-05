@@ -141,26 +141,6 @@ float4x4 mf44_identity(void) {
   };
 }
 
-void mulf33(float3x3 *m, float3 v) {
-  SDL_assert(m);
-  unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
-    float s = v[i];
-    m->row0[i] *= s;
-    m->row1[i] *= s;
-    m->row2[i] *= s;
-  }
-}
-
-void mulf34(float3x4 *m, float4 v) {
-  SDL_assert(m);
-  unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
-    float s = v[i];
-    m->row0[i] *= s;
-    m->row1[i] *= s;
-    m->row2[i] *= s;
-  }
-}
-
 float4 mulf44(float4x4 m, float4 v) {
   float4 out = {0};
 
@@ -189,44 +169,22 @@ float4 mul4f44f(float4 v, float4x4 m) {
   return out;
 }
 
-void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
-  SDL_assert(x);
-  SDL_assert(y);
-  SDL_assert(o);
-  unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
-    unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
-      float s = 0.0f;
-      unroll_loop_3 for (uint32_t iii = 0; iii < 3; ++iii) {
-        s += x->rows[i][iii] * y->rows[iii][ii];
-      }
-      if (ii == 3) {
-        s += x->rows[i][3];
-      }
-      o->rows[i][ii] = s;
-    }
-  }
-}
-
-void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
-  TracyCZoneN(ctx, "mulmf44", true);
-  TracyCZoneColor(ctx, TracyCategoryColorMath);
-  SDL_assert(x);
-  SDL_assert(y);
-  SDL_assert(o);
+float4x4 mulmf44(float4x4 x, float4x4 y) {
+  float4x4 o = {.row0 = {0}};
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
       unroll_loop_4 for (uint32_t iii = 0; iii < 4; ++iii) {
-        s += x->rows[i][iii] * y->rows[iii][ii];
+        s += x.rows[i][iii] * y.rows[iii][ii];
       }
-      o->rows[i][ii] = s;
+      o.rows[i][ii] = s;
     }
   }
-  TracyCZoneEnd(ctx);
+  return o;
 }
 
 float4x4 inv_mf44(float4x4 m) {
-  TracyCZoneN(ctx, "mulmf44", true);
+  TracyCZoneN(ctx, "inv_mf44", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
 
   float coef00 = m.row2[2] * m.row3[3] - m.row3[2] * m.row2[3];
@@ -466,10 +424,8 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
       (float4){0, 0, 0, 1},
   };
 
-  // Transformation matrix = r * p * s;
-  float4x4 temp = {.row0 = {0}};
-  mulmf44(&p, &r, &temp);
-  mulmf44(&temp, &s, m);
+  // Transformation matrix = p * r * s
+  *m = mulmf44(mulmf44(p, r), s);
 
   TracyCZoneEnd(ctx);
 }
