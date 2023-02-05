@@ -440,7 +440,7 @@ Transform tb_transform_from_node(const cgltf_node *node) {
       node->rotation[0],
       node->rotation[1],
       node->rotation[2],
-      node->rotation[3],
+      -node->rotation[3],
   };
 
   transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
