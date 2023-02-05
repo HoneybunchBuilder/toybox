@@ -119,9 +119,9 @@ float4 normf4(float4 v);
 
 float lenf3(float3 v);
 
-void mf33_identity(float3x3 *m);
-void mf34_identity(float3x4 *m);
-void mf44_identity(float4x4 *m);
+float3x3 mf33_identity(void);
+float3x4 mf34_identity(void);
+float4x4 mf44_identity(void);
 
 void mulf33(float3x3 *m, float3 v);
 void mulf34(float3x4 *m, float4 v);

@@ -9,6 +9,7 @@
 #define OceanComponentIdStr "0xBAD22222"
 
 typedef struct ComponentDescriptor ComponentDescriptor;
+typedef struct TransformComponent TransformComponent;
 
 typedef struct OceanComponentDescriptor {
   uint32_t wave_count;
@@ -22,3 +23,6 @@ typedef struct OceanComponent {
 } OceanComponent;
 
 void tb_ocean_component_descriptor(ComponentDescriptor *desc);
+
+float tb_ocean_sample_height(const OceanComponent *ocean,
+                             TransformComponent *transform, float2 pos);

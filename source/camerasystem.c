@@ -54,8 +54,8 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
         tb_get_component(transforms, cam_idx, TransformComponent);
 
     // Eval transform heirarchy
-    float4x4 model = {.row0 = {0}};
-    tb_transform_get_world_matrix((TransformComponent *)trans_comp, &model);
+    float4x4 model =
+        tb_transform_get_world_matrix((TransformComponent *)trans_comp);
 
     CommonViewData view_data = {
         .view_pos = trans_comp->transform.position,

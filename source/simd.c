@@ -116,27 +116,24 @@ float4 normf4(float3 v) {
 
 float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }
 
-void mf33_identity(float3x3 *m) {
-  SDL_assert(m);
-  *m = (float3x3){
+float3x3 mf33_identity(void) {
+  return (float3x3){
       (float3){1, 0, 0},
       (float3){0, 1, 0},
       (float3){0, 0, 1},
   };
 }
 
-void mf34_identity(float3x4 *m) {
-  SDL_assert(m);
-  *m = (float3x4){
+float3x4 mf34_identity(void) {
+  return (float3x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
       (float4){0, 0, 1, 0},
   };
 }
 
-void mf44_identity(float4x4 *m) {
-  SDL_assert(m);
-  *m = (float4x4){
+float4x4 mf44_identity(void) {
+  return (float4x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
       (float4){0, 0, 1, 0},

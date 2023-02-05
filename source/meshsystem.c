@@ -917,8 +917,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           tb_get_component(mesh_store, mesh_idx, MeshComponent);
 
       // Convert the transform to a matrix for rendering
-      CommonObjectData data = {.m = {.row0 = {0}}};
-      tb_transform_get_world_matrix(&out_trans[mesh_idx], &data.m);
+      CommonObjectData data = {
+          .m = tb_transform_get_world_matrix(&out_trans[mesh_idx]),
+      };
 
       // Transform local aabb into world space
       AABB aabb = aabb_init();
