@@ -61,7 +61,9 @@ void tb_ocean_component_descriptor(ComponentDescriptor *desc) {
 
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and
 // bitangent
-float3 gerstner_wave(OceanWave wave, float3 p, float time) {
+OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
+  float3 p = sample.pos;
+
   float steepness = wave.steepness;
   float k = 2.0f * PI / wave.wavelength;
   float c = SDL_sqrtf(9.8f / k);
@@ -72,11 +74,21 @@ float3 gerstner_wave(OceanWave wave, float3 p, float time) {
   float sinf = SDL_sinf(f);
   float cosf = SDL_cosf(f);
 
-  return (float3){d[0] * (a * cosf), a * sinf, d[1] * (a * cosf)};
+  p = (float3){d[0] * (a * cosf), a * sinf, d[1] * (a * cosf)};
+  float3 t = {-d[0] * d[0] * (steepness * sinf), d[0] * (steepness * cosf),
+              -d[0] * d[1] * (steepness * sinf)};
+  float3 b = {-d[0] * d[1] * (steepness * sinf), d[1] * (steepness * cosf),
+              -d[1] * d[1] * (steepness * sinf)};
+
+  return (OceanSample){
+      .pos = sample.pos + p,
+      .tangent = sample.tangent + t,
+      .binormal = sample.binormal + b,
+  };
 }
 
-float tb_ocean_sample_height(const OceanComponent *ocean,
-                             TransformComponent *transform, float2 pos) {
+OceanSample tb_sample_ocean(const OceanComponent *ocean,
+                            TransformComponent *transform, float2 pos) {
   OceanWave wave_0 = {0.4, 64, (float2){0.8, -1}};
   OceanWave wave_1 = {0.3, 24, (float2){-1, 0.6}};
   OceanWave wave_2 = {0.25, 16, (float2){0.2, 3}};
@@ -88,9 +100,15 @@ float tb_ocean_sample_height(const OceanComponent *ocean,
   uint32_t wave_count = 5;
   OceanWave waves[] = {wave_0, wave_1, wave_2, wave_3, wave_4};
 
-  float3 wave_pos = f4tof3(mul4f44f((float4){pos[0], pos[1], 0, 1}, mat));
+  OceanSample sample = {
+      .pos = f4tof3(mul4f44f((float4){pos[0], 0, pos[1], 1}, mat)),
+      .tangent = (float3){1, 0, 0},
+      .binormal = (float3){0, 0, 1},
+  };
   for (uint32_t i = 0; i < wave_count; ++i) {
-    wave_pos += gerstner_wave(waves[i], wave_pos, ocean->time);
+    sample = gerstner_wave(waves[i], sample, ocean->time);
   }
-  return wave_pos[2];
+  sample.tangent = normf3(sample.tangent);
+  sample.binormal = normf3(sample.binormal);
+  return sample;
 }

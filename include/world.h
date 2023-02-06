@@ -249,3 +249,6 @@ void *tb_find_system_dep_self_by_id(System *const *systems,
   &((const Type *)(store)->components)[(idx)];
 #define tb_get_system(deps, count, Type)                                       \
   (Type *)tb_find_system_dep_self_by_id(deps, count, Type##Id);
+#define tb_make_out_copy(copy, alloc, store, count, Type)                      \
+  Type *copy = tb_alloc_nm_tp(alloc, count, Type);                             \
+  SDL_memcpy(copy, store->components, sizeof(Type) * count);

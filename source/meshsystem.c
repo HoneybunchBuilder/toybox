@@ -902,10 +902,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   // Since we want to update the world matrix dirty flag on the transform
   // component, we need to write the components back out
   EntityId *out_entity_ids = tb_get_column_entity_ids(input, 2);
-  TransformComponent *out_trans =
-      tb_alloc_nm_tp(self->tmp_alloc, mesh_count, TransformComponent);
-  SDL_memcpy(out_trans, mesh_transform_store->components,
-             mesh_count * sizeof(TransformComponent));
+  tb_make_out_copy(out_trans, self->tmp_alloc, mesh_transform_store, mesh_count,
+                   TransformComponent);
 
   // Update each mesh's render object data while also collecting world space
   // AABBs for culling later

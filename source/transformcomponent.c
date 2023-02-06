@@ -69,19 +69,18 @@ TransformComponent *tb_transform_get_parent(TransformComponent *self) {
 float4x4 tb_transform_get_world_matrix(TransformComponent *self) {
   TracyCZoneNC(ctx, "transform component get world matrix",
                TracyCategoryColorCore, true);
-  if (self->dirty) {
-    transform_to_matrix(&self->world_matrix, &self->transform);
-    // If we have a parent, look up its world transform and combine it with this
-    if (self->parent != InvalidEntityId) {
-      float4x4 parent_mat = mf44_identity();
-      TransformComponent *parent_comp = tb_transform_get_parent(self);
-      if (parent_comp) {
-        parent_mat = tb_transform_get_world_matrix(parent_comp);
-        self->world_matrix = mulmf44(parent_mat, self->world_matrix);
-      }
+
+  transform_to_matrix(&self->world_matrix, &self->transform);
+  // If we have a parent, look up its world transform and combine it with this
+  if (self->parent != InvalidEntityId) {
+    float4x4 parent_mat = mf44_identity();
+    TransformComponent *parent_comp = tb_transform_get_parent(self);
+    if (parent_comp) {
+      parent_mat = tb_transform_get_world_matrix(parent_comp);
+      self->world_matrix = mulmf44(parent_mat, self->world_matrix);
     }
-    self->dirty = false;
   }
+
   TracyCZoneEnd(ctx);
   return self->world_matrix;
 }

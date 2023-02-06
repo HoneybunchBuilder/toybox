@@ -34,6 +34,7 @@
 
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
+float2 f3tof2(float3 f) { return (float2){f[0], f[1]}; }
 
 float3x4 m44tom34(float4x4 m) {
   return (float3x4){

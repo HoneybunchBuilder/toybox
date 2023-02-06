@@ -100,6 +100,7 @@ typedef struct Frustum {
 
 float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
+float2 f3tof2(float3 f);
 float3x4 m44tom34(float4x4 m);
 
 float dotf2(float2 x, float2 y);
