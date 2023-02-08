@@ -463,9 +463,9 @@ void tb_destroy_world(World *world) {
   *world = (World){0};
 }
 
-void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
-                 const char *root_scene_path, Allocator tmp_alloc,
-                 EntityId parent, const cgltf_node *node) {
+EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
+                     const char *root_scene_path, Allocator tmp_alloc,
+                     EntityId parent, const cgltf_node *node) {
   // Get extras
   cgltf_size extra_size = 0;
   char *extra_json = NULL;
@@ -630,11 +630,38 @@ void load_entity(World *world, json_tokener *tok, const cgltf_data *data,
   }
   EntityId id = tb_world_add_entity(world, &entity_desc);
 
-  // Load all children
-  for (uint32_t i = 0; i < node->children_count; ++i) {
-    const cgltf_node *child = node->children[i];
-    load_entity(world, tok, data, root_scene_path, tmp_alloc, id, child);
+  if (node->children_count > 0) {
+    // Get the transform store and find this entity's transform component
+    ComponentStore *transform_store = NULL;
+    uint32_t transform_idx = 0;
+    for (uint32_t i = 0; i < world->component_store_count; ++i) {
+      if (world->component_stores[i].id == TransformComponentId) {
+        transform_store = &world->component_stores[i];
+        transform_idx = i;
+      }
+    }
+    TB_CHECK(transform_store, "Unexepcted");
+
+    // Make sure this entity actually has a transform
+    if (world->entities[id] & (1 << transform_idx)) {
+      TransformComponent *trans_comp = (TransformComponent *)tb_get_component(
+          transform_store, id, TransformComponent);
+      trans_comp->child_count = node->children_count;
+      trans_comp->children =
+          tb_alloc_nm_tp(world->std_alloc, node->children_count, EntityId);
+      EntityId *children = trans_comp->children;
+
+      // Load all children
+      for (uint32_t i = 0; i < node->children_count; ++i) {
+        const cgltf_node *child = node->children[i];
+        EntityId child_id = load_entity(world, tok, data, root_scene_path,
+                                        tmp_alloc, id, child);
+        children[i] = child_id;
+      }
+    }
   }
+
+  return id;
 }
 
 bool tb_world_load_scene(World *world, const char *scene_path) {

@@ -19,6 +19,8 @@ typedef struct TransformComponent {
   ComponentStore *transform_store;
   Transform transform;
   EntityId parent;
+  uint32_t child_count;
+  EntityId *children;
 } TransformComponent;
 
 void tb_transform_component_descriptor(ComponentDescriptor *desc);
