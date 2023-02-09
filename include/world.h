@@ -79,6 +79,8 @@ typedef bool (*ComponentCreateFn)(void *self, InternalDescriptor desc,
                                   uint32_t system_dep_count,
                                   System *const *system_deps);
 typedef bool (*ComponentDeserializeFn)(json_object *json, void *out_desc);
+typedef bool (*ComponentOnLoadedFn)(EntityId id, const World *world,
+                                    void *component);
 typedef void (*ComponentDestroyFn)(void *self, uint32_t system_dep_count,
                                    System *const *system_deps);
 typedef struct ComponentDescriptor {
@@ -93,6 +95,7 @@ typedef struct ComponentDescriptor {
 
   ComponentCreateFn create;
   ComponentDeserializeFn deserialize;
+  ComponentOnLoadedFn on_loaded;
   ComponentDestroyFn destroy;
 } ComponentDescriptor;
 
@@ -109,6 +112,7 @@ typedef struct ComponentStore {
   ComponentDescriptor desc;
   ComponentCreateFn create;
   ComponentDeserializeFn deserialize;
+  ComponentOnLoadedFn on_loaded;
   ComponentDestroyFn destroy;
 } ComponentStore;
 

@@ -36,6 +36,7 @@ void create_component_store(ComponentStore *store,
   store->desc = *desc;
   store->create = desc->create;
   store->deserialize = desc->deserialize;
+  store->on_loaded = desc->on_loaded;
   store->destroy = desc->destroy;
 }
 
@@ -677,6 +678,8 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 
   json_tokener *tok = json_tokener_new();
 
+  uint32_t entity_tail = world->entity_count;
+
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     const cgltf_node *node = data->scene->nodes[i];
@@ -684,6 +687,27 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   }
 
   json_tokener_free(tok);
+
+  {
+    TracyCZoneN(ctx, "On Loaded", true);
+
+    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+         ++store_idx) {
+      ComponentStore *store = &world->component_stores[store_idx];
+      if (store->on_loaded) {
+        // Only bother with new entities
+        for (uint32_t id = entity_tail; id < world->entity_count; ++id) {
+          Entity ent = world->entities[id];
+          if (ent & (1 << store_idx)) {
+            store->on_loaded(id, world,
+                             (void *)&store->components[id * store->size]);
+          }
+        }
+      }
+    }
+
+    TracyCZoneEnd(ctx);
+  }
 
   return true;
 }
