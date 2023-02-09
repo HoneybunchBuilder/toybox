@@ -102,6 +102,8 @@ float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
 float2 f3tof2(float3 f);
 float3x4 m44tom34(float4x4 m);
+float3x3 m44tom33(float4x4 m);
+float4x4 m33tom44(float3x3 m);
 
 float dotf2(float2 x, float2 y);
 float dotf3(float3 x, float3 y);
@@ -129,8 +131,12 @@ float4 mul4f44f(float4 v, float4x4 m);
 
 float4x4 mulmf44(float4x4 x, float4x4 y);
 float4x4 inv_mf44(float4x4 m);
+float3x3 mf33_from_axes(float3 forward, float3 right, float3 up);
 
+Quaternion mf33_to_quat(float3x3 m);
+Quaternion quat_from_axes(float3 forward, float3 right, float3 up);
 Quaternion angle_axis_to_quat(float4 angle_axis);
+float3x3 quat_to_mf33(Quaternion quat);
 float4x4 quat_to_trans(Quaternion quat);
 Quaternion trans_to_quat(float4x4 mat);
 

@@ -43,6 +43,22 @@ float3x4 m44tom34(float4x4 m) {
       .row2 = m.row2,
   };
 }
+float3x3 m44tom33(float4x4 m) {
+  return (float3x3){
+      .row0 = f4tof3(m.row0),
+      .row1 = f4tof3(m.row1),
+      .row2 = f4tof3(m.row2),
+  };
+}
+
+float4x4 m33tom44(float3x3 m) {
+  return (float4x4){
+      .row0 = f3tof4(m.row0, 0.0f),
+      .row1 = f3tof4(m.row1, 0.0f),
+      .row2 = f3tof4(m.row2, 0.0f),
+      .row3 = {0.0f, 0.0f, 0.0f, 1.0f},
+  };
+}
 
 float dotf2(float2 x, float2 y) { return (x[0] * y[0]) + (x[1] * y[1]); }
 
@@ -247,49 +263,15 @@ float4x4 inv_mf44(float4x4 m) {
   return out;
 }
 
-Quaternion angle_axis_to_quat(float4 angle_axis) {
-  float s = SDL_sinf(angle_axis[3] * 0.5f);
-  return (Quaternion){
-      angle_axis[0] * s,
-      angle_axis[1] * s,
-      angle_axis[2] * s,
-      SDL_cosf(angle_axis[3] * 0.5f),
+float3x3 mf33_from_axes(float3 forward, float3 right, float3 up) {
+  return (float3x3){
+      .row0 = {forward[0], up[0], right[0]},
+      .row1 = {forward[1], up[1], right[1]},
+      .row2 = {forward[2], up[2], right[2]},
   };
 }
 
-float4x4 quat_to_trans(Quaternion q) {
-  float qxx = q[0] * q[0];
-  float qyy = q[1] * q[1];
-  float qzz = q[2] * q[2];
-  float qxz = q[0] * q[2];
-  float qxy = q[0] * q[1];
-  float qyz = q[1] * q[2];
-  float qwx = q[3] * q[0];
-  float qwy = q[3] * q[1];
-  float qwz = q[3] * q[2];
-
-  float m00 = 1.0f - 2.0f * (qyy + qzz);
-  float m01 = 2.0f * (qxy + qwz);
-  float m02 = 2.0f * (qxz - qwy);
-
-  float m10 = 2.0f * (qxy - qwz);
-  float m11 = 1.0f - 2.0f * (qxx + qzz);
-  float m12 = 2.0f * (qyz + qwx);
-
-  float m20 = 2.0f * (qxz + qwy);
-  float m21 = 2.0f * (qyz - qwx);
-  float m22 = 1.0f - 2.0f * (qxx + qyy);
-
-  return (float4x4){
-      .row0 = {m00, m01, m02, 0.0f},
-      .row1 = {m10, m11, m12, 0.0f},
-      .row2 = {m20, m21, m22, 0.0f},
-      .row3 = {0.0f, 0.0f, 0.0f, 1.0f},
-  };
-}
-
-Quaternion trans_to_quat(float4x4 mat) {
-  // Only actually use the 3x3 section of the matrix
+Quaternion mf33_to_quat(float3x3 mat) {
   float four_x_squared_minus_1 =
       mat.rows[0][0] - mat.rows[1][1] - mat.rows[2][2];
   float four_y_squared_minus_1 =
@@ -351,6 +333,54 @@ Quaternion trans_to_quat(float4x4 mat) {
     return (Quaternion){0, 0, 0, 1};
   }
 }
+
+Quaternion quat_from_axes(float3 forward, float3 right, float3 up) {
+  return mf33_to_quat(mf33_from_axes(forward, right, up));
+}
+
+Quaternion angle_axis_to_quat(float4 angle_axis) {
+  float s = SDL_sinf(angle_axis[3] * 0.5f);
+  return (Quaternion){
+      angle_axis[0] * s,
+      angle_axis[1] * s,
+      angle_axis[2] * s,
+      SDL_cosf(angle_axis[3] * 0.5f),
+  };
+}
+
+float3x3 quat_to_mf33(Quaternion q) {
+  float qxx = q[0] * q[0];
+  float qyy = q[1] * q[1];
+  float qzz = q[2] * q[2];
+  float qxz = q[0] * q[2];
+  float qxy = q[0] * q[1];
+  float qyz = q[1] * q[2];
+  float qwx = q[3] * q[0];
+  float qwy = q[3] * q[1];
+  float qwz = q[3] * q[2];
+
+  float m00 = 1.0f - 2.0f * (qyy + qzz);
+  float m01 = 2.0f * (qxy + qwz);
+  float m02 = 2.0f * (qxz - qwy);
+
+  float m10 = 2.0f * (qxy - qwz);
+  float m11 = 1.0f - 2.0f * (qxx + qzz);
+  float m12 = 2.0f * (qyz + qwx);
+
+  float m20 = 2.0f * (qxz + qwy);
+  float m21 = 2.0f * (qyz - qwx);
+  float m22 = 1.0f - 2.0f * (qxx + qyy);
+
+  return (float3x3){
+      .row0 = {m00, m01, m02},
+      .row1 = {m10, m11, m12},
+      .row2 = {m20, m21, m22},
+  };
+}
+
+float4x4 quat_to_trans(Quaternion q) { return m33tom44(quat_to_mf33(q)); }
+
+Quaternion trans_to_quat(float4x4 mat) { return mf33_to_quat(m44tom33(mat)); }
 
 Quaternion mulq(Quaternion p, Quaternion q) {
   return (Quaternion){
