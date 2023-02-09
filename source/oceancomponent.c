@@ -89,11 +89,11 @@ OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
 
 OceanSample tb_sample_ocean(const OceanComponent *ocean,
                             TransformComponent *transform, float2 pos) {
-  OceanWave wave_0 = {0.4, 64, (float2){0.8, -1}};
-  OceanWave wave_1 = {0.3, 24, (float2){-1, 0.6}};
-  OceanWave wave_2 = {0.25, 16, (float2){0.2, 3}};
-  OceanWave wave_3 = {0.2, 10, (float2){0.5, 1.7}};
-  OceanWave wave_4 = {0.15, 8, (float2){-0.6, .84}};
+  OceanWave wave_0 = {0.4, 32, (float2){0.8, -1}};
+  OceanWave wave_1 = {0.3, 12, (float2){-1, 0.6}};
+  OceanWave wave_2 = {0.25, 8, (float2){0.2, 3}};
+  OceanWave wave_3 = {0.2, 5, (float2){0.5, 1.7}};
+  OceanWave wave_4 = {0.15, 3, (float2){-0.6, -.84}};
 
   float4x4 mat = tb_transform_get_world_matrix(transform);
 

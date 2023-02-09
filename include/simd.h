@@ -119,6 +119,7 @@ float norm_angle(float a);
 float2 normf2(float2 v);
 float3 normf3(float3 v);
 float4 normf4(float4 v);
+Quaternion normq(Quaternion q);
 
 float lenf3(float3 v);
 

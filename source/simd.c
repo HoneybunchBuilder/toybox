@@ -131,6 +131,8 @@ float4 normf4(float3 v) {
   };
 }
 
+Quaternion normq(Quaternion q) { return (Quaternion)normf4((float4)q); }
+
 float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }
 
 float3x3 mf33_identity(void) {
@@ -467,12 +469,12 @@ Transform tb_transform_from_node(const cgltf_node *node) {
   transform.position = (float3){node->translation[0], node->translation[1],
                                 node->translation[2]};
 
-  transform.rotation = (Quaternion){
+  transform.rotation = normq((Quaternion){
       node->rotation[0],
-      node->rotation[1],
+      -node->rotation[1],
       node->rotation[2],
-      -node->rotation[3],
-  };
+      node->rotation[3],
+  });
 
   transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
 
