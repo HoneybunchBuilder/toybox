@@ -14,16 +14,16 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: [Windows, X64, self-hosted], preset: x64-windows-ninja-llvm},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-static-ninja-llvm},
-          {host: [Windows, X64, self-hosted], preset: x64-mingw-ninja-gcc},
-          {host: [Windows, X64, self-hosted], preset: x64-mingw-static-ninja-gcc},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-vs2022-llvm},
-          {host: [Windows, X64, self-hosted], preset: x64-windows-static-vs2022-llvm},
+          {preset: x64-windows-ninja-llvm},
+          {preset: x64-windows-static-ninja-llvm},
+          {preset: x64-mingw-ninja-gcc},
+          {preset: x64-mingw-static-ninja-gcc},
+          {preset: x64-windows-vs2022-llvm},
+          {preset: x64-windows-static-vs2022-llvm},
         ]
 
-    name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
-    runs-on: ${{matrix.toolsets.host}}
+    name: ${{matrix.toolsets.preset}} on Windows}
+    runs-on: [Windows, X64, self-hosted]
 
     steps:
     - uses: actions/checkout@v3
@@ -39,3 +39,15 @@ jobs:
 
     - name: Build Release
       run: cmake --build --preset release-${{matrix.toolsets.preset}}
+
+  notify:
+    needs: build
+    name: Notify TheHighSeas
+    runs-on: [Windows, X64, self-hosted]
+    steps:
+      - name: Notify
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT }}
+          repository: HoneybunchBuilder/thehighseas
+          event-type: windows-engine

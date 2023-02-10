@@ -14,12 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         toolsets: [
-          {host: [Linux, X64, self-hosted], preset: x64-linux-ninja-llvm},
-          {host: [Linux, X64, self-hosted], preset: x64-linux-ninja-gcc},
+          {preset: x64-linux-ninja-llvm},
+          {preset: x64-linux-ninja-gcc},
         ]
 
-    name: ${{matrix.toolsets.preset}} on ${{matrix.toolsets.host[0]}}
-    runs-on: ${{matrix.toolsets.host}}
+    name: ${{matrix.toolsets.preset}} on Linux
+    runs-on: [Linux, X64, self-hosted]
 
     steps:
     - uses: actions/checkout@v3
@@ -35,3 +35,15 @@ jobs:
 
     - name: Build Release
       run: cmake --build --preset release-${{matrix.toolsets.preset}}
+
+  notify:
+    needs: build
+    name: Notify TheHighSeas
+    runs-on: [Linux, X64, self-hosted]
+    steps:
+      - name: Notify
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT }}
+          repository: HoneybunchBuilder/thehighseas
+          event-type: linux-engine
