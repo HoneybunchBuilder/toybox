@@ -39,7 +39,7 @@ jobs:
   notify:
     needs: build
     name: Notify TheHighSeas
-    runs-on: [macOS, X64, self-hosted]
+    runs-on: [macOS, ARM64, self-hosted]
     steps:
       - name: Notify
         uses: peter-evans/repository-dispatch@v2
