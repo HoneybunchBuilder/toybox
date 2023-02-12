@@ -258,6 +258,7 @@ function(cook_assets target_name out_assets_path)
     get_filename_component(filename ${texture} NAME_WE)
     set(packed_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
 
+    message("Copying ${texture} to ${packed_texture}")
     add_custom_command(
       OUTPUT ${packed_texture}
       COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
@@ -460,7 +461,10 @@ function(tb_add_app target_name source)
 
   if(engine_assets_path)
     # Add a target to copy engine assets
-    add_custom_target(${target_name}_engine_assets COMMAND ${CMAKE_COMMAND} -E copy_directory ${engine_assets_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets)
+    add_custom_target(${target_name}_engine_assets 
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${engine_assets_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
+    )
+    add_dependencies(${target_name}_engine_assets toybox)
     add_dependencies(${target_name} ${target_name}_engine_assets)
   endif()
 
