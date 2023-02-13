@@ -22,6 +22,21 @@ typedef struct RenderPass RenderPass;
 typedef struct VkRenderPass_T *VkRenderPass;
 typedef struct VkFramebuffer_T *VkFramebuffer;
 
+typedef struct DrawBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+
+  VkViewport viewport;
+  VkRect2D scissor;
+
+  uint64_t user_batch_size;
+  void *user_batch;
+
+  uint32_t draw_count;
+  uint64_t draw_size;
+  void *draws;
+} DrawBatch;
+
 typedef struct DrawContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
@@ -92,3 +107,8 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
                                          const void *batches);
+
+void tb_render_pipeline_issue_draw_batch2(RenderPipelineSystem *self,
+                                          TbDrawContextId draw_ctx,
+                                          uint32_t batch_count,
+                                          const DrawBatch *batches);

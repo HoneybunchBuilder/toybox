@@ -30,18 +30,9 @@ typedef struct ImGuiDraw {
 } ImGuiDraw;
 
 typedef struct ImGuiDrawBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-
-  VkViewport viewport;
-  VkRect2D scissor;
-
   VkPushConstantRange const_range;
   ImGuiPushConstants consts;
   VkDescriptorSet atlas_set;
-
-  uint32_t draw_count;
-  ImGuiDraw *draws;
 } ImGuiDrawBatch;
 
 VkResult create_imgui_pipeline(VkDevice device,
@@ -236,15 +227,17 @@ VkResult create_imgui_pipeline(VkDevice device,
 }
 
 void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const void *batches) {
+                       uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 1, true);
   cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
-  const ImGuiDrawBatch *imgui_batches = (ImGuiDrawBatch *)batches;
+  TB_CHECK(batches->user_batch_size == sizeof(ImGuiDrawBatch),
+           "Unexpected batch");
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const ImGuiDrawBatch *batch = &imgui_batches[batch_idx];
+    const DrawBatch *batch = &batches[batch_idx];
+    const ImGuiDrawBatch *imgui_batch = (ImGuiDrawBatch *)batches->user_batch;
     if (batch->draw_count > 0) {
       vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                         batch->pipeline);
@@ -252,16 +245,17 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
       vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-      VkPushConstantRange range = batch->const_range;
-      const ImGuiPushConstants *consts = &batch->consts;
+      VkPushConstantRange range = imgui_batch->const_range;
+      const ImGuiPushConstants *consts = &imgui_batch->consts;
       vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
                          range.size, consts);
 
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              batch->layout, 0, 1, &batch->atlas_set, 0, NULL);
+                              batch->layout, 0, 1, &imgui_batch->atlas_set, 0,
+                              NULL);
 
       for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-        const ImGuiDraw *draw = &batch->draws[draw_idx];
+        const ImGuiDraw *draw = &((const ImGuiDraw *)batch->draws)[draw_idx];
         vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
                              VK_INDEX_TYPE_UINT16);
         vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
@@ -486,11 +480,16 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
-    ImGuiDrawBatch *batches =
+    ImGuiDrawBatch *imgui_batches =
         tb_alloc_nm_tp(self->render_system->render_thread
                            ->frame_states[self->render_system->frame_idx]
                            .tmp_alloc.alloc,
                        imgui_entity_count, ImGuiDrawBatch);
+    DrawBatch *batches =
+        tb_alloc_nm_tp(self->render_system->render_thread
+                           ->frame_states[self->render_system->frame_idx]
+                           .tmp_alloc.alloc,
+                       imgui_entity_count, DrawBatch);
 
     for (uint32_t entity_idx = 0; entity_idx < imgui_entity_count;
          ++entity_idx) {
@@ -649,11 +648,18 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
               }
             }
 
-            batches[batch_count] = (ImGuiDrawBatch){
+            batches[batch_count] = (DrawBatch){
                 .layout = self->pipe_layout,
                 .pipeline = self->pipeline,
                 .viewport = {0, 0, width, height, 0, 1},
                 .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
+                .user_batch_size = sizeof(ImGuiDrawBatch),
+                .user_batch = &imgui_batches[batch_count],
+                .draw_count = imgui_draw_count,
+                .draw_size = sizeof(ImGuiDrawBatch),
+                .draws = draws,
+            };
+            imgui_batches[batch_count] = (ImGuiDrawBatch){
                 .const_range =
                     (VkPushConstantRange){
                         .size = sizeof(ImGuiPushConstants),
@@ -664,8 +670,6 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                         .scale = {scale_x, scale_y},
                         .translation = {-1.0f, -1.0f},
                     },
-                .draw_count = imgui_draw_count,
-                .draws = draws,
                 .atlas_set = state->sets[batch_count],
             };
             batch_count++;
@@ -674,7 +678,7 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
       }
 
       // Issue draw batches
-      tb_render_pipeline_issue_draw_batch(
+      tb_render_pipeline_issue_draw_batch2(
           self->render_pipe_system, self->imgui_draw_ctx, batch_count, batches);
 
       igNewFrame();

@@ -1960,6 +1960,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
 
   for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
     state->draw_contexts[i].batch_count = 0;
+    state->draw_context_2s[i].batch_count = 0;
   }
 
   // A few passes will be driven from here because an external system
@@ -2120,6 +2121,8 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
       const uint32_t new_max = new_count * 2;
       state->draw_contexts = tb_realloc_nm_tp(std_alloc, state->draw_contexts,
                                               new_max, DrawContext);
+      state->draw_context_2s = tb_realloc_nm_tp(
+          std_alloc, state->draw_context_2s, new_max, DrawContext2);
       state->draw_ctx_max = new_max;
     }
     state->draw_ctx_count = new_count;
@@ -2128,6 +2131,11 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
         .pass_id = desc->pass_id,
         .batch_size = desc->batch_size,
         .record_fn = desc->draw_fn,
+    };
+    state->draw_context_2s[id] = (DrawContext2){
+        .pass_id = desc->pass_id,
+        .user_batch_size = desc->batch_size,
+        .record_fn = (tb_record_draw_batch2 *)desc->draw_fn,
     };
   }
   return id;
@@ -2175,6 +2183,44 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
   // Copy batches into frame state's batch list
   void *dst = ((uint8_t *)ctx->batches) + (write_head * ctx->batch_size);
   SDL_memcpy(dst, batches, batch_count * ctx->batch_size);
+
+  ctx->batch_count = new_count;
+}
+
+void tb_render_pipeline_issue_draw_batch2(RenderPipelineSystem *self,
+                                          TbDrawContextId draw_ctx,
+                                          uint32_t batch_count,
+                                          const DrawBatch *batches) {
+  RenderThread *thread = self->render_system->render_thread;
+  FrameState *state = &thread->frame_states[self->render_system->frame_idx];
+  if (draw_ctx >= state->draw_ctx_count) {
+    TB_CHECK(false, "Draw Context Id out of range");
+    return;
+  }
+
+  DrawContext2 *ctx = &state->draw_context_2s[draw_ctx];
+
+  const uint32_t write_head = ctx->batch_count;
+  const uint32_t new_count = ctx->batch_count + batch_count;
+  if (new_count > ctx->batch_max) {
+    const uint32_t new_max = new_count * 2;
+    ctx->batches =
+        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
+    ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
+                                   new_max * ctx->user_batch_size);
+    ctx->batch_max = new_max;
+  }
+
+  // Copy batches into frame state's batch list
+  DrawBatch *dst = &ctx->batches[write_head];
+  SDL_memcpy(dst, batches, batch_count * sizeof(DrawBatch));
+
+  for (uint32_t i = 0; i < 0 + batch_count; ++i) {
+    void *user_dst = ((uint8_t *)ctx->user_batches) +
+                     ((i + write_head) * ctx->user_batch_size);
+    SDL_memcpy(user_dst, batches[i].user_batch, ctx->user_batch_size);
+    ctx->batches[i + write_head].user_batch = user_dst;
+  }
 
   ctx->batch_count = new_count;
 }
