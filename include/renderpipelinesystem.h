@@ -29,7 +29,6 @@ typedef struct DrawBatch {
   VkViewport viewport;
   VkRect2D scissor;
 
-  uint64_t user_batch_size;
   void *user_batch;
 
   uint32_t draw_count;

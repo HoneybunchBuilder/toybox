@@ -232,9 +232,6 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 1, true);
   cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
-  TB_CHECK(batches->user_batch_size == sizeof(ImGuiDrawBatch),
-           "Unexpected batch");
-
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
     const ImGuiDrawBatch *imgui_batch = (ImGuiDrawBatch *)batches->user_batch;
@@ -653,7 +650,6 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
                 .pipeline = self->pipeline,
                 .viewport = {0, 0, width, height, 0, 1},
                 .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
-                .user_batch_size = sizeof(ImGuiDrawBatch),
                 .user_batch = &imgui_batches[batch_count],
                 .draw_count = imgui_draw_count,
                 .draw_size = sizeof(ImGuiDrawBatch),

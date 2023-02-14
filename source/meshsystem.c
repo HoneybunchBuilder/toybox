@@ -94,8 +94,6 @@ typedef struct ShadowDrawView {
 } ShadowDrawView;
 
 typedef struct ShadowDrawBatch {
-  VkPipeline pipeline;
-  VkPipelineLayout layout;
   uint32_t view_count;
   ShadowDrawView *views;
 } ShadowDrawBatch;
@@ -537,24 +535,28 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 }
 
 void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const void *batches) {
+                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 1, true);
 
-  const ShadowDrawBatch *shadow_batches = (const ShadowDrawBatch *)batches;
+  const ShadowDrawBatch *shadow_batches =
+      (const ShadowDrawBatch *)batches->user_batch;
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const ShadowDrawBatch *batch = &shadow_batches[batch_idx];
-    if (batch->view_count == 0) {
+    const DrawBatch *batch = &batches[batch_idx];
+    const ShadowDrawBatch *shadow_batch = &shadow_batches[batch_idx];
+    if (shadow_batch->view_count == 0) {
       continue;
     }
+
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-    for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
-      const ShadowDrawView *view = &batch->views[view_idx];
+    for (uint32_t view_idx = 0; view_idx < shadow_batch->view_count;
+         ++view_idx) {
+      const ShadowDrawView *view = &shadow_batch->views[view_idx];
       if (view->draw_count == 0) {
         continue;
       }
@@ -618,16 +620,15 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const void *batches) {
+                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
 
-  const MeshDrawBatch *mesh_batches = (const MeshDrawBatch *)batches;
-
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    const MeshDrawBatch *batch = &mesh_batches[batch_idx];
-    if (batch->view_count == 0) {
+    const DrawBatch *batch = &batches[batch_idx];
+    const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
+    if (mesh_batch->view_count == 0) {
       TracyCZoneEnd(batch_ctx);
       continue;
     }
@@ -637,9 +638,9 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-    for (uint32_t view_idx = 0; view_idx < batch->view_count; ++view_idx) {
+    for (uint32_t view_idx = 0; view_idx < mesh_batch->view_count; ++view_idx) {
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      const MeshDrawView *view = &batch->views[view_idx];
+      const MeshDrawView *view = &mesh_batch->views[view_idx];
       if (view->draw_count == 0) {
         TracyCZoneEnd(view_ctx);
         continue;
@@ -1063,16 +1064,20 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   TB_PROF_MESSAGE("Batch Count: %d", batch_count);
 
   // Allocate and initialize each batch
-  MeshDrawBatch *batches = NULL;
+
+  DrawBatch *mesh_batches = NULL;
+  MeshDrawBatch *mesh_user_batches = NULL;
   {
     TracyCZoneN(batch_ctx, "Allocate Batches", true);
-    batches = tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
+    mesh_batches = tb_alloc_nm_tp(tmp_alloc, batch_count, DrawBatch);
+    mesh_user_batches = tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
     for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
       // Each batch could use each view
-      MeshDrawBatch *batch = &batches[batch_idx];
+      MeshDrawBatch *batch = &mesh_user_batches[batch_idx];
       *batch = (MeshDrawBatch){0};
       batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
       batch->view_count = 0;
+      mesh_batches[batch_idx].user_batch = batch;
 
       for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
         MeshDrawView *view = &batch->views[cam_idx];
@@ -1091,14 +1096,16 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   // Create one batch for each shadow cascade
-  ShadowDrawBatch shadow_batches[TB_CASCADE_COUNT] = {0};
+  DrawBatch shadow_batches[TB_CASCADE_COUNT] = {0};
+  ShadowDrawBatch shadow_user_batches[TB_CASCADE_COUNT] = {0};
   for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
     // Batch could use each light
-    shadow_batches[i].views =
+    shadow_user_batches[i].views =
         tb_alloc_nm_tp(tmp_alloc, dir_light_count, ShadowDrawView);
-    shadow_batches[i].view_count = 0;
+    shadow_user_batches[i].view_count = 0;
+    shadow_batches[i].user_batch = &shadow_user_batches[i];
 
-    ShadowDrawView *view = &shadow_batches[i].views[0];
+    ShadowDrawView *view = &shadow_user_batches[i].views[0];
     // Each view already knows how many meshes it should see
     // Each mesh could have TB_SUBMESH_MAX # of submeshes
     *view = (ShadowDrawView){0};
@@ -1148,11 +1155,13 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
               self, submesh->vertex_input, mat_perm);
           const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
 
-          MeshDrawBatch *batch = &batches[local_pipe_idx];
+          DrawBatch *batch = &mesh_batches[local_pipe_idx];
           batch->pipeline = self->pipelines[pipe_idx];
-          batch->layout = self->pipe_layout; // Can we avoid putting this here?
-          batch->view_count = camera_count;
-          MeshDrawView *view = &batch->views[cam_idx];
+          batch->layout = self->pipe_layout;
+
+          MeshDrawBatch *mesh_batch = &mesh_user_batches[local_pipe_idx];
+          mesh_batch->view_count = camera_count;
+          MeshDrawView *view = &mesh_batch->views[cam_idx];
           view->view_set = view_set;
           view->viewport = (VkViewport){0, height, width, -(float)height, 0, 1};
           view->scissor = (VkRect2D){{0, 0}, {width, height}};
@@ -1214,8 +1223,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   // Submit batches
-  tb_render_pipeline_issue_draw_batch(
-      self->render_pipe_system, self->opaque_draw_ctx, batch_count, batches);
+  tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                       self->opaque_draw_ctx, batch_count,
+                                       mesh_batches);
 
   // Similar process for shadow batch
   for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
@@ -1240,8 +1250,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
         shadow_batches[cascade_idx].pipeline = self->shadow_pipeline;
         shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
-        shadow_batches[cascade_idx].view_count = dir_light_count;
-        ShadowDrawView *draw_view = &shadow_batches[cascade_idx].views[0];
+        shadow_user_batches[cascade_idx].view_count = dir_light_count;
+        ShadowDrawView *draw_view = &shadow_user_batches[cascade_idx].views[0];
         draw_view->viewport =
             (VkViewport){0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1};
         draw_view->scissor =
@@ -1267,9 +1277,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->shadow_draw_ctxs[i], 1,
-                                        &shadow_batches[i]);
+    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                         self->shadow_draw_ctxs[i], 1,
+                                         &shadow_batches[i]);
   }
 
   // Output potential transform updates
