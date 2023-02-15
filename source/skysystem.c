@@ -1269,18 +1269,18 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
     }
 
-    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                         self->sky_draw_ctx, batch_count,
-                                         sky_draw_batches);
-    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                         self->env_capture_ctx, batch_count,
-                                         env_draw_batches);
-    tb_render_pipeline_issue_draw_batch2(
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->sky_draw_ctx, batch_count,
+                                        sky_draw_batches);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->env_capture_ctx, batch_count,
+                                        env_draw_batches);
+    tb_render_pipeline_issue_draw_batch(
         self->render_pipe_system, self->irradiance_ctx, 1, irr_draw_batch);
     for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-      tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                           self->prefilter_ctxs[i], 1,
-                                           &pre_draw_batches[i]);
+      tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                          self->prefilter_ctxs[i], 1,
+                                          &pre_draw_batches[i]);
     }
   }
 }

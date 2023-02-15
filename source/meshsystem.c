@@ -1223,9 +1223,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   // Submit batches
-  tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                       self->opaque_draw_ctx, batch_count,
-                                       mesh_batches);
+  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                      self->opaque_draw_ctx, batch_count,
+                                      mesh_batches);
 
   // Similar process for shadow batch
   for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
@@ -1277,9 +1277,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   }
 
   for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                         self->shadow_draw_ctxs[i], 1,
-                                         &shadow_batches[i]);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->shadow_draw_ctxs[i], 1,
+                                        &shadow_batches[i]);
   }
 
   // Output potential transform updates

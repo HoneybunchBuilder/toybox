@@ -105,9 +105,4 @@ VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
-                                         const void *batches);
-
-void tb_render_pipeline_issue_draw_batch2(RenderPipelineSystem *self,
-                                          TbDrawContextId draw_ctx,
-                                          uint32_t batch_count,
-                                          const DrawBatch *batches);
+                                         const DrawBatch *batches);

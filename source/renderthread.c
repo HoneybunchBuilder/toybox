@@ -1499,11 +1499,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
             draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
                             draw->batches);
           }
-          DrawContext2 *draw2 = &state->draw_context_2s[draw_idx];
-          if (draw2->pass_id == pass->id && draw2->batch_count > 0) {
-            draw2->record_fn(gpu_ctx, pass_buffer, draw2->batch_count,
-                             draw2->batches);
-          }
         }
 
 #ifdef TRACY_ENABLE

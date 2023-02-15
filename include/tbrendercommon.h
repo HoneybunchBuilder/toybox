@@ -61,12 +61,8 @@ typedef struct TbImage {
 } TbImage;
 
 typedef struct DrawBatch DrawBatch;
-
 typedef struct TracyCGPUContext TracyCGPUContext;
 
 typedef void tb_record_draw_batch(TracyCGPUContext *gpu_ctx,
                                   VkCommandBuffer buffer, uint32_t batch_count,
-                                  const void *batches);
-typedef void tb_record_draw_batch2(TracyCGPUContext *gpu_ctx,
-                                   VkCommandBuffer buffer, uint32_t batch_count,
-                                   const DrawBatch *batches);
+                                  const DrawBatch *batches);

@@ -504,8 +504,8 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
       ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
     }
 
-    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
-                                         self->draw_ctx, 1, batch);
+    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                        self->draw_ctx, 1, batch);
   }
 
   // UI for recording visual logs
