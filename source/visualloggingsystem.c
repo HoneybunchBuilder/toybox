@@ -58,32 +58,25 @@ typedef struct VLogFrame {
 } VLogFrame;
 
 typedef struct VLogDrawBatch {
-  VkPipeline pipeline;
-  VkPipelineLayout layout;
-  VkViewport viewport;
-  VkRect2D scissor;
   VkDescriptorSet view_set;
-  uint32_t draw_count;
   VkBuffer shape_geom_buffer;
   float3 shape_scale;
   uint32_t index_count;
   uint64_t pos_offset;
   VLogShapeType type;
-  VLogShape draws[TB_MAX_VLOG_DRAWS];
 } VLogDrawBatch;
 
 TB_DEFINE_SYSTEM(visual_logging, VisualLoggingSystem,
                  VisualLoggingSystemDescriptor)
 
 void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                      uint32_t batch_count, const void *batches) {
+                      uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Visual Logger Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 1, true);
 
-  const VLogDrawBatch *vlog_batches = (const VLogDrawBatch *)batches;
-
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const VLogDrawBatch *batch = &vlog_batches[batch_idx];
+    const DrawBatch *batch = &batches[batch_idx];
+    const VLogDrawBatch *vlog_batch = (const VLogDrawBatch *)batch->user_batch;
     if (batch->draw_count == 0) {
       continue;
     }
@@ -94,11 +87,11 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const VLogShape *shape = &batch->draws[draw_idx];
+      const VLogShape *shape = &((const VLogShape *)batch->draws)[draw_idx];
 
       // Set push constants for draw
-      if (batch->type == TB_VLOG_SHAPE_LOCATION) {
-        const float3 scale = batch->shape_scale * shape->location.radius;
+      if (vlog_batch->type == TB_VLOG_SHAPE_LOCATION) {
+        const float3 scale = vlog_batch->shape_scale * shape->location.radius;
         PrimitivePushConstants consts = {
             .position = shape->location.position,
             .scale = scale,
@@ -106,7 +99,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         };
         vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_ALL_GRAPHICS,
                            0, sizeof(PrimitivePushConstants), &consts);
-      } else if (batch->type == TB_VLOG_SHAPE_LINE) {
+      } else if (vlog_batch->type == TB_VLOG_SHAPE_LINE) {
         // TODO: Set push constants for line drawing
       }
 
@@ -114,16 +107,17 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              batch->layout, 0, 1, &batch->view_set, 0, NULL);
+                              batch->layout, 0, 1, &vlog_batch->view_set, 0,
+                              NULL);
 
-      vkCmdBindIndexBuffer(buffer, batch->shape_geom_buffer, 0,
+      vkCmdBindIndexBuffer(buffer, vlog_batch->shape_geom_buffer, 0,
                            VK_INDEX_TYPE_UINT16);
-      vkCmdBindVertexBuffers(buffer, 0, 1, &batch->shape_geom_buffer,
-                             &batch->pos_offset);
+      vkCmdBindVertexBuffers(buffer, 0, 1, &vlog_batch->shape_geom_buffer,
+                             &vlog_batch->pos_offset);
 
       // Note: This is probably better suited to instanced drawing
       // Maybe a good first pass at instancing in the future
-      vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+      vkCmdDrawIndexed(buffer, vlog_batch->index_count, 1, 0, 0, 0);
     }
 
     cmd_end_label(buffer);
@@ -485,26 +479,33 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
 
     VLogDrawBatch *loc_batch = tb_alloc_tp(self->tmp_alloc, VLogDrawBatch);
     *loc_batch = (VLogDrawBatch){
-        .draw_count = frame->loc_draw_count,
         .index_count = self->sphere_index_count,
-        .layout = self->pipe_layout,
-        .pipeline = self->pipeline,
         .pos_offset = self->sphere_pos_offset,
         .shape_geom_buffer = self->sphere_geom_buffer,
         .shape_scale = self->sphere_scale,
         .type = TB_VLOG_SHAPE_LOCATION,
-        .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
-        .scissor = (VkRect2D){{0, 0}, {width, height}},
         .view_set =
             tb_view_system_get_descriptor(self->view_system, camera->view_id),
     };
 
+    DrawBatch *batch = tb_alloc_tp(self->tmp_alloc, DrawBatch);
+    *batch = (DrawBatch){
+        .layout = self->pipe_layout,
+        .pipeline = self->pipeline,
+        .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
+        .scissor = (VkRect2D){{0, 0}, {width, height}},
+        .user_batch = loc_batch,
+        .draw_count = frame->loc_draw_count,
+        .draw_size = sizeof(VLogShape),
+        .draws =
+            tb_alloc_nm_tp(self->tmp_alloc, frame->loc_draw_count, VLogShape),
+    };
     for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
-      loc_batch->draws[i].location = frame->loc_draws[i];
+      ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
     }
 
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->draw_ctx, 1, loc_batch);
+    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                         self->draw_ctx, 1, batch);
   }
 
   // UI for recording visual logs
