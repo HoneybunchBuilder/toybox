@@ -33,12 +33,6 @@
 #include "world.h"
 
 typedef struct SkyDrawBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-
-  VkViewport viewport;
-  VkRect2D scissor;
-
   VkPushConstantRange const_range;
   SkyPushConstants consts;
   VkDescriptorSet sky_set;
@@ -49,12 +43,6 @@ typedef struct SkyDrawBatch {
 } SkyDrawBatch;
 
 typedef struct IrradianceBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-
-  VkViewport viewport;
-  VkRect2D scissor;
-
   VkDescriptorSet set;
 
   VkBuffer geom_buffer;
@@ -63,12 +51,6 @@ typedef struct IrradianceBatch {
 } IrradianceBatch;
 
 typedef struct PrefilterBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-
-  VkViewport viewport;
-  VkRect2D scissor;
-
   EnvFilterConstants consts;
   VkDescriptorSet set;
 
@@ -605,36 +587,38 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
 }
 
 void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
-                       const SkyDrawBatch *batches) {
+                       const DrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const SkyDrawBatch *batch = &batches[batch_idx];
+    const DrawBatch *batch = &batches[batch_idx];
+    const SkyDrawBatch *sky_batch = (const SkyDrawBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    VkPushConstantRange range = batch->const_range;
-    const SkyPushConstants *consts = &batch->consts;
+    VkPushConstantRange range = sky_batch->const_range;
+    const SkyPushConstants *consts = &sky_batch->consts;
     vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
                        range.size, consts);
 
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            batch->layout, 0, 1, &batch->sky_set, 0, NULL);
+                            batch->layout, 0, 1, &sky_batch->sky_set, 0, NULL);
 
-    vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
-                           &batch->vertex_offset);
-    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+    vkCmdBindIndexBuffer(buffer, sky_batch->geom_buffer, 0,
+                         VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &sky_batch->geom_buffer,
+                           &sky_batch->vertex_offset);
+    vkCmdDrawIndexed(buffer, sky_batch->index_count, 1, 0, 0, 0);
   }
 }
 
 void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                uint32_t batch_count, const void *batches) {
+                uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
   cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
 
-  record_sky_common(buffer, batch_count, (const SkyDrawBatch *)batches);
+  record_sky_common(buffer, batch_count, batches);
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -642,12 +626,12 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const void *batches) {
+                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 1, true);
   cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
-  record_sky_common(buffer, batch_count, (const SkyDrawBatch *)batches);
+  record_sky_common(buffer, batch_count, batches);
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -655,25 +639,28 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const void *batches) {
+                       uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 1, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
-  if (batch_count > 0) {
-    const IrradianceBatch *batch = (const IrradianceBatch *)batches;
+  for (uint32_t i = 0; i < batch_count; ++i) {
+    const DrawBatch *batch = &batches[i];
+    const IrradianceBatch *irr_batch =
+        (const IrradianceBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            batch->layout, 0, 1, &batch->set, 0, NULL);
+                            batch->layout, 0, 1, &irr_batch->set, 0, NULL);
 
-    vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
-                           &batch->vertex_offset);
-    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+    vkCmdBindIndexBuffer(buffer, irr_batch->geom_buffer, 0,
+                         VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &irr_batch->geom_buffer,
+                           &irr_batch->vertex_offset);
+    vkCmdDrawIndexed(buffer, irr_batch->index_count, 1, 0, 0, 0);
   }
 
   cmd_end_label(buffer);
@@ -682,29 +669,31 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const void *batches) {
+                       uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 1, true);
   cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
-  if (batch_count > 0) {
-    const PrefilterBatch *batch = (const PrefilterBatch *)batches;
+  for (uint32_t i = 0; i < batch_count; ++i) {
+    const DrawBatch *batch = &batches[i];
+    const PrefilterBatch *pre_batch = (const PrefilterBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            batch->layout, 0, 1, &batch->set, 0, NULL);
+                            batch->layout, 0, 1, &pre_batch->set, 0, NULL);
 
-    vkCmdBindIndexBuffer(buffer, batch->geom_buffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdBindVertexBuffers(buffer, 0, 1, &batch->geom_buffer,
-                           &batch->vertex_offset);
+    vkCmdBindIndexBuffer(buffer, pre_batch->geom_buffer, 0,
+                         VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(buffer, 0, 1, &pre_batch->geom_buffer,
+                           &pre_batch->vertex_offset);
 
     vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(EnvFilterConstants), &batch->consts);
+                       sizeof(EnvFilterConstants), &pre_batch->consts);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    vkCmdDrawIndexed(buffer, batch->index_count, 1, 0, 0, 0);
+    vkCmdDrawIndexed(buffer, pre_batch->index_count, 1, 0, 0, 0);
   }
 
   cmd_end_label(buffer);
@@ -1160,14 +1149,16 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
                            writes, 0, NULL);
 
     uint32_t batch_count = 0;
-    const size_t batch_bytes = sky_count * camera_count;
+    const size_t num_batches = sky_count * camera_count;
     Allocator tmp_alloc = self->render_system->render_thread
                               ->frame_states[self->render_system->frame_idx]
                               .tmp_alloc.alloc;
+    DrawBatch *sky_draw_batches =
+        tb_alloc_nm_tp(tmp_alloc, num_batches, DrawBatch);
+    DrawBatch *env_draw_batches =
+        tb_alloc_nm_tp(tmp_alloc, num_batches, DrawBatch);
     SkyDrawBatch *sky_batches =
-        tb_alloc_nm_tp(tmp_alloc, batch_bytes, SkyDrawBatch);
-    SkyDrawBatch *env_batches =
-        tb_alloc_nm_tp(tmp_alloc, batch_bytes, SkyDrawBatch);
+        tb_alloc_nm_tp(tmp_alloc, num_batches, SkyDrawBatch);
 
     // Submit a sky draw for each camera, for each sky
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
@@ -1193,11 +1184,14 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
-        sky_batches[batch_count] = (SkyDrawBatch){
+        sky_draw_batches[batch_count] = (DrawBatch){
             .layout = self->sky_pipe_layout,
             .pipeline = self->sky_pipeline,
             .viewport = {0, height, width, -(float)height, 0, 1},
             .scissor = {{0, 0}, {width, height}},
+            .user_batch = &sky_batches[batch_count],
+        };
+        sky_batches[batch_count] = (SkyDrawBatch){
             .const_range =
                 (VkPushConstantRange){
                     .size = sizeof(SkyPushConstants),
@@ -1212,24 +1206,29 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
         };
-        env_batches[batch_count] = sky_batches[batch_count];
-        env_batches[batch_count].pipeline = self->env_pipeline;
-        env_batches[batch_count].viewport =
-            (VkViewport){0, 512, 512, -512, 0, 1};
-        env_batches[batch_count].scissor = (VkRect2D){{0, 0}, {512, 512}};
+        env_draw_batches[batch_count] = (DrawBatch){
+            .layout = self->sky_pipe_layout,
+            .pipeline = self->env_pipeline,
+            .viewport = {0, 512.0f, 512.0f, -512.0f, 0, 1},
+            .scissor = {{0, 0}, {512, 512}},
+            .user_batch = &sky_batches[batch_count],
+        };
         batch_count++;
       }
     }
 
     // Generate the batch for the irradiance pass
-    IrradianceBatch *irradiance_batch =
-        tb_alloc_nm_tp(tmp_alloc, sizeof(IrradianceBatch), IrradianceBatch);
+    DrawBatch *irr_draw_batch = tb_alloc_tp(tmp_alloc, DrawBatch);
+    IrradianceBatch *irradiance_batch = tb_alloc_tp(tmp_alloc, IrradianceBatch);
     {
-      *irradiance_batch = (IrradianceBatch){
+      *irr_draw_batch = (DrawBatch){
           .layout = self->irr_pipe_layout,
           .pipeline = self->irradiance_pipeline,
           .viewport = {0, 64, 64, -64, 0, 1},
           .scissor = {{0, 0}, {64, 64}},
+          .user_batch = irradiance_batch,
+      };
+      *irradiance_batch = (IrradianceBatch){
           .set = state->sets[state->set_count - 1],
           .geom_buffer = self->sky_geom_gpu_buffer.buffer,
           .index_count = get_skydome_index_count(),
@@ -1238,19 +1237,25 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     }
 
     // Generate batch for prefiltering the environment map
+    DrawBatch *pre_draw_batches =
+        tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
     PrefilterBatch *prefilter_batches =
-        tb_alloc_nm_tp(tmp_alloc, sizeof(PrefilterBatch), PrefilterBatch);
+        tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
     {
       const float dim = 512;
       const uint32_t mip_count = (uint32_t)(SDL_floorf(log2f(dim))) + 1u;
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
         const float mip_dim = dim * SDL_powf(0.5f, i);
 
-        prefilter_batches[i] = (PrefilterBatch){
+        pre_draw_batches[i] = (DrawBatch){
             .layout = self->prefilter_pipe_layout,
             .pipeline = self->prefilter_pipeline,
             .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
             .scissor = {{0, 0}, {mip_dim, mip_dim}},
+            .user_batch = &prefilter_batches[i],
+        };
+
+        prefilter_batches[i] = (PrefilterBatch){
             .set = state->sets[state->set_count - 1],
             .geom_buffer = self->sky_geom_gpu_buffer.buffer,
             .index_count = get_skydome_index_count(),
@@ -1264,17 +1269,18 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       }
     }
 
-    tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->sky_draw_ctx, batch_count, sky_batches);
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->env_capture_ctx, batch_count,
-                                        env_batches);
-    tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->irradiance_ctx, 1, irradiance_batch);
+    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                         self->sky_draw_ctx, batch_count,
+                                         sky_draw_batches);
+    tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                         self->env_capture_ctx, batch_count,
+                                         env_draw_batches);
+    tb_render_pipeline_issue_draw_batch2(
+        self->render_pipe_system, self->irradiance_ctx, 1, irr_draw_batch);
     for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-      tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                          self->prefilter_ctxs[i], 1,
-                                          &prefilter_batches[i]);
+      tb_render_pipeline_issue_draw_batch2(self->render_pipe_system,
+                                           self->prefilter_ctxs[i], 1,
+                                           &pre_draw_batches[i]);
     }
   }
 }
