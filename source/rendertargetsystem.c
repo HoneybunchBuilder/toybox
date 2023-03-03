@@ -11,6 +11,7 @@ typedef struct RenderTargetMipView {
 
 typedef struct RenderTarget {
   bool imported;
+  VkFormat format;
   TbImage images[TB_MAX_FRAME_STATES];
   VkImageView views[TB_MAX_FRAME_STATES];
   uint32_t mip_count;
@@ -34,6 +35,11 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
       desc->view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY) {
     create_flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
   }
+
+  // Store the render target's format so we can look it up later
+  TB_CHECK_RETURN(desc->format != VK_FORMAT_UNDEFINED,
+                  "Undefined render target format", false);
+  rt->format = desc->format;
 
   // Allocate images for each frame
   {
@@ -539,6 +545,10 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
     aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
+  TB_CHECK_RETURN(rt_desc->format != VK_FORMAT_UNDEFINED,
+                  "Undefined render target format", false);
+  rt->format = rt_desc->format;
+
   rt->imported = true;
 
   // When importing, the images are already created but we still want to record
@@ -599,6 +609,15 @@ VkExtent3D tb_render_target_get_mip_extent(RenderTargetSystem *self,
     TB_CHECK_RETURN(false, "Render target index out of range", (VkExtent3D){0});
   }
   return self->render_targets[rt].mip_views[mip].extent;
+}
+
+VkFormat tb_render_target_get_format(RenderTargetSystem *self,
+                                     TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range",
+                    VK_FORMAT_UNDEFINED);
+  }
+  return self->render_targets[rt].format;
 }
 
 VkImageView tb_render_target_get_view(RenderTargetSystem *self,

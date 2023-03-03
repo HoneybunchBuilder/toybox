@@ -8,6 +8,7 @@
 
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
+typedef struct RenderTargetSystem RenderTargetSystem;
 
 typedef struct VkRenderPass_T *VkRenderPass;
 typedef struct VkSampler_T *VkSampler;
@@ -34,6 +35,7 @@ typedef struct ImGuiSystem {
 
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
+  RenderTargetSystem *render_target_system;
 
   ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 

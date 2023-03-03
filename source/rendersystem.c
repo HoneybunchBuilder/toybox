@@ -53,6 +53,13 @@ bool create_render_system(RenderSystem *self,
           .vkCreateImage = vkCreateImage,
           .vkDestroyImage = vkDestroyImage,
           .vkCmdCopyBuffer = vkCmdCopyBuffer,
+          .vkGetBufferMemoryRequirements2KHR =
+              vkGetBufferMemoryRequirements2KHR,
+          .vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2KHR,
+          .vkBindBufferMemory2KHR = vkBindBufferMemory2KHR,
+          .vkBindImageMemory2KHR = vkBindImageMemory2KHR,
+          .vkGetPhysicalDeviceMemoryProperties2KHR =
+              vkGetPhysicalDeviceMemoryProperties2KHR,
       };
       VmaDeviceMemoryCallbacks vma_callbacks = {
           tb_vma_alloc_fn,

@@ -16,6 +16,7 @@
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
 #include "shadercommon.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
@@ -38,7 +39,8 @@ typedef struct ImGuiDrawBatch {
 VkResult create_imgui_pipeline(VkDevice device,
                                const VkAllocationCallbacks *vk_alloc,
                                VkPipelineCache cache, VkRenderPass pass,
-                               VkSampler sampler, VkPipelineLayout *pipe_layout,
+                               VkSampler sampler, VkFormat ui_target_format,
+                               VkPipelineLayout *pipe_layout,
                                VkDescriptorSetLayout *set_layout,
                                VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -197,8 +199,17 @@ VkResult create_imgui_pipeline(VkDevice device,
         .pDynamicStates = dyn_states,
     };
 
+    // We're using direct rendering instead of render passes
+    // We don't supply a render pass so we have to supply rendering info
+    VkPipelineRenderingCreateInfo rendering_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = (VkFormat[1]){ui_target_format},
+    };
+
     VkGraphicsPipelineCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &rendering_info,
         .stageCount = STAGE_COUNT,
         .pStages = stages,
         .pVertexInputState = &vert_input_state,
@@ -210,7 +221,6 @@ VkResult create_imgui_pipeline(VkDevice device,
         .pDepthStencilState = &depth_state,
         .pDynamicState = &dynamic_state,
         .layout = *pipe_layout,
-        .renderPass = pass,
     };
 #undef STAGE_COUNT
     err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
@@ -270,7 +280,7 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
-  TB_CHECK_RETURN(system_dep_count == 2,
+  TB_CHECK_RETURN(system_dep_count == 3,
                   "Different than expected number of system dependencies",
                   false);
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
@@ -286,9 +296,16 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
       render_pipe_system,
       "Failed to find render pipeline system which imgui depends on", false);
 
+  RenderTargetSystem *render_target_system =
+      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
+  TB_CHECK_RETURN(render_target_system,
+                  "Failed to find render target system which imgui depends on",
+                  false);
+
   *self = (ImGuiSystem){
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
+      .render_target_system = render_target_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -296,8 +313,19 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   VkResult err = VK_SUCCESS;
 
   // Look up UI pipeline
-  TbRenderPassId pass_id = self->render_pipe_system->ui_pass;
-  self->pass = tb_render_pipeline_get_pass(self->render_pipe_system, pass_id);
+  TbRenderPassId ui_pass_id = self->render_pipe_system->ui_pass;
+  self->pass =
+      tb_render_pipeline_get_pass(self->render_pipe_system, ui_pass_id);
+  uint32_t attach_count = 0;
+  tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
+                                     &attach_count, NULL);
+  TB_CHECK(attach_count == 1, "Unexpected");
+  TbRenderTargetId ui_target_id = 0;
+  tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
+                                     &attach_count, &ui_target_id);
+
+  VkFormat ui_target_format =
+      tb_render_target_get_format(self->render_target_system, ui_target_id);
 
   // Create Immutable Sampler
   {
@@ -323,14 +351,14 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   err = create_imgui_pipeline(
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
       render_system->pipeline_cache, self->pass, self->sampler,
-      &self->pipe_layout, &self->set_layout, &self->pipeline);
+      ui_target_format, &self->pipe_layout, &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
 
   self->imgui_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(ImGuiDrawBatch),
                               .draw_fn = imgui_pass_record,
-                              .pass_id = pass_id,
+                              .pass_id = ui_pass_id,
                           });
 
   return true;
@@ -696,9 +724,10 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
       .dep_count = 2,
       .deps[0] = (SystemComponentDependencies){1, {InputComponentId}},
       .deps[1] = (SystemComponentDependencies){1, {ImGuiComponentId}},
-      .system_dep_count = 2,
+      .system_dep_count = 3,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = RenderPipelineSystemId,
+      .system_deps[2] = RenderTargetSystemId,
       .create = tb_create_imgui_system,
       .destroy = tb_destroy_imgui_system,
       .tick = tb_tick_imgui_system,

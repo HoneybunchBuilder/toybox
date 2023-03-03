@@ -102,6 +102,11 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
 VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
                                          TbRenderPassId pass_id);
 
+void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
+                                        TbRenderPassId pass,
+                                        uint32_t *attach_count,
+                                        TbRenderTargetId *attachments);
+
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,

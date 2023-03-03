@@ -220,7 +220,7 @@ bool init_instance(SDL_Window *window, Allocator tmp_alloc,
     app_info.engineVersion =
         VK_MAKE_VERSION(TB_ENGINE_VERSION_MAJOR, TB_ENGINE_VERSION_MINOR,
                         TB_ENGINE_VERSION_PATCH);
-    app_info.apiVersion = VK_API_VERSION_1_2;
+    app_info.apiVersion = VK_API_VERSION_1_3;
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -794,8 +794,14 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
+  VkPhysicalDeviceVulkan13Features vk_13_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+      .dynamicRendering = true,
+  };
+
   VkPhysicalDeviceVulkan11Features vk_11_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .pNext = &vk_13_features,
       .multiview = VK_TRUE,
   };
 
@@ -811,7 +817,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .rayTracingPipeline = ext_support->raytracing,
       .pNext = &rt_query_feature,
   };
-  vk_11_features.pNext = &rt_pipe_feature;
+  vk_13_features.pNext = &rt_pipe_feature;
 #endif
 
   VkDeviceCreateInfo create_info = {0};
@@ -1177,25 +1183,6 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
   cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
 #endif
 
-  const uint32_t clear_value_count = pass->attachment_count;
-  TB_CHECK(clear_value_count < TB_MAX_ATTACHMENTS, "Unexpected");
-
-  VkRenderPassBeginInfo begin_info = {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .renderPass = pass->pass,
-      .framebuffer = pass->framebuffer,
-      .renderArea =
-          {
-              .extent =
-                  {
-                      .width = pass->width,
-                      .height = pass->height,
-                  },
-          },
-      .clearValueCount = clear_value_count,
-      .pClearValues = pass->clear_values,
-  };
-
   // Perform any necessary image transitions
   for (uint32_t i = 0; i < pass->barrier_count; ++i) {
     const ImageTransition *barrier = &pass->barriers[i];
@@ -1203,7 +1190,41 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
                          NULL, 0, NULL, 1, &barrier->barrier);
   }
 
-  vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+  if (pass->dynamic) {
+    // New strategy: dynamic rendering
+    vkCmdBeginRendering(buffer, pass->render_info);
+  } else {
+    // Old strategy: render pass
+    const uint32_t clear_value_count = pass->attachment_count;
+    TB_CHECK(clear_value_count < TB_MAX_ATTACHMENTS, "Unexpected");
+
+    VkRenderPassBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = pass->pass,
+        .framebuffer = pass->framebuffer,
+        .renderArea =
+            {
+                .extent =
+                    {
+                        .width = pass->width,
+                        .height = pass->height,
+                    },
+            },
+        .clearValueCount = clear_value_count,
+        .pClearValues = pass->clear_values,
+    };
+    vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+  }
+}
+
+void record_pass_end(VkCommandBuffer buffer, PassContext *pass) {
+  if (pass->dynamic) {
+    // New strategy: dynamic rendering
+    vkCmdEndRendering(buffer);
+  } else {
+    // Old: render passes
+    vkCmdEndRenderPass(buffer);
+  }
 }
 
 void tick_render_thread(RenderThread *thread, FrameState *state) {
@@ -1504,7 +1525,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
 #endif
-        vkCmdEndRenderPass(pass_buffer);
+        record_pass_end(pass_buffer, pass);
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }

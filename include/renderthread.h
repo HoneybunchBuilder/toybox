@@ -31,6 +31,8 @@ typedef struct ImageTransition {
   VkImageMemoryBarrier barrier;
 } ImageTransition;
 
+typedef struct VkRenderingInfo VkRenderingInfo;
+
 typedef struct PassContext {
   TbRenderPassId id;
   uint32_t command_buffer_index;
@@ -43,6 +45,9 @@ typedef struct PassContext {
 
   uint32_t barrier_count;
   ImageTransition barriers[TB_MAX_BARRIERS];
+
+  bool dynamic; // temp
+  VkRenderingInfo *render_info;
 
 #ifdef TRACY_ENABLE
   char label[TB_RP_LABEL_LEN];

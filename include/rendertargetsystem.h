@@ -67,6 +67,8 @@ VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
 VkExtent3D tb_render_target_get_mip_extent(RenderTargetSystem *self,
                                            uint32_t mip, TbRenderTargetId rt);
 
+VkFormat tb_render_target_get_format(RenderTargetSystem *self,
+                                     TbRenderTargetId rt);
 VkImageView tb_render_target_get_view(RenderTargetSystem *self,
                                       uint32_t frame_idx, TbRenderTargetId rt);
 VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
