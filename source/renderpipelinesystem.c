@@ -347,6 +347,7 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
 
 VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                                      VkRenderPass pass,
+                                     VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
                                      VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -373,6 +374,12 @@ VkResult create_tonemapping_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){swap_target_format},
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -447,7 +454,6 @@ VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = pipe_layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Tonmapping Pipeline", pipeline);
@@ -1620,7 +1626,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }};
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          1, &(VkClearValue){0}, &default_mip, &swapchain_target, false,
+          1, &(VkClearValue){0}, &default_mip, &swapchain_target, true,
           "Tonemap Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create tonemap pass", false);
@@ -1845,8 +1851,21 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
     // Tonemapping
     {
+      const RenderPass *pass = &self->render_passes[self->tonemap_pass];
+
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      TbRenderTargetId tonemap_target_id = 0;
+      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
+                                         &attach_count, &tonemap_target_id);
+
+      VkFormat swap_target_format = tb_render_target_get_format(
+          self->render_target_system, tonemap_target_id);
+
       err = create_tonemapping_pipeline(
-          self->render_system, self->render_passes[self->color_copy_pass].pass,
+          self->render_system, pass->pass, swap_target_format,
           self->copy_pipe_layout, &self->tonemap_pipe);
       TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
 
