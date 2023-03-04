@@ -119,6 +119,7 @@ typedef struct FullscreenBatch {
 } FullscreenBatch;
 
 VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
+                               VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -145,6 +146,12 @@ VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){depth_format},
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -219,7 +226,6 @@ VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = pipe_layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Depth Copy Pipeline", pipeline);
@@ -1349,7 +1355,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id =
           create_render_pass(self, &create_info, 1, &self->depth_copy_pass, 1,
                              &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &depth_copy, false, "Depth Copy Pass");
+                             &depth_copy, true, "Depth Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
@@ -1546,7 +1552,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 #undef ATTACH_COUNT
 
-      PassTransition transitions[2] = {
+      PassTransition transitions[3] = {
           {
               .render_target = self->render_target_system->hdr_color,
               .barrier =
@@ -1600,10 +1606,37 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                   },
                           },
                   },
-          }};
+          },
+          {
+              .render_target = self->render_target_system->depth_buffer_copy,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
 
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_color_pass, 2, transitions,
+          self, &create_info, 1, &self->transparent_color_pass, 3, transitions,
           2, (VkClearValue[2]){0}, (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, transparent_depth}, false,
           "Transparent Color Pass");
@@ -1788,151 +1821,161 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
 
     // Depth Copy
-    {
-      {
-        VkSamplerCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            .magFilter = VK_FILTER_LINEAR,
-            .minFilter = VK_FILTER_LINEAR,
-            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-            .anisotropyEnable = VK_FALSE,
-            .maxAnisotropy = 1.0f,
-            .maxLod = 1.0f,
-            .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-        };
-        err = tb_rnd_create_sampler(render_system, &create_info,
-                                    "Depth Copy Sampler", &self->sampler);
-        TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
-      }
-
-      {
-        VkDescriptorSetLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 2,
-            .pBindings = (VkDescriptorSetLayoutBinding[2]){
-                {
-                    .binding = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 1,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
-                },
-            }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
-                                       "Depth Copy Descriptor Set Layout",
-                                       &self->copy_set_layout);
-        TB_VK_CHECK_RET(
-            err, "Failed to create depth copy descriptor set layout", false);
-      }
-
-      {
-        VkPipelineLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts =
-                (VkDescriptorSetLayout[1]){
-                    self->copy_set_layout,
-                },
-        };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
-                                            "Depth Copy Pipeline Layout",
-                                            &self->copy_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
-      }
-
-      err = create_depth_pipeline(
-          self->render_system, self->render_passes[self->depth_copy_pass].pass,
-          self->copy_pipe_layout, &self->depth_copy_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
-
-      {
-        DrawContextDescriptor desc = {
-            .batch_size = sizeof(FullscreenBatch),
-            .draw_fn = record_depth_copy,
-            .pass_id = self->depth_copy_pass,
-        };
-        self->depth_copy_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
-                        "Failed to create depth copy draw context", false);
-      }
-    }
-
-    // Color Copy
-    {
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
-                                         &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-      TbRenderTargetId attach_id = InvalidRenderTargetId;
-      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
-                                         &attach_count, &attach_id);
-
-      VkFormat color_format =
-          tb_render_target_get_format(self->render_target_system, attach_id);
-
-      err = create_color_copy_pipeline(
-          self->render_system, self->render_passes[self->color_copy_pass].pass,
-          color_format, self->copy_pipe_layout, &self->color_copy_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
-
-      {
-        DrawContextDescriptor desc = {
-            .batch_size = sizeof(FullscreenBatch),
-            .draw_fn = record_color_copy,
-            .pass_id = self->color_copy_pass,
-        };
-        self->color_copy_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
-                        "Failed to create color copy draw context", false);
-      }
-    }
-
-    // Tonemapping
-    {
-      const RenderPass *pass = &self->render_passes[self->tonemap_pass];
-
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
-                                         &attach_count, NULL);
-      TB_CHECK(attach_count == 1, "Unexpected");
-      TbRenderTargetId tonemap_target_id = 0;
-      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
-                                         &attach_count, &tonemap_target_id);
-
-      VkFormat swap_target_format = tb_render_target_get_format(
-          self->render_target_system, tonemap_target_id);
-
-      err = create_tonemapping_pipeline(
-          self->render_system, pass->pass, swap_target_format,
-          self->copy_pipe_layout, &self->tonemap_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
-
-      {
-        DrawContextDescriptor desc = {
-            .batch_size = sizeof(FullscreenBatch),
-            .draw_fn = record_tonemapping,
-            .pass_id = self->tonemap_pass,
-        };
-        self->tonemap_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->tonemap_ctx != InvalidDrawContextId,
-                        "Failed to create tonemapping draw context", false);
-      }
-    }
+    {{VkSamplerCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+          .magFilter = VK_FILTER_LINEAR,
+          .minFilter = VK_FILTER_LINEAR,
+          .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+          .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .anisotropyEnable = VK_FALSE,
+          .maxAnisotropy = 1.0f,
+          .maxLod = 1.0f,
+          .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+      };
+    err = tb_rnd_create_sampler(render_system, &create_info,
+                                "Depth Copy Sampler", &self->sampler);
+    TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
   }
 
-  return true;
+  {
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 2,
+        .pBindings = (VkDescriptorSetLayoutBinding[2]){
+            {
+                .binding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+            {
+                .binding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &self->sampler,
+            },
+        }};
+    err = tb_rnd_create_set_layout(render_system, &create_info,
+                                   "Depth Copy Descriptor Set Layout",
+                                   &self->copy_set_layout);
+    TB_VK_CHECK_RET(err, "Failed to create depth copy descriptor set layout",
+                    false);
+  }
+
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts =
+            (VkDescriptorSetLayout[1]){
+                self->copy_set_layout,
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                        "Depth Copy Pipeline Layout",
+                                        &self->copy_pipe_layout);
+    TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
+  }
+
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+                                       &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+    TbRenderTargetId depth_id = InvalidRenderTargetId;
+    tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+                                       &attach_count, &depth_id);
+
+    VkFormat depth_format =
+        tb_render_target_get_format(self->render_target_system, depth_id);
+
+    err = create_depth_pipeline(
+        self->render_system, self->render_passes[self->depth_copy_pass].pass,
+        depth_format, self->copy_pipe_layout, &self->depth_copy_pipe);
+    TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
+  }
+
+  {
+    DrawContextDescriptor desc = {
+        .batch_size = sizeof(FullscreenBatch),
+        .draw_fn = record_depth_copy,
+        .pass_id = self->depth_copy_pass,
+    };
+    self->depth_copy_ctx =
+        tb_render_pipeline_register_draw_context(self, &desc);
+    TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
+                    "Failed to create depth copy draw context", false);
+  }
+}
+
+// Color Copy
+{
+  uint32_t attach_count = 0;
+  tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
+                                     NULL);
+  TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+  TbRenderTargetId attach_id = InvalidRenderTargetId;
+  tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
+                                     &attach_id);
+
+  VkFormat color_format =
+      tb_render_target_get_format(self->render_target_system, attach_id);
+
+  err = create_color_copy_pipeline(
+      self->render_system, self->render_passes[self->color_copy_pass].pass,
+      color_format, self->copy_pipe_layout, &self->color_copy_pipe);
+  TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
+
+  {
+    DrawContextDescriptor desc = {
+        .batch_size = sizeof(FullscreenBatch),
+        .draw_fn = record_color_copy,
+        .pass_id = self->color_copy_pass,
+    };
+    self->color_copy_ctx =
+        tb_render_pipeline_register_draw_context(self, &desc);
+    TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
+                    "Failed to create color copy draw context", false);
+  }
+}
+
+// Tonemapping
+{
+  const RenderPass *pass = &self->render_passes[self->tonemap_pass];
+
+  uint32_t attach_count = 0;
+  tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
+                                     NULL);
+  TB_CHECK(attach_count == 1, "Unexpected");
+  TbRenderTargetId tonemap_target_id = 0;
+  tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
+                                     &tonemap_target_id);
+
+  VkFormat swap_target_format = tb_render_target_get_format(
+      self->render_target_system, tonemap_target_id);
+
+  err = create_tonemapping_pipeline(self->render_system, pass->pass,
+                                    swap_target_format, self->copy_pipe_layout,
+                                    &self->tonemap_pipe);
+  TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
+
+  {
+    DrawContextDescriptor desc = {
+        .batch_size = sizeof(FullscreenBatch),
+        .draw_fn = record_tonemapping,
+        .pass_id = self->tonemap_pass,
+    };
+    self->tonemap_ctx = tb_render_pipeline_register_draw_context(self, &desc);
+    TB_CHECK_RETURN(self->tonemap_ctx != InvalidDrawContextId,
+                    "Failed to create tonemapping draw context", false);
+  }
+}
+}
+
+return true;
 }
 
 void destroy_render_passes(RenderPipelineSystem *self) {
