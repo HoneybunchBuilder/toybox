@@ -762,11 +762,21 @@ TbRenderPassId create_render_pass(
         };
       }
 
+      uint32_t view_mask = 0;
+      if (create_info->pNext != NULL) {
+        VkRenderPassMultiviewCreateInfo *multiview_info = create_info->pNext;
+        if (multiview_info->sType ==
+            VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO) {
+          view_mask = multiview_info->pViewMasks[0];
+        }
+      }
+
       VkRenderingInfo *info = &pass->info[i];
       *info = (VkRenderingInfo){
           .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
           .renderArea = {.extent = {extent.width, extent.height}},
           .layerCount = 1,
+          .viewMask = view_mask,
           .colorAttachmentCount = color_count,
           .pColorAttachments = color_attachments,
           .pDepthAttachment = depth_attachment,
@@ -899,10 +909,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
+      PassTransition transition = {
+          .render_target = self->render_target_system->env_cube,
+          .barrier =
+              {
+                  .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  .barrier =
+                      {
+                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                          .srcAccessMask = VK_ACCESS_NONE,
+                          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                          .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                          .subresourceRange =
+                              {
+                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                  .levelCount = 1,
+                                  .layerCount = 6,
+                              },
+                      },
+              },
+      };
+
       TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 0,
-                             NULL, 1, &(VkClearValue){0}, &default_mip,
-                             &env_cube, false, "Env Capture Pass");
+          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 1,
+                             &transition, 1, &(VkClearValue){0}, &default_mip,
+                             &env_cube, true, "Env Capture Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create env capture pass", false);
       self->env_capture_pass = id;
@@ -949,35 +984,68 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 
       // Need to read the environment map
-      PassTransition transition = {
-          .render_target = env_cube,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 6,
-                              },
-                      },
-              },
+      PassTransition transitions[2] = {
+          {
+              .render_target = env_cube,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 6,
+                                  },
+                          },
+                  },
+          },
+          {
+              .render_target = self->render_target_system->irradiance_map,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 6,
+                                  },
+                          },
+                  },
+          },
       };
 
       TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->env_capture_pass, 1,
-                             &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &irradiance_map, false, "Irradiance Pass");
+          create_render_pass(self, &create_info, 1, &self->env_capture_pass, 2,
+                             transitions, 1, &(VkClearValue){0}, &default_mip,
+                             &irradiance_map, true, "Irradiance Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create irradiance pass", false);
       self->irradiance_pass = id;
@@ -1024,9 +1092,45 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-        TbRenderPassId id = create_render_pass(
-            self, &create_info, 1, &self->env_capture_pass, 0, NULL, 1,
-            &(VkClearValue){0}, &i, &prefiltered_cube, false, "Prefilter Pass");
+        uint32_t trans_count = 0;
+        PassTransition transitions[1] = {};
+
+        // Do all mip transitions up-front
+        if (i == 0) {
+          trans_count = 1;
+          transitions[0] = (PassTransition){
+              .render_target = self->render_target_system->prefiltered_cube,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = PREFILTER_PASS_COUNT,
+                                      .layerCount = 6,
+                                  },
+                          },
+                  },
+          };
+        }
+
+        TbRenderPassId id =
+            create_render_pass(self, &create_info, 1, &self->env_capture_pass,
+                               trans_count, transitions, 1, &(VkClearValue){0},
+                               &i, &prefiltered_cube, true, "Prefilter Pass");
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create prefilter pass", false);
         self->prefilter_passes[i] = id;

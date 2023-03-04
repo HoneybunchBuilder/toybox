@@ -191,7 +191,8 @@ VkResult create_sky_pipeline(RenderSystem *render_system, VkRenderPass pass,
 }
 
 VkResult create_env_capture_pipeline(RenderSystem *render_system,
-                                     VkRenderPass pass, VkPipelineLayout layout,
+                                     VkRenderPass pass, VkFormat color_format,
+                                     VkPipelineLayout layout,
                                      VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
@@ -218,6 +219,13 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .viewMask = 0x0000003F, // 0b00111111
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -307,7 +315,6 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Env Capture Pipeline", pipeline);
@@ -321,7 +328,8 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
 }
 
 VkResult create_irradiance_pipeline(RenderSystem *render_system,
-                                    VkRenderPass pass, VkPipelineLayout layout,
+                                    VkRenderPass pass, VkFormat color_format,
+                                    VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
@@ -348,6 +356,13 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .viewMask = 0x0000003F, // 0b00111111
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -437,7 +452,6 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Irradiance Pipeline", pipeline);
@@ -451,7 +465,8 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
 }
 
 VkResult create_prefilter_pipeline(RenderSystem *render_system,
-                                   VkRenderPass pass, VkPipelineLayout layout,
+                                   VkRenderPass pass, VkFormat color_format,
+                                   VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
@@ -480,6 +495,13 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .viewMask = 0x0000003F, // 0b00111111
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -569,7 +591,6 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Prefilter Pipeline", pipeline);
@@ -851,50 +872,96 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   }
 
   // Look up target color and depth formats for pipeline creation
-  VkFormat color_format = VK_FORMAT_UNDEFINED;
-  VkFormat depth_format = VK_FORMAT_UNDEFINED;
+  {
+    VkFormat color_format = VK_FORMAT_UNDEFINED;
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
 
-  uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
-                                     &attach_count, NULL);
-  TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-  TbRenderTargetId *attach_ids =
-      tb_alloc_nm_tp(self->std_alloc, 2, TbRenderTargetId);
-  tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
-                                     &attach_count, attach_ids);
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
+                                       &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+    TbRenderTargetId *attach_ids =
+        tb_alloc_nm_tp(self->std_alloc, 2, TbRenderTargetId);
+    tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
+                                       &attach_count, attach_ids);
 
-  for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-    VkFormat format = tb_render_target_get_format(self->render_target_system,
-                                                  attach_ids[attach_idx]);
-    if (format == VK_FORMAT_D32_SFLOAT) {
-      depth_format = format;
-    } else {
-      color_format = format;
+    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
+      VkFormat format = tb_render_target_get_format(self->render_target_system,
+                                                    attach_ids[attach_idx]);
+      if (format == VK_FORMAT_D32_SFLOAT) {
+        depth_format = format;
+      } else {
+        color_format = format;
+      }
     }
+
+    // Create sky pipeline
+    err = create_sky_pipeline(render_system, self->sky_pass, color_format,
+                              depth_format, self->sky_pipe_layout,
+                              &self->sky_pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create sky pipeline", false);
   }
 
-  // Create sky pipeline
-  err = create_sky_pipeline(render_system, self->sky_pass, color_format,
-                            depth_format, self->sky_pipe_layout,
-                            &self->sky_pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create sky pipeline", false);
-
   // Create env capture pipeline
-  err = create_env_capture_pipeline(render_system, self->env_capture_pass,
-                                    self->sky_pipe_layout, &self->env_pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create env capture pipeline", false);
+
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->env_capture_pass,
+        &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
+    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->env_capture_pass,
+        &attach_count, &attach_id);
+
+    VkFormat color_format =
+        tb_render_target_get_format(self->render_target_system, attach_id);
+    err = create_env_capture_pipeline(render_system, self->env_capture_pass,
+                                      color_format, self->sky_pipe_layout,
+                                      &self->env_pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create env capture pipeline", false);
+  }
 
   // Create irradiance pipeline
-  err = create_irradiance_pipeline(render_system, self->irradiance_pass,
-                                   self->irr_pipe_layout,
-                                   &self->irradiance_pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->irradiance_pass,
+        &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
+    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->irradiance_pass,
+        &attach_count, &attach_id);
+
+    VkFormat color_format =
+        tb_render_target_get_format(self->render_target_system, attach_id);
+    err = create_irradiance_pipeline(render_system, self->irradiance_pass,
+                                     color_format, self->irr_pipe_layout,
+                                     &self->irradiance_pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
+  }
 
   // Create prefilter pipeline
-  err = create_prefilter_pipeline(render_system, self->prefilter_passes[0],
-                                  self->prefilter_pipe_layout,
-                                  &self->prefilter_pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
+        &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
+    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
+        &attach_count, &attach_id);
+
+    VkFormat color_format =
+        tb_render_target_get_format(self->render_target_system, attach_id);
+    err = create_prefilter_pipeline(render_system, self->prefilter_passes[0],
+                                    color_format, self->prefilter_pipe_layout,
+                                    &self->prefilter_pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
+  }
 
   // Register passes with the render system
   self->sky_draw_ctx = tb_render_pipeline_register_draw_context(
