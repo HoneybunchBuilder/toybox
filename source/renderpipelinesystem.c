@@ -1282,7 +1282,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
           0, NULL, 2, (VkClearValue[2]){0},
           (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, opaque_depth}, false, "Sky Pass");
+          (TbRenderTargetId[2]){hdr_color, opaque_depth}, true, "Sky Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
       self->sky_pass = id;
