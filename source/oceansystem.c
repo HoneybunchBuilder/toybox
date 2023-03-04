@@ -141,6 +141,7 @@ void ocean_shadow_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 VkResult create_ocean_pipelines(RenderSystem *render_system,
                                 VkRenderPass prepass, VkRenderPass pass,
+                                VkFormat color_format, VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *prepass_pipeline,
                                 VkPipeline *pipeline) {
@@ -288,6 +289,10 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
                                          "Ocean Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
 
+  create_info.pNext = &(VkPipelineRenderingCreateInfo){
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+      .depthAttachmentFormat = depth_format,
+  };
   create_info.pStages =
       (VkPipelineShaderStageCreateInfo[2]){
           {
@@ -314,7 +319,7 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
           .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
           .maxDepthBounds = 1.0f,
       },
-  create_info.renderPass = prepass;
+  create_info.renderPass = VK_NULL_HANDLE;
 
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Ocean Prepass Pipeline",
@@ -660,10 +665,30 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean shadow pipeline", false);
   }
 
-  err = create_ocean_pipelines(render_system, self->ocean_prepass,
-                               self->ocean_pass, self->pipe_layout,
-                               &self->prepass_pipeline, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
+  {
+
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_depth_pass, &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+    TbRenderTargetId depth_id = InvalidRenderTargetId;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_depth_pass, &attach_count,
+        &depth_id);
+
+    VkFormat depth_format = tb_render_target_get_format(
+        self->render_pipe_system->render_target_system, depth_id);
+
+    VkFormat color_format = VK_FORMAT_UNDEFINED;
+
+    err = create_ocean_pipelines(render_system, self->ocean_prepass,
+                                 self->ocean_pass, color_format, depth_format,
+                                 self->pipe_layout, &self->prepass_pipeline,
+                                 &self->pipeline);
+    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
+  }
 
   for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
     self->shadow_draw_ctxs[i] = tb_render_pipeline_register_draw_context(

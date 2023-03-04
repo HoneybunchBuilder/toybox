@@ -864,7 +864,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 0, NULL, 0, NULL, 1, &(VkClearValue){0},
-          &default_mip, &opaque_depth, false, "Opaque Depth Pass");
+          &default_mip, &opaque_depth, true, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
@@ -1638,7 +1638,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_depth_pass, 1, &transition,
-          1, &(VkClearValue){0}, &default_mip, &transparent_depth, false,
+          1, &(VkClearValue){0}, &default_mip, &transparent_depth, true,
           "Transparent Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
