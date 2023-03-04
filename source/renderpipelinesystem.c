@@ -232,7 +232,7 @@ VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
 }
 
 VkResult create_color_copy_pipeline(RenderSystem *render_system,
-                                    VkRenderPass pass,
+                                    VkRenderPass pass, VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -259,6 +259,12 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -333,7 +339,6 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = pipe_layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Color Copy Pipeline", pipeline);
@@ -1405,7 +1410,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id =
           create_render_pass(self, &create_info, 1, &self->color_copy_pass, 1,
                              &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &color_copy, false, "Color Copy Pass");
+                             &color_copy, true, "Color Copy Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create color copy pass", false);
       self->color_copy_pass = id;
@@ -1541,31 +1546,64 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
 #undef ATTACH_COUNT
 
-      PassTransition transition = {
-          .render_target = self->render_target_system->hdr_color,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      PassTransition transitions[2] = {
+          {
+              .render_target = self->render_target_system->hdr_color,
               .barrier =
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .subresourceRange =
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+          {
+              .render_target = self->render_target_system->color_copy,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
                           },
                   },
           }};
 
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
+          self, &create_info, 1, &self->transparent_color_pass, 2, transitions,
           2, (VkClearValue[2]){0}, (uint32_t[2]){default_mip, default_mip},
           (TbRenderTargetId[2]){hdr_color, transparent_depth}, false,
           "Transparent Color Pass");
@@ -1831,9 +1869,20 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
     // Color Copy
     {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+                                         &attach_count, NULL);
+      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+      TbRenderTargetId attach_id = InvalidRenderTargetId;
+      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+                                         &attach_count, &attach_id);
+
+      VkFormat color_format =
+          tb_render_target_get_format(self->render_target_system, attach_id);
+
       err = create_color_copy_pipeline(
           self->render_system, self->render_passes[self->color_copy_pass].pass,
-          self->copy_pipe_layout, &self->color_copy_pipe);
+          color_format, self->copy_pipe_layout, &self->color_copy_pipe);
       TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
 
       {
