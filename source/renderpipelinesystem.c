@@ -764,7 +764,8 @@ TbRenderPassId create_render_pass(
 
       uint32_t view_mask = 0;
       if (create_info->pNext != NULL) {
-        VkRenderPassMultiviewCreateInfo *multiview_info = create_info->pNext;
+        VkRenderPassMultiviewCreateInfo *multiview_info =
+            (VkRenderPassMultiviewCreateInfo *)create_info->pNext;
         if (multiview_info->sType ==
             VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO) {
           view_mask = multiview_info->pViewMasks[0];
@@ -1093,7 +1094,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
         uint32_t trans_count = 0;
-        PassTransition transitions[1] = {};
+        PassTransition transitions[1] = {0};
 
         // Do all mip transitions up-front
         if (i == 0) {
@@ -1169,10 +1170,45 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // but for now the pass dependencies system only has one starter node,
       // so everything must be a child of that
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+        // Front load all transitions on the first cascade
+        uint32_t trans_count = 0;
+        PassTransition transitions[TB_CASCADE_COUNT] = {0};
+        if (i == 0) {
+          for (uint32_t j = 0; j < TB_CASCADE_COUNT; ++j) {
+            transitions[trans_count++] = (PassTransition){
+                .render_target = self->render_target_system->shadow_maps[j],
+                .barrier =
+                    {
+                        .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                        .barrier =
+                            {
+                                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                .srcAccessMask = VK_ACCESS_NONE,
+                                .dstAccessMask =
+                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                .newLayout =
+                                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .subresourceRange =
+                                    {
+                                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                                        .levelCount = 1,
+                                        .layerCount = 1,
+                                    },
+                            },
+                    },
+            };
+          }
+        }
+
         TbRenderPassId id = create_render_pass(
-            self, &create_info, 1, &self->opaque_depth_pass, 0, NULL, 1,
+            self, &create_info, 1, &self->opaque_depth_pass, trans_count,
+            transitions, 1,
             &(VkClearValue){.depthStencil = {.depth = 1.0f, .stencil = 0u}},
-            &default_mip, &shadow_maps[i], false, "Shadow Pass");
+            &default_mip, &shadow_maps[i], true, "Shadow Pass");
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create shadow pass", false);
         self->shadow_passes[i] = id;
