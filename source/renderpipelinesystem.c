@@ -1778,7 +1778,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassId id = create_render_pass(
           self, &create_info, 1, &self->transparent_color_pass, 3, transitions,
           2, (VkClearValue[2]){0}, (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, transparent_depth}, false,
+          (TbRenderTargetId[2]){hdr_color, transparent_depth}, true,
           "Transparent Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent color pass", false);

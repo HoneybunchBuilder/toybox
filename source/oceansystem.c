@@ -187,6 +187,13 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -283,7 +290,6 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = pipe_layout,
-      .renderPass = pass,
   };
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Ocean Pipeline", pipeline);
@@ -319,7 +325,6 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
           .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
           .maxDepthBounds = 1.0f,
       },
-  create_info.renderPass = VK_NULL_HANDLE;
 
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Ocean Prepass Pipeline",
@@ -682,6 +687,24 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         self->render_pipe_system->render_target_system, depth_id);
 
     VkFormat color_format = VK_FORMAT_UNDEFINED;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_color_pass, &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+    TbRenderTargetId color_ids[2] = {0};
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_color_pass, &attach_count,
+        color_ids);
+
+    for (uint32_t i = 0; i < attach_count; i++) {
+      VkFormat format = tb_render_target_get_format(
+          self->render_pipe_system->render_target_system, color_ids[i]);
+      if (format != VK_FORMAT_D32_SFLOAT) {
+        color_format = format;
+        break;
+      }
+    }
 
     err = create_ocean_pipelines(render_system, self->ocean_prepass,
                                  self->ocean_pass, color_format, depth_format,
