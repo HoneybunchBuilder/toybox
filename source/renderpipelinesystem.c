@@ -713,8 +713,9 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
         const TbAttachmentInfo *attachment = &create_info->attachments[rt_idx];
         VkFormat format = tb_render_target_get_format(
             self->render_target_system, attachment->attachment);
-        VkImageView view = tb_render_target_get_view(self->render_target_system,
-                                                     i, attachment->attachment);
+        VkImageView view = tb_render_target_get_mip_view(
+            self->render_target_system, attachment->mip, i,
+            attachment->attachment);
 
         VkRenderingAttachmentInfo *info = &color_attachments[color_count];
         VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -731,7 +732,6 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = view,
             .imageLayout = layout,
-            // TODO:specify load and store ops without render pass create info
             .loadOp = attachment->load_op,
             .storeOp = attachment->store_op,
             .clearValue = attachment->clear_value,

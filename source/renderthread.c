@@ -1480,7 +1480,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         }
 
         record_pass_begin(pass_buffer, pass);
-
         for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
              ++draw_idx) {
           DrawContext *draw = &state->draw_contexts[draw_idx];
@@ -1489,11 +1488,11 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                             draw->batches);
           }
         }
+        record_pass_end(pass_buffer);
 
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
 #endif
-        record_pass_end(pass_buffer);
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }
