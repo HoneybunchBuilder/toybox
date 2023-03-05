@@ -189,7 +189,8 @@ VLogShape *vlog_acquire_frame_shape(VisualLoggingSystem *vlog,
 }
 
 VkResult create_primitive_pipeline(RenderSystem *render_system,
-                                   VkRenderPass pass, VkPipelineLayout layout,
+                                   VkFormat color_format,
+                                   VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
@@ -215,6 +216,12 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+          },
       .stageCount = 2,
       .pStages =
           (VkPipelineShaderStageCreateInfo[2]){
@@ -298,7 +305,6 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
                                                     VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = layout,
-      .renderPass = pass,
   };
 
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
@@ -414,10 +420,31 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   }
 
   {
-    VkRenderPass pass = tb_render_pipeline_get_pass(
-        render_pipe_system, render_pipe_system->transparent_color_pass);
-    err = create_primitive_pipeline(render_system, pass, self->pipe_layout,
-                                    &self->pipeline);
+    uint32_t attach_count = 0;
+    VkFormat color_format = VK_FORMAT_UNDEFINED;
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_color_pass, &attach_count, NULL);
+    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+    PassAttachment attach_info[2] = {0};
+    tb_render_pipeline_get_attachments(
+        self->render_pipe_system,
+        self->render_pipe_system->transparent_color_pass, &attach_count,
+        attach_info);
+
+    for (uint32_t i = 0; i < attach_count; i++) {
+      VkFormat format = tb_render_target_get_format(
+          self->render_pipe_system->render_target_system,
+          attach_info[i].attachment);
+      if (format != VK_FORMAT_D32_SFLOAT) {
+        color_format = format;
+        break;
+      }
+    }
+    TB_CHECK(color_format != VK_FORMAT_UNDEFINED, "Unexpected");
+
+    err = create_primitive_pipeline(render_system, color_format,
+                                    self->pipe_layout, &self->pipeline);
     TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
   }
 

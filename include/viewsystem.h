@@ -37,9 +37,6 @@ typedef struct View {
   CommonViewData view_data;
   CommonLightData light_data;
   Frustum frustum;
-
-  uint32_t pass_count;
-  VkRenderPass passes[TB_MAX_PASSES_PER_VIEW];
 } View;
 
 typedef struct ViewSystem {

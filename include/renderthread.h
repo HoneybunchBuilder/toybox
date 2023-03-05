@@ -36,17 +36,14 @@ typedef struct VkRenderingInfo VkRenderingInfo;
 typedef struct PassContext {
   TbRenderPassId id;
   uint32_t command_buffer_index;
-  VkRenderPass pass;
   uint32_t attachment_count;
   VkClearValue clear_values[TB_MAX_ATTACHMENTS];
-  VkFramebuffer framebuffer;
   uint32_t width;
   uint32_t height;
 
   uint32_t barrier_count;
   ImageTransition barriers[TB_MAX_BARRIERS];
 
-  bool dynamic; // temp
   VkRenderingInfo *render_info;
 
 #ifdef TRACY_ENABLE

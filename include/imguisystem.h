@@ -10,7 +10,6 @@ typedef struct RenderSystem RenderSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 
-typedef struct VkRenderPass_T *VkRenderPass;
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
@@ -39,7 +38,6 @@ typedef struct ImGuiSystem {
 
   ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 
-  VkRenderPass pass;
   TbDrawContextId imgui_draw_ctx;
 
   VkSampler sampler;

@@ -104,7 +104,7 @@ typedef struct VisibleSet {
   MeshComponent const **meshes;
 } VisibleSet;
 
-VkResult create_shadow_pipeline(RenderSystem *render_system, VkRenderPass pass,
+VkResult create_shadow_pipeline(RenderSystem *render_system,
                                 VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *pipeline) {
@@ -226,8 +226,8 @@ VkResult create_shadow_pipeline(RenderSystem *render_system, VkRenderPass pass,
 }
 
 VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
-                               Allocator std_alloc, VkRenderPass pass,
-                               VkFormat color_format, VkFormat depth_format,
+                               Allocator std_alloc, VkFormat color_format,
+                               VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **pipelines) {
   VkResult err = VK_SUCCESS;
@@ -756,18 +756,10 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   };
 
   TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
-  const TbRenderPassId *shadow_pass_ids =
-      self->render_pipe_system->shadow_passes;
 
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
-
-    // Look up passes
-    VkRenderPass opaque_pass =
-        tb_render_pipeline_get_pass(self->render_pipe_system, opaque_pass_id);
-    VkRenderPass shadow_pass = tb_render_pipeline_get_pass(
-        self->render_pipe_system, shadow_pass_ids[0]);
 
     // Get descriptor set layouts from related systems
     {
@@ -802,14 +794,15 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           self->render_pipe_system->transparent_depth_pass, &attach_count,
           NULL);
       TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-      TbRenderTargetId depth_id = InvalidRenderTargetId;
+      PassAttachment depth_info = {0};
       tb_render_pipeline_get_attachments(
           self->render_pipe_system,
           self->render_pipe_system->transparent_depth_pass, &attach_count,
-          &depth_id);
+          &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system, depth_id);
+          self->render_pipe_system->render_target_system,
+          depth_info.attachment);
 
       VkFormat color_format = VK_FORMAT_UNDEFINED;
       tb_render_pipeline_get_attachments(
@@ -817,24 +810,24 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           self->render_pipe_system->transparent_color_pass, &attach_count,
           NULL);
       TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-      TbRenderTargetId color_ids[2] = {0};
+      PassAttachment attach_info[2] = {0};
       tb_render_pipeline_get_attachments(
           self->render_pipe_system,
           self->render_pipe_system->transparent_color_pass, &attach_count,
-          color_ids);
+          attach_info);
 
       for (uint32_t i = 0; i < attach_count; i++) {
         VkFormat format = tb_render_target_get_format(
-            self->render_pipe_system->render_target_system, color_ids[i]);
+            self->render_pipe_system->render_target_system,
+            attach_info[i].attachment);
         if (format != VK_FORMAT_D32_SFLOAT) {
           color_format = format;
           break;
         }
       }
-      err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
-                                  self->std_alloc, opaque_pass, color_format,
-                                  depth_format, self->pipe_layout,
-                                  &self->pipe_count, &self->pipelines);
+      err = create_mesh_pipelines(
+          self->render_system, self->tmp_alloc, self->std_alloc, color_format,
+          depth_format, self->pipe_layout, &self->pipe_count, &self->pipelines);
       TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
     }
 
@@ -863,15 +856,16 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
           &attach_count, NULL);
       TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-      TbRenderTargetId depth_id = InvalidRenderTargetId;
+      PassAttachment depth_info = {0};
       tb_render_pipeline_get_attachments(
           self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
-          &attach_count, &depth_id);
+          &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system, depth_id);
-      err = create_shadow_pipeline(self->render_system, shadow_pass,
-                                   depth_format, self->shadow_pipe_layout,
+          self->render_pipe_system->render_target_system,
+          depth_info.attachment);
+      err = create_shadow_pipeline(self->render_system, depth_format,
+                                   self->shadow_pipe_layout,
                                    &self->shadow_pipeline);
       TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", false);
     }

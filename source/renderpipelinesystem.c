@@ -32,16 +32,9 @@ typedef struct RenderPass {
   uint32_t transition_count;
   PassTransition transitions[TB_MAX_RENDER_PASS_TRANS];
 
-  VkRenderPass pass;
-
   uint32_t attach_count;
-  VkClearValue clear_values[TB_MAX_ATTACHMENTS];
-  uint32_t attach_mips[TB_MAX_ATTACHMENTS];
-  TbRenderTargetId attachments[TB_MAX_ATTACHMENTS];
+  PassAttachment attachments[TB_MAX_ATTACHMENTS];
 
-  VkFramebuffer framebuffers[TB_MAX_FRAME_STATES];
-
-  bool dynamic;
   VkRenderingInfo info[TB_MAX_FRAME_STATES];
 
 #ifdef TRACY_ENABLE
@@ -118,7 +111,7 @@ typedef struct FullscreenBatch {
   VkDescriptorSet set;
 } FullscreenBatch;
 
-VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
+VkResult create_depth_pipeline(RenderSystem *render_system,
                                VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                VkPipeline *pipeline) {
@@ -238,7 +231,7 @@ VkResult create_depth_pipeline(RenderSystem *render_system, VkRenderPass pass,
 }
 
 VkResult create_color_copy_pipeline(RenderSystem *render_system,
-                                    VkRenderPass pass, VkFormat color_format,
+                                    VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -357,7 +350,6 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
 }
 
 VkResult create_tonemapping_pipeline(RenderSystem *render_system,
-                                     VkRenderPass pass,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
                                      VkPipeline *pipeline) {
@@ -586,27 +578,24 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
       state->pass_ctx_max = new_max;
     }
 
-    VkFramebuffer framebuffer = pass->framebuffers[frame_idx];
-    TbRenderTargetId target_id = pass->attachments[0];
+    TbRenderTargetId target_id = pass->attachments[0].attachment;
     VkExtent3D target_ext = tb_render_target_get_mip_extent(
-        self->render_target_system, pass->attach_mips[0], target_id);
+        self->render_target_system, pass->attachments[0].mip, target_id);
 
     PassContext *pass_context = &state->pass_contexts[state->pass_ctx_count];
     TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
     *pass_context = (PassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
-        .pass = pass->pass,
         .attachment_count = pass->attach_count,
         .barrier_count = pass->transition_count,
-        .framebuffer = framebuffer,
         .width = target_ext.width,
         .height = target_ext.height,
-        .dynamic = pass->dynamic,
         .render_info = &pass->info[frame_idx],
     };
-    TB_COPY(pass_context->clear_values, pass->clear_values, pass->attach_count,
-            VkClearValue);
+    for (uint32_t i = 0; i < pass->attach_count; ++i) {
+      pass_context->clear_values[i] = pass->attachments[i].clear_value;
+    }
 #ifdef TRACY_ENABLE
     SDL_strlcpy(pass_context->label, pass->label, TB_RP_LABEL_LEN);
 #endif
@@ -625,12 +614,33 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
   }
 }
 
-TbRenderPassId create_render_pass(
-    RenderPipelineSystem *self, const VkRenderPassCreateInfo *create_info,
-    uint32_t dep_count, const TbRenderTargetId *deps, uint32_t trans_count,
-    const PassTransition *transitions, uint32_t attach_count,
-    const VkClearValue *clear_values, const uint32_t *attach_mips,
-    const TbRenderTargetId *attachments, bool dynamic, const char *name) {
+typedef struct TbAttachmentInfo {
+  VkClearValue clear_value;
+  uint32_t mip;
+  VkAttachmentLoadOp load_op;
+  VkAttachmentStoreOp store_op;
+  TbRenderTargetId attachment;
+} TbAttachmentInfo;
+
+typedef struct TbRenderPassCreateInfo {
+  uint32_t view_mask;
+
+  uint32_t dependency_count;
+  const TbRenderPassId *dependencies;
+
+  uint32_t transition_count;
+  const PassTransition *transitions;
+
+  uint32_t attachment_count;
+  const TbAttachmentInfo *attachments;
+
+  const char *name;
+} TbRenderPassCreateInfo;
+
+TbRenderPassId create_render_pass(RenderPipelineSystem *self,
+                                  const TbRenderPassCreateInfo *create_info) {
+  TB_CHECK_RETURN(create_info, "Invalid Create Info ptr", InvalidRenderPassId);
+
   TbRenderPassId id = self->pass_count;
   uint32_t new_count = self->pass_count + 1;
   if (new_count > self->pass_max) {
@@ -644,87 +654,53 @@ TbRenderPassId create_render_pass(
 
   RenderPass *pass = &self->render_passes[id];
 
-  pass->dynamic = dynamic;
-
 #ifdef TRACY_ENABLE
-  SDL_strlcpy(pass->label, name, TB_RP_LABEL_LEN);
+  if (create_info->name != NULL) {
+    SDL_strlcpy(pass->label, create_info->name, TB_RP_LABEL_LEN);
+  }
 #endif
 
-  TB_COPY(pass->clear_values, clear_values, attach_count, VkClearValue);
-
-  VkResult err = VK_SUCCESS;
-  err = tb_rnd_create_render_pass(self->render_system, create_info, name,
-                                  &pass->pass);
-  TB_VK_CHECK_RET(err, "Failed to create render pass", InvalidRenderPassId);
-
   // Copy dependencies
-  pass->dep_count = dep_count;
+  pass->dep_count = create_info->dependency_count;
   SDL_memset(pass->deps, InvalidRenderPassId,
              sizeof(TbRenderPassId) * TB_MAX_RENDER_PASS_DEPS);
-  if (dep_count > 0) {
-    SDL_memcpy(pass->deps, deps, sizeof(TbRenderPassId) * dep_count);
+  if (pass->dep_count > 0) {
+    SDL_memcpy(pass->deps, create_info->dependencies,
+               sizeof(TbRenderPassId) * pass->dep_count);
   }
 
   // Copy attachments
-  pass->attach_count = attach_count;
+  pass->attach_count = create_info->attachment_count;
   TB_CHECK_RETURN(pass->attach_count < TB_MAX_ATTACHMENTS, "Out of range",
                   InvalidRenderPassId);
-  SDL_memset(pass->attachments, InvalidRenderTargetId,
-             sizeof(TbRenderTargetId) * TB_MAX_ATTACHMENTS);
-  if (attach_count > 0) {
-    SDL_memcpy(pass->attach_mips, attach_mips, sizeof(uint32_t) * attach_count);
-    SDL_memcpy(pass->attachments, attachments,
-               sizeof(TbRenderTargetId) * attach_count);
+  SDL_memset(pass->attachments, 0,
+             sizeof(TbAttachmentInfo) * TB_MAX_ATTACHMENTS);
+  for (uint32_t i = 0; i < pass->attach_count; ++i) {
+    const TbAttachmentInfo *attach_info = &create_info->attachments[i];
+    pass->attachments[i] = (PassAttachment){
+        .clear_value = attach_info->clear_value,
+        .mip = attach_info->mip,
+        .attachment = attach_info->attachment,
+    };
   }
 
   // Copy pass transitions
-  pass->transition_count = trans_count;
+  pass->transition_count = create_info->transition_count;
   TB_CHECK_RETURN(pass->transition_count <= TB_MAX_RENDER_PASS_TRANS,
                   "Out of range", InvalidRenderPassId);
   SDL_memset(pass->transitions, 0,
              sizeof(PassTransition) * TB_MAX_RENDER_PASS_TRANS);
-  if (trans_count > 0) {
-    SDL_memcpy(pass->transitions, transitions,
-               sizeof(PassTransition) * trans_count);
-  }
-
-  // Create framebuffers for render target based on attachments
-  {
-    RenderTargetSystem *rt_sys = self->render_target_system;
-    // HACK: Assume all attachments have the same extents
-    const VkExtent3D extent =
-        tb_render_target_get_mip_extent(rt_sys, attach_mips[0], attachments[0]);
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      VkImageView attach_views[TB_MAX_ATTACHMENTS] = {0};
-
-      for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-        attach_views[attach_idx] = tb_render_target_get_mip_view(
-            rt_sys, attach_mips[attach_idx], i, attachments[attach_idx]);
-      }
-
-      VkFramebufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-          .renderPass = pass->pass,
-          .attachmentCount = attach_count,
-          .pAttachments = attach_views,
-          .width = extent.width,
-          .height = extent.height,
-          .layers = extent.depth,
-      };
-      err =
-          tb_rnd_create_framebuffer(self->render_system, &create_info,
-                                    "Pass Framebuffer", &pass->framebuffers[i]);
-      TB_VK_CHECK_RET(err, "Failed to create pass framebuffer",
-                      InvalidRenderPassId);
-    }
+  if (pass->transition_count > 0) {
+    SDL_memcpy(pass->transitions, create_info->transitions,
+               sizeof(PassTransition) * pass->transition_count);
   }
 
   // Populate rendering info
   {
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
-    const VkExtent3D extent =
-        tb_render_target_get_mip_extent(rt_sys, attach_mips[0], attachments[0]);
+    const VkExtent3D extent = tb_render_target_get_mip_extent(
+        rt_sys, pass->attachments[0].mip, pass->attachments[0].attachment);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       uint32_t color_count = 0;
@@ -733,12 +709,12 @@ TbRenderPassId create_render_pass(
       VkRenderingAttachmentInfo *color_attachments = tb_alloc_nm_tp(
           self->std_alloc, TB_MAX_ATTACHMENTS, VkRenderingAttachmentInfo);
 
-      for (uint32_t rt_idx = 0; rt_idx < attach_count; ++rt_idx) {
-        TbRenderTargetId rt = attachments[rt_idx];
-        VkFormat format =
-            tb_render_target_get_format(self->render_target_system, rt);
-        VkImageView view =
-            tb_render_target_get_view(self->render_target_system, i, rt);
+      for (uint32_t rt_idx = 0; rt_idx < pass->attach_count; ++rt_idx) {
+        const TbAttachmentInfo *attachment = &create_info->attachments[rt_idx];
+        VkFormat format = tb_render_target_get_format(
+            self->render_target_system, attachment->attachment);
+        VkImageView view = tb_render_target_get_view(self->render_target_system,
+                                                     i, attachment->attachment);
 
         VkRenderingAttachmentInfo *info = &color_attachments[color_count];
         VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -756,20 +732,10 @@ TbRenderPassId create_render_pass(
             .imageView = view,
             .imageLayout = layout,
             // TODO:specify load and store ops without render pass create info
-            .loadOp = create_info->pAttachments[rt_idx].loadOp,
-            .storeOp = create_info->pAttachments[rt_idx].storeOp,
-            .clearValue = clear_values[rt_idx],
+            .loadOp = attachment->load_op,
+            .storeOp = attachment->store_op,
+            .clearValue = attachment->clear_value,
         };
-      }
-
-      uint32_t view_mask = 0;
-      if (create_info->pNext != NULL) {
-        VkRenderPassMultiviewCreateInfo *multiview_info =
-            (VkRenderPassMultiviewCreateInfo *)create_info->pNext;
-        if (multiview_info->sType ==
-            VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO) {
-          view_mask = multiview_info->pViewMasks[0];
-        }
       }
 
       VkRenderingInfo *info = &pass->info[i];
@@ -777,7 +743,7 @@ TbRenderPassId create_render_pass(
           .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
           .renderArea = {.extent = {extent.width, extent.height}},
           .layerCount = 1,
-          .viewMask = view_mask,
+          .viewMask = create_info->view_mask,
           .colorAttachmentCount = color_count,
           .pColorAttachments = color_attachments,
           .pDepthAttachment = depth_attachment,
@@ -831,289 +797,202 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         render_target_system->depth_buffer;
     const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
 
-    const uint32_t default_mip = 0;
-
     // Create opaque depth pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_D32_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout =
-                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
-      PassTransition transitions[1] = {
-          {
-              .render_target = self->render_target_system->depth_buffer,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                      .render_target = self->render_target_system->depth_buffer,
                       .barrier =
                           {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask =
-                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                              .subresourceRange =
+                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                              .barrier =
                                   {
-                                      .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 1,
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
                                   },
                           },
                   },
-          },
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = opaque_depth,
+                  },
+              },
+          .name = "Opaque Depth Pass",
       };
 
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 0, NULL, 1, transitions, 1, &(VkClearValue){0},
-          &default_mip, &opaque_depth, true, "Opaque Depth Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
       self->opaque_depth_pass = id;
     }
+
     // Create env capture pass
     {
-      // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
-      const uint32_t view_mask = 0x0000003F; // 0b00111111
-      const uint32_t correlation_mask = 0;
-
-      VkRenderPassMultiviewCreateInfo multiview_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
-          .subpassCount = 1,
-          .pViewMasks = &view_mask,
-          .correlationMaskCount = 1,
-          .pCorrelationMasks = &correlation_mask,
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .pNext = &multiview_info,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      TbRenderPassCreateInfo create_info = {
+          .view_mask = 0x0000003F, // 0b00111111
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->opaque_depth_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
+                  {
+                      .render_target = self->render_target_system->env_cube,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 6,
+                                          },
+                                  },
+                          },
+                  },
               },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = env_cube,
+                  },
               },
-      };
-
-      PassTransition transition = {
-          .render_target = self->render_target_system->env_cube,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_NONE,
-                          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 6,
-                              },
-                      },
-              },
+          .name = "Env Capture Pass",
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->opaque_depth_pass, 1,
-                             &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &env_cube, true, "Env Capture Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create env capture pass", false);
       self->env_capture_pass = id;
     }
     // Create irradiance convolution pass
     {
-      // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
-      const uint32_t view_mask = 0x0000003F; // 0b00111111
-      const uint32_t correlation_mask = 0;
-
-      VkRenderPassMultiviewCreateInfo multiview_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
-          .subpassCount = 1,
-          .pViewMasks = &view_mask,
-          .correlationMaskCount = 1,
-          .pCorrelationMasks = &correlation_mask,
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .pNext = &multiview_info,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
-      // Need to read the environment map
-      PassTransition transitions[2] = {
-          {
-              .render_target = env_cube,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .view_mask = 0x0000003F, // 0b00111111
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+          .transition_count = 2,
+          .transitions =
+              (PassTransition[2]){
                   {
-                      .src_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .render_target = env_cube,
                       .barrier =
                           {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              .subresourceRange =
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
                                   {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 6,
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 6,
+                                          },
                                   },
                           },
                   },
-          },
-          {
-              .render_target = self->render_target_system->irradiance_map,
-              .barrier =
                   {
-                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .render_target =
+                          self->render_target_system->irradiance_map,
                       .barrier =
                           {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .subresourceRange =
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
                                   {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 6,
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 6,
+                                          },
                                   },
                           },
                   },
-          },
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = irradiance_map,
+                  },
+              },
+          .name = "Irradiance Pass",
       };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->env_capture_pass, 2,
-                             transitions, 1, &(VkClearValue){0}, &default_mip,
-                             &irradiance_map, true, "Irradiance Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create irradiance pass", false);
       self->irradiance_pass = id;
     }
     // Create environment prefiltering passes
     {
-      // https://blog.anishbhobe.site/vulkan-render-to-cubemaps-using-multiview/
-      const uint32_t view_mask = 0x0000003F; // 0b00111111
-      const uint32_t correlation_mask = 0;
-
-      VkRenderPassMultiviewCreateInfo multiview_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO,
-          .subpassCount = 1,
-          .pViewMasks = &view_mask,
-          .correlationMaskCount = 1,
-          .pCorrelationMasks = &correlation_mask,
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .pNext = &multiview_info,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
         uint32_t trans_count = 0;
         PassTransition transitions[1] = {0};
@@ -1148,10 +1027,26 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           };
         }
 
-        TbRenderPassId id =
-            create_render_pass(self, &create_info, 1, &self->env_capture_pass,
-                               trans_count, transitions, 1, &(VkClearValue){0},
-                               &i, &prefiltered_cube, true, "Prefilter Pass");
+        TbRenderPassCreateInfo create_info = {
+            .view_mask = 0x0000003F, // 0b00111111
+            .dependency_count = 1,
+            .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+            .transition_count = trans_count,
+            .transitions = transitions,
+            .attachment_count = 1,
+            .attachments =
+                (TbAttachmentInfo[1]){
+                    {
+                        .mip = i,
+                        .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                        .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                        .attachment = prefiltered_cube,
+                    },
+                },
+            .name = "Prefilter Pass",
+        };
+
+        TbRenderPassId id = create_render_pass(self, &create_info);
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create prefilter pass", false);
         self->prefilter_passes[i] = id;
@@ -1159,33 +1054,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create shadow pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_D32_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout =
-                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
       // Note: this doesn't actually depend on the opaque depth pass,
       // but for now the pass dependencies system only has one starter node,
       // so everything must be a child of that
@@ -1222,11 +1090,26 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }
         }
 
-        TbRenderPassId id = create_render_pass(
-            self, &create_info, 1, &self->opaque_depth_pass, trans_count,
-            transitions, 1,
-            &(VkClearValue){.depthStencil = {.depth = 1.0f, .stencil = 0u}},
-            &default_mip, &shadow_maps[i], true, "Shadow Pass");
+        TbRenderPassCreateInfo create_info = {
+            .dependency_count = 1,
+            .dependencies = (TbRenderPassId[1]){self->opaque_depth_pass},
+            .transition_count = trans_count,
+            .transitions = transitions,
+            .attachment_count = 1,
+            .attachments =
+                (TbAttachmentInfo[1]){
+                    {
+                        .clear_value = {.depthStencil = {.depth = 1.0f,
+                                                         .stencil = 0u}},
+                        .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                        .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                        .attachment = shadow_maps[i],
+                    },
+                },
+            .name = "Shadow Pass",
+        };
+
+        TbRenderPassId id = create_render_pass(self, &create_info);
         TB_CHECK_RETURN(id != InvalidRenderPassId,
                         "Failed to create shadow pass", false);
         self->shadow_passes[i] = id;
@@ -1234,52 +1117,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create opaque color pass
     {
-#define ATTACH_COUNT 2
-      VkAttachmentDescription attachments[ATTACH_COUNT] = {
-          {
-              .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-              .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          },
-          {
-              .format = VK_FORMAT_D32_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-              .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-          },
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = ATTACH_COUNT,
-          .pAttachments = attachments,
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          1,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-#undef ATTACH_COUNT
-
       // Transition irradiance map, prefiltered env map and shadow map
       PassTransition irr_trans = {
           .render_target = self->render_target_system->irradiance_map,
@@ -1395,353 +1232,231 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       transitions[TB_CASCADE_COUNT + 2] = color_trans;
       transitions[TB_CASCADE_COUNT + 3] = depth_trans;
 
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 2,
-          (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_passes[3]},
-          TB_CASCADE_COUNT + 4, transitions, 2, (VkClearValue[2]){0},
-          (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, opaque_depth}, true,
-          "Opaque Color Pass");
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 2,
+          .dependencies = (TbRenderPassId[2]){self->opaque_depth_pass,
+                                              self->shadow_passes[3]},
+          .transition_count = TB_CASCADE_COUNT + 4,
+          .transitions = transitions,
+          .attachment_count = 2,
+          .attachments =
+              (TbAttachmentInfo[2]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = hdr_color,
+                  },
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = opaque_depth,
+                  },
+              },
+          .name = "Opaque Color Pass",
+      };
+
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);
       self->opaque_color_pass = id;
     }
     // Create Sky Pass
     {
-#define ATTACH_COUNT 2
-      VkAttachmentDescription attachments[ATTACH_COUNT] = {
-          {
-              .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          },
-          {
-              .format = VK_FORMAT_D32_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-          },
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = ATTACH_COUNT,
-          .pAttachments = attachments,
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          1,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-          // We want the depth buffer to be read by a shader in the next pass
-          .dependencyCount = 2,
-          .pDependencies =
-              (VkSubpassDependency[2]){
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 2,
+          .dependencies = (TbRenderPassId[2]){self->opaque_depth_pass,
+                                              self->opaque_color_pass},
+          .attachment_count = 2,
+          .attachments =
+              (TbAttachmentInfo[2]){
                   {
-                      .srcSubpass = VK_SUBPASS_EXTERNAL,
-                      .dstSubpass = 0,
-                      .srcStageMask =
-                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                          VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                      .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .srcAccessMask =
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = hdr_color,
                   },
                   {
-                      .srcSubpass = 0,
-                      .dstSubpass = VK_SUBPASS_EXTERNAL,
-                      .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dstStageMask =
-                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                          VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dstAccessMask =
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = opaque_depth,
                   },
               },
+          .name = "Sky Pass",
       };
-#undef ATTACH_COUNT
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 2,
-          (TbRenderPassId[2]){self->opaque_depth_pass, self->opaque_color_pass},
-          0, NULL, 2, (VkClearValue[2]){0},
-          (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, opaque_depth}, true, "Sky Pass");
+
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
                       false);
       self->sky_pass = id;
     }
     // Create opaque depth copy pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_R32_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
-      PassTransition transition = {
-          .render_target = self->render_target_system->depth_buffer,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->depth_copy_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask =
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .oldLayout =
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .subresourceRange =
+                      .render_target = self->render_target_system->depth_buffer,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
                           },
                   },
-          }};
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = depth_copy,
+                  },
+              },
+          .name = "Depth Copy Pass",
+      };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->depth_copy_pass, 1,
-                             &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &depth_copy, true, "Depth Copy Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create depth copy pass", false);
       self->depth_copy_pass = id;
     }
     // Create opaque color copy pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format =
-                      self->render_system->render_thread->swapchain.format,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                  .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-
-      PassTransition transition = {
-          .render_target = self->render_target_system->hdr_color,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->color_copy_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .subresourceRange =
+                      .render_target = self->render_target_system->hdr_color,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
                           },
                   },
-          }};
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = color_copy,
+                  },
+              },
+          .name = "Color Copy Pass",
+      };
 
-      TbRenderPassId id =
-          create_render_pass(self, &create_info, 1, &self->color_copy_pass, 1,
-                             &transition, 1, &(VkClearValue){0}, &default_mip,
-                             &color_copy, true, "Color Copy Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create color copy pass", false);
       self->color_copy_pass = id;
     }
     // Create transparent depth pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format = VK_FORMAT_D32_SFLOAT,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout =
-                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                  .finalLayout =
-                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-          // We need to re-use the depth buffer as a depth buffer after the
-          // depth copy
-          .dependencyCount = 1,
-          .pDependencies =
-              (VkSubpassDependency[1]){
-                  {
-                      .srcSubpass = VK_SUBPASS_EXTERNAL,
-                      .dstSubpass = 0,
-                      .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dstStageMask =
-                          VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                          VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dstAccessMask =
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-                  },
-              },
-      };
-
       // Must transition back to depth so that we can load the contents
-      PassTransition transition = {
-          .render_target = self->render_target_system->depth_buffer,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->transparent_depth_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dstAccessMask =
-                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .newLayout =
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      .subresourceRange =
+                      .render_target = self->render_target_system->depth_buffer,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
                           },
                   },
-          }};
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .attachment = transparent_depth,
+                  },
+              },
+          .name = "Transparent Depth Pass",
+      };
 
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_depth_pass, 1, &transition,
-          1, &(VkClearValue){0}, &default_mip, &transparent_depth, true,
-          "Transparent Depth Pass");
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent depth pass", false);
       self->transparent_depth_pass = id;
     }
     // Create transparent color pass
     {
-#define ATTACH_COUNT 2
-      VkAttachmentDescription attachments[ATTACH_COUNT] = {
-          {
-              .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          },
-          {
-              .format = VK_FORMAT_D32_SFLOAT,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-              .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-              .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-          },
-      };
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = ATTACH_COUNT,
-          .pAttachments = attachments,
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-                  .pDepthStencilAttachment =
-                      &(VkAttachmentReference){
-                          1,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-#undef ATTACH_COUNT
-
       PassTransition transitions[3] = {
           {
               .render_target = self->render_target_system->hdr_color,
@@ -1819,124 +1534,139 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           },
       };
 
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_color_pass, 3, transitions,
-          2, (VkClearValue[2]){0}, (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, transparent_depth}, true,
-          "Transparent Color Pass");
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
+          .transition_count = 3,
+          .transitions = transitions,
+          .attachment_count = 2,
+          .attachments =
+              (TbAttachmentInfo[2]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = hdr_color,
+                  },
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = transparent_depth,
+                  },
+              },
+          .name = "Transparent Color Pass",
+      };
+
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create transparent color pass", false);
       self->transparent_color_pass = id;
     }
     // Create Tonemapping pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format =
-                      self->render_system->render_thread->swapchain.format,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-      PassTransition transition = {
-          .render_target = self->render_target_system->hdr_color,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .subresourceRange =
+                      .render_target = self->render_target_system->hdr_color,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
                           },
                   },
-          }};
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->transparent_color_pass, 1, &transition,
-          1, &(VkClearValue){0}, &default_mip, &swapchain_target, true,
-          "Tonemap Pass");
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = swapchain_target,
+                  },
+              },
+          .name = "Tonemap Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create tonemap pass", false);
       self->tonemap_pass = id;
     }
     // Create UI Pass
     {
-      VkRenderPassCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .attachmentCount = 1,
-          .pAttachments =
-              &(VkAttachmentDescription){
-                  .format =
-                      self->render_system->render_thread->swapchain.format,
-                  .samples = VK_SAMPLE_COUNT_1_BIT,
-                  .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                  .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                  .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-              },
-          .subpassCount = 1,
-          .pSubpasses =
-              &(VkSubpassDescription){
-                  .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-                  .colorAttachmentCount = 1,
-                  .pColorAttachments =
-                      &(VkAttachmentReference){
-                          0,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      },
-              },
-      };
-      PassTransition transition = {
-          .render_target = self->render_target_system->hdr_color,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-              .barrier =
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->tonemap_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
                   {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .subresourceRange =
+                      .render_target = self->render_target_system->hdr_color,
+                      .barrier =
                           {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
                           },
                   },
-          }};
-      TbRenderPassId id = create_render_pass(
-          self, &create_info, 1, &self->tonemap_pass, 1, &transition, 1,
-          &(VkClearValue){0}, &default_mip, &swapchain_target, true, "UI Pass");
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = swapchain_target,
+                  },
+              },
+          .name = "UI Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
                       false);
       self->ui_pass = id;
@@ -2065,16 +1795,15 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
                                        &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-    TbRenderTargetId depth_id = InvalidRenderTargetId;
+    PassAttachment depth_info = {0};
     tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
-                                       &attach_count, &depth_id);
+                                       &attach_count, &depth_info);
 
-    VkFormat depth_format =
-        tb_render_target_get_format(self->render_target_system, depth_id);
+    VkFormat depth_format = tb_render_target_get_format(
+        self->render_target_system, depth_info.attachment);
 
-    err = create_depth_pipeline(
-        self->render_system, self->render_passes[self->depth_copy_pass].pass,
-        depth_format, self->copy_pipe_layout, &self->depth_copy_pipe);
+    err = create_depth_pipeline(self->render_system, depth_format,
+                                self->copy_pipe_layout, &self->depth_copy_pipe);
     TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
   }
 
@@ -2097,16 +1826,16 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
                                      NULL);
   TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-  TbRenderTargetId attach_id = InvalidRenderTargetId;
+  PassAttachment attach_info = {0};
   tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
-                                     &attach_id);
+                                     &attach_info);
 
-  VkFormat color_format =
-      tb_render_target_get_format(self->render_target_system, attach_id);
+  VkFormat color_format = tb_render_target_get_format(
+      self->render_target_system, attach_info.attachment);
 
-  err = create_color_copy_pipeline(
-      self->render_system, self->render_passes[self->color_copy_pass].pass,
-      color_format, self->copy_pipe_layout, &self->color_copy_pipe);
+  err = create_color_copy_pipeline(self->render_system, color_format,
+                                   self->copy_pipe_layout,
+                                   &self->color_copy_pipe);
   TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
 
   {
@@ -2124,22 +1853,20 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
 // Tonemapping
 {
-  const RenderPass *pass = &self->render_passes[self->tonemap_pass];
-
   uint32_t attach_count = 0;
   tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
                                      NULL);
   TB_CHECK(attach_count == 1, "Unexpected");
-  TbRenderTargetId tonemap_target_id = 0;
+  PassAttachment attach_info = {0};
   tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
-                                     &tonemap_target_id);
+                                     &attach_info);
 
   VkFormat swap_target_format = tb_render_target_get_format(
-      self->render_target_system, tonemap_target_id);
+      self->render_target_system, attach_info.attachment);
 
-  err = create_tonemapping_pipeline(self->render_system, pass->pass,
-                                    swap_target_format, self->copy_pipe_layout,
-                                    &self->tonemap_pipe);
+  err =
+      create_tonemapping_pipeline(self->render_system, swap_target_format,
+                                  self->copy_pipe_layout, &self->tonemap_pipe);
   TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
 
   {
@@ -2158,16 +1885,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 return true;
 }
 
-void destroy_render_passes(RenderPipelineSystem *self) {
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-    RenderPass *pass = &self->render_passes[pass_idx];
-    tb_rnd_destroy_render_pass(self->render_system, pass->pass);
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      tb_rnd_destroy_framebuffer(self->render_system, pass->framebuffers[i]);
-    }
-  }
-}
-
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
@@ -2175,9 +1892,6 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
-
-  // Clean up all render passes
-  destroy_render_passes(self);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
@@ -2193,48 +1907,27 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
 void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
   RenderPass *rp = &self->render_passes[id];
 
-  // Destroy the old framebuffers
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_framebuffer(self->render_system, rp->framebuffers[i]);
-  }
-
   {
-    VkResult err = VK_SUCCESS;
-
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
-        rt_sys, rp->attach_mips[0], rp->attachments[0]);
+        rt_sys, rp->attachments[0].mip, rp->attachments[0].attachment);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       VkImageView attach_views[TB_MAX_ATTACHMENTS] = {0};
 
       for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
            ++attach_idx) {
-        attach_views[attach_idx] =
-            tb_render_target_get_mip_view(rt_sys, rp->attach_mips[attach_idx],
-                                          i, rp->attachments[attach_idx]);
+        attach_views[attach_idx] = tb_render_target_get_mip_view(
+            rt_sys, rp->attachments[attach_idx].mip, i,
+            rp->attachments[attach_idx].attachment);
       }
-
-      VkFramebufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-          .renderPass = rp->pass,
-          .attachmentCount = rp->attach_count,
-          .pAttachments = attach_views,
-          .width = extent.width,
-          .height = extent.height,
-          .layers = extent.depth,
-      };
-      err = tb_rnd_create_framebuffer(self->render_system, &create_info,
-                                      "Pass Framebuffer", &rp->framebuffers[i]);
-      TB_VK_CHECK(err, "Failed to create pass framebuffer");
 
       // Update the pass context on each frame index
       {
         FrameState *state =
             &self->render_system->render_thread->frame_states[i];
         PassContext *context = &state->pass_contexts[id];
-        context->framebuffer = rp->framebuffers[i];
         context->width = extent.width;
         context->height = extent.height;
       }
@@ -2498,18 +2191,10 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
   return id;
 }
 
-VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
-                                         TbRenderPassId pass) {
-  TB_CHECK_RETURN(pass < self->pass_count, "Pass Id out of range",
-                  VK_NULL_HANDLE);
-
-  return self->render_passes[pass].pass;
-}
-
 void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
-                                        TbRenderTargetId *attachments) {
+                                        PassAttachment *attachments) {
   TB_CHECK(pass < self->pass_count, "Pass Id out of range");
   TB_CHECK(attach_count, "Attachment count pointer must be valid");
   TB_CHECK(*attach_count <= TB_MAX_ATTACHMENTS, "Too many attachments");
@@ -2524,17 +2209,8 @@ void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
     // Attachment count and attachment pointers were provided
     TB_CHECK(*attach_count == p->attach_count, "Unexpected size mismatch");
     SDL_memcpy(attachments, p->attachments,
-               sizeof(TbRenderTargetId) * (*attach_count));
+               sizeof(PassAttachment) * (*attach_count));
   }
-}
-
-const VkFramebuffer *
-tb_render_pipeline_get_pass_framebuffers(RenderPipelineSystem *self,
-                                         TbRenderPassId pass) {
-  TB_CHECK_RETURN(pass < self->pass_count, "Pass Id out of range",
-                  VK_NULL_HANDLE);
-
-  return self->render_passes[pass].framebuffers;
 }
 
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,

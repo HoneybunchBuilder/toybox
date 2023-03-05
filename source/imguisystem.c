@@ -36,13 +36,11 @@ typedef struct ImGuiDrawBatch {
   VkDescriptorSet atlas_set;
 } ImGuiDrawBatch;
 
-VkResult create_imgui_pipeline(VkDevice device,
-                               const VkAllocationCallbacks *vk_alloc,
-                               VkPipelineCache cache, VkRenderPass pass,
-                               VkSampler sampler, VkFormat ui_target_format,
-                               VkPipelineLayout *pipe_layout,
-                               VkDescriptorSetLayout *set_layout,
-                               VkPipeline *pipeline) {
+VkResult
+create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                      VkPipelineCache cache, VkSampler sampler,
+                      VkFormat ui_target_format, VkPipelineLayout *pipe_layout,
+                      VkDescriptorSetLayout *set_layout, VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Create Descriptor Set Layout
@@ -314,18 +312,17 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
 
   // Look up UI pipeline
   TbRenderPassId ui_pass_id = self->render_pipe_system->ui_pass;
-  self->pass =
-      tb_render_pipeline_get_pass(self->render_pipe_system, ui_pass_id);
+
   uint32_t attach_count = 0;
   tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
                                      &attach_count, NULL);
   TB_CHECK(attach_count == 1, "Unexpected");
-  TbRenderTargetId ui_target_id = 0;
+  PassAttachment ui_info = {0};
   tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
-                                     &attach_count, &ui_target_id);
+                                     &attach_count, &ui_info);
 
-  VkFormat ui_target_format =
-      tb_render_target_get_format(self->render_target_system, ui_target_id);
+  VkFormat ui_target_format = tb_render_target_get_format(
+      self->render_target_system, ui_info.attachment);
 
   // Create Immutable Sampler
   {
@@ -350,8 +347,8 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   // Create imgui pipeline
   err = create_imgui_pipeline(
       render_system->render_thread->device, &render_system->vk_host_alloc_cb,
-      render_system->pipeline_cache, self->pass, self->sampler,
-      ui_target_format, &self->pipe_layout, &self->set_layout, &self->pipeline);
+      render_system->pipeline_cache, self->sampler, ui_target_format,
+      &self->pipe_layout, &self->set_layout, &self->pipeline);
   TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
 
   self->imgui_draw_ctx = tb_render_pipeline_register_draw_context(

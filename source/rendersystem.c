@@ -450,29 +450,6 @@ VkResult tb_rnd_create_sampler(RenderSystem *self,
   return err;
 }
 
-VkResult tb_rnd_create_render_pass(RenderSystem *self,
-                                   const VkRenderPassCreateInfo *create_info,
-                                   const char *name, VkRenderPass *pass) {
-  VkResult err = vkCreateRenderPass(self->render_thread->device, create_info,
-                                    &self->vk_host_alloc_cb, pass);
-  TB_VK_CHECK_RET(err, "Failed to create render pass", err);
-  SET_VK_NAME(self->render_thread->device, *pass, VK_OBJECT_TYPE_RENDER_PASS,
-              name);
-  return err;
-}
-
-VkResult tb_rnd_create_framebuffer(RenderSystem *self,
-                                   const VkFramebufferCreateInfo *create_info,
-                                   const char *name,
-                                   VkFramebuffer *framebuffer) {
-  VkResult err = vkCreateFramebuffer(self->render_thread->device, create_info,
-                                     &self->vk_host_alloc_cb, framebuffer);
-  TB_VK_CHECK_RET(err, "Failed to create framebuffer", err);
-  SET_VK_NAME(self->render_thread->device, *framebuffer,
-              VK_OBJECT_TYPE_FRAMEBUFFER, name);
-  return err;
-}
-
 VkResult tb_rnd_create_image_view(RenderSystem *self,
                                   const VkImageViewCreateInfo *create_info,
                                   const char *name, VkImageView *view) {
@@ -602,16 +579,6 @@ void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
 void tb_rnd_destroy_image_view(RenderSystem *self, VkImageView view) {
   vkDestroyImageView(self->render_thread->device, view,
                      &self->vk_host_alloc_cb);
-}
-
-void tb_rnd_destroy_framebuffer(RenderSystem *self, VkFramebuffer framebuffer) {
-  vkDestroyFramebuffer(self->render_thread->device, framebuffer,
-                       &self->vk_host_alloc_cb);
-}
-
-void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass) {
-  vkDestroyRenderPass(self->render_thread->device, pass,
-                      &self->vk_host_alloc_cb);
 }
 
 void tb_rnd_destroy_sampler(RenderSystem *self, VkSampler sampler) {

@@ -74,15 +74,6 @@ VkResult tb_rnd_create_sampler(RenderSystem *self,
                                const VkSamplerCreateInfo *create_info,
                                const char *name, VkSampler *sampler);
 
-VkResult tb_rnd_create_render_pass(RenderSystem *self,
-                                   const VkRenderPassCreateInfo *create_info,
-                                   const char *name, VkRenderPass *pass);
-
-VkResult tb_rnd_create_framebuffer(RenderSystem *self,
-                                   const VkFramebufferCreateInfo *create_info,
-                                   const char *name,
-                                   VkFramebuffer *framebuffer);
-
 VkResult tb_rnd_create_image_view(RenderSystem *self,
                                   const VkImageViewCreateInfo *create_info,
                                   const char *name, VkImageView *view);
@@ -119,8 +110,6 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image);
 
 void tb_rnd_destroy_image_view(RenderSystem *self, VkImageView view);
-void tb_rnd_destroy_framebuffer(RenderSystem *self, VkFramebuffer framebuffer);
-void tb_rnd_destroy_render_pass(RenderSystem *self, VkRenderPass pass);
 void tb_rnd_destroy_sampler(RenderSystem *self, VkSampler sampler);
 void tb_rnd_destroy_set_layout(RenderSystem *self,
                                VkDescriptorSetLayout set_layout);

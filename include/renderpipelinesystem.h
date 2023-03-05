@@ -19,8 +19,12 @@ typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct RenderPass RenderPass;
-typedef struct VkRenderPass_T *VkRenderPass;
-typedef struct VkFramebuffer_T *VkFramebuffer;
+
+typedef struct PassAttachment {
+  VkClearValue clear_value;
+  uint32_t mip;
+  TbRenderTargetId attachment;
+} PassAttachment;
 
 typedef struct DrawBatch {
   VkPipelineLayout layout;
@@ -99,13 +103,10 @@ TbDrawContextId
 tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
                                          const DrawContextDescriptor *desc);
 
-VkRenderPass tb_render_pipeline_get_pass(RenderPipelineSystem *self,
-                                         TbRenderPassId pass_id);
-
 void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
-                                        TbRenderTargetId *attachments);
+                                        PassAttachment *attachments);
 
 void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,

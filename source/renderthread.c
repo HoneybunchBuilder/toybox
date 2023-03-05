@@ -1190,42 +1190,10 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
                          NULL, 0, NULL, 1, &barrier->barrier);
   }
 
-  if (pass->dynamic) {
-    // New strategy: dynamic rendering
-    vkCmdBeginRendering(buffer, pass->render_info);
-  } else {
-    // Old strategy: render pass
-    const uint32_t clear_value_count = pass->attachment_count;
-    TB_CHECK(clear_value_count < TB_MAX_ATTACHMENTS, "Unexpected");
-
-    VkRenderPassBeginInfo begin_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = pass->pass,
-        .framebuffer = pass->framebuffer,
-        .renderArea =
-            {
-                .extent =
-                    {
-                        .width = pass->width,
-                        .height = pass->height,
-                    },
-            },
-        .clearValueCount = clear_value_count,
-        .pClearValues = pass->clear_values,
-    };
-    vkCmdBeginRenderPass(buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
-  }
+  vkCmdBeginRendering(buffer, pass->render_info);
 }
 
-void record_pass_end(VkCommandBuffer buffer, PassContext *pass) {
-  if (pass->dynamic) {
-    // New strategy: dynamic rendering
-    vkCmdEndRendering(buffer);
-  } else {
-    // Old: render passes
-    vkCmdEndRenderPass(buffer);
-  }
-}
+void record_pass_end(VkCommandBuffer buffer) { vkCmdEndRendering(buffer); }
 
 void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkResult err = VK_SUCCESS;
@@ -1525,7 +1493,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
 #endif
-        record_pass_end(pass_buffer, pass);
+        record_pass_end(pass_buffer);
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }

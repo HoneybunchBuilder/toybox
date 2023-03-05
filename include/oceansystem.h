@@ -41,11 +41,8 @@ typedef struct OceanSystem {
 
   VkSampler sampler;
 
-  VkRenderPass ocean_prepass;
   TbDrawContextId trans_depth_draw_ctx;
-  VkRenderPass shadow_passes[TB_CASCADE_COUNT];
   TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
-  VkRenderPass ocean_pass;
   TbDrawContextId trans_color_draw_ctx;
 
   FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];

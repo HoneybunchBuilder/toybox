@@ -59,9 +59,9 @@ typedef struct PrefilterBatch {
   uint64_t vertex_offset;
 } PrefilterBatch;
 
-VkResult create_sky_pipeline(RenderSystem *render_system, VkRenderPass pass,
-                             VkFormat color_format, VkFormat depth_format,
-                             VkPipelineLayout layout, VkPipeline *pipeline) {
+VkResult create_sky_pipeline(RenderSystem *render_system, VkFormat color_format,
+                             VkFormat depth_format, VkPipelineLayout layout,
+                             VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Load Shaders
@@ -191,7 +191,7 @@ VkResult create_sky_pipeline(RenderSystem *render_system, VkRenderPass pass,
 }
 
 VkResult create_env_capture_pipeline(RenderSystem *render_system,
-                                     VkRenderPass pass, VkFormat color_format,
+                                     VkFormat color_format,
                                      VkPipelineLayout layout,
                                      VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -328,7 +328,7 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
 }
 
 VkResult create_irradiance_pipeline(RenderSystem *render_system,
-                                    VkRenderPass pass, VkFormat color_format,
+                                    VkFormat color_format,
                                     VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -465,7 +465,7 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
 }
 
 VkResult create_prefilter_pipeline(RenderSystem *render_system,
-                                   VkRenderPass pass, VkFormat color_format,
+                                   VkFormat color_format,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -756,17 +756,6 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
   TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
   TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
-  self->sky_pass =
-      tb_render_pipeline_get_pass(self->render_pipe_system, sky_pass_id);
-  self->env_capture_pass =
-      tb_render_pipeline_get_pass(self->render_pipe_system, env_cap_id);
-  self->irradiance_pass =
-      tb_render_pipeline_get_pass(self->render_pipe_system, irr_pass_id);
-  for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-    self->prefilter_passes[i] = tb_render_pipeline_get_pass(
-        self->render_pipe_system,
-        self->render_pipe_system->prefilter_passes[i]);
-  }
 
   // Create immutable sampler
   {
@@ -880,14 +869,13 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
     tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
                                        &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-    TbRenderTargetId *attach_ids =
-        tb_alloc_nm_tp(self->std_alloc, 2, TbRenderTargetId);
+    PassAttachment attach_info[2] = {0};
     tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
-                                       &attach_count, attach_ids);
+                                       &attach_count, attach_info);
 
     for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-      VkFormat format = tb_render_target_get_format(self->render_target_system,
-                                                    attach_ids[attach_idx]);
+      VkFormat format = tb_render_target_get_format(
+          self->render_target_system, attach_info[attach_idx].attachment);
       if (format == VK_FORMAT_D32_SFLOAT) {
         depth_format = format;
       } else {
@@ -896,9 +884,8 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
     }
 
     // Create sky pipeline
-    err = create_sky_pipeline(render_system, self->sky_pass, color_format,
-                              depth_format, self->sky_pipe_layout,
-                              &self->sky_pipeline);
+    err = create_sky_pipeline(render_system, color_format, depth_format,
+                              self->sky_pipe_layout, &self->sky_pipeline);
     TB_VK_CHECK_RET(err, "Failed to create sky pipeline", false);
   }
 
@@ -910,16 +897,16 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         self->render_pipe_system, self->render_pipe_system->env_capture_pass,
         &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    PassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(
         self->render_pipe_system, self->render_pipe_system->env_capture_pass,
-        &attach_count, &attach_id);
+        &attach_count, &attach_info);
 
-    VkFormat color_format =
-        tb_render_target_get_format(self->render_target_system, attach_id);
-    err = create_env_capture_pipeline(render_system, self->env_capture_pass,
-                                      color_format, self->sky_pipe_layout,
-                                      &self->env_pipeline);
+    VkFormat color_format = tb_render_target_get_format(
+        self->render_target_system, attach_info.attachment);
+    err =
+        create_env_capture_pipeline(render_system, color_format,
+                                    self->sky_pipe_layout, &self->env_pipeline);
     TB_VK_CHECK_RET(err, "Failed to create env capture pipeline", false);
   }
 
@@ -930,15 +917,15 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         self->render_pipe_system, self->render_pipe_system->irradiance_pass,
         &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    PassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(
         self->render_pipe_system, self->render_pipe_system->irradiance_pass,
-        &attach_count, &attach_id);
+        &attach_count, &attach_info);
 
-    VkFormat color_format =
-        tb_render_target_get_format(self->render_target_system, attach_id);
-    err = create_irradiance_pipeline(render_system, self->irradiance_pass,
-                                     color_format, self->irr_pipe_layout,
+    VkFormat color_format = tb_render_target_get_format(
+        self->render_target_system, attach_info.attachment);
+    err = create_irradiance_pipeline(render_system, color_format,
+                                     self->irr_pipe_layout,
                                      &self->irradiance_pipeline);
     TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
   }
@@ -950,15 +937,15 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
         &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    TbRenderTargetId attach_id = InvalidRenderTargetId;
+    PassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(
         self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
-        &attach_count, &attach_id);
+        &attach_count, &attach_info);
 
-    VkFormat color_format =
-        tb_render_target_get_format(self->render_target_system, attach_id);
-    err = create_prefilter_pipeline(render_system, self->prefilter_passes[0],
-                                    color_format, self->prefilter_pipe_layout,
+    VkFormat color_format = tb_render_target_get_format(
+        self->render_target_system, attach_info.attachment);
+    err = create_prefilter_pipeline(render_system, color_format,
+                                    self->prefilter_pipe_layout,
                                     &self->prefilter_pipeline);
     TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
   }
