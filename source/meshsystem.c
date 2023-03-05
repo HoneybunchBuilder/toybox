@@ -227,6 +227,7 @@ VkResult create_shadow_pipeline(RenderSystem *render_system, VkRenderPass pass,
 
 VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                                Allocator std_alloc, VkRenderPass pass,
+                               VkFormat color_format, VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **pipelines) {
   VkResult err = VK_SUCCESS;
@@ -294,60 +295,6 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
       .vertexAttributeDescriptionCount = 4,
       .pVertexAttributeDescriptions = vert_attrs_P3N3T4U2,
   };
-
-  VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-  };
-
-  VkViewport viewport = {0, 600.0f, 800.0f, -600.0f, 0, 1};
-  VkRect2D scissor = {{0, 0}, {800, 600}};
-
-  VkPipelineViewportStateCreateInfo viewport_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-      .viewportCount = 1,
-      .pViewports = &viewport,
-      .scissorCount = 1,
-      .pScissors = &scissor,
-  };
-  VkPipelineRasterizationStateCreateInfo raster_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-      .polygonMode = VK_POLYGON_MODE_FILL,
-      .cullMode = VK_CULL_MODE_BACK_BIT,
-      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-      .lineWidth = 1.0f,
-  };
-
-  VkPipelineMultisampleStateCreateInfo multisample_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-  };
-  VkPipelineDepthStencilStateCreateInfo depth_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-      .depthTestEnable = VK_TRUE,
-      .depthWriteEnable = VK_TRUE,
-      .depthCompareOp = VK_COMPARE_OP_GREATER,
-      .maxDepthBounds = 1.0f,
-  };
-
-  VkPipelineColorBlendAttachmentState attachment_state = {
-      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-  };
-  VkPipelineColorBlendStateCreateInfo color_blend_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-      .attachmentCount = 1,
-      .pAttachments = &attachment_state,
-  };
-#define DYN_STATE_COUNT 2
-  VkDynamicState dyn_states[DYN_STATE_COUNT] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                                VK_DYNAMIC_STATE_SCISSOR};
-  VkPipelineDynamicStateCreateInfo dynamic_state = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = DYN_STATE_COUNT,
-      .pDynamicStates = dyn_states,
-  };
-#undef DYN_STATE_COUNT
 
   // Load Shader Modules
   VkShaderModule vert_mod_P3N3 = VK_NULL_HANDLE;
@@ -444,16 +391,76 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 
   VkGraphicsPipelineCreateInfo create_info_base = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
       .stageCount = 2,
-      .pInputAssemblyState = &input_assembly_state,
-      .pViewportState = &viewport_state,
-      .pRasterizationState = &raster_state,
-      .pMultisampleState = &multisample_state,
-      .pDepthStencilState = &depth_state,
-      .pColorBlendState = &color_blend_state,
-      .pDynamicState = &dynamic_state,
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = (VkViewport[1]){{0, 600.0f, 800.0f, -600.0f, 0, 1}},
+              .scissorCount = 1,
+              .pScissors = (VkRect2D[1]){{{0, 0}, {800, 600}}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .maxDepthBounds = 1.0f,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  (VkPipelineColorBlendAttachmentState[1]){
+                      {
+                          .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                            VK_COLOR_COMPONENT_G_BIT |
+                                            VK_COLOR_COMPONENT_B_BIT |
+                                            VK_COLOR_COMPONENT_A_BIT,
+                      },
+                  },
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates =
+                  (VkDynamicState[2]){
+                      VK_DYNAMIC_STATE_VIEWPORT,
+                      VK_DYNAMIC_STATE_SCISSOR,
+                  },
+          },
       .layout = pipe_layout,
-      .renderPass = pass,
   };
 
   VkGraphicsPipelineCreateInfo create_info_bases[VI_Count] = {0};
@@ -788,10 +795,48 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                                           &self->pipe_layout);
     }
 
-    err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
-                                self->std_alloc, opaque_pass, self->pipe_layout,
-                                &self->pipe_count, &self->pipelines);
-    TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(
+          self->render_pipe_system,
+          self->render_pipe_system->transparent_depth_pass, &attach_count,
+          NULL);
+      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+      TbRenderTargetId depth_id = InvalidRenderTargetId;
+      tb_render_pipeline_get_attachments(
+          self->render_pipe_system,
+          self->render_pipe_system->transparent_depth_pass, &attach_count,
+          &depth_id);
+
+      VkFormat depth_format = tb_render_target_get_format(
+          self->render_pipe_system->render_target_system, depth_id);
+
+      VkFormat color_format = VK_FORMAT_UNDEFINED;
+      tb_render_pipeline_get_attachments(
+          self->render_pipe_system,
+          self->render_pipe_system->transparent_color_pass, &attach_count,
+          NULL);
+      TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+      TbRenderTargetId color_ids[2] = {0};
+      tb_render_pipeline_get_attachments(
+          self->render_pipe_system,
+          self->render_pipe_system->transparent_color_pass, &attach_count,
+          color_ids);
+
+      for (uint32_t i = 0; i < attach_count; i++) {
+        VkFormat format = tb_render_target_get_format(
+            self->render_pipe_system->render_target_system, color_ids[i]);
+        if (format != VK_FORMAT_D32_SFLOAT) {
+          color_format = format;
+          break;
+        }
+      }
+      err = create_mesh_pipelines(self->render_system, self->tmp_alloc,
+                                  self->std_alloc, opaque_pass, color_format,
+                                  depth_format, self->pipe_layout,
+                                  &self->pipe_count, &self->pipelines);
+      TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
+    }
 
     {
       VkPipelineLayoutCreateInfo create_info = {
@@ -832,7 +877,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
     }
   }
 
-  // Register drawing with the pipeline
+  // Register drawing with the pipelines
   self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),

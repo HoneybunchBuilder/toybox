@@ -671,7 +671,6 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   }
 
   {
-
     uint32_t attach_count = 0;
     tb_render_pipeline_get_attachments(
         self->render_pipe_system,

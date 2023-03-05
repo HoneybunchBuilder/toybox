@@ -592,7 +592,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
         self->render_target_system, pass->attach_mips[0], target_id);
 
     PassContext *pass_context = &state->pass_contexts[state->pass_ctx_count];
-    TB_CHECK(pass->transition_count < TB_MAX_BARRIERS, "Out of range");
+    TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
     *pass_context = (PassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
@@ -679,7 +679,7 @@ TbRenderPassId create_render_pass(
 
   // Copy pass transitions
   pass->transition_count = trans_count;
-  TB_CHECK_RETURN(pass->transition_count < TB_MAX_RENDER_PASS_TRANS,
+  TB_CHECK_RETURN(pass->transition_count <= TB_MAX_RENDER_PASS_TRANS,
                   "Out of range", InvalidRenderPassId);
   SDL_memset(pass->transitions, 0,
              sizeof(PassTransition) * TB_MAX_RENDER_PASS_TRANS);
@@ -862,8 +862,36 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
 
+      PassTransition transitions[1] = {
+          {
+              .render_target = self->render_target_system->depth_buffer,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+
       TbRenderPassId id = create_render_pass(
-          self, &create_info, 0, NULL, 0, NULL, 1, &(VkClearValue){0},
+          self, &create_info, 0, NULL, 1, transitions, 1, &(VkClearValue){0},
           &default_mip, &opaque_depth, true, "Opaque Depth Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque depth pass", false);
@@ -923,8 +951,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                           .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                           .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                           .subresourceRange =
                               {
                                   .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1003,8 +1029,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1030,8 +1054,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1115,8 +1137,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1190,8 +1210,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                                 .newLayout =
                                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                 .subresourceRange =
                                     {
                                         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1275,8 +1293,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                       .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1297,8 +1313,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                       .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1307,7 +1321,50 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
+      PassTransition color_trans = {
+          .render_target = self->render_target_system->hdr_color,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_NONE,
+                      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                      .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                              .levelCount = 1,
+                              .layerCount = 1,
+                          },
+                  },
+          }};
+      PassTransition depth_trans = {
+          .render_target = self->render_target_system->depth_buffer,
+          .barrier = {
+              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+              .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+              .barrier =
+                  {
+                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                      .srcAccessMask = VK_ACCESS_NONE,
+                      .dstAccessMask =
+                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                      .newLayout =
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 
+                      .subresourceRange =
+                          {
+                              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                              .levelCount = 1,
+                              .layerCount = 1,
+                          },
+                  },
+          }};
       PassTransition shadow_trans_base = {
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1320,8 +1377,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .oldLayout =
                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1330,21 +1385,22 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-
-      PassTransition transitions[TB_CASCADE_COUNT + 2] = {0};
+      PassTransition transitions[TB_CASCADE_COUNT + 4] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
       }
       transitions[TB_CASCADE_COUNT + 0] = irr_trans;
       transitions[TB_CASCADE_COUNT + 1] = filter_trans;
+      transitions[TB_CASCADE_COUNT + 2] = color_trans;
+      transitions[TB_CASCADE_COUNT + 3] = depth_trans;
 
       TbRenderPassId id = create_render_pass(
           self, &create_info, 2,
           (TbRenderPassId[2]){self->opaque_depth_pass, self->shadow_passes[3]},
-          TB_CASCADE_COUNT + 2, transitions, 2, (VkClearValue[2]){0},
+          TB_CASCADE_COUNT + 4, transitions, 2, (VkClearValue[2]){0},
           (uint32_t[2]){default_mip, default_mip},
-          (TbRenderTargetId[2]){hdr_color, opaque_depth}, false,
+          (TbRenderTargetId[2]){hdr_color, opaque_depth}, true,
           "Opaque Color Pass");
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create opaque color pass", false);
@@ -1481,8 +1537,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .oldLayout =
                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1542,8 +1596,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                       .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1625,8 +1677,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       .newLayout =
                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -1710,8 +1760,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1736,8 +1784,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1762,8 +1808,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1825,8 +1869,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                       .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1884,8 +1926,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                       .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                       .subresourceRange =
                           {
                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
