@@ -632,7 +632,7 @@ void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
 void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                 uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 3, true);
   cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
 
   record_sky_common(buffer, batch_count, batches);
@@ -645,7 +645,7 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 3, true);
   cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   record_sky_common(buffer, batch_count, batches);
@@ -658,7 +658,7 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 3, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
@@ -688,7 +688,7 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 3, true);
   cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
@@ -1337,7 +1337,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             .consts =
                 {
                     .roughness = (float)i / (float)(mip_count - 1),
-                    .sample_count = 32,
+                    .sample_count = 16,
                 },
         };
       }

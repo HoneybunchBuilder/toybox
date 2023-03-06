@@ -72,7 +72,7 @@ TB_DEFINE_SYSTEM(visual_logging, VisualLoggingSystem,
 void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                       uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Visual Logger Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 3, true);
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
@@ -81,7 +81,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
     TracyCZoneNC(batch_ctx, "VLog Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "VLog Batch", 2, true);
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "VLog Batch", 4, true);
     cmd_begin_label(buffer, "VLog Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);

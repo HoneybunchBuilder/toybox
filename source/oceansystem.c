@@ -80,7 +80,7 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
 void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                           uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 3, true);
   cmd_begin_label(buffer, "Ocean Prepass", (float4){0.0f, 0.4f, 0.4f, 1.0f});
 
   ocean_record(buffer, batch_count, batches);
@@ -93,7 +93,7 @@ void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 3, true);
   cmd_begin_label(buffer, "Ocean", (float4){0.0f, 0.8f, 0.8f, 1.0f});
 
   ocean_record(buffer, batch_count, batches);
@@ -106,7 +106,7 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void ocean_shadow_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                          uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Shadow Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Shadows", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Shadows", 3, true);
   cmd_begin_label(buffer, "Ocean Shadows", (float4){0.0f, 0.4f, 0.4f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {

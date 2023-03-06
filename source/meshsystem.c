@@ -549,7 +549,7 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 3, true);
 
   const ShadowDrawBatch *shadow_batches =
       (const ShadowDrawBatch *)batches->user_batch;
@@ -562,7 +562,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -573,7 +573,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
@@ -584,7 +584,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           continue;
         }
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         VkBuffer geom_buffer = draw->geom_buffer;
 
@@ -601,7 +601,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const ShadowSubDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
+            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
                               true);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);

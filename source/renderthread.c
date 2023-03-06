@@ -1178,9 +1178,13 @@ void resize_swapchain(RenderThread *thread) {
   vkDestroySwapchainKHR(thread->device, old_swapchain, vk_alloc);
 }
 
-void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
+void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
+                        PassContext *pass) {
+  void *ret = NULL;
 #ifdef TRACY_ENABLE
   cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
+  TracyCVkNamedZone(ctx, frame_scope, buffer, pass->label, 2, true);
+  ret = frame_scope;
 #endif
 
   // Perform any necessary image transitions
@@ -1191,9 +1195,13 @@ void record_pass_begin(VkCommandBuffer buffer, PassContext *pass) {
   }
 
   vkCmdBeginRendering(buffer, pass->render_info);
+  return ret;
 }
 
-void record_pass_end(VkCommandBuffer buffer) { vkCmdEndRendering(buffer); }
+void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope) {
+  TracyCVkZoneEnd(scope);
+  vkCmdEndRendering(buffer);
+}
 
 void tick_render_thread(RenderThread *thread, FrameState *state) {
   VkResult err = VK_SUCCESS;
@@ -1375,7 +1383,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     // End upload record
     {
       TracyCVkCollect(gpu_ctx, start_buffer);
-
       err = vkEndCommandBuffer(start_buffer);
       TB_VK_CHECK(err, "Failed to end upload command buffer");
     }
@@ -1421,6 +1428,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       TracyCZoneN(pass_ctx, "Record Passes", true);
       pre_final_sem = render_complete_sem;
       uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
+      void *cmd_scope = NULL;
       for (uint32_t pass_idx = 0; pass_idx < state->pass_ctx_count;
            ++pass_idx) {
         PassContext *pass = &state->pass_contexts[pass_idx];
@@ -1430,8 +1438,12 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         if (pass->command_buffer_index != last_pass_buffer_idx) {
           // Submit previous command buffer
           if (last_pass_buffer_idx != 0xFFFFFFFF) {
+            if (cmd_scope != NULL) {
+              TracyCVkZoneEnd(cmd_scope);
+            }
             TracyCVkCollect(gpu_ctx,
                             state->pass_command_buffers[last_pass_buffer_idx]);
+            cmd_end_label(state->pass_command_buffers[last_pass_buffer_idx]);
             vkEndCommandBuffer(
                 state->pass_command_buffers[last_pass_buffer_idx]);
 
@@ -1477,9 +1489,14 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
           };
           vkBeginCommandBuffer(pass_buffer, &begin_info);
+          cmd_begin_label(pass_buffer, "Command Buffer",
+                          (float4){0.0f, 1.0f, 0.0f, 1.0f});
+          TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
+                            true);
+          cmd_scope = scope;
         }
 
-        record_pass_begin(pass_buffer, pass);
+        void *scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
         for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
              ++draw_idx) {
           DrawContext *draw = &state->draw_contexts[draw_idx];
@@ -1488,7 +1505,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                             draw->batches);
           }
         }
-        record_pass_end(pass_buffer);
+        record_pass_end(pass_buffer, scope);
 
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
@@ -1496,8 +1513,10 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }
+      TracyCVkZoneEnd(cmd_scope);
       TracyCVkCollect(gpu_ctx,
                       state->pass_command_buffers[last_pass_buffer_idx]);
+      cmd_end_label(state->pass_command_buffers[last_pass_buffer_idx]);
       vkEndCommandBuffer(state->pass_command_buffers[last_pass_buffer_idx]);
 
       // Submit last pass work
