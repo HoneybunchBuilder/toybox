@@ -189,7 +189,7 @@ VLogShape *vlog_acquire_frame_shape(VisualLoggingSystem *vlog,
 }
 
 VkResult create_primitive_pipeline(RenderSystem *render_system,
-                                   VkFormat color_format,
+                                   VkFormat color_format, VkFormat depth_format,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -221,6 +221,7 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
               .colorAttachmentCount = 1,
               .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
           },
       .stageCount = 2,
       .pStages =
@@ -422,6 +423,7 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   {
     uint32_t attach_count = 0;
     VkFormat color_format = VK_FORMAT_UNDEFINED;
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
     tb_render_pipeline_get_attachments(
         self->render_pipe_system,
         self->render_pipe_system->transparent_color_pass, &attach_count, NULL);
@@ -432,18 +434,18 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
         self->render_pipe_system->transparent_color_pass, &attach_count,
         attach_info);
 
-    for (uint32_t i = 0; i < attach_count; i++) {
+    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
       VkFormat format = tb_render_target_get_format(
           self->render_pipe_system->render_target_system,
-          attach_info[i].attachment);
-      if (format != VK_FORMAT_D32_SFLOAT) {
+          attach_info[attach_idx].attachment);
+      if (format == VK_FORMAT_D32_SFLOAT) {
+        depth_format = format;
+      } else {
         color_format = format;
-        break;
       }
     }
-    TB_CHECK(color_format != VK_FORMAT_UNDEFINED, "Unexpected");
 
-    err = create_primitive_pipeline(render_system, color_format,
+    err = create_primitive_pipeline(render_system, color_format, depth_format,
                                     self->pipe_layout, &self->pipeline);
     TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
   }
