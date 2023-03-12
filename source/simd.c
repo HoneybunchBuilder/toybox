@@ -652,7 +652,7 @@ float deg_to_rad(float d) { return d * (M_PI / 180.0f); }
 float rad_to_deg(float r) { return r * (180 / M_PI); }
 
 // https://en.wikipedia.org/wiki/Linear_interpolation
-float lerpf(float v0, float v1, float a) { return (1 - a) * v0 + a * v1; }
+float lerpf(float f0, float f1, float a) { return (1 - a) * f0 + a * f1; }
 float3 lerpf3(float3 v0, float3 v1, float a) {
   return ((1 - a) * v0) + (a * v1);
 }

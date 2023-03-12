@@ -1493,7 +1493,9 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                           (float4){0.0f, 1.0f, 0.0f, 1.0f});
           TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
                             true);
+#ifdef TRACY_VK_C_ENABLE
           cmd_scope = scope;
+#endif
         }
 
         void *scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
