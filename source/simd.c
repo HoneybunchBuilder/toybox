@@ -342,12 +342,12 @@ Quaternion quat_from_axes(float3 forward, float3 right, float3 up) {
 
 Quaternion angle_axis_to_quat(float4 angle_axis) {
   float s = SDL_sinf(angle_axis[3] * 0.5f);
-  return (Quaternion){
+  return normq((Quaternion){
       angle_axis[0] * s,
       angle_axis[1] * s,
       angle_axis[2] * s,
       SDL_cosf(angle_axis[3] * 0.5f),
-  };
+  });
 }
 
 float3x3 quat_to_mf33(Quaternion q) {
