@@ -395,12 +395,17 @@ Quaternion mulq(Quaternion p, Quaternion q) {
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
 float3 qrotf3(Quaternion q, float3 v) {
+  /*
   // Extract the vector and scalar parts of the quat
   float3 u = {q[0], q[1], q[2]};
   float s = q[3];
 
   return (2.0f * dotf3(u, v) * u) + (((s * s) - dotf3(u, v)) * v) +
          (2.0f * s * crossf3(u, v));
+  */
+
+  float4x4 rot_mat = m33tom44(quat_to_mf33(q));
+  return f4tof3(mul4f44f(f3tof4(v, 1.0f), rot_mat));
 }
 
 AABB aabb_init(void) {
