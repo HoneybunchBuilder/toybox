@@ -1239,7 +1239,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
                                   SDL_MIN_UINT64, img_acquired_sem,
                                   VK_NULL_HANDLE, &idx);
-      TB_CHECK(idx == thread->frame_idx, "Error acquiring image");
+      thread->frame_idx = idx;
       if (err == VK_ERROR_OUT_OF_DATE_KHR) {
         // swapchain is out of date (e.g. the window was resized) and
         // must be recreated:
