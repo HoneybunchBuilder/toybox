@@ -1293,9 +1293,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->depth_copy_pass},
-          .transition_count = 1,
+          .transition_count = 2,
           .transitions =
-              (PassTransition[1]){
+              (PassTransition[2]){
                   {
                       .render_target = self->render_target_system->depth_buffer,
                       .barrier =
@@ -1326,6 +1326,36 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                   },
                           },
                   },
+                  {
+                      .render_target =
+                          self->render_target_system->depth_buffer_copy,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
               },
           .attachment_count = 1,
           .attachments =
@@ -1349,9 +1379,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->color_copy_pass},
-          .transition_count = 1,
+          .transition_count = 2,
           .transitions =
-              (PassTransition[1]){
+              (PassTransition[2]){
                   {
                       .render_target = self->render_target_system->hdr_color,
                       .barrier =
@@ -1372,6 +1402,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                       .newLayout =
                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  {
+                      .render_target = self->render_target_system->color_copy,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                       .subresourceRange =
                                           {
                                               .aspectMask =
@@ -1494,9 +1553,11 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                               .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                               .subresourceRange =
@@ -1518,9 +1579,11 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                               .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                               .subresourceRange =
