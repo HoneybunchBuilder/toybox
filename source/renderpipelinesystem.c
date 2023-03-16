@@ -1977,15 +1977,6 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
         rt_sys, rp->attachments[0].mip, rp->attachments[0].attachment);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      VkImageView attach_views[TB_MAX_ATTACHMENTS] = {0};
-
-      for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
-           ++attach_idx) {
-        attach_views[attach_idx] = tb_render_target_get_mip_view(
-            rt_sys, rp->attachments[attach_idx].mip, i,
-            rp->attachments[attach_idx].attachment);
-      }
-
       // Update the pass context on each frame index
       {
         FrameState *state =
@@ -1993,6 +1984,29 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
         PassContext *context = &state->pass_contexts[id];
         context->width = extent.width;
         context->height = extent.height;
+
+        context->render_info->renderArea.extent =
+            (VkExtent2D){extent.width, extent.height};
+
+        uint32_t col_count = 0;
+        for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
+             ++attach_idx) {
+          TbRenderTargetId rt = rp->attachments[attach_idx].attachment;
+          VkFormat format = tb_render_target_get_format(rt_sys, rt);
+          VkImageView view = tb_render_target_get_mip_view(
+              rt_sys, rp->attachments[attach_idx].mip, i, rt);
+
+          // Forgive the const casting :(
+          if (format == VK_FORMAT_D32_SFLOAT) {
+            ((VkRenderingAttachmentInfo *)
+                 context->render_info->pDepthAttachment)
+                ->imageView = view;
+          } else {
+            ((VkRenderingAttachmentInfo *)
+                 context->render_info->pColorAttachments)[col_count++]
+                .imageView = view;
+          }
+        }
       }
     }
   }
