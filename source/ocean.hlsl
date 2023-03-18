@@ -52,9 +52,11 @@ Interpolators vert(VertexIn i) {
 }
 
 float4 frag(Interpolators i) : SV_TARGET {
+  float3 view_dir_vec = camera_data.view_pos - i.world_pos;
+
   // Calculate normal after interpolation
   float3 N = normalize(cross(normalize(i.binormal), normalize(i.tangent)));
-  float3 V = normalize(camera_data.view_pos - i.world_pos);
+  float3 V = normalize(view_dir_vec);
   float3 R = reflect(-V, N);
   float3 L = light_data.light_dir;
 
@@ -65,22 +67,33 @@ float4 frag(Interpolators i) : SV_TARGET {
     // HACK: Need to paramaterize these
     const float near = 0.1f;
     const float far = 1000.0f;
-    const float fog_density = 0.15f;
-    const float3 fog_color = float3(0.305, 0.513, 0.662);
+    const float fog_density = 0.05f;
+    const float3 fog_color = float3(0.105, 0.163, 0.262);
     const float refraction_strength = 0.25f;
+    const float horizon_dist = 5.0f;
+    const float3 horizon_color = float3(0.3, 0.9, 0.3);
 
+    const float p_div = i.screen_pos.w;
     const float2 uv_offset = N.xy * refraction_strength;
-    const float2 uv = (i.screen_pos.xy + uv_offset) / i.screen_pos.w;
+    const float2 uv = (i.screen_pos.xy + uv_offset) / p_div;
 
-    float background_depth = linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
-    float surface_depth = depth_from_clip_z(i.screen_pos.z, near, far);
+    // World position depth
+    float raw_depth = depth_map.Sample(static_sampler, uv).r;
+    float scene_eye_depth = linear_depth(1 - raw_depth, near, far);
+    float fragment_eye_depth = -i.view_pos.z;
+    float3 world_pos = camera_data.view_pos - ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
+    float depth_diff = world_pos.y;
 
-    float depth_diff = surface_depth - background_depth;
-
+    float fog = saturate(exp(fog_density * depth_diff));
     float3 background_color = color_map.Sample(static_sampler, uv).rgb;
-    float fog = exp2(-fog_density * depth_diff);
-
     albedo = lerp(fog_color, background_color, fog);
+
+    // Add a bit of a fresnel effect
+    {
+      float fresnel = dot(N, V);
+      fresnel = pow(saturate(1 - fresnel), horizon_dist);
+      albedo = lerp(albedo, horizon_color, fresnel);
+    }
   }
 
   // PBR Lighting

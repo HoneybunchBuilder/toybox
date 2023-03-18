@@ -76,7 +76,7 @@ float4 clip_to_screen(float4 clip) {
 }
 
 float linear_depth(float depth, float near, float far) {
-  return near * far / (far + depth * (near - far));
+  return far * near / ((near - far) * depth + far);
 }
 
 float depth_from_clip_z(float z, float near, float far) {
