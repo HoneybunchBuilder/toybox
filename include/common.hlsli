@@ -83,6 +83,38 @@ float depth_from_clip_z(float z, float near, float far) {
   return max((1.0 - z / near) * far, 0);
 }
 
+float2 tiling_and_offset(float2 uv, float2 tiling, float2 offset) {
+  return uv * tiling + offset;
+}
+
+float inv_lerp(float from, float to, float value) {
+  return (value - from) / (to - from);
+}
+
+float remap(float x_from, float x_to, float y_from, float y_to, float value) {
+  float rel = inv_lerp(x_from, x_to, value);
+  return lerp(y_from, y_to, rel);
+}
+
+float2 gradient_noise_dir(float2 uv) {
+  uv = uv % 289;
+  float x = (34 * uv.x + 1) * uv.x % 289 + uv.y;
+  x = (34 * x + 1) * x % 289;
+  x = frac(x / 41) * 2 - 1;
+  return normalize(float2(x - floor(x + 0.5), abs(x) - 0.5));
+}
+
+float gradient_noise(float2 uv) {
+  float2 ip = floor(uv);
+  float2 fp = frac(uv);
+  float d00 = dot(gradient_noise_dir(ip), fp);
+  float d01 = dot(gradient_noise_dir(ip + float2(0, 1)), fp - float2(0, 1));
+  float d10 = dot(gradient_noise_dir(ip + float2(1, 0)), fp - float2(1, 0));
+  float d11 = dot(gradient_noise_dir(ip + float2(1, 1)), fp - float2(1, 1));
+  fp = fp * fp * fp * (fp * (fp * 6 - 15) + 10);
+  return lerp(lerp(d00, d01, fp.y), lerp(d10, d11, fp.y), fp.x) + 0.5f;
+}
+
 #endif
 
 #endif

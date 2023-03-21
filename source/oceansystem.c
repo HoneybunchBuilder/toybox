@@ -563,7 +563,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                 .binding = 0,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
             },
             {
                 .binding = 1,

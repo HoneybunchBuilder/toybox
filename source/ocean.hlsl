@@ -6,7 +6,7 @@
 #include "pbr.hlsli"
 
 ConstantBuffer<OceanData> ocean_data
-    : register(b0, space0);                    // Vertex Stage Only
+    : register(b0, space0);                    // All Stages
 Texture2D depth_map : register(t1, space0);    // Fragment Stage Only
 Texture2D color_map : register(t2, space0);    // Fragment Stage Only
 sampler static_sampler : register(s3, space0); // Immutable Sampler
@@ -62,20 +62,38 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 albedo = float3(0, 0, 0);
 
+  // Calculate refracted UVs
+  float2 uv = float2(0, 0);
+  {
+    // TODO: Paramaterize
+    const float refraction_scale = 5.0f;
+    const float refraction_speed = 0.3f;
+    const float refraction_strength = 1.0f;
+
+    float scale = 1.0f / refraction_scale;
+    float speed = refraction_speed * ocean_data.time;
+
+    // Note: parent scope variable "uv" is used as a temporary here.
+    // It will be overwritten with a value of a different context later
+    uv = tiling_and_offset(N.xz, float2(scale, scale), float2(speed, speed));
+
+    float ripple = gradient_noise(uv);
+    ripple = remap(0, 1, -1, 1, ripple);
+    ripple *= refraction_strength;
+
+    float4 pos = i.screen_pos + float4(ripple, ripple, ripple, ripple);
+
+    float2 offset = N.xy * refraction_strength;
+    uv = (pos.xy + offset) /  pos.w;
+  }
+
   // Underwater fog
   {
-    // HACK: Need to paramaterize these
+    // TODO: Paramaterize
     const float near = 0.1f;
     const float far = 1000.0f;
     const float fog_density = 0.05f;
     const float3 fog_color = float3(0.105, 0.163, 0.262);
-    const float refraction_strength = 0.25f;
-    const float horizon_dist = 5.0f;
-    const float3 horizon_color = float3(0.3, 0.9, 0.3);
-
-    const float p_div = i.screen_pos.w;
-    const float2 uv_offset = N.xy * refraction_strength;
-    const float2 uv = (i.screen_pos.xy + uv_offset) / p_div;
 
     // World position depth
     float raw_depth = depth_map.Sample(static_sampler, uv).r;
@@ -87,13 +105,17 @@ float4 frag(Interpolators i) : SV_TARGET {
     float fog = saturate(exp(fog_density * depth_diff));
     float3 background_color = color_map.Sample(static_sampler, uv).rgb;
     albedo = lerp(fog_color, background_color, fog);
+  }
 
-    // Add a bit of a fresnel effect
-    {
-      float fresnel = dot(N, V);
-      fresnel = pow(saturate(1 - fresnel), horizon_dist);
-      albedo = lerp(albedo, horizon_color, fresnel);
-    }
+  // Add a bit of a fresnel effect
+  {
+    // TODO: Parameterize
+    const float horizon_dist = 5.0f;
+    const float3 horizon_color = float3(0.3, 0.9, 0.3);
+
+    float fresnel = dot(N, V);
+    fresnel = pow(saturate(1 - fresnel), horizon_dist);
+    albedo = lerp(albedo, horizon_color, fresnel);
   }
 
   // PBR Lighting
