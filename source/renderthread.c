@@ -1289,7 +1289,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     // Upload
     {
       TracyCZoneN(up_ctx, "Record Upload", true);
-      TracyCVkNamedZone(gpu_ctx, frame_scope, start_buffer, "Upload", 1, true);
+      TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1, true);
       // Upload all buffer requests
       if (state->buf_copy_queue.req_count > 0) {
         for (int32_t i = state->buf_copy_queue.req_count - 1; i >= 0; i--) {
@@ -1347,7 +1347,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         state->buf_img_copy_queue.req_count = 0;
       }
 
-      TracyCVkZoneEnd(frame_scope);
+      TracyCVkZoneEnd(upload_scope);
       TracyCZoneEnd(up_ctx);
 
       // Transition swapchain image to color attachment output
@@ -1498,7 +1498,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 #endif
         }
 
-        void *scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
+        void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
         for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
              ++draw_idx) {
           DrawContext *draw = &state->draw_contexts[draw_idx];
@@ -1507,7 +1507,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                             draw->batches);
           }
         }
-        record_pass_end(pass_buffer, scope);
+
+        record_pass_end(pass_buffer, pass_scope);
 
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);
