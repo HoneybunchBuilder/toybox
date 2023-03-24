@@ -89,9 +89,9 @@ ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
     a.max_size *= 2;
 
     a.grow = false;
-    TracyCFreeN(a.data, a.name) a.data =
-        mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
-    TracyCAllocN(a.data, a.max_size, a.name)
+    TracyCFreeN(a.data, a.name);
+    a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
+    TracyCAllocN(a.data, a.max_size, a.name);
   }
 
   a.size = 0;

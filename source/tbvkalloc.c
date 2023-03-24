@@ -60,7 +60,7 @@ void tb_vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCAllocN((void *)memory, size, "VMA")
+  TracyCAllocN((void *)memory, size, "VMA");
 }
 void tb_vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
                     VkDeviceMemory memory, VkDeviceSize size, void *pUserData) {
@@ -69,5 +69,5 @@ void tb_vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
   (void)memory;
   (void)size;
   (void)pUserData;
-  TracyCFreeN((void *)memory, "VMA")
+  TracyCFreeN((void *)memory, "VMA");
 }

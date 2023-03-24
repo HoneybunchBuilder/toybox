@@ -183,13 +183,14 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
           "View System Frame State Descriptor Pool", &state->set_pool);
       TB_VK_CHECK(err,
                   "Failed to create view system frame state descriptor pool");
+      state->set_count = self->view_count;
+      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                     state->set_count, VkDescriptorSet);
     } else {
       vkResetDescriptorPool(self->render_system->render_thread->device,
                             state->set_pool, 0);
+      state->set_count = self->view_count;
     }
-    state->set_count = self->view_count;
-    state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
-                                   state->set_count, VkDescriptorSet);
 
     VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
         self->tmp_alloc, state->set_count, VkDescriptorSetLayout);

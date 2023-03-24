@@ -512,7 +512,14 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   // Parse expected mesh from glb
   {
     cgltf_mesh *ocean_mesh = &data->meshes[0];
-    ocean_mesh->name = "Ocean";
+    // Must put mesh name on std_alloc for proper cleanup
+    {
+      const char *static_name = "Ocean";
+      char *name =
+          tb_alloc_nm_tp(self->std_alloc, sizeof(static_name) + 1, char);
+      SDL_snprintf(name, sizeof(static_name), "%s", static_name);
+      ocean_mesh->name = name;
+    }
 
     self->ocean_transform = tb_transform_from_node(&data->nodes[0]);
 
@@ -530,6 +537,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     self->ocean_patch_mesh =
         tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
   }
+
+  cgltf_free(data);
 
   VkResult err = VK_SUCCESS;
 

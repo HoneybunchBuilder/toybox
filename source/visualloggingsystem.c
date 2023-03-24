@@ -370,7 +370,14 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
     // Parse expected mesh from glbs
     {
       cgltf_mesh *sphere_mesh = &data->meshes[0];
-      sphere_mesh->name = "Sphere";
+      // Must put mesh name on std_alloc for proper cleanup
+      {
+        const char *static_name = "Sphere";
+        char *name =
+            tb_alloc_nm_tp(self->std_alloc, sizeof(static_name) + 1, char);
+        SDL_snprintf(name, sizeof(static_name), "%s", static_name);
+        sphere_mesh->name = name;
+      }
       self->sphere_index_type = sphere_mesh->primitives->indices->stride == 2
                                     ? VK_INDEX_TYPE_UINT16
                                     : VK_INDEX_TYPE_UINT32;
@@ -395,6 +402,8 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
         tb_mesh_system_get_gpu_mesh(mesh_system, self->sphere_mesh);
     TB_CHECK_RETURN(self->sphere_geom_buffer,
                     "Failed to get gpu buffer for mesh", false);
+
+    cgltf_free(data);
   }
 
   {

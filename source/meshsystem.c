@@ -1616,7 +1616,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           cgltf_size index_size = indices->count * indices->stride;
 
           // Decode the buffer
-          cgltf_result res = decompress_buffer_view(self->tmp_alloc, view);
+          cgltf_result res = decompress_buffer_view(self->std_alloc, view);
           TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
           void *src = ((uint8_t *)view->data) + indices->offset;
@@ -1662,7 +1662,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           size_t attr_size = accessor->stride * accessor->count;
 
           // Decode the buffer
-          cgltf_result res = decompress_buffer_view(self->tmp_alloc, view);
+          cgltf_result res = decompress_buffer_view(self->std_alloc, view);
           TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
           void *src = ((uint8_t *)view->data) + attr_offset;

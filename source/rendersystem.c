@@ -628,12 +628,13 @@ tb_rnd_frame_desc_pool_tick(RenderSystem *self,
     err =
         tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->set_pool);
     TB_VK_CHECK(err, "Failed to create pool");
+    pool->set_count = set_count;
+    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
+                                  VkDescriptorSet);
   } else {
     vkResetDescriptorPool(self->render_thread->device, pool->set_pool, 0);
+    pool->set_count = set_count;
   }
-  pool->set_count = set_count;
-  pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
-                                VkDescriptorSet);
 
   VkDescriptorSetLayout *layouts =
       tb_alloc_nm_tp(self->tmp_alloc, pool->set_count, VkDescriptorSetLayout);

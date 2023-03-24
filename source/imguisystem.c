@@ -443,13 +443,15 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
             "ImGui System Frame State Descriptor Pool", &state->set_pool);
         TB_VK_CHECK(
             err, "Failed to create imgui system frame state descriptor pool");
+
+        state->set_count = imgui_entity_count;
+        state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+                                       state->set_count, VkDescriptorSet);
       } else {
         vkResetDescriptorPool(self->render_system->render_thread->device,
                               state->set_pool, 0);
+        state->set_count = imgui_entity_count;
       }
-      state->set_count = imgui_entity_count;
-      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
-                                     state->set_count, VkDescriptorSet);
 
       VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
           self->tmp_alloc, state->set_count, VkDescriptorSetLayout);

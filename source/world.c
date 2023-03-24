@@ -465,14 +465,14 @@ void tb_destroy_world(World *world) {
 }
 
 EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
-                     const char *root_scene_path, Allocator tmp_alloc,
-                     EntityId parent, const cgltf_node *node) {
+                     const char *root_scene_path, EntityId parent,
+                     const cgltf_node *node) {
   // Get extras
   cgltf_size extra_size = 0;
   char *extra_json = NULL;
   if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
     extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
-    extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
+    extra_json = tb_alloc_nm_tp(world->tmp_alloc, extra_size, char);
     if (cgltf_copy_extras_json(data, &node->extras, extra_json, &extra_size) !=
         cgltf_result_success) {
       extra_size = 0;
@@ -524,9 +524,9 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
   }
 
   ComponentId *component_ids =
-      tb_alloc_nm_tp(tmp_alloc, component_count, ComponentId);
+      tb_alloc_nm_tp(world->tmp_alloc, component_count, ComponentId);
   InternalDescriptor *component_descriptors =
-      tb_alloc_nm_tp(tmp_alloc, component_count, InternalDescriptor);
+      tb_alloc_nm_tp(world->tmp_alloc, component_count, InternalDescriptor);
 
   EntityDescriptor entity_desc = {
       .component_count = component_count,
@@ -538,7 +538,7 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
   uint32_t component_idx = 0;
   {
     if (node->camera) {
-      cgltf_camera *camera = tb_alloc_tp(tmp_alloc, cgltf_camera);
+      cgltf_camera *camera = tb_alloc_tp(world->tmp_alloc, cgltf_camera);
       if (camera) {
         SDL_memcpy(camera, node->camera, sizeof(cgltf_camera));
         const cgltf_camera_type type = camera->type;
@@ -555,7 +555,7 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
       }
     }
     if (node->light) {
-      cgltf_light *light = tb_alloc_tp(tmp_alloc, cgltf_light);
+      cgltf_light *light = tb_alloc_tp(world->tmp_alloc, cgltf_light);
       if (light) {
         SDL_memcpy(light, node->light, sizeof(cgltf_light));
         const cgltf_light_type type = light->type;
@@ -572,8 +572,15 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
     }
     if (node->mesh) {
       MeshComponentDescriptor *mesh_desc =
-          tb_alloc_tp(tmp_alloc, MeshComponentDescriptor);
-      node->mesh->name = node->parent->name; // HACK: gltfpack strips mesh names
+          tb_alloc_tp(world->tmp_alloc, MeshComponentDescriptor);
+      // Must put mesh name on std_alloc for proper cleanup
+      {
+        const char *parent_name = node->parent->name;
+        const size_t name_len = SDL_strlen(parent_name) + 1;
+        char *name = tb_alloc_nm_tp(world->std_alloc, name_len, char);
+        SDL_snprintf(name, name_len, "%s", parent_name);
+        node->mesh->name = name;
+      }
       *mesh_desc = (MeshComponentDescriptor){
           .node = node,
           .source_path = root_scene_path,
@@ -591,7 +598,7 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
       Transform transform = tb_transform_from_node(node);
 
       TransformComponentDescriptor *transform_desc =
-          tb_alloc_tp(tmp_alloc, TransformComponentDescriptor);
+          tb_alloc_tp(world->tmp_alloc, TransformComponentDescriptor);
       transform_desc->transform = transform;
       transform_desc->parent = parent;
       transform_desc->world = world;
@@ -616,7 +623,7 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
               const ComponentStore *store = &world->component_stores[comp_idx];
               if (store->deserialize &&
                   SDL_strcmp(store->id_str, id_str) == 0) {
-                void *comp_desc = tb_alloc(tmp_alloc, store->desc_size);
+                void *comp_desc = tb_alloc(world->tmp_alloc, store->desc_size);
                 store->deserialize(json, comp_desc);
                 component_ids[component_idx] = store->id;
                 component_descriptors[component_idx] = comp_desc;
@@ -655,8 +662,8 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
       // Load all children
       for (uint32_t i = 0; i < node->children_count; ++i) {
         const cgltf_node *child = node->children[i];
-        EntityId child_id = load_entity(world, tok, data, root_scene_path,
-                                        tmp_alloc, id, child);
+        EntityId child_id =
+            load_entity(world, tok, data, root_scene_path, id, child);
         children[i] = child_id;
       }
     }
@@ -683,7 +690,7 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     const cgltf_node *node = data->scene->nodes[i];
-    load_entity(world, tok, data, scene_path, tmp_alloc, InvalidEntityId, node);
+    load_entity(world, tok, data, scene_path, InvalidEntityId, node);
   }
 
   json_tokener_free(tok);
@@ -708,6 +715,9 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 
     TracyCZoneEnd(ctx);
   }
+
+  // Clean up gltf file now that it's parsed
+  cgltf_free(data);
 
   return true;
 }

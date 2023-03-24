@@ -10,6 +10,7 @@
 
 #ifdef TRACY_ENABLE
 #define TRACY_VK_C_ENABLE
+#define TRACY_CALLSTACK 32
 #endif
 #include <tracy/TracyC.h>
 
