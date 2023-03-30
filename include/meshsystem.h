@@ -24,6 +24,9 @@ typedef uint64_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
 static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
+static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
+typedef struct MeshCommandPool MeshCommandPool;
+
 typedef struct MeshSystemDescriptor {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -87,12 +90,16 @@ typedef struct MeshSystem {
   VkPipeline shadow_pipeline;
 
   uint32_t mesh_count;
-
   TbMeshId *mesh_ids;
   TbHostBuffer *mesh_host_buffers;
   TbBuffer *mesh_gpu_buffers;
   uint32_t *mesh_ref_counts;
+  VkCommandBuffer *mesh_command_buffers;
   uint32_t mesh_max;
+
+  uint32_t cmd_pool_count;
+  MeshCommandPool *cmd_pools;
+  uint32_t cmd_pool_max;
 } MeshSystem;
 
 void tb_mesh_system_descriptor(SystemDescriptor *desc,

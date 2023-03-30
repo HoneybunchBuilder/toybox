@@ -1463,6 +1463,23 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
   return cgltf_result_success;
 }
 
+typedef struct MeshCommandPool {
+  VkCommandPool pool;
+  VkCommandBuffer *buffers;
+} MeshCommandPool;
+
+MeshCommandPool *mesh_get_cmd_pool(MeshSystem *self) {
+  uint32_t pool_idx = self->mesh_count / TB_MESH_CMD_PAGE_SIZE;
+  return &self->cmd_pools[pool_idx];
+}
+
+VkCommandBuffer mesh_get_cmd_buff(MeshSystem *self) {
+  uint32_t cmd_idx = self->mesh_count % TB_MESH_CMD_PAGE_SIZE;
+  MeshCommandPool *pool = mesh_get_cmd_pool(self);
+  self->mesh_count++;
+  return pool->buffers[cmd_idx];
+}
+
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node) {
   // Hash the mesh's path and gltf name to get the id
@@ -1755,6 +1772,32 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       };
       tb_rnd_upload_buffers(self->render_system, &copy, 1);
     }
+
+    // Get a secondary command buffer from the pools
+    /*
+    {
+      VkCommandBuffer cmd = mesh_get_cmd_buff(self);
+
+      // Record mesh onto secondary command buffer
+      {
+        VkResult err = VK_SUCCESS;
+
+        VkCommandBufferBeginInfo begin_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pInheritanceInfo =
+                &(VkCommandBufferInheritanceInfo){
+                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+                },
+        };
+        err = vkBeginCommandBuffer(cmd, &begin_info);
+        TB_VK_CHECK(err, "Failed to begin secondary command buffer");
+
+        vkEndCommandBuffer(cmd);
+      }
+
+      self->mesh_command_buffers[index] = cmd;
+    }
+    */
 
     self->mesh_ids[index] = id;
     self->mesh_ref_counts[index] =
