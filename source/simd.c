@@ -476,7 +476,7 @@ Transform tb_transform_from_node(const cgltf_node *node) {
 
   transform.rotation = normq((Quaternion){
       node->rotation[0],
-      -node->rotation[1],
+      node->rotation[1],
       node->rotation[2],
       node->rotation[3],
   });
