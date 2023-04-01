@@ -2,7 +2,7 @@
 
 #include "pbr.hlsli"
 
-#define AMBIENT 0.1
+#define AMBIENT 0.6
 
 float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
                              float3 V, float3 N, float3 f0, float metallic,
@@ -74,7 +74,7 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
                    Texture2D shadow_map, sampler samp, float NdotL) {
-  float bias = max(0.005 * (1.0 - NdotL), 0.0005);
+  float bias = max(0.0005 * (1.0 - NdotL), 0.00005);
 
   float4 proj_coord = shadow_coord;
 
@@ -84,7 +84,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient,
   float sampled_depth =
       shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
 
-  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? ambient
+  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? (1 - ambient)
                                                                    : 1.0f;
 }
 

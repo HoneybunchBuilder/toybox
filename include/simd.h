@@ -130,6 +130,8 @@ float4x4 mf44_identity(void);
 float4 mulf44(float4x4 m, float4 v);
 float4 mul4f44f(float4 v, float4x4 m);
 
+float3 mulf33(float3x3 m, float3 v);
+
 float4x4 mulmf44(float4x4 x, float4x4 y);
 float4x4 inv_mf44(float4x4 m);
 float3x3 mf33_from_axes(float3 forward, float3 right, float3 up);
@@ -150,6 +152,8 @@ void aabb_add_point(AABB *aabb, float3 point);
 void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
 void rotate(Transform *t, Quaternion r);
+
+float3 transform_get_forward(const Transform *t);
 
 void transform_to_matrix(float4x4 *m, const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);

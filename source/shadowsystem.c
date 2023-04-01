@@ -172,8 +172,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       // Calc view matrix
       float4x4 light_view_mat = {.row0 = {0}};
       {
-        float4x4 rot = quat_to_trans(transform.rotation);
-        const float3 forward = f4tof3(rot.row2);
+        const float3 forward = transform_get_forward(&transform);
 
         const float3 offset = center + (forward * -min[2]);
         look_at(&light_view_mat, offset, center, (float3){0, 1, 0});

@@ -174,6 +174,20 @@ float4 mulf44(float4x4 m, float4 v) {
   return out;
 }
 
+float3 mulf33(float3x3 m, float3 v) {
+  float3 out = {0};
+
+  unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
+    float sum = 0.0f;
+    unroll_loop_3 for (uint32_t ii = 0; ii < 3; ++ii) {
+      sum += m.rows[ii][i] * v[ii];
+    }
+    out[i] = sum;
+  }
+
+  return out;
+}
+
 float4 mul4f44f(float4 v, float4x4 m) {
   float4 out = {0};
 
@@ -435,6 +449,12 @@ void scale(Transform *t, float3 s) {
 void rotate(Transform *t, Quaternion r) {
   SDL_assert(t);
   t->rotation = mulq(r, t->rotation);
+}
+
+float3 transform_get_forward(const Transform *t) {
+  float3 forward = {0, 0, 1};
+  float3x3 rot = quat_to_mf33(t->rotation);
+  return normf3(mulf33(rot, forward));
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
