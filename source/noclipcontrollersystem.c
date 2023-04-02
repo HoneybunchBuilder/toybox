@@ -122,7 +122,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
         float4x4 mat = {.row0 = {0}};
         transform_to_matrix(&mat, &transform->transform);
 
-        float3 forward = f4tof3(mat.row2);
+        float3 forward = transform_get_forward(&transform->transform);
         float3 right = normf3(crossf3((float3){0, 1, 0}, forward));
         float3 up = normf3(crossf3(right, forward));
 
