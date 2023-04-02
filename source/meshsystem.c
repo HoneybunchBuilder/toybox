@@ -185,8 +185,8 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .cullMode = VK_CULL_MODE_NONE,
+              .depthBiasEnable = VK_TRUE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -209,9 +209,13 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
-              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                    VK_DYNAMIC_STATE_SCISSOR},
+              .dynamicStateCount = 3,
+              .pDynamicStates =
+                  (VkDynamicState[3]){
+                      VK_DYNAMIC_STATE_VIEWPORT,
+                      VK_DYNAMIC_STATE_SCISSOR,
+                      VK_DYNAMIC_STATE_DEPTH_BIAS,
+                  },
           },
       .layout = pipe_layout,
   };
@@ -577,6 +581,8 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
+
+      vkCmdSetDepthBias(buffer, 1.25f, 0.0f, 1.75f);
 
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
         const ShadowDraw *draw = &view->draws[draw_idx];

@@ -149,6 +149,21 @@ float4 frag(Interpolators i) : SV_TARGET {
     */
   }
 
+  // Fog
+  {
+    // Coefficients
+    float a = 0.0001f;
+    float b = 0.00001f;
+
+    float distance = length(camera_data.view_pos - i.world_pos);
+
+    float fog_amount = (a / b) * exp(-camera_data.view_pos.y * b) *
+                       (1.0f - exp(-distance * V.y * b)) / V.y;
+    float sun_amount = max(dot(V, -L), 0.0);
+    float3 fog_color = lerp(float3(0.5, 0.6, 0.7), float3(1.0, 0.9, 0.7),
+                            pow(sun_amount, 8.0));
+    out_color = lerp(out_color, fog_color, saturate(fog_amount));
+  }
 
   return float4(out_color, 1.0);
 }
