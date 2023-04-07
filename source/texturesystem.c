@@ -3,6 +3,7 @@
 #include "cgltf.h"
 #include "common.hlsli"
 #include "hash.h"
+#include "profiling.h"
 #include "rendersystem.h"
 #include "tbktx.h"
 #include "world.h"
@@ -679,6 +680,7 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
 TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
                                        const char *name,
                                        const cgltf_texture *texture) {
+  TracyCZoneN(ctx, "Load Texture", true);
   // Must use basisu image
   TB_CHECK_RETURN(texture->has_basisu, "Expecting basisu image",
                   InvalidTextureId);
@@ -716,6 +718,7 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
 
   // Create texture from ktx2 texture
   TbTextureId tex = tb_tex_system_create_texture_ktx2(self, path, name, ktx);
+  TracyCZoneEnd(ctx);
   return tex;
 }
 

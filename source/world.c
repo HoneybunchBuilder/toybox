@@ -725,20 +725,24 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
   TracyCZoneNC(ctx, "Add Entity", TracyCategoryColorCore, true);
   // Determine if we need to grow the entity list
-  const uint32_t new_entity_count = world->entity_count + 1;
-  if (new_entity_count > world->max_entities) {
-    world->max_entities = new_entity_count * 2;
-    world->entities = tb_realloc_nm_tp(world->std_alloc, world->entities,
-                                       world->max_entities, Entity);
+  {
+    TracyCZoneNC(resize_ctx, "Add To Collection", TracyCategoryColorCore, true);
+    const uint32_t new_entity_count = world->entity_count + 1;
+    if (new_entity_count > world->max_entities) {
+      world->max_entities = new_entity_count * 2;
+      world->entities = tb_realloc_nm_tp(world->std_alloc, world->entities,
+                                         world->max_entities, Entity);
 
-    // Also resize *all* the component stores
-    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-         ++store_idx) {
-      ComponentStore *store = &world->component_stores[store_idx];
-      store->components =
-          tb_realloc_nm_tp(world->std_alloc, store->components,
-                           store->size * world->max_entities, uint8_t);
+      // Also resize *all* the component stores
+      for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+           ++store_idx) {
+        ComponentStore *store = &world->component_stores[store_idx];
+        store->components =
+            tb_realloc_nm_tp(world->std_alloc, store->components,
+                             store->size * world->max_entities, uint8_t);
+      }
     }
+    TracyCZoneEnd(resize_ctx);
   }
   EntityId entity_id = world->entity_count;
   Entity *entity = &world->entities[entity_id];
@@ -765,6 +769,8 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
 
         if (comp_desc) {
           // Find system dependencies
+          TracyCZoneNC(sys_dep_ctx, "Find Sys Deps", TracyCategoryColorCore,
+                       true);
           system_dep_count = comp_desc->system_dep_count;
           if (system_dep_count > 0) {
             system_deps =
@@ -780,18 +786,23 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
               }
             }
           }
+          TracyCZoneEnd(sys_dep_ctx);
         }
 
         // Create a component in the store at this entity index
+        TracyCZoneNC(comp_ctx, "Create Component", TracyCategoryColorCore,
+                     true);
         uint8_t *comp_head = &store->components[entity_id * store->size];
         if (!store->create(comp_head, desc->component_descriptors[comp_idx],
                            system_dep_count, system_deps)) {
           SDL_LogError(SDL_LOG_CATEGORY_SYSTEM, "%s",
                        "Failed to create component for entity.");
           SDL_TriggerBreakpoint();
+          TracyCZoneEnd(comp_ctx);
           TracyCZoneEnd(ctx);
           return (EntityId)-1;
         }
+        TracyCZoneEnd(comp_ctx);
 
         break;
       }

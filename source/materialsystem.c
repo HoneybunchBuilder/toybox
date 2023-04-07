@@ -4,6 +4,7 @@
 #include "common.hlsli"
 #include "gltf.hlsli"
 #include "hash.h"
+#include "profiling.h"
 #include "rendersystem.h"
 #include "texturesystem.h"
 #include "world.h"
@@ -151,6 +152,7 @@ VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self) {
 
 TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
                                          const cgltf_material *mat) {
+  TracyCZoneN(ctx, "Load Material", true);
   VkResult err = VK_SUCCESS;
 
   // Hash the materials's path and gltf name to get the id
@@ -590,6 +592,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
   self->mat_ref_counts[index]++;
 
+  TracyCZoneEnd(ctx);
   return id;
 }
 

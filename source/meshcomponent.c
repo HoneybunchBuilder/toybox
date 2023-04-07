@@ -6,6 +6,7 @@
 #include "common.hlsli"
 #include "materialsystem.h"
 #include "meshsystem.h"
+#include "profiling.h"
 #include "renderobjectsystem.h"
 #include "world.h"
 
@@ -13,6 +14,7 @@ bool create_mesh_component(MeshComponent *self,
                            const MeshComponentDescriptor *desc,
                            uint32_t system_dep_count,
                            System *const *system_deps) {
+  TracyCZoneN(ctx, "Create Mesh Component", true);
   // Ensure we have a reference to the necessary systems
   MeshSystem *mesh_system =
       tb_get_system(system_deps, system_dep_count, MeshSystem);
@@ -44,6 +46,7 @@ bool create_mesh_component(MeshComponent *self,
   // Retrieve info about how to draw this mesh
   uint64_t offset = 0;
   {
+    TracyCZoneN(prim_ctx, "load primitives", true);
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &desc->node->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
@@ -170,8 +173,11 @@ bool create_mesh_component(MeshComponent *self,
         offset += accessor->stride * accessor->count;
       }
     }
+
+    TracyCZoneEnd(prim_ctx);
   }
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 

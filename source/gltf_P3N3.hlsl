@@ -129,14 +129,10 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   // Fog
   {
-    // Coefficients
-    float a = 0.0001f;
-    float b = 0.00001f;
+    float b = 0.0001f;
 
     float distance = length(camera_data.view_pos - i.world_pos);
-
-    float fog_amount = (a / b) * exp(-camera_data.view_pos.y * b) *
-                       (1.0f - exp(-distance * V.y * b)) / V.y;
+    float fog_amount = 1.0 - exp(-distance * b);
     float sun_amount = max(dot(V, -L), 0.0);
     float3 fog_color = lerp(float3(0.5, 0.6, 0.7), float3(1.0, 0.9, 0.7),
                             pow(sun_amount, 8.0));
