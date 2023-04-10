@@ -1408,15 +1408,26 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
 // https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
 static cgltf_result decompress_buffer_view(Allocator alloc,
                                            cgltf_buffer_view *view) {
-  if (!view->has_meshopt_compression || view->data != NULL) {
+  if (view->data != NULL) {
+    // Already decoded
+    return cgltf_result_success;
+  }
+
+  // Uncompressed buffer? No problem
+  if (!view->has_meshopt_compression) {
+    uint8_t *data = (uint8_t *)view->buffer->data;
+    data += view->offset;
+
+    uint8_t *result = tb_alloc(alloc, view->size);
+    SDL_memcpy(result, data, view->size);
+    view->data = result;
     return cgltf_result_success;
   }
 
   const cgltf_meshopt_compression *mc = &view->meshopt_compression;
   uint8_t *data = (uint8_t *)mc->buffer->data;
-  TB_CHECK_RETURN(data, "Invalid data", cgltf_result_invalid_gltf);
-
   data += mc->offset;
+  TB_CHECK_RETURN(data, "Invalid data", cgltf_result_invalid_gltf);
 
   uint8_t *result = tb_alloc(alloc, mc->count * mc->stride);
   TB_CHECK_RETURN(result, "Failed to allocate space for decoded buffer view",

@@ -27,7 +27,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float time = sky_data.time * 0.2f;
   float cirrus = sky_data.cirrus;
   float cumulus = sky_data.cumulus;
-  float3 sun_dir = sky_data.sun_dir;
+  float3 sun_dir = normalize(sky_data.sun_dir);
   float3 view_pos = i.view_pos;
 
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);

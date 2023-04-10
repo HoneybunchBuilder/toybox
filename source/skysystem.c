@@ -281,7 +281,7 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
@@ -418,7 +418,7 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
@@ -557,7 +557,7 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
@@ -768,7 +768,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
+        .maxAnisotropy = 16.0f,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
@@ -979,7 +979,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         });
   }
 
-  // Create sky box geometry
+  // Create skydome geometry
   {
     const uint64_t skydome_size = get_skydome_size();
     // Make space for the sky geometry on the GPU
@@ -992,9 +992,9 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
           .size = skydome_size,
       };
       err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
-                                        "Sky Geom Buffer",
+                                        "SkyDome Geom Buffer",
                                         &self->sky_geom_gpu_buffer);
-      TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", false);
+      TB_VK_CHECK_RET(err, "Failed to alloc skydome geom buffer", false);
     }
 
     // Use the gpu tmp buffer to copy the geom buffer

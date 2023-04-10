@@ -13,5 +13,9 @@ float4 frag(Interpolators i) : SV_TARGET {
   color = tonemap(color * exposure);
   color *= 1.0f / tonemap(float3(11.2f, 11.2f, 11.2f));
 
+  // Gamma correction
+  float gamma = 1.0f / 2.2f;
+  color = pow(color, float3(gamma, gamma, gamma));
+
   return float4(color, 1);
 }

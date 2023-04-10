@@ -553,7 +553,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
+        .maxAnisotropy = 16.0f,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };

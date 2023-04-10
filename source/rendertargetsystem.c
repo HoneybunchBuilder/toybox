@@ -288,8 +288,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R32G32B32A32_SFLOAT,
           .extent =
               {
-                  .width = 32,
-                  .height = 32,
+                  .width = 64,
+                  .height = 64,
                   .depth = 1,
               },
           .mip_count = 1,

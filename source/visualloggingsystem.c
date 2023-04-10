@@ -358,7 +358,7 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   VkResult err = VK_SUCCESS;
 
   {
-    // Load the known glb that has the ocean mesh
+    // Load the known glb that has the sphere mesh
     // Get qualified path to scene asset
     char *asset_path =
         tb_resolve_asset_path(self->tmp_alloc, "scenes/Sphere.glb");
