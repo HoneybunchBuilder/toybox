@@ -5,8 +5,7 @@
 #include "ocean.hlsli"
 #include "pbr.hlsli"
 
-ConstantBuffer<OceanData> ocean_data
-    : register(b0, space0);                    // All Stages
+ConstantBuffer<OceanData> ocean_data : register(b0, space0); // All Stages
 Texture2D depth_map : register(t1, space0);    // Fragment Stage Only
 Texture2D color_map : register(t2, space0);    // Fragment Stage Only
 sampler static_sampler : register(s3, space0); // Immutable Sampler
@@ -84,7 +83,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     float4 pos = i.screen_pos + float4(ripple, ripple, ripple, ripple);
 
     float2 offset = N.xy * refraction_strength;
-    uv = (pos.xy + offset) /  pos.w;
+    uv = (pos.xy + offset) / pos.w;
   }
 
   // Underwater fog
@@ -99,7 +98,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     float raw_depth = depth_map.Sample(static_sampler, uv).r;
     float scene_eye_depth = linear_depth(1 - raw_depth, near, far);
     float fragment_eye_depth = -i.view_pos.z;
-    float3 world_pos = camera_data.view_pos - ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
+    float3 world_pos = camera_data.view_pos -
+                       ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
     float depth_diff = world_pos.y;
 
     float fog = saturate(exp(fog_density * depth_diff));
@@ -134,7 +134,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
       color = pbr_lighting(albedo, metallic, roughness, brdf, reflection,
-                               irradiance, light_data.color, L, V, N);
+                           irradiance, light_data.color, L, V, N);
     }
   }
 
@@ -150,9 +150,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     float4 shadow_coord =
         mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
 
-    float NdotL = clamp(dot(N, L), 0.001, 1.0);
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],
-                              static_sampler, NdotL);
+                              static_sampler);
     color *= shadow;
   }
 

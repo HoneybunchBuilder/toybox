@@ -270,10 +270,7 @@ float4 frag(FragmentInput i) : SV_TARGET {
   // Shadow hack
   /*
   float3 L = normalize(light_data.light_dir);
-  float NdotL = clamp(dot(N, L), 0.001, 1.0);
-
-  float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler,
-  NdotL); out_color *= shadow;
+  float shadow = pcf_filter(i.shadowcoord, AMBIENT, shadow_map, shadow_sampler); out_color *= shadow;
   */
 
   return float4(out_color, 1);

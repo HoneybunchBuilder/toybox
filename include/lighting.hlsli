@@ -2,7 +2,7 @@
 
 #include "pbr.hlsli"
 
-#define AMBIENT 0.6
+#define AMBIENT 0.7
 
 float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
                              float3 V, float3 N, float3 f0, float metallic,
@@ -73,13 +73,18 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 // Shadowing
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
-                   Texture2D shadow_map, sampler samp, float NdotL) {
-  float bias = 0.0005;
+                   Texture2D shadow_map, sampler samp) {
+  float bias = 0.005;
 
   float4 proj_coord = shadow_coord;
 
   proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
   proj_coord = proj_coord / proj_coord.w;
+
+  if(proj_coord.z <= -1.0 || shadow_coord.z >= 1.0)
+  {
+    return 1.0;
+  }
 
   float sampled_depth =
       shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
@@ -89,7 +94,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient,
 }
 
 float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
-                 sampler samp, float NdotL) {
+                 sampler samp) {
   int2 tex_dim;
   shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
 
@@ -105,7 +110,7 @@ float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
     for (int y = -range; y <= range; ++y) {
       float2 offset = float2(dx * x, dy * y);
       shadow_factor += texture_proj(shadow_coord, offset, ambient, shadow_map,
-                                    samp, NdotL);
+                                    samp);
       count++;
     }
   }

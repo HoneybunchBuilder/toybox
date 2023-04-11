@@ -142,9 +142,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     float4 shadow_coord =
         mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
 
-    float NdotL = clamp(dot(N, L), 0.001, 1.0);
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],
-                              static_sampler, NdotL);
+                              static_sampler);
     out_color *= shadow;
   }
 

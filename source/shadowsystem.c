@@ -77,8 +77,8 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const CameraComponent *camera_component =
       tb_get_component(camera_components, 0, CameraComponent);
 
-  const float near = 0.1f; // camera_component->near;
-  const float far = 50.0f; // camera_component->far;
+  const float near = camera_component->near;
+  const float far = camera_component->far;
 
   // Get inverse camera vp matrix from view system
   float4x4 inv_cam_vp = {.row0 = {0}};
