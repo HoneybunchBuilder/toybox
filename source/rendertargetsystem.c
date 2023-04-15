@@ -209,6 +209,24 @@ bool create_render_target_system(RenderTargetSystem *self,
       self->depth_buffer = tb_create_render_target(self, &rt_desc);
     }
 
+    // Create normal prepass target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Normal Prepass Buffer",
+          .format = VK_FORMAT_R8G8B8A8_SNORM,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->normal_buffer = tb_create_render_target(self, &rt_desc);
+    }
+
     // Create hdr color target
     {
       RenderTargetDescriptor rt_desc = {
