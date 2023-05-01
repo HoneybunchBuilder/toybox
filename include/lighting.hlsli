@@ -74,7 +74,7 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
                    Texture2D shadow_map, sampler samp) {
-  float bias = 0.005;
+  float bias = 0.0005;
 
   float4 proj_coord = shadow_coord;
 

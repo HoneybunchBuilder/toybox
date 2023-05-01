@@ -67,6 +67,14 @@ float4 frag(Interpolators i) : SV_TARGET {
     float metallic = material_data.pbr_metallic_roughness.metallic_factor;
     float roughness = material_data.pbr_metallic_roughness.roughness_factor;
 
+    // TODO: Handle alpha masking
+    {
+      float4 pbr_base_color =
+          material_data.pbr_metallic_roughness.base_color_factor;
+
+      albedo = pbr_base_color.rgb;
+    }
+
     // Lighting
     {
       float2 brdf =
