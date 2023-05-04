@@ -76,12 +76,16 @@ typedef struct MeshSystem {
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
 
+  TbDrawContextId prepass_draw_ctx;
   TbDrawContextId opaque_draw_ctx;
   TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
   VkPipelineLayout pipe_layout;
+
+  VkPipelineLayout prepass_layout;
+  VkPipeline prepass_pipe;
 
   uint32_t pipe_count;
   VkPipeline *pipelines;

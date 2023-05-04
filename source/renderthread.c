@@ -1284,6 +1284,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       };
       err = vkBeginCommandBuffer(start_buffer, &begin_info);
       TB_VK_CHECK(err, "Failed to begin command buffer");
+      TracyCVkCollect(gpu_ctx, start_buffer);
     }
 
     // Upload
@@ -1443,7 +1444,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
             }
             TracyCVkCollect(gpu_ctx,
                             state->pass_command_buffers[last_pass_buffer_idx]);
-            cmd_end_label(state->pass_command_buffers[last_pass_buffer_idx]);
             vkEndCommandBuffer(
                 state->pass_command_buffers[last_pass_buffer_idx]);
 
@@ -1473,11 +1473,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                         &state->pass_command_buffers[last_pass_buffer_idx],
                 };
 
-                queue_begin_label(graphics_queue, "Render Passes",
-                                  (float4){1.0f, 0.1f, 0.1f, 1.0f});
                 err = vkQueueSubmit(graphics_queue, 1, &submit_info,
                                     VK_NULL_HANDLE);
-                queue_end_label(graphics_queue);
                 TB_VK_CHECK(err, "Failed to submit pass work");
               }
 
@@ -1489,10 +1486,9 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
           };
           vkBeginCommandBuffer(pass_buffer, &begin_info);
-          cmd_begin_label(pass_buffer, "Command Buffer",
-                          (float4){0.0f, 1.0f, 0.0f, 1.0f});
           TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
                             true);
+          TracyCVkCollect(gpu_ctx, pass_buffer);
 #ifdef TRACY_VK_C_ENABLE
           cmd_scope = scope;
 #endif
@@ -1516,10 +1512,11 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }
-      TracyCVkZoneEnd(cmd_scope);
+      if (cmd_scope != NULL) {
+        TracyCVkZoneEnd(cmd_scope);
+      }
       TracyCVkCollect(gpu_ctx,
                       state->pass_command_buffers[last_pass_buffer_idx]);
-      cmd_end_label(state->pass_command_buffers[last_pass_buffer_idx]);
       vkEndCommandBuffer(state->pass_command_buffers[last_pass_buffer_idx]);
 
       // Submit last pass work
@@ -1544,10 +1541,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               .pSignalSemaphores = &render_complete_sem,
           };
 
-          queue_begin_label(graphics_queue, "Render Passes",
-                            (float4){1.0f, 0.1f, 0.1f, 1.0f});
           err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-          queue_end_label(graphics_queue);
           TB_VK_CHECK(err, "Failed to submit pass work");
         }
 
@@ -1564,6 +1558,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       };
       err = vkBeginCommandBuffer(end_buffer, &begin_info);
       TB_VK_CHECK(err, "Failed to begin command buffer");
+      TracyCVkCollect(gpu_ctx, end_buffer);
 
       TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
       VkImageMemoryBarrier barrier = {

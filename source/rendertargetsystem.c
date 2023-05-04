@@ -213,7 +213,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "Normal Prepass Buffer",
-          .format = VK_FORMAT_R8G8B8A8_SNORM,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
           .extent =
               {
                   .width = width,

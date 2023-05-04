@@ -1213,32 +1213,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      PassTransition depth_trans = {
-          .render_target = self->render_target_system->depth_buffer,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_NONE,
-                          .dstAccessMask =
-                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                          .newLayout =
-                              VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 1,
-                              },
-                      },
-              },
-      };
       PassTransition normal_trans = {
           .render_target = self->render_target_system->normal_buffer,
           .barrier =
@@ -1283,7 +1257,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      PassTransition transitions[TB_CASCADE_COUNT + 5] = {0};
+      const uint32_t transition_count = TB_CASCADE_COUNT + 4;
+      PassTransition transitions[transition_count] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
@@ -1291,14 +1266,13 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       transitions[TB_CASCADE_COUNT + 0] = irr_trans;
       transitions[TB_CASCADE_COUNT + 1] = filter_trans;
       transitions[TB_CASCADE_COUNT + 2] = color_trans;
-      transitions[TB_CASCADE_COUNT + 3] = depth_trans;
-      transitions[TB_CASCADE_COUNT + 4] = normal_trans;
+      transitions[TB_CASCADE_COUNT + 3] = normal_trans;
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
           .dependencies = (TbRenderPassId[2]){self->opaque_depth_normal_pass,
                                               self->shadow_passes[3]},
-          .transition_count = TB_CASCADE_COUNT + 5,
+          .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,
           .attachments =
@@ -1309,7 +1283,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .attachment = hdr_color,
                   },
                   {
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
                       .store_op = VK_ATTACHMENT_STORE_OP_STORE,
                       .attachment = opaque_depth,
                   },

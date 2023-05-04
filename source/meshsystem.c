@@ -33,6 +33,8 @@
 #include "gltf_P3N3U2_vert.h"
 #include "gltf_P3N3_frag.h"
 #include "gltf_P3N3_vert.h"
+#include "opaque_prepass_frag.h"
+#include "opaque_prepass_vert.h"
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
@@ -222,6 +224,148 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
   err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
                                          "Shadow Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
+
+  return err;
+}
+
+VkResult create_prepass_pipeline(RenderSystem *render_system,
+                                 VkFormat depth_format,
+                                 VkPipelineLayout pipe_layout,
+                                 VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(opaque_prepass_vert);
+    create_info.pCode = (const uint32_t *)opaque_prepass_vert;
+    err = tb_rnd_create_shader(render_system, &create_info,
+                               "Opaque Prepass Vert", &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load opaque prepass vert shader module",
+                    err);
+
+    create_info.codeSize = sizeof(opaque_prepass_frag);
+    create_info.pCode = (const uint32_t *)opaque_prepass_frag;
+    err = tb_rnd_create_shader(render_system, &create_info,
+                               "Opaque Prepass Frag", &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load opaque prepass frag shader module",
+                    err);
+  }
+
+  VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 2,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[2]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+                      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
+                  },
+              .vertexAttributeDescriptionCount = 2,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[2]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
+                      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
+                  },
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
+                  .blendEnable = VK_FALSE,
+                  .colorWriteMask =
+                      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+              }},
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+              .maxDepthBounds = 1.0f,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates =
+                  (VkDynamicState[2]){
+                      VK_DYNAMIC_STATE_VIEWPORT,
+                      VK_DYNAMIC_STATE_SCISSOR,
+                  },
+          },
+      .layout = pipe_layout,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Opaque Prepass Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", err);
 
   tb_rnd_destroy_shader(render_system, vert_mod);
   tb_rnd_destroy_shader(render_system, frag_mod);
@@ -436,8 +580,8 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
-              .depthWriteEnable = VK_TRUE,
-              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .depthWriteEnable = VK_FALSE,
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
               .maxDepthBounds = 1.0f,
           },
       .pColorBlendState =
@@ -637,48 +781,143 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
+void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                    uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "Mesh Opaque Prepass Record", TracyCategoryColorRendering,
+               true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 1,
+                    true);
+  cmd_begin_label(buffer, "Prepass Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     const DrawBatch *batch = &batches[batch_idx];
     const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
     if (mesh_batch->view_count == 0) {
-      TracyCZoneEnd(batch_ctx);
       continue;
     }
 
+    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
     TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
     for (uint32_t view_idx = 0; view_idx < mesh_batch->view_count; ++view_idx) {
-      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       const MeshDrawView *view = &mesh_batch->views[view_idx];
       if (view->draw_count == 0) {
-        TracyCZoneEnd(view_ctx);
         continue;
       }
+
+      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
       TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
+
+      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
+      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
+
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              1, 1, &view->view_set, 0, NULL);
+      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
+        const MeshDraw *draw = &view->draws[draw_idx];
+        if (draw->submesh_draw_count == 0) {
+          continue;
+        }
+
+        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
+        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
+
+        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                                0, 1, &draw->obj_set, 0, NULL);
+        VkBuffer geom_buffer = draw->geom_buffer;
+
+        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
+             ++sub_idx) {
+          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
+                       true);
+          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
+          if (submesh->index_count > 0) {
+            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
+                              true);
+            // Don't need to bind material data
+            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
+                                 submesh->index_type);
+            for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
+                 ++vb_idx) {
+              vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
+                                     &submesh->vertex_binding_offsets[vb_idx]);
+            }
+
+            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
+            TracyCVkZoneEnd(submesh_scope);
+          }
+          TracyCZoneEnd(submesh_ctx);
+        }
+
+        cmd_end_label(buffer);
+        TracyCVkZoneEnd(mesh_scope);
+        TracyCZoneEnd(draw_ctx);
+      }
+
+      cmd_end_label(buffer);
+      TracyCVkZoneEnd(view_scope);
+      TracyCZoneEnd(view_ctx);
+    }
+
+    cmd_end_label(buffer);
+    TracyCVkZoneEnd(batch_scope);
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
+  cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const DrawBatch *batch = &batches[batch_idx];
+    const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
+    if (mesh_batch->view_count == 0) {
+      continue;
+    }
+
+    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
+    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
+
+    VkPipelineLayout layout = batch->layout;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+    for (uint32_t view_idx = 0; view_idx < mesh_batch->view_count; ++view_idx) {
+      const MeshDrawView *view = &mesh_batch->views[view_idx];
+      if (view->draw_count == 0) {
+        continue;
+      }
+
+      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
+      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
+
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
 
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                               2, 1, &view->view_set, 0, NULL);
       for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
-        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         const MeshDraw *draw = &view->draws[draw_idx];
         if (draw->submesh_draw_count == 0) {
-          TracyCZoneEnd(draw_ctx);
           continue;
         }
+
+        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
         TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
+
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                                 1, 1, &draw->obj_set, 0, NULL);
         VkBuffer geom_buffer = draw->geom_buffer;
@@ -706,10 +945,12 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           }
           TracyCZoneEnd(submesh_ctx);
         }
+
         cmd_end_label(buffer);
         TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
+
       cmd_end_label(buffer);
       TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
@@ -720,6 +961,7 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     TracyCZoneEnd(batch_ctx);
   }
 
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
@@ -761,6 +1003,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .render_pipe_system = render_pipe_system,
   };
 
+  TbRenderPassId prepass_id =
+      self->render_pipe_system->opaque_depth_normal_pass;
   TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
 
   // Setup mesh system for rendering
@@ -773,7 +1017,31 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       self->view_set_layout = view_system->set_layout;
     }
 
-    // Create pipeline layout
+    // Create prepass pipeline layout
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = 2,
+          .pSetLayouts =
+              (VkDescriptorSetLayout[2]){
+                  self->obj_set_layout,
+                  self->view_set_layout,
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "Opaque Depth Normal Prepass Layout",
+                                          &self->prepass_layout);
+    }
+
+    // Create prepass pipeline
+    {
+      VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
+      err = create_prepass_pipeline(self->render_system, depth_format,
+                                    self->prepass_layout, &self->prepass_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", false);
+    }
+
+    // Create pipeline layouts
     {
 #define LAYOUT_COUNT 3
       VkDescriptorSetLayout layouts[LAYOUT_COUNT] = {
@@ -793,6 +1061,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                                           &self->pipe_layout);
     }
 
+    // Create opaque color pass
     {
       uint32_t attach_count = 0;
       tb_render_pipeline_get_attachments(
@@ -878,6 +1147,13 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   }
 
   // Register drawing with the pipelines
+  self->prepass_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = prepass_record,
+                              .pass_id = prepass_id,
+                          });
+
   self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
@@ -903,9 +1179,11 @@ void destroy_mesh_system(MeshSystem *self) {
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->pipelines[i]);
   }
+  tb_rnd_destroy_pipeline(render_system, self->prepass_pipe);
 
   tb_rnd_destroy_pipe_layout(render_system, self->shadow_pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
+  tb_rnd_destroy_pipe_layout(render_system, self->prepass_layout);
 
   for (uint32_t i = 0; i < self->mesh_count; ++i) {
     if (self->mesh_ref_counts[i] != 0) {
@@ -1127,8 +1405,41 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
 
   TB_PROF_MESSAGE("Batch Count: %d", batch_count);
 
-  // Allocate and initialize each batch
+  // Allocate and initialize prepass batch per vertex input layout
+  DrawBatch *prepass_batch = NULL;
+  MeshDrawBatch *prepass_user_batch = NULL;
+  {
+    TracyCZoneN(batch_ctx, "Allocate Prepass Batch", true);
+    prepass_batch = tb_alloc_nm_tp(tmp_alloc, 1, DrawBatch);
+    prepass_user_batch = tb_alloc_nm_tp(tmp_alloc, 1, MeshDrawBatch);
 
+    // Batch could use each view
+    *prepass_user_batch = (MeshDrawBatch){0};
+    prepass_user_batch->views =
+        tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
+    prepass_user_batch->view_count = 0;
+    prepass_batch->user_batch = prepass_user_batch;
+
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      MeshDrawView *view = &prepass_user_batch->views[cam_idx];
+      // Each view already knows how many meshes it should see
+      // Each mesh could have TB_SUBMESH_MAX # of submeshes
+      *view = (MeshDrawView){0};
+      view->draws =
+          tb_alloc_nm_tp(tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
+      view->draw_count = 0;
+
+      SDL_memset(view->draws, 0,
+                 sizeof(MeshDraw) * visible_sets[cam_idx].mesh_count);
+
+      prepass_batch->pipeline = self->prepass_pipe;
+      prepass_batch->layout = self->prepass_layout;
+    }
+
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  // Allocate and initialize each opaque batch
   DrawBatch *mesh_batches = NULL;
   MeshDrawBatch *mesh_user_batches = NULL;
   {
@@ -1183,6 +1494,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   const uint32_t width = self->render_system->render_thread->swapchain.width;
   const uint32_t height = self->render_system->render_thread->swapchain.height;
 
+  // Gather prepass batch and opaque batches
   for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
     const VisibleSet *visible_set = &visible_sets[cam_idx];
 
@@ -1210,83 +1522,125 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
              ++sub_idx) {
           const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
 
-          TbMaterialPerm mat_perm =
-              tb_mat_system_get_perm(self->material_system, submesh->material);
-          VkDescriptorSet material_set =
-              tb_mat_system_get_set(self->material_system, submesh->material);
+          // Handle prepass draw
+          {
+            prepass_user_batch->view_count = camera_count;
+            MeshDrawView *view = &prepass_user_batch->views[cam_idx];
+            view->view_set = view_set;
+            view->viewport =
+                (VkViewport){0, height, width, -(float)height, 0, 1};
+            view->scissor = (VkRect2D){{0, 0}, {width, height}};
+            view->draw_count = visible_set->mesh_count;
+            MeshDraw *draw = &view->draws[mesh_idx];
+            draw->geom_buffer = geom_buffer;
+            draw->obj_set = obj_set;
+            draw->submesh_draw_count = submesh_draw_idx + 1;
+            SubMeshDraw *sub_draw =
+                &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
+            *sub_draw = (SubMeshDraw){
+                .index_type = submesh->index_type,
+                .index_count = submesh->index_count,
+                .index_offset = submesh->index_offset,
+            };
 
-          const uint32_t pipe_idx = get_pipeline_for_input_and_mat(
-              self, submesh->vertex_input, mat_perm);
-          const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
+            const uint64_t base_vert_offset = submesh->vertex_offset;
+            const uint32_t vertex_count = submesh->vertex_count;
 
-          DrawBatch *batch = &mesh_batches[local_pipe_idx];
-          batch->pipeline = self->pipelines[pipe_idx];
-          batch->layout = self->pipe_layout;
+            static const uint64_t pos_stride = sizeof(uint16_t) * 4;
 
-          MeshDrawBatch *mesh_batch = &mesh_user_batches[local_pipe_idx];
-          mesh_batch->view_count = camera_count;
-          MeshDrawView *view = &mesh_batch->views[cam_idx];
-          view->view_set = view_set;
-          view->viewport = (VkViewport){0, height, width, -(float)height, 0, 1};
-          view->scissor = (VkRect2D){{0, 0}, {width, height}};
-          view->draw_count = visible_set->mesh_count;
-          MeshDraw *draw = &view->draws[mesh_idx];
-          draw->geom_buffer = geom_buffer;
-          draw->obj_set = obj_set;
-          draw->submesh_draw_count = submesh_draw_idx + 1;
-          SubMeshDraw *sub_draw =
-              &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
-          *sub_draw = (SubMeshDraw){
-              .mat_set = material_set,
-              .index_type = submesh->index_type,
-              .index_count = submesh->index_count,
-              .index_offset = submesh->index_offset,
-          };
-
-          submesh_draw_idx++;
-
-          const uint64_t base_vert_offset = submesh->vertex_offset;
-          const uint32_t vertex_count = submesh->vertex_count;
-
-          static const uint64_t pos_stride = sizeof(uint16_t) * 4;
-          static const uint64_t attr_stride = sizeof(uint16_t) * 2;
-
-          switch (submesh->vertex_input) {
-          case VI_P3N3:
+            // We only ever need position and normal vertex attributes
             sub_draw->vertex_binding_count = 2;
             sub_draw->vertex_binding_offsets[0] = base_vert_offset;
             sub_draw->vertex_binding_offsets[1] =
                 base_vert_offset + (vertex_count * pos_stride);
-            break;
-          case VI_P3N3U2:
-            sub_draw->vertex_binding_count = 3;
-            sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[1] =
-                base_vert_offset + (vertex_count * pos_stride);
-            sub_draw->vertex_binding_offsets[2] =
-                base_vert_offset + (vertex_count * (pos_stride + attr_stride));
-            break;
-          case VI_P3N3T4U2:
-            sub_draw->vertex_binding_count = 4;
-            sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-            sub_draw->vertex_binding_offsets[1] =
-                base_vert_offset + (vertex_count * pos_stride);
-            sub_draw->vertex_binding_offsets[2] =
-                base_vert_offset + (vertex_count * (pos_stride + attr_stride));
-            sub_draw->vertex_binding_offsets[3] =
-                base_vert_offset +
-                (vertex_count * (pos_stride + (attr_stride * 2)));
-            break;
-          default:
-            TB_CHECK(false, "Unexepcted vertex input");
-            break;
           }
+
+          // Handle opaque draw
+          {
+            TbMaterialPerm mat_perm = tb_mat_system_get_perm(
+                self->material_system, submesh->material);
+            VkDescriptorSet material_set =
+                tb_mat_system_get_set(self->material_system, submesh->material);
+
+            const uint32_t pipe_idx = get_pipeline_for_input_and_mat(
+                self, submesh->vertex_input, mat_perm);
+            const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
+
+            DrawBatch *opaque_batch = &mesh_batches[local_pipe_idx];
+            opaque_batch->pipeline = self->pipelines[pipe_idx];
+            opaque_batch->layout = self->pipe_layout;
+
+            MeshDrawBatch *mesh_batch = &mesh_user_batches[local_pipe_idx];
+            mesh_batch->view_count = camera_count;
+            MeshDrawView *view = &mesh_batch->views[cam_idx];
+            view->view_set = view_set;
+            view->viewport =
+                (VkViewport){0, height, width, -(float)height, 0, 1};
+            view->scissor = (VkRect2D){{0, 0}, {width, height}};
+            view->draw_count = visible_set->mesh_count;
+            MeshDraw *draw = &view->draws[mesh_idx];
+            draw->geom_buffer = geom_buffer;
+            draw->obj_set = obj_set;
+            draw->submesh_draw_count = submesh_draw_idx + 1;
+            SubMeshDraw *sub_draw =
+                &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
+            *sub_draw = (SubMeshDraw){
+                .mat_set = material_set,
+                .index_type = submesh->index_type,
+                .index_count = submesh->index_count,
+                .index_offset = submesh->index_offset,
+            };
+
+            const uint64_t base_vert_offset = submesh->vertex_offset;
+            const uint32_t vertex_count = submesh->vertex_count;
+
+            static const uint64_t pos_stride = sizeof(uint16_t) * 4;
+            static const uint64_t attr_stride = sizeof(uint16_t) * 2;
+
+            switch (submesh->vertex_input) {
+            case VI_P3N3:
+              sub_draw->vertex_binding_count = 2;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              break;
+            case VI_P3N3U2:
+              sub_draw->vertex_binding_count = 3;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              break;
+            case VI_P3N3T4U2:
+              sub_draw->vertex_binding_count = 4;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              sub_draw->vertex_binding_offsets[3] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + (attr_stride * 2)));
+              break;
+            default:
+              TB_CHECK(false, "Unexepcted vertex input");
+              break;
+            }
+          }
+
+          submesh_draw_idx++;
         }
       }
     }
   }
 
-  // Submit batches
+  // Submit prepass batch
+  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                      self->prepass_draw_ctx, 1, prepass_batch);
+  // Submit opaque batches
   tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                       self->opaque_draw_ctx, batch_count,
                                       mesh_batches);
