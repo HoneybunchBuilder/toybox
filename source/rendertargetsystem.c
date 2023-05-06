@@ -231,7 +231,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "HDR Color",
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_R16G16B16A16_UNORM,
           .extent =
               {
                   .width = width,
