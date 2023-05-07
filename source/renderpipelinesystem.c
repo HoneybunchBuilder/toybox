@@ -797,6 +797,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
     const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
+    const TbRenderTargetId brightness_downsample =
+        render_target_system->brightness_downsample;
 
     // Create opaque depth normal pass
     {
@@ -1195,24 +1197,26 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           }};
       PassTransition color_trans = {
           .render_target = self->render_target_system->hdr_color,
-          .barrier = {
-              .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-              .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-              .barrier =
-                  {
-                      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                      .srcAccessMask = VK_ACCESS_NONE,
-                      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                      .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      .subresourceRange =
-                          {
-                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .levelCount = 1,
-                              .layerCount = 1,
-                          },
-                  },
-          }};
+          .barrier =
+              {
+                  .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  .barrier =
+                      {
+                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                          .srcAccessMask = VK_ACCESS_NONE,
+                          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                          .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          .subresourceRange =
+                              {
+                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                  .levelCount = 1,
+                                  .layerCount = 1,
+                              },
+                      },
+              },
+      };
       PassTransition normal_trans = {
           .render_target = self->render_target_system->normal_buffer,
           .barrier =
@@ -1296,7 +1300,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create opaque color pass", false);
       self->opaque_color_pass = id;
     }
-    // Create Sky Pass
+    // Create sky Pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
@@ -1328,7 +1332,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->depth_copy_pass},
+          .dependencies = (TbRenderPassId[1]){self->sky_pass},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
@@ -1414,7 +1418,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->color_copy_pass},
+          .dependencies = (TbRenderPassId[1]){self->depth_copy_pass},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
@@ -1500,7 +1504,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // Must transition back to depth so that we can load the contents
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->transparent_depth_pass},
+          .dependencies = (TbRenderPassId[1]){self->color_copy_pass},
           .transition_count = 1,
           .transitions =
               (PassTransition[1]){
@@ -1635,7 +1639,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
+          .dependencies = (TbRenderPassId[1]){self->transparent_depth_pass},
           .transition_count = 3,
           .transitions = transitions,
           .attachment_count = 2,
@@ -1660,45 +1664,94 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create transparent color pass", false);
       self->transparent_color_pass = id;
     }
-    // Create Tonemapping pass
+    // Create brightness pass
     {
-      TbRenderPassCreateInfo create_info = {
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
-          .transition_count = 1,
-          .transitions =
-              (PassTransition[1]){
+      static const size_t trans_count = 2;
+      PassTransition transitions[trans_count] = {
+          {
+              .render_target = self->render_target_system->hdr_color,
+              .barrier =
                   {
-                      .render_target = self->render_target_system->hdr_color,
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                       .barrier =
                           {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .barrier =
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
                                   {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
                                   },
                           },
                   },
+          },
+          {
+              .render_target =
+                  self->render_target_system->brightness_downsample,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = brightness_downsample,
+                  },
               },
+          .name = "Brightness Pass",
+      };
+
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create brightness downsample pass", false);
+      self->brightness_pass = id;
+    }
+    // Create bloom x pass
+    {
+
+    }  // Create bloom y pass
+    {} // Create tonemapping pass
+    {
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
           .attachment_count = 1,
           .attachments =
               (TbAttachmentInfo[1]){

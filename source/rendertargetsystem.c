@@ -231,7 +231,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "HDR Color",
-          .format = VK_FORMAT_R16G16B16A16_UNORM,
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
                   .width = width,
@@ -356,6 +356,23 @@ bool create_render_target_system(RenderTargetSystem *self,
         rt_desc.name = name;
         self->shadow_maps[i] = tb_create_render_target(self, &rt_desc);
       }
+    }
+
+    // Create brightness downsampled target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .extent =
+              {
+                  .width = SDL_ceilf((float)width / 4.0f),
+                  .height = SDL_ceilf((float)height / 4.0f),
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->brightness_downsample = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target

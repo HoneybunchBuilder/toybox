@@ -49,6 +49,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId irradiance_map;
   TbRenderTargetId prefiltered_cube;
   TbRenderTargetId shadow_maps[TB_CASCADE_COUNT];
+  TbRenderTargetId brightness_downsample;
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

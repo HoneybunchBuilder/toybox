@@ -70,6 +70,9 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId sky_pass;
   TbRenderPassId transparent_depth_pass;
   TbRenderPassId transparent_color_pass;
+  TbRenderPassId brightness_pass; // Downsamples to quarter res
+  TbRenderPassId bloom_blur_x;
+  TbRenderPassId bloom_blur_y;
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
