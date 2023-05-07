@@ -84,6 +84,7 @@ typedef struct RenderPipelineSystem {
   // Some default draw contexts
   TbDrawContextId depth_copy_ctx;
   TbDrawContextId color_copy_ctx;
+  TbDrawContextId brightness_ctx;
   TbDrawContextId tonemap_ctx;
 
   // Copy resources
@@ -92,6 +93,7 @@ typedef struct RenderPipelineSystem {
   VkPipelineLayout copy_pipe_layout;
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
+  VkPipeline brightness_pipe;
   VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];

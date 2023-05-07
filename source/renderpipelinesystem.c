@@ -349,6 +349,14 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
   return err;
 }
 
+VkResult create_brightness_pipeline(RenderSystem *render_system,
+                                    VkFormat color_format,
+                                    VkPipelineLayout pipe_layout,
+                                    VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+  return err;
+}
+
 VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
@@ -513,6 +521,26 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneNC(ctx, "Color Copy Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Color Copy", 3, true);
   cmd_begin_label(buffer, "Color Copy", (float4){0.4f, 0.0f, 0.8f, 1.0f});
+
+  record_fullscreen(buffer, batches,
+                    (const FullscreenBatch *)batches->user_batch);
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "Brightness Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Brightness", 3, true);
+  cmd_begin_label(buffer, "Brightness", (float4){0.8f, 0.4f, 0.0f, 1.0f});
+
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
 
   record_fullscreen(buffer, batches,
                     (const FullscreenBatch *)batches->user_batch);
@@ -1885,158 +1913,190 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
 
     // Depth Copy
-    {{VkSamplerCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-          .magFilter = VK_FILTER_LINEAR,
-          .minFilter = VK_FILTER_LINEAR,
-          .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-          .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-          .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-          .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-          .anisotropyEnable = VK_FALSE,
-          .maxAnisotropy = 1.0f,
-          .maxLod = 1.0f,
-          .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    {
+#if 1 // Formatting lmao
+      {
+        VkSamplerCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .anisotropyEnable = VK_FALSE,
+            .maxAnisotropy = 1.0f,
+            .maxLod = 1.0f,
+            .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+        };
+        err = tb_rnd_create_sampler(render_system, &create_info,
+                                    "Depth Copy Sampler", &self->sampler);
+        TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
+      }
+#endif
+
+      {
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = (VkDescriptorSetLayoutBinding[2]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->sampler,
+                },
+            }};
+        err = tb_rnd_create_set_layout(render_system, &create_info,
+                                       "Depth Copy Descriptor Set Layout",
+                                       &self->copy_set_layout);
+        TB_VK_CHECK_RET(
+            err, "Failed to create depth copy descriptor set layout", false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->copy_set_layout,
+                },
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "Depth Copy Pipeline Layout",
+                                            &self->copy_pipe_layout);
+        TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
+      }
+
+      {
+        uint32_t attach_count = 0;
+        tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+                                           &attach_count, NULL);
+        TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+        PassAttachment depth_info = {0};
+        tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+                                           &attach_count, &depth_info);
+
+        VkFormat depth_format = tb_render_target_get_format(
+            self->render_target_system, depth_info.attachment);
+
+        err = create_depth_pipeline(self->render_system, depth_format,
+                                    self->copy_pipe_layout,
+                                    &self->depth_copy_pipe);
+        TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
+      }
+
+      {
+        DrawContextDescriptor desc = {
+            .batch_size = sizeof(FullscreenBatch),
+            .draw_fn = record_depth_copy,
+            .pass_id = self->depth_copy_pass,
+        };
+        self->depth_copy_ctx =
+            tb_render_pipeline_register_draw_context(self, &desc);
+        TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
+                        "Failed to create depth copy draw context", false);
+      }
+    }
+
+    // Color Copy
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+                                         &attach_count, NULL);
+      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+      PassAttachment attach_info = {0};
+      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+                                         &attach_count, &attach_info);
+
+      VkFormat color_format = tb_render_target_get_format(
+          self->render_target_system, attach_info.attachment);
+
+      err = create_color_copy_pipeline(self->render_system, color_format,
+                                       self->copy_pipe_layout,
+                                       &self->color_copy_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
+
+      {
+        DrawContextDescriptor desc = {
+            .batch_size = sizeof(FullscreenBatch),
+            .draw_fn = record_color_copy,
+            .pass_id = self->color_copy_pass,
+        };
+        self->color_copy_ctx =
+            tb_render_pipeline_register_draw_context(self, &desc);
+        TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
+                        "Failed to create color copy draw context", false);
+      }
+    }
+
+    // Brightness
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->brightness_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment attach_info = {0};
+      tb_render_pipeline_get_attachments(self, self->brightness_pass,
+                                         &attach_count, &attach_info);
+
+      VkFormat swap_target_format = tb_render_target_get_format(
+          self->render_target_system, attach_info.attachment);
+
+      err = create_brightness_pipeline(self->render_system, swap_target_format,
+                                       self->copy_pipe_layout,
+                                       &self->brightness_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", false);
+
+      DrawContextDescriptor desc = {
+          .batch_size = sizeof(FullscreenBatch),
+          .draw_fn = record_brightness,
+          .pass_id = self->brightness_pass,
       };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Depth Copy Sampler", &self->sampler);
-    TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
+      self->brightness_ctx =
+          tb_render_pipeline_register_draw_context(self, &desc);
+      TB_CHECK_RETURN(self->brightness_ctx != InvalidDrawContextId,
+                      "Failed to create brightness draw context", false);
+    }
+
+    // Tonemapping
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment attach_info = {0};
+      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
+                                         &attach_count, &attach_info);
+
+      VkFormat swap_target_format = tb_render_target_get_format(
+          self->render_target_system, attach_info.attachment);
+
+      err = create_tonemapping_pipeline(self->render_system, swap_target_format,
+                                        self->copy_pipe_layout,
+                                        &self->tonemap_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
+
+      DrawContextDescriptor desc = {
+          .batch_size = sizeof(FullscreenBatch),
+          .draw_fn = record_tonemapping,
+          .pass_id = self->tonemap_pass,
+      };
+      self->tonemap_ctx = tb_render_pipeline_register_draw_context(self, &desc);
+      TB_CHECK_RETURN(self->tonemap_ctx != InvalidDrawContextId,
+                      "Failed to create tonemapping draw context", false);
+    }
   }
 
-  {
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 2,
-        .pBindings = (VkDescriptorSetLayoutBinding[2]){
-            {
-                .binding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },
-            {
-                .binding = 1,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &self->sampler,
-            },
-        }};
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "Depth Copy Descriptor Set Layout",
-                                   &self->copy_set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create depth copy descriptor set layout",
-                    false);
-  }
-
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts =
-            (VkDescriptorSetLayout[1]){
-                self->copy_set_layout,
-            },
-    };
-    err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
-                                        "Depth Copy Pipeline Layout",
-                                        &self->copy_pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
-  }
-
-  {
-    uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
-                                       &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-    PassAttachment depth_info = {0};
-    tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
-                                       &attach_count, &depth_info);
-
-    VkFormat depth_format = tb_render_target_get_format(
-        self->render_target_system, depth_info.attachment);
-
-    err = create_depth_pipeline(self->render_system, depth_format,
-                                self->copy_pipe_layout, &self->depth_copy_pipe);
-    TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
-  }
-
-  {
-    DrawContextDescriptor desc = {
-        .batch_size = sizeof(FullscreenBatch),
-        .draw_fn = record_depth_copy,
-        .pass_id = self->depth_copy_pass,
-    };
-    self->depth_copy_ctx =
-        tb_render_pipeline_register_draw_context(self, &desc);
-    TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
-                    "Failed to create depth copy draw context", false);
-  }
-}
-
-// Color Copy
-{
-  uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
-                                     NULL);
-  TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-  PassAttachment attach_info = {0};
-  tb_render_pipeline_get_attachments(self, self->color_copy_pass, &attach_count,
-                                     &attach_info);
-
-  VkFormat color_format = tb_render_target_get_format(
-      self->render_target_system, attach_info.attachment);
-
-  err = create_color_copy_pipeline(self->render_system, color_format,
-                                   self->copy_pipe_layout,
-                                   &self->color_copy_pipe);
-  TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
-
-  {
-    DrawContextDescriptor desc = {
-        .batch_size = sizeof(FullscreenBatch),
-        .draw_fn = record_color_copy,
-        .pass_id = self->color_copy_pass,
-    };
-    self->color_copy_ctx =
-        tb_render_pipeline_register_draw_context(self, &desc);
-    TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
-                    "Failed to create color copy draw context", false);
-  }
-}
-
-// Tonemapping
-{
-  uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
-                                     NULL);
-  TB_CHECK(attach_count == 1, "Unexpected");
-  PassAttachment attach_info = {0};
-  tb_render_pipeline_get_attachments(self, self->tonemap_pass, &attach_count,
-                                     &attach_info);
-
-  VkFormat swap_target_format = tb_render_target_get_format(
-      self->render_target_system, attach_info.attachment);
-
-  err =
-      create_tonemapping_pipeline(self->render_system, swap_target_format,
-                                  self->copy_pipe_layout, &self->tonemap_pipe);
-  TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
-
-  {
-    DrawContextDescriptor desc = {
-        .batch_size = sizeof(FullscreenBatch),
-        .draw_fn = record_tonemapping,
-        .pass_id = self->tonemap_pass,
-    };
-    self->tonemap_ctx = tb_render_pipeline_register_draw_context(self, &desc);
-    TB_CHECK_RETURN(self->tonemap_ctx != InvalidDrawContextId,
-                    "Failed to create tonemapping draw context", false);
-  }
-}
-}
-
-return true;
+  return true;
 }
 
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
