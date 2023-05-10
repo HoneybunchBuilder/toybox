@@ -10,6 +10,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
+#include "brightness_frag.h"
+#include "brightness_vert.h"
 #include "colorcopy_frag.h"
 #include "colorcopy_vert.h"
 #include "depthcopy_frag.h"
@@ -354,6 +356,116 @@ VkResult create_brightness_pipeline(RenderSystem *render_system,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
+  VkShaderModule brightness_vert_mod = VK_NULL_HANDLE;
+  VkShaderModule brightness_frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(brightness_vert);
+    create_info.pCode = (const uint32_t *)brightness_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Brightness Vert",
+                               &brightness_vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load brightness vert shader module", err);
+
+    create_info.codeSize = sizeof(brightness_frag);
+    create_info.pCode = (const uint32_t *)brightness_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Brightness Frag",
+                               &brightness_frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load brightness frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = brightness_vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = brightness_frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Brightness Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, brightness_vert_mod);
+  tb_rnd_destroy_shader(render_system, brightness_frag_mod);
+
   return err;
 }
 
@@ -2105,6 +2217,7 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -2351,6 +2464,26 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
           .user_batch = &fs_batch,
       };
       tb_render_pipeline_issue_draw_batch(self, self->color_copy_ctx, 1,
+                                          &batch);
+    }
+    // Brightness pass
+    {
+      const uint32_t downscaled_width =
+          (uint32_t)SDL_ceilf((float)width / 4.0f);
+      const uint32_t downscaled_height =
+          (uint32_t)SDL_ceilf((float)height / 4.0f);
+      FullscreenBatch fs_batch = {
+          .set = color_set,
+      };
+      DrawBatch batch = {
+          .layout = self->copy_pipe_layout,
+          .pipeline = self->brightness_pipe,
+          .viewport = {0, downscaled_height, downscaled_width,
+                       -(float)downscaled_height, 0, 1},
+          .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
+          .user_batch = &fs_batch,
+      };
+      tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
                                           &batch);
     }
     // Tonemapping pass
