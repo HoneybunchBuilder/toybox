@@ -92,8 +92,10 @@ typedef struct RenderPipelineSystem {
   // Copy resources
   VkSampler sampler;
   VkDescriptorSetLayout copy_set_layout;
+  VkDescriptorSetLayout tonemap_set_layout;
   VkPipelineLayout bloom_blur_layout;
   VkPipelineLayout copy_pipe_layout;
+  VkPipelineLayout tonemap_pipe_layout;
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;

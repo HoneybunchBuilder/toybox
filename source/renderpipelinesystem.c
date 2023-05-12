@@ -2185,7 +2185,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .dependencies = (TbRenderPassId[1]){self->bloom_blur_x_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -2422,6 +2422,37 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       }
 
       {
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 3,
+            .pBindings = (VkDescriptorSetLayoutBinding[3]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->sampler,
+                },
+            }};
+        err = tb_rnd_create_set_layout(render_system, &create_info,
+                                       "Tonemap Descriptor Set Layout",
+                                       &self->tonemap_set_layout);
+        TB_VK_CHECK_RET(err, "Failed to create tonemap set layout", false);
+      }
+
+      {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
@@ -2460,6 +2491,21 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                             &self->bloom_blur_layout);
         TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline layout",
                         false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->tonemap_set_layout,
+                },
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "Tonemap Pipeline Layout",
+                                            &self->tonemap_pipe_layout);
+        TB_VK_CHECK_RET(err, "Failed to create tonemap pipeline layout", false);
       }
 
       {
@@ -2610,7 +2656,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           self->render_target_system, attach_info.attachment);
 
       err = create_tonemapping_pipeline(self->render_system, swap_target_format,
-                                        self->copy_pipe_layout,
+                                        self->tonemap_pipe_layout,
                                         &self->tonemap_pipe);
       TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
 
@@ -2631,8 +2677,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
+  tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->bloom_blur_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
@@ -2777,22 +2825,27 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
   // Allocate and write all core descriptor sets
   {
     VkResult err = VK_SUCCESS;
-    // Allocate the one known descriptor set we need for this frame
+    // Allocate the known descriptor sets we need for this frame
     {
-      const uint32_t set_count = 2;
+      const uint32_t set_count = 5;
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = set_count * 2,
+          .maxSets = set_count * 4,
           .poolSizeCount = 1,
           .pPoolSizes =
               &(VkDescriptorPoolSize){
-                  .descriptorCount = set_count * 2,
+                  .descriptorCount = set_count * 4,
                   .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
               },
       };
-      err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info,
-                                        self->copy_set_layout,
-                                        self->descriptor_pools, set_count);
+      VkDescriptorSetLayout layouts[set_count] = {
+          self->copy_set_layout,    self->copy_set_layout,
+          self->copy_set_layout,    self->copy_set_layout,
+          self->tonemap_set_layout,
+      };
+      err =
+          tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
+                                      self->descriptor_pools, set_count);
       TB_VK_CHECK(err, "Failed to tick descriptor pool");
     }
 
@@ -2800,6 +2853,12 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 0);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 2);
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 3);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 4);
 
     VkImageView depth_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
@@ -2807,9 +2866,18 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkImageView color_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->hdr_color);
+    VkImageView brightness_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->brightness_downsample);
+    VkImageView blur_x_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->bloom_blur_x);
+    VkImageView blur_y_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->bloom_blur_y);
 
 // Write the descriptor set
-#define WRITE_COUNT 2
+#define WRITE_COUNT 6
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -2837,6 +2905,58 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                     .imageView = color_view,
                 },
         },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = blur_x_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = brightness_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = blur_y_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = blur_x_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = tonemap_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = color_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = tonemap_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = blur_y_view,
+                },
+        },
     };
     vkUpdateDescriptorSets(self->render_system->render_thread->device,
                            WRITE_COUNT, writes, 0, NULL);
@@ -2849,6 +2969,12 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 0);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 2);
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 3);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 4);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -2885,33 +3011,66 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       tb_render_pipeline_issue_draw_batch(self, self->color_copy_ctx, 1,
                                           &batch);
     }
-    // Brightness pass
     {
-      const uint32_t downscaled_width =
-          (uint32_t)SDL_ceilf((float)width / 2.0f);
-      const uint32_t downscaled_height =
-          (uint32_t)SDL_ceilf((float)height / 2.0f);
-      FullscreenBatch fs_batch = {
-          .set = color_set,
-      };
-      DrawBatch batch = {
-          .layout = self->copy_pipe_layout,
-          .pipeline = self->brightness_pipe,
-          .viewport = {0, downscaled_height, downscaled_width,
-                       -(float)downscaled_height, 0, 1},
-          .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
-          .user_batch = &fs_batch,
-      };
-      tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
-                                          &batch);
+      const uint32_t downscaled_width = width;
+      const uint32_t downscaled_height = height;
+      // Brightness pass
+      {
+        FullscreenBatch fs_batch = {
+            .set = color_set,
+        };
+        DrawBatch batch = {
+            .layout = self->copy_pipe_layout,
+            .pipeline = self->brightness_pipe,
+            .viewport = {0, downscaled_height, downscaled_width,
+                         -(float)downscaled_height, 0, 1},
+            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
+            .user_batch = &fs_batch,
+        };
+        tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
+                                            &batch);
+      }
+      // Bloom X pass
+      {
+        BlurBatch blur_batch = {
+            .set = blur_x_set,
+            .consts = (BloomBlurPushConstants){.horizontal = true},
+        };
+        DrawBatch batch = {
+            .layout = self->bloom_blur_layout,
+            .pipeline = self->bloom_blur_pipe,
+            .viewport = {0, downscaled_height, downscaled_width,
+                         -(float)downscaled_height, 0, 1},
+            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
+            .user_batch = &blur_batch,
+        };
+        tb_render_pipeline_issue_draw_batch(self, self->bloom_blur_x_ctx, 1,
+                                            &batch);
+      } // Bloom Y pass
+      {
+        BlurBatch blur_batch = {
+            .set = blur_y_set,
+            .consts = (BloomBlurPushConstants){.horizontal = false},
+        };
+        DrawBatch batch = {
+            .layout = self->bloom_blur_layout,
+            .pipeline = self->bloom_blur_pipe,
+            .viewport = {0, downscaled_height, downscaled_width,
+                         -(float)downscaled_height, 0, 1},
+            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
+            .user_batch = &blur_batch,
+        };
+        tb_render_pipeline_issue_draw_batch(self, self->bloom_blur_y_ctx, 1,
+                                            &batch);
+      }
     }
     // Tonemapping pass
     {
       FullscreenBatch fs_batch = {
-          .set = color_set,
+          .set = tonemap_set,
       };
       DrawBatch batch = {
-          .layout = self->copy_pipe_layout,
+          .layout = self->tonemap_pipe_layout,
           .pipeline = self->tonemap_pipe,
           .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},

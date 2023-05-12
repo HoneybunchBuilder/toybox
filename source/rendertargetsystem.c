@@ -364,8 +364,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = SDL_ceilf((float)width / 2.0f),
-                  .height = SDL_ceilf((float)height / 2.0f),
+                  .width = width,
+                  .height = height,
                   .depth = 1,
               },
           .mip_count = 1,
@@ -381,8 +381,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = SDL_ceilf((float)width / 2.0f),
-                  .height = SDL_ceilf((float)height / 2.0f),
+                  .width = width,
+                  .height = height,
                   .depth = 1,
               },
           .mip_count = 1,
@@ -398,8 +398,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = SDL_ceilf((float)width / 2.0f),
-                  .height = SDL_ceilf((float)height / 2.0f),
+                  .width = width,
+                  .height = height,
                   .depth = 1,
               },
           .mip_count = 1,
