@@ -1180,6 +1180,7 @@ void resize_swapchain(RenderThread *thread) {
 
 void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
                         PassContext *pass) {
+  (void)ctx;
   void *ret = NULL;
 #ifdef TRACY_ENABLE
   cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
@@ -1199,6 +1200,7 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
 }
 
 void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope) {
+  (void)scope;
   TracyCVkZoneEnd(scope);
   vkCmdEndRendering(buffer);
 }

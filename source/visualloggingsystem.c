@@ -322,6 +322,10 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
                                   const VisualLoggingSystemDescriptor *desc,
                                   uint32_t system_dep_count,
                                   System *const *system_deps) {
+  (void)self;
+  (void)desc;
+  (void)system_dep_count;
+  (void)system_deps;
 #ifndef FINAL
   RenderSystem *render_system =
       tb_get_system(system_deps, system_dep_count, RenderSystem);
