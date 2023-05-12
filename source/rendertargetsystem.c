@@ -364,8 +364,8 @@ bool create_render_target_system(RenderTargetSystem *self,
           .format = VK_FORMAT_R16G16B16A16_SFLOAT,
           .extent =
               {
-                  .width = SDL_ceilf((float)width / 4.0f),
-                  .height = SDL_ceilf((float)height / 4.0f),
+                  .width = SDL_ceilf((float)width / 2.0f),
+                  .height = SDL_ceilf((float)height / 2.0f),
                   .depth = 1,
               },
           .mip_count = 1,
@@ -373,6 +373,40 @@ bool create_render_target_system(RenderTargetSystem *self,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
       self->brightness_downsample = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create bloom blur x target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .extent =
+              {
+                  .width = SDL_ceilf((float)width / 2.0f),
+                  .height = SDL_ceilf((float)height / 2.0f),
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->bloom_blur_x = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create bloom blur y target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .extent =
+              {
+                  .width = SDL_ceilf((float)width / 2.0f),
+                  .height = SDL_ceilf((float)height / 2.0f),
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->bloom_blur_y = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target

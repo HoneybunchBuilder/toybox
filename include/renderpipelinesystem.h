@@ -71,8 +71,8 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId transparent_depth_pass;
   TbRenderPassId transparent_color_pass;
   TbRenderPassId brightness_pass; // Downsamples to quarter res
-  TbRenderPassId bloom_blur_x;
-  TbRenderPassId bloom_blur_y;
+  TbRenderPassId bloom_blur_x_pass;
+  TbRenderPassId bloom_blur_y_pass;
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
@@ -85,15 +85,19 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId depth_copy_ctx;
   TbDrawContextId color_copy_ctx;
   TbDrawContextId brightness_ctx;
+  TbDrawContextId bloom_blur_x_ctx;
+  TbDrawContextId bloom_blur_y_ctx;
   TbDrawContextId tonemap_ctx;
 
   // Copy resources
   VkSampler sampler;
   VkDescriptorSetLayout copy_set_layout;
+  VkPipelineLayout bloom_blur_layout;
   VkPipelineLayout copy_pipe_layout;
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;
+  VkPipeline bloom_blur_pipe; // used for blurring along X and Y axes
   VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];

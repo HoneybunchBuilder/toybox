@@ -8,7 +8,7 @@
 
 #define PUSH_CONSTANT_BYTES 128
 
-_Static_assert(sizeof(FullscreenPushConstants) <= PUSH_CONSTANT_BYTES,
+_Static_assert(sizeof(BloomBlurPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 _Static_assert(sizeof(SkyPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");

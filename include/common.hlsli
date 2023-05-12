@@ -9,11 +9,9 @@
 
 #include "pi.h"
 
-// Push Constants Data for a fullscreen pass
-typedef struct FullscreenPushConstants {
-  float4 time;
-  float2 resolution;
-} FullscreenPushConstants;
+typedef struct BloomBlurPushConstants {
+  float horizontal;
+} BloomBlurPushConstants;
 
 typedef struct SkyPushConstants {
   float4x4 vp;

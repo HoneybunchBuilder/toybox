@@ -3,6 +3,7 @@
 #include "profiling.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "shadercommon.h"
 #include "tbcommon.h"
 #include "world.h"
 
@@ -10,6 +11,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
+#include "bloomblur_frag.h"
+#include "bloomblur_vert.h"
 #include "brightness_frag.h"
 #include "brightness_vert.h"
 #include "colorcopy_frag.h"
@@ -112,6 +115,11 @@ void sort_pass_graph(RenderPipelineSystem *self) {
 typedef struct FullscreenBatch {
   VkDescriptorSet set;
 } FullscreenBatch;
+
+typedef struct BlurBatch {
+  VkDescriptorSet set;
+  BloomBlurPushConstants consts;
+} BlurBatch;
 
 VkResult create_depth_pipeline(RenderSystem *render_system,
                                VkFormat depth_format,
@@ -469,6 +477,124 @@ VkResult create_brightness_pipeline(RenderSystem *render_system,
   return err;
 }
 
+VkResult create_bloom_blur_pipeline(RenderSystem *render_system,
+                                    VkFormat color_format,
+                                    VkPipelineLayout pipe_layout,
+                                    VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+  VkShaderModule bloom_blur_vert_mod = VK_NULL_HANDLE;
+  VkShaderModule bloom_blur_frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(bloomblur_vert);
+    create_info.pCode = (const uint32_t *)bloomblur_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Bloom Blur Vert",
+                               &bloom_blur_vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load bloom blur vert shader module", err);
+
+    create_info.codeSize = sizeof(bloomblur_frag);
+    create_info.pCode = (const uint32_t *)bloomblur_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Bloom Blur Frag",
+                               &bloom_blur_frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load bloom blur frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = bloom_blur_vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = bloom_blur_frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Bloom Blur Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, bloom_blur_vert_mod);
+  tb_rnd_destroy_shader(render_system, bloom_blur_frag_mod);
+
+  return err;
+}
+
 VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
@@ -656,6 +782,42 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   record_fullscreen(buffer, batches,
                     (const FullscreenBatch *)batches->user_batch);
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                       uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "Bloom Blur Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Bloom Blur", 3, true);
+  cmd_begin_label(buffer, "Bloom Blur", (float4){0.8f, 0.4f, 0.0f, 1.0f});
+
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  const DrawBatch *batch = batches;
+  const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
+
+  VkPipelineLayout layout = batch->layout;
+
+  vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+  vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+  vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
+  vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                     sizeof(BloomBlurPushConstants), &blur_batch->consts);
+
+  vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
+                          &blur_batch->set, 0, NULL);
+
+  // Just drawing a fullscreen triangle that's generated by the vertex shader
+  vkCmdDraw(buffer, 3, 1, 0, 0);
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -939,6 +1101,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
     const TbRenderTargetId brightness_downsample =
         render_target_system->brightness_downsample;
+    const TbRenderTargetId bloom_blur_x = render_target_system->bloom_blur_x;
+    const TbRenderTargetId bloom_blur_y = render_target_system->bloom_blur_y;
 
     // Create opaque depth normal pass
     {
@@ -1885,13 +2049,197 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create bloom x pass
     {
-
-    }  // Create bloom y pass
-    {} // Create tonemapping pass
-    {
+      const uint32_t trans_count = 3;
+      PassTransition transitions[trans_count] = {
+          // Need to read brightness downsample
+          {
+              .render_target =
+                  self->render_target_system->brightness_downsample,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+          // Make both bloom targets ready for writing
+          {
+              .render_target = self->render_target_system->bloom_blur_x,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+          {
+              .render_target = self->render_target_system->bloom_blur_y,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = bloom_blur_x,
+                  },
+              },
+          .name = "Bloom Blur X Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create bloom blur x pass", false);
+      self->bloom_blur_x_pass = id;
+    } // Create bloom y pass
+    {
+      const uint32_t trans_count = 1;
+      // Need to read horizontal blur result
+      PassTransition transitions[trans_count] = {
+          {
+              .render_target = self->render_target_system->bloom_blur_x,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = bloom_blur_y,
+                  },
+              },
+          .name = "Bloom Blur Y Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create bloom blur y pass", false);
+      self->bloom_blur_y_pass = id;
+    } // Create tonemapping pass
+    {
+      const uint32_t trans_count = 1;
+      // Need to read vertical blur result
+      PassTransition transitions[trans_count] = {
+          {
+              .render_target = self->render_target_system->bloom_blur_y,
+              .barrier =
+                  {
+                      .src_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->bloom_blur_y_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
           .attachment_count = 1,
           .attachments =
               (TbAttachmentInfo[1]){
@@ -2024,7 +2372,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   {
     VkResult err = VK_SUCCESS;
 
-    // Depth Copy
+    // Copy
     {
 #if 1 // Formatting lmao
       {
@@ -2041,9 +2389,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
             .maxLod = 1.0f,
             .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
         };
-        err = tb_rnd_create_sampler(render_system, &create_info,
-                                    "Depth Copy Sampler", &self->sampler);
-        TB_VK_CHECK_RET(err, "Failed to create depth copy sampler", err);
+        err = tb_rnd_create_sampler(render_system, &create_info, "Copy Sampler",
+                                    &self->sampler);
+        TB_VK_CHECK_RET(err, "Failed to create copy sampler", err);
       }
 #endif
 
@@ -2067,10 +2415,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
-                                       "Depth Copy Descriptor Set Layout",
+                                       "Copy Descriptor Set Layout",
                                        &self->copy_set_layout);
-        TB_VK_CHECK_RET(
-            err, "Failed to create depth copy descriptor set layout", false);
+        TB_VK_CHECK_RET(err, "Failed to create copy descriptor set layout",
+                        false);
       }
 
       {
@@ -2083,9 +2431,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                 },
         };
         err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
-                                            "Depth Copy Pipeline Layout",
+                                            "Copy Pipeline Layout",
                                             &self->copy_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create depth pipeline layout", false);
+        TB_VK_CHECK_RET(err, "Failed to create copy pipeline layout", false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->copy_set_layout,
+                },
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges =
+                (VkPushConstantRange[1]){
+                    {
+                        .offset = 0,
+                        .size = sizeof(BloomBlurPushConstants),
+                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    },
+                },
+
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "Bloom Blur Pipeline Layout",
+                                            &self->bloom_blur_layout);
+        TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline layout",
+                        false);
       }
 
       {
@@ -2160,10 +2534,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       tb_render_pipeline_get_attachments(self, self->brightness_pass,
                                          &attach_count, &attach_info);
 
-      VkFormat swap_target_format = tb_render_target_get_format(
+      VkFormat color_format = tb_render_target_get_format(
           self->render_target_system, attach_info.attachment);
 
-      err = create_brightness_pipeline(self->render_system, swap_target_format,
+      err = create_brightness_pipeline(self->render_system, color_format,
                                        self->copy_pipe_layout,
                                        &self->brightness_pipe);
       TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", false);
@@ -2177,6 +2551,49 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           tb_render_pipeline_register_draw_context(self, &desc);
       TB_CHECK_RETURN(self->brightness_ctx != InvalidDrawContextId,
                       "Failed to create brightness draw context", false);
+    }
+
+    // Blur
+    {
+      // Assume same attachments between X and Y passes
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->bloom_blur_x_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment attach_info = {0};
+      tb_render_pipeline_get_attachments(self, self->bloom_blur_x_pass,
+                                         &attach_count, &attach_info);
+
+      VkFormat color_format = tb_render_target_get_format(
+          self->render_target_system, attach_info.attachment);
+
+      err = create_bloom_blur_pipeline(self->render_system, color_format,
+                                       self->bloom_blur_layout,
+                                       &self->bloom_blur_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline", false);
+      // X
+      {
+        DrawContextDescriptor desc = {
+            .batch_size = sizeof(FullscreenBatch),
+            .draw_fn = record_bloom_blur,
+            .pass_id = self->bloom_blur_x_pass,
+        };
+        self->bloom_blur_x_ctx =
+            tb_render_pipeline_register_draw_context(self, &desc);
+        TB_CHECK_RETURN(self->bloom_blur_x_ctx != InvalidDrawContextId,
+                        "Failed to create bloom blur x draw context", false);
+      } // Y
+      {
+        DrawContextDescriptor desc = {
+            .batch_size = sizeof(FullscreenBatch),
+            .draw_fn = record_bloom_blur,
+            .pass_id = self->bloom_blur_y_pass,
+        };
+        self->bloom_blur_y_ctx =
+            tb_render_pipeline_register_draw_context(self, &desc);
+        TB_CHECK_RETURN(self->bloom_blur_y_ctx != InvalidDrawContextId,
+                        "Failed to create bloom blur y draw context", false);
+      }
     }
 
     // Tonemapping
@@ -2215,9 +2632,11 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->bloom_blur_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->bloom_blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -2469,9 +2888,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     // Brightness pass
     {
       const uint32_t downscaled_width =
-          (uint32_t)SDL_ceilf((float)width / 4.0f);
+          (uint32_t)SDL_ceilf((float)width / 2.0f);
       const uint32_t downscaled_height =
-          (uint32_t)SDL_ceilf((float)height / 4.0f);
+          (uint32_t)SDL_ceilf((float)height / 2.0f);
       FullscreenBatch fs_batch = {
           .set = color_set,
       };
