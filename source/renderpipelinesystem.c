@@ -1092,6 +1092,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         render_target_system->prefiltered_cube;
     const TbRenderTargetId opaque_depth = render_target_system->depth_buffer;
     const TbRenderTargetId opaque_normal = render_target_system->normal_buffer;
+    const TbRenderTargetId ssao_buffer = render_target_system->ssao_buffer;
     const TbRenderTargetId hdr_color = render_target_system->hdr_color;
     const TbRenderTargetId depth_copy = render_target_system->depth_buffer_copy;
     const TbRenderTargetId color_copy = render_target_system->color_copy;
@@ -1190,7 +1191,59 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create opaque depth normal pass", false);
       self->opaque_depth_normal_pass = id;
     }
+    // Create SSAO pass
+    {
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->opaque_depth_normal_pass},
+          .transition_count = 1,
+          .transitions =
+              (PassTransition[1]){
+                  {
+                      .render_target = self->render_target_system->ssao_buffer,
+                      .barrier =
+                          {
+                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+              },
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = ssao_buffer,
+                  },
+              },
+          .name = "SSAO Pass",
+      };
 
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ssao pass",
+                      false);
+      self->ssao_pass = id;
+    }
     // Create env capture pass
     {
       TbRenderPassCreateInfo create_info = {
@@ -2758,6 +2811,7 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   // render passes
   {
     reimport_render_pass(self, self->opaque_depth_normal_pass);
+    reimport_render_pass(self, self->ssao_pass);
     reimport_render_pass(self, self->opaque_color_pass);
     reimport_render_pass(self, self->depth_copy_pass);
     reimport_render_pass(self, self->color_copy_pass);
