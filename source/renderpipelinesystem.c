@@ -19,6 +19,8 @@
 #include "colorcopy_vert.h"
 #include "depthcopy_frag.h"
 #include "depthcopy_vert.h"
+#include "ssao_frag.h"
+#include "ssao_vert.h"
 #include "tonemap_frag.h"
 #include "tonemap_vert.h"
 #ifdef __clang__
@@ -355,6 +357,124 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
 
   tb_rnd_destroy_shader(render_system, color_vert_mod);
   tb_rnd_destroy_shader(render_system, color_frag_mod);
+
+  return err;
+}
+
+VkResult create_ssao_pipeline(RenderSystem *render_system,
+                              VkFormat color_format,
+                              VkPipelineLayout pipe_layout,
+                              VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+  VkShaderModule ssao_vert_mod = VK_NULL_HANDLE;
+  VkShaderModule ssao_frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(ssao_vert);
+    create_info.pCode = (const uint32_t *)ssao_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "ssao Vert",
+                               &ssao_vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ssao vert shader module", err);
+
+    create_info.codeSize = sizeof(ssao_frag);
+    create_info.pCode = (const uint32_t *)ssao_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "ssao Frag",
+                               &ssao_frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load ssao frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = ssao_vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = ssao_frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "ssao Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create ssao pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, ssao_vert_mod);
+  tb_rnd_destroy_shader(render_system, ssao_frag_mod);
 
   return err;
 }
@@ -759,6 +879,26 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneNC(ctx, "Color Copy Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Color Copy", 3, true);
   cmd_begin_label(buffer, "Color Copy", (float4){0.4f, 0.0f, 0.8f, 1.0f});
+
+  record_fullscreen(buffer, batches,
+                    (const FullscreenBatch *)batches->user_batch);
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
+void record_ssao(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                 uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "SSAO Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "SSAO", 3, true);
+  cmd_begin_label(buffer, "SSAO", (float4){0.4f, 0.8f, 0.0f, 1.0f});
+
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
 
   record_fullscreen(buffer, batches,
                     (const FullscreenBatch *)batches->user_batch);
@@ -2563,6 +2703,52 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       }
 
       {
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 3,
+            .pBindings = (VkDescriptorSetLayoutBinding[3]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->sampler,
+                },
+            }};
+        err = tb_rnd_create_set_layout(render_system, &create_info,
+                                       "SSAO Descriptor Set Layout",
+                                       &self->ssao_set_layout);
+        TB_VK_CHECK_RET(err, "Failed to create ssao set layout", false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->ssao_set_layout,
+                },
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "SSAO Pipeline Layout",
+                                            &self->ssao_pipe_layout);
+        TB_VK_CHECK_RET(err, "Failed to create ssao pipeline layout", false);
+      }
+
+      {
         uint32_t attach_count = 0;
         tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
                                            &attach_count, NULL);
@@ -2622,6 +2808,33 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
                         "Failed to create color copy draw context", false);
       }
+    }
+
+    // SSAO
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(self, self->ssao_pass, &attach_count,
+                                         NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment attach_info = {0};
+      tb_render_pipeline_get_attachments(self, self->ssao_pass, &attach_count,
+                                         &attach_info);
+
+      VkFormat color_format = tb_render_target_get_format(
+          self->render_target_system, attach_info.attachment);
+
+      err = create_ssao_pipeline(self->render_system, color_format,
+                                 self->ssao_pipe_layout, &self->ssao_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create ssao pipeline", false);
+
+      DrawContextDescriptor desc = {
+          .batch_size = sizeof(FullscreenBatch),
+          .draw_fn = record_ssao,
+          .pass_id = self->ssao_pass,
+      };
+      self->ssao_ctx = tb_render_pipeline_register_draw_context(self, &desc);
+      TB_CHECK_RETURN(self->ssao_ctx != InvalidDrawContextId,
+                      "Failed to create ssao draw context", false);
     }
 
     // Brightness
@@ -2730,11 +2943,14 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
+  tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->bloom_blur_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
+  tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);

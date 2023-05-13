@@ -136,9 +136,9 @@ set(library_list "SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mima
 function(cook_shaders out_shader_sources out_shader_headers)
   # Compile Shaders
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
-  file(GLOB shader_includes "${shader_include_dir}/*.hlsli")
+  file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli")
 
-  file(GLOB shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
+  file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
   foreach(shader ${shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
     set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
@@ -159,7 +159,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
   endforeach()
   list(APPEND shader_sources ${shader_files})
 
-  file(GLOB mesh_shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.m")
+  file(GLOB mesh_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.m")
   foreach(shader ${mesh_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
     get_filename_component(filename ${filename} NAME_WLE)
@@ -181,7 +181,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
   endforeach()
   list(APPEND shader_sources ${mesh_shader_files})
 
-  file(GLOB rt_shader_files "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.rt")
+  file(GLOB rt_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.rt")
   foreach(shader ${rt_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
     get_filename_component(filename ${filename} NAME_WLE)
@@ -251,7 +251,7 @@ function(cook_assets target_name out_assets_path)
   add_custom_target(${target_name}_scenes DEPENDS ${packed_scenes})
 
   # Copy textures
-  file(GLOB_RECURSE source_textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.ktx2")
+  file(GLOB_RECURSE source_textures CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.ktx2")
   foreach(texture ${source_textures})
     file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
     get_filename_component(relpath ${relpath} DIRECTORY)
@@ -308,7 +308,7 @@ function(cook_assets target_name out_assets_path)
 endfunction()
 
 # Setup toybox library
-file(GLOB lib_source "${CMAKE_CURRENT_LIST_DIR}/source/*.c" "${CMAKE_CURRENT_LIST_DIR}/source/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/source/*.h")
+file(GLOB lib_source CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.c" "${CMAKE_CURRENT_LIST_DIR}/source/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/source/*.h")
 add_library(toybox STATIC ${lib_source})
 
 if(WIN32)

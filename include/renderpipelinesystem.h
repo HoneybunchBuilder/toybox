@@ -83,6 +83,7 @@ typedef struct RenderPipelineSystem {
   uint32_t pass_max;
 
   // Some default draw contexts
+  TbDrawContextId ssao_ctx;
   TbDrawContextId depth_copy_ctx;
   TbDrawContextId color_copy_ctx;
   TbDrawContextId brightness_ctx;
@@ -92,11 +93,14 @@ typedef struct RenderPipelineSystem {
 
   // Copy resources
   VkSampler sampler;
+  VkDescriptorSetLayout ssao_set_layout;
   VkDescriptorSetLayout copy_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
+  VkPipelineLayout ssao_pipe_layout;
   VkPipelineLayout bloom_blur_layout;
   VkPipelineLayout copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
+  VkPipeline ssao_pipe;
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;
