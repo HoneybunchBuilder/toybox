@@ -2203,7 +2203,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create bloom blur y pass", false);
       self->bloom_blur_y_pass = id;
-    } // Create tonemapping pass
+    }
+    // Create tonemapping pass
     {
       const uint32_t trans_count = 1;
       // Need to read vertical blur result
@@ -2763,6 +2764,9 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
     reimport_render_pass(self, self->sky_pass);
     reimport_render_pass(self, self->transparent_depth_pass);
     reimport_render_pass(self, self->transparent_color_pass);
+    reimport_render_pass(self, self->brightness_pass);
+    reimport_render_pass(self, self->bloom_blur_x_pass);
+    reimport_render_pass(self, self->bloom_blur_y_pass);
     reimport_render_pass(self, self->tonemap_pass);
     reimport_render_pass(self, self->ui_pass);
   }

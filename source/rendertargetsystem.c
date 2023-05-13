@@ -226,7 +226,23 @@ bool create_render_target_system(RenderTargetSystem *self,
       };
       self->normal_buffer = tb_create_render_target(self, &rt_desc);
     }
-
+    // Create ssao target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "SSAO",
+          .format = VK_FORMAT_R32_SFLOAT,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->ssao_buffer = tb_create_render_target(self, &rt_desc);
+    }
     // Create hdr color target
     {
       RenderTargetDescriptor rt_desc = {
@@ -513,6 +529,40 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   }
   {
     RenderTargetDescriptor rt_desc = {
+        .name = "Normal Prepass Buffer",
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(self, &self->render_targets[self->normal_buffer],
+                         &rt_desc);
+  }
+  {
+    RenderTargetDescriptor rt_desc = {
+        .name = "SSAO",
+        .format = VK_FORMAT_D32_SFLOAT,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(self, &self->render_targets[self->ssao_buffer],
+                         &rt_desc);
+  }
+  {
+    RenderTargetDescriptor rt_desc = {
         .name = "HDR Color",
         .format = VK_FORMAT_R16G16B16A16_SFLOAT,
         .extent =
@@ -563,6 +613,62 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
                          &rt_desc);
   }
 
+  // Resize brightness downsampled target
+  {
+    RenderTargetDescriptor rt_desc = {
+        .name = "Brightness",
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(
+        self, &self->render_targets[self->brightness_downsample], &rt_desc);
+  }
+
+  // Resize bloom blur x target
+  {
+    RenderTargetDescriptor rt_desc = {
+        .name = "Bloom Blur X",
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(self, &self->render_targets[self->bloom_blur_x],
+                         &rt_desc);
+  }
+
+  // Resize bloom blur y target
+  {
+    RenderTargetDescriptor rt_desc = {
+        .name = "Bloom Blur Y",
+        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(self, &self->render_targets[self->bloom_blur_y],
+                         &rt_desc);
+  }
   // Finally reimport swapchain
   {
     RenderTargetDescriptor rt_desc = {

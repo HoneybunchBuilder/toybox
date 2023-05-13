@@ -42,6 +42,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
   TbRenderTargetId normal_buffer;
+  TbRenderTargetId ssao_buffer;
   TbRenderTargetId hdr_color;
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;
