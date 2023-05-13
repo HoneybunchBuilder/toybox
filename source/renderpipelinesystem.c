@@ -1336,9 +1336,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->opaque_depth_normal_pass},
-          .transition_count = 1,
+          .transition_count = 3,
           .transitions =
-              (PassTransition[1]){
+              (PassTransition[3]){
                   {
                       .render_target = self->render_target_system->ssao_buffer,
                       .barrier =
@@ -1356,6 +1356,68 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                       .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                                       .newLayout =
                                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  {
+                      .render_target = self->render_target_system->depth_buffer,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  {
+                      .render_target =
+                          self->render_target_system->normal_buffer,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                       .subresourceRange =
                                           {
                                               .aspectMask =
@@ -1830,39 +1892,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->sky_pass},
-          .transition_count = 2,
+          .transition_count = 1,
           .transitions =
-              (PassTransition[2]){
-                  {
-                      .render_target = self->render_target_system->depth_buffer,
-                      .barrier =
-                          {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
+              (PassTransition[1]){
                   {
                       .render_target =
                           self->render_target_system->depth_buffer_copy,
@@ -3296,7 +3328,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       DrawBatch batch = {
           .layout = self->ssao_pipe_layout,
           .pipeline = self->ssao_pipe,
-          .viewport = {0, 0, width, height, 0, 1},
+          .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &fs_batch,
       };
