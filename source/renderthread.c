@@ -11,7 +11,7 @@
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvkalloc.h"
-#include "vk_mem_alloc.h"
+#include "tbvma.h"
 #include "vkdbg.h"
 
 int32_t render_thread(void *data);

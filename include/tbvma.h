@@ -39,6 +39,8 @@
 #pragma GCC diagnostic ignored "-Wtype-limits"
 #endif
 
+#define VMA_STATS_STRING_ENABLED 0
+
 #include <vk_mem_alloc.h>
 
 #ifdef __clang__

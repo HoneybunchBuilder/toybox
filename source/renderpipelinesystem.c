@@ -1566,7 +1566,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           }};
       const uint32_t transition_count = TB_CASCADE_COUNT + 4;
-      PassTransition transitions[transition_count] = {0};
+      PassTransition transitions[TB_CASCADE_COUNT + 4] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
@@ -1971,7 +1971,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     // Create brightness pass
     {
       static const size_t trans_count = 2;
-      PassTransition transitions[trans_count] = {
+      PassTransition transitions[2] = {
           {
               .render_target = self->render_target_system->hdr_color,
               .barrier =
@@ -2050,7 +2050,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     // Create bloom x pass
     {
       const uint32_t trans_count = 3;
-      PassTransition transitions[trans_count] = {
+      PassTransition transitions[3] = {
           // Need to read brightness downsample
           {
               .render_target =
@@ -2155,7 +2155,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     {
       const uint32_t trans_count = 1;
       // Need to read horizontal blur result
-      PassTransition transitions[trans_count] = {
+      PassTransition transitions[1] = {
           {
               .render_target = self->render_target_system->bloom_blur_x,
               .barrier =
@@ -2207,7 +2207,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     {
       const uint32_t trans_count = 1;
       // Need to read vertical blur result
-      PassTransition transitions[trans_count] = {
+      PassTransition transitions[1] = {
           {
               .render_target = self->render_target_system->bloom_blur_y,
               .barrier =
@@ -2838,7 +2838,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                   .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
               },
       };
-      VkDescriptorSetLayout layouts[set_count] = {
+      VkDescriptorSetLayout layouts[5] = {
           self->copy_set_layout,    self->copy_set_layout,
           self->copy_set_layout,    self->copy_set_layout,
           self->tonemap_set_layout,
