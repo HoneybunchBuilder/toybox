@@ -3101,7 +3101,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
     // Allocate the known descriptor sets we need for this frame
     {
-      const uint32_t set_count = 5;
+      const uint32_t set_count = 6;
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
           .maxSets = set_count * 4,
@@ -3112,10 +3112,10 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                   .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
               },
       };
-      VkDescriptorSetLayout layouts[5] = {
-          self->copy_set_layout,    self->copy_set_layout,
-          self->copy_set_layout,    self->copy_set_layout,
-          self->tonemap_set_layout,
+      VkDescriptorSetLayout layouts[6] = {
+          self->ssao_set_layout, self->copy_set_layout,
+          self->copy_set_layout, self->copy_set_layout,
+          self->copy_set_layout, self->tonemap_set_layout,
       };
       err =
           tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
@@ -3123,20 +3123,25 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       TB_VK_CHECK(err, "Failed to tick descriptor pool");
     }
 
-    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 2);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 5);
 
     VkImageView depth_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->depth_buffer);
+    VkImageView normal_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->normal_buffer);
     VkImageView color_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->hdr_color);
@@ -3151,8 +3156,34 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_target_system->bloom_blur_y);
 
 // Write the descriptor set
-#define WRITE_COUNT 6
+#define WRITE_COUNT 8
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = depth_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = normal_view,
+                },
+        },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = depth_set,
@@ -3239,22 +3270,38 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
 
   // Issue draws for full screen passes
   {
-    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 2);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 5);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
     const uint32_t height =
         self->render_system->render_thread->swapchain.height;
 
+    // SSAO pass
+    {
+      FullscreenBatch fs_batch = {
+          .set = ssao_set,
+      };
+      DrawBatch batch = {
+          .layout = self->ssao_pipe_layout,
+          .pipeline = self->ssao_pipe,
+          .viewport = {0, 0, width, height, 0, 1},
+          .scissor = {{0, 0}, {width, height}},
+          .user_batch = &fs_batch,
+      };
+      tb_render_pipeline_issue_draw_batch(self, self->ssao_ctx, 1, &batch);
+    }
     // Depth copy pass
     {
       FullscreenBatch fs_batch = {
