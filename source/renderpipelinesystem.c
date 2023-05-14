@@ -2881,6 +2881,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         };
         err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
                                           "SSAO Params", &self->ssao_params);
+        TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
         // Schedule upload
         BufferCopy upload = {
             .dst = self->ssao_params.buffer,
@@ -2892,7 +2893,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         // Noise Texture
         const uint32_t noise_tex_dim = 4;
         const uint32_t noise_tex_size =
-            noise_tex_dim * noise_tex_dim * sizeof(float4);
+            noise_tex_dim * noise_tex_dim * sizeof(float2);
         TbHostBuffer tmp_ssao_noise = {0};
         err = tb_rnd_sys_alloc_tmp_host_buffer(
             self->render_system, noise_tex_size, 16, &tmp_ssao_noise);
@@ -2900,17 +2901,85 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
         // Fill out buffer on the CPU side
         {
-          float4 noise[16] = {0};
+          float2 noise[16] = {0};
           for (uint32_t i = 0; i < 16; ++i) {
-            noise[i] = normf3((float3){
+            noise[i] = normf2((float2){
                 tb_randf(-1.0f, 1.0f),
                 tb_randf(-1.0f, 1.0f),
-                0.0f,
             });
           }
 
           SDL_memcpy(tmp_ssao_noise.ptr, noise, noise_tex_size);
         }
+
+        // Create GPU Image
+        {
+          VkImageCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+              .imageType = VK_IMAGE_TYPE_2D,
+              .format = VK_FORMAT_R8G8_SNORM,
+
+              .extent =
+                  (VkExtent3D){
+                      .width = noise_tex_dim,
+                      .height = noise_tex_dim,
+                      .depth = 1,
+                  },
+              .mipLevels = 1,
+              .arrayLayers = 1,
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .usage =
+                  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+          };
+          err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info,
+                                           "SSAO Noise", &self->ssao_noise);
+          TB_VK_CHECK(err, "Failed to create gpu image for ssao params");
+        }
+
+        {
+          VkImageViewCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+              .image = self->ssao_noise.image,
+              .viewType = VK_IMAGE_VIEW_TYPE_2D,
+              .format = VK_FORMAT_R8G8_SNORM,
+              .subresourceRange =
+                  {
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .layerCount = 1,
+                      .levelCount = 1,
+                  },
+          };
+          err = tb_rnd_create_image_view(self->render_system, &create_info,
+                                         "SSAO Noise View",
+                                         &self->ssao_noise_view);
+        }
+
+        BufferImageCopy image_copy = {
+            .src = tmp_ssao_noise.buffer,
+            .dst = self->ssao_noise.image,
+            .region =
+                {
+                    .bufferOffset = tmp_ssao_noise.offset,
+                    .imageSubresource =
+                        {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .layerCount = 1,
+                        },
+                    .imageExtent =
+                        {
+                            .width = noise_tex_dim,
+                            .height = noise_tex_dim,
+                            .depth = 1,
+                        },
+                },
+            .range =
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .layerCount = 1,
+                    .levelCount = 1,
+                },
+        };
+        tb_rnd_upload_buffer_to_image(self->render_system, &image_copy, 1);
       }
 
       uint32_t attach_count = 0;
@@ -3064,6 +3133,8 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   }
 
   tb_rnd_free_gpu_buffer(self->render_system, &self->ssao_params);
+  tb_rnd_free_gpu_image(self->render_system, &self->ssao_noise);
+  tb_rnd_destroy_image_view(self->render_system, self->ssao_noise_view);
 
   tb_free(self->std_alloc, self->render_passes);
   tb_free(self->std_alloc, self->pass_order);

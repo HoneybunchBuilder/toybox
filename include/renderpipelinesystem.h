@@ -83,6 +83,8 @@ typedef struct RenderPipelineSystem {
   uint32_t pass_max;
 
   TbBuffer ssao_params;
+  TbImage ssao_noise;
+  VkImageView ssao_noise_view;
 
   // Some default draw contexts
   TbDrawContextId ssao_ctx;
