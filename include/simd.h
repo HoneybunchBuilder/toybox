@@ -181,3 +181,5 @@ Quaternion slerp(Quaternion q1, Quaternion q2, float a);
 
 float clampf(float v, float min, float max);
 float3 clampf3(float3 v, float3 min, float3 max);
+
+float tb_randf(float min, float max);

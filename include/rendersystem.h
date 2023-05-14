@@ -107,6 +107,7 @@ void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
 void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
                                    uint32_t upload_count);
 
+void tb_rnd_free_gpu_buffer(RenderSystem *self, TbBuffer *buffer);
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image);
 
 void tb_rnd_destroy_image_view(RenderSystem *self, VkImageView view);

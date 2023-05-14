@@ -82,6 +82,8 @@ typedef struct RenderPipelineSystem {
   uint32_t *pass_order;
   uint32_t pass_max;
 
+  TbBuffer ssao_params;
+
   // Some default draw contexts
   TbDrawContextId ssao_ctx;
   TbDrawContextId depth_copy_ctx;

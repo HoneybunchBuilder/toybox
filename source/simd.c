@@ -734,6 +734,11 @@ float3 clampf3(float3 v, float3 min, float3 max) {
   };
 }
 
+float tb_randf(float min, float max) {
+  float r = (float)rand() / (float)RAND_MAX;
+  return min + r * (max - min);
+}
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

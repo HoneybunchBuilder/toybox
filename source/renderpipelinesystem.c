@@ -4,6 +4,7 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "shadercommon.h"
+#include "ssao.h"
 #include "tbcommon.h"
 #include "world.h"
 
@@ -2844,6 +2845,50 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
     // SSAO
     {
+      // Create SSAO kernel buffer
+      {
+        TbHostBuffer tmp_ssao_params = {0};
+        VkResult err = tb_rnd_sys_alloc_tmp_host_buffer(
+            self->render_system, sizeof(SSAOParams), 16, &tmp_ssao_params);
+        TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao params");
+
+        // Fill out buffer on the CPU side
+        {
+          SSAOParams params = {
+              .kernel_size = SSAO_KERNEL_SIZE,
+          };
+          for (uint32_t i = 0; i < SSAO_KERNEL_SIZE; ++i) {
+            params.kernel[i] = normf3((float3){
+                tb_randf(-1.0f, 1.0f),
+                tb_randf(-1.0f, 1.0f),
+                tb_randf(0.0f, 1.0f),
+            });
+
+            // Distribute samples in the hemisphere
+            params.kernel[i] *= tb_randf(0.0f, 1.0f);
+          }
+
+          SDL_memcpy(tmp_ssao_params.ptr, &params, sizeof(SSAOParams));
+        }
+
+        // Create GPU version
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .size = sizeof(SSAOParams),
+        };
+        err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
+                                          "SSAO Params", &self->ssao_params);
+        // Schedule upload
+        BufferCopy upload = {
+            .dst = self->ssao_params.buffer,
+            .src = tmp_ssao_params.buffer,
+            .region = {.size = sizeof(SSAOParams)},
+        };
+        tb_rnd_upload_buffers(self->render_system, &upload, 1);
+      }
+
       uint32_t attach_count = 0;
       tb_render_pipeline_get_attachments(self, self->ssao_pass, &attach_count,
                                          NULL);
@@ -2993,6 +3038,8 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
                                    self->descriptor_pools[i].set_pool);
   }
+
+  tb_rnd_free_gpu_buffer(self->render_system, &self->ssao_params);
 
   tb_free(self->std_alloc, self->render_passes);
   tb_free(self->std_alloc, self->pass_order);

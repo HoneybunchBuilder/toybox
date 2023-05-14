@@ -572,6 +572,10 @@ void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
   queue->req_count = new_count;
 }
 
+void tb_rnd_free_gpu_buffer(RenderSystem *self, TbBuffer *buffer) {
+  vmaDestroyBuffer(self->vma_alloc, buffer->buffer, buffer->alloc);
+}
+
 void tb_rnd_free_gpu_image(RenderSystem *self, TbImage *image) {
   vmaDestroyImage(self->vma_alloc, image->image, image->alloc);
 }
