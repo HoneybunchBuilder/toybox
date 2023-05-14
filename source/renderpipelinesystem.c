@@ -2845,8 +2845,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
     // SSAO
     {
-      // Create SSAO kernel buffer
+      // Create SSAO kernel buffer and noise texture
       {
+        // Kernel Buffer
         TbHostBuffer tmp_ssao_params = {0};
         VkResult err = tb_rnd_sys_alloc_tmp_host_buffer(
             self->render_system, sizeof(SSAOParams), 16, &tmp_ssao_params);
@@ -2887,6 +2888,29 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
             .region = {.size = sizeof(SSAOParams)},
         };
         tb_rnd_upload_buffers(self->render_system, &upload, 1);
+
+        // Noise Texture
+        const uint32_t noise_tex_dim = 4;
+        const uint32_t noise_tex_size =
+            noise_tex_dim * noise_tex_dim * sizeof(float4);
+        TbHostBuffer tmp_ssao_noise = {0};
+        err = tb_rnd_sys_alloc_tmp_host_buffer(
+            self->render_system, noise_tex_size, 16, &tmp_ssao_noise);
+        TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao noise");
+
+        // Fill out buffer on the CPU side
+        {
+          float4 noise[16] = {0};
+          for (uint32_t i = 0; i < 16; ++i) {
+            noise[i] = normf3((float3){
+                tb_randf(-1.0f, 1.0f),
+                tb_randf(-1.0f, 1.0f),
+                0.0f,
+            });
+          }
+
+          SDL_memcpy(tmp_ssao_noise.ptr, noise, noise_tex_size);
+        }
       }
 
       uint32_t attach_count = 0;
