@@ -2738,8 +2738,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       {
         VkDescriptorSetLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 3,
-            .pBindings = (VkDescriptorSetLayoutBinding[3]){
+            .bindingCount = 6,
+            .pBindings = (VkDescriptorSetLayoutBinding[6]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -2759,6 +2759,24 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                     .pImmutableSamplers = &self->sampler,
                 },
+                {
+                    .binding = 3,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 4,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 5,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
                                        "SSAO Descriptor Set Layout",
@@ -2773,6 +2791,15 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
             .pSetLayouts =
                 (VkDescriptorSetLayout[1]){
                     self->ssao_set_layout,
+                },
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges =
+                (VkPushConstantRange[1]){
+                    {
+                        .offset = 0,
+                        .size = sizeof(SSAOPushConstants),
+                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    },
                 },
         };
         err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,

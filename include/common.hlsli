@@ -3,11 +3,8 @@
 #ifndef TB_COMMON_H
 #define TB_COMMON_H
 
-#ifndef __HLSL_VERSION
-#include "simd.h" // If not a shader, we need simd types
-#endif
-
 #include "pi.h"
+#include "simd.h"
 
 typedef struct BloomBlurPushConstants {
   float horizontal;

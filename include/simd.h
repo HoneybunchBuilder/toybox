@@ -1,5 +1,8 @@
 #pragma once
 
+// Do nothing if this is a shader
+#ifndef __HLSL_VERSION
+
 #include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -183,3 +186,5 @@ float clampf(float v, float min, float max);
 float3 clampf3(float3 v, float3 min, float3 max);
 
 float tb_randf(float min, float max);
+
+#endif
