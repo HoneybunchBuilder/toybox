@@ -547,7 +547,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   {
     RenderTargetDescriptor rt_desc = {
         .name = "SSAO",
-        .format = VK_FORMAT_D32_SFLOAT,
+        .format = VK_FORMAT_R32_SFLOAT,
         .extent =
             {
                 .width = width,
