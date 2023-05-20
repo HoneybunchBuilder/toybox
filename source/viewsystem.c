@@ -105,9 +105,8 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                 {
                     .binding = 6,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
                 },
             },
     };
@@ -211,7 +210,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
 
   // Just upload and write all views for now, they tend to be important anyway
   const uint32_t buf_count = 2;
-  const uint32_t img_count = 3 + TB_CASCADE_COUNT;
+  const uint32_t img_count = 4 + TB_CASCADE_COUNT;
   const uint32_t write_count = buf_count + img_count;
 
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
@@ -285,6 +284,12 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
       };
     }
 
+    image_info[image_idx + 7] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = tb_render_target_get_view(
+            self->render_target_system, self->render_system->frame_idx,
+            self->render_target_system->ssao_buffer)};
+
     // Construct a write descriptor
 
     writes[write_idx + 0] = (VkWriteDescriptorSet){
@@ -343,6 +348,15 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
           .pImageInfo = &image_info[image_idx + 3 + i],
       };
     }
+    writes[write_idx + 9] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = view_set,
+        .dstBinding = 6,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[image_idx + 7],
+    };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
                          self->view_count * write_count, writes, 0, NULL);

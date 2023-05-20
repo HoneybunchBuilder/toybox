@@ -17,6 +17,7 @@ TextureCube prefiltered_map : register(t2, space1);
 Texture2D brdf_lut : register(t3, space1);
 ConstantBuffer<CommonLightData> light_data : register(b4, space1);
 Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space1); // Frag Only
+Texture2D ssao_map : register(s6, space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -29,6 +30,7 @@ struct Interpolators {
   float4 screen_pos : POSITION2;
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
+  float2 screen_uv : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -46,6 +48,7 @@ Interpolators vert(VertexIn i) {
   o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
+  o.screen_uv = (o.clip_pos.xy / o.clip_pos.w) * 0.5 + 0.5;
 
   return o;
 }
@@ -60,6 +63,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 L = light_data.light_dir;
 
   float3 albedo = float3(0, 0, 0);
+
+  return float4(i.screen_uv, 0, 1);
 
   // Calculate refracted UVs
   float2 uv = float2(0, 0);
@@ -133,8 +138,9 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 reflection =
           prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      color = pbr_lighting(albedo, metallic, roughness, brdf, reflection,
-                           irradiance, light_data.color, L, V, N);
+      float ao = ssao_map.Sample(static_sampler, i.screen_uv).r;
+      albedo = pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
+                            irradiance, light_data.color, L, V, N);
     }
   }
 

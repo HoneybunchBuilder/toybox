@@ -28,7 +28,7 @@ float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
   return color;
 }
 
-float3 pbr_lighting(float3 albedo, float metallic, float roughness, float2 brdf, float3 reflection, float3 irradiance, float3 light_color, float3 L, float3 V, float3 N) {
+float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness, float2 brdf, float3 reflection, float3 irradiance, float3 light_color, float3 L, float3 V, float3 N) {
   float3 f0 = float3(0.04, 0.04, 0.04);
   f0 = lerp(f0, albedo, metallic);
 
@@ -49,7 +49,7 @@ float3 pbr_lighting(float3 albedo, float metallic, float roughness, float2 brdf,
   // Ambient
   float3 kD = 1.0 - kS;
   kD *= 1.0 - metallic;
-  float3 ambient = (kD * diffuse + specular);
+  float3 ambient = (kD * diffuse + specular) * ao;
 
   return ambient + direct;
 }

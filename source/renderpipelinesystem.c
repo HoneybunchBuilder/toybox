@@ -1849,8 +1849,31 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      const uint32_t transition_count = TB_CASCADE_COUNT + 4;
-      PassTransition transitions[TB_CASCADE_COUNT + 4] = {0};
+      PassTransition ssao_trans = {
+          .render_target = self->render_target_system->ssao_buffer,
+          .barrier =
+              {
+                  .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  .barrier =
+                      {
+                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                           VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          .subresourceRange =
+                              {
+                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                  .levelCount = 1,
+                                  .layerCount = 1,
+                              },
+                      },
+              },
+      };
+      const uint32_t transition_count = TB_CASCADE_COUNT + 5;
+      PassTransition transitions[TB_CASCADE_COUNT + 5] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
@@ -1859,6 +1882,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       transitions[TB_CASCADE_COUNT + 1] = filter_trans;
       transitions[TB_CASCADE_COUNT + 2] = color_trans;
       transitions[TB_CASCADE_COUNT + 3] = normal_trans;
+      transitions[TB_CASCADE_COUNT + 4] = ssao_trans;
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
@@ -3573,7 +3597,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       DrawBatch batch = {
           .layout = self->ssao_pipe_layout,
           .pipeline = self->ssao_pipe,
-          .viewport = {0, height, width, -(float)height, 0, 1},
+          .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &ssao_batch,
       };

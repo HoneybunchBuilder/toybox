@@ -23,6 +23,7 @@ TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
 Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
 ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
 Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);       // Frag Only
+Texture2D ssao_map : register(s6, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
@@ -38,6 +39,7 @@ struct Interpolators {
   float3 view_pos : POSITION1;
   float3 normal : NORMAL0;
   float2 uv : TEXCOORD0;
+  float2 screen_uv : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i) {
@@ -52,6 +54,7 @@ Interpolators vert(VertexIn i) {
   o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
   o.uv = uv_transform(i.uv, material_data.tex_transform);
+  o.screen_uv = (o.clip_pos.xy / o.clip_pos.w) * 0.5 + 0.5;
   return o;
 }
 
@@ -65,6 +68,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 L = light_data.light_dir;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
+
+  return float4(i.screen_uv, 0, 1);
 
   if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic = material_data.pbr_metallic_roughness.metallic_factor;
@@ -96,8 +101,10 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 reflection =
           prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      out_color = pbr_lighting(albedo, metallic, roughness, brdf, reflection,
-                               irradiance, light_data.color, L, V, N);
+      float ao = ssao_map.Sample(static_sampler, i.screen_uv).r;
+      out_color =
+          pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
+                       irradiance, light_data.color, L, V, N);
     }
 
   } else {
