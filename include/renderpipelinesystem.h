@@ -19,6 +19,7 @@ typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct RenderPass RenderPass;
+typedef struct ViewSystem ViewSystem;
 
 typedef struct PassAttachment {
   VkClearValue clear_value;
@@ -58,6 +59,7 @@ typedef struct RenderPipelineSystem {
 
   RenderSystem *render_system;
   RenderTargetSystem *render_target_system;
+  ViewSystem *view_system;
 
   TbRenderPassId env_capture_pass;
   TbRenderPassId irradiance_pass;
