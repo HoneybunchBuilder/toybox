@@ -14,7 +14,7 @@ float frag(Interpolators interp) : SV_TARGET {
     float3 origin = consts.view_dir * depth_map.Sample(map_sampler, interp.uv0).r;
     float3 normal = normalize(normal_map.Sample(map_sampler, interp.uv0).rgb * 2.0 - 1.0);
 
-    float3 random = noise.Sample(noise_sampler, interp.uv0 * consts.noise_scale).xyz;
+    float3 random = noise.Sample(noise_sampler, interp.uv0 * consts.noise_scale).xyz * 2.0 - 1.0;
     float3 tangent =  normalize(random - normal * dot(random, normal));
     float3 bitangent = cross(normal, tangent);
     float3x3 orientation = float3x3(tangent, bitangent, normal);
@@ -26,8 +26,9 @@ float frag(Interpolators interp) : SV_TARGET {
 
         float4 offset = float4(kernel_sample, 1.0f);
         offset = mul(consts.projection, offset);
-        offset.xy /= offset.w;
+        
         offset.xy = offset.xy * 0.5 + 0.5;
+        offset.xy /= offset.w;
 
         float sample_depth = depth_map.Sample(map_sampler, offset.xy).r;
         float range_check = abs(origin.z - sample_depth) < consts.radius ? 1.0 : 0.0;

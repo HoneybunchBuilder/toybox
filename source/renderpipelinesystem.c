@@ -2923,6 +2923,10 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
             // Distribute samples in the hemisphere
             params.kernel[i] *= tb_randf(0.0f, 1.0f);
+
+            float scale = (float)i / SSAO_KERNEL_SIZE;
+            scale = lerpf(0.1f, 1.0f, scale * scale);
+            params.kernel[i] *= scale;
           }
 
           SDL_memcpy(tmp_ssao_params.ptr, &params, sizeof(SSAOParams));
@@ -3551,15 +3555,17 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       const View *view = &self->view_system->views[0];
 
       float4x4 inv_view = inv_mf44(view->view_data.v);
-      float4x4 projection = mulmf44(inv_view, view->view_data.vp);
-      float3 view_dir = normf3(f4tof3(inv_view.row2));
+      float4x4 projection = mulmf44(view->view_data.vp, inv_view);
+      float3 view_dir = normf3(
+          (float3){inv_view.row0[2], inv_view.row1[2], inv_view.row2[2]});
 
       SSAOBatch ssao_batch = {
           .set = ssao_set,
           .consts =
               {
-                  .noise_scale = (float2){1, 1},
-                  .radius = 3.0f,
+                  .noise_scale =
+                      (float2){(float)width / 4.0f, (float)height / 4.0f},
+                  .radius = 0.5,
                   .projection = projection,
                   .view_dir = view_dir,
               },
