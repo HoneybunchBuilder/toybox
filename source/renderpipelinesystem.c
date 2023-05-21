@@ -3579,7 +3579,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       const View *view = &self->view_system->views[0];
 
       float4x4 inv_view = inv_mf44(view->view_data.v);
-      float4x4 projection = mulmf44(view->view_data.vp, inv_view);
+      float4x4 projection = view->view_data.p;
       float3 view_dir = normf3(
           (float3){inv_view.row0[2], inv_view.row1[2], inv_view.row2[2]});
 

@@ -68,6 +68,7 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     float4x4 proj = {.row0 = {0}};
     reverse_perspective(&proj, cam_comp->fov, cam_comp->aspect_ratio,
                         cam_comp->near, cam_comp->far);
+    view_data.p = proj;
 
     // Calculate view projection matrix
     view_data.vp = mulmf44(proj, view);

@@ -37,7 +37,7 @@ struct Interpolators {
   float3 world_pos : POSITION0;
   float3 view_pos : POSITION1;
   float3 normal : NORMAL0;
-  float2 screen_uv : TEXCOORD0;
+  float4 clip : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -51,7 +51,7 @@ Interpolators vert(VertexIn i) {
   o.world_pos = world_pos;
   o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
   o.normal = mul(i.normal, orientation); // convert to world-space normal
-  o.screen_uv = (o.clip_pos.xy / o.clip_pos.w) * 0.5 + 0.5;
+  o.clip = clip_pos;
   return o;
 }
 
@@ -63,6 +63,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float3 R = reflect(-V, N);
   float3 L = light_data.light_dir;
+  float2 screen_uv = (i.clip.xy / i.clip.w) * 0.5 + 0.5;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
@@ -88,7 +89,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
 
-      float ao = ssao_map.Sample(static_sampler, i.screen_uv).r;
+      float ao = ssao_map.Sample(static_sampler, screen_uv).r;
       out_color =
           pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
                        irradiance, light_data.color, L, V, N);

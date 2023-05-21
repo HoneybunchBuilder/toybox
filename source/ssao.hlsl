@@ -30,9 +30,7 @@ float frag(Interpolators interp) : SV_TARGET {
 
     float4 offset = float4(kernel_sample, 1.0f);
     offset = mul(consts.projection, offset);
-
-    offset.xy /= offset.w;
-    offset.xy = offset.xy * 0.5 + 0.5;
+    offset.xy = (offset.xy / offset.w) * 0.5 + 0.5;
 
     float sample_depth = depth_map.Sample(map_sampler, offset.xy).r;
     float range_check =
