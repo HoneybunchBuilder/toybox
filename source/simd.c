@@ -543,41 +543,33 @@ Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
   return look_forward_quat(forward, up);
 }
 
-// Left Handed
-void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
-  SDL_assert(m);
+// Right Handed
+float4x4 perspective(float fovy, float aspect, float zn, float zf) {
   float focal_length = 1.0f / SDL_tanf(fovy * 0.5f);
-
   float m00 = focal_length / aspect;
   float m11 = focal_length;
-  float m22 = zf / (zf - zn);
-  float m23 = -(zn * zf) / (zf - zn);
 
-  *m = (float4x4){
-      (float4){m00, 0, 0, 0},
-      (float4){0, m11, 0, 0},
-      (float4){0, 0, m22, m23},
-      (float4){0, 0, 1, 0},
-  };
-}
-
-// Left Handed
-void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
-                         float zf) {
-  SDL_assert(m);
-  float focal_length = 1.0f / SDL_tanf(fovy * 0.5f);
-
-  float m00 = focal_length / aspect;
-  float m11 = focal_length;
+#ifdef TB_USE_INVERSE_DEPTH
   float m22 = zn / (zf - zn);
   float m23 = zf * zn / (zf - zn);
 
-  *m = (float4x4){
+  return (float4x4){
       (float4){m00, 0, 0, 0},
       (float4){0, m11, 0, 0},
       (float4){0, 0, m22, m23},
       (float4){0, 0, -1, 0},
   };
+#else
+  float m22 = zf / (zn - zf);
+  float m23 = (zn * zf) / (zn - zf);
+
+  return (float4x4){
+      (float4){m00, 0, 0, 0},
+      (float4){0, m11, 0, 0},
+      (float4){0, 0, m22, m23},
+      (float4){0, 0, -1, 0},
+  };
+#endif
 }
 
 // Left Handed

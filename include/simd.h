@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef TB_USE_INVERSE_DEPTH
+// #define TB_USE_INVERSE_DEPTH 1
+#endif
+
 // Do nothing if this is a shader
 #ifndef __HLSL_VERSION
 
@@ -165,9 +169,8 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
 Quaternion look_forward_quat(float3 forward, float3 up);
 Quaternion look_at_quat(float3 pos, float3 target, float3 up);
-void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf);
-void reverse_perspective(float4x4 *m, float fovy, float aspect, float zn,
-                         float zf);
+
+float4x4 perspective(float fovy, float aspect, float zn, float zf);
 float4x4 orthographic(float r, float l, float t, float b, float zn, float zf);
 
 Frustum frustum_from_view_proj(const float4x4 *vp);

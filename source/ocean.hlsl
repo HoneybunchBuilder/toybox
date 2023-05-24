@@ -92,15 +92,15 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   // Underwater fog
   {
+    const float near = camera_data.proj_params.x;
+    const float far = camera_data.proj_params.y;
     // TODO: Paramaterize
-    const float near = 0.1f;
-    const float far = 1000.0f;
     const float fog_density = 0.05f;
     const float3 fog_color = float3(0.105, 0.163, 0.262);
 
     // World position depth
     float raw_depth = depth_map.Sample(static_sampler, uv).r;
-    float scene_eye_depth = linear_depth(1 - raw_depth, near, far);
+    float scene_eye_depth = linear_depth(raw_depth, near, far);
     float fragment_eye_depth = -i.view_pos.z;
     float3 world_pos = camera_data.view_pos -
                        ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);

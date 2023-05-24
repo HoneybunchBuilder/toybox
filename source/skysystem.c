@@ -1244,9 +1244,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       // Need to manually calculate this here
       float4x4 vp = {.row0 = {0}};
       {
-        float4x4 proj = {.row0 = {0}};
-        reverse_perspective(&proj, camera->fov, camera->aspect_ratio,
-                            camera->near, camera->far);
+        float4x4 proj = perspective(camera->fov, camera->aspect_ratio,
+                                    camera->near, camera->far);
 
         float3 forward = transform_get_forward(&transform->transform);
 

@@ -206,7 +206,7 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
               .depthWriteEnable = VK_TRUE,
-              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+              .depthCompareOp = VK_COMPARE_OP_LESS,
           },
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
@@ -348,7 +348,11 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
               .depthWriteEnable = VK_TRUE,
-              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS,
+#endif
               .maxDepthBounds = 1.0f,
           },
       .pDynamicState =
@@ -581,7 +585,11 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
               .depthWriteEnable = VK_FALSE,
+#ifdef TB_USE_INVERSE_DEPTH
               .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+#endif
               .maxDepthBounds = 1.0f,
           },
       .pColorBlendState =

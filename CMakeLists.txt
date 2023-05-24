@@ -14,7 +14,7 @@ project(toybox
         LANGUAGES C CXX)
 
 option(TB_BUILD_SAMPLES "Compile samples" ON)
-option(FINAL "Compile with the intention to redistribute" ON)
+option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" OFF)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
 
@@ -136,7 +136,7 @@ set(library_list "SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mima
 function(cook_shaders out_shader_sources out_shader_headers)
   # Compile Shaders
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
-  file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli")
+  file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli" "${shader_include_dir}/*.h")
 
   file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
   foreach(shader ${shader_files})

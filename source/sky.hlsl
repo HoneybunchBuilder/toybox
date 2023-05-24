@@ -2,6 +2,8 @@
 #include "common.hlsli"
 #include "sky_common.hlsli"
 
+#include "simd.h"
+
 ConstantBuffer<SkyData> sky_data : register(b0, space0); // Fragment Stage Only
 
 [[vk::push_constant]] ConstantBuffer<SkyPushConstants> consts
@@ -39,7 +41,12 @@ FragmentOut frag(Interpolators i) {
 
   FragmentOut o;
   o.color = float4(color, 1.0);
-  o.depth = 0; // The skybox has no depth no matter what the geometry says
+  // The skybox has no depth no matter what the geometry says
+#ifdef TB_USE_INVERSE_DEPTH
+  o.depth = 0;
+#else
+  o.depth = 1;
+#endif
 
   return o;
 }

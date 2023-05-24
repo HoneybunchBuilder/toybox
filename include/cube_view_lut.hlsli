@@ -1,11 +1,12 @@
 #pragma once
 
+#include "simd.h"
+
 // Per view matrix look up table
 // So that each view is pointing at the right face of the cubemap
 // Generated manually by doing the math on the CPU and writing the values here
 /*
-    float4x4 proj = {.row0 = {0}};
-    reverse_perspective(&proj, PI_2, 1.0, 0.1, 1000.0f);
+    float4x4 proj = perspective(&proj, PI_2, 1.0, 0.1, 1000.0f);
 
     float4x4 view = {.row0 = {0}};
     look_forward(&view, (float3){0}, (float3){0, -1, 0}, (float3){1, 0, 0});

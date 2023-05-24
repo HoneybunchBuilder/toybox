@@ -296,7 +296,11 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
               .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
               .depthCompareOp = VK_COMPARE_OP_GREATER,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS,
+#endif
           },
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){

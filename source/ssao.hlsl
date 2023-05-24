@@ -12,7 +12,11 @@ sampler noise_sampler : register(s5, space0);
     : register(b6, space0);
 
 float frag(Interpolators interp) : SV_TARGET {
-  float3 origin = consts.view_dir * depth_map.Sample(map_sampler, interp.uv0).r;
+  const float near = consts.proj_params.x;
+  const float far = consts.proj_params.y;
+
+  float3 origin = view_space_pos_from_depth(map_sampler, depth_map,
+                                            consts.inv_proj, interp.uv0);
   float3 normal =
       normalize(normal_map.Sample(map_sampler, interp.uv0).rgb * 2.0 - 1.0);
 
@@ -32,7 +36,8 @@ float frag(Interpolators interp) : SV_TARGET {
     offset = mul(consts.projection, offset);
     offset.xy = (offset.xy / offset.w) * 0.5 + 0.5;
 
-    float sample_depth = depth_map.Sample(map_sampler, offset.xy).r;
+    float sample_depth =
+        linear_depth(depth_map.Sample(map_sampler, offset.xy).r, near, far);
     float range_check =
         abs(origin.z - sample_depth) < consts.radius ? 1.0 : 0.0;
     occlusion += (sample_depth <= kernel_sample.z ? 1.0 : 0.0) * range_check;

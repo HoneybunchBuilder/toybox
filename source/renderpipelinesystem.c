@@ -205,7 +205,6 @@ VkResult create_depth_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -324,7 +323,6 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -442,7 +440,6 @@ VkResult create_ssao_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -560,7 +557,6 @@ VkResult create_brightness_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -678,7 +674,6 @@ VkResult create_bloom_blur_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -797,7 +792,6 @@ VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_NONE,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -1345,6 +1339,13 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                       .store_op = VK_ATTACHMENT_STORE_OP_STORE,
                       .attachment = opaque_depth,
+#ifdef TB_USE_INVERSE_DEPTH
+                      .clear_value =
+                          (VkClearValue){.depthStencil = {.depth = 0.0f}},
+#else
+                      .clear_value =
+                          (VkClearValue){.depthStencil = {.depth = 1.0f}},
+#endif
                   },
                   {
                       .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -3578,10 +3579,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       // HACK - Just grab data out of the first view
       const View *view = &self->view_system->views[0];
 
-      float4x4 inv_view = inv_mf44(view->view_data.v);
       float4x4 projection = view->view_data.p;
-      float3 view_dir = normf3(
-          (float3){inv_view.row0[2], inv_view.row1[2], inv_view.row2[2]});
 
       SSAOBatch ssao_batch = {
           .set = ssao_set,
@@ -3591,7 +3589,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                       (float2){(float)width / 4.0f, (float)height / 4.0f},
                   .radius = 0.5,
                   .projection = projection,
-                  .view_dir = view_dir,
+                  .inv_proj = inv_mf44(projection),
+                  .proj_params = view->view_data.proj_params,
               },
       };
       DrawBatch batch = {

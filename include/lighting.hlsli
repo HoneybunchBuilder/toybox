@@ -81,8 +81,7 @@ float texture_proj(float4 shadow_coord, float2 offset, float ambient,
   proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
   proj_coord = proj_coord / proj_coord.w;
 
-  if(proj_coord.z <= -1.0 || shadow_coord.z >= 1.0)
-  {
+  if(proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
     return 1.0;
   }
 

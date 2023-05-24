@@ -126,12 +126,19 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
          ++cascade_idx) {
       float split_dist = cascade_splits[cascade_idx];
 
-      // Inverse near and far because main camera uses reverse depth
       float3 frustum_corners[8] = {
+#ifdef TB_USE_INVERSE_DEPTH
+          // Inverse near and far because main camera uses reverse depth
           {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Near
           {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
           {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Far
           {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
+#else
+          {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Near
+          {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
+          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Far
+          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
+#endif
       };
 
       // Project into world space
