@@ -63,6 +63,18 @@ typedef struct DrawContext {
   uint32_t batch_max;
 } DrawContext;
 
+typedef struct DispatchBatch DispatchBatch;
+
+typedef struct DispatchContext {
+  TbRenderPassId pass_id;
+  tb_record_dispatch_batch *record_fn;
+  uint32_t batch_count;
+  DispatchBatch *batches;
+  uint32_t user_batch_size;
+  void *user_batches;
+  uint32_t batch_max;
+} DispatchContext;
+
 #define TB_MAX_COMMAND_BUFFERS 32
 
 typedef struct FrameState {
@@ -102,6 +114,10 @@ typedef struct FrameState {
   uint32_t draw_ctx_count;
   DrawContext *draw_contexts;
   uint32_t draw_ctx_max;
+
+  uint32_t dispatch_ctx_count;
+  DispatchContext *dispatch_contexts;
+  uint32_t dispatch_ctx_max;
 
 } FrameState;
 

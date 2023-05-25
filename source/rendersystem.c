@@ -510,6 +510,21 @@ tb_rnd_create_descriptor_pool(RenderSystem *self,
   return err;
 }
 
+VkResult
+tb_rnd_create_compute_pipelines(RenderSystem *self, uint32_t create_info_count,
+                                const VkComputePipelineCreateInfo *create_info,
+                                const char *name, VkPipeline *pipelines) {
+  VkResult err = vkCreateComputePipelines(
+      self->render_thread->device, self->pipeline_cache, create_info_count,
+      create_info, &self->vk_host_alloc_cb, pipelines);
+  TB_VK_CHECK_RET(err, "Failed to create compute pipeline", err);
+  for (uint32_t i = 0; i < create_info_count; ++i) {
+    SET_VK_NAME(self->render_thread->device, pipelines[i],
+                VK_OBJECT_TYPE_PIPELINE, name);
+  }
+  return err;
+}
+
 VkResult tb_rnd_create_graphics_pipelines(
     RenderSystem *self, uint32_t create_info_count,
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,

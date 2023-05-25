@@ -41,8 +41,10 @@ typedef struct RenderTargetSystem {
 
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
-  TbRenderTargetId normal_buffer;
+  TbRenderTargetId
+      normal_buffer; // Could be transient and memory recycled after ssao
   TbRenderTargetId ssao_buffer;
+  TbRenderTargetId ssao_scratch; // Ideally want this to be transient
   TbRenderTargetId hdr_color;
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;
@@ -51,8 +53,8 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId prefiltered_cube;
   TbRenderTargetId shadow_maps[TB_CASCADE_COUNT];
   TbRenderTargetId brightness_downsample;
-  TbRenderTargetId bloom_blur_x;
-  TbRenderTargetId bloom_blur_y;
+  TbRenderTargetId bloom_blur_x; // Ideally want this to be transient
+  TbRenderTargetId bloom_blur_y; // Ideally want this to be transient
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

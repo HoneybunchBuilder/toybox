@@ -243,6 +243,23 @@ bool create_render_target_system(RenderTargetSystem *self,
       };
       self->ssao_buffer = tb_create_render_target(self, &rt_desc);
     }
+    // Create ssao scratch target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "SSAO scratch",
+          .format = VK_FORMAT_R32_SFLOAT,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->ssao_scratch = tb_create_render_target(self, &rt_desc);
+    }
     // Create hdr color target
     {
       RenderTargetDescriptor rt_desc = {

@@ -1195,14 +1195,21 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
                          NULL, 0, NULL, 1, &barrier->barrier);
   }
 
-  vkCmdBeginRendering(buffer, pass->render_info);
+  // Assume a pass with no render info is doing compute work
+  if (pass->render_info) {
+    vkCmdBeginRendering(buffer, pass->render_info);
+  }
   return ret;
 }
 
-void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope) {
+void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope,
+                     PassContext *pass) {
   (void)scope;
   TracyCVkZoneEnd(scope);
-  vkCmdEndRendering(buffer);
+  // Assume a pass with no render info has done no rendering
+  if (pass->render_info) {
+    vkCmdEndRendering(buffer);
+  }
 }
 
 void tick_render_thread(RenderThread *thread, FrameState *state) {
@@ -1497,16 +1504,26 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         }
 
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
-        for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
-             ++draw_idx) {
-          DrawContext *draw = &state->draw_contexts[draw_idx];
-          if (draw->pass_id == pass->id && draw->batch_count > 0) {
-            draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
-                            draw->batches);
+        if (pass->render_info) {
+          for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
+               ++draw_idx) {
+            DrawContext *draw = &state->draw_contexts[draw_idx];
+            if (draw->pass_id == pass->id && draw->batch_count > 0) {
+              draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
+                              draw->batches);
+            }
+          }
+        } else {
+          for (uint32_t dispatch_idx = 0;
+               dispatch_idx < state->dispatch_ctx_count; ++dispatch_idx) {
+            DispatchContext *dispatch = &state->dispatch_contexts[dispatch_idx];
+            if (dispatch->pass_id == pass->id && dispatch->batch_count > 0) {
+              dispatch->record_fn(gpu_ctx, pass_buffer, dispatch->batch_count,
+                                  dispatch->batches);
+            }
           }
         }
-
-        record_pass_end(pass_buffer, pass_scope);
+        record_pass_end(pass_buffer, pass_scope, pass);
 
 #ifdef TRACY_ENABLE
         cmd_end_label(pass_buffer);

@@ -181,6 +181,26 @@ function(cook_shaders out_shader_sources out_shader_headers)
   endforeach()
   list(APPEND shader_sources ${mesh_shader_files})
 
+  file(GLOB compute_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.cs")
+  foreach(shader ${compute_shader_files})
+    get_filename_component(filename ${shader} NAME_WLE)
+    get_filename_component(filename ${filename} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+    set(comp_out_path "${shader_out_path}/${filename}_comp.h")
+    set(out_paths "${comp_out_path}")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.1 -spirv ${shader} -Fh ${comp_out_path}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+    list(APPEND shader_headers ${out_paths})
+  endforeach()
+  list(APPEND shader_sources ${compute_shader_files})
+
   file(GLOB rt_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.rt")
   foreach(shader ${rt_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)

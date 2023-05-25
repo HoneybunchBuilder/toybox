@@ -15,6 +15,8 @@ typedef uint32_t TbRenderPassId;
 static const TbRenderPassId InvalidRenderPassId = SDL_MAX_UINT32;
 typedef uint32_t TbDrawContextId;
 static const TbDrawContextId InvalidDrawContextId = SDL_MAX_UINT32;
+typedef uint32_t TbDispatchContextId;
+static const TbDispatchContextId InvalidDispatchContextId = SDL_MAX_UINT32;
 typedef struct SystemDescriptor SystemDescriptor;
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
@@ -41,12 +43,26 @@ typedef struct DrawBatch {
   void *draws;
 } DrawBatch;
 
+typedef struct DispatchBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+
+  void *user_batch;
+} DispatchBatch;
+
 typedef struct DrawContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
   tb_record_draw_batch *draw_fn;
 } DrawContextDescriptor;
 typedef struct DrawContext DrawContext;
+
+typedef struct DispatchContextDescriptor {
+  TbRenderPassId pass_id;
+  uint64_t batch_size;
+  tb_record_dispatch_batch *dispatch_fn;
+} DispatchContextDescriptor;
+typedef struct DispatchContext DispatchContext;
 
 typedef struct RenderPipelineSystemDescriptor {
   Allocator std_alloc;
@@ -100,13 +116,16 @@ typedef struct RenderPipelineSystem {
   // Copy resources
   VkSampler sampler;
   VkDescriptorSetLayout ssao_set_layout;
+  VkDescriptorSetLayout blur_set_layout;
   VkDescriptorSetLayout copy_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
   VkPipelineLayout ssao_pipe_layout;
+  VkPipelineLayout blur_pipe_layout;
   VkPipelineLayout bloom_blur_layout;
   VkPipelineLayout copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
   VkPipeline ssao_pipe;
+  VkPipeline blur_pipe; // Compute blur pipe
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;
@@ -125,6 +144,9 @@ TbDrawContextId
 tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
                                          const DrawContextDescriptor *desc);
 
+TbDispatchContextId tb_render_pipeline_register_dispatch_context(
+    RenderPipelineSystem *self, const DispatchContextDescriptor *desc);
+
 void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
@@ -134,3 +156,8 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
                                          const DrawBatch *batches);
+
+void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
+                                             TbDispatchContextId dispatch_ctx,
+                                             uint32_t batch_count,
+                                             const DispatchBatch *batches);

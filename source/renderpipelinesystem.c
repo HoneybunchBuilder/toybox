@@ -15,6 +15,7 @@
 #endif
 #include "bloomblur_frag.h"
 #include "bloomblur_vert.h"
+#include "blur_comp.h"
 #include "brightness_frag.h"
 #include "brightness_vert.h"
 #include "colorcopy_frag.h"
@@ -479,6 +480,42 @@ VkResult create_ssao_pipeline(RenderSystem *render_system,
 
   tb_rnd_destroy_shader(render_system, ssao_vert_mod);
   tb_rnd_destroy_shader(render_system, ssao_frag_mod);
+
+  return err;
+}
+
+VkResult create_blur_pipeline(RenderSystem *render_system,
+                              VkPipelineLayout layout, VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+  VkShaderModule blur_comp_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(blur_comp);
+    create_info.pCode = (const uint32_t *)blur_comp;
+    err = tb_rnd_create_shader(render_system, &create_info, "Blur Comp",
+                               &blur_comp_mod);
+    TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
+  }
+
+  VkComputePipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .stage =
+          (VkPipelineShaderStageCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+              .module = blur_comp_mod,
+              .pName = "comp",
+          },
+      .layout = layout,
+  };
+  err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+                                        "Blur Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create blur pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, blur_comp_mod);
 
   return err;
 }
@@ -3092,6 +3129,62 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create ssao draw context", false);
     }
 
+    // Compute Blur
+    {
+      {
+        VkDescriptorSetLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = (VkDescriptorSetLayoutBinding[2]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                },
+            }};
+        err =
+            tb_rnd_create_set_layout(render_system, &create_info,
+                                     "Blur Set Layout", &self->blur_set_layout);
+        TB_VK_CHECK_RET(err, "Failed to create blur descriptor set layout",
+                        false);
+      }
+
+      {
+        VkPipelineLayoutCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts =
+                (VkDescriptorSetLayout[1]){
+                    self->blur_set_layout,
+                },
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges =
+                (VkPushConstantRange[1]){
+                    {
+                        .offset = 0,
+                        .size = sizeof(BlurPushConstants),
+                        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    },
+                },
+        };
+        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+                                            "Blur Pipeline Layout",
+                                            &self->blur_pipe_layout);
+        TB_VK_CHECK_RET(err, "Failed to create blur pipeline layout", false);
+      }
+
+      err = create_blur_pipeline(self->render_system, self->blur_pipe_layout,
+                                 &self->blur_pipe);
+      TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
+    }
+
     // Brightness
     {
       uint32_t attach_count = 0;
@@ -3199,13 +3292,16 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
+  tb_rnd_destroy_set_layout(self->render_system, self->blur_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->bloom_blur_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
@@ -3329,6 +3425,10 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
     for (uint32_t ctx_idx = 0; ctx_idx < state->draw_ctx_count; ++ctx_idx) {
       DrawContext *draw_ctx = &state->draw_contexts[ctx_idx];
       draw_ctx->batch_count = 0;
+    }
+    for (uint32_t ctx_idx = 0; ctx_idx < state->dispatch_ctx_count; ++ctx_idx) {
+      DispatchContext *dispatch_ctx = &state->dispatch_contexts[ctx_idx];
+      dispatch_ctx->batch_count = 0;
     }
   }
 }
@@ -3766,6 +3866,32 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
   return id;
 }
 
+TbDispatchContextId tb_render_pipeline_register_dispatch_context(
+    RenderPipelineSystem *self, const DispatchContextDescriptor *desc) {
+  Allocator std_alloc = self->std_alloc;
+  RenderThread *thread = self->render_system->render_thread;
+  TbDispatchContextId id = thread->frame_states[0].dispatch_ctx_count;
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state = &thread->frame_states[frame_idx];
+
+    const uint32_t new_count = state->dispatch_ctx_count + 1;
+    if (new_count > state->dispatch_ctx_max) {
+      const uint32_t new_max = new_count * 2;
+      state->dispatch_contexts = tb_realloc_nm_tp(
+          std_alloc, state->dispatch_contexts, new_max, DispatchContext);
+      state->dispatch_ctx_max = new_max;
+    }
+    state->dispatch_ctx_count = new_count;
+
+    state->dispatch_contexts[id] = (DispatchContext){
+        .pass_id = desc->pass_id,
+        .user_batch_size = desc->batch_size,
+        .record_fn = desc->dispatch_fn,
+    };
+  }
+  return id;
+}
+
 void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
@@ -3815,6 +3941,44 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
   // Copy batches into frame state's batch list
   DrawBatch *dst = &ctx->batches[write_head];
   SDL_memcpy(dst, batches, batch_count * sizeof(DrawBatch));
+
+  for (uint32_t i = 0; i < 0 + batch_count; ++i) {
+    void *user_dst = ((uint8_t *)ctx->user_batches) +
+                     ((i + write_head) * ctx->user_batch_size);
+    SDL_memcpy(user_dst, batches[i].user_batch, ctx->user_batch_size);
+    ctx->batches[i + write_head].user_batch = user_dst;
+  }
+
+  ctx->batch_count = new_count;
+}
+
+void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
+                                             TbDispatchContextId dispatch_ctx,
+                                             uint32_t batch_count,
+                                             const DispatchBatch *batches) {
+  RenderThread *thread = self->render_system->render_thread;
+  FrameState *state = &thread->frame_states[self->render_system->frame_idx];
+  if (dispatch_ctx >= state->dispatch_ctx_count) {
+    TB_CHECK(false, "Dispatch Context Id out of range");
+    return;
+  }
+
+  DispatchContext *ctx = &state->dispatch_contexts[dispatch_ctx];
+
+  const uint32_t write_head = ctx->batch_count;
+  const uint32_t new_count = ctx->batch_count + batch_count;
+  if (new_count > ctx->batch_max) {
+    const uint32_t new_max = new_count * 2;
+    ctx->batches =
+        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DispatchBatch);
+    ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
+                                   new_max * ctx->user_batch_size);
+    ctx->batch_max = new_max;
+  }
+
+  // Copy batches into frame state's batch list
+  DispatchBatch *dst = &ctx->batches[write_head];
+  SDL_memcpy(dst, batches, batch_count * sizeof(DispatchBatch));
 
   for (uint32_t i = 0; i < 0 + batch_count; ++i) {
     void *user_dst = ((uint8_t *)ctx->user_batches) +

@@ -97,6 +97,10 @@ tb_rnd_create_descriptor_pool(RenderSystem *self,
                               const VkDescriptorPoolCreateInfo *create_info,
                               const char *name, VkDescriptorPool *pool);
 
+VkResult
+tb_rnd_create_compute_pipelines(RenderSystem *self, uint32_t create_info_count,
+                                const VkComputePipelineCreateInfo *create_info,
+                                const char *name, VkPipeline *pipelines);
 VkResult tb_rnd_create_graphics_pipelines(
     RenderSystem *self, uint32_t create_info_count,
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,

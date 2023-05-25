@@ -6,6 +6,11 @@
 #include "pi.h"
 #include "simd.h"
 
+typedef struct BlurPushConstants {
+  float radius;
+  float horizontal;
+} BlurPushConstants;
+
 typedef struct BloomBlurPushConstants {
   float horizontal;
 } BloomBlurPushConstants;
