@@ -1166,17 +1166,19 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
 
   // Copy attachments
   pass->attach_count = create_info->attachment_count;
-  TB_CHECK_RETURN(pass->attach_count < TB_MAX_ATTACHMENTS, "Out of range",
-                  InvalidRenderPassId);
-  SDL_memset(pass->attachments, 0,
-             sizeof(TbAttachmentInfo) * TB_MAX_ATTACHMENTS);
-  for (uint32_t i = 0; i < pass->attach_count; ++i) {
-    const TbAttachmentInfo *attach_info = &create_info->attachments[i];
-    pass->attachments[i] = (PassAttachment){
-        .clear_value = attach_info->clear_value,
-        .mip = attach_info->mip,
-        .attachment = attach_info->attachment,
-    };
+  if (pass->attach_count > 0) {
+    TB_CHECK_RETURN(pass->attach_count < TB_MAX_ATTACHMENTS, "Out of range",
+                    InvalidRenderPassId);
+    SDL_memset(pass->attachments, 0,
+               sizeof(TbAttachmentInfo) * TB_MAX_ATTACHMENTS);
+    for (uint32_t i = 0; i < pass->attach_count; ++i) {
+      const TbAttachmentInfo *attach_info = &create_info->attachments[i];
+      pass->attachments[i] = (PassAttachment){
+          .clear_value = attach_info->clear_value,
+          .mip = attach_info->mip,
+          .attachment = attach_info->attachment,
+      };
+    }
   }
 
   // Copy pass transitions
@@ -1190,8 +1192,8 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
                sizeof(PassTransition) * pass->transition_count);
   }
 
-  // Populate rendering info
-  {
+  // Populate rendering info if we target any attachments
+  if (pass->attach_count > 0) {
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
@@ -1513,12 +1515,85 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       false);
       self->ssao_pass = id;
     }
+    // Create SSAO blur compute pass
+    {
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->ssao_pass},
+          .transition_count = 2,
+          .transitions =
+              (PassTransition[2]){
+                  {
+                      .render_target = self->render_target_system->ssao_buffer,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT |
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  {
+                      .render_target = self->render_target_system->ssao_scratch,
+                      .barrier =
+                          {
+                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT |
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+              },
+          .name = "SSAO Blur Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create ssao blur pass", false);
+      self->ssao_blur_pass = id;
+    }
     // Create env capture pass
     {
       TbRenderPassCreateInfo create_info = {
           .view_mask = 0x0000003F, // 0b00111111
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->opaque_depth_normal_pass},
+          .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
           .transition_count = 1,
           .transitions =
               (PassTransition[1]){
@@ -1717,7 +1792,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create shadow passes
     {
-      // Note: this doesn't actually depend on the opaque depth pass,
+      // Note: this doesn't actually depend a previous pass,
       // but for now the pass dependencies system only has one starter node,
       // so everything must be a child of that
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
@@ -1755,7 +1830,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
         TbRenderPassCreateInfo create_info = {
             .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){self->opaque_depth_normal_pass},
+            .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
             .transition_count = trans_count,
             .transitions = transitions,
             .attachment_count = 1,
@@ -1887,31 +1962,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      PassTransition ssao_trans = {
-          .render_target = self->render_target_system->ssao_buffer,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-                                           VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 1,
-                              },
-                      },
-              },
-      };
-      const uint32_t transition_count = TB_CASCADE_COUNT + 5;
-      PassTransition transitions[TB_CASCADE_COUNT + 5] = {0};
+      const uint32_t transition_count = TB_CASCADE_COUNT + 4;
+      PassTransition transitions[TB_CASCADE_COUNT + 4] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
@@ -1920,12 +1972,11 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       transitions[TB_CASCADE_COUNT + 1] = filter_trans;
       transitions[TB_CASCADE_COUNT + 2] = color_trans;
       transitions[TB_CASCADE_COUNT + 3] = normal_trans;
-      transitions[TB_CASCADE_COUNT + 4] = ssao_trans;
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
-          .dependencies = (TbRenderPassId[2]){self->opaque_depth_normal_pass,
-                                              self->shadow_passes[3]},
+          .dependencies =
+              (TbRenderPassId[2]){self->ssao_blur_pass, self->shadow_passes[3]},
           .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,

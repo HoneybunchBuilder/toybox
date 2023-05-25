@@ -82,6 +82,7 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId prefilter_passes[PREFILTER_PASS_COUNT];
   TbRenderPassId opaque_depth_normal_pass;
   TbRenderPassId ssao_pass;
+  TbRenderPassId ssao_blur_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;
   TbRenderPassId shadow_passes[TB_CASCADE_COUNT];

@@ -1195,8 +1195,8 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
                          NULL, 0, NULL, 1, &barrier->barrier);
   }
 
-  // Assume a pass with no render info is doing compute work
-  if (pass->render_info) {
+  // Assume a pass with no attachments is doing compute work
+  if (pass->attachment_count > 0) {
     vkCmdBeginRendering(buffer, pass->render_info);
   }
   return ret;
@@ -1206,8 +1206,8 @@ void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope,
                      PassContext *pass) {
   (void)scope;
   TracyCVkZoneEnd(scope);
-  // Assume a pass with no render info has done no rendering
-  if (pass->render_info) {
+  // Assume a pass with no attachments has done no rendering
+  if (pass->attachment_count > 0) {
     vkCmdEndRendering(buffer);
   }
 }
