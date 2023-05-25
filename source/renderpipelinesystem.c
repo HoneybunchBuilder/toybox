@@ -3576,10 +3576,24 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
 
     // SSAO pass
     {
-      // HACK - Just grab data out of the first view
-      const View *view = &self->view_system->views[0];
+      // HACK - find which view targets the swapchain
+      const View *view = NULL;
+      for (uint32_t view_idx = 0; view_idx < self->view_system->view_count;
+           ++view_idx) {
+        const View *v = &self->view_system->views[view_idx];
+        if (v->target == self->render_target_system->swapchain) {
+          view = v;
+          break;
+        }
+      }
 
-      float4x4 projection = view->view_data.p;
+      float4x4 projection = {.row0 = {0}};
+      float4 proj_params = {0};
+
+      if (view) {
+        projection = view->view_data.p;
+        proj_params = view->view_data.proj_params;
+      }
 
       SSAOBatch ssao_batch = {
           .set = ssao_set,
@@ -3590,7 +3604,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                   .radius = 0.5,
                   .projection = projection,
                   .inv_proj = inv_mf44(projection),
-                  .proj_params = view->view_data.proj_params,
+                  .proj_params = proj_params,
               },
       };
       DrawBatch batch = {

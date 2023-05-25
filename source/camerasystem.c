@@ -3,6 +3,7 @@
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
+#include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -80,6 +81,13 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
 
     Frustum frustum = frustum_from_view_proj(&view_data.vp);
 
+    // HACK - setting target here to the swapchain in a janky way that's
+    // just used to facilitate other hacks
+    // The render pipeline will use whatever view targets the swapchain
+    // to do SSAO
+    tb_view_system_set_view_target(
+        view_system, cam_comp->view_id,
+        self->view_system->render_target_system->swapchain);
     tb_view_system_set_view_data(view_system, cam_comp->view_id, &view_data);
     tb_view_system_set_view_frustum(view_system, cam_comp->view_id, &frustum);
   }

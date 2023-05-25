@@ -417,6 +417,14 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
   return id;
 }
 
+void tb_view_system_set_view_target(ViewSystem *self, TbViewId view,
+                                    TbRenderTargetId target) {
+  if (view >= self->view_count) {
+    TB_CHECK(false, "View Id out of range");
+  }
+  self->views[view].target = target;
+}
+
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data) {
   if (view >= self->view_count) {

@@ -59,6 +59,8 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
                                const ViewSystemDescriptor *view_desc);
 
 TbViewId tb_view_system_create_view(ViewSystem *self);
+void tb_view_system_set_view_target(ViewSystem *self, TbViewId view,
+                                    TbRenderTargetId target);
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data);
 void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
