@@ -73,17 +73,11 @@ float4 clip_to_screen(float4 clip) {
 }
 
 float linear_depth(float depth, float near, float far) {
-  #ifdef TB_USE_INVERSE_DEPTH
-  depth = 1 - depth;
-  #endif
-  return far * near / ((near - far) * depth + far);
+  return (far * near / ((near - far) * depth + far));
 }
 
 float depth_from_clip_z(float z, float near, float far) {
-  #ifdef TB_USE_INVERSE_DEPTH
-  z = 1 - z;
-  #endif
-  return max((z / near) * far, 0);
+  return max((1 - z / near) * far, 0);
 }
 
 float2 tiling_and_offset(float2 uv, float2 tiling, float2 offset) {
@@ -118,12 +112,11 @@ float gradient_noise(float2 uv) {
   return lerp(lerp(d00, d01, fp.y), lerp(d10, d11, fp.y), fp.x) + 0.5f;
 }
 
-float3 view_space_pos_from_depth(sampler s, Texture2D depth_map, float4x4 inv_proj, float2 uv){
-  float z = depth_map.Sample(s, uv).r;
-  float x = uv.x * 2 - 1;
-  float y = (1 - uv.y) * 2 - 1;
-  float4 proj_pos = float4(x, y, z, 1.0f);
-  float4 view_space_pos = mul(proj_pos, inv_proj);
+float3 view_space_pos_from_depth(float depth, float4x4 inv_proj, float2 uv){
+  float x = uv.x * 2.0 - 1.0;
+  float y = uv.y * 2.0 - 1.0;
+  float z = depth;
+  float4 view_space_pos = mul(float4(x, y, z, 1.0f), inv_proj);
   return view_space_pos.xyz / view_space_pos.w;
 }
 

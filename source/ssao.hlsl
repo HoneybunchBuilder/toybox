@@ -15,8 +15,10 @@ float frag(Interpolators interp) : SV_TARGET {
   const float near = consts.proj_params.x;
   const float far = consts.proj_params.y;
 
-  float3 origin = view_space_pos_from_depth(map_sampler, depth_map,
-                                            consts.inv_proj, interp.uv0);
+  const float bias = 0.025f;
+
+  float3 origin = view_space_pos_from_depth(
+      depth_map.Sample(map_sampler, interp.uv0).r, consts.inv_proj, interp.uv0);
   float3 normal =
       normalize(normal_map.Sample(map_sampler, interp.uv0).rgb * 2.0 - 1.0);
 
@@ -30,18 +32,21 @@ float frag(Interpolators interp) : SV_TARGET {
   float occlusion = 0.0f;
   for (int i = 0; i < params.kernel_size; ++i) {
     float3 kernel_sample = mul(orientation, params.kernel[i]);
-    kernel_sample = origin + (kernel_sample * consts.radius);
+    kernel_sample = origin + kernel_sample * consts.radius;
 
     float4 offset = float4(kernel_sample, 1.0f);
-    offset = mul(consts.projection, offset);
-    offset.xy = (offset.xy / offset.w) * 0.5 + 0.5;
+    offset = mul(offset, consts.projection);
+    offset = offset / offset.w;
+    offset.xy = offset.xy * 0.5 + 0.5;
 
     float sample_depth =
-        linear_depth(depth_map.Sample(map_sampler, offset.xy).r, near, far);
+        -linear_depth(depth_map.Sample(map_sampler, offset.xy).r, near, far);
+
     float range_check =
-        abs(origin.z - sample_depth) < consts.radius ? 1.0 : 0.0;
-    occlusion += (sample_depth <= kernel_sample.z ? 1.0 : 0.0) * range_check;
+        smoothstep(0.0f, 1.0f, consts.radius / abs(origin.z - sample_depth));
+    occlusion +=
+        (sample_depth >= kernel_sample.z + bias ? 1.0 : 0.0) * range_check;
   }
 
-  return 1.0 - (occlusion / params.kernel_size);
+  return 1 - (occlusion / params.kernel_size);
 }
