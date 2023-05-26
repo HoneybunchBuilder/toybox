@@ -1504,7 +1504,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         }
 
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
-        if (pass->render_info) {
+        if (pass->attachment_count > 0) {
           for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
                ++draw_idx) {
             DrawContext *draw = &state->draw_contexts[draw_idx];

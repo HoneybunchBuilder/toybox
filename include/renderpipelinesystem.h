@@ -43,11 +43,15 @@ typedef struct DrawBatch {
   void *draws;
 } DrawBatch;
 
+#define MAX_GROUPS 8
 typedef struct DispatchBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
 
   void *user_batch;
+
+  uint32_t group_count;
+  uint3 groups[MAX_GROUPS];
 } DispatchBatch;
 
 typedef struct DrawContextDescriptor {
@@ -113,6 +117,7 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId bloom_blur_x_ctx;
   TbDrawContextId bloom_blur_y_ctx;
   TbDrawContextId tonemap_ctx;
+  TbDispatchContextId ssao_blur_ctx;
 
   // Copy resources
   VkSampler sampler;

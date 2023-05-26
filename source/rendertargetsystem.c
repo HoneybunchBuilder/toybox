@@ -22,7 +22,8 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
                           const RenderTargetDescriptor *desc) {
   VkResult err = VK_SUCCESS;
 
-  VkImageUsageFlagBits usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  VkImageUsageFlagBits usage =
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
   VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
   if (desc->format == VK_FORMAT_D32_SFLOAT) {
     usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;

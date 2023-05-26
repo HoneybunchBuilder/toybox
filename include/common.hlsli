@@ -7,7 +7,6 @@
 #include "simd.h"
 
 typedef struct BlurPushConstants {
-  float radius;
   float horizontal;
 } BlurPushConstants;
 

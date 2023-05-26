@@ -126,6 +126,11 @@ typedef struct SSAOBatch {
   SSAOPushConstants consts;
 } SSAOBatch;
 
+typedef struct SSAOBlurBatch {
+  VkDescriptorSet set;
+  BlurPushConstants consts;
+} SSAOBlurBatch;
+
 typedef struct BlurBatch {
   VkDescriptorSet set;
   BloomBlurPushConstants consts;
@@ -928,15 +933,13 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void record_ssao(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                  uint32_t batch_count, const DrawBatch *batches) {
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    return;
+  }
   TracyCZoneNC(ctx, "SSAO Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "SSAO", 3, true);
   cmd_begin_label(buffer, "SSAO", (float4){0.4f, 0.8f, 0.0f, 1.0f});
-
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
 
   const DrawBatch *batch = &batches[0];
   const SSAOBatch *ssao_batch = (const SSAOBatch *)batch->user_batch;
@@ -961,17 +964,45 @@ void record_ssao(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
+void record_ssao_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                      uint32_t batch_count, const DispatchBatch *batches) {
+  TracyCZoneNC(ctx, "SSAO Blur Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "SSAO Blur", 3, true);
+  cmd_begin_label(buffer, "SSAO Blur", (float4){0.4f, 0.0f, 0.0f, 1.0f});
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const DispatchBatch *batch = &batches[batch_idx];
+    const SSAOBlurBatch *blur_batch = (const SSAOBlurBatch *)batch->user_batch;
+
+    VkPipelineLayout layout = batch->layout;
+
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
+                            1, &blur_batch->set, 0, NULL);
+    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(BlurPushConstants), &blur_batch->consts);
+
+    for (uint32_t i = 0; i < batch->group_count; i++) {
+      uint3 group = batch->groups[i];
+      vkCmdDispatch(buffer, group[0], group[1], group[2]);
+    }
+  }
+
+  cmd_end_label(buffer);
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
 void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    return;
+  }
+
   TracyCZoneNC(ctx, "Brightness Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Brightness", 3, true);
   cmd_begin_label(buffer, "Brightness", (float4){0.8f, 0.4f, 0.0f, 1.0f});
-
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
 
   record_fullscreen(buffer, batches,
                     (const FullscreenBatch *)batches->user_batch);
@@ -983,15 +1014,14 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    return;
+  }
+
   TracyCZoneNC(ctx, "Bloom Blur Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Bloom Blur", 3, true);
   cmd_begin_label(buffer, "Bloom Blur", (float4){0.8f, 0.4f, 0.0f, 1.0f});
-
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
 
   const DrawBatch *batch = batches;
   const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
@@ -1019,15 +1049,14 @@ void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
+  // Only expecting one draw per pass
+  if (batch_count != 1) {
+    return;
+  }
+
   TracyCZoneNC(ctx, "Tonemapping Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Tonemapping", 3, true);
   cmd_begin_label(buffer, "Tonemapping", (float4){0.8f, 0.4f, 0.0f, 1.0f});
-
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
 
   record_fullscreen(buffer, batches,
                     (const FullscreenBatch *)batches->user_batch);
@@ -1541,8 +1570,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                           VK_ACCESS_SHADER_WRITE_BIT,
                                       .oldLayout =
                                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
                                       .subresourceRange =
                                           {
                                               .aspectMask =
@@ -1568,8 +1596,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                           VK_ACCESS_SHADER_READ_BIT |
                                           VK_ACCESS_SHADER_WRITE_BIT,
                                       .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
                                       .subresourceRange =
                                           {
                                               .aspectMask =
@@ -1942,6 +1969,30 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       },
               },
       };
+      PassTransition ssao_trans = {
+          .render_target = self->render_target_system->ssao_buffer,
+          .barrier =
+              {
+                  .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  .barrier =
+                      {
+                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                          .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                           VK_ACCESS_SHADER_WRITE_BIT,
+                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                          .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+
+                          .subresourceRange =
+                              {
+                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                  .levelCount = 1,
+                                  .layerCount = 1,
+                              },
+                      },
+              },
+      };
       PassTransition shadow_trans_base = {
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1962,8 +2013,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      const uint32_t transition_count = TB_CASCADE_COUNT + 4;
-      PassTransition transitions[TB_CASCADE_COUNT + 4] = {0};
+      const uint32_t transition_count = TB_CASCADE_COUNT + 5;
+      PassTransition transitions[TB_CASCADE_COUNT + 5] = {0};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
         transitions[i] = shadow_trans_base;
         transitions[i].render_target = shadow_maps[i];
@@ -1972,6 +2023,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       transitions[TB_CASCADE_COUNT + 1] = filter_trans;
       transitions[TB_CASCADE_COUNT + 2] = color_trans;
       transitions[TB_CASCADE_COUNT + 3] = normal_trans;
+      transitions[TB_CASCADE_COUNT + 4] = ssao_trans;
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
@@ -3185,12 +3237,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       {
         VkDescriptorSetLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 2,
-            .pBindings = (VkDescriptorSetLayoutBinding[2]){
+            .bindingCount = 3,
+            .pBindings = (VkDescriptorSetLayoutBinding[3]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                 },
                 {
@@ -3198,6 +3250,13 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .pImmutableSamplers = &self->sampler,
                 },
             }};
         err =
@@ -3234,6 +3293,16 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       err = create_blur_pipeline(self->render_system, self->blur_pipe_layout,
                                  &self->blur_pipe);
       TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
+
+      DispatchContextDescriptor desc = {
+          .batch_size = sizeof(SSAOBatch),
+          .dispatch_fn = record_ssao_blur,
+          .pass_id = self->ssao_blur_pass,
+      };
+      self->ssao_blur_ctx =
+          tb_render_pipeline_register_dispatch_context(self, &desc);
+      TB_CHECK_RETURN(self->ssao_blur_ctx != InvalidDispatchContextId,
+                      "Failed to create ssao blur dispatch context", false);
     }
 
     // Brightness
@@ -3502,6 +3571,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
   for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
     state->draw_contexts[i].batch_count = 0;
   }
+  for (uint32_t i = 0; i < state->dispatch_ctx_count; ++i) {
+    state->dispatch_contexts[i].batch_count = 0;
+  }
 
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
@@ -3511,41 +3583,59 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
     // Allocate the known descriptor sets we need for this frame
     {
-      const uint32_t set_count = 6;
+#define SET_COUNT 8
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = set_count * 4,
-          .poolSizeCount = 1,
+          .maxSets = SET_COUNT * 4,
+          .poolSizeCount = 2,
           .pPoolSizes =
-              &(VkDescriptorPoolSize){
-                  .descriptorCount = set_count * 4,
-                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              (VkDescriptorPoolSize[2]){
+                  {
+                      .descriptorCount = SET_COUNT * 4,
+                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                  },
+                  {
+                      .descriptorCount = SET_COUNT * 4,
+                      .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                  },
               },
       };
-      VkDescriptorSetLayout layouts[6] = {
-          self->ssao_set_layout, self->copy_set_layout,
+      VkDescriptorSetLayout layouts[SET_COUNT] = {
+          self->ssao_set_layout, self->blur_set_layout,
+          self->blur_set_layout, self->copy_set_layout,
           self->copy_set_layout, self->copy_set_layout,
           self->copy_set_layout, self->tonemap_set_layout,
       };
       err =
           tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
-                                      self->descriptor_pools, set_count);
+                                      self->descriptor_pools, SET_COUNT);
       TB_VK_CHECK(err, "Failed to tick descriptor pool");
+#undef SET_COUNT
     }
 
     VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_x_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_y_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 2);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 6);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 7);
 
+    VkImageView ssao_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->ssao_buffer);
+    VkImageView ssao_scratch_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->ssao_scratch);
     VkImageView depth_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->depth_buffer);
@@ -3566,7 +3656,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_target_system->bloom_blur_y);
 
 // Write the descriptor set
-#define WRITE_COUNT 10
+#define WRITE_COUNT 14
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -3619,6 +3709,58 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     .imageView = self->ssao_noise_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_x_blur_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = ssao_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_x_blur_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = ssao_scratch_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_y_blur_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = ssao_scratch_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = ssao_y_blur_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = ssao_view,
                 },
         },
         {
@@ -3709,16 +3851,20 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
   {
     VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_blur_x_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet ssao_blur_y_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 2);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
+    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 6);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 7);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -3766,6 +3912,45 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
           .user_batch = &ssao_batch,
       };
       tb_render_pipeline_issue_draw_batch(self, self->ssao_ctx, 1, &batch);
+    }
+    // SSAO Blur Pass
+    {
+      uint32_t group_x = width;
+      uint32_t group_y = height;
+      // Do a blur on each axis
+      SSAOBlurBatch x_blur_batch = {
+          .set = ssao_blur_x_set,
+          .consts =
+              {
+                  .horizontal = 1.0f,
+              },
+      };
+      DispatchBatch x_batch = {
+          .layout = self->blur_pipe_layout,
+          .pipeline = self->blur_pipe,
+          .user_batch = &x_blur_batch,
+          .group_count = 1,
+          .groups[0] = {group_x, group_y, 1},
+      };
+      SSAOBlurBatch y_blur_batch = {
+          .set = ssao_blur_y_set,
+          .consts =
+              {
+                  .horizontal = 0.0f,
+              },
+      };
+      DispatchBatch y_batch = {
+          .layout = self->blur_pipe_layout,
+          .pipeline = self->blur_pipe,
+          .user_batch = &y_blur_batch,
+          .group_count = 1,
+          .groups[0] = {group_x, group_y, 1},
+      };
+
+      tb_render_pipeline_issue_dispatch_batch(self, self->ssao_blur_ctx, 1,
+                                              &x_batch);
+      tb_render_pipeline_issue_dispatch_batch(self, self->ssao_blur_ctx, 1,
+                                              &y_batch);
     }
     // Depth copy pass
     {
