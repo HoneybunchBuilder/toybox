@@ -53,8 +53,8 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId prefiltered_cube;
   TbRenderTargetId shadow_maps[TB_CASCADE_COUNT];
   TbRenderTargetId brightness_downsample;
-  TbRenderTargetId bloom_blur_x; // Ideally want this to be transient
-  TbRenderTargetId bloom_blur_y; // Ideally want this to be transient
+  TbRenderTargetId bloom;         // Ideally want this to be transient
+  TbRenderTargetId bloom_scratch; // Ideally want this to be transient
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(

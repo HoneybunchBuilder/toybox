@@ -423,7 +423,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->bloom_blur_x = tb_create_render_target(self, &rt_desc);
+      self->bloom = tb_create_render_target(self, &rt_desc);
     }
 
     // Create bloom blur y target
@@ -440,7 +440,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->bloom_blur_y = tb_create_render_target(self, &rt_desc);
+      self->bloom_scratch = tb_create_render_target(self, &rt_desc);
     }
 
     // Import swapchain target
@@ -665,7 +665,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         .layer_count = 1,
         .view_type = VK_IMAGE_VIEW_TYPE_2D,
     };
-    resize_render_target(self, &self->render_targets[self->bloom_blur_x],
+    resize_render_target(self, &self->render_targets[self->bloom],
                          &rt_desc);
   }
 
@@ -684,7 +684,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         .layer_count = 1,
         .view_type = VK_IMAGE_VIEW_TYPE_2D,
     };
-    resize_render_target(self, &self->render_targets[self->bloom_blur_y],
+    resize_render_target(self, &self->render_targets[self->bloom_scratch],
                          &rt_desc);
   }
   // Finally reimport swapchain

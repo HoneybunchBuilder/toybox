@@ -10,10 +10,6 @@ typedef struct BlurPushConstants {
   float horizontal;
 } BlurPushConstants;
 
-typedef struct BloomBlurPushConstants {
-  float horizontal;
-} BloomBlurPushConstants;
-
 typedef struct SkyPushConstants {
   float4x4 vp;
 } SkyPushConstants;

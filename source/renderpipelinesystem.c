@@ -13,8 +13,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
-#include "bloomblur_frag.h"
-#include "bloomblur_vert.h"
 #include "blur_comp.h"
 #include "brightness_frag.h"
 #include "brightness_vert.h"
@@ -126,14 +124,9 @@ typedef struct SSAOBatch {
   SSAOPushConstants consts;
 } SSAOBatch;
 
-typedef struct SSAOBlurBatch {
-  VkDescriptorSet set;
-  BlurPushConstants consts;
-} SSAOBlurBatch;
-
 typedef struct BlurBatch {
   VkDescriptorSet set;
-  BloomBlurPushConstants consts;
+  BlurPushConstants consts;
 } BlurBatch;
 
 VkResult create_depth_pipeline(RenderSystem *render_system,
@@ -642,123 +635,6 @@ VkResult create_brightness_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_bloom_blur_pipeline(RenderSystem *render_system,
-                                    VkFormat color_format,
-                                    VkPipelineLayout pipe_layout,
-                                    VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-  VkShaderModule bloom_blur_vert_mod = VK_NULL_HANDLE;
-  VkShaderModule bloom_blur_frag_mod = VK_NULL_HANDLE;
-
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(bloomblur_vert);
-    create_info.pCode = (const uint32_t *)bloomblur_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Bloom Blur Vert",
-                               &bloom_blur_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load bloom blur vert shader module", err);
-
-    create_info.codeSize = sizeof(bloomblur_frag);
-    create_info.pCode = (const uint32_t *)bloomblur_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Bloom Blur Frag",
-                               &bloom_blur_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load bloom blur frag shader module", err);
-  }
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .pNext =
-          &(VkPipelineRenderingCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-              .colorAttachmentCount = 1,
-              .pColorAttachmentFormats = (VkFormat[1]){color_format},
-          },
-      .stageCount = 2,
-      .pStages =
-          (VkPipelineShaderStageCreateInfo[2]){
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = bloom_blur_vert_mod,
-                  .pName = "vert",
-              },
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = bloom_blur_frag_mod,
-                  .pName = "frag",
-              },
-          },
-      .pVertexInputState =
-          &(VkPipelineVertexInputStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-          },
-      .pInputAssemblyState =
-          &(VkPipelineInputAssemblyStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-          },
-      .pViewportState =
-          &(VkPipelineViewportStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-              .viewportCount = 1,
-              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
-              .scissorCount = 1,
-              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
-          },
-      .pRasterizationState =
-          &(VkPipelineRasterizationStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-              .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
-              .lineWidth = 1.0f,
-          },
-      .pMultisampleState =
-          &(VkPipelineMultisampleStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-          },
-      .pColorBlendState =
-          &(VkPipelineColorBlendStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-              .attachmentCount = 1,
-              .pAttachments =
-                  &(VkPipelineColorBlendAttachmentState){
-                      .blendEnable = VK_FALSE,
-                      .colorWriteMask =
-                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                  },
-          },
-      .pDepthStencilState =
-          &(VkPipelineDepthStencilStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-          },
-      .pDynamicState =
-          &(VkPipelineDynamicStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
-              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                    VK_DYNAMIC_STATE_SCISSOR},
-          },
-      .layout = pipe_layout,
-  };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
-                                         "Bloom Blur Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline", err);
-
-  tb_rnd_destroy_shader(render_system, bloom_blur_vert_mod);
-  tb_rnd_destroy_shader(render_system, bloom_blur_frag_mod);
-
-  return err;
-}
-
 VkResult create_tonemapping_pipeline(RenderSystem *render_system,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
@@ -972,7 +848,7 @@ void record_ssao_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DispatchBatch *batch = &batches[batch_idx];
-    const SSAOBlurBatch *blur_batch = (const SSAOBlurBatch *)batch->user_batch;
+    const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
 
     VkPipelineLayout layout = batch->layout;
 
@@ -1013,34 +889,28 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    return;
-  }
-
+                       uint32_t batch_count, const DispatchBatch *batches) {
   TracyCZoneNC(ctx, "Bloom Blur Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Bloom Blur", 3, true);
   cmd_begin_label(buffer, "Bloom Blur", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
-  const DrawBatch *batch = batches;
-  const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const DispatchBatch *batch = &batches[batch_idx];
+    const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
 
-  VkPipelineLayout layout = batch->layout;
+    VkPipelineLayout layout = batch->layout;
 
-  vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
+                            1, &blur_batch->set, 0, NULL);
+    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(BlurPushConstants), &blur_batch->consts);
 
-  vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
-  vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
-
-  vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                     sizeof(BloomBlurPushConstants), &blur_batch->consts);
-
-  vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
-                          &blur_batch->set, 0, NULL);
-
-  // Just drawing a fullscreen triangle that's generated by the vertex shader
-  vkCmdDraw(buffer, 3, 1, 0, 0);
+    for (uint32_t i = 0; i < batch->group_count; i++) {
+      uint3 group = batch->groups[i];
+      vkCmdDispatch(buffer, group[0], group[1], group[2]);
+    }
+  }
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -1333,8 +1203,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
     const TbRenderTargetId brightness_downsample =
         render_target_system->brightness_downsample;
-    const TbRenderTargetId bloom_blur_x = render_target_system->bloom_blur_x;
-    const TbRenderTargetId bloom_blur_y = render_target_system->bloom_blur_y;
 
     // Create opaque depth normal pass
     {
@@ -2466,7 +2334,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create brightness downsample pass", false);
       self->brightness_pass = id;
     }
-    // Create bloom x pass
+    // Create bloom blur compute pass
     {
       const uint32_t trans_count = 3;
       PassTransition transitions[3] = {
@@ -2500,21 +2368,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           },
           // Make both bloom targets ready for writing
           {
-              .render_target = self->render_target_system->bloom_blur_x,
+              .render_target = self->render_target_system->bloom,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                               .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -2525,21 +2391,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           },
           {
-              .render_target = self->render_target_system->bloom_blur_y,
+              .render_target = self->render_target_system->bloom_scratch,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                               .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
                               .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -2555,73 +2419,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
           .dependencies = (TbRenderPassId[1]){self->brightness_pass},
           .transition_count = trans_count,
           .transitions = transitions,
-          .attachment_count = 1,
-          .attachments =
-              (TbAttachmentInfo[1]){
-                  {
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = bloom_blur_x,
-                  },
-              },
-          .name = "Bloom Blur X Pass",
+          .name = "Bloom Blur Pass",
       };
       TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom blur x pass", false);
-      self->bloom_blur_x_pass = id;
-    } // Create bloom y pass
-    {
-      const uint32_t trans_count = 1;
-      // Need to read horizontal blur result
-      PassTransition transitions[1] = {
-          {
-              .render_target = self->render_target_system->bloom_blur_x,
-              .barrier =
-                  {
-                      .src_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .barrier =
-                          {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              .subresourceRange =
-                                  {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 1,
-                                  },
-                          },
-                  },
-          },
-      };
-      TbRenderPassCreateInfo create_info = {
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_blur_x_pass},
-          .transition_count = trans_count,
-          .transitions = transitions,
-          .attachment_count = 1,
-          .attachments =
-              (TbAttachmentInfo[1]){
-                  {
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = bloom_blur_y,
-                  },
-              },
-          .name = "Bloom Blur Y Pass",
-      };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom blur y pass", false);
-      self->bloom_blur_y_pass = id;
+                      "Failed to create bloom blur pass", false);
+      self->bloom_blur_pass = id;
     }
     // Create tonemapping pass
     {
@@ -2629,20 +2432,18 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // Need to read vertical blur result
       PassTransition transitions[1] = {
           {
-              .render_target = self->render_target_system->bloom_blur_y,
+              .render_target = self->render_target_system->bloom_scratch,
               .barrier =
                   {
-                      .src_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
                               .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
                               .newLayout =
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                               .subresourceRange =
@@ -2657,7 +2458,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_blur_y_pass},
+          .dependencies = (TbRenderPassId[1]){self->bloom_blur_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -2869,32 +2670,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                             "Copy Pipeline Layout",
                                             &self->copy_pipe_layout);
         TB_VK_CHECK_RET(err, "Failed to create copy pipeline layout", false);
-      }
-
-      {
-        VkPipelineLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts =
-                (VkDescriptorSetLayout[1]){
-                    self->copy_set_layout,
-                },
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges =
-                (VkPushConstantRange[1]){
-                    {
-                        .offset = 0,
-                        .size = sizeof(BloomBlurPushConstants),
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    },
-                },
-
-        };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
-                                            "Bloom Blur Pipeline Layout",
-                                            &self->bloom_blur_layout);
-        TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline layout",
-                        false);
       }
 
       {
@@ -3279,7 +3054,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
 
       DispatchContextDescriptor desc = {
-          .batch_size = sizeof(SSAOBlurBatch),
+          .batch_size = sizeof(BlurBatch),
           .dispatch_fn = record_ssao_blur,
           .pass_id = self->ssao_blur_pass,
       };
@@ -3320,45 +3095,15 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
     // Blur
     {
-      // Assume same attachments between X and Y passes
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->bloom_blur_x_pass,
-                                         &attach_count, NULL);
-      TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(self, self->bloom_blur_x_pass,
-                                         &attach_count, &attach_info);
-
-      VkFormat color_format = tb_render_target_get_format(
-          self->render_target_system, attach_info.attachment);
-
-      err = create_bloom_blur_pipeline(self->render_system, color_format,
-                                       self->bloom_blur_layout,
-                                       &self->bloom_blur_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create bloom blur pipeline", false);
-      // X
-      {
-        DrawContextDescriptor desc = {
-            .batch_size = sizeof(FullscreenBatch),
-            .draw_fn = record_bloom_blur,
-            .pass_id = self->bloom_blur_x_pass,
-        };
-        self->bloom_blur_x_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->bloom_blur_x_ctx != InvalidDrawContextId,
-                        "Failed to create bloom blur x draw context", false);
-      } // Y
-      {
-        DrawContextDescriptor desc = {
-            .batch_size = sizeof(FullscreenBatch),
-            .draw_fn = record_bloom_blur,
-            .pass_id = self->bloom_blur_y_pass,
-        };
-        self->bloom_blur_y_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->bloom_blur_y_ctx != InvalidDrawContextId,
-                        "Failed to create bloom blur y draw context", false);
-      }
+      DispatchContextDescriptor desc = {
+          .batch_size = sizeof(BlurBatch),
+          .dispatch_fn = record_bloom_blur,
+          .pass_id = self->bloom_blur_pass,
+      };
+      self->bloom_blur_ctx =
+          tb_render_pipeline_register_dispatch_context(self, &desc);
+      TB_CHECK_RETURN(self->bloom_blur_ctx != InvalidDispatchContextId,
+                      "Failed to create bloom blur dispatch context", false);
     }
 
     // Tonemapping
@@ -3402,14 +3147,12 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->bloom_blur_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->bloom_blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -3494,8 +3237,7 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
     reimport_render_pass(self, self->transparent_depth_pass);
     reimport_render_pass(self, self->transparent_color_pass);
     reimport_render_pass(self, self->brightness_pass);
-    reimport_render_pass(self, self->bloom_blur_x_pass);
-    reimport_render_pass(self, self->bloom_blur_y_pass);
+    reimport_render_pass(self, self->bloom_blur_pass);
     reimport_render_pass(self, self->tonemap_pass);
     reimport_render_pass(self, self->ui_pass);
   }
@@ -3587,8 +3329,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       VkDescriptorSetLayout layouts[SET_COUNT] = {
           self->ssao_set_layout, self->blur_set_layout,
           self->blur_set_layout, self->copy_set_layout,
-          self->copy_set_layout, self->copy_set_layout,
-          self->copy_set_layout, self->tonemap_set_layout,
+          self->copy_set_layout, self->blur_set_layout,
+          self->blur_set_layout, self->tonemap_set_layout,
       };
       err =
           tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
@@ -3607,9 +3349,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 3);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
@@ -3632,15 +3374,15 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkImageView brightness_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->brightness_downsample);
-    VkImageView blur_x_view = tb_render_target_get_view(
+    VkImageView bloom_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->bloom_blur_x);
-    VkImageView blur_y_view = tb_render_target_get_view(
+        self->render_target_system->bloom);
+    VkImageView bloom_scratch_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->bloom_blur_y);
+        self->render_target_system->bloom_scratch);
 
 // Write the descriptor set
-#define WRITE_COUNT 14
+#define WRITE_COUNT 16
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -3775,7 +3517,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = blur_x_set,
+            .dstSet = bloom_x_blur_set,
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,
@@ -3788,7 +3530,20 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = blur_y_set,
+            .dstSet = bloom_x_blur_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = bloom_scratch_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = bloom_y_blur_set,
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,
@@ -3796,7 +3551,20 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = blur_x_view,
+                    .imageView = bloom_scratch_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = bloom_y_blur_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = bloom_view,
                 },
         },
         {
@@ -3822,7 +3590,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = blur_y_view,
+                    .imageView = bloom_view,
                 },
         },
     };
@@ -3843,9 +3611,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 3);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet blur_x_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet blur_y_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
@@ -3902,7 +3670,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       uint32_t group_x = width / 16;
       uint32_t group_y = height;
       // Do a blur on each axis
-      SSAOBlurBatch x_blur_batch = {
+      BlurBatch x_blur_batch = {
           .set = ssao_blur_x_set,
           .consts =
               {
@@ -3916,7 +3684,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
           .group_count = 1,
           .groups[0] = {group_x, group_y, 1},
       };
-      SSAOBlurBatch y_blur_batch = {
+      BlurBatch y_blur_batch = {
           .set = ssao_blur_y_set,
           .consts =
               {
@@ -3985,38 +3753,44 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
                                             &batch);
       }
-      // Bloom X pass
+      // Bloom Blur Pass
       {
-        BlurBatch blur_batch = {
-            .set = blur_x_set,
-            .consts = (BloomBlurPushConstants){.horizontal = true},
+        uint32_t group_x = width / 16;
+        uint32_t group_y = height;
+        // Do a blur on each axis
+        BlurBatch x_blur_batch = {
+            .set = bloom_x_blur_set,
+            .consts =
+                {
+                    .horizontal = 1.0f,
+                },
         };
-        DrawBatch batch = {
-            .layout = self->bloom_blur_layout,
-            .pipeline = self->bloom_blur_pipe,
-            .viewport = {0, downscaled_height, downscaled_width,
-                         -(float)downscaled_height, 0, 1},
-            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
-            .user_batch = &blur_batch,
+        DispatchBatch x_batch = {
+            .layout = self->blur_pipe_layout,
+            .pipeline = self->blur_pipe,
+            .user_batch = &x_blur_batch,
+            .group_count = 1,
+            .groups[0] = {group_x, group_y, 1},
         };
-        tb_render_pipeline_issue_draw_batch(self, self->bloom_blur_x_ctx, 1,
-                                            &batch);
-      } // Bloom Y pass
-      {
-        BlurBatch blur_batch = {
-            .set = blur_y_set,
-            .consts = (BloomBlurPushConstants){.horizontal = false},
+        BlurBatch y_blur_batch = {
+            .set = bloom_y_blur_set,
+            .consts =
+                {
+                    .horizontal = 0.0f,
+                },
         };
-        DrawBatch batch = {
-            .layout = self->bloom_blur_layout,
-            .pipeline = self->bloom_blur_pipe,
-            .viewport = {0, downscaled_height, downscaled_width,
-                         -(float)downscaled_height, 0, 1},
-            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
-            .user_batch = &blur_batch,
+        DispatchBatch y_batch = {
+            .layout = self->blur_pipe_layout,
+            .pipeline = self->blur_pipe,
+            .user_batch = &y_blur_batch,
+            .group_count = 1,
+            .groups[0] = {group_x, group_y, 1},
         };
-        tb_render_pipeline_issue_draw_batch(self, self->bloom_blur_y_ctx, 1,
-                                            &batch);
+
+        tb_render_pipeline_issue_dispatch_batch(self, self->bloom_blur_ctx, 1,
+                                                &x_batch);
+        tb_render_pipeline_issue_dispatch_batch(self, self->bloom_blur_ctx, 1,
+                                                &y_batch);
       }
     }
     // Tonemapping pass
