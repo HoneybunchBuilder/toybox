@@ -3295,7 +3295,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
 
       DispatchContextDescriptor desc = {
-          .batch_size = sizeof(SSAOBatch),
+          .batch_size = sizeof(SSAOBlurBatch),
           .dispatch_fn = record_ssao_blur,
           .pass_id = self->ssao_blur_pass,
       };
@@ -3915,7 +3915,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     }
     // SSAO Blur Pass
     {
-      uint32_t group_x = width;
+      uint32_t group_x = width / 16;
       uint32_t group_y = height;
       // Do a blur on each axis
       SSAOBlurBatch x_blur_batch = {
