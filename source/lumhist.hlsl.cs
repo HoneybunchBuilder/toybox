@@ -4,7 +4,7 @@
 #define THREADS_X 16
 #define THREADS_Y 16
 
-#define EPSILON 0.005
+#define EPSILON 0.000001
 // Taken from RTR vol 4 pg. 278
 #define RGB_TO_LUM float3(0.2125, 0.7154, 0.0721)
 
@@ -41,14 +41,13 @@ void comp(int group_idx: SV_GroupIndex,
   GroupMemoryBarrierWithGroupSync();
 
   // Get size of input
-  float2 input_len;
-  input.GetDimensions(input_len.x, input_len.y);
+  float2 input_len = params.zw;
 
   // Ignore any threads that map outside the image
   if (dispatch_thread_id.x < input_len.x &&
       dispatch_thread_id.y < input_len.y) {
     float3 color =
-        input.SampleLevel(static_sampler, dispatch_thread_id.xy, 0).rgb;
+        input.SampleLevel(static_sampler, int2(dispatch_thread_id.xy), 0).rgb;
     uint idx = color_to_hist(color, params.x, params.y);
     InterlockedAdd(histogram_shared[idx], 1);
   }

@@ -31,7 +31,7 @@ void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &lum_set->set, 0, NULL);
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(BlurPushConstants), &lum_set->consts);
+                       sizeof(LuminancePushConstants), &lum_set->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -119,7 +119,8 @@ VkResult create_lum_gather_pipeline(RenderSystem *render_system,
     create_info.pCode = (const uint32_t *)lumhist_comp;
     err = tb_rnd_create_shader(render_system, &create_info,
                                "Luminance Histogram Comp", &lumhist_comp_mod);
-    TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
+    TB_VK_CHECK_RET(
+        err, "Failed to load luminance histogram compute shader module", err);
   }
 
   VkComputePipelineCreateInfo create_info = {
