@@ -1,6 +1,5 @@
 #include "renderpipelinesystem.h"
 
-#include "luminance.h"
 #include "profiling.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
@@ -3155,28 +3154,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
 
     // Compute Luminance Histogram
-    {
-      err = create_lum_gather_set_layout(self->render_system, self->sampler,
-                                         &self->lum_gather_set_layout);
-
-      err = create_lum_gather_pipe_layout(self->render_system,
-                                          self->lum_gather_set_layout,
-                                          &self->lum_gather_pipe_layout);
-
-      err = create_lum_gather_pipeline(self->render_system,
-                                       self->lum_gather_pipe_layout,
-                                       &self->lum_gather_pipe);
-
-      DispatchContextDescriptor desc = {
-          .batch_size = sizeof(LuminanceBatch),
-          .dispatch_fn = record_luminance_gather,
-          .pass_id = self->luminance_pass,
-      };
-      self->lum_gather_ctx =
-          tb_render_pipeline_register_dispatch_context(self, &desc);
-      TB_CHECK_RETURN(self->lum_gather_ctx != InvalidDispatchContextId,
-                      "Failed to create lum gather dispatch context", false);
-    }
+    err = create_lum_hist_work(self->render_system, self, self->sampler,
+                               self->luminance_pass, &self->lum_hist_work);
 
     // Brightness
     {
@@ -3257,20 +3236,19 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->blur_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
-  tb_rnd_destroy_set_layout(self->render_system, self->lum_gather_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->lum_gather_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->lum_gather_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
+
+  destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
@@ -3446,7 +3424,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       VkDescriptorSetLayout layouts[SET_COUNT] = {
           self->ssao_set_layout,    self->blur_set_layout,
           self->blur_set_layout,    self->copy_set_layout,
-          self->copy_set_layout,    self->lum_gather_set_layout,
+          self->copy_set_layout,    self->lum_hist_work.set_layout,
           self->blur_set_layout,    self->blur_set_layout,
           self->tonemap_set_layout,
       };
@@ -3899,13 +3877,13 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                                 (float)width, (float)height}},
       };
       DispatchBatch batch = {
-          .layout = self->lum_gather_pipe_layout,
-          .pipeline = self->lum_gather_pipe,
+          .layout = self->lum_hist_work.pipe_layout,
+          .pipeline = self->lum_hist_work.pipeline,
           .user_batch = &lum_batch,
           .group_count = 1,
           .groups[0] = {group_x, group_y, 1},
       };
-      tb_render_pipeline_issue_dispatch_batch(self, self->lum_gather_ctx, 1,
+      tb_render_pipeline_issue_dispatch_batch(self, self->lum_hist_work.ctx, 1,
                                               &batch);
     }
     {

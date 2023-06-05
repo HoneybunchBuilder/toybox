@@ -14,26 +14,29 @@ _Static_assert(sizeof(LuminancePushConstants) <= PUSH_CONSTANT_BYTES,
 // Declare some functions for the C api
 #include "tbrendercommon.h"
 
+typedef uint32_t TbRenderPassId;
+typedef uint32_t TbDispatchContextId;
+typedef struct RenderPipelineSystem RenderPipelineSystem;
+
 typedef struct LuminanceBatch {
   VkDescriptorSet set;
   LuminancePushConstants consts;
 } LuminanceBatch;
 
+typedef struct LumHistRenderWork {
+  VkDescriptorSetLayout set_layout;
+  VkPipelineLayout pipe_layout;
+  VkPipeline pipeline;
+  TbDispatchContextId ctx;
+} LumHistRenderWork;
+
 typedef struct RenderSystem RenderSystem;
 
-void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                             uint32_t batch_count,
-                             const DispatchBatch *batches);
+VkResult create_lum_hist_work(RenderSystem *render_system,
+                              RenderPipelineSystem *render_pipe,
+                              VkSampler sampler, TbRenderPassId pass,
+                              LumHistRenderWork *work);
 
-VkResult create_lum_gather_set_layout(RenderSystem *render_system,
-                                      VkSampler sampler,
-                                      VkDescriptorSetLayout *layout);
-
-VkResult create_lum_gather_pipe_layout(RenderSystem *render_system,
-                                       VkDescriptorSetLayout set_layout,
-                                       VkPipelineLayout *layout);
-
-VkResult create_lum_gather_pipeline(RenderSystem *render_system,
-                                    VkPipelineLayout layout,
-                                    VkPipeline *pipeline);
+void destroy_lum_hist_work(RenderSystem *render_system,
+                           LumHistRenderWork *work);
 #endif

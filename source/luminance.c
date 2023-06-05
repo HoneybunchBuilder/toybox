@@ -3,6 +3,7 @@
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "tbcommon.h"
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -141,4 +142,35 @@ VkResult create_lum_gather_pipeline(RenderSystem *render_system,
   tb_rnd_destroy_shader(render_system, lumhist_comp_mod);
 
   return err;
+}
+
+VkResult create_lum_hist_work(RenderSystem *render_system,
+                              RenderPipelineSystem *render_pipe,
+                              VkSampler sampler, TbRenderPassId pass,
+                              LumHistRenderWork *work) {
+  VkResult err = VK_SUCCESS;
+  err = create_lum_gather_set_layout(render_system, sampler, &work->set_layout);
+
+  err = create_lum_gather_pipe_layout(render_system, work->set_layout,
+                                      &work->pipe_layout);
+
+  err = create_lum_gather_pipeline(render_system, work->pipe_layout,
+                                   &work->pipeline);
+
+  DispatchContextDescriptor desc = {
+      .batch_size = sizeof(LuminanceBatch),
+      .dispatch_fn = record_luminance_gather,
+      .pass_id = pass,
+  };
+  work->ctx = tb_render_pipeline_register_dispatch_context(render_pipe, &desc);
+  TB_CHECK(work->ctx != InvalidDispatchContextId,
+           "Failed to create lum gather dispatch context");
+  return err;
+}
+
+void destroy_lum_hist_work(RenderSystem *render_system,
+                           LumHistRenderWork *work) {
+  tb_rnd_destroy_set_layout(render_system, work->set_layout);
+  tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
+  tb_rnd_destroy_pipeline(render_system, work->pipeline);
 }
