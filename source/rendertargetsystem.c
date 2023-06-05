@@ -42,13 +42,19 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
                   "Undefined render target format", false);
   rt->format = desc->format;
 
+  // Determine image type based on view type
+  VkImageType image_type = VK_IMAGE_TYPE_2D;
+  if (desc->view_type == VK_IMAGE_VIEW_TYPE_1D) {
+    image_type = VK_IMAGE_TYPE_1D;
+  }
+
   // Allocate images for each frame
   {
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       VkImageCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
           .flags = create_flags,
-          .imageType = VK_IMAGE_TYPE_2D,
+          .imageType = image_type,
           .format = desc->format,
           .extent = desc->extent,
           .mipLevels = desc->mip_count,
@@ -392,6 +398,42 @@ bool create_render_target_system(RenderTargetSystem *self,
       }
     }
 
+    // Create luminance histogram as a render target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Luminance Histogram",
+          .format = VK_FORMAT_R32_UINT,
+          .extent =
+              {
+                  .width = 256,
+                  .height = 1,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_1D,
+      };
+      self->lum_histogram = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Create luminance average as a render target
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Luminance Average",
+          .format = VK_FORMAT_R16_SFLOAT,
+          .extent =
+              {
+                  .width = 1,
+                  .height = 1,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->lum_avg = tb_create_render_target(self, &rt_desc);
+    }
+
     // Create brightness downsampled target
     {
       RenderTargetDescriptor rt_desc = {
@@ -665,8 +707,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         .layer_count = 1,
         .view_type = VK_IMAGE_VIEW_TYPE_2D,
     };
-    resize_render_target(self, &self->render_targets[self->bloom],
-                         &rt_desc);
+    resize_render_target(self, &self->render_targets[self->bloom], &rt_desc);
   }
 
   // Resize bloom blur y target

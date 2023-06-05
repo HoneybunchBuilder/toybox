@@ -1,5 +1,6 @@
 #include "renderpipelinesystem.h"
 
+#include "luminance.h"
 #include "profiling.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
@@ -1921,7 +1922,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create opaque color pass", false);
       self->opaque_color_pass = id;
     }
-    // Create sky Pass
+    // Create sky pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
@@ -2263,15 +2264,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
               .render_target = self->render_target_system->hdr_color,
               .barrier =
                   {
+                      // We know that the hdr color buffer will need to be r/w
+                      // on the fragment and compute stages
                       .src_flags =
                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                               .srcAccessMask =
                                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
                               .oldLayout =
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               .newLayout =
@@ -2290,7 +2295,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   self->render_target_system->brightness_downsample,
               .barrier =
                   {
-                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                       .dst_flags =
                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       .barrier =
@@ -2334,7 +2339,69 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create brightness downsample pass", false);
       self->brightness_pass = id;
     }
-    // Create bloom blur compute pass
+    // Create luminance compute pass
+    {
+      const uint32_t trans_count = 2;
+      PassTransition transitions[2] = {
+          {
+              .render_target = self->render_target_system->lum_histogram,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+          {
+              .render_target = self->render_target_system->lum_avg,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .name = "Luminance Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create luminance pass", false);
+      self->luminance_pass = id;
+    } // Create bloom blur compute pass
     {
       const uint32_t trans_count = 3;
       PassTransition transitions[3] = {
@@ -2346,7 +2413,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   {
                       .src_flags =
                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                       .barrier =
                           {
                               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -2355,8 +2422,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                               .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
                               .oldLayout =
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .newLayout =
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
                               .subresourceRange =
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -2416,7 +2482,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .dependencies = (TbRenderPassId[1]){self->luminance_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .name = "Bloom Blur Pass",
@@ -2428,11 +2494,35 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create tonemapping pass
     {
-      const uint32_t trans_count = 1;
-      // Need to read vertical blur result
-      PassTransition transitions[1] = {
+      const uint32_t trans_count = 2;
+      // Need to read bloom blur result and luminance average
+      PassTransition transitions[2] = {
           {
-              .render_target = self->render_target_system->bloom_scratch,
+              .render_target = self->render_target_system->bloom,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+          {
+              .render_target = self->render_target_system->lum_avg,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -3064,6 +3154,30 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create ssao blur dispatch context", false);
     }
 
+    // Compute Luminance Histogram
+    {
+      err = create_lum_gather_set_layout(self->render_system, self->sampler,
+                                         &self->lum_gather_set_layout);
+
+      err = create_lum_gather_pipe_layout(self->render_system,
+                                          self->lum_gather_set_layout,
+                                          &self->lum_gather_pipe_layout);
+
+      err = create_lum_gather_pipeline(self->render_system,
+                                       self->lum_gather_pipe_layout,
+                                       &self->lum_gather_pipe);
+
+      DispatchContextDescriptor desc = {
+          .batch_size = sizeof(LuminanceBatch),
+          .dispatch_fn = record_luminance_gather,
+          .pass_id = self->luminance_pass,
+      };
+      self->lum_gather_ctx =
+          tb_render_pipeline_register_dispatch_context(self, &desc);
+      TB_CHECK_RETURN(self->lum_gather_ctx != InvalidDispatchContextId,
+                      "Failed to create lum gather dispatch context", false);
+    }
+
     // Brightness
     {
       uint32_t attach_count = 0;
@@ -3143,16 +3257,19 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->blur_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
+  tb_rnd_destroy_set_layout(self->render_system, self->lum_gather_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->render_system, self->lum_gather_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->blur_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->lum_gather_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -3524,7 +3641,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     .imageView = brightness_view,
                 },
         },
@@ -3537,7 +3654,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     .imageView = bloom_scratch_view,
                 },
         },
@@ -3550,7 +3667,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     .imageView = bloom_scratch_view,
                 },
         },
@@ -3563,7 +3680,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     .imageView = bloom_view,
                 },
         },

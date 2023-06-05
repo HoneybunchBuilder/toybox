@@ -94,7 +94,8 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId sky_pass;
   TbRenderPassId transparent_depth_pass;
   TbRenderPassId transparent_color_pass;
-  TbRenderPassId brightness_pass; // Downsamples to quarter res
+  TbRenderPassId luminance_pass;
+  TbRenderPassId brightness_pass;
   TbRenderPassId bloom_blur_pass;
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
@@ -116,22 +117,30 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId tonemap_ctx;
   TbDispatchContextId bloom_blur_ctx;
   TbDispatchContextId ssao_blur_ctx;
+  TbDispatchContextId lum_gather_ctx;
+  TbDispatchContextId lum_avg_ctx;
 
   // Copy resources
   VkSampler sampler;
   VkDescriptorSetLayout ssao_set_layout;
   VkDescriptorSetLayout blur_set_layout;
   VkDescriptorSetLayout copy_set_layout;
+  VkDescriptorSetLayout lum_gather_set_layout;
+  VkDescriptorSetLayout lum_avg_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
   VkPipelineLayout ssao_pipe_layout;
   VkPipelineLayout blur_pipe_layout;
   VkPipelineLayout copy_pipe_layout;
+  VkPipelineLayout lum_gather_pipe_layout;
+  VkPipelineLayout lum_avg_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
   VkPipeline ssao_pipe;
   VkPipeline blur_pipe; // Compute blur pipe
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;
+  VkPipeline lum_gather_pipe;
+  VkPipeline lum_avg_pipe;
   VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];

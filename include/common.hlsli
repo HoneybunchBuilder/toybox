@@ -6,6 +6,8 @@
 #include "pi.h"
 #include "simd.h"
 
+#define PUSH_CONSTANT_BYTES 128
+
 typedef struct BlurPushConstants {
   float horizontal;
 } BlurPushConstants;
