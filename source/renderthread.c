@@ -740,40 +740,8 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
                         props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 
     // Mesh Shader support
-    // required_device_ext((const char **)&device_ext_names, &device_ext_count,
-    //                    props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
-
-    // Raytracing is optional
-    /*
-#if defined(VK_KHR_ray_tracing_pipeline)
-    if (optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                            props, prop_count,
-                            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)) {
-      ext.raytracing = true;
-
-      // Required for VK_KHR_acceleration_structure
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-
-      // Required for raytracing
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count, VK_KHR_RAY_QUERY_EXTENSION_NAME);
-      optional_device_ext((const char **)&device_ext_names, &device_ext_count,
-                          props, prop_count,
-                          VK_KHR_RAY_TRACING_MAINTENANCE_1_EXTENSION_NAME);
-    }
-#endif
-*/
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
 #ifdef TRACY_ENABLE
     // Enable calibrated timestamps if we can when profiling with tracy
@@ -804,21 +772,6 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .pNext = &vk_13_features,
       .multiview = VK_TRUE,
   };
-
-#if defined(VK_KHR_ray_tracing_pipeline)
-  VkPhysicalDeviceRayQueryFeaturesKHR rt_query_feature = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
-      .rayQuery = ext_support->raytracing,
-  };
-
-  VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
-      .sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
-      .rayTracingPipeline = ext_support->raytracing,
-      .pNext = &rt_query_feature,
-  };
-  vk_13_features.pNext = &rt_pipe_feature;
-#endif
 
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

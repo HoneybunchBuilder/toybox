@@ -134,7 +134,6 @@ typedef struct Swapchain {
 
 typedef struct RenderExtensionSupport {
   bool portability : 1;
-  bool raytracing : 1;
   bool calibrated_timestamps : 1;
 } RenderExtensionSupport;
 
