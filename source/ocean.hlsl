@@ -5,10 +5,10 @@
 #include "ocean.hlsli"
 #include "pbr.hlsli"
 
-ConstantBuffer<OceanData> ocean_data : register(b0, space0); // All Stages
-Texture2D depth_map : register(t1, space0);    // Fragment Stage Only
-Texture2D color_map : register(t2, space0);    // Fragment Stage Only
-sampler static_sampler : register(s3, space0); // Immutable Sampler
+ConstantBuffer<OceanData> ocean_data : register(b0, space0);
+Texture2D depth_map : register(t1, space0);
+Texture2D color_map : register(t2, space0);
+sampler static_sampler : register(s3, space0);
 
 // Per-view data
 ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
@@ -16,8 +16,8 @@ TextureCube irradiance_map : register(t1, space1);
 TextureCube prefiltered_map : register(t2, space1);
 Texture2D brdf_lut : register(t3, space1);
 ConstantBuffer<CommonLightData> light_data : register(b4, space1);
-Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space1); // Frag Only
-Texture2D ssao_map : register(s6, space2);
+Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space1);
+Texture2D ssao_map : register(s6, space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -138,8 +138,8 @@ float4 frag(Interpolators i) : SV_TARGET {
           prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
       float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
       float ao = ssao_map.Sample(static_sampler, screen_uv).r;
-      albedo = pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
-                            irradiance, light_data.color, L, V, N);
+      color = pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
+                           irradiance, light_data.color, L, V, N);
     }
   }
 

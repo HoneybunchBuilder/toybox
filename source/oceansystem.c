@@ -279,9 +279,9 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
               .depthTestEnable = VK_TRUE,
               .depthWriteEnable = VK_FALSE,
 #ifdef TB_USE_INVERSE_DEPTH
-              .depthCompareOp = VK_COMPARE_OP_GREATER,
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
 #else
-              .depthCompareOp = VK_COMPARE_OP_LESS,
+              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 #endif
               .maxDepthBounds = 1.0f,
           },
@@ -326,9 +326,9 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
           .depthTestEnable = VK_TRUE,
           .depthWriteEnable = VK_TRUE,
 #ifdef TB_USE_INVERSE_DEPTH
-          .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+          .depthCompareOp = VK_COMPARE_OP_GREATER,
 #else
-          .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+          .depthCompareOp = VK_COMPARE_OP_LESS,
 #endif
           .maxDepthBounds = 1.0f,
       },
