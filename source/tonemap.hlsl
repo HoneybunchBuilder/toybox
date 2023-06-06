@@ -77,11 +77,11 @@ float3 gamma_correct(float3 rgb) {
 
 Texture2D color_map : register(t0, space0);
 Texture2D bloom_map : register(t1, space0);
-Texture2D lum_avg : register(t2, space0);
+RWStructuredBuffer<float> lum_avg : register(u2, space0);
 sampler static_sampler : register(s3, space0);
 
 float4 frag(Interpolators i) : SV_TARGET {
-  float lum = lum_avg.SampleLevel(static_sampler, float2(0, 0), 0).x;
+  float lum = lum_avg[0];
 
   float3 color = color_map.Sample(static_sampler, i.uv0).rgb;
   float3 bloom = bloom_map.Sample(static_sampler, i.uv0).rgb;

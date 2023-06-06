@@ -9,7 +9,7 @@
 #define RGB_TO_LUM float3(0.2125, 0.7154, 0.0721)
 
 Texture2D input : register(t0, space0);
-RWTexture1D<uint> output : register(u1, space0);
+RWStructuredBuffer<uint> output : register(u1, space0);
 sampler static_sampler : register(s2, space0);
 
 [[vk::push_constant]]
@@ -45,8 +45,9 @@ void comp(int group_idx: SV_GroupIndex,
   // Ignore any threads that map outside the image
   if (dispatch_thread_id.x < dimensions.x &&
       dispatch_thread_id.y < dimensions.y) {
-    float3 color =
-        input.SampleLevel(static_sampler, int2(dispatch_thread_id.xy), 0).rgb;
+    float2 uv = dispatch_thread_id.xy / dimensions;
+
+    float3 color = input.SampleLevel(static_sampler, uv, 0).rgb;
     uint idx = color_to_hist(color, params.x, params.y);
     InterlockedAdd(histogram_shared[idx], 1);
   }

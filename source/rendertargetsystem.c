@@ -397,43 +397,6 @@ bool create_render_target_system(RenderTargetSystem *self,
         self->shadow_maps[i] = tb_create_render_target(self, &rt_desc);
       }
     }
-
-    // Create luminance histogram as a render target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .name = "Luminance Histogram",
-          .format = VK_FORMAT_R32_UINT,
-          .extent =
-              {
-                  .width = 256,
-                  .height = 1,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_1D,
-      };
-      self->lum_histogram = tb_create_render_target(self, &rt_desc);
-    }
-
-    // Create luminance average as a render target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .name = "Luminance Average",
-          .format = VK_FORMAT_R16_SFLOAT,
-          .extent =
-              {
-                  .width = 1,
-                  .height = 1,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      self->lum_avg = tb_create_render_target(self, &rt_desc);
-    }
-
     // Create brightness downsampled target
     {
       RenderTargetDescriptor rt_desc = {

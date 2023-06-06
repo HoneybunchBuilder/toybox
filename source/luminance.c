@@ -68,7 +68,7 @@ VkResult create_lum_gather_set_layout(RenderSystem *render_system,
               {
                   .binding = 1,
                   .descriptorCount = 1,
-                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               {
@@ -163,6 +163,19 @@ VkResult create_lum_hist_work(RenderSystem *render_system,
   err = create_lum_gather_pipeline(render_system, work->pipe_layout,
                                    &work->pipeline);
 
+  // Create histogram buffer
+  {
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(uint32_t) * 256,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
+                                      "Luminance Histogram",
+                                      &work->lum_histogram);
+    TB_VK_CHECK(err, "Failed to create luminance histogram buffer");
+  }
+
   DispatchContextDescriptor desc = {
       .batch_size = sizeof(LuminanceBatch),
       .dispatch_fn = record_luminance_gather,
@@ -179,6 +192,7 @@ void destroy_lum_hist_work(RenderSystem *render_system,
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);
+  tb_rnd_free_gpu_buffer(render_system, &work->lum_histogram);
 }
 
 void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -207,13 +221,13 @@ VkResult create_lum_avg_set_layout(RenderSystem *render_system,
               {
                   .binding = 0,
                   .descriptorCount = 1,
-                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               {
                   .binding = 1,
                   .descriptorCount = 1,
-                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
           },
@@ -300,6 +314,18 @@ VkResult create_lum_avg_work(RenderSystem *render_system,
   err = create_lum_avg_pipeline(render_system, work->pipe_layout,
                                 &work->pipeline);
 
+  // Create luminance average buffer
+  {
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(float),
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
+                                      "Luminance Average", &work->lum_avg);
+    TB_VK_CHECK(err, "Failed to create luminance average buffer");
+  }
+
   DispatchContextDescriptor desc = {
       .batch_size = sizeof(LuminanceBatch),
       .dispatch_fn = record_luminance_average,
@@ -315,4 +341,5 @@ void destroy_lum_avg_work(RenderSystem *render_system, LumAvgRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);
+  tb_rnd_free_gpu_buffer(render_system, &work->lum_avg);
 }

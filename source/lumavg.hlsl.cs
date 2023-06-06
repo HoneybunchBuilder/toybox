@@ -4,8 +4,8 @@
 #define THREADS_X 256
 #define THREADS_Y 1
 
-RWTexture1D<uint> input : register(u0, space0);
-RWTexture2D<float> output : register(u1, space0);
+RWStructuredBuffer<uint> input : register(u0, space0);
+RWStructuredBuffer<float> output : register(u1, space0);
 
 [[vk::push_constant]]
 ConstantBuffer<LuminancePushConstants> consts : register(b2, space0);
@@ -44,9 +44,9 @@ void comp(int group_idx: SV_GroupIndex) {
     float weighted_avg_lum =
         exp2(((weighted_log_avg / 254.0) * log_lum_range) + min_log_lum);
 
-    float lum_last_frame = output[int2(0, 0)].r;
+    float lum_last_frame = output[0].r;
     float adapted_lum =
         lum_last_frame + (weighted_avg_lum - lum_last_frame) * time;
-    output[int2(0, 0)] = adapted_lum;
+    output[0] = adapted_lum;
   }
 }

@@ -24,6 +24,8 @@ typedef struct LuminanceBatch {
 } LuminanceBatch;
 
 typedef struct LumHistRenderWork {
+  TbBuffer lum_histogram;
+
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
@@ -31,6 +33,8 @@ typedef struct LumHistRenderWork {
 } LumHistRenderWork;
 
 typedef struct LumAvgRenderWork {
+  TbBuffer lum_avg;
+
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
