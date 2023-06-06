@@ -4,7 +4,7 @@
 #define THREADS_X 256
 #define THREADS_Y 1
 
-RWBuffer<uint> input : register(u0, space0);
+RWTexture1D<uint> input : register(u0, space0);
 RWTexture2D<float> output : register(u1, space0);
 
 [[vk::push_constant]]

@@ -40,12 +40,11 @@ void comp(int group_idx: SV_GroupIndex,
   histogram_shared[group_idx] = 0;
   GroupMemoryBarrierWithGroupSync();
 
-  // Get size of input
-  float2 input_len = params.zw;
+  float2 dimensions = params.zw;
 
   // Ignore any threads that map outside the image
-  if (dispatch_thread_id.x < input_len.x &&
-      dispatch_thread_id.y < input_len.y) {
+  if (dispatch_thread_id.x < dimensions.x &&
+      dispatch_thread_id.y < dimensions.y) {
     float3 color =
         input.SampleLevel(static_sampler, int2(dispatch_thread_id.xy), 0).rgb;
     uint idx = color_to_hist(color, params.x, params.y);

@@ -75,12 +75,13 @@ float3 gamma_correct(float3 rgb) {
       float3(rgb.x <= 0.0031308, rgb.y <= 0.0031308, rgb.z <= 0.0031308));
 }
 
-Texture2D color_map : register(t0, space0);    // Fragment Stage Only
-Texture2D bloom_map : register(t1, space0);    // Fragment Stage Only
-sampler static_sampler : register(s2, space0); // Immutable Sampler
+Texture2D color_map : register(t0, space0);
+Texture2D bloom_map : register(t1, space0);
+Texture2D lum_avg : register(t2, space0);
+sampler static_sampler : register(s3, space0);
 
 float4 frag(Interpolators i) : SV_TARGET {
-  const float lum = 1; // TODO: Look up from texture
+  float lum = lum_avg.SampleLevel(static_sampler, float2(0, 0), 0).x;
 
   float3 color = color_map.Sample(static_sampler, i.uv0).rgb;
   float3 bloom = bloom_map.Sample(static_sampler, i.uv0).rgb;

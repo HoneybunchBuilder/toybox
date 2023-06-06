@@ -2494,7 +2494,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     // Create tonemapping pass
     {
       const uint32_t trans_count = 2;
-      // Need to read bloom blur result and luminance average
+      // Need to read bloom blur resu1lt and luminance average
       PassTransition transitions[2] = {
           {
               .render_target = self->render_target_system->bloom,
@@ -2718,8 +2718,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       {
         VkDescriptorSetLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 3,
-            .pBindings = (VkDescriptorSetLayoutBinding[3]){
+            .bindingCount = 4,
+            .pBindings = (VkDescriptorSetLayoutBinding[4]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -2734,6 +2734,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                 },
                 {
                     .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 3,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -3153,9 +3159,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create ssao blur dispatch context", false);
     }
 
-    // Compute Luminance Histogram
+    // Compute Luminance Histogram and Average work
     err = create_lum_hist_work(self->render_system, self, self->sampler,
                                self->luminance_pass, &self->lum_hist_work);
+
+    err = create_lum_avg_work(self->render_system, self, self->luminance_pass,
+                              &self->lum_avg_work);
 
     // Brightness
     {
@@ -3248,6 +3257,7 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
+  destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
   destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -3404,7 +3414,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
     // Allocate the known descriptor sets we need for this frame
     {
-#define SET_COUNT 9
+#define SET_COUNT 10
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
           .maxSets = SET_COUNT * 4,
@@ -3422,11 +3432,11 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
       VkDescriptorSetLayout layouts[SET_COUNT] = {
-          self->ssao_set_layout,    self->blur_set_layout,
-          self->blur_set_layout,    self->copy_set_layout,
-          self->copy_set_layout,    self->lum_hist_work.set_layout,
-          self->blur_set_layout,    self->blur_set_layout,
-          self->tonemap_set_layout,
+          self->ssao_set_layout,         self->blur_set_layout,
+          self->blur_set_layout,         self->copy_set_layout,
+          self->copy_set_layout,         self->lum_hist_work.set_layout,
+          self->lum_avg_work.set_layout, self->blur_set_layout,
+          self->blur_set_layout,         self->tonemap_set_layout,
       };
       err =
           tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
@@ -3447,12 +3457,14 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 4);
     VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 8);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 9);
 
     VkImageView ssao_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
@@ -3472,6 +3484,9 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkImageView lum_hist_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->lum_histogram);
+    VkImageView lum_avg_view = tb_render_target_get_view(
+        self->render_target_system, self->render_system->frame_idx,
+        self->render_target_system->lum_avg);
     VkImageView brightness_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->brightness_downsample);
@@ -3483,7 +3498,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_target_system->bloom_scratch);
 
 // Write the descriptor set
-#define WRITE_COUNT 18
+#define WRITE_COUNT 21
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -3644,6 +3659,32 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = lum_avg_set,
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = lum_hist_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = lum_avg_set,
+            .dstBinding = 1,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = lum_avg_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = bloom_x_blur_set,
             .dstBinding = 0,
             .dstArrayElement = 0,
@@ -3720,6 +3761,19 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                     .imageView = bloom_view,
                 },
         },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = tonemap_set,
+            .dstBinding = 2,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .imageView = lum_avg_view,
+                },
+        },
     };
     vkUpdateDescriptorSets(self->render_system->render_thread->device,
                            WRITE_COUNT, writes, 0, NULL);
@@ -3740,12 +3794,14 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 4);
     VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 8);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 9);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -3863,28 +3919,47 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       tb_render_pipeline_issue_draw_batch(self, self->color_copy_ctx, 1,
                                           &batch);
     }
-    // Luminance histogram gather pass
     {
       // Configurables
       float min_log_lum = -5.0f;
       float max_log_lum = 10.0f;
-
-      uint32_t group_x = width / 16;
-      uint32_t group_y = height / 16;
-      LuminanceBatch lum_batch = {
-          .set = lum_hist_set,
-          .consts = {.params = {min_log_lum, 1 / (max_log_lum - min_log_lum),
-                                (float)width, (float)height}},
-      };
-      DispatchBatch batch = {
-          .layout = self->lum_hist_work.pipe_layout,
-          .pipeline = self->lum_hist_work.pipeline,
-          .user_batch = &lum_batch,
-          .group_count = 1,
-          .groups[0] = {group_x, group_y, 1},
-      };
-      tb_render_pipeline_issue_dispatch_batch(self, self->lum_hist_work.ctx, 1,
-                                              &batch);
+      // Luminance histogram gather pass
+      {
+        uint32_t group_x = (uint32_t)SDL_ceilf((float)width / 16.0f);
+        uint32_t group_y = (uint32_t)SDL_ceilf((float)height / 16.0f);
+        LuminanceBatch lum_batch = {
+            .set = lum_hist_set,
+            .consts = {.params = {min_log_lum, 1 / (max_log_lum - min_log_lum),
+                                  (float)width, (float)height}},
+        };
+        DispatchBatch batch = {
+            .layout = self->lum_hist_work.pipe_layout,
+            .pipeline = self->lum_hist_work.pipeline,
+            .user_batch = &lum_batch,
+            .group_count = 1,
+            .groups[0] = {group_x, group_y, 1},
+        };
+        tb_render_pipeline_issue_dispatch_batch(self, self->lum_hist_work.ctx,
+                                                1, &batch);
+      }
+      // Luminance average pass
+      {
+        float time = clampf(1.f - SDL_expf(-delta_seconds * 1.1f), 0, 1);
+        LuminanceBatch lum_batch = {
+            .set = lum_avg_set,
+            .consts = {.params = {min_log_lum, (max_log_lum - min_log_lum),
+                                  time, (float)width * (float)height}},
+        };
+        DispatchBatch batch = {
+            .layout = self->lum_avg_work.pipe_layout,
+            .pipeline = self->lum_avg_work.pipeline,
+            .user_batch = &lum_batch,
+            .group_count = 1,
+            .groups[0] = {1, 1, 1},
+        };
+        tb_render_pipeline_issue_dispatch_batch(self, self->lum_avg_work.ctx, 1,
+                                                &batch);
+      }
     }
     {
       const uint32_t downscaled_width = width;
