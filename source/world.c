@@ -216,6 +216,20 @@ bool tb_tick_world(World *world, float delta_seconds) {
                          render_system->frame_idx);
           TracyCZoneEnd(resize_ctx);
         }
+
+        // While we're here and hacking,
+        // Manually zero out the previous frame's draw batches here
+        // It's cleaner to do it here than dedicate a whole system to this
+        // operation on tick
+        FrameState *state = &render_system->render_thread
+                                 ->frame_states[render_system->frame_idx];
+
+        for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
+          state->draw_contexts[i].batch_count = 0;
+        }
+        for (uint32_t i = 0; i < state->dispatch_ctx_count; ++i) {
+          state->dispatch_contexts[i].batch_count = 0;
+        }
       }
     }
 

@@ -33,6 +33,7 @@ typedef struct CommonViewData {
   float4x4 p;
   float4x4 vp;
   float4x4 inv_vp;
+  float4x4 inv_proj;
   float3 view_pos;
   float4 proj_params;
 } CommonViewData;

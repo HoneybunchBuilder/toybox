@@ -11,14 +11,17 @@ sampler noise_sampler : register(s5, space0);
 [[vk::push_constant]] ConstantBuffer<SSAOPushConstants> consts
     : register(b6, space0);
 
+ConstantBuffer<CommonViewData> view_data : register(b0, space1);
+
 float frag(Interpolators interp) : SV_TARGET {
-  const float near = consts.proj_params.x;
-  const float far = consts.proj_params.y;
+  const float near = view_data.proj_params.x;
+  const float far = view_data.proj_params.y;
 
   const float bias = 0.025f;
 
-  float3 origin = view_space_pos_from_depth(
-      depth_map.Sample(map_sampler, interp.uv0).r, consts.inv_proj, interp.uv0);
+  float3 origin =
+      view_space_pos_from_depth(depth_map.Sample(map_sampler, interp.uv0).r,
+                                view_data.inv_proj, interp.uv0);
   float3 normal =
       normalize(normal_map.Sample(map_sampler, interp.uv0).rgb * 2.0 - 1.0);
 
@@ -35,7 +38,7 @@ float frag(Interpolators interp) : SV_TARGET {
     kernel_sample = origin + kernel_sample * consts.radius;
 
     float4 offset = float4(kernel_sample, 1.0f);
-    offset = mul(offset, consts.projection);
+    offset = mul(offset, view_data.p);
     offset = offset / offset.w;
     offset.xy = offset.xy * 0.5 + 0.5;
 
