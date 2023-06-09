@@ -38,7 +38,7 @@ float frag(Interpolators interp) : SV_TARGET {
     kernel_sample = origin + kernel_sample * consts.radius;
 
     float4 offset = float4(kernel_sample, 1.0f);
-    offset = mul(offset, view_data.p);
+    offset = mul(view_data.p, offset);
     offset = offset / offset.w;
     offset.xy = offset.xy * 0.5 + 0.5;
 

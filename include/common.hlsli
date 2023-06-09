@@ -119,7 +119,7 @@ float3 view_space_pos_from_depth(float depth, float4x4 inv_proj, float2 uv){
   float x = uv.x * 2.0 - 1.0;
   float y = uv.y * 2.0 - 1.0;
   float z = depth;
-  float4 view_space_pos = mul(float4(x, y, z, 1.0f), inv_proj);
+  float4 view_space_pos = mul(inv_proj, float4(x, y, z, 1.0f));
   return view_space_pos.xyz / view_space_pos.w;
 }
 

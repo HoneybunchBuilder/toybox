@@ -19,7 +19,7 @@ Interpolators vert(VertexIn i) {
 
   Interpolators o;
   o.view_pos = i.local_pos;
-  o.clip_pos = mul(float4(i.local_pos, 1.0), vp);
+  o.clip_pos = mul(vp, float4(i.local_pos, 1.0));
   return o;
 }
 

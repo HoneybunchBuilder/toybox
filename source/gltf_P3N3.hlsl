@@ -41,16 +41,16 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float3 world_pos = mul(float4(i.local_pos, 1), object_data.m).xyz;
-  float4 clip_pos = mul(float4(world_pos, 1.0), camera_data.vp);
+  float3 world_pos = mul(object_data.m, float4(i.local_pos, 1)).xyz;
+  float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
   float3x3 orientation = (float3x3)object_data.m;
 
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos;
-  o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
-  o.normal = mul(i.normal, orientation); // convert to world-space normal
+  o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
+  o.normal = mul(orientation, i.normal); // convert to world-space normal
   o.clip = clip_pos;
   return o;
 }
@@ -117,7 +117,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     }
 
     float4 shadow_coord =
-        mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+        mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],

@@ -36,6 +36,8 @@ typedef struct MaterialSystem {
   VkDescriptorSetLayout set_layout;
   VkDescriptorPool mat_set_pool;
 
+  const cgltf_material *default_material;
+
   uint32_t mat_count;
   TbMaterialId *mat_ids;
   TbMaterialPerm *mat_perms;

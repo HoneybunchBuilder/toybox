@@ -323,7 +323,7 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -571,7 +571,7 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -1895,7 +1895,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     // Get the mesh node's transform so that we can dequanitze vertices
     // in order to do meshlet generation
-    float4x4 dequant = {.row0 = {0}};
+    float4x4 dequant = {.col0 = {0}};
     {
       Transform transform = tb_transform_from_node(node);
       transform_to_matrix(&dequant, &transform);

@@ -81,7 +81,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   const float far = camera_component->far;
 
   // Get inverse camera vp matrix from view system
-  float4x4 inv_cam_vp = {.row0 = {0}};
+  float4x4 inv_cam_vp = {.col0 = {0}};
   {
     const View *v = tb_get_view(self->view_system, camera_component->view_id);
     inv_cam_vp = v->view_data.inv_vp;
@@ -177,12 +177,12 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
           orthographic(max[0], min[0], max[1], min[1], 0.0f, max[2] - min[2]);
 
       // Calc view matrix
-      float4x4 light_view_mat = {.row0 = {0}};
+      float4x4 light_view_mat = {.col0 = {0}};
       {
         const float3 forward = transform_get_forward(&transform);
 
         const float3 offset = center + (forward * -min[2]);
-        look_at(&light_view_mat, offset, center, (float3){0, 1, 0});
+        light_view_mat = look_at(offset, center, (float3){0, 1, 0});
       }
 
       // Calculate view projection matrix

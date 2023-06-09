@@ -38,13 +38,13 @@ Interpolators vert(VertexIn i) {
   float3 binormal = float3(0, 0, 1);
   float3 pos = calc_wave_pos(i.local_pos, ocean_data.m, ocean_data.time,
                              tangent, binormal);
-  float4 clip_pos = mul(float4(pos, 1), camera_data.vp);
+  float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);
 
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
-  o.view_pos = mul(world_pos, camera_data.v).xyz;
+  o.view_pos = mul(camera_data.v, world_pos).xyz;
   o.screen_pos = clip_to_screen(clip_pos);
   o.tangent = tangent;
   o.binormal = binormal;
@@ -153,7 +153,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     }
 
     float4 shadow_coord =
-        mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+        mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],
                               static_sampler);

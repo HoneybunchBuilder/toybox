@@ -3322,8 +3322,6 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
   TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
                true);
 
-  const uint32_t frame_idx = self->render_system->frame_idx;
-
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
 

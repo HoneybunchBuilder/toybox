@@ -119,7 +119,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
         }
 
         // Modify transform based on state
-        float4x4 mat = {.row0 = {0}};
+        float4x4 mat = {.col0 = {0}};
         transform_to_matrix(&mat, &transform->transform);
 
         float3 forward = transform_get_forward(&transform->transform);

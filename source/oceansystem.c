@@ -244,7 +244,7 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -432,7 +432,7 @@ VkResult create_ocean_shadow_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -938,7 +938,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   {
     // Look up the shadow caster's relevant view info
     ShadowViewConstants shadow_consts[TB_CASCADE_COUNT] = {
-        {.vp = {.row0 = {0}}},
+        {.vp = {.col0 = {0}}},
     };
     {
       const DirectionalLightComponent *light =

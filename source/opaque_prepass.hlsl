@@ -18,13 +18,13 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float3 world_pos = mul(float4(i.local_pos, 1), object_data.m).xyz;
+  float3 world_pos = mul(object_data.m, float4(i.local_pos, 1)).xyz;
 
   float3x3 orientation = (float3x3)object_data.m;
 
   Interpolators o;
-  o.clip_pos = mul(float4(world_pos, 1.0), camera_data.vp);
-  o.normal = mul(i.normal, orientation); // convert to world-space normal
+  o.clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
+  o.normal = mul(orientation, i.normal); // convert to world-space normal
   return o;
 }
 

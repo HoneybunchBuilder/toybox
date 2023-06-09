@@ -44,7 +44,7 @@ float3 calc_wave_pos(int3 local_pos, float4x4 m, float time,
   OceanWave wave_2 = {0.13, 45, float2(0.4, 0.6)};
   OceanWave wave_3 = {0.10, 30, float2(-0.8, 0.6)};
 
-  float3 pos = mul(float4(local_pos, 1), m).xyz;
+  float3 pos = mul(m, float4(local_pos, 1)).xyz;
 
   pos += gerstner_wave(wave_0, pos, time, tangent, binormal);
   pos += gerstner_wave(wave_1, pos, time, tangent, binormal);

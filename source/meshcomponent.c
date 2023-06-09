@@ -61,9 +61,15 @@ bool create_mesh_component(MeshComponent *self,
       self->submeshes[prim_idx].index_offset = offset;
       self->submeshes[prim_idx].vertex_count = prim->attributes[0].data->count;
 
+      // If no material is provided we use a default
+      const cgltf_material *material = prim->material;
+      if (material == NULL) {
+        material = mat_system->default_material;
+      }
+
       // Load materials
-      self->submeshes[prim_idx].material = tb_mat_system_load_material(
-          mat_system, desc->source_path, prim->material);
+      self->submeshes[prim_idx].material =
+          tb_mat_system_load_material(mat_system, desc->source_path, material);
       TB_CHECK_RETURN(self->submeshes[prim_idx].material,
                       "Failed to load material", false);
 

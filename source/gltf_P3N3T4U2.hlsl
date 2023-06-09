@@ -43,16 +43,16 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float3 world_pos = mul(float4(i.local_pos, 1), object_data.m).xyz;
-  float4 clip_pos = mul(float4(world_pos, 1.0), camera_data.vp);
+  float3 world_pos = mul(object_data.m, float4(i.local_pos, 1)).xyz;
+  float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
   float3x3 orientation = (float3x3)object_data.m;
 
   Interpolators o;
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
-  o.view_pos = mul(float4(world_pos, 1.0), camera_data.v).xyz;
-  o.normal = normalize(mul(i.normal, orientation)); // convert to world-space
+  o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
+  o.normal = normalize(mul(orientation, i.normal)); // convert to world-space
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
   o.binormal = cross(o.tangent, o.normal) * i.tangent.w;
   o.uv = uv_transform(i.uv, material_data.tex_transform);
@@ -75,7 +75,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
     tangentSpaceNormal =
         normalize(tangentSpaceNormal * 2 - 1); // Must unpack normal
-    N = normalize(mul(tangentSpaceNormal, tbn));
+    N = normalize(mul(tbn, tangentSpaceNormal));
   }
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);
@@ -145,7 +145,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     }
 
     float4 shadow_coord =
-        mul(float4(i.world_pos, 1.0), light_data.cascade_vps[cascade_idx]);
+        mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],
                               static_sampler);

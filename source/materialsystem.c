@@ -87,6 +87,23 @@ bool create_material_system(MaterialSystem *self,
                 "Material DS Layout");
   }
 
+  // Create a default material
+  // It uses the metallic roughness flow
+  // it does not supply textures, those will be provided by default since
+  // it is marked to use pbr metal rough but provides no texture views
+  cgltf_material *default_mat = tb_alloc_tp(self->std_alloc, cgltf_material);
+  *default_mat = (cgltf_material){
+      .name = "default",
+      .has_pbr_metallic_roughness = true,
+      .pbr_metallic_roughness =
+          {
+              .base_color_factor = {1, 1, 1, 1},
+              .metallic_factor = 0.5f,
+              .roughness_factor = 0.5f,
+          },
+  };
+  self->default_material = default_mat;
+
   return true;
 }
 
@@ -94,6 +111,8 @@ void destroy_material_system(MaterialSystem *self) {
   RenderSystem *render_system = self->render_system;
   VkDevice device = render_system->render_thread->device;
   const VkAllocationCallbacks *vk_alloc = &render_system->vk_host_alloc_cb;
+
+  tb_free(self->std_alloc, (void *)self->default_material);
 
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
   tb_rnd_destroy_sampler(render_system, self->sampler);
@@ -353,16 +372,18 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
       }
 
       // Find a suitable texture transform from the material
-      const cgltf_texture_transform *tex_trans = NULL;
-      {
+      cgltf_texture_transform tex_trans = {
+          .scale = {1, 1},
+      };
+      if (mat) {
         // Expecting that all textures in the material share the same texture
         // transform
         if (mat->has_pbr_metallic_roughness) {
-          tex_trans = &mat->pbr_metallic_roughness.base_color_texture.transform;
+          tex_trans = mat->pbr_metallic_roughness.base_color_texture.transform;
         } else if (mat->has_pbr_specular_glossiness) {
-          tex_trans = &mat->pbr_specular_glossiness.diffuse_texture.transform;
+          tex_trans = mat->pbr_specular_glossiness.diffuse_texture.transform;
         } else if (mat->normal_texture.texture) {
-          tex_trans = &mat->normal_texture.transform;
+          tex_trans = mat->normal_texture.transform;
         }
       }
 
@@ -374,13 +395,13 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           data.tex_transform = (TextureTransform){
               .offset =
                   (float2){
-                      tex_trans->offset[0],
-                      tex_trans->offset[1],
+                      tex_trans.offset[0],
+                      tex_trans.offset[1],
                   },
               .scale =
                   (float2){
-                      tex_trans->scale[0],
-                      tex_trans->scale[1],
+                      tex_trans.scale[0],
+                      tex_trans.scale[1],
                   },
           };
           SDL_memcpy(&data.pbr_metallic_roughness.base_color_factor,

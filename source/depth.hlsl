@@ -12,10 +12,10 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float4x4 mvp = mul(consts.m, consts.vp);
+  float4x4 mvp = mul(consts.vp, consts.m);
 
   Interpolators o;
-  o.clip_pos = mul(float4(i.local_pos, 1.0), mvp);
+  o.clip_pos = mul(mvp, float4(i.local_pos, 1.0));
   return o;
 }
 

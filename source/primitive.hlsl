@@ -1,6 +1,7 @@
 #include "common.hlsli"
 
-[[vk::push_constant]] ConstantBuffer<PrimitivePushConstants> consts : register(b0, space0);
+[[vk::push_constant]] ConstantBuffer<PrimitivePushConstants> consts
+    : register(b0, space0);
 ConstantBuffer<CommonViewData> camera_data : register(b0, space0);
 
 struct VertexIn {
@@ -13,13 +14,11 @@ struct Interpolators {
 
 Interpolators vert(VertexIn i) {
   float3 world_pos = (i.local_pos * consts.scale) + consts.position;
-  float4 clip_pos = mul(float4(world_pos, 1.0), camera_data.vp);
+  float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
   Interpolators o;
   o.clip_pos = clip_pos;
   return o;
 }
 
-float4 frag(Interpolators i) : SV_TARGET {
-  return consts.color;
-}
+float4 frag(Interpolators i) : SV_TARGET { return consts.color; }

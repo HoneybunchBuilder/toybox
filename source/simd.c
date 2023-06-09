@@ -38,25 +38,25 @@ float2 f3tof2(float3 f) { return (float2){f[0], f[1]}; }
 
 float3x4 m44tom34(float4x4 m) {
   return (float3x4){
-      .row0 = m.row0,
-      .row1 = m.row1,
-      .row2 = m.row2,
+      .col0 = m.col0,
+      .col1 = m.col1,
+      .col2 = m.col2,
   };
 }
 float3x3 m44tom33(float4x4 m) {
   return (float3x3){
-      .row0 = f4tof3(m.row0),
-      .row1 = f4tof3(m.row1),
-      .row2 = f4tof3(m.row2),
+      .col0 = f4tof3(m.col0),
+      .col1 = f4tof3(m.col1),
+      .col2 = f4tof3(m.col2),
   };
 }
 
 float4x4 m33tom44(float3x3 m) {
   return (float4x4){
-      .row0 = f3tof4(m.row0, 0.0f),
-      .row1 = f3tof4(m.row1, 0.0f),
-      .row2 = f3tof4(m.row2, 0.0f),
-      .row3 = {0.0f, 0.0f, 0.0f, 1.0f},
+      .col0 = f3tof4(m.col0, 0.0f),
+      .col1 = f3tof4(m.col1, 0.0f),
+      .col2 = f3tof4(m.col2, 0.0f),
+      .col3 = {0.0f, 0.0f, 0.0f, 1.0f},
   };
 }
 
@@ -166,7 +166,7 @@ float4 mulf44(float4x4 m, float4 v) {
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     float sum = 0.0f;
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
-      sum += m.rows[ii][i] * v[ii];
+      sum += m.cols[ii][i] * v[ii];
     }
     out[i] = sum;
   }
@@ -180,7 +180,7 @@ float3 mulf33(float3x3 m, float3 v) {
   unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
     float sum = 0.0f;
     unroll_loop_3 for (uint32_t ii = 0; ii < 3; ++ii) {
-      sum += m.rows[ii][i] * v[ii];
+      sum += m.cols[ii][i] * v[ii];
     }
     out[i] = sum;
   }
@@ -194,7 +194,7 @@ float4 mul4f44f(float4 v, float4x4 m) {
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     float sum = 0.0f;
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
-      sum += m.rows[i][ii] * v[ii];
+      sum += m.cols[i][ii] * v[ii];
     }
     out[i] = sum;
   }
@@ -203,14 +203,14 @@ float4 mul4f44f(float4 v, float4x4 m) {
 }
 
 float4x4 mulmf44(float4x4 x, float4x4 y) {
-  float4x4 o = {.row0 = {0}};
+  float4x4 o = {.col0 = {0}};
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
       unroll_loop_4 for (uint32_t iii = 0; iii < 4; ++iii) {
-        s += x.rows[i][iii] * y.rows[iii][ii];
+        s += x.cols[iii][ii] * y.cols[i][iii];
       }
-      o.rows[i][ii] = s;
+      o.cols[i][ii] = s;
     }
   }
   return o;
@@ -220,24 +220,24 @@ float4x4 inv_mf44(float4x4 m) {
   TracyCZoneN(ctx, "inv_mf44", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
 
-  float coef00 = m.row2[2] * m.row3[3] - m.row3[2] * m.row2[3];
-  float coef02 = m.row1[2] * m.row3[3] - m.row3[2] * m.row1[3];
-  float coef03 = m.row1[2] * m.row2[3] - m.row2[2] * m.row1[3];
-  float coef04 = m.row2[1] * m.row3[3] - m.row3[1] * m.row2[3];
-  float coef06 = m.row1[1] * m.row3[3] - m.row3[1] * m.row1[3];
-  float coef07 = m.row1[1] * m.row2[3] - m.row2[1] * m.row1[3];
-  float coef08 = m.row2[1] * m.row3[2] - m.row3[1] * m.row2[2];
-  float coef10 = m.row1[1] * m.row3[2] - m.row3[1] * m.row1[2];
-  float coef11 = m.row1[1] * m.row2[2] - m.row2[1] * m.row1[2];
-  float coef12 = m.row2[0] * m.row3[3] - m.row3[0] * m.row2[3];
-  float coef14 = m.row1[0] * m.row3[3] - m.row3[0] * m.row1[3];
-  float coef15 = m.row1[0] * m.row2[3] - m.row2[0] * m.row1[3];
-  float coef16 = m.row2[0] * m.row3[2] - m.row3[0] * m.row2[2];
-  float coef18 = m.row1[0] * m.row3[2] - m.row3[0] * m.row1[2];
-  float coef19 = m.row1[0] * m.row2[2] - m.row2[0] * m.row1[2];
-  float coef20 = m.row2[0] * m.row3[1] - m.row3[0] * m.row2[1];
-  float coef22 = m.row1[0] * m.row3[1] - m.row3[0] * m.row1[1];
-  float coef23 = m.row1[0] * m.row2[1] - m.row2[0] * m.row1[1];
+  float coef00 = m.col2[2] * m.col3[3] - m.col3[2] * m.col2[3];
+  float coef02 = m.col1[2] * m.col3[3] - m.col3[2] * m.col1[3];
+  float coef03 = m.col1[2] * m.col2[3] - m.col2[2] * m.col1[3];
+  float coef04 = m.col2[1] * m.col3[3] - m.col3[1] * m.col2[3];
+  float coef06 = m.col1[1] * m.col3[3] - m.col3[1] * m.col1[3];
+  float coef07 = m.col1[1] * m.col2[3] - m.col2[1] * m.col1[3];
+  float coef08 = m.col2[1] * m.col3[2] - m.col3[1] * m.col2[2];
+  float coef10 = m.col1[1] * m.col3[2] - m.col3[1] * m.col1[2];
+  float coef11 = m.col1[1] * m.col2[2] - m.col2[1] * m.col1[2];
+  float coef12 = m.col2[0] * m.col3[3] - m.col3[0] * m.col2[3];
+  float coef14 = m.col1[0] * m.col3[3] - m.col3[0] * m.col1[3];
+  float coef15 = m.col1[0] * m.col2[3] - m.col2[0] * m.col1[3];
+  float coef16 = m.col2[0] * m.col3[2] - m.col3[0] * m.col2[2];
+  float coef18 = m.col1[0] * m.col3[2] - m.col3[0] * m.col1[2];
+  float coef19 = m.col1[0] * m.col2[2] - m.col2[0] * m.col1[2];
+  float coef20 = m.col2[0] * m.col3[1] - m.col3[0] * m.col2[1];
+  float coef22 = m.col1[0] * m.col3[1] - m.col3[0] * m.col1[1];
+  float coef23 = m.col1[0] * m.col2[1] - m.col2[0] * m.col1[1];
 
   float4 fac0 = {coef00, coef00, coef02, coef03};
   float4 fac1 = {coef04, coef04, coef06, coef07};
@@ -246,10 +246,10 @@ float4x4 inv_mf44(float4x4 m) {
   float4 fac4 = {coef16, coef16, coef18, coef19};
   float4 fac5 = {coef20, coef20, coef22, coef23};
 
-  float4 vec0 = {m.row1[0], m.row0[0], m.row0[0], m.row0[0]};
-  float4 vec1 = {m.row1[1], m.row0[1], m.row0[1], m.row0[1]};
-  float4 vec2 = {m.row1[2], m.row0[2], m.row0[2], m.row0[2]};
-  float4 vec3 = {m.row1[3], m.row0[3], m.row0[3], m.row0[3]};
+  float4 vec0 = {m.col1[0], m.col0[0], m.col0[0], m.col0[0]};
+  float4 vec1 = {m.col1[1], m.col0[1], m.col0[1], m.col0[1]};
+  float4 vec2 = {m.col1[2], m.col0[2], m.col0[2], m.col0[2]};
+  float4 vec3 = {m.col1[3], m.col0[3], m.col0[3], m.col0[3]};
 
   float4 inv0 = vec1 * fac0 - vec2 * fac1 + vec3 * fac2;
   float4 inv1 = vec0 * fac0 - vec2 * fac3 + vec3 * fac4;
@@ -260,18 +260,18 @@ float4x4 inv_mf44(float4x4 m) {
   float4 sign_b = {-1, +1, -1, +1};
   float4x4 inv = {inv0 * sign_a, inv1 * sign_b, inv2 * sign_a, inv3 * sign_b};
 
-  float4 Row0 = {inv.row0[0], inv.row1[0], inv.row2[0], inv.row3[0]};
+  float4 col0 = {inv.col0[0], inv.col1[0], inv.col2[0], inv.col3[0]};
 
-  float4 dot0 = m.row0 * Row0;
+  float4 dot0 = m.col0 * col0;
   float dot1 = (dot0[0] + dot0[1]) + (dot0[2] + dot0[3]);
 
   float OneOverDeterminant = 1.0f / dot1;
 
   float4x4 out = {
-      inv.row0 * OneOverDeterminant,
-      inv.row1 * OneOverDeterminant,
-      inv.row2 * OneOverDeterminant,
-      inv.row3 * OneOverDeterminant,
+      inv.col0 * OneOverDeterminant,
+      inv.col1 * OneOverDeterminant,
+      inv.col2 * OneOverDeterminant,
+      inv.col3 * OneOverDeterminant,
   };
 
   TracyCZoneEnd(ctx);
@@ -281,21 +281,21 @@ float4x4 inv_mf44(float4x4 m) {
 
 float3x3 mf33_from_axes(float3 forward, float3 right, float3 up) {
   return (float3x3){
-      .row0 = {forward[0], up[0], right[0]},
-      .row1 = {forward[1], up[1], right[1]},
-      .row2 = {forward[2], up[2], right[2]},
+      .col0 = {forward[0], forward[1], forward[2]},
+      .col1 = {right[0], right[1], right[2]},
+      .col2 = {up[0], up[1], up[2]},
   };
 }
 
 Quaternion mf33_to_quat(float3x3 mat) {
   float four_x_squared_minus_1 =
-      mat.rows[0][0] - mat.rows[1][1] - mat.rows[2][2];
+      mat.cols[0][0] - mat.cols[1][1] - mat.cols[2][2];
   float four_y_squared_minus_1 =
-      mat.rows[1][1] - mat.rows[0][0] - mat.rows[2][2];
+      mat.cols[1][1] - mat.cols[0][0] - mat.cols[2][2];
   float four_z_squared_minus_1 =
-      mat.rows[2][2] - mat.rows[0][0] - mat.rows[1][1];
+      mat.cols[2][2] - mat.cols[0][0] - mat.cols[1][1];
   float four_w_squared_minus_1 =
-      mat.rows[0][0] + mat.rows[1][1] + mat.rows[2][2];
+      mat.cols[0][0] + mat.cols[1][1] + mat.cols[2][2];
 
   int32_t biggest_index = 0;
   float four_biggest_squared_minus_1 = four_w_squared_minus_1;
@@ -318,31 +318,31 @@ Quaternion mf33_to_quat(float3x3 mat) {
   switch (biggest_index) {
   case 0:
     return (Quaternion){
-        (mat.rows[1][2] - mat.rows[2][1]) * mult,
-        (mat.rows[2][0] - mat.rows[0][2]) * mult,
-        (mat.rows[0][1] - mat.rows[1][0]) * mult,
+        (mat.cols[1][2] - mat.cols[2][1]) * mult,
+        (mat.cols[2][0] - mat.cols[0][2]) * mult,
+        (mat.cols[0][1] - mat.cols[1][0]) * mult,
         biggest_val,
     };
   case 1:
     return (Quaternion){
         biggest_val,
-        (mat.rows[0][1] + mat.rows[1][0]) * mult,
-        (mat.rows[2][0] + mat.rows[0][2]) * mult,
-        (mat.rows[1][2] - mat.rows[2][1]) * mult,
+        (mat.cols[0][1] + mat.cols[1][0]) * mult,
+        (mat.cols[2][0] + mat.cols[0][2]) * mult,
+        (mat.cols[1][2] - mat.cols[2][1]) * mult,
     };
   case 2:
     return (Quaternion){
-        (mat.rows[0][1] + mat.rows[1][0]) * mult,
+        (mat.cols[0][1] + mat.cols[1][0]) * mult,
         biggest_val,
-        (mat.rows[1][2] + mat.rows[2][1]) * mult,
-        (mat.rows[2][0] - mat.rows[0][2]) * mult,
+        (mat.cols[1][2] + mat.cols[2][1]) * mult,
+        (mat.cols[2][0] - mat.cols[0][2]) * mult,
     };
   case 3:
     return (Quaternion){
-        (mat.rows[2][0] + mat.rows[0][2]) * mult,
-        (mat.rows[1][2] + mat.rows[2][1]) * mult,
+        (mat.cols[2][0] + mat.cols[0][2]) * mult,
+        (mat.cols[1][2] + mat.cols[2][1]) * mult,
         biggest_val,
-        (mat.rows[0][1] - mat.rows[1][0]) * mult,
+        (mat.cols[0][1] - mat.cols[1][0]) * mult,
     };
   default:
     SDL_assert(false);
@@ -388,9 +388,9 @@ float3x3 quat_to_mf33(Quaternion q) {
   float m22 = 1.0f - 2.0f * (qxx + qyy);
 
   return (float3x3){
-      .row0 = {m00, m01, m02},
-      .row1 = {m10, m11, m12},
-      .row2 = {m20, m21, m22},
+      .col0 = {m00, m01, m02},
+      .col1 = {m10, m11, m12},
+      .col2 = {m20, m21, m22},
   };
 }
 
@@ -506,35 +506,32 @@ Transform tb_transform_from_node(const cgltf_node *node) {
   return transform;
 }
 
-void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
+float4x4 look_forward(float3 pos, float3 forward, float3 up) {
   TracyCZoneN(ctx, "look_forward", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  SDL_assert(m);
 
   forward = normf3(forward);
   float3 right = normf3(crossf3(normf3(up), forward));
-  up = normf3(crossf3(forward, right));
+  up = crossf3(forward, right);
 
-  *m = (float4x4){
-      (float4){right[0], right[1], right[2], -dotf3(right, pos)},
-      (float4){up[0], up[1], up[2], -dotf3(up, pos)},
-      (float4){forward[0], forward[1], forward[2], -dotf3(forward, pos)},
-      (float4){0, 0, 0, 1},
+  float4x4 m = {
+      (float4){right[0], up[0], forward[0], 0},
+      (float4){right[1], up[1], forward[1], 0},
+      (float4){right[2], up[2], forward[2], 0},
+      (float4){-dotf3(right, pos), -dotf3(up, pos), -dotf3(forward, pos), 1},
   };
   TracyCZoneEnd(ctx);
+  return m;
 }
 
-// Left-Handed
-void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
-  SDL_assert(m);
-
+// Left Handed
+float4x4 look_at(float3 pos, float3 target, float3 up) {
   float3 forward = normf3(target - pos);
-  look_forward(m, pos, forward, up);
+  return look_forward(pos, forward, up);
 }
 
 Quaternion look_forward_quat(float3 forward, float3 up) {
-  float4x4 m = {.row0 = {0}};
-  look_forward(&m, (float3){0.0f, 0.0f, 0.0f}, forward, up);
+  float4x4 m = look_forward((float3){0.0f, 0.0f, 0.0f}, forward, up);
   return trans_to_quat(m);
 }
 
@@ -543,31 +540,31 @@ Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
   return look_forward_quat(forward, up);
 }
 
-// Right Handed
+// Left Handed
 float4x4 perspective(float fovy, float aspect, float zn, float zf) {
-  float focal_length = 1.0f / SDL_tanf(fovy * 0.5f);
+  float focal_length = 1.0f / tanf(fovy * 0.5f);
   float m00 = focal_length / aspect;
   float m11 = focal_length;
 
 #ifdef TB_USE_INVERSE_DEPTH
-  float m22 = zn / (zf - zn);
-  float m23 = zf * zn / (zf - zn);
+  float m22 = zn / (zn - zf);
+  float m32 = -(zn * zf) / (zn - zf);
 
   return (float4x4){
       (float4){m00, 0, 0, 0},
       (float4){0, m11, 0, 0},
-      (float4){0, 0, m22, m23},
-      (float4){0, 0, -1, 0},
+      (float4){0, 0, m22, 1},
+      (float4){0, 0, m32, 0},
   };
 #else
-  float m22 = zf / (zn - zf);
-  float m23 = (zn * zf) / (zn - zf);
+  float m22 = zf / (zf - zn);
+  float m32 = -(zf * zn) / (zf - zn);
 
   return (float4x4){
       (float4){m00, 0, 0, 0},
       (float4){0, m11, 0, 0},
-      (float4){0, 0, m22, m23},
-      (float4){0, 0, -1, 0},
+      (float4){0, 0, m22, 1},
+      (float4){0, 0, m32, 0},
   };
 #endif
 }
@@ -588,45 +585,45 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
   Frustum f = {
       .planes[LeftPlane] =
           (float4){
-              vp->row3[0] + vp->row0[0],
-              vp->row3[1] + vp->row0[1],
-              vp->row3[2] + vp->row0[2],
-              vp->row3[3] + vp->row0[3],
+              vp->col3[0] + vp->col0[0],
+              vp->col3[1] + vp->col0[1],
+              vp->col3[2] + vp->col0[2],
+              vp->col3[3] + vp->col0[3],
           },
       .planes[RightPlane] =
           (float4){
-              vp->row3[0] - vp->row0[0],
-              vp->row3[1] - vp->row0[1],
-              vp->row3[2] - vp->row0[2],
-              vp->row3[3] - vp->row0[3],
+              vp->col3[0] - vp->col0[0],
+              vp->col3[1] - vp->col0[1],
+              vp->col3[2] - vp->col0[2],
+              vp->col3[3] - vp->col0[3],
           },
       .planes[TopPlane] =
           (float4){
-              vp->row3[0] - vp->row1[0],
-              vp->row3[1] - vp->row1[1],
-              vp->row3[2] - vp->row1[2],
-              vp->row3[3] - vp->row1[3],
+              vp->col3[0] - vp->col1[0],
+              vp->col3[1] - vp->col1[1],
+              vp->col3[2] - vp->col1[2],
+              vp->col3[3] - vp->col1[3],
           },
       .planes[BottomPlane] =
           (float4){
-              vp->row3[0] + vp->row1[0],
-              vp->row3[1] + vp->row1[1],
-              vp->row3[2] + vp->row1[2],
-              vp->row3[3] + vp->row1[3],
+              vp->col3[0] + vp->col1[0],
+              vp->col3[1] + vp->col1[1],
+              vp->col3[2] + vp->col1[2],
+              vp->col3[3] + vp->col1[3],
           },
       .planes[NearPlane] =
           (float4){
-              vp->row2[0],
-              vp->row2[1],
-              vp->row2[2],
-              vp->row2[3],
+              vp->col2[0],
+              vp->col2[1],
+              vp->col2[2],
+              vp->col2[3],
           },
       .planes[FarPlane] =
           (float4){
-              vp->row3[0] - vp->row2[0],
-              vp->row3[1] - vp->row2[1],
-              vp->row3[2] - vp->row2[2],
-              vp->row3[3] - vp->row2[3],
+              vp->col3[0] - vp->col2[0],
+              vp->col3[1] - vp->col2[1],
+              vp->col3[2] - vp->col2[2],
+              vp->col3[3] - vp->col2[3],
           },
   };
   // Must normalize planes

@@ -27,37 +27,39 @@ typedef uint32_t __attribute__((vector_size(16))) uint4;
 typedef uint32_t __attribute__((vector_size(16))) uint3;
 typedef uint32_t __attribute__((vector_size(8))) uint2;
 
+// All matrices are column major since HLSL expects that by default
+
 typedef struct float4x4 {
   union {
     struct {
-      float4 row0;
-      float4 row1;
-      float4 row2;
-      float4 row3;
+      float4 col0;
+      float4 col1;
+      float4 col2;
+      float4 col3;
     };
-    float4 rows[4];
+    float4 cols[4];
   };
 } float4x4;
 
 typedef struct float3x4 {
   union {
     struct {
-      float4 row0;
-      float4 row1;
-      float4 row2;
+      float4 col0;
+      float4 col1;
+      float4 col2;
     };
-    float4 rows[3];
+    float4 cols[3];
   };
 } float3x4;
 
 typedef struct float3x3 {
   union {
     struct {
-      float3 row0;
-      float3 row1;
-      float3 row2;
+      float3 col0;
+      float3 col1;
+      float3 col2;
     };
-    float3 rows[3];
+    float3 cols[3];
   };
 } float3x3;
 
@@ -165,8 +167,8 @@ float3 transform_get_forward(const Transform *t);
 void transform_to_matrix(float4x4 *m, const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);
 
-void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
-void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
+float4x4 look_forward(float3 pos, float3 forward, float3 up);
+float4x4 look_at(float3 pos, float3 target, float3 up);
 Quaternion look_forward_quat(float3 forward, float3 up);
 Quaternion look_at_quat(float3 pos, float3 target, float3 up);
 

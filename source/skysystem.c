@@ -143,7 +143,7 @@ VkResult create_sky_pipeline(RenderSystem *render_system, VkFormat color_format,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -282,7 +282,7 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -419,7 +419,7 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -558,7 +558,7 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -1242,17 +1242,13 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       const TransformComponent *transform = &transform_comps[cam_idx];
 
       // Need to manually calculate this here
-      float4x4 vp = {.row0 = {0}};
+      float4x4 vp = {.col0 = {0}};
       {
         float4x4 proj = perspective(camera->fov, camera->aspect_ratio,
                                     camera->near, camera->far);
-
         float3 forward = transform_get_forward(&transform->transform);
-
-        float4x4 view = {.row0 = {0}};
-        look_forward(&view, (float3){0.0f, 0.0f, 0.0f}, forward,
-                     (float3){0.0f, 1.0f, 0.0f});
-
+        float4x4 view = look_forward((float3){0.0f, 0.0f, 0.0f}, forward,
+                                     (float3){0.0f, 1.0f, 0.0f});
         vp = mulmf44(proj, view);
       }
 
