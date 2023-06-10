@@ -86,13 +86,13 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           {
             const TBKeyboard *keyboard = &input_comp->keyboard;
             if (keyboard->key_W) {
-              move_axis[1] -= 1.0f;
+              move_axis[1] += 1.0f;
             }
             if (keyboard->key_A) {
               move_axis[0] -= 1.0f;
             }
             if (keyboard->key_S) {
-              move_axis[1] += 1.0f;
+              move_axis[1] -= 1.0f;
             }
             if (keyboard->key_D) {
               move_axis[0] += 1.0f;
@@ -118,13 +118,9 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           }
         }
 
-        // Modify transform based on state
-        float4x4 mat = {.col0 = {0}};
-        transform_to_matrix(&mat, &transform->transform);
-
-        float3 forward = transform_get_forward(&transform->transform);
-        float3 right = normf3(crossf3((float3){0, 1, 0}, forward));
-        float3 up = normf3(crossf3(right, forward));
+        float3 forward = -transform_get_forward(&transform->transform);
+        float3 right = crossf3((float3){0, 1, 0}, forward);
+        float3 up = crossf3(forward, right);
 
         float3 velocity = {0};
         {
@@ -141,7 +137,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           Quaternion av0 =
               angle_axis_to_quat(f3tof4(up, look_axis[0] * delta_look_speed));
           Quaternion av1 = angle_axis_to_quat(
-              f3tof4(right, look_axis[1] * -delta_look_speed));
+              f3tof4(right, look_axis[1] * delta_look_speed));
 
           angular_velocity = mulq(av0, av1);
         }

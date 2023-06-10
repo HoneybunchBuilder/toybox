@@ -398,7 +398,7 @@ float4x4 quat_to_trans(Quaternion q) { return m33tom44(quat_to_mf33(q)); }
 
 Quaternion trans_to_quat(float4x4 mat) { return mf33_to_quat(m44tom33(mat)); }
 
-Quaternion mulq(Quaternion p, Quaternion q) {
+Quaternion mulq(Quaternion q, Quaternion p) {
   return (Quaternion){
       (p[3] * q[0]) + (p[0] * q[3]) + (p[1] * q[2]) - (p[2] * q[1]),
       (p[3] * q[1]) + (p[1] * q[3]) + (p[2] * q[0]) - (p[0] * q[2]),
@@ -408,19 +408,7 @@ Quaternion mulq(Quaternion p, Quaternion q) {
 }
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 qrotf3(Quaternion q, float3 v) {
-  /*
-  // Extract the vector and scalar parts of the quat
-  float3 u = {q[0], q[1], q[2]};
-  float s = q[3];
-
-  return (2.0f * dotf3(u, v) * u) + (((s * s) - dotf3(u, v)) * v) +
-         (2.0f * s * crossf3(u, v));
-  */
-
-  float4x4 rot_mat = m33tom44(quat_to_mf33(q));
-  return f4tof3(mul4f44f(f3tof4(v, 1.0f), rot_mat));
-}
+float3 qrotf3(Quaternion q, float3 v) { return mulf33(quat_to_mf33(q), v); }
 
 AABB aabb_init(void) {
   return (AABB){
@@ -448,13 +436,11 @@ void scale(Transform *t, float3 s) {
 }
 void rotate(Transform *t, Quaternion r) {
   SDL_assert(t);
-  t->rotation = mulq(r, t->rotation);
+  t->rotation = mulq(t->rotation, r);
 }
 
 float3 transform_get_forward(const Transform *t) {
-  float3 forward = {0, 0, 1};
-  float3x3 rot = quat_to_mf33(t->rotation);
-  return normf3(mulf33(rot, forward));
+  return normf3(qrotf3(t->rotation, (float3){0, 0, 1}));
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
@@ -465,10 +451,10 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
 
   // Position matrix
   float4x4 p = {
-      (float4){1, 0, 0, t->position[0]},
-      (float4){0, 1, 0, t->position[1]},
-      (float4){0, 0, 1, t->position[2]},
-      (float4){0, 0, 0, 1},
+      (float4){1, 0, 0, 0},
+      (float4){0, 1, 0, 0},
+      (float4){0, 0, 1, 0},
+      (float4){t->position[0], t->position[1], t->position[2], 1},
   };
 
   // Rotation matrix from quaternion
@@ -648,10 +634,11 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
         (float3){plane->xyzw[0], plane->xyzw[1], plane->xyzw[2]};
     const float plane_const = plane->xyzw[3];
 
-    float3 axis = {0};
-    axis[0] = normal[0] < 0.0f ? aabb->min[0] : aabb->max[0];
-    axis[1] = normal[1] < 0.0f ? aabb->min[1] : aabb->max[1];
-    axis[2] = normal[2] < 0.0f ? aabb->min[2] : aabb->max[2];
+    float3 axis = {
+        normal[0] < 0.0f ? aabb->min[0] : aabb->max[0],
+        normal[1] < 0.0f ? aabb->min[1] : aabb->max[1],
+        normal[2] < 0.0f ? aabb->min[2] : aabb->max[2],
+    };
 
     if (dotf3(normal, axis) + plane_const < 0.0f) {
       // The AABB was outside one of the planes and failed this test
