@@ -118,7 +118,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
           }
         }
 
-        float3 forward = -transform_get_forward(&transform->transform);
+        float3 forward = transform_get_forward(&transform->transform);
         float3 right = crossf3((float3){0, 1, 0}, forward);
         float3 up = crossf3(forward, right);
 

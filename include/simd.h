@@ -150,7 +150,6 @@ Quaternion quat_from_axes(float3 forward, float3 right, float3 up);
 Quaternion angle_axis_to_quat(float4 angle_axis);
 float3x3 quat_to_mf33(Quaternion quat);
 float4x4 quat_to_trans(Quaternion quat);
-Quaternion trans_to_quat(float4x4 mat);
 
 Quaternion mulq(Quaternion p, Quaternion q);
 float3 qrotf3(Quaternion q, float3 v);

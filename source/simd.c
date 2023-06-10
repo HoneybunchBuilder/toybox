@@ -396,8 +396,6 @@ float3x3 quat_to_mf33(Quaternion q) {
 
 float4x4 quat_to_trans(Quaternion q) { return m33tom44(quat_to_mf33(q)); }
 
-Quaternion trans_to_quat(float4x4 mat) { return mf33_to_quat(m44tom33(mat)); }
-
 Quaternion mulq(Quaternion q, Quaternion p) {
   return (Quaternion){
       (p[3] * q[0]) + (p[0] * q[3]) + (p[1] * q[2]) - (p[2] * q[1]),
@@ -514,11 +512,6 @@ float4x4 look_forward(float3 pos, float3 forward, float3 up) {
 float4x4 look_at(float3 pos, float3 target, float3 up) {
   float3 forward = normf3(target - pos);
   return look_forward(pos, forward, up);
-}
-
-Quaternion look_forward_quat(float3 forward, float3 up) {
-  float4x4 m = look_forward((float3){0.0f, 0.0f, 0.0f}, forward, up);
-  return trans_to_quat(m);
 }
 
 Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
