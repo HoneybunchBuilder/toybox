@@ -168,8 +168,6 @@ Transform tb_transform_from_node(const cgltf_node *node);
 
 float4x4 look_forward(float3 pos, float3 forward, float3 up);
 float4x4 look_at(float3 pos, float3 target, float3 up);
-Quaternion look_forward_quat(float3 forward, float3 up);
-Quaternion look_at_quat(float3 pos, float3 target, float3 up);
 
 float4x4 perspective(float fovy, float aspect, float zn, float zf);
 float4x4 orthographic(float r, float l, float t, float b, float zn, float zf);

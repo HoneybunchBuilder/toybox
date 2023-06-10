@@ -514,11 +514,6 @@ float4x4 look_at(float3 pos, float3 target, float3 up) {
   return look_forward(pos, forward, up);
 }
 
-Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
-  float3 forward = normf3(target - pos);
-  return look_forward_quat(forward, up);
-}
-
 // Left Handed
 float4x4 perspective(float fovy, float aspect, float zn, float zf) {
   float focal_length = 1.0f / tanf(fovy * 0.5f);
