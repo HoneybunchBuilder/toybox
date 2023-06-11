@@ -146,7 +146,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         const float3 corner = frustum_corners[i];
         float4 inv_corner =
             mulf44(inv_cam_vp, (float4){corner[0], corner[1], corner[2], 0.0f});
-        frustum_corners[i] = inv_corner;
+        frustum_corners[i] = f4tof3(inv_corner);
       }
       for (uint32_t i = 0; i < 4; i++) {
         float3 dist = frustum_corners[i + 4] - frustum_corners[i];
@@ -177,16 +177,16 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
           orthographic(max[0], min[0], max[1], min[1], 0.0f, max[2] - min[2]);
 
       // Calc view matrix
-      float4x4 light_view_mat = {.col0 = {0}};
+      float4x4 view = {.col0 = {0}};
       {
         const float3 forward = transform_get_forward(&transform);
 
-        const float3 offset = center + (forward * -min[2]);
-        light_view_mat = look_at(offset, center, (float3){0, 1, 0});
+        const float3 offset = center + (forward * min[2]);
+        view = look_at(offset, center, (float3){0, 1, 0});
       }
 
       // Calculate view projection matrix
-      data.vp = mulmf44(proj, light_view_mat);
+      data.vp = mulmf44(proj, view);
 
       // Inverse
       data.inv_vp = inv_mf44(data.vp);

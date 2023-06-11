@@ -284,7 +284,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
       };
     }
 
-    image_info[image_idx + 7] = (VkDescriptorImageInfo){
+    image_info[image_idx + TB_CASCADE_COUNT + 3] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_render_target_get_view(
             self->render_target_system, self->render_system->frame_idx,
@@ -348,14 +348,14 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
           .pImageInfo = &image_info[image_idx + 3 + i],
       };
     }
-    writes[write_idx + 9] = (VkWriteDescriptorSet){
+    writes[write_idx + TB_CASCADE_COUNT + 5] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = view_set,
         .dstBinding = 6,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 7],
+        .pImageInfo = &image_info[image_idx + TB_CASCADE_COUNT + 3],
     };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,

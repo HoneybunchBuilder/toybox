@@ -30,10 +30,10 @@ float3 gerstner_wave(OceanWave wave, float3 p, float time, inout float3 tangent,
   float sinf = sin(f);
   float cosf = cos(f);
 
-  tangent += float3(-d.x * d.x * (steepness * sinf), d.x * (steepness * cosf),
-                    -d.x * d.y * (steepness * sinf));
-  binormal += float3(-d.x * d.y * (steepness * sinf), d.y * (steepness * cosf),
+  tangent += float3(-d.x * d.y * (steepness * sinf), d.y * (steepness * cosf),
                      -d.y * d.y * (steepness * sinf));
+  binormal += float3(-d.x * d.x * (steepness * sinf), d.x * (steepness * cosf),
+                    -d.x * d.y * (steepness * sinf));
   return float3(d.x * (a * cosf), a * sinf, d.y * (a * cosf));
 }
 

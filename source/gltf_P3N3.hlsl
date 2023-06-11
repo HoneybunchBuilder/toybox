@@ -97,9 +97,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     // for each light
     {
       float3 H = normalize(V + L);
-
-      float3 light_color = light_data.color;
-      out_color += phong_light(albedo, light_color, gloss, N, L, V, H);
+      out_color += phong_light(albedo, light_data.color, gloss, N, L, V, H);
     }
   }
 

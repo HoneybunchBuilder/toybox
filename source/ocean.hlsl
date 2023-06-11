@@ -34,8 +34,8 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float3 tangent = float3(1, 0, 0);
-  float3 binormal = float3(0, 0, 1);
+  float3 tangent = float3(0, 0, 1);
+  float3 binormal = float3(1, 0, 0);
   float3 pos = calc_wave_pos(i.local_pos, ocean_data.m, ocean_data.time,
                              tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
@@ -57,7 +57,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 view_dir_vec = camera_data.view_pos - i.world_pos;
 
   // Calculate normal after interpolation
-  float3 N = normalize(cross(normalize(i.binormal), normalize(i.tangent)));
+  float3 N = normalize(cross(normalize(i.tangent), normalize(i.binormal)));
   float3 V = normalize(view_dir_vec);
   float3 R = reflect(-V, N);
   float3 L = light_data.light_dir;

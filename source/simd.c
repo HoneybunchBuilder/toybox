@@ -563,45 +563,45 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
   Frustum f = {
       .planes[LeftPlane] =
           (float4){
-              vp->col3[0] + vp->col0[0],
-              vp->col3[1] + vp->col0[1],
-              vp->col3[2] + vp->col0[2],
-              vp->col3[3] + vp->col0[3],
+              vp->cols[0][3] + vp->cols[0][0],
+              vp->cols[1][3] + vp->cols[1][0],
+              vp->cols[2][3] + vp->cols[2][0],
+              vp->cols[3][3] + vp->cols[3][0],
           },
       .planes[RightPlane] =
           (float4){
-              vp->col3[0] - vp->col0[0],
-              vp->col3[1] - vp->col0[1],
-              vp->col3[2] - vp->col0[2],
-              vp->col3[3] - vp->col0[3],
+              vp->cols[0][3] - vp->cols[0][0],
+              vp->cols[1][3] - vp->cols[1][0],
+              vp->cols[2][3] - vp->cols[2][0],
+              vp->cols[3][3] - vp->cols[3][0],
           },
       .planes[TopPlane] =
           (float4){
-              vp->col3[0] - vp->col1[0],
-              vp->col3[1] - vp->col1[1],
-              vp->col3[2] - vp->col1[2],
-              vp->col3[3] - vp->col1[3],
+              vp->cols[0][3] - vp->cols[0][1],
+              vp->cols[1][3] - vp->cols[1][1],
+              vp->cols[2][3] - vp->cols[2][1],
+              vp->cols[3][3] - vp->cols[3][1],
           },
       .planes[BottomPlane] =
           (float4){
-              vp->col3[0] + vp->col1[0],
-              vp->col3[1] + vp->col1[1],
-              vp->col3[2] + vp->col1[2],
-              vp->col3[3] + vp->col1[3],
+              vp->cols[0][3] + vp->cols[0][1],
+              vp->cols[1][3] + vp->cols[1][1],
+              vp->cols[2][3] + vp->cols[2][1],
+              vp->cols[3][3] + vp->cols[3][1],
           },
       .planes[NearPlane] =
           (float4){
-              vp->col2[0],
-              vp->col2[1],
-              vp->col2[2],
-              vp->col2[3],
+              vp->cols[0][2],
+              vp->cols[1][2],
+              vp->cols[2][2],
+              vp->cols[3][2],
           },
       .planes[FarPlane] =
           (float4){
-              vp->col3[0] - vp->col2[0],
-              vp->col3[1] - vp->col2[1],
-              vp->col3[2] - vp->col2[2],
-              vp->col3[3] - vp->col2[3],
+              vp->cols[0][3] - vp->cols[0][2],
+              vp->cols[1][3] - vp->cols[1][2],
+              vp->cols[2][3] - vp->cols[2][2],
+              vp->cols[3][3] - vp->cols[3][2],
           },
   };
   // Must normalize planes
@@ -618,7 +618,6 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
 }
 
 bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
-  return true;
   // See
   // https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
   for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {

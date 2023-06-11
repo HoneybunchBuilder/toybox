@@ -66,6 +66,7 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
     float4x4 proj = perspective(cam_comp->fov, cam_comp->aspect_ratio,
                                 cam_comp->near, cam_comp->far);
 
+    view_data.v = view;
     view_data.p = proj;
     view_data.inv_proj = inv_mf44(proj);
     view_data.proj_params = (float4){cam_comp->near, cam_comp->far,
