@@ -99,7 +99,7 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
             }
             const TBMouse *mouse = &input_comp->mouse;
             if (mouse->left || mouse->right || mouse->middle) {
-              look_axis = mouse->axis;
+              look_axis = -mouse->axis;
             }
           }
 
@@ -119,8 +119,8 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
         }
 
         float3 forward = transform_get_forward(&transform->transform);
-        float3 right = crossf3((float3){0, 1, 0}, forward);
-        float3 up = crossf3(forward, right);
+        float3 right = crossf3(forward, (float3){0, 1, 0});
+        float3 up = crossf3(right, forward);
 
         float3 velocity = {0};
         {

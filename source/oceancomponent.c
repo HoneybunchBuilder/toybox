@@ -100,9 +100,9 @@ OceanSample tb_sample_ocean(const OceanComponent *ocean,
   OceanWave waves[] = {wave_0, wave_1, wave_2, wave_3};
 
   OceanSample sample = {
-      .pos = f4tof3(mul4f44f((float4){pos[0], 0, pos[1], 1}, mat)),
+      .pos = f4tof3(mulf44(mat, (float4){pos[0], 0, pos[1], 1})),
       .tangent = (float3){1, 0, 0},
-      .binormal = (float3){0, 0, 1},
+      .binormal = (float3){0, 0, -1},
   };
   for (uint32_t i = 0; i < wave_count; ++i) {
     sample = gerstner_wave(waves[i], sample, ocean->time);

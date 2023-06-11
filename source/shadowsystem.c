@@ -129,8 +129,8 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       float3 frustum_corners[8] = {
 #ifdef TB_USE_INVERSE_DEPTH
           // Inverse near and far because main camera uses reverse depth
-          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Near
-          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
+          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, -1.0f}, // Near
+          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, -1.0f},
           {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Far
           {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
 #else
@@ -144,9 +144,9 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       // Project into world space
       for (uint32_t i = 0; i < 8; ++i) {
         const float3 corner = frustum_corners[i];
-        float4 inv_corner = mul4f44f(
-            (float4){corner[0], corner[1], corner[2], 1.0f}, inv_cam_vp);
-        frustum_corners[i] = inv_corner / inv_corner[3];
+        float4 inv_corner =
+            mulf44(inv_cam_vp, (float4){corner[0], corner[1], corner[2], 0.0f});
+        frustum_corners[i] = inv_corner;
       }
       for (uint32_t i = 0; i < 4; i++) {
         float3 dist = frustum_corners[i + 4] - frustum_corners[i];

@@ -279,6 +279,15 @@ float4x4 inv_mf44(float4x4 m) {
   return out;
 }
 
+float4x4 transpose_mf44(float4x4 m) {
+  return (float4x4){
+      .col0 = (float4){m.cols[0][0], m.cols[1][0], m.cols[2][0], m.cols[3][0]},
+      .col1 = (float4){m.cols[0][1], m.cols[1][1], m.cols[2][1], m.cols[3][1]},
+      .col2 = (float4){m.cols[0][2], m.cols[1][2], m.cols[2][2], m.cols[3][2]},
+      .col3 = (float4){m.cols[0][3], m.cols[1][3], m.cols[2][3], m.cols[3][3]},
+  };
+}
+
 float3x3 mf33_from_axes(float3 forward, float3 right, float3 up) {
   return (float3x3){
       .col0 = {forward[0], forward[1], forward[2]},
@@ -438,7 +447,7 @@ void rotate(Transform *t, Quaternion r) {
 }
 
 float3 transform_get_forward(const Transform *t) {
-  return normf3(qrotf3(t->rotation, (float3){0, 0, 1}));
+  return normf3(qrotf3(t->rotation, (float3){0, 0, -1}));
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {
@@ -490,31 +499,26 @@ Transform tb_transform_from_node(const cgltf_node *node) {
   return transform;
 }
 
+// Right Handed
 float4x4 look_forward(float3 pos, float3 forward, float3 up) {
-  TracyCZoneN(ctx, "look_forward", true);
-  TracyCZoneColor(ctx, TracyCategoryColorMath);
-
   forward = normf3(forward);
-  float3 right = normf3(crossf3(normf3(up), forward));
-  up = crossf3(forward, right);
+  float3 right = normf3(crossf3(forward, normf3(up)));
+  up = crossf3(right, forward);
 
-  float4x4 m = {
-      (float4){right[0], up[0], forward[0], 0},
-      (float4){right[1], up[1], forward[1], 0},
-      (float4){right[2], up[2], forward[2], 0},
-      (float4){-dotf3(right, pos), -dotf3(up, pos), -dotf3(forward, pos), 1},
+  return (float4x4){
+      (float4){right[0], up[0], -forward[0], 0},
+      (float4){right[1], up[1], -forward[1], 0},
+      (float4){right[2], up[2], -forward[2], 0},
+      (float4){-dotf3(right, pos), -dotf3(up, pos), dotf3(forward, pos), 1},
   };
-  TracyCZoneEnd(ctx);
-  return m;
 }
 
-// Left Handed
 float4x4 look_at(float3 pos, float3 target, float3 up) {
   float3 forward = normf3(target - pos);
   return look_forward(pos, forward, up);
 }
 
-// Left Handed
+// Right Handed
 float4x4 perspective(float fovy, float aspect, float zn, float zf) {
   float focal_length = 1.0f / tanf(fovy * 0.5f);
   float m00 = focal_length / aspect;
@@ -531,25 +535,25 @@ float4x4 perspective(float fovy, float aspect, float zn, float zf) {
       (float4){0, 0, m32, 0},
   };
 #else
-  float m22 = zf / (zf - zn);
+  float m22 = zf / (zn - zf);
   float m32 = -(zf * zn) / (zf - zn);
 
   return (float4x4){
       (float4){m00, 0, 0, 0},
       (float4){0, m11, 0, 0},
-      (float4){0, 0, m22, 1},
+      (float4){0, 0, m22, -1},
       (float4){0, 0, m32, 0},
   };
 #endif
 }
 
-// Left Handed
+// Right Handed
 float4x4 orthographic(float r, float l, float t, float b, float zn, float zf) {
   return (float4x4){
       (float4){2.0f / (r - l), 0, 0, 0},
       (float4){0, 2.0f / (t - b), 0, 0},
-      (float4){0, 0, 1 / (zf - zn), 0},
-      (float4){(l + r) / (l - r), (t + b) / (b - t), zn / (zn - zf), 1},
+      (float4){0, 0, -1 / (zf - zn), 0},
+      (float4){-(r + l) / (r - l), -(t + b) / (t - b), -zn / (zf - zn), 1},
   };
 }
 
@@ -614,6 +618,7 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
 }
 
 bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
+  return true;
   // See
   // https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
   for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {

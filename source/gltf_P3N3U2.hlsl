@@ -2,27 +2,21 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-// Per-material data - Fragment & Vertex Stages
 ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
-Texture2D base_color_map : register(t1, space0); // Fragment Stage Only
-Texture2D normal_map
-    : register(
-          t2,
-          space0); // (unusable without per-vertex tangents) Fragment Stage Only
-Texture2D metal_rough_map : register(t3, space0); // Fragment Stage Only
-// Texture2D emissive_map : register(t4, space0); // Fragment Stage Only
-sampler static_sampler : register(s4, space0); // Immutable sampler
+Texture2D base_color_map : register(t1, space0);
+Texture2D normal_map : register(t2, space0);
+Texture2D metal_rough_map : register(t3, space0);
+// Texture2D emissive_map : register(t4, space0);
+sampler static_sampler : register(s4, space0);
 
-// Per-object data - Vertex Stage Only
 ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 
-// Per-view data - Fragment Stage Only
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
-TextureCube irradiance_map : register(t1, space2);  // Fragment Stage Only
-TextureCube prefiltered_map : register(t2, space2); // Fragment Stage Only
-Texture2D brdf_lut : register(t3, space2);          // Fragment Stage Only
-ConstantBuffer<CommonLightData> light_data : register(b4, space2); // Frag Only
-Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);       // Frag Only
+TextureCube irradiance_map : register(t1, space2);
+TextureCube prefiltered_map : register(t2, space2);
+Texture2D brdf_lut : register(t3, space2);
+ConstantBuffer<CommonLightData> light_data : register(b4, space2);
+Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);
 Texture2D ssao_map : register(s6, space2);
 
 [[vk::constant_id(0)]] const uint PermutationFlags = 0;

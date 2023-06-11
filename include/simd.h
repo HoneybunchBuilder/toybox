@@ -1,5 +1,13 @@
 #pragma once
 
+/*
+  Notes on mathematic standards used
+  * Coordinate system is right handed. GLTF is right handed
+  * +Y is up, +X is right and -Z is forward
+  * Matrices are column major. HLSL and SPIRV may consider them row major but
+  they are not
+*/
+
 #ifndef TB_USE_INVERSE_DEPTH
 // #define TB_USE_INVERSE_DEPTH 1
 #endif
@@ -143,6 +151,7 @@ float3 mulf33(float3x3 m, float3 v);
 
 float4x4 mulmf44(float4x4 x, float4x4 y);
 float4x4 inv_mf44(float4x4 m);
+float4x4 transpose_mf44(float4x4 m);
 float3x3 mf33_from_axes(float3 forward, float3 right, float3 up);
 
 Quaternion mf33_to_quat(float3x3 m);

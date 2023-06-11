@@ -323,7 +323,7 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -571,7 +571,7 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
               .cullMode = VK_CULL_MODE_BACK_BIT,
-              .frontFace = VK_FRONT_FACE_CLOCKWISE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -1276,8 +1276,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         float4 min = f3tof4(mesh_comp->local_aabb.min, 1.0f);
         float4 max = f3tof4(mesh_comp->local_aabb.max, 1.0f);
 
-        min = mul4f44f(min, data.m);
-        max = mul4f44f(max, data.m);
+        min = mulf44(data.m, min);
+        max = mulf44(data.m, max);
 
         aabb_add_point(&aabb, f4tof3(min));
         aabb_add_point(&aabb, f4tof3(max));
@@ -1316,9 +1316,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
       for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
         // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
         const AABB *world_aabb = &world_space_aabbs[mesh_idx];
-        // if (!frustum_test_aabb(frustum, world_aabb)) {
-        //   continue;
-        // }
+        if (!frustum_test_aabb(frustum, world_aabb)) {
+          continue;
+        }
         const MeshComponent *mesh_comp =
             tb_get_component(mesh_store, mesh_idx, MeshComponent);
 

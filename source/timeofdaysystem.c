@@ -182,7 +182,7 @@ void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
       angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, self->time});
   out_sun_lights->color = lookup_sun_color(time_norm);
 
-  float3 sun_dir = transform_get_forward(&out_sun_trans->transform);
+  float3 sun_dir = -transform_get_forward(&out_sun_trans->transform);
 
   // Update sky component's time and sun direction
   out_sky->time = self->time;
