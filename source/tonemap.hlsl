@@ -91,6 +91,6 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   color = yxy_to_rgb(yxy);
 
-  color = tonemap_aces(color);
+  color = tonemap_unreal(color);
   return float4(color, 1);
 }
