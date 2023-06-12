@@ -189,8 +189,8 @@ float4 frag(FragmentInput i) : SV_TARGET {
     float3 L = light_data.light_dir;
 
     if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
-      float metallic = material_data.pbr_metallic_roughness.metallic_factor;
-      float roughness = material_data.pbr_metallic_roughness.roughness_factor;
+      float metallic = material_data.pbr_metallic_roughness.metal_rough_factors[0];
+      float roughness = material_data.pbr_metallic_roughness.metal_rough_factors[1];
 
       // TODO: Handle alpha masking
       {

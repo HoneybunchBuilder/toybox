@@ -13,51 +13,39 @@
 #define GLTF_PERM_SHEEN 0x000000400
 #define GLTF_PERM_UNLIT 0x00000800
 
+#ifdef __HLSL_VERSION
+  #define PACKED
+  #define PADDING(t, n) t n;
+#else 
+  #define PACKED __attribute__((__packed__))
+  #define PADDING(t, n)
+#endif
+
 // Omitting texture rotation because it's not widely used
-typedef struct TextureTransform {
+typedef struct PACKED TextureTransform {
   float2 offset;
   float2 scale;
 } TextureTransform;
 
-typedef struct PBRMetallicRoughness {
+typedef struct PACKED PBRMetallicRoughness {
   float4 base_color_factor;
-  float metallic_factor;
-  float roughness_factor;
+  float4 metal_rough_factors;
 } PBRMetallicRoughness;
 
-typedef struct PBRSpecularGlossiness {
+typedef struct PACKED PBRSpecularGlossiness {
   float4 diffuse_factor;
-  float3 specular_factor;
-  float glossiness_factor;
+  float4 spec_gloss_factors;
 } PBRSpecularGlossiness;
 
-typedef struct Specular {
-  float3 color_factor;
-  float specular_factor;
-} Specular;
-
-typedef struct Sheen {
-  float3 color_factor;
-  float roughness_factor;
-} Sheen;
-
-typedef struct Volume {
-  float3 attenuation_color;
-  float attenuation_distance;
-  float thickness_factor;
-} Volume;
-
-typedef struct GLTFMaterialData {
+typedef struct PACKED GLTFMaterialData {
   TextureTransform tex_transform;
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
-  float clearcoat_factor;
-  float clearcoat_roughness_factor;
-  float ior;
-  Specular specular;
-  Sheen sheen;
-  float transmission_factor;
-  Volume volume;
+  float4 specular;
+  float4 sheen;
+  float4 attenuation_params;
+  float4 thickness_factor;
+  float4 emissives;
 } GLTFMaterialData;
 
 // If a shader, provide some helper functions

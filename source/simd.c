@@ -32,6 +32,9 @@
 #define unroll_loop_4 _Pragma("GCC unroll 4")
 #endif
 
+float3 atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
+float4 atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
+
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
 float2 f3tof2(float3 f) { return (float2){f[0], f[1]}; }

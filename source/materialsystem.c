@@ -390,36 +390,38 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
       // Gather uniform buffer data and copy to the tmp host buffer
       TbHostBuffer host_buf = {0};
       {
-        GLTFMaterialData data = {.clearcoat_factor = 0};
-        {
-          data.tex_transform = (TextureTransform){
-              .offset =
-                  (float2){
-                      tex_trans.offset[0],
-                      tex_trans.offset[1],
-                  },
-              .scale =
-                  (float2){
-                      tex_trans.scale[0],
-                      tex_trans.scale[1],
-                  },
-          };
-          SDL_memcpy(&data.pbr_metallic_roughness.base_color_factor,
-                     mat->pbr_metallic_roughness.base_color_factor,
-                     sizeof(float) * 4);
-          data.pbr_metallic_roughness.metallic_factor =
-              mat->pbr_metallic_roughness.metallic_factor;
-          data.pbr_metallic_roughness.roughness_factor =
-              mat->pbr_metallic_roughness.roughness_factor;
+        GLTFMaterialData data = {
+            .tex_transform =
+                {
+                    .offset =
+                        (float2){
+                            tex_trans.offset[0],
+                            tex_trans.offset[1],
+                        },
+                    .scale =
+                        (float2){
+                            tex_trans.scale[0],
+                            tex_trans.scale[1],
+                        },
+                },
+            .pbr_metallic_roughness =
+                {
+                    .base_color_factor =
+                        atof4(mat->pbr_metallic_roughness.base_color_factor),
+                    .metal_rough_factors =
+                        {mat->pbr_metallic_roughness.metallic_factor,
+                         mat->pbr_metallic_roughness.roughness_factor},
+                },
+            .pbr_specular_glossiness.diffuse_factor =
+                atof4(mat->pbr_specular_glossiness.diffuse_factor),
+            .specular =
+                f3tof4(atof3(mat->pbr_specular_glossiness.specular_factor),
+                       mat->pbr_specular_glossiness.glossiness_factor),
+            .emissives = f3tof4(atof3(mat->emissive_factor), 1.0f),
+        };
 
-          SDL_memcpy(&data.pbr_specular_glossiness.diffuse_factor,
-                     mat->pbr_specular_glossiness.diffuse_factor,
-                     sizeof(float) * 4);
-          SDL_memcpy(&data.pbr_specular_glossiness.specular_factor,
-                     mat->pbr_specular_glossiness.specular_factor,
-                     sizeof(float) * 3);
-          data.pbr_specular_glossiness.glossiness_factor =
-              mat->pbr_specular_glossiness.glossiness_factor;
+        if (mat->has_emissive_strength) {
+          data.emissives[3] = mat->emissive_strength.emissive_strength;
         }
 
         // HACK: Known alignment for uniform buffers
