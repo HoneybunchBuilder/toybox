@@ -40,7 +40,6 @@ float3 prefiltered_reflection(TextureCube map, SamplerState s,  float3 R, float 
   return lerp(a, b, lod - lodf);
 }
 
-
 // This calculates the specular geometric attenuation (aka G()),
 // where rougher material will reflect less light back to the viewer.
 float geometricOcclusion(float NdotL, float NdotV, float roughness) {

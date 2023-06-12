@@ -51,7 +51,7 @@ Interpolators vert(VertexIn i) {
   o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
   o.normal = normalize(mul(orientation, i.normal)); // convert to world-space
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
-  o.binormal = normalize(cross(o.normal, o.tangent));
+  o.binormal = normalize(cross(o.tangent, o.normal));
   o.uv = uv_transform(i.uv, material_data.tex_transform);
   o.clip = clip_pos;
   return o;

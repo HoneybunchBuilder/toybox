@@ -6,5 +6,5 @@
 #include "simd.h"
 
 void tb_sample_on_start(World *world) {
-  tb_world_load_scene(world, "scenes/Bistro.glb");
+  tb_world_load_scene(world, "scenes/PBRTest.glb");
 }

@@ -24,7 +24,7 @@ Interpolators vert(VertexIn i) {
 }
 
 float4 frag(Interpolators i) : SV_TARGET {
-  float time = sky_data.time * 0.2f;
+  float time = sky_data.time * 0.02f;
   float cirrus = sky_data.cirrus;
   float cumulus = sky_data.cumulus;
   float3 sun_dir = normalize(sky_data.sun_dir);

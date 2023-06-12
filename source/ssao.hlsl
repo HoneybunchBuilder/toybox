@@ -29,7 +29,7 @@ float frag(Interpolators interp) : SV_TARGET {
       noise.Sample(noise_sampler, interp.uv0 * consts.noise_scale).xyz * 2.0 -
       1.0;
   float3 tangent = normalize(random - normal * dot(random, normal));
-  float3 bitangent = cross(normal, tangent);
+  float3 bitangent = cross(tangent, normal);
   float3x3 orientation = float3x3(tangent, bitangent, normal);
 
   float occlusion = 0.0f;
