@@ -122,7 +122,7 @@ VertexAttributes index_vert(uint32_t meshlet_index, uint vertex_index) {
     if (MeshFlags & VA_INPUT_PERM_TANGENT) {
       half4 tangent = tangents[vertex_index];
       o.tangent = normalize(mul(orientation, tangent.xyz));
-      o.binormal = normalize(cross(o.normal, o.tangent));
+      o.binormal = normalize(cross(o.tangent, o.normal));
     }
   }
   if (MeshFlags & VA_INPUT_PERM_TEXCOORD0) {

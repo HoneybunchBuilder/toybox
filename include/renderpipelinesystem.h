@@ -116,6 +116,7 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId color_copy_ctx;
   TbDrawContextId brightness_ctx;
   TbDrawContextId tonemap_ctx;
+  TbDispatchContextId bloom_copy_ctx;
   TbDispatchContextId bloom_blur_ctx;
   TbDispatchContextId ssao_blur_ctx;
 
@@ -128,16 +129,19 @@ typedef struct RenderPipelineSystem {
   VkDescriptorSetLayout ssao_set_layout;
   VkDescriptorSetLayout blur_set_layout;
   VkDescriptorSetLayout copy_set_layout;
+  VkDescriptorSetLayout comp_copy_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
   VkPipelineLayout ssao_pipe_layout;
   VkPipelineLayout blur_pipe_layout;
   VkPipelineLayout copy_pipe_layout;
+  VkPipelineLayout comp_copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
   VkPipeline ssao_pipe;
   VkPipeline blur_pipe; // Compute blur pipe
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;
+  VkPipeline comp_copy_pipe;
   VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];

@@ -28,8 +28,8 @@ Interpolators vert(VertexIn i) {
 float4 frag(Interpolators i) : SV_TARGET {
   float3 normal = normalize(i.view_pos);
   float3 up = float3(0, 1, 0);
-  float3 right = normalize(cross(normal, up));
-  up = normalize(cross(right, normal));
+  float3 right = normalize(cross(up, normal));
+  up = normalize(cross(normal, right));
 
   const float phi_delta = TAU / 32.0f;
   const float theta_delta = PI_2 / 16.0f;

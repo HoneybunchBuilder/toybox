@@ -65,8 +65,8 @@ float3 importance_sample_ggx(float2 Xi, float roughness, float3 normal) {
   // Tangent space
   float3 up =
       abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
-  float3 tan_x = normalize(cross(normal, up));
-  float3 tan_y = normalize(cross(tan_x, normal));
+  float3 tan_x = normalize(cross(up, normal));
+  float3 tan_y = normalize(cross(normal, tan_x));
 
   // Convert to world Space
   return normalize(tan_x * H.x + tan_y * H.y + normal * H.z);
