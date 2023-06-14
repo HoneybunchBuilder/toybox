@@ -14,8 +14,8 @@ project(toybox
         LANGUAGES C CXX)
 
 option(TB_BUILD_SAMPLES "Compile samples" ON)
-option(FINAL "Compile with the intention to redistribute" OFF)
-option(PROFILE_TRACY "Compile with support for the tracy profiler" OFF)
+option(FINAL "Compile with the intention to redistribute" ON)
+option(PROFILE_TRACY "Compile with support for the tracy profiler" ON)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
 
 set(toybox_source_dir ${CMAKE_CURRENT_LIST_DIR})

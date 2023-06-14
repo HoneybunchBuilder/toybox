@@ -51,7 +51,7 @@ Interpolators vert(VertexIn i) {
   o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
   o.normal = normalize(mul(orientation, i.normal)); // convert to world-space
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
-  o.binormal = normalize(cross(o.tangent, o.normal));
+  o.binormal = normalize(cross(o.tangent, o.normal) * i.tangent.w);
   o.uv = uv_transform(i.uv, material_data.tex_transform);
   o.clip = clip_pos;
   return o;
@@ -69,10 +69,9 @@ float4 frag(Interpolators i) : SV_TARGET {
                             normalize(i.normal));
 
     // Convert from tangent space to world space
-    float3 tangentSpaceNormal = normal_map.Sample(static_sampler, i.uv).xyz;
-    tangentSpaceNormal =
-        normalize(tangentSpaceNormal * 2 - 1); // Must unpack normal
-    N = normalize(mul(tbn, tangentSpaceNormal));
+    float3 tangent_space_normal = normal_map.Sample(static_sampler, i.uv).xyz;
+    tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
+    N = normalize(mul(tangent_space_normal, tbn));
   }
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);

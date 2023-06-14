@@ -46,33 +46,9 @@ float tonemap_unreal_x(float x) {
   return x / (x + 0.155) * 1.019;
 }
 
-float tonemap_aces_x(float x) {
-  // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
-  const float a = 2.51;
-  const float b = 0.03;
-  const float c = 2.43;
-  const float d = 0.59;
-  const float e = 0.14;
-  return (x * (a * x + b)) / (x * (c * x + d) + e);
-}
-
 float3 tonemap_unreal(float3 rgb) {
   return float3(tonemap_unreal_x(rgb.r), tonemap_unreal_x(rgb.g),
                 tonemap_unreal_x(rgb.b));
-}
-
-float3 tonemap_aces(float3 rgb) {
-  return float3(tonemap_aces_x(rgb.r), tonemap_aces_x(rgb.g),
-                tonemap_aces_x(rgb.b));
-}
-
-float3 gamma_correct(float3 rgb) {
-  float3 lo = rgb * 12.92;
-  float3 hi =
-      pow(abs(rgb), float3(1.0 / 2.4, 1.0 / 2.4, 1.0 / 2.4)) * 1.055 - 0.055;
-  return lerp(
-      hi, lo,
-      float3(rgb.x <= 0.0031308, rgb.y <= 0.0031308, rgb.z <= 0.0031308));
 }
 
 Texture2D color_map : register(t0, space0);
@@ -91,6 +67,5 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   color = yxy_to_rgb(yxy);
 
-  color = tonemap_unreal(color);
-  return float4(color, 1);
+  return float4(tonemap_unreal(color), 1);
 }
