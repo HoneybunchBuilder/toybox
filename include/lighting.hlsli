@@ -74,7 +74,7 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 
 float texture_proj(float4 shadow_coord, float2 offset, float ambient,
                    Texture2D shadow_map, sampler samp) {
-  float bias = 0.0005;
+  float bias = 0.005;
 
   float4 proj_coord = shadow_coord;
 
@@ -97,7 +97,7 @@ float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
   int2 tex_dim;
   shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
 
-  float scale = 0.75f;
+  float scale = 0.5f;
   float dx = scale * (1.0 / float(tex_dim.x));
   float dy = scale * (1.0 / float(tex_dim.y));
 
