@@ -100,8 +100,5 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
-  // Dithering Noise
-  color += noise(view_dir_y * 1000) * 0.01;
-
-  return color;
+  return color * 0.2;
 }

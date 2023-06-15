@@ -2421,7 +2421,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       TB_CHECK_RETURN(id != InvalidRenderPassId,
                       "Failed to create luminance pass", false);
       self->luminance_pass = id;
-    } // Create bloom blur compute pass
+    }
+    // Create bloom blur compute pass
     {
       const uint32_t trans_count = 3;
       PassTransition transitions[3] = {

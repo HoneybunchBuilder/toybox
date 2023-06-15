@@ -44,7 +44,7 @@ float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness, fl
 
   // Specular
   float3 kS = fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
-  float3 specular = reflection * (kS);// * brdf.x + brdf.y);
+  float3 specular = reflection * (kS * brdf.x + brdf.y);
 
   // Ambient
   float3 kD = 1.0 - kS;
