@@ -9,6 +9,9 @@ Texture2D metal_rough_map : register(t3, space0);
 // Texture2D emissive_map : register(t4, space0);
 sampler static_sampler : register(s4, space0);
 
+[[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts
+    : register(b5, space0);
+
 ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 
 ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
@@ -18,8 +21,6 @@ Texture2D brdf_lut : register(t3, space2);
 ConstantBuffer<CommonLightData> light_data : register(b4, space2);
 Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);
 Texture2D ssao_map : register(s6, space2);
-
-[[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -64,7 +65,7 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 out_color = float3(0.0, 0.0, 0.0);
 
-  if (PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
+  if (consts.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic =
         material_data.pbr_metallic_roughness.metal_rough_factors[0];
     float roughness =
@@ -79,7 +80,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       albedo = pbr_base_color.rgb;
     }
 
-    if (PermutationFlags & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
+    if (consts.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
       // The red channel of this texture *may* store occlusion.
       // TODO: Check the perm for occlusion
       float4 mr_sample = metal_rough_map.Sample(static_sampler, i.uv);

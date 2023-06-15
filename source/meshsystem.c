@@ -3,6 +3,7 @@
 #include "cameracomponent.h"
 #include "cgltf.h"
 #include "common.hlsli"
+#include "gltf.hlsli"
 #include "hash.h"
 #include "lightcomponent.h"
 #include "materialsystem.h"
@@ -44,6 +45,7 @@ static const uint32_t max_pipe_count = VI_Count * GLTF_PERM_COUNT;
 
 typedef struct SubMeshDraw {
   VkDescriptorSet mat_set;
+  MaterialPushConstants consts;
   VkIndexType index_type;
   uint32_t index_count;
   uint64_t index_offset;
@@ -377,9 +379,8 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
-                               Allocator std_alloc, VkFormat color_format,
-                               VkFormat depth_format,
+VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator std_alloc,
+                               VkFormat color_format, VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **pipelines) {
   VkResult err = VK_SUCCESS;
@@ -632,63 +633,13 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator tmp_alloc,
 
   // Create pipelines
   {
-    VkGraphicsPipelineCreateInfo *create_info =
-        tb_alloc_nm_tp(tmp_alloc, max_pipe_count, VkGraphicsPipelineCreateInfo);
-    VkPipeline *pipes = tb_alloc_nm_tp(std_alloc, max_pipe_count, VkPipeline);
-
-    uint32_t perm_idx = 0;
-    for (uint32_t vi_idx = 0; vi_idx < VI_Count; ++vi_idx) {
-      const VkGraphicsPipelineCreateInfo *base = &create_info_bases[vi_idx];
-
-      const uint32_t stage_count = base->stageCount;
-      const uint32_t perm_stage_count = GLTF_PERM_COUNT * stage_count;
-
-      // Every shader stage needs its own create info
-      VkPipelineShaderStageCreateInfo *pipe_stage_info = tb_alloc_nm_tp(
-          tmp_alloc, perm_stage_count, VkPipelineShaderStageCreateInfo);
-
-      VkSpecializationMapEntry map_entries[1] = {
-          {0, 0, sizeof(uint32_t)},
-      };
-
-      VkSpecializationInfo *spec_info =
-          tb_alloc_nm_tp(tmp_alloc, GLTF_PERM_COUNT, VkSpecializationInfo);
-      uint32_t *flags = tb_alloc_nm_tp(tmp_alloc, GLTF_PERM_COUNT, uint32_t);
-
-      // Insert specialization info to every shader stage
-      for (uint32_t fp_idx = 0; fp_idx < GLTF_PERM_COUNT; ++fp_idx) {
-
-        create_info[perm_idx] = *base;
-
-        flags[fp_idx] = fp_idx;
-        spec_info[fp_idx] = (VkSpecializationInfo){
-            1,
-            map_entries,
-            sizeof(uint32_t),
-            &flags[fp_idx],
-        };
-
-        uint32_t stage_idx = fp_idx * stage_count;
-        for (uint32_t i = 0; i < stage_count; ++i) {
-          VkPipelineShaderStageCreateInfo *stage =
-              &pipe_stage_info[stage_idx + i];
-          *stage = base->pStages[i];
-          stage->pSpecializationInfo = &spec_info[fp_idx];
-        }
-        create_info[perm_idx].pStages = &pipe_stage_info[stage_idx];
-
-        // Set permutation tracking values
-        // pipe->input_flags[perm_idx] = vertex_input;
-        // pipe->pipeline_flags[perm_idx] = fp_idx;
-        perm_idx++;
-      }
-    }
-    err = tb_rnd_create_graphics_pipelines(render_system, max_pipe_count,
-                                           create_info, "Mesh Pipeline", pipes);
+    VkPipeline *pipes = tb_alloc_nm_tp(std_alloc, VI_Count, VkPipeline);
+    err = tb_rnd_create_graphics_pipelines(
+        render_system, VI_Count, create_info_bases, "Mesh Pipeline", pipes);
     TB_VK_CHECK_RET(err, "Failed to create graphics pipelines", err);
 
     *pipelines = pipes;
-    *pipe_count = max_pipe_count;
+    *pipe_count = VI_Count;
   }
 
   // Can destroy shader moduless
@@ -940,6 +891,8 @@ void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                               true);
             vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     layout, 0, 1, &submesh->mat_set, 0, NULL);
+            vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                               sizeof(MaterialPushConstants), &submesh->consts);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);
             for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
@@ -1062,6 +1015,15 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = LAYOUT_COUNT,
           .pSetLayouts = layouts,
+          .pushConstantRangeCount = 1,
+          .pPushConstantRanges =
+              (VkPushConstantRange[1]){
+                  {
+                      .offset = 0,
+                      .size = sizeof(MaterialPushConstants),
+                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  },
+              },
       };
 #undef LAYOUT_COUNT
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
@@ -1108,9 +1070,9 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           break;
         }
       }
-      err = create_mesh_pipelines(
-          self->render_system, self->tmp_alloc, self->std_alloc, color_format,
-          depth_format, self->pipe_layout, &self->pipe_count, &self->pipelines);
+      err = create_mesh_pipelines(self->render_system, self->std_alloc,
+                                  color_format, depth_format, self->pipe_layout,
+                                  &self->pipe_count, &self->pipelines);
       TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
     }
 
@@ -1202,17 +1164,15 @@ void destroy_mesh_system(MeshSystem *self) {
   *self = (MeshSystem){0};
 }
 
-uint32_t get_pipeline_for_input_and_mat(MeshSystem *self, TbVertexInput input,
-                                        TbMaterialPerm mat) {
+uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
   TracyCZone(ctx, true);
   // We know the layout of the distribution of pipelines so we can
   // decode the vertex input and the material permutation from the
   // index
   for (uint32_t pipe_idx = 0; pipe_idx < self->pipe_count; ++pipe_idx) {
-    const TbVertexInput vi = pipe_idx / GLTF_PERM_COUNT;
-    const TbMaterialPerm mp = pipe_idx % GLTF_PERM_COUNT;
+    const TbVertexInput vi = pipe_idx;
 
-    if (input == vi && mat == mp) {
+    if (input == vi) {
       TracyCZoneEnd(ctx);
       return pipe_idx;
     }
@@ -1392,10 +1352,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
              ++sub_idx) {
           const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-          TbMaterialPerm mat_perm =
-              tb_mat_system_get_perm(self->material_system, submesh->material);
-          uint32_t pipe_idx = get_pipeline_for_input_and_mat(
-              self, submesh->vertex_input, mat_perm);
+          uint32_t pipe_idx =
+              get_pipeline_for_input(self, submesh->vertex_input);
 
           if (pipe_idxs[pipe_idx] == 0) {
             pipe_idxs[pipe_idx] = pipe_count;
@@ -1570,8 +1528,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
             VkDescriptorSet material_set =
                 tb_mat_system_get_set(self->material_system, submesh->material);
 
-            const uint32_t pipe_idx = get_pipeline_for_input_and_mat(
-                self, submesh->vertex_input, mat_perm);
+            const uint32_t pipe_idx =
+                get_pipeline_for_input(self, submesh->vertex_input);
             const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
 
             DrawBatch *opaque_batch = &mesh_batches[local_pipe_idx];
@@ -1594,6 +1552,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
                 &view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
             *sub_draw = (SubMeshDraw){
                 .mat_set = material_set,
+                .consts = {.perm = mat_perm},
                 .index_type = submesh->index_type,
                 .index_count = submesh->index_count,
                 .index_offset = submesh->index_offset,

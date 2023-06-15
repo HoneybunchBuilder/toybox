@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.hlsli"
+
 #define GLTF_PERM_BASE_COLOR_MAP 0x00000001
 #define GLTF_PERM_NORMAL_MAP 0x00000002
 #define GLTF_PERM_PBR_METALLIC_ROUGHNESS 0x00000004
@@ -14,11 +16,11 @@
 #define GLTF_PERM_UNLIT 0x00000800
 
 #ifdef __HLSL_VERSION
-  #define PACKED
-  #define PADDING(t, n) t n;
-#else 
-  #define PACKED __attribute__((__packed__))
-  #define PADDING(t, n)
+#define PACKED
+#define PADDING(t, n) t n;
+#else
+#define PACKED __attribute__((__packed__))
+#define PADDING(t, n)
 #endif
 
 // Omitting texture rotation because it's not widely used
@@ -48,6 +50,10 @@ typedef struct PACKED GLTFMaterialData {
   float4 emissives;
 } GLTFMaterialData;
 
+typedef struct PACKED MaterialPushConstants {
+  uint perm;
+} MaterialPushConstants;
+
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 float2 uv_transform(int2 quant_uv, TextureTransform trans) {
@@ -57,4 +63,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   uv += trans.offset;
   return uv;
 }
+#else
+_Static_assert(sizeof(MaterialPushConstants) <= PUSH_CONSTANT_BYTES,
+               "Too Many Push Constants");
 #endif

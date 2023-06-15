@@ -34,6 +34,7 @@ typedef int32_t __attribute__((vector_size(8))) int2;
 typedef uint32_t __attribute__((vector_size(16))) uint4;
 typedef uint32_t __attribute__((vector_size(16))) uint3;
 typedef uint32_t __attribute__((vector_size(8))) uint2;
+typedef uint32_t uint; // For hlsl compatibility
 
 // All matrices are column major since HLSL expects that by default
 
