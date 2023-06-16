@@ -63,6 +63,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float2 screen_uv = (i.clip.xy / i.clip.w) * 0.5 + 0.5;
 
   float3 out_color = float3(0.0, 0.0, 0.0);
+  float alpha = 1.0f;
 
   if (consts.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
     float metallic =
@@ -76,6 +77,12 @@ float4 frag(Interpolators i) : SV_TARGET {
           material_data.pbr_metallic_roughness.base_color_factor;
 
       albedo = pbr_base_color.rgb;
+      alpha = pbr_base_color.a;
+      if (consts.perm & GLTF_PERM_ALPHA_CLIP) {
+        if (alpha < ALPHA_CUTOFF(material_data)) {
+          discard;
+        }
+      }
     }
 
     // Lighting
@@ -156,5 +163,5 @@ float4 frag(Interpolators i) : SV_TARGET {
   float emissive_strength = material_data.emissives.w;
   out_color += emissive_factor * emissive_strength;
 
-  return float4(out_color, 1.0);
+  return float4(out_color, alpha);
 }

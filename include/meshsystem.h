@@ -46,8 +46,9 @@ typedef enum GLTF_PERMUTATIONS {
   GLTF_PERM_SPECULAR = 0x00000200,
   GLTF_PERM_SHEEN = 0x000000400,
   GLTF_PERM_UNLIT = 0x00000800,
-  // Actually 13... but using 4 to cut down on startup time
-  GLTF_PERM_FLAG_COUNT = 4,
+  GLTF_PERM_ALPHA_CLIP = 0x00001000,
+  GLTF_PERM_ALPHA_BLEND = 0x00002000,
+  GLTF_PERM_FLAG_COUNT = 14,
   GLTF_PERM_COUNT = 1 << GLTF_PERM_FLAG_COUNT,
 } GLTF_PERMUTATIONS;
 
@@ -64,6 +65,8 @@ static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
     GLTF_PERM_SPECULAR,
     GLTF_PERM_SHEEN,
     GLTF_PERM_UNLIT,
+    GLTF_PERM_ALPHA_CLIP,
+    GLTF_PERM_ALPHA_BLEND,
 };
 
 typedef struct MeshSystem {
@@ -78,6 +81,7 @@ typedef struct MeshSystem {
 
   TbDrawContextId prepass_draw_ctx;
   TbDrawContextId opaque_draw_ctx;
+  TbDrawContextId transparent_draw_ctx;
   TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
 
   VkDescriptorSetLayout obj_set_layout;
@@ -88,7 +92,8 @@ typedef struct MeshSystem {
   VkPipeline prepass_pipe;
 
   uint32_t pipe_count;
-  VkPipeline *pipelines;
+  VkPipeline *opaque_pipelines;
+  VkPipeline *transparent_pipelines;
 
   VkPipelineLayout shadow_pipe_layout;
   VkPipeline shadow_pipeline;

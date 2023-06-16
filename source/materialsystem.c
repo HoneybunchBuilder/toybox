@@ -423,6 +423,9 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         if (mat->has_emissive_strength) {
           data.emissives[3] = mat->emissive_strength.emissive_strength;
         }
+        if (mat->alpha_mode == cgltf_alpha_mode_mask) {
+          data.sheen_alpha[3] = mat->alpha_cutoff;
+        }
 
         // HACK: Known alignment for uniform buffers
         err = tb_rnd_sys_alloc_tmp_host_buffer(
@@ -520,6 +523,12 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         }
         if (mat->unlit) {
           feat_perm |= GLTF_PERM_UNLIT;
+        }
+        if (mat->alpha_mode == cgltf_alpha_mode_mask) {
+          feat_perm |= GLTF_PERM_ALPHA_CLIP;
+        }
+        if (mat->alpha_mode == cgltf_alpha_mode_blend) {
+          feat_perm |= GLTF_PERM_ALPHA_BLEND;
         }
         TbTextureId normal_id = self->texture_system->default_normal_tex;
         if (mat->normal_texture.texture != NULL) {
