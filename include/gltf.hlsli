@@ -14,6 +14,7 @@
 #define GLTF_PERM_SPECULAR 0x00000200
 #define GLTF_PERM_SHEEN 0x000000400
 #define GLTF_PERM_UNLIT 0x00000800
+#define GLTF_PERM_ALPHA_CLIP 0x00001000
 
 #ifdef __HLSL_VERSION
 #define PACKED
@@ -44,11 +45,13 @@ typedef struct PACKED GLTFMaterialData {
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
   float4 specular;
-  float4 sheen;
+  float4 sheen_alpha; // alpha cutoff packed into w
   float4 attenuation_params;
   float4 thickness_factor;
   float4 emissives;
 } GLTFMaterialData;
+
+#define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
 typedef struct PACKED MaterialPushConstants {
   uint perm;
