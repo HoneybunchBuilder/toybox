@@ -1594,7 +1594,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
           static const uint64_t attr_stride = sizeof(uint16_t) * 2;
 
           bool opaque = true;
-          if (mat_perm & GLTF_PERM_ALPHA_CLIP) {
+          if (mat_perm & GLTF_PERM_ALPHA_CLIP ||
+              mat_perm & GLTF_PERM_ALPHA_BLEND) {
             opaque = false;
           }
 

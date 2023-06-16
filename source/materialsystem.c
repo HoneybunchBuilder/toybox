@@ -527,6 +527,9 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         if (mat->alpha_mode == cgltf_alpha_mode_mask) {
           feat_perm |= GLTF_PERM_ALPHA_CLIP;
         }
+        if (mat->alpha_mode == cgltf_alpha_mode_blend) {
+          feat_perm |= GLTF_PERM_ALPHA_BLEND;
+        }
         TbTextureId normal_id = self->texture_system->default_normal_tex;
         if (mat->normal_texture.texture != NULL) {
           feat_perm |= GLTF_PERM_NORMAL_MAP;
