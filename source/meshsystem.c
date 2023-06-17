@@ -76,6 +76,7 @@ typedef struct MeshDrawBatch {
 } MeshDrawBatch;
 
 typedef struct ShadowSubDraw {
+  TbMaterialPerm mat_perm;
   VkIndexType index_type;
   uint32_t index_count;
   uint64_t index_offset;
@@ -213,12 +214,13 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 3,
+              .dynamicStateCount = 4,
               .pDynamicStates =
-                  (VkDynamicState[3]){
+                  (VkDynamicState[4]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
                       VK_DYNAMIC_STATE_DEPTH_BIAS,
+                      VK_DYNAMIC_STATE_CULL_MODE,
                   },
           },
       .layout = pipe_layout,
@@ -360,11 +362,12 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
+              .dynamicStateCount = 3,
               .pDynamicStates =
-                  (VkDynamicState[2]){
+                  (VkDynamicState[3]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
+                      VK_DYNAMIC_STATE_CULL_MODE,
                   },
           },
       .layout = pipe_layout,
@@ -611,11 +614,12 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator std_alloc,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
+              .dynamicStateCount = 3,
               .pDynamicStates =
-                  (VkDynamicState[2]){
+                  (VkDynamicState[3]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
+                      VK_DYNAMIC_STATE_CULL_MODE,
                   },
           },
       .layout = pipe_layout,
@@ -749,6 +753,11 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           if (submesh->index_count > 0) {
             TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
                               true);
+            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
+            if (submesh->mat_perm & GLTF_PERM_DOUBLE_SIDED) {
+              cull_flags = VK_CULL_MODE_NONE;
+            }
+            vkCmdSetCullMode(buffer, cull_flags);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);
             vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
@@ -835,6 +844,11 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           if (submesh->index_count > 0) {
             TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
                               true);
+            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
+            if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
+              cull_flags = VK_CULL_MODE_NONE;
+            }
+            vkCmdSetCullMode(buffer, cull_flags);
             // Don't need to bind material data
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);
@@ -926,6 +940,11 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                                     layout, 0, 1, &submesh->mat_set, 0, NULL);
             vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                                sizeof(MaterialPushConstants), &submesh->consts);
+            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
+            if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
+              cull_flags = VK_CULL_MODE_NONE;
+            }
+            vkCmdSetCullMode(buffer, cull_flags);
             vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
                                  submesh->index_type);
             for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
@@ -1617,6 +1636,8 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
               SubMeshDraw *sub_draw =
                   &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
               *sub_draw = (SubMeshDraw){
+                  .consts = {.perm = mat_perm}, // Need this for some last
+                                                // minute material options
                   .index_type = submesh->index_type,
                   .index_count = submesh->index_count,
                   .index_offset = submesh->index_offset,
@@ -1800,6 +1821,11 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
            ++sub_idx) {
         const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
 
+        // Still need the material perm to check for things like
+        // double-sidedness
+        TbMaterialPerm mat_perm =
+            tb_mat_system_get_perm(self->material_system, submesh->material);
+
         shadow_batches[cascade_idx].pipeline = self->shadow_pipeline;
         shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
         shadow_user_batches[cascade_idx].view_count = dir_light_count;
@@ -1817,6 +1843,7 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         ShadowSubDraw *sub_draw =
             &draw_view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
         *sub_draw = (ShadowSubDraw){
+            .mat_perm = mat_perm,
             .index_type = submesh->index_type,
             .index_count = submesh->index_count,
             .index_offset = submesh->index_offset,
