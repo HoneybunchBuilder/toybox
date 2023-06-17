@@ -174,7 +174,25 @@ void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
 void rotate(Transform *t, Quaternion r);
 
+// Reminder: Left Handed coordinate space
+#define TB_ORIGIN                                                              \
+  (float3) { 0 }
+#define TB_FORWARD                                                             \
+  (float3) { 0, 0, -1 }
+#define TB_BACKWARD                                                            \
+  (float3) { 0, 0, 1 }
+#define TB_LEFT                                                                \
+  (float3) { -1, 0, 0 }
+#define TB_RIGHT                                                               \
+  (float3) { 1, 0, 0 }
+#define TB_UP                                                                  \
+  (float3) { 0, 1, 0 }
+#define TB_DOWN                                                                \
+  (float3) { 0, -1, 0 }
+
 float3 transform_get_forward(const Transform *t);
+float3 transform_get_right(const Transform *t);
+float3 transform_get_up(const Transform *t);
 
 void transform_to_matrix(float4x4 *m, const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);

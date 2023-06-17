@@ -450,7 +450,15 @@ void rotate(Transform *t, Quaternion r) {
 }
 
 float3 transform_get_forward(const Transform *t) {
-  return normf3(qrotf3(t->rotation, (float3){0, 0, -1}));
+  return normf3(qrotf3(t->rotation, TB_FORWARD));
+}
+
+float3 transform_get_right(const Transform *t) {
+  return normf3(qrotf3(t->rotation, TB_RIGHT));
+}
+
+float3 transform_get_up(const Transform *t) {
+  return normf3(qrotf3(t->rotation, TB_UP));
 }
 
 void transform_to_matrix(float4x4 *m, const Transform *t) {

@@ -1247,8 +1247,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
         float4x4 proj = perspective(camera->fov, camera->aspect_ratio,
                                     camera->near, camera->far);
         float3 forward = transform_get_forward(&transform->transform);
-        float4x4 view = look_forward((float3){0.0f, 0.0f, 0.0f}, forward,
-                                     (float3){0.0f, 1.0f, 0.0f});
+        float4x4 view = look_forward(TB_ORIGIN, forward, TB_UP);
         vp = mulmf44(proj, view);
       }
 
