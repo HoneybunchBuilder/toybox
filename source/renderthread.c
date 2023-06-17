@@ -765,6 +765,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   VkPhysicalDeviceVulkan13Features vk_13_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
       .dynamicRendering = true,
+      .shaderDemoteToHelperInvocation = true,
   };
 
   VkPhysicalDeviceVulkan11Features vk_11_features = {

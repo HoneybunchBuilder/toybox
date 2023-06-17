@@ -1228,6 +1228,7 @@ void destroy_mesh_system(MeshSystem *self) {
   tb_rnd_destroy_pipeline(render_system, self->shadow_pipeline);
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->opaque_pipelines[i]);
+    tb_rnd_destroy_pipeline(render_system, self->transparent_pipelines[i]);
   }
   tb_rnd_destroy_pipeline(render_system, self->prepass_pipe);
 
