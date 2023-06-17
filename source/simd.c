@@ -330,31 +330,31 @@ Quaternion mf33_to_quat(float3x3 mat) {
   switch (biggest_index) {
   case 0:
     return (Quaternion){
-        (mat.cols[1][2] - mat.cols[2][1]) * mult,
-        (mat.cols[2][0] - mat.cols[0][2]) * mult,
-        (mat.cols[0][1] - mat.cols[1][0]) * mult,
+        (mat.cols[2][1] - mat.cols[1][2]) * mult,
+        (mat.cols[0][2] - mat.cols[2][0]) * mult,
+        (mat.cols[1][0] - mat.cols[0][1]) * mult,
         biggest_val,
     };
   case 1:
     return (Quaternion){
         biggest_val,
-        (mat.cols[0][1] + mat.cols[1][0]) * mult,
-        (mat.cols[2][0] + mat.cols[0][2]) * mult,
-        (mat.cols[1][2] - mat.cols[2][1]) * mult,
+        (mat.cols[1][0] + mat.cols[0][1]) * mult,
+        (mat.cols[0][2] + mat.cols[2][0]) * mult,
+        (mat.cols[2][1] - mat.cols[1][2]) * mult,
     };
   case 2:
     return (Quaternion){
-        (mat.cols[0][1] + mat.cols[1][0]) * mult,
+        (mat.cols[1][0] + mat.cols[0][1]) * mult,
         biggest_val,
-        (mat.cols[1][2] + mat.cols[2][1]) * mult,
-        (mat.cols[2][0] - mat.cols[0][2]) * mult,
+        (mat.cols[2][1] + mat.cols[1][2]) * mult,
+        (mat.cols[0][2] - mat.cols[2][0]) * mult,
     };
   case 3:
     return (Quaternion){
-        (mat.cols[2][0] + mat.cols[0][2]) * mult,
-        (mat.cols[1][2] + mat.cols[2][1]) * mult,
+        (mat.cols[0][2] + mat.cols[2][0]) * mult,
+        (mat.cols[2][1] + mat.cols[1][2]) * mult,
         biggest_val,
-        (mat.cols[0][1] - mat.cols[1][0]) * mult,
+        (mat.cols[1][0] - mat.cols[0][1]) * mult,
     };
   default:
     SDL_assert(false);
