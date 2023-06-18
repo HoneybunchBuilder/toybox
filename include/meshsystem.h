@@ -84,7 +84,7 @@ typedef struct MeshSystem {
   TbDrawContextId prepass_draw_ctx;
   TbDrawContextId opaque_draw_ctx;
   TbDrawContextId transparent_draw_ctx;
-  TbDrawContextId shadow_draw_ctxs[TB_CASCADE_COUNT];
+  TbDrawContextId shadow_draw_ctx;
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;

@@ -1272,7 +1272,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId swapchain_target = render_target_system->swapchain;
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
-    const TbRenderTargetId *shadow_maps = render_target_system->shadow_maps;
+    const TbRenderTargetId shadow_map = render_target_system->shadow_map;
     const TbRenderTargetId brightness_downsample =
         render_target_system->brightness_downsample;
 
@@ -1762,63 +1762,58 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // Note: this doesn't actually depend a previous pass,
       // but for now the pass dependencies system only has one starter node,
       // so everything must be a child of that
-      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-        // Front load all transitions on the first cascade
-        uint32_t trans_count = 0;
-        PassTransition transitions[TB_CASCADE_COUNT] = {0};
-        if (i == 0) {
-          for (uint32_t j = 0; j < TB_CASCADE_COUNT; ++j) {
-            transitions[trans_count++] = (PassTransition){
-                .render_target = self->render_target_system->shadow_maps[j],
-                .barrier =
-                    {
-                        .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                        .barrier =
-                            {
-                                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                .srcAccessMask = VK_ACCESS_NONE,
-                                .dstAccessMask =
-                                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                .newLayout =
-                                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                .subresourceRange =
-                                    {
-                                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                                        .levelCount = 1,
-                                        .layerCount = 1,
-                                    },
-                            },
-                    },
-            };
-          }
-        }
 
-        TbRenderPassCreateInfo create_info = {
-            .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
-            .transition_count = trans_count,
-            .transitions = transitions,
-            .attachment_count = 1,
-            .attachments =
-                (TbAttachmentInfo[1]){
-                    {
-                        .clear_value = {.depthStencil = {.depth = 1.0f,
-                                                         .stencil = 0u}},
-                        .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                        .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                        .attachment = shadow_maps[i],
-                    },
-                },
-            .name = "Shadow Pass",
-        };
+      const uint32_t trans_count = 1;
+      PassTransition transitions[1] = {
+          {
+              .render_target = self->render_target_system->shadow_map,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
 
-        TbRenderPassId id = create_render_pass(self, &create_info);
-        TB_CHECK_RETURN(id != InvalidRenderPassId,
-                        "Failed to create shadow pass", false);
-        self->shadow_passes[i] = id;
-      }
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
+                  {
+                      .clear_value = {.depthStencil = {.depth = 1.0f,
+                                                       .stencil = 0u}},
+                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = shadow_map,
+                  },
+              },
+          .name = "Shadow Pass",
+      };
+
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create shadow pass",
+                      false);
+      self->shadow_pass = id;
     }
     // Create opaque color pass
     {
@@ -1933,7 +1928,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       },
               },
       };
-      PassTransition shadow_trans_base = {
+      PassTransition shadow_trans = {
+          .render_target = self->render_target_system->shadow_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1953,22 +1949,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                           },
                   },
           }};
-      const uint32_t transition_count = TB_CASCADE_COUNT + 5;
-      PassTransition transitions[TB_CASCADE_COUNT + 5] = {0};
-      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-        transitions[i] = shadow_trans_base;
-        transitions[i].render_target = shadow_maps[i];
-      }
-      transitions[TB_CASCADE_COUNT + 0] = irr_trans;
-      transitions[TB_CASCADE_COUNT + 1] = filter_trans;
-      transitions[TB_CASCADE_COUNT + 2] = color_trans;
-      transitions[TB_CASCADE_COUNT + 3] = normal_trans;
-      transitions[TB_CASCADE_COUNT + 4] = ssao_trans;
+      const uint32_t transition_count = 6;
+      PassTransition transitions[6] = {0};
+      transitions[0] = shadow_trans;
+      transitions[1] = irr_trans;
+      transitions[2] = filter_trans;
+      transitions[3] = color_trans;
+      transitions[4] = normal_trans;
+      transitions[5] = ssao_trans;
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
           .dependencies =
-              (TbRenderPassId[2]){self->ssao_blur_pass, self->shadow_passes[3]},
+              (TbRenderPassId[2]){self->ssao_blur_pass, self->shadow_pass},
           .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,
@@ -4260,10 +4253,18 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
   const uint32_t new_count = ctx->batch_count + batch_count;
   if (new_count > ctx->batch_max) {
     const uint32_t new_max = new_count * 2;
-    ctx->batches =
-        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
+    // We want to realloc the user batches first because their pointers
+    // changing is what we have to fix up
     ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
+    ctx->batches =
+        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
+    // Pointer Fixup
+    for (uint32_t i = 0; i < batch_count; ++i) {
+      ctx->batches[i].user_batch =
+          (uint8_t *)ctx->user_batches + (ctx->user_batch_size * i);
+    }
+
     ctx->batch_max = new_max;
   }
 
@@ -4298,10 +4299,18 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
   const uint32_t new_count = ctx->batch_count + batch_count;
   if (new_count > ctx->batch_max) {
     const uint32_t new_max = new_count * 2;
-    ctx->batches =
-        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DispatchBatch);
+    // We want to realloc the user batches first because their pointers
+    // changing is what we have to fix up
     ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
+    ctx->batches =
+        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DispatchBatch);
+    // Pointer Fixup
+    for (uint32_t i = 0; i < batch_count; ++i) {
+      ctx->batches[i].user_batch =
+          (uint8_t *)ctx->user_batches + (ctx->user_batch_size * i);
+    }
+
     ctx->batch_max = new_max;
   }
 

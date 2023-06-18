@@ -28,15 +28,17 @@ float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
   return color;
 }
 
-float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness, float2 brdf, float3 reflection, float3 irradiance, float3 light_color, float3 L, float3 V, float3 N) {
+float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness,
+                    float2 brdf, float3 reflection, float3 irradiance,
+                    float3 light_color, float3 L, float3 V, float3 N) {
   float3 f0 = float3(0.04, 0.04, 0.04);
   f0 = lerp(f0, albedo, metallic);
 
   float3 direct = float3(0, 0, 0);
   // TODO: Handle more than one direct light
   {
-    direct += specular_contribution(light_color, albedo, L, V, N, f0,
-                                    metallic, roughness);
+    direct += specular_contribution(light_color, albedo, L, V, N, f0, metallic,
+                                    roughness);
   }
 
   // Diffuse
@@ -72,28 +74,31 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 
 // Shadowing
 
-float texture_proj(float4 shadow_coord, float2 offset, float ambient,
-                   Texture2D shadow_map, sampler samp) {
+float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
+                   float ambient, Texture2D shadow_map, sampler samp) {
   float bias = 0.0005;
 
   float4 proj_coord = shadow_coord;
 
   proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
+  proj_coord.y /= (float)TB_CASCADE_COUNT;
+  proj_coord.y += ((float)cascade_idx / (float)TB_CASCADE_COUNT);
   proj_coord = proj_coord / proj_coord.w;
 
-  if(proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
+  if (proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
     return 1.0;
   }
 
   float sampled_depth =
       shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
 
-  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias) ? saturate(1 - ambient)
-                                                                   : 1.0f;
+  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias)
+             ? saturate(1 - ambient)
+             : 1.0f;
 }
 
 float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
-                 sampler samp) {
+                 uint cascade_idx, sampler samp) {
   int2 tex_dim;
   shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
 
@@ -108,8 +113,8 @@ float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
   for (int x = -range; x <= range; ++x) {
     for (int y = -range; y <= range; ++y) {
       float2 offset = float2(dx * x, dy * y);
-      shadow_factor += texture_proj(shadow_coord, offset, ambient, shadow_map,
-                                    samp);
+      shadow_factor += texture_proj(shadow_coord, offset, cascade_idx, ambient,
+                                    shadow_map, samp);
       count++;
     }
   }

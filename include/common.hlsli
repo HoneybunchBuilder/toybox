@@ -39,12 +39,12 @@ typedef struct CommonViewData {
 } CommonViewData;
 
 // Constant per-view Light Data
-#define CASCADE_COUNT 4
+#define TB_CASCADE_COUNT 2
 typedef struct CommonLightData {
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
-  float4x4 cascade_vps[CASCADE_COUNT];
+  float4x4 cascade_vps[TB_CASCADE_COUNT];
 } CommonLightData;
 
 // Constant per-object Object Data for common objects
@@ -115,7 +115,7 @@ float gradient_noise(float2 uv) {
   return lerp(lerp(d00, d01, fp.y), lerp(d10, d11, fp.y), fp.x) + 0.5f;
 }
 
-float3 view_space_pos_from_depth(float depth, float4x4 inv_proj, float2 uv){
+float3 view_space_pos_from_depth(float depth, float4x4 inv_proj, float2 uv) {
   float x = uv.x * 2.0 - 1.0;
   float y = uv.y * 2.0 - 1.0;
   float z = depth;

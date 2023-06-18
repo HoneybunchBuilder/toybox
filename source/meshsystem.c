@@ -699,12 +699,10 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 3, true);
 
-  const ShadowDrawBatch *shadow_batches =
-      (const ShadowDrawBatch *)batches->user_batch;
-
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
-    const ShadowDrawBatch *shadow_batch = &shadow_batches[batch_idx];
+    const ShadowDrawBatch *shadow_batch =
+        (const ShadowDrawBatch *)batch->user_batch;
     if (shadow_batch->view_count == 0) {
       continue;
     }
@@ -1171,14 +1169,14 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
-          &attach_count, NULL);
+      tb_render_pipeline_get_attachments(self->render_pipe_system,
+                                         self->render_pipe_system->shadow_pass,
+                                         &attach_count, NULL);
       TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
       PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
-          &attach_count, &depth_info);
+      tb_render_pipeline_get_attachments(self->render_pipe_system,
+                                         self->render_pipe_system->shadow_pass,
+                                         &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
           self->render_pipe_system->render_target_system,
@@ -1210,15 +1208,12 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                               .draw_fn = transparent_pass_record,
                               .pass_id = transparent_pass_id,
                           });
-  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    self->shadow_draw_ctxs[i] = tb_render_pipeline_register_draw_context(
-        render_pipe_system, &(DrawContextDescriptor){
-                                .batch_size = sizeof(MeshDrawBatch),
-                                .draw_fn = shadow_pass_record,
-                                .pass_id = render_pipe_system->shadow_passes[i],
-                            });
-  }
-
+  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = shadow_pass_record,
+                              .pass_id = render_pipe_system->shadow_pass,
+                          });
   return true;
 }
 
@@ -1831,10 +1826,14 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
         shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
         shadow_user_batches[cascade_idx].view_count = dir_light_count;
         ShadowDrawView *draw_view = &shadow_user_batches[cascade_idx].views[0];
-        draw_view->viewport =
-            (VkViewport){0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1};
-        draw_view->scissor =
-            (VkRect2D){{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
+        draw_view->viewport = (VkViewport){0,
+                                           TB_SHADOW_MAP_DIM * cascade_idx,
+                                           TB_SHADOW_MAP_DIM,
+                                           TB_SHADOW_MAP_DIM,
+                                           0,
+                                           1};
+        draw_view->scissor = (VkRect2D){{0, TB_SHADOW_MAP_DIM * cascade_idx},
+                                        {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
         draw_view->draw_count = lit_set->mesh_count;
         draw_view->consts = (ShadowViewConstants){view->view_data.vp};
         ShadowDraw *draw = &draw_view->draws[mesh_idx];
@@ -1856,11 +1855,9 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
     }
   }
 
-  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->shadow_draw_ctxs[i], 1,
-                                        &shadow_batches[i]);
-  }
+  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                      self->shadow_draw_ctx, TB_CASCADE_COUNT,
+                                      shadow_batches);
 
   // Output potential transform updates
   {

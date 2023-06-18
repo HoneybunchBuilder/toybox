@@ -21,7 +21,7 @@ TextureCube irradiance_map : register(t1, space2);
 TextureCube prefiltered_map : register(t2, space2);
 Texture2D brdf_lut : register(t3, space2);
 ConstantBuffer<CommonLightData> light_data : register(b4, space2);
-Texture2D shadow_maps[CASCADE_COUNT] : register(t5, space2);
+Texture2D shadow_map : register(t5, space2);
 Texture2D ssao_map : register(s6, space2);
 
 struct VertexIn {
@@ -114,7 +114,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   // Shadow cascades
   {
     uint cascade_idx = 0;
-    for (uint c = 0; c < (CASCADE_COUNT - 1); ++c) {
+    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
       if (i.view_pos.z < light_data.cascade_splits[c]) {
         cascade_idx = c + 1;
       }
@@ -124,7 +124,7 @@ float4 frag(Interpolators i) : SV_TARGET {
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
-    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_maps[cascade_idx],
+    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
                               static_sampler);
     out_color *= shadow;
 

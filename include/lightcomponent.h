@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.hlsli"
 #include "rendertargetsystem.h"
 #include "simd.h"
 

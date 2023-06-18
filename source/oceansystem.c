@@ -655,20 +655,20 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   }
 
   // Retrieve passes
-  const TbRenderPassId *shadow_ids = self->render_pipe_system->shadow_passes;
+  TbRenderPassId shadow_id = self->render_pipe_system->shadow_pass;
   TbRenderPassId depth_id = self->render_pipe_system->transparent_depth_pass;
   TbRenderPassId color_id = self->render_pipe_system->transparent_color_pass;
 
   {
     uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
-        &attach_count, NULL);
+    tb_render_pipeline_get_attachments(self->render_pipe_system,
+                                       self->render_pipe_system->shadow_pass,
+                                       &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
     PassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->shadow_passes[0],
-        &attach_count, &attach_info);
+    tb_render_pipeline_get_attachments(self->render_pipe_system,
+                                       self->render_pipe_system->shadow_pass,
+                                       &attach_count, &attach_info);
 
     VkFormat depth_format = tb_render_target_get_format(
         self->render_pipe_system->render_target_system, attach_info.attachment);
@@ -721,14 +721,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
   }
 
-  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    self->shadow_draw_ctxs[i] = tb_render_pipeline_register_draw_context(
-        render_pipe_system, &(DrawContextDescriptor){
-                                .batch_size = sizeof(OceanShadowBatch),
-                                .draw_fn = ocean_shadow_record,
-                                .pass_id = shadow_ids[i],
-                            });
-  }
+  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(OceanShadowBatch),
+                              .draw_fn = ocean_shadow_record,
+                              .pass_id = shadow_id,
+                          });
   self->trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
@@ -1004,8 +1002,10 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           shadow_draw_batches[batch_count + i] = (DrawBatch){
               .pipeline = self->shadow_pipeline,
               .layout = self->shadow_pipe_layout,
-              .viewport = {0, 0, TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM, 0, 1},
-              .scissor = {{0, 0}, {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}},
+              .viewport = {0, TB_SHADOW_MAP_DIM * i, TB_SHADOW_MAP_DIM,
+                           TB_SHADOW_MAP_DIM, 0, 1},
+              .scissor = {{0, TB_SHADOW_MAP_DIM * i},
+                          {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}},
               .user_batch = &shadow_batches[batch_count + i],
           };
           shadow_batches[batch_count + i] = (OceanShadowBatch){
@@ -1024,8 +1024,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     // Draw to the prepass and the ocean pass
     for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
       tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                          self->shadow_draw_ctxs[i],
-                                          batch_count, &shadow_draw_batches[i]);
+                                          self->shadow_draw_ctx, batch_count,
+                                          &shadow_draw_batches[i]);
     }
     tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
                                         self->trans_depth_draw_ctx, batch_count,

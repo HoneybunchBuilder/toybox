@@ -6,8 +6,7 @@
 
 #define RenderTargetSystemId 0xB0BABABE
 
-#define TB_CASCADE_COUNT 4
-#define TB_SHADOW_MAP_DIM 4096
+#define TB_SHADOW_MAP_DIM 2048
 
 typedef uint32_t TbRenderTargetId;
 static const TbRenderTargetId InvalidRenderTargetId = SDL_MAX_UINT32;
@@ -51,7 +50,7 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId env_cube;
   TbRenderTargetId irradiance_map;
   TbRenderTargetId prefiltered_cube;
-  TbRenderTargetId shadow_maps[TB_CASCADE_COUNT];
+  TbRenderTargetId shadow_map;
   TbRenderTargetId brightness_downsample;
   TbRenderTargetId bloom;         // Ideally want this to be transient
   TbRenderTargetId bloom_scratch; // Ideally want this to be transient

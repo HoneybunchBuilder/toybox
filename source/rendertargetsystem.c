@@ -1,5 +1,6 @@
 #include "rendertargetsystem.h"
 
+#include "common.hlsli"
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "world.h"
@@ -376,26 +377,22 @@ bool create_render_target_system(RenderTargetSystem *self,
       self->prefiltered_cube = tb_create_render_target(self, &rt_desc);
     }
 
-    // Create shadow maps
+    // Create shadow map
     {
       RenderTargetDescriptor rt_desc = {
+          .name = "Shadow Cascades",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
               {
                   .width = TB_SHADOW_MAP_DIM,
-                  .height = TB_SHADOW_MAP_DIM,
+                  .height = TB_SHADOW_MAP_DIM * TB_CASCADE_COUNT,
                   .depth = 1,
               },
           .mip_count = 1,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-        char name[100] = {0};
-        SDL_snprintf(name, 100, "Shadow Cascade %d", i);
-        rt_desc.name = name;
-        self->shadow_maps[i] = tb_create_render_target(self, &rt_desc);
-      }
+      self->shadow_map = tb_create_render_target(self, &rt_desc);
     }
     // Create brightness downsampled target
     {
