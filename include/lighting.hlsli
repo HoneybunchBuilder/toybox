@@ -18,7 +18,7 @@ float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
     float alpha = roughness * roughness;
     float D = microfacetDistribution(alpha, NdotH);
     float G = geometricOcclusion(NdotL, NdotV, roughness);
-    float3 F = fresnesl_schlick(NdotV, f0);
+    float3 F = fresnel_schlick_roughness(NdotV, f0, roughness);
 
     float3 spec = D * F * G / (4.0 * NdotL * NdotV + 0.001);
     float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
