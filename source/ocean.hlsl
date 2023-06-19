@@ -10,6 +10,9 @@ Texture2D depth_map : register(t1, space0);
 Texture2D color_map : register(t2, space0);
 sampler static_sampler : register(s3, space0);
 
+[[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
+    : register(b4, space0);
+
 // Per-view data
 ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
 TextureCube irradiance_map : register(t1, space1);
@@ -36,8 +39,8 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float3 tangent = float3(0, 0, 1);
   float3 binormal = float3(1, 0, 0);
-  float3 pos = calc_wave_pos(i.local_pos, ocean_data.m, ocean_data.time,
-                             tangent, binormal);
+  float3 pos =
+      calc_wave_pos(i.local_pos, consts.m, ocean_data.time, tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);
 

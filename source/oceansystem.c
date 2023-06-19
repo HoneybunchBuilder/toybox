@@ -35,6 +35,7 @@
 typedef struct OceanDrawBatch {
   VkDescriptorSet view_set;
   VkDescriptorSet ocean_set;
+  OceanPushConstants consts;
   VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
@@ -44,6 +45,7 @@ typedef struct OceanDrawBatch {
 typedef struct OceanShadowBatch {
   VkDescriptorSet ocean_set;
   ShadowViewConstants shadow_consts;
+  OceanPushConstants ocean_consts;
   VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
@@ -68,6 +70,8 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
                             1, &ocean_batch->ocean_set, 0, NULL);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
                             1, &ocean_batch->view_set, 0, NULL);
+    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(OceanPushConstants), &ocean_batch->consts);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, ocean_batch->index_type);
     vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
@@ -126,6 +130,9 @@ void ocean_shadow_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                        sizeof(ShadowViewConstants),
                        &ocean_batch->shadow_consts);
+    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT,
+                       sizeof(ShadowViewConstants), sizeof(OceanPushConstants),
+                       &ocean_batch->ocean_consts);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, ocean_batch->index_type);
     vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
@@ -625,7 +632,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .pPushConstantRanges =
             (VkPushConstantRange[1]){
                 {
-                    .size = sizeof(ShadowViewConstants),
+                    .size = sizeof(OceanShadowConstants),
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 },
             },
@@ -646,6 +653,14 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
             (VkDescriptorSetLayout[2]){
                 self->set_layout,
                 self->view_system->set_layout,
+            },
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            (VkPushConstantRange[1]){
+                {
+                    .size = sizeof(OceanPushConstants),
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                },
             },
     };
     err = tb_rnd_create_pipeline_layout(render_system, &create_info,
@@ -853,7 +868,6 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           .time = ocean_comp->time,
           .wave_count = ocean_comp->wave_count,
       };
-      transform_to_matrix(&data.m, &self->ocean_transform);
       SDL_memcpy(data.wave, ocean_comp->waves,
                  data.wave_count * sizeof(OceanWave));
 
@@ -948,9 +962,17 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       }
     }
 
-    // Max camera * ocean draw batches are required
+    // We want to draw a number of ocean tiles to cover the entire ocean plane
+    // Since only visible ocean tiles need to be drawn we can calculate the
+    // tiles relative to the view
+    uint32_t tile_count = 1;
+
+    OceanPushConstants ocean_consts = {0};
+    transform_to_matrix(&ocean_consts.m, &self->ocean_transform);
+
+    // Max camera * ocean * tile draw batches are required
     uint32_t batch_count = 0;
-    const uint32_t batch_max = ocean_count * camera_count;
+    const uint32_t batch_max = ocean_count * camera_count * tile_count;
 
     OceanDrawBatch *ocean_batches =
         tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
@@ -975,7 +997,6 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
             self->render_system, self->ocean_pools, ocean_idx);
 
-        // TODO: only if ocean is visible to camera
         ocean_draw_batches[batch_count] = (DrawBatch){
             .pipeline = self->pipeline,
             .layout = self->pipe_layout,
@@ -993,6 +1014,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         ocean_batches[batch_count] = (OceanDrawBatch){
             .view_set = view_set,
             .ocean_set = ocean_set,
+            .consts = ocean_consts,
             .geom_buffer = self->ocean_geom_buffer,
             .index_type = (VkIndexType)self->ocean_index_type,
             .index_count = self->ocean_index_count,
@@ -1011,6 +1033,7 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
           shadow_batches[batch_count + i] = (OceanShadowBatch){
               .ocean_set = ocean_set,
               .shadow_consts = shadow_consts[i],
+              .ocean_consts = ocean_consts,
               .geom_buffer = self->ocean_geom_buffer,
               .index_type = (VkIndexType)self->ocean_index_type,
               .index_count = self->ocean_index_count,
