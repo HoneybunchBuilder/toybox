@@ -461,10 +461,9 @@ float3 transform_get_up(const Transform *t) {
   return normf3(qrotf3(t->rotation, TB_UP));
 }
 
-void transform_to_matrix(float4x4 *m, const Transform *t) {
+float4x4 transform_to_matrix(const Transform *t) {
   TracyCZoneN(ctx, "transform_to_matrix", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  SDL_assert(m);
   SDL_assert(t);
 
   // Position matrix
@@ -487,9 +486,9 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   };
 
   // Transformation matrix = p * r * s
-  *m = mulmf44(mulmf44(p, r), s);
-
+  float4x4 m = mulmf44(mulmf44(p, r), s);
   TracyCZoneEnd(ctx);
+  return m;
 }
 
 Transform tb_transform_from_node(const cgltf_node *node) {

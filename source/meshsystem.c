@@ -2044,14 +2044,6 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     index = self->mesh_count;
 
-    // Get the mesh node's transform so that we can dequanitze vertices
-    // in order to do meshlet generation
-    float4x4 dequant = {.col0 = {0}};
-    {
-      Transform transform = tb_transform_from_node(node);
-      transform_to_matrix(&dequant, &transform);
-    }
-
     // Determine how big this mesh is
     uint64_t geom_size = 0;
     uint64_t vertex_offset = 0;

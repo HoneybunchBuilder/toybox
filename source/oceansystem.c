@@ -967,8 +967,8 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     // tiles relative to the view
     uint32_t tile_count = 1;
 
-    OceanPushConstants ocean_consts = {0};
-    transform_to_matrix(&ocean_consts.m, &self->ocean_transform);
+    OceanPushConstants ocean_consts = {
+        .m = transform_to_matrix(&self->ocean_transform)};
 
     // Max camera * ocean * tile draw batches are required
     uint32_t batch_count = 0;

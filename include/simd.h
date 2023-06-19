@@ -194,7 +194,7 @@ float3 transform_get_forward(const Transform *t);
 float3 transform_get_right(const Transform *t);
 float3 transform_get_up(const Transform *t);
 
-void transform_to_matrix(float4x4 *m, const Transform *t);
+float4x4 transform_to_matrix(const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);
 
 float4x4 look_forward(float3 pos, float3 forward, float3 up);
