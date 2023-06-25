@@ -33,6 +33,8 @@ typedef struct OceanSystem {
 
   TbMeshId ocean_patch_mesh;
   Transform ocean_transform;
+  float tile_width;
+  float tile_depth;
   uint32_t ocean_index_type;
   uint32_t ocean_index_count;
   uint64_t ocean_pos_offset;

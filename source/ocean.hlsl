@@ -24,6 +24,7 @@ Texture2D ssao_map : register(s6, space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
+  float4 inst_offset : POSITION_0;
 };
 
 struct Interpolators {
@@ -39,8 +40,8 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float3 tangent = float3(0, 0, 1);
   float3 binormal = float3(1, 0, 0);
-  float3 pos =
-      calc_wave_pos(i.local_pos, consts.m, ocean_data.time, tangent, binormal);
+  float3 pos = calc_wave_pos(i.local_pos, consts.m, i.inst_offset.xyz,
+                             ocean_data.time, tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);
 

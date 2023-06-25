@@ -36,6 +36,9 @@ typedef struct OceanDrawBatch {
   VkDescriptorSet view_set;
   VkDescriptorSet ocean_set;
   OceanPushConstants consts;
+  VkBuffer inst_buffer;
+  uint32_t inst_offset;
+  uint32_t inst_count;
   VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
@@ -74,10 +77,12 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
                        sizeof(OceanPushConstants), &ocean_batch->consts);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, ocean_batch->index_type);
-    vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
-                           &ocean_batch->pos_offset);
+    vkCmdBindVertexBuffers(
+        buffer, 0, 2, (VkBuffer[2]){geom_buffer, ocean_batch->inst_buffer},
+        (VkDeviceSize[2]){ocean_batch->pos_offset, ocean_batch->inst_offset});
 
-    vkCmdDrawIndexed(buffer, ocean_batch->index_count, 1, 0, 0, 0);
+    vkCmdDrawIndexed(buffer, ocean_batch->index_count, ocean_batch->inst_count,
+                     0, 0, 0);
   }
 }
 
@@ -220,15 +225,17 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
           &(VkPipelineVertexInputStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 1,
+              .vertexBindingDescriptionCount = 2,
               .pVertexBindingDescriptions =
-                  (VkVertexInputBindingDescription[1]){
+                  (VkVertexInputBindingDescription[2]){
                       {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+                      {1, sizeof(float4), VK_VERTEX_INPUT_RATE_INSTANCE},
                   },
-              .vertexAttributeDescriptionCount = 1,
+              .vertexAttributeDescriptionCount = 2,
               .pVertexAttributeDescriptions =
-                  (VkVertexInputAttributeDescription[1]){
+                  (VkVertexInputAttributeDescription[2]){
                       {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
+                      {1, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
                   },
           },
       .pInputAssemblyState =
@@ -542,6 +549,39 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 
     self->ocean_transform = tb_transform_from_node(&data->nodes[0]);
 
+    // Determine mesh's width and height
+
+    {
+      const cgltf_primitive *prim = &ocean_mesh->primitives[0];
+
+      uint32_t pos_idx = 0;
+      for (uint32_t attr_idx = 0; attr_idx < (uint32_t)prim->attributes_count;
+           ++attr_idx) {
+        cgltf_attribute_type attr_type = prim->attributes[attr_idx].type;
+        if (attr_type == cgltf_attribute_type_position) {
+          pos_idx = attr_idx;
+          break;
+        }
+      }
+      const cgltf_attribute *pos_attr = &prim->attributes[pos_idx];
+
+      TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
+               "Unexpected vertex attribute type");
+
+      float *min = pos_attr->data->min;
+      float *max = pos_attr->data->max;
+
+      AABB local_aabb = aabb_init();
+      aabb_add_point(&local_aabb, (float3){min[0], min[1], min[2]});
+      aabb_add_point(&local_aabb, (float3){max[0], max[1], max[2]});
+
+      float4x4 m = transform_to_matrix(&self->ocean_transform);
+      local_aabb = aabb_transform(m, local_aabb);
+
+      self->tile_width = aabb_get_width(local_aabb);
+      self->tile_depth = aabb_get_depth(local_aabb);
+    }
+
     self->ocean_index_type = ocean_mesh->primitives->indices->stride == 2
                                  ? VK_INDEX_TYPE_UINT16
                                  : VK_INDEX_TYPE_UINT32;
@@ -821,6 +861,98 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   VkResult err = VK_SUCCESS;
   RenderSystem *render_system = self->render_system;
 
+  // We want to draw a number of ocean tiles to cover the entire ocean plane
+  // Since only visible ocean tiles need to be drawn we can calculate the
+  // tiles relative to the view
+
+  // only handle one camera for now
+  TB_CHECK(camera_count == 1,
+           "Too many cameras for the ocean system to handle");
+
+  const CameraComponent *camera = tb_get_component(cameras, 0, CameraComponent);
+
+  // Get the camera's view so we can examine its frustum and decide where to
+  // place ocean tiles
+  const View *view = tb_get_view(self->view_system, camera->view_id);
+  float4x4 inv_v = inv_mf44(view->view_data.v);
+
+  // Get frustum AABB in view space by taking a unit frustum and
+  // transforming it by the view's projection
+  AABB frust_aabb = aabb_init();
+  {
+    float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {0};
+    for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
+      float3 corner = tb_frustum_corners[i];
+      float4 inv_corner =
+          mulf44(view->view_data.inv_proj,
+                 (float4){corner[0], corner[1], corner[2], 1.0f});
+      frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
+    }
+
+    for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
+      aabb_add_point(&frust_aabb, frustum_corners[i]);
+    }
+  }
+
+  // Determine how many tiles we'll need
+  uint32_t tile_count = 0;
+  uint32_t horiz_tile_count = 0;
+  uint32_t deep_tile_count = 0;
+  {
+    float frust_width = aabb_get_width(frust_aabb);
+    float frust_depth = aabb_get_depth(frust_aabb);
+
+    horiz_tile_count = (uint32_t)SDL_ceilf(frust_width / self->tile_width);
+    deep_tile_count = (uint32_t)SDL_ceilf(frust_depth / self->tile_depth);
+    tile_count = horiz_tile_count * deep_tile_count;
+  }
+
+  // See which of these tiles pass the visibility check against the camera
+  uint32_t visible_tile_count = 0;
+  // Worst case the projection is orthographic and all tiles are visible
+  // That allocation is quick to make up front on the temp allocator
+  float4 *visible_tile_offsets =
+      tb_alloc_nm_tp(self->tmp_alloc, tile_count, float4);
+  {
+    float half_width = self->tile_width * 0.5f;
+    float half_depth = self->tile_depth * 0.5f;
+    float4 pos = {
+        frust_aabb.min[TB_WIDTH_IDX] + half_width,
+        0,
+        frust_aabb.min[TB_DEPTH_IDX] + half_depth,
+        0,
+    };
+
+    for (uint32_t d = 0; d < deep_tile_count; ++d) {
+      for (uint32_t h = 0; h < horiz_tile_count; ++h) {
+        AABB world_aabb = aabb_init();
+        aabb_add_point(&world_aabb,
+                       (float3){-half_width, 0, -half_depth} + pos);
+        aabb_add_point(&world_aabb, (float3){half_width, 0, half_depth} + pos);
+        world_aabb = aabb_transform(inv_v, world_aabb);
+        if (frustum_test_aabb(&view->frustum, &world_aabb)) {
+          float4 offset = mulf44(inv_v, f3tof4(pos, 1.0f));
+          offset[TB_HEIGHT_IDX] = 0.0f;
+          visible_tile_offsets[visible_tile_count++] = offset;
+        }
+        pos[TB_WIDTH_IDX] += self->tile_width;
+      }
+      pos[TB_WIDTH_IDX] = frust_aabb.min[TB_WIDTH_IDX] + half_width,
+      pos[TB_DEPTH_IDX] += self->tile_depth;
+    }
+  }
+  // Now that all the tile offsets are calculated, move them on to the tmp
+  // gpu which we know will get uploaded and record the offset
+  TbHostBuffer inst_buffer = {0};
+  {
+    uint64_t size = sizeof(float4) * visible_tile_count;
+    err = tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, size, 0x40,
+                                           &inst_buffer);
+    TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
+
+    SDL_memcpy(inst_buffer.ptr, visible_tile_offsets, size);
+  }
+
   // Allocate and write all ocean descriptor sets
   {
     // Allocate all the descriptor sets
@@ -962,11 +1094,6 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
       }
     }
 
-    // We want to draw a number of ocean tiles to cover the entire ocean plane
-    // Since only visible ocean tiles need to be drawn we can calculate the
-    // tiles relative to the view
-    uint32_t tile_count = 1;
-
     OceanPushConstants ocean_consts = {
         .m = transform_to_matrix(&self->ocean_transform)};
 
@@ -1015,6 +1142,9 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
             .view_set = view_set,
             .ocean_set = ocean_set,
             .consts = ocean_consts,
+            .inst_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system),
+            .inst_offset = inst_buffer.offset,
+            .inst_count = visible_tile_count,
             .geom_buffer = self->ocean_geom_buffer,
             .index_type = (VkIndexType)self->ocean_index_type,
             .index_count = self->ocean_index_count,

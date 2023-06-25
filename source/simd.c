@@ -436,6 +436,25 @@ void aabb_add_point(AABB *aabb, float3 point) {
   aabb->max[2] = SDL_max(aabb->max[2], point[2]);
 }
 
+float aabb_get_width(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_WIDTH_IDX] - aabb.min[TB_WIDTH_IDX]);
+}
+
+float aabb_get_height(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_HEIGHT_IDX] - aabb.min[TB_HEIGHT_IDX]);
+}
+
+float aabb_get_depth(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_DEPTH_IDX] - aabb.min[TB_DEPTH_IDX]);
+}
+
+AABB aabb_transform(float4x4 m, AABB aabb) {
+  return (AABB){
+      .min = f4tof3(mulf44(m, f3tof4(aabb.min, 1.0f))),
+      .max = f4tof3(mulf44(m, f3tof4(aabb.max, 1.0f))),
+  };
+}
+
 void translate(Transform *t, float3 p) {
   SDL_assert(t);
   t->position += p;

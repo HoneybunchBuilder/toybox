@@ -126,24 +126,10 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
          ++cascade_idx) {
       float split_dist = cascade_splits[cascade_idx];
 
-      float3 frustum_corners[8] = {
-#ifdef TB_USE_INVERSE_DEPTH
-          // Inverse near and far because main camera uses reverse depth
-          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, -1.0f}, // Near
-          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, -1.0f},
-          {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Far
-          {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
-#else
-          {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Near
-          {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
-          {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Far
-          {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
-#endif
-      };
-
+      float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {0};
       // Project into world space
-      for (uint32_t i = 0; i < 8; ++i) {
-        const float3 corner = frustum_corners[i];
+      for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
+        const float3 corner = tb_frustum_corners[i];
         float4 inv_corner =
             mulf44(inv_cam_vp, (float4){corner[0], corner[1], corner[2], 1.0f});
         frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
@@ -156,14 +142,14 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
 
       // Calculate frustum center
       float3 center = {0};
-      for (uint32_t i = 0; i < 8; i++) {
+      for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; i++) {
         center += frustum_corners[i];
       }
-      center /= 8.0f;
+      center /= (float)TB_FRUSTUM_CORNER_COUNT;
 
       // Calculate radius
       float radius = 0.0f;
-      for (uint32_t i = 0; i < 8; i++) {
+      for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; i++) {
         float distance = magf3(frustum_corners[i] - center);
         radius = SDL_max(radius, distance);
       }
