@@ -40,7 +40,9 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float3 tangent = float3(0, 0, 1);
   float3 binormal = float3(1, 0, 0);
-  float3 pos = calc_wave_pos(i.local_pos, consts.m, i.inst_offset.xyz,
+  float4 rot = aa_to_quat(float4(0, 1, 0, i.inst_offset.w));
+
+  float3 pos = calc_wave_pos(i.local_pos, consts.m, rot, i.inst_offset.xyz,
                              ocean_data.time, tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);

@@ -35,6 +35,10 @@
 float3 atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
 float4 atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
 
+float2 f2(float x, float y) { return (float2){x, y}; }
+float3 f3(float x, float y, float z) { return (float3){x, y, z}; }
+float4 f4(float x, float y, float z, float w) { return (float4){x, y, z, w}; }
+
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
 float2 f3tof2(float3 f) { return (float2){f[0], f[1]}; }
@@ -418,7 +422,13 @@ Quaternion mulq(Quaternion q, Quaternion p) {
 }
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 qrotf3(Quaternion q, float3 v) { return mulf33(quat_to_mf33(q), v); }
+float3 qrotf3(Quaternion q, float3 v) {
+  float3 u = f3(q[0], q[1], q[2]);
+  float3 uv = crossf3(u, v);
+  float3 uuv = crossf3(u, uv);
+
+  return v + ((uv * q[3]) + uuv) * 2.0f;
+}
 
 AABB aabb_init(void) {
   return (AABB){

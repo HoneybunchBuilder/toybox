@@ -114,6 +114,9 @@ typedef struct Frustum {
 float3 atof3(const float f[3]);
 float4 atof4(const float f[4]);
 
+float2 f2(float x, float y);
+float3 f3(float x, float y, float z);
+float4 f4(float x, float y, float z, float w);
 float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
 float2 f3tof2(float3 f);

@@ -90,7 +90,7 @@ void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                           uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 3, true);
-  cmd_begin_label(buffer, "Ocean Prepass", (float4){0.0f, 0.4f, 0.4f, 1.0f});
+  cmd_begin_label(buffer, "Ocean Prepass", f4(0.0f, 0.4f, 0.4f, 1.0f));
 
   ocean_record(buffer, batch_count, batches);
 
@@ -103,7 +103,7 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 3, true);
-  cmd_begin_label(buffer, "Ocean", (float4){0.0f, 0.8f, 0.8f, 1.0f});
+  cmd_begin_label(buffer, "Ocean", f4(0.0f, 0.8f, 0.8f, 1.0f));
 
   ocean_record(buffer, batch_count, batches);
 
@@ -116,7 +116,7 @@ void ocean_shadow_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                          uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Shadow Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Shadows", 3, true);
-  cmd_begin_label(buffer, "Ocean Shadows", (float4){0.0f, 0.4f, 0.4f, 1.0f});
+  cmd_begin_label(buffer, "Ocean Shadows", f4(0.0f, 0.4f, 0.4f, 1.0f));
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
@@ -572,8 +572,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       float *max = pos_attr->data->max;
 
       AABB local_aabb = aabb_init();
-      aabb_add_point(&local_aabb, (float3){min[0], min[1], min[2]});
-      aabb_add_point(&local_aabb, (float3){max[0], max[1], max[2]});
+      aabb_add_point(&local_aabb, f3(min[0], min[1], min[2]));
+      aabb_add_point(&local_aabb, f3(max[0], max[1], max[2]));
 
       float4x4 m = transform_to_matrix(&self->ocean_transform);
       local_aabb = aabb_transform(m, local_aabb);
@@ -876,16 +876,29 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   const View *view = tb_get_view(self->view_system, camera->view_id);
   float4x4 inv_v = inv_mf44(view->view_data.v);
 
+  // Determine Up axis rotation of the view so that we can pass that
+  // along to the ocean shader. Get the forward vector, squash any change on the
+  // Up axis and determine the difference from the default forward vector
+  float rot_angle = 0.0f;
+  {
+    float3 forward = f4tof3(view->view_data.v.col0);
+    forward[TB_HEIGHT_IDX] = 0.0f;
+    forward = normf3(forward);
+
+    float dot = dotf3(forward, TB_FORWARD);
+    float denom = SDL_sqrtf(magsqf3(forward) * magsqf3(TB_FORWARD));
+    rot_angle = SDL_acosf(dot / denom);
+  }
+
   // Get frustum AABB in view space by taking a unit frustum and
   // transforming it by the view's projection
   AABB frust_aabb = aabb_init();
   {
-    float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {0};
+    float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {{0}};
     for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
       float3 corner = tb_frustum_corners[i];
-      float4 inv_corner =
-          mulf44(view->view_data.inv_proj,
-                 (float4){corner[0], corner[1], corner[2], 1.0f});
+      float4 inv_corner = mulf44(view->view_data.inv_proj,
+                                 f4(corner[0], corner[1], corner[2], 1.0f));
       frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
     }
 
@@ -926,12 +939,12 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     for (uint32_t d = 0; d < deep_tile_count; ++d) {
       for (uint32_t h = 0; h < horiz_tile_count; ++h) {
         AABB world_aabb = aabb_init();
-        aabb_add_point(&world_aabb,
-                       (float3){-half_width, 0, -half_depth} + pos);
-        aabb_add_point(&world_aabb, (float3){half_width, 0, half_depth} + pos);
+        aabb_add_point(&world_aabb, f3(-half_width, 0, -half_depth) + pos);
+        aabb_add_point(&world_aabb, f3(half_width, 0, half_depth) + pos);
         world_aabb = aabb_transform(inv_v, world_aabb);
         if (frustum_test_aabb(&view->frustum, &world_aabb)) {
-          float4 offset = mulf44(inv_v, f3tof4(pos, 1.0f));
+          // We also pack some rotation info in here
+          float4 offset = mulf44(inv_v, f3tof4(pos, rot_angle));
           offset[TB_HEIGHT_IDX] = 0.0f;
           visible_tile_offsets[visible_tile_count++] = offset;
         }
