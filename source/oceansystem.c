@@ -876,20 +876,6 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   const View *view = tb_get_view(self->view_system, camera->view_id);
   float4x4 inv_v = inv_mf44(view->view_data.v);
 
-  // Determine Up axis rotation of the view so that we can pass that
-  // along to the ocean shader. Get the forward vector, squash any change on the
-  // Up axis and determine the difference from the default forward vector
-  float rot_angle = 0.0f;
-  {
-    float3 forward = f4tof3(view->view_data.v.col0);
-    forward[TB_HEIGHT_IDX] = 0.0f;
-    forward = normf3(forward);
-
-    float dot = dotf3(forward, TB_FORWARD);
-    float denom = SDL_sqrtf(magsqf3(forward) * magsqf3(TB_FORWARD));
-    rot_angle = SDL_acosf(dot / denom);
-  }
-
   // Get frustum AABB in view space by taking a unit frustum and
   // transforming it by the view's projection
   AABB frust_aabb = aabb_init();
@@ -897,12 +883,11 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
     float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {{0}};
     for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
       float3 corner = tb_frustum_corners[i];
-      float4 inv_corner = mulf44(view->view_data.inv_proj,
+      // Transform from screen space to world space
+      float4 inv_corner = mulf44(view->view_data.inv_vp,
                                  f4(corner[0], corner[1], corner[2], 1.0f));
       frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
-    }
-
-    for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
+      frustum_corners[i][TB_HEIGHT_IDX] = 0.0f; // Flatten the AABB
       aabb_add_point(&frust_aabb, frustum_corners[i]);
     }
   }
@@ -936,17 +921,21 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
         0,
     };
 
+    float3 view_to_world_offset = f4tof3(inv_v.col3);
+    view_to_world_offset[TB_HEIGHT_IDX] = 0.0f;
+
     for (uint32_t d = 0; d < deep_tile_count; ++d) {
       for (uint32_t h = 0; h < horiz_tile_count; ++h) {
         AABB world_aabb = aabb_init();
-        aabb_add_point(&world_aabb, f3(-half_width, 0, -half_depth) + pos);
-        aabb_add_point(&world_aabb, f3(half_width, 0, half_depth) + pos);
-        world_aabb = aabb_transform(inv_v, world_aabb);
+        float3 min = f3(-half_width, 0, -half_depth) + pos;
+        float3 max = f3(half_width, 0, half_depth) + pos;
+
+        aabb_add_point(&world_aabb, min + view_to_world_offset);
+        aabb_add_point(&world_aabb, max + view_to_world_offset);
         if (frustum_test_aabb(&view->frustum, &world_aabb)) {
-          // We also pack some rotation info in here
-          float4 offset = mulf44(inv_v, f3tof4(pos, rot_angle));
+          float3 offset = pos;
           offset[TB_HEIGHT_IDX] = 0.0f;
-          visible_tile_offsets[visible_tile_count++] = offset;
+          visible_tile_offsets[visible_tile_count++] = f3tof4(offset, 0.0f);
         }
         pos[TB_WIDTH_IDX] += self->tile_width;
       }

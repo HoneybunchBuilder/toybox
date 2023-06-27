@@ -458,6 +458,13 @@ float aabb_get_depth(AABB aabb) {
   return SDL_fabsf(aabb.max[TB_DEPTH_IDX] - aabb.min[TB_DEPTH_IDX]);
 }
 
+AABB aabb_rotate(Quaternion q, AABB aabb) {
+  return (AABB){
+      .min = qrotf3(q, aabb.min),
+      .max = qrotf3(q, aabb.max),
+  };
+}
+
 AABB aabb_transform(float4x4 m, AABB aabb) {
   return (AABB){
       .min = f4tof3(mulf44(m, f3tof4(aabb.min, 1.0f))),

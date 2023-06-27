@@ -170,6 +170,7 @@ void aabb_add_point(AABB *aabb, float3 point);
 float aabb_get_width(AABB aabb);
 float aabb_get_height(AABB aabb);
 float aabb_get_depth(AABB aabb);
+AABB aabb_rotate(Quaternion q, AABB aabb);
 AABB aabb_transform(float4x4 m, AABB aabb);
 
 void translate(Transform *t, float3 p);

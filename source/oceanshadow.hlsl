@@ -18,9 +18,9 @@ struct Interpolators {
 Interpolators vert(VertexIn i) {
   float3 tangent = float3(1, 0, 0);
   float3 binormal = float3(0, 0, 1);
-  float3 pos =
-      calc_wave_pos(i.local_pos, consts.m, float4(0, 0, 0, 1), float3(0, 0, 0),
-                    ocean_data.time, tangent, binormal);
+
+  float3 pos = mul(consts.m, float4(i.local_pos, 1)).xyz;
+  pos = calc_wave_pos(pos, ocean_data.time, tangent, binormal);
   float4 clip_pos = mul(consts.vp, float4(pos, 1));
 
   Interpolators o;
