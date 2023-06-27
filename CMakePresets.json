@@ -17,7 +17,9 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_RC_COMPILER": "llvm-rc",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "FINAL": "OFF",
+        "PROFILE_TRACY": "OFF"
       },
       "condition": {
         "type": "equals",

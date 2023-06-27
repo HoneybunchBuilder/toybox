@@ -68,6 +68,19 @@ typedef struct CommonObjectData {
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 
+float4 aa_to_quat(float4 aa) {
+  float s = sin(aa.w * 0.5f);
+  return normalize(float4(aa.x * s, aa.y * s, aa.z * s, cos(aa.w * 0.5f)));
+}
+
+float3 qrot(float4 q, float3 v) {
+  float3 u = q.xyz;
+  float3 uv = cross(u, v);
+  float3 uuv = cross(u, uv);
+
+  return v + ((uv * q.w) + uuv) * 2.0f;
+}
+
 float4 clip_to_screen(float4 clip) {
   float4 o = clip * 0.5f;
   o.xy += o.w;

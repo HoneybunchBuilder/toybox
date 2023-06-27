@@ -81,7 +81,7 @@ bool create_mesh_component(MeshComponent *self,
 
     // While we determine the vertex offset we'll also calculate the local space
     // AABB for this mesh across all primitives
-    self->local_aabb = InvalidAABB;
+    self->local_aabb = aabb_init();
 
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {

@@ -97,11 +97,6 @@ typedef struct AABB {
 // Must forward declare this for helper function;
 typedef struct cgltf_node cgltf_node;
 
-static const AABB InvalidAABB = {
-    .min = {FLT_MAX, FLT_MAX, FLT_MAX},
-    .max = {FLT_MIN, FLT_MIN, FLT_MIN},
-};
-
 typedef enum FrustumPlane {
   TopPlane,
   BottomPlane,
@@ -119,6 +114,9 @@ typedef struct Frustum {
 float3 atof3(const float f[3]);
 float4 atof4(const float f[4]);
 
+float2 f2(float x, float y);
+float3 f3(float x, float y, float z);
+float4 f4(float x, float y, float z, float w);
 float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
 float2 f3tof2(float3 f);
@@ -169,10 +167,30 @@ float3 qrotf3(Quaternion q, float3 v);
 
 AABB aabb_init(void);
 void aabb_add_point(AABB *aabb, float3 point);
+float aabb_get_width(AABB aabb);
+float aabb_get_height(AABB aabb);
+float aabb_get_depth(AABB aabb);
+AABB aabb_rotate(Quaternion q, AABB aabb);
+AABB aabb_transform(float4x4 m, AABB aabb);
 
 void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
 void rotate(Transform *t, Quaternion r);
+
+#define TB_FRUSTUM_CORNER_COUNT 8
+static const float3 tb_frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {
+#ifdef TB_USE_INVERSE_DEPTH
+    {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, -1.0f}, // Near
+    {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, -1.0f},
+    {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Far
+    {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
+#else
+    {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, // Near
+    {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f},
+    {-1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, // Far
+    {1.0f, -1.0f, 1.0f}, {-1.0f, -1.0f, 1.0f},
+#endif
+};
 
 // Reminder: Left Handed coordinate space
 #define TB_ORIGIN                                                              \
@@ -190,11 +208,16 @@ void rotate(Transform *t, Quaternion r);
 #define TB_DOWN                                                                \
   (float3) { 0, -1, 0 }
 
+// X is left to right, Y is down to up and Z is front to back
+#define TB_WIDTH_IDX 0
+#define TB_HEIGHT_IDX 1
+#define TB_DEPTH_IDX 2
+
 float3 transform_get_forward(const Transform *t);
 float3 transform_get_right(const Transform *t);
 float3 transform_get_up(const Transform *t);
 
-void transform_to_matrix(float4x4 *m, const Transform *t);
+float4x4 transform_to_matrix(const Transform *t);
 Transform tb_transform_from_node(const cgltf_node *node);
 
 float4x4 look_forward(float3 pos, float3 forward, float3 up);

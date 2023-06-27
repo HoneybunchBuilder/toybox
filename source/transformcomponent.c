@@ -70,7 +70,7 @@ float4x4 tb_transform_get_world_matrix(TransformComponent *self) {
   TracyCZoneNC(ctx, "transform component get world matrix",
                TracyCategoryColorCore, true);
 
-  transform_to_matrix(&self->world_matrix, &self->transform);
+  self->world_matrix = transform_to_matrix(&self->transform);
   // If we have a parent, look up its world transform and combine it with this
   if (self->parent != InvalidEntityId) {
     float4x4 parent_mat = mf44_identity();

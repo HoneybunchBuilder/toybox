@@ -35,6 +35,10 @@
 float3 atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
 float4 atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
 
+float2 f2(float x, float y) { return (float2){x, y}; }
+float3 f3(float x, float y, float z) { return (float3){x, y, z}; }
+float4 f4(float x, float y, float z, float w) { return (float4){x, y, z, w}; }
+
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
 float2 f3tof2(float3 f) { return (float2){f[0], f[1]}; }
@@ -418,7 +422,13 @@ Quaternion mulq(Quaternion q, Quaternion p) {
 }
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 qrotf3(Quaternion q, float3 v) { return mulf33(quat_to_mf33(q), v); }
+float3 qrotf3(Quaternion q, float3 v) {
+  float3 u = f3(q[0], q[1], q[2]);
+  float3 uv = crossf3(u, v);
+  float3 uuv = crossf3(u, uv);
+
+  return v + ((uv * q[3]) + uuv) * 2.0f;
+}
 
 AABB aabb_init(void) {
   return (AABB){
@@ -434,6 +444,32 @@ void aabb_add_point(AABB *aabb, float3 point) {
   aabb->max[0] = SDL_max(aabb->max[0], point[0]);
   aabb->max[1] = SDL_max(aabb->max[1], point[1]);
   aabb->max[2] = SDL_max(aabb->max[2], point[2]);
+}
+
+float aabb_get_width(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_WIDTH_IDX] - aabb.min[TB_WIDTH_IDX]);
+}
+
+float aabb_get_height(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_HEIGHT_IDX] - aabb.min[TB_HEIGHT_IDX]);
+}
+
+float aabb_get_depth(AABB aabb) {
+  return SDL_fabsf(aabb.max[TB_DEPTH_IDX] - aabb.min[TB_DEPTH_IDX]);
+}
+
+AABB aabb_rotate(Quaternion q, AABB aabb) {
+  return (AABB){
+      .min = qrotf3(q, aabb.min),
+      .max = qrotf3(q, aabb.max),
+  };
+}
+
+AABB aabb_transform(float4x4 m, AABB aabb) {
+  return (AABB){
+      .min = f4tof3(mulf44(m, f3tof4(aabb.min, 1.0f))),
+      .max = f4tof3(mulf44(m, f3tof4(aabb.max, 1.0f))),
+  };
 }
 
 void translate(Transform *t, float3 p) {
@@ -461,10 +497,9 @@ float3 transform_get_up(const Transform *t) {
   return normf3(qrotf3(t->rotation, TB_UP));
 }
 
-void transform_to_matrix(float4x4 *m, const Transform *t) {
+float4x4 transform_to_matrix(const Transform *t) {
   TracyCZoneN(ctx, "transform_to_matrix", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
-  SDL_assert(m);
   SDL_assert(t);
 
   // Position matrix
@@ -487,9 +522,9 @@ void transform_to_matrix(float4x4 *m, const Transform *t) {
   };
 
   // Transformation matrix = p * r * s
-  *m = mulmf44(mulmf44(p, r), s);
-
+  float4x4 m = mulmf44(mulmf44(p, r), s);
   TracyCZoneEnd(ctx);
+  return m;
 }
 
 Transform tb_transform_from_node(const cgltf_node *node) {
