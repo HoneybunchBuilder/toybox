@@ -47,7 +47,7 @@ typedef enum VLogShapeType {
   TB_VLOG_SHAPE_LINE,
 } VLogShapeType;
 
-#define TB_MAX_VLOG_DRAWS 50
+#define TB_MAX_VLOG_DRAWS 1024
 
 typedef struct VLogFrame {
   float timestamp;

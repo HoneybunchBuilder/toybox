@@ -15,6 +15,7 @@
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
+#include "visualloggingsystem.h"
 #include "world.h"
 
 // Ignore some warnings for the generated headers
@@ -516,6 +517,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   TB_CHECK_RETURN(render_target_system,
                   "Failed to find render target system which ocean depends on",
                   false);
+  VisualLoggingSystem *vlog =
+      tb_get_system(system_deps, system_dep_count, VisualLoggingSystem);
+  TB_CHECK_RETURN(vlog,
+                  "Failed to find visual logging system which ocean depends on",
+                  false);
 
   *self = (OceanSystem){
       .render_system = render_system,
@@ -523,6 +529,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       .mesh_system = mesh_system,
       .view_system = view_system,
       .render_target_system = render_target_system,
+      .vlog = vlog,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
@@ -932,11 +939,18 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
 
         aabb_add_point(&world_aabb, min + view_to_world_offset);
         aabb_add_point(&world_aabb, max + view_to_world_offset);
-        if (frustum_test_aabb(&view->frustum, &world_aabb)) {
+
+        // TODO: Make frustum test more reliable
+        // if (frustum_test_aabb(&view->frustum, &world_aabb))
+        {
           float3 offset = pos;
           offset[TB_HEIGHT_IDX] = 0.0f;
+          // tb_vlog_location(self->vlog, offset, 20.0f, f3(0, 1, 0));
           visible_tile_offsets[visible_tile_count++] = f3tof4(offset, 0.0f);
         }
+        // else {
+        //   tb_vlog_location(self->vlog, pos, 20.0f, f3(1, 0, 0));
+        // }
         pos[TB_WIDTH_IDX] += self->tile_width;
       }
       pos[TB_WIDTH_IDX] = frust_aabb.min[TB_WIDTH_IDX] + half_width,
@@ -1216,12 +1230,13 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .deps[0] = {1, {OceanComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
       .deps[2] = {1, {DirectionalLightComponentId}},
-      .system_dep_count = 5,
+      .system_dep_count = 6,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,
       .system_deps[2] = ViewSystemId,
       .system_deps[3] = RenderPipelineSystemId,
       .system_deps[4] = RenderTargetSystemId,
+      .system_deps[5] = VisualLoggingSystemId,
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,
