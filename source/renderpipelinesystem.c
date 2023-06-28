@@ -4035,8 +4035,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       }
     }
     {
-      const uint32_t downscaled_width = width;
-      const uint32_t downscaled_height = height;
+      const uint32_t downscaled_width = width / 4;
+      const uint32_t downscaled_height = height / 4;
       // Brightness pass
       {
         FullscreenBatch fs_batch = {
@@ -4055,8 +4055,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       }
       // Bloom Blur Pass
       {
-        uint32_t group_x = width / 16;
-        uint32_t group_y = height;
+        uint32_t group_x = downscaled_width / 16;
+        uint32_t group_y = downscaled_height;
 
         // First we want to do a quick copy from the brightness resource to the
         // bloom target so we can more easily ping-pong multiple blur sweeps
