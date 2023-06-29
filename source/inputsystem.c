@@ -60,7 +60,6 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   InputComponent input_comp = *incoming_comp;
   input_comp.mouse.axis = (float2){0}; // Must always clear axes
   input_comp.mouse.wheel = (float2){0};
-  input_comp.controller_count = 0;
   input_comp.controller_states[0] = (TBGameControllerState){.buttons = 0};
   input_comp.controller_states[1] = (TBGameControllerState){.buttons = 0};
   input_comp.controller_states[2] = (TBGameControllerState){.buttons = 0};
@@ -144,6 +143,7 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
           SDL_GameController *controller =
               SDL_GameControllerOpen(event.cdevice.which);
           self->controllers[event.cdevice.which] = controller;
+          input_comp.controller_count++;
         }
       }
 
@@ -152,6 +152,7 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
         if (controller != NULL) {
           SDL_GameControllerClose(controller);
           self->controllers[event.cdevice.which] = NULL;
+          input_comp.controller_count--;
         }
       }
     }
