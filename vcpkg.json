@@ -52,7 +52,7 @@
     },
     {
       "name": "ktx",
-      "version": "4.1.0"
+      "version": "4.1.0-rc2"
     },
     {
       "name": "meshoptimizer",
@@ -61,7 +61,7 @@
     },
     {
       "name": "mimalloc",
-      "version": "2.1.1"
+      "version": "2.0.7"
     },
     {
       "name": "sdl2",
