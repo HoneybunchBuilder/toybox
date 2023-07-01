@@ -78,13 +78,16 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       tb_get_component(camera_components, 0, CameraComponent);
 
   const float near = camera_component->near;
-  const float far = camera_component->far;
+  const float far = 100.0f;
 
-  // Get inverse camera vp matrix from view system
+  // Calculate inv cam vp based on shadow draw distance
   float4x4 inv_cam_vp = {.col0 = {0}};
   {
     const View *v = tb_get_view(self->view_system, camera_component->view_id);
-    inv_cam_vp = v->view_data.inv_vp;
+    float4 proj_params = v->view_data.proj_params;
+    float4x4 view = v->view_data.v;
+    float4x4 proj = perspective(proj_params[2], proj_params[3], near, far);
+    inv_cam_vp = inv_mf44(mulmf44(proj, view));
   }
 
   const float cascade_split_lambda = 0.95f;
@@ -168,6 +171,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         const float3 forward = transform_get_forward(&transform);
 
         const float3 offset = center + (forward * min[2]);
+        tb_vlog_location(self->vlog, offset, 1.0f, f3(0, 0, 1));
         view = look_at(offset, center, TB_UP);
       }
 

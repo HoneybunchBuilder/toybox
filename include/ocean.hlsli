@@ -3,17 +3,13 @@
 #include "common.hlsli"
 #include "pi.h"
 
-#define TB_WAVE_MAX 4
+#define TB_WAVE_MAX 8
 
-typedef struct OceanWave {
-  float steepness;
-  float wavelength;
-  float2 direction;
-} OceanWave;
+// To avoid struct packing issues
+typedef float4 OceanWave; // xy = dir, z = steep, w = wavelength
 
 typedef struct OceanData {
-  float time;
-  int32_t wave_count;
+  float4 time_waves; // x = time, y = wave count
   OceanWave wave[TB_WAVE_MAX];
 } OceanData;
 
@@ -21,27 +17,20 @@ typedef struct OceanPushConstants {
   float4x4 m;
 } OceanPushConstants;
 
-typedef struct OceanShadowConstants {
-  float4x4 vp;
-  float4x4 m;
-} OceanShadowConstants;
-
 // If not in a shader, make a quick static assert check
 #ifndef __HLSL_VERSION
 _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
-_Static_assert(sizeof(OceanShadowConstants) <= PUSH_CONSTANT_BYTES,
-               "Too Many Push Constants");
 #endif
 
 #ifdef __HLSL_VERSION
-float3 gerstner_wave(OceanWave wave, float3 p, float time, inout float3 tangent,
-                     inout float3 binormal) {
-  float steepness = wave.steepness;
-  float k = 2 * PI / wave.wavelength;
+void gerstner_wave(OceanWave wave, float time, inout float3 pos,
+                   inout float3 tangent, inout float3 binormal) {
+  float steepness = wave.z;
+  float k = 2 * PI / wave.w;
   float c = sqrt(9.8 / k);
-  float2 d = normalize(wave.direction);
-  float f = k * (dot(d, p.xz) - c * time);
+  float2 d = normalize(wave.xy);
+  float f = k * (dot(d, pos.xz) - c * time);
   float a = steepness / k;
 
   float sinf = sin(f);
@@ -51,20 +40,19 @@ float3 gerstner_wave(OceanWave wave, float3 p, float time, inout float3 tangent,
                     -d.y * d.y * (steepness * sinf));
   binormal += float3(-d.x * d.x * (steepness * sinf), d.x * (steepness * cosf),
                      -d.x * d.y * (steepness * sinf));
-  return float3(d.x * (a * cosf), a * sinf, d.y * (a * cosf));
+  pos += float3(d.x * (a * cosf), a * sinf, d.y * (a * cosf));
 }
 
-float3 calc_wave_pos(float3 pos, float time, inout float3 tangent,
+float3 calc_wave_pos(float3 pos, OceanData data, inout float3 tangent,
                      inout float3 binormal) {
-  OceanWave wave_0 = {0.24, 150, float2(-0.8, 0.5)};
-  OceanWave wave_1 = {0.16, 95, float2(0.9, 0.6)};
-  OceanWave wave_2 = {0.13, 45, float2(0.4, 0.6)};
-  OceanWave wave_3 = {0.10, 30, float2(-0.8, 0.6)};
-
-  pos += gerstner_wave(wave_0, pos, time, tangent, binormal);
-  pos += gerstner_wave(wave_1, pos, time, tangent, binormal);
-  pos += gerstner_wave(wave_2, pos, time, tangent, binormal);
-  pos += gerstner_wave(wave_3, pos, time, tangent, binormal);
+  float time = data.time_waves.x;
+  uint count = (uint)data.time_waves.y;
+  if (count > TB_WAVE_MAX) {
+    count = TB_WAVE_MAX;
+  }
+  for (uint i = 0; i < count; ++i) {
+    gerstner_wave(data.wave[i], time, pos, tangent, binormal);
+  }
 
   return pos;
 }

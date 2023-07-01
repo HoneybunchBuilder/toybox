@@ -6,6 +6,10 @@
 #include "transformcomponent.h"
 #include "world.h"
 
+float4 make_wave(float2 dir, float steepness, float wavelength) {
+  return f4(dir[0], dir[1], steepness, wavelength);
+}
+
 bool create_ocean_component(OceanComponent *comp,
                             const OceanComponentDescriptor *desc,
                             uint32_t system_dep_count,
@@ -16,24 +20,43 @@ bool create_ocean_component(OceanComponent *comp,
       .wave_count = desc->wave_count,
   };
   SDL_memcpy(comp->waves, desc->waves, sizeof(OceanWave) * desc->wave_count);
+
+  // TEMP: Creating some hard coded wave data for testing
+  comp->wave_count = TB_WAVE_MAX;
+  OceanWave waves[TB_WAVE_MAX] = {
+      make_wave(f2(-0.51, 0.67), 0.15, 28),
+      make_wave(f2(-.48, -0.69), 0.28, 7),
+      make_wave(f2(0.67, -.44), 0.32, 15),
+      make_wave(f2(-0.41, 0.89), 0.21, 16),
+      make_wave(f2(-0.1, -0.6), 0.0078, 167),
+      make_wave(f2(0.42, 0.81), 0.0051, 700),
+      make_wave(f2(-0.23, 0.89), 0.0120, 800),
+      make_wave(f2(0.62, -0.71), 0.004, 919),
+  };
+  SDL_memcpy(comp->waves, waves, sizeof(OceanWave) * TB_WAVE_MAX);
+
   return true;
 }
 
 bool deserialize_ocean_component(json_object *json, void *out_desc) {
+  (void)json;
+  (void)out_desc;
+  /* Come back to this when we have a better solution for component markup
   OceanComponentDescriptor *desc = (OceanComponentDescriptor *)out_desc;
   desc->wave_count = 1;
   OceanWave *wave = &desc->waves[0];
   json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "steepness") == 0) {
-      wave->steepness = (float)json_object_get_double(value);
+      (*wave)[2] = (float)json_object_get_double(value);
     } else if (SDL_strcmp(key, "wavelength") == 0) {
-      wave->wavelength = (float)json_object_get_double(value);
+      (*wave)[3] = (float)json_object_get_double(value);
     } else if (SDL_strcmp(key, "direction_x") == 0) {
-      wave->direction[0] = (float)json_object_get_double(value);
+      (*wave)[0] = (float)json_object_get_double(value);
     } else if (SDL_strcmp(key, "direction_y") == 0) {
-      wave->direction[1] = (float)json_object_get_double(value);
+      (*wave)[1] = (float)json_object_get_double(value);
     }
   }
+  */
   return true;
 }
 
@@ -64,10 +87,10 @@ void tb_ocean_component_descriptor(ComponentDescriptor *desc) {
 OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
   float3 p = sample.pos;
 
-  float steepness = wave.steepness;
-  float k = 2.0f * PI / wave.wavelength;
+  float steepness = wave[2];
+  float k = 2.0f * PI / wave[3];
   float c = SDL_sqrtf(9.8f / k);
-  float2 d = normf2(wave.direction);
+  float2 d = normf2(f2(wave[0], wave[1]));
   float f = k * (dotf2(d, (float2){p[0], p[2]}) - c * time);
   float a = steepness / k;
 
@@ -89,15 +112,12 @@ OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
 
 OceanSample tb_sample_ocean(const OceanComponent *ocean,
                             TransformComponent *transform, float2 pos) {
-  OceanWave wave_0 = {0.24, 150, (float2){-0.8, 0.5}};
-  OceanWave wave_1 = {0.16, 95, (float2){0.9, 0.6}};
-  OceanWave wave_2 = {0.13, 45, (float2){0.4, 0.6}};
-  OceanWave wave_3 = {0.10, 30, (float2){-0.8, 0.6}};
-
   float4x4 mat = tb_transform_get_world_matrix(transform);
 
-  uint32_t wave_count = 4;
-  OceanWave waves[] = {wave_0, wave_1, wave_2, wave_3};
+  uint32_t wave_count = ocean->wave_count;
+  if (wave_count > TB_WAVE_MAX) {
+    wave_count = TB_WAVE_MAX;
+  }
 
   OceanSample sample = {
       .pos = f4tof3(mulf44(mat, (float4){pos[0], 0, pos[1], 1})),
@@ -105,9 +125,10 @@ OceanSample tb_sample_ocean(const OceanComponent *ocean,
       .binormal = TB_FORWARD,
   };
   for (uint32_t i = 0; i < wave_count; ++i) {
-    sample = gerstner_wave(waves[i], sample, ocean->time);
+    sample = gerstner_wave(ocean->waves[i], sample, ocean->time);
   }
   sample.tangent = normf3(sample.tangent);
   sample.binormal = normf3(sample.binormal);
+
   return sample;
 }

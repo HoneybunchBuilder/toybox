@@ -22,7 +22,7 @@ Interpolators vert(VertexIn i) {
 
   float3 pos = mul(consts.m, float4(i.local_pos, 1)).xyz + i.inst_offset.xyz;
 
-  pos = calc_wave_pos(pos, ocean_data.time, tangent, binormal);
+  pos = calc_wave_pos(pos, ocean_data, tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
 
   Interpolators o;

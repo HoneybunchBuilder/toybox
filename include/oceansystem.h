@@ -46,13 +46,9 @@ typedef struct OceanSystem {
   VkSampler sampler;
 
   TbDrawContextId trans_depth_draw_ctx;
-  TbDrawContextId shadow_draw_ctx;
   TbDrawContextId trans_color_draw_ctx;
 
   FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
-
-  VkPipelineLayout shadow_pipe_layout;
-  VkPipeline shadow_pipeline;
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;

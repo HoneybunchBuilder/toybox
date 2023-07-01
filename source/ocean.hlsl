@@ -43,7 +43,7 @@ Interpolators vert(VertexIn i) {
 
   float3 pos = mul(consts.m, float4(i.local_pos, 1)).xyz + i.inst_offset.xyz;
 
-  pos = calc_wave_pos(pos, ocean_data.time, tangent, binormal);
+  pos = calc_wave_pos(pos, ocean_data, tangent, binormal);
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);
 
@@ -71,42 +71,19 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 albedo = float3(0, 0, 0);
 
-  // Calculate refracted UVs
-  float2 uv = float2(0, 0);
-  {
-    // TODO: Paramaterize
-    const float refraction_scale = 5.0f;
-    const float refraction_speed = 0.3f;
-    const float refraction_strength = 1.0f;
-
-    float scale = 1.0f / refraction_scale;
-    float speed = refraction_speed * ocean_data.time;
-
-    // Note: parent scope variable "uv" is used as a temporary here.
-    // It will be overwritten with a value of a different context later
-    uv = tiling_and_offset(N.xz, float2(scale, scale), float2(speed, speed));
-
-    float ripple = gradient_noise(uv);
-    ripple = remap(0, 1, -1, 1, ripple);
-    ripple *= refraction_strength;
-
-    float4 pos = i.screen_pos + float4(ripple, ripple, ripple, ripple);
-
-    float2 offset = N.xy * refraction_strength;
-    uv = (pos.xy + offset) / pos.w;
-  }
+  float2 uv = (i.screen_pos.xy) / i.screen_pos.w;
 
   // Underwater fog
   {
     const float near = camera_data.proj_params.x;
     const float far = camera_data.proj_params.y;
     // TODO: Paramaterize
-    const float fog_density = 0.05f;
+    const float fog_density = 0.2f;
     const float3 fog_color = float3(0.105, 0.163, 0.262);
 
     // World position depth
-    float raw_depth = depth_map.Sample(static_sampler, uv).r;
-    float scene_eye_depth = linear_depth(raw_depth, near, far);
+    float scene_eye_depth =
+        linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
     float fragment_eye_depth = -i.view_pos.z;
     float3 world_pos = camera_data.view_pos -
                        ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
@@ -121,7 +98,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   {
     // TODO: Parameterize
     const float horizon_dist = 5.0f;
-    const float3 horizon_color = float3(0.3, 0.9, 0.3);
+    const float3 horizon_color = float3(0.8, 0.9, 0.8);
 
     float fresnel = dot(N, V);
     fresnel = pow(saturate(1 - fresnel), horizon_dist);
