@@ -65,11 +65,11 @@
     },
     {
       "name": "sdl2",
-      "version": "2.26.1"
+      "version": "2.26.5"
     },
     {
       "name": "tracy",
-      "version": "0.9.0"
+      "version": "0.9.1"
     },
     {
       "name": "volk",
