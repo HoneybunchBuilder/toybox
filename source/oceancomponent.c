@@ -24,14 +24,14 @@ bool create_ocean_component(OceanComponent *comp,
   // TEMP: Creating some hard coded wave data for testing
   comp->wave_count = TB_WAVE_MAX;
   OceanWave waves[TB_WAVE_MAX] = {
-      make_wave(f2(-0.51, 0.67), 0.15, 28),
-      make_wave(f2(-.48, -0.69), 0.28, 7),
-      make_wave(f2(0.67, -.44), 0.32, 15),
-      make_wave(f2(-0.41, 0.89), 0.21, 16),
-      make_wave(f2(-0.1, -0.6), 0.0078, 167),
-      make_wave(f2(0.42, 0.81), 0.0051, 700),
-      make_wave(f2(-0.23, 0.89), 0.0120, 800),
-      make_wave(f2(0.62, -0.71), 0.004, 919),
+      make_wave(f2(-0.51, 0.67), 0.07, 5.3),
+      make_wave(f2(.91, -0.69), 0.051, 6.7),
+      make_wave(f2(0.67, .44), 0.071, 8.9),
+      make_wave(f2(-0.41, -0.89), 0.13, 27),
+      make_wave(f2(0.1, -0.6), 0.078, 43),
+      make_wave(f2(0.87, 0.62), 0.0089, 56),
+      make_wave(f2(-0.51, 0.89), 0.052, 283),
+      make_wave(f2(-0.34, 0.71), 0.0078, 654),
   };
   SDL_memcpy(comp->waves, waves, sizeof(OceanWave) * TB_WAVE_MAX);
 

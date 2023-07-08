@@ -171,7 +171,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
         const float3 forward = transform_get_forward(&transform);
 
         const float3 offset = center + (forward * min[2]);
-        tb_vlog_location(self->vlog, offset, 1.0f, f3(0, 0, 1));
+        // tb_vlog_location(self->vlog, offset, 1.0f, f3(0, 0, 1));
         view = look_at(offset, center, TB_UP);
       }
 
