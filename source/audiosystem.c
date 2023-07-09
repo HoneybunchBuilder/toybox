@@ -5,12 +5,17 @@
 
 #include <SDL2/SDL_mixer.h>
 
+typedef struct TbMusic {
+  uint32_t ref_count;
+  Mix_Music *music;
+} TbMusic;
+
 bool create_audio_system(AudioSystem *self, const AudioSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
   (void)system_dep_count;
   (void)system_deps;
-  int32_t ret = Mix_Init(MIX_INIT_OPUS | MIX_INIT_FLAC);
+  int32_t ret = Mix_Init(MIX_INIT_OGG);
   TB_CHECK_RETURN(ret != 0, "Failed to initialize SDL2 Mixer", false);
 
   // Default to 44khz 16-bit stereo for now
@@ -37,11 +42,17 @@ bool create_audio_system(AudioSystem *self, const AudioSystemDescriptor *desc,
       .format = format,
       .channels = channels,
   };
+  TB_DYN_ARR_RESET(self->music, self->std_alloc, 8);
 
   return true;
 }
 
 void destroy_audio_system(AudioSystem *self) {
+  TB_DYN_ARR_FOREACH(self->music, i) {
+    TB_CHECK(TB_DYN_ARR_AT(self->music, i).ref_count == 0, "Leaking music");
+  }
+
+  TB_DYN_ARR_DESTROY(self->music);
   Mix_CloseAudio();
   Mix_Quit();
   *self = (AudioSystem){0};
@@ -68,4 +79,29 @@ void tb_audio_system_descriptor(SystemDescriptor *desc,
       .destroy = tb_destroy_audio_system,
       .tick = tb_tick_audio_system,
   };
+}
+
+TbMusicId tb_audio_system_load_music(AudioSystem *self, const char *path) {
+  Mix_Music *music = Mix_LoadMUS(path);
+  TB_CHECK_RETURN(music, "Failed to load music", 0xFFFFFFFF);
+  TbMusicId id = (TbMusicId)TB_DYN_ARR_SIZE(self->music);
+  TbMusic m = {1, music}; // Assume that by loading the music we take a ref
+  TB_DYN_ARR_APPEND(self->music, m);
+  return id;
+}
+
+void tb_audio_system_release_music_ref(AudioSystem *self, TbMusicId id) {
+  TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
+  TB_CHECK(
+      music->ref_count > 0,
+      "Trying to release reference to music that has no reference holders");
+  music->ref_count--;
+  if (music->ref_count == 0) {
+    Mix_FreeMusic(music->music);
+  }
+}
+
+void tb_audio_play_music(AudioSystem *self, TbMusicId id) {
+  TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
+  Mix_PlayMusic(music->music, 1);
 }

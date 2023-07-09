@@ -269,8 +269,30 @@ function(cook_assets target_name out_assets_path)
   list(APPEND assets ${packed_textures})
   add_custom_target(${target_name}_textures DEPENDS ${packed_textures})
 
+  # Copy audio
+  file(GLOB_RECURSE source_audio CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/assets/audio/*.ogg" "${CMAKE_CURRENT_LIST_DIR}/assets/audio/*.wav")
+  foreach(audio ${source_audio})
+    file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${audio})
+    get_filename_component(relpath ${relpath} DIRECTORY)
+    get_filename_component(filename ${audio} NAME)
+    set(packed_audio ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/audio/${filename})
+
+    message("Copying ${audio} to ${packed_audio}")
+    add_custom_command(
+      OUTPUT ${packed_audio}
+      COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+      COMMAND ${CMAKE_COMMAND} -E copy ${audio} ${packed_audio}
+      MAIN_DEPENDENCY ${audio}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+    )
+
+    list(APPEND packed_audio ${packed_audio})
+  endforeach()
+  list(APPEND assets ${packed_audio})
+  add_custom_target(${target_name}_audio DEPENDS ${packed_audio})
+
   # Generate asset database
-  set(source_assets ${packed_scenes} ${packed_textures})
+  set(source_assets ${packed_scenes} ${packed_textures} ${packed_audio})
   list(LENGTH source_assets ASSET_NUM)
   set(generated_manifest "${engine_config_include_dir}/tbengineassetmanifest.h")
   # Add all assets to asset list
@@ -295,7 +317,7 @@ function(cook_assets target_name out_assets_path)
   configure_file(${toybox_source_dir}/source/assetmanifest.h.in ${generated_manifest})
   add_custom_target(${target_name}_asset_manifest DEPENDS ${generated_manifest})
 
-  add_dependencies(${target_name} ${target_name}_scenes ${target_name}_textures ${target_name}_asset_manifest)
+  add_dependencies(${target_name} ${target_name}_scenes ${target_name}_textures ${target_name}_audio ${target_name}_asset_manifest)
 
   # Install cooked assets
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets

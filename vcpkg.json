@@ -28,12 +28,7 @@
         "vulkan"
       ]
     },
-    {
-      "name": "sdl2-mixer",
-      "features": [
-        "opusfile"
-      ]
-    },
+    "sdl2-mixer",
     "tracy",
     "volk",
     "vulkan-memory-allocator",

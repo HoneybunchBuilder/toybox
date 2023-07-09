@@ -1,6 +1,7 @@
 #include "oceansystem.h"
 
 #include "assets.h"
+#include "audiosystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
 #include "lightcomponent.h"
@@ -341,6 +342,10 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   TB_CHECK_RETURN(vlog,
                   "Failed to find visual logging system which ocean depends on",
                   false);
+  AudioSystem *audio_system =
+      tb_get_system(system_deps, system_dep_count, AudioSystem);
+  TB_CHECK_RETURN(audio_system,
+                  "Failed to find audio system which ocean depends on", false);
 
   *self = (OceanSystem){
       .render_system = render_system,
@@ -349,9 +354,16 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       .view_system = view_system,
       .render_target_system = render_target_system,
       .vlog = vlog,
+      .audio_system = audio_system,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
+
+  // Load a music track for testing
+  char *music_path = tb_resolve_asset_path(self->tmp_alloc, "audio/test.ogg");
+  self->music = tb_audio_system_load_music(self->audio_system, music_path);
+
+  tb_audio_play_music(self->audio_system, self->music);
 
   // Load the known glb that has the ocean mesh
   // Get qualified path to scene asset
@@ -578,6 +590,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
 }
 
 void destroy_ocean_system(OceanSystem *self) {
+  tb_audio_system_release_music_ref(self->audio_system, self->music);
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->ocean_patch_mesh);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -948,13 +961,14 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .dep_count = 2,
       .deps[0] = {1, {OceanComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 6,
+      .system_dep_count = 7,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = MeshSystemId,
       .system_deps[2] = ViewSystemId,
       .system_deps[3] = RenderPipelineSystemId,
       .system_deps[4] = RenderTargetSystemId,
       .system_deps[5] = VisualLoggingSystemId,
+      .system_deps[6] = AudioSystemId,
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,

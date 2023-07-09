@@ -12,11 +12,14 @@ typedef struct ViewSystem ViewSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct VisualLoggingSystem VisualLoggingSystem;
+typedef struct AudioSystem AudioSystem;
+
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef uint64_t TbMeshId;
 typedef uint32_t TbDrawContextId;
+typedef uint32_t TbMusicId;
 
 typedef struct OceanSystemDescriptor {
   Allocator tmp_alloc;
@@ -30,8 +33,11 @@ typedef struct OceanSystem {
   ViewSystem *view_system;
   RenderTargetSystem *render_target_system;
   VisualLoggingSystem *vlog;
+  AudioSystem *audio_system;
   Allocator tmp_alloc;
   Allocator std_alloc;
+
+  TbMusicId music;
 
   TbMeshId ocean_patch_mesh;
   Transform ocean_transform;
