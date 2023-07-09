@@ -22,6 +22,7 @@
 #define TracyCategoryColorMemory 0xff8c69
 #define TracyCategoryColorWait 0xff0000
 #define TracyCategoryColorGame 0x0022ff
+#define TracyCategoryColorAudio 0xffff00
 
 #ifdef TRACY_VK_C_ENABLE
 #define VK_NO_PROTOTYPES

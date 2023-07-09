@@ -19,7 +19,7 @@ typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef uint64_t TbMeshId;
 typedef uint32_t TbDrawContextId;
-typedef uint32_t TbMusicId;
+typedef uint32_t TbSoundEffectId;
 
 typedef struct OceanSystemDescriptor {
   Allocator tmp_alloc;
@@ -37,7 +37,9 @@ typedef struct OceanSystem {
   Allocator tmp_alloc;
   Allocator std_alloc;
 
-  TbMusicId music;
+  TbSoundEffectId wave_sounds[4];
+  float wave_sound_timer;
+  uint32_t last_wave_idx;
 
   TbMeshId ocean_patch_mesh;
   Transform ocean_transform;

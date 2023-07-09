@@ -10,8 +10,10 @@
 typedef struct SystemDescriptor SystemDescriptor;
 
 typedef uint32_t TbMusicId;
+typedef uint32_t TbSoundEffectId;
 
 typedef struct TbMusic TbMusic;
+typedef struct TbSoundEffect TbSoundEffect;
 
 typedef struct AudioSystemDescriptor {
   Allocator std_alloc;
@@ -27,12 +29,17 @@ typedef struct AudioSystem {
   int32_t channels;
 
   TB_DYN_ARR_OF(TbMusic) music;
+  TB_DYN_ARR_OF(TbSoundEffect) sfx;
 } AudioSystem;
 
 void tb_audio_system_descriptor(SystemDescriptor *desc,
                                 const AudioSystemDescriptor *audio_desc);
 
 TbMusicId tb_audio_system_load_music(AudioSystem *self, const char *path);
+TbSoundEffectId tb_audio_system_load_effect(AudioSystem *self,
+                                            const char *path);
 void tb_audio_system_release_music_ref(AudioSystem *self, TbMusicId id);
+void tb_audio_system_release_effect_ref(AudioSystem *self, TbSoundEffectId id);
 
 void tb_audio_play_music(AudioSystem *self, TbMusicId id);
+void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id);
