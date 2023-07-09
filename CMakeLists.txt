@@ -95,6 +95,7 @@ if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES and
 endif()
 
 find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc CONFIG REQUIRED)
@@ -366,9 +367,11 @@ endif()
 
 if(STATIC)
   target_link_libraries(toybox PUBLIC SDL2::SDL2-static)
+  target_link_libraries(toybox PUBLIC SDL2_mixer::SDL2_mixer-static)
   set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(toybox PUBLIC SDL2::SDL2)
+  target_link_libraries(toybox PUBLIC SDL2_mixer::SDL2_mixer)
 endif()
 
 target_compile_features(toybox PUBLIC c_std_11)
