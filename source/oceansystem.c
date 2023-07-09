@@ -360,7 +360,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
   };
 
   // Load a music track for testing
-  char *music_path = tb_resolve_asset_path(self->tmp_alloc, "audio/test.ogg");
+  char *music_path = tb_resolve_asset_path(self->tmp_alloc, "audio/wave01.wav");
   self->music = tb_audio_system_load_music(self->audio_system, music_path);
 
   tb_audio_play_music(self->audio_system, self->music);

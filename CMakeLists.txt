@@ -253,18 +253,18 @@ function(cook_assets target_name out_assets_path)
     file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
     get_filename_component(relpath ${relpath} DIRECTORY)
     get_filename_component(filename ${texture} NAME_WE)
-    set(packed_texture ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
+    set(packed ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures/${filename}.ktx2)
 
-    message("Copying ${texture} to ${packed_texture}")
+    message("Copying ${texture} to ${packed}")
     add_custom_command(
-      OUTPUT ${packed_texture}
+      OUTPUT ${packed}
       COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-      COMMAND ${CMAKE_COMMAND} -E copy ${texture} ${packed_texture}
+      COMMAND ${CMAKE_COMMAND} -E copy ${texture} ${packed}
       MAIN_DEPENDENCY ${texture}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
     )
 
-    list(APPEND packed_textures ${packed_texture})
+    list(APPEND packed_textures ${packed})
   endforeach()
   list(APPEND assets ${packed_textures})
   add_custom_target(${target_name}_textures DEPENDS ${packed_textures})
@@ -275,18 +275,18 @@ function(cook_assets target_name out_assets_path)
     file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${audio})
     get_filename_component(relpath ${relpath} DIRECTORY)
     get_filename_component(filename ${audio} NAME)
-    set(packed_audio ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/audio/${filename})
+    set(packed ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/audio/${filename})
 
-    message("Copying ${audio} to ${packed_audio}")
+    message("Copying ${audio} to ${packed}")
     add_custom_command(
-      OUTPUT ${packed_audio}
+      OUTPUT ${packed}
       COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-      COMMAND ${CMAKE_COMMAND} -E copy ${audio} ${packed_audio}
+      COMMAND ${CMAKE_COMMAND} -E copy ${audio} ${packed}
       MAIN_DEPENDENCY ${audio}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
     )
 
-    list(APPEND packed_audio ${packed_audio})
+    list(APPEND packed_audio ${packed})
   endforeach()
   list(APPEND assets ${packed_audio})
   add_custom_target(${target_name}_audio DEPENDS ${packed_audio})
