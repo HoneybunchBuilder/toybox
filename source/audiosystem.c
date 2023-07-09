@@ -103,5 +103,5 @@ void tb_audio_system_release_music_ref(AudioSystem *self, TbMusicId id) {
 
 void tb_audio_play_music(AudioSystem *self, TbMusicId id) {
   TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
-  Mix_PlayMusic(music->music, 1);
+  Mix_PlayMusic(music->music, SDL_MAX_SINT32);
 }
