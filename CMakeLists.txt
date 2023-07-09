@@ -367,12 +367,12 @@ endif()
 
 if(STATIC)
   target_link_libraries(toybox PUBLIC SDL2::SDL2-static)
-  target_link_libraries(toybox PUBLIC SDL2_mixer::SDL2_mixer-static)
   set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(toybox PUBLIC SDL2::SDL2)
-  target_link_libraries(toybox PUBLIC SDL2_mixer::SDL2_mixer)
 endif()
+
+target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
 
 target_compile_features(toybox PUBLIC c_std_11)
 
