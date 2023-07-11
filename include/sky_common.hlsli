@@ -107,7 +107,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   float view_dir_y = max(view_pos.y, 0.0001);
 
   // Rayleigh coefficient
-  float sunfade = 1.0 - clamp(1.0 - exp((view_dir_y / 450000.0)), 0.0, 1.0);
+  float sunfade = 1.0 - clamp(1.0 - exp((view_dir_y / 45000000.0)), 0.0, 1.0);
   float rayleigh_coefficient = rayleigh - (1.0 * (1.0 - sunfade));
   float3 beta_r = total_rayleigh(primaries, refractive_index,
                                  depolarization_factor, num_molecules) *
@@ -149,10 +149,8 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
                              sun_angluar_diameter_cos + 0.00002, cos_theta);
   float3 L0 = float3(0.1, 0.1, 0.1) * fex;
   L0 += sun_e * 19000.0 * fex * sundisk;
-  float3 color = Lin + L0;
-  color *= 0.04;
-  color += float3(0.0, 0.001, 0.0025) * 0.3;
-  // color = pow(color, 1.0 / (1.2 + (1.2 * sunfade)));
+  float3 color = (Lin + L0) * 0.04 + float3(0.0, 0.0003, 0.00075);
+  color = pow(color, 1.0 / sunfade);
 
   // Cirrus clouds
   float density =
@@ -170,6 +168,5 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
-  // Must reduce color to avoid blow out during tonemapping
-  return color * 0.05f;
+  return color;
 }
