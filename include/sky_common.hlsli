@@ -152,23 +152,24 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   float3 color = Lin + L0;
   color *= 0.04;
   color += float3(0.0, 0.001, 0.0025) * 0.3;
-  color = pow(color, 1.0 / (1.2 + (1.2 * sunfade)));
+  // color = pow(color, 1.0 / (1.2 + (1.2 * sunfade)));
 
   // Cirrus clouds
   float density =
       smoothstep(1.0 - cirrus, 1.0,
                  fbm(view_pos.xyz / view_dir_y * 2.0 + time * 0.05)) *
       0.3;
-  color = lerp(color, fex * 4.0, density * max(view_dir_y, 0.0));
+  color = lerp(color, color * 4.0, density * max(view_dir_y, 0.0));
 
   // Cumulus Clouds
   for (int32_t j = 0; j < 3; j++) {
     float density = smoothstep(
         1.0 - cumulus, 1.0,
         fbm((0.7 + float(j) * 0.01) * view_pos.xyz / view_dir_y + time * 0.3));
-    color = lerp(color, fex * density * 5.0,
+    color = lerp(color, color * density * 5.0,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
-  return color * 0.25f;
+  // Must reduce color to avoid blow out during tonemapping
+  return color * 0.05f;
 }
