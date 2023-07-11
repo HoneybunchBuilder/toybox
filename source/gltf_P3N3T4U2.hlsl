@@ -58,7 +58,7 @@ Interpolators vert(VertexIn i) {
   return o;
 }
 
-float4 frag(Interpolators i) : SV_TARGET {
+float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
   // Sample textures up-front
   float3 albedo = float3(0.5, 0.5, 0.5);
 
@@ -74,6 +74,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
     N = normalize(mul(tangent_space_normal, tbn));
   }
+  N = front_face ? N : -N;
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float3 R = reflect(-V, N);

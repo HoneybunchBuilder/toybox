@@ -52,11 +52,12 @@ Interpolators vert(VertexIn i) {
   return o;
 }
 
-float4 frag(Interpolators i) : SV_TARGET {
+float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
   // TODO: Get material base color color some other way
   float3 albedo = float3(0.5, 0.5, 0.5);
 
   float3 N = normalize(i.normal);
+  N = front_face ? N : -N;
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float3 R = reflect(-V, N);
   float3 L = light_data.light_dir;
