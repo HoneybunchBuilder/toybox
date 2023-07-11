@@ -49,7 +49,7 @@ bool create_material_system(MaterialSystem *self,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
+        .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = 16.0f, // 16x anisotropy is cheap
         .maxLod = 14.0f,        // Hack; known number of mips for 8k textures
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,

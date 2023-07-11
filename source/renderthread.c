@@ -716,7 +716,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 #if (defined(VK_USE_PLATFORM_MACOS_MVK) ||                                     \
      defined(VK_USE_PLATFORM_IOS_MVK)) &&                                      \
     (VK_HEADER_VERSION >= 216)
-    ext.portability = optional_device_ext(
+    ext.portability = required_device_ext(
         &device_ext_names, &device_ext_count, props, prop_count,
         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
@@ -774,6 +774,10 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .multiview = VK_TRUE,
   };
 
+  VkPhysicalDeviceFeatures vk_features = {
+      .samplerAnisotropy = VK_TRUE,
+  };
+
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   create_info.pNext = (const void *)&vk_11_features;
@@ -781,6 +785,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   create_info.pQueueCreateInfos = queues;
   create_info.enabledExtensionCount = device_ext_count;
   create_info.ppEnabledExtensionNames = device_ext_names;
+  create_info.pEnabledFeatures = &vk_features;
 
   if (present_queue_family_index != graphics_queue_family_index) {
     queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
