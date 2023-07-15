@@ -16,7 +16,6 @@
 #include "tbvma.h"
 
 #include "cameracomponent.h"
-#include "coreuicomponent.h"
 #include "imguicomponent.h"
 #include "inputcomponent.h"
 #include "lightcomponent.h"
@@ -110,7 +109,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
            "Failed to start render thread");
 
 // Order does not matter
-#define COMP_COUNT 11
+#define COMP_COUNT 10
   ComponentDescriptor component_descs[COMP_COUNT] = {0};
   {
     int32_t i = 0;
@@ -119,7 +118,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_directional_light_component_descriptor(&component_descs[i++]);
     tb_noclip_component_descriptor(&component_descs[i++]);
     tb_input_component_descriptor(&component_descs[i++]);
-    tb_coreui_component_descriptor(&component_descs[i++]);
     tb_imgui_component_descriptor(&component_descs[i++]);
     tb_sky_component_descriptor(&component_descs[i++]);
     tb_mesh_component_descriptor(&component_descs[i++]);
@@ -344,11 +342,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   ImGuiComponentDescriptor imgui_comp_desc = {
       .font_atlas = NULL,
   };
-  const uint32_t core_comp_count = 3;
-  ComponentId core_comp_ids[3] = {InputComponentId, CoreUIComponentId,
-                                  ImGuiComponentId};
-  InternalDescriptor core_comp_descs[3] = {
-      NULL,
+  const uint32_t core_comp_count = 2;
+  ComponentId core_comp_ids[2] = {InputComponentId, ImGuiComponentId};
+  InternalDescriptor core_comp_descs[2] = {
       NULL,
       &imgui_comp_desc,
   };

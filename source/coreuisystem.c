@@ -1,6 +1,5 @@
 #include "coreuisystem.h"
 
-#include "coreuicomponent.h"
 #include "imguicomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
@@ -24,7 +23,11 @@ bool create_coreui_system(CoreUISystem *self,
       .std_alloc = desc->std_alloc,
       .tmp_alloc = desc->tmp_alloc,
   };
-  TB_DYN_ARR_RESET(self->menu_registry, self->std_alloc, 8);
+  TB_DYN_ARR_RESET(self->menu_registry, self->std_alloc, 1);
+
+  self->metrics = tb_coreui_register_menu(self, "Metrics");
+  self->about = tb_coreui_register_menu(self, "About");
+
   return true;
 }
 
@@ -50,17 +53,17 @@ void coreui_show_about(bool *open) {
 
 void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
                         SystemOutput *output, float delta_seconds) {
+  (void)output;
   (void)delta_seconds;
+
   TracyCZoneN(ctx, "Core UI System Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
 
   // Find expected components
   uint32_t entity_count = 0;
   const EntityId *entities = NULL;
-  const PackedComponentStore *coreui_comp_store =
-      tb_get_column_check_id(input, 0, 0, CoreUIComponentId);
   const PackedComponentStore *imgui_comp_store =
-      tb_get_column_check_id(input, 0, 1, ImGuiComponentId);
+      tb_get_column_check_id(input, 0, 0, ImGuiComponentId);
   for (uint32_t dep_set_idx = 0; dep_set_idx < input->dep_set_count;
        ++dep_set_idx) {
     const SystemDependencySet *dep_set = &input->dep_sets[dep_set_idx];
@@ -70,25 +73,13 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
   if (entity_count > 0) {
     TB_CHECK(entities, "Invalid input entities");
 
-    CoreUIComponent *out_coreui =
-        tb_alloc_nm_tp(self->tmp_alloc, entity_count, CoreUIComponent);
-    SDL_memset(out_coreui, 0, sizeof(CoreUIComponent) * entity_count);
-
     for (uint32_t entity_idx = 0; entity_idx < entity_count; ++entity_idx) {
-      const CoreUIComponent *coreui =
-          tb_get_component(coreui_comp_store, entity_idx, CoreUIComponent);
       const ImGuiComponent *imgui =
           tb_get_component(imgui_comp_store, entity_idx, ImGuiComponent);
-
-      *out_coreui = *coreui;
 
       igSetCurrentContext(imgui->context);
 
       if (igBeginMainMenuBar()) {
-        if (igBeginMenu("Metrics", true)) {
-          out_coreui->show_metrics = !out_coreui->show_metrics;
-          igEndMenu();
-        }
         TB_DYN_ARR_FOREACH(self->menu_registry, i) {
           CoreUIMenu *menu = &TB_DYN_ARR_AT(self->menu_registry, i);
           if (igBeginMenu(menu->name, true)) {
@@ -96,28 +87,16 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
             igEndMenu();
           }
         }
-        if (igBeginMenu("About", true)) {
-          out_coreui->show_about = !out_coreui->show_about;
-          igEndMenu();
-        }
         igEndMainMenuBar();
       }
 
-      if (out_coreui->show_about) {
-        coreui_show_about(&out_coreui->show_about);
+      if (*self->about) {
+        coreui_show_about(self->about);
       }
-      if (out_coreui->show_metrics) {
-        igShowMetricsWindow(&out_coreui->show_metrics);
+      if (*self->metrics) {
+        igShowMetricsWindow(self->metrics);
       }
     }
-
-    output->set_count = 1;
-    output->write_sets[0] = (SystemWriteSet){
-        .id = CoreUIComponentId,
-        .count = entity_count,
-        .entities = entities,
-        .components = (uint8_t *)out_coreui,
-    };
   }
 
   TracyCZoneEnd(ctx);
@@ -127,20 +106,17 @@ TB_DEFINE_SYSTEM(coreui, CoreUISystem, CoreUISystemDescriptor)
 
 void tb_coreui_system_descriptor(SystemDescriptor *desc,
                                  const CoreUISystemDescriptor *coreui_desc) {
-  desc->name = "CoreUI";
-  desc->size = sizeof(CoreUISystem);
-  desc->id = CoreUISystemId;
-  desc->desc = (InternalDescriptor)coreui_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 1;
-  desc->deps[0] = (SystemComponentDependencies){
-      .count = 2,
-      .dependent_ids = {CoreUIComponentId, ImGuiComponentId},
+  *desc = (SystemDescriptor){
+      .name = "CoreUI",
+      .size = sizeof(CoreUISystem),
+      .id = CoreUISystemId,
+      .desc = (InternalDescriptor)coreui_desc,
+      .dep_count = 1,
+      .deps[0] = {1, {ImGuiComponentId}},
+      .create = tb_create_coreui_system,
+      .destroy = tb_destroy_coreui_system,
+      .tick = tb_tick_coreui_system,
   };
-  desc->create = tb_create_coreui_system;
-  desc->destroy = tb_destroy_coreui_system;
-  desc->tick = tb_tick_coreui_system;
 }
 
 bool *tb_coreui_register_menu(CoreUISystem *self, const char *name) {

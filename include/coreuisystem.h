@@ -19,6 +19,9 @@ typedef struct CoreUISystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
   TB_DYN_ARR_OF(CoreUIMenu) menu_registry;
+
+  bool *metrics;
+  bool *about;
 } CoreUISystem;
 
 void tb_coreui_system_descriptor(SystemDescriptor *desc,

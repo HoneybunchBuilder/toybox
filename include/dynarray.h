@@ -21,6 +21,7 @@
 
 #define TB_DYN_ARR_RESET(array, allocator, cap)                                \
   {                                                                            \
+    assert(cap);                                                               \
     array.alloc = allocator;                                                   \
     array.data = (decltype(array.data))tb_alloc(allocator,                     \
                                                 sizeof(array.data[0]) * cap);  \
