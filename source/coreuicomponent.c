@@ -8,9 +8,7 @@ bool create_coreui_component(CoreUIComponent *self, const void *desc,
   (void)system_dep_count;
   (void)system_deps;
   (void)desc;
-  *self = (CoreUIComponent){
-      .show_all = 1, // Show UI by default
-  };
+  *self = (CoreUIComponent){0};
   return true;
 }
 

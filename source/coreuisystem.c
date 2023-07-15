@@ -4,6 +4,7 @@
 #include "imguicomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
+#include "tbengineconfig.h"
 #include "tbimgui.h"
 
 typedef struct CoreUIMenu {
@@ -39,6 +40,10 @@ void destroy_coreui_system(CoreUISystem *self) {
 
 void coreui_show_about(bool *open) {
   if (igBegin("About Toybox", open, 0)) {
+    igText("Version: %s", TB_ENGINE_VERSION);
+    igText("Platform: %s", TB_PLATFORM);
+    igText("Arch: %s", TB_ARCH);
+    igText("Git Hash: %s", GIT_COMMIT_HASH);
     igEnd();
   }
 }
@@ -80,14 +85,6 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
       igSetCurrentContext(imgui->context);
 
       if (igBeginMainMenuBar()) {
-        if (igBeginMenu("About", true)) {
-          out_coreui->show_about = !out_coreui->show_about;
-          igEndMenu();
-        }
-        if (igBeginMenu("Demo", true)) {
-          out_coreui->show_demo = !out_coreui->show_demo;
-          igEndMenu();
-        }
         if (igBeginMenu("Metrics", true)) {
           out_coreui->show_metrics = !out_coreui->show_metrics;
           igEndMenu();
@@ -99,20 +96,18 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
             igEndMenu();
           }
         }
-
+        if (igBeginMenu("About", true)) {
+          out_coreui->show_about = !out_coreui->show_about;
+          igEndMenu();
+        }
         igEndMainMenuBar();
       }
 
-      if (out_coreui->show_all) {
-        if (out_coreui->show_about) {
-          coreui_show_about(&out_coreui->show_about);
-        }
-        if (out_coreui->show_demo) {
-          igShowDemoWindow(&out_coreui->show_demo);
-        }
-        if (out_coreui->show_metrics) {
-          igShowMetricsWindow(&out_coreui->show_metrics);
-        }
+      if (out_coreui->show_about) {
+        coreui_show_about(&out_coreui->show_about);
+      }
+      if (out_coreui->show_metrics) {
+        igShowMetricsWindow(&out_coreui->show_metrics);
       }
     }
 

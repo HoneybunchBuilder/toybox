@@ -7,10 +7,8 @@
 typedef struct ComponentDescriptor ComponentDescriptor;
 
 typedef struct CoreUIComponent {
-  bool show_all;
   bool show_about;
   bool show_metrics;
-  bool show_demo;
 } CoreUIComponent;
 
 void tb_coreui_component_descriptor(ComponentDescriptor *desc);
