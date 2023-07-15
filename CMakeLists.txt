@@ -14,6 +14,7 @@ project(toybox
         LANGUAGES C CXX)
 
 option(TB_BUILD_SAMPLES "Compile samples" ON)
+option(TB_BUILD_VIEWER "Build the viewer application" ON)
 option(FINAL "Compile with the intention to redistribute" OFF)
 option(PROFILE_TRACY "Compile with support for the tracy profiler" OFF)
 option(COOK_ASSETS "Process assets for runtime loading" ON)
@@ -294,7 +295,7 @@ function(cook_assets target_name out_assets_path)
   # Generate asset database
   set(source_assets ${packed_scenes} ${packed_textures} ${packed_audio})
   list(LENGTH source_assets ASSET_NUM)
-  set(generated_manifest "${engine_config_include_dir}/tbengineassetmanifest.h")
+  set(generated_manifest "${CMAKE_CURRENT_BINARY_DIR}/config/${target_name}_assetmanifest.h")
   # Add all assets to asset list
   # Also keep track of which assets are scenes
   math(EXPR asset_idx "0")
@@ -497,4 +498,8 @@ endfunction()
 
 if(TB_BUILD_SAMPLES)
   add_subdirectory(samples)
+endif()
+
+if(TB_BUILD_VIEWER)
+  add_subdirectory(viewer)
 endif()

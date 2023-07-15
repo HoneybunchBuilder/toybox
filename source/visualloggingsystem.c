@@ -2,6 +2,7 @@
 
 #include "assets.h"
 #include "cameracomponent.h"
+#include "coreuisystem.h"
 #include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
@@ -139,12 +140,13 @@ void tb_visual_logging_system_descriptor(
       .dep_count = 1,
       .deps[0] = {.count = 2,
                   .dependent_ids = {CameraComponentId, TransformComponentId}},
-      .system_dep_count = 5,
+      .system_dep_count = 6,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = ViewSystemId,
       .system_deps[2] = RenderObjectSystemId,
       .system_deps[3] = RenderPipelineSystemId,
       .system_deps[4] = MeshSystemId,
+      .system_deps[5] = CoreUISystemId,
       .create = tb_create_visual_logging_system,
       .destroy = tb_destroy_visual_logging_system,
       .tick = tb_tick_visual_logging_system,
@@ -334,24 +336,28 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
   RenderSystem *render_system =
       tb_get_system(system_deps, system_dep_count, RenderSystem);
   TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which visual logger depend on",
+                  "Failed to find render system which visual logger depends on",
                   false);
   ViewSystem *view_system =
       tb_get_system(system_deps, system_dep_count, ViewSystem);
   TB_CHECK_RETURN(view_system,
-                  "Failed to find view system which visual logger depend on",
-                  false);
+                  "Failed to find view system which visual logger s on", false);
   RenderPipelineSystem *render_pipe_system =
       tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
   TB_CHECK_RETURN(
       render_pipe_system,
-      "Failed to find render pipeline system which visual logger depend on",
+      "Failed to find render pipeline system which visual logger depends on",
       false);
   MeshSystem *mesh_system =
       tb_get_system(system_deps, system_dep_count, MeshSystem);
   TB_CHECK_RETURN(mesh_system,
-                  "Failed to find mesh system which visual logger depend on",
+                  "Failed to find mesh system which visual logger depends on",
                   false);
+  CoreUISystem *coreui =
+      tb_get_system(system_deps, system_dep_count, CoreUISystem);
+  TB_CHECK_RETURN(
+      coreui, "Failed to find core ui system which visual logger depends on",
+      false);
 
   *self = (VisualLoggingSystem){
       .tmp_alloc = desc->tmp_alloc,
@@ -360,6 +366,7 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       .view_system = view_system,
       .render_pipe_system = render_pipe_system,
       .mesh_system = mesh_system,
+      .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
   };
 
   // Load some default meshes, load some simple shader pipelines
@@ -555,42 +562,44 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
   }
 
   // UI for recording visual logs
-  if (igBegin("Visual Logger", NULL, 0)) {
-    igText("Recording: %s", self->recording ? "true" : "false");
+  if (self->ui && *self->ui) {
+    if (igBegin("Visual Logger", self->ui, 0)) {
+      igText("Recording: %s", self->recording ? "true" : "false");
 
-    if (self->recording) {
-      if (igButton("Stop", (ImVec2){0})) {
-        self->recording = false;
+      if (self->recording) {
+        if (igButton("Stop", (ImVec2){0})) {
+          self->recording = false;
+        }
+      } else {
+        if (igButton("Start", (ImVec2){0})) {
+          self->recording = true;
+        }
       }
-    } else {
-      if (igButton("Start", (ImVec2){0})) {
-        self->recording = true;
+
+      if (self->recording) {
+        igText("Recording Frame %d", self->frame_count);
+      } else {
+        igText("Recorded %d Frames", self->frame_count);
       }
-    }
+      igText("%d frames allocated", self->frame_max);
 
-    if (self->recording) {
-      igText("Recording Frame %d", self->frame_count);
-    } else {
-      igText("Recorded %d Frames", self->frame_count);
-    }
-    igText("%d frames allocated", self->frame_max);
+      igSeparator();
 
-    igSeparator();
+      igText("Selected Frame:");
+      igSliderInt("##frame", &self->log_frame_idx, 0, self->frame_max, "%d", 0);
+      if (self->log_frame_idx < 0 || self->frame_max == 0) {
+        self->log_frame_idx = 0;
+      } else if (self->frame_count > 0 &&
+                 self->log_frame_idx >= (int32_t)self->frame_count) {
+        self->log_frame_idx = (int32_t)self->frame_count - 1;
+      }
+      if (igButton(self->logging ? "Stop Rendering" : "Start Rendering",
+                   (ImVec2){0})) {
+        self->logging = !self->logging;
+      }
 
-    igText("Selected Frame:");
-    igSliderInt("##frame", &self->log_frame_idx, 0, self->frame_max, "%d", 0);
-    if (self->log_frame_idx < 0 || self->frame_max == 0) {
-      self->log_frame_idx = 0;
-    } else if (self->frame_count > 0 &&
-               self->log_frame_idx >= (int32_t)self->frame_count) {
-      self->log_frame_idx = (int32_t)self->frame_count - 1;
+      igEnd();
     }
-    if (igButton(self->logging ? "Stop Rendering" : "Start Rendering",
-                 (ImVec2){0})) {
-      self->logging = !self->logging;
-    }
-
-    igEnd();
   }
 
   if (self->recording) {

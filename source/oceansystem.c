@@ -369,9 +369,11 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
           tb_audio_system_load_effect(self->audio_system, wave_path);
     }
     // And music
+    /*
     char *mus_path = tb_resolve_asset_path(self->tmp_alloc, "audio/test.ogg");
     self->music = tb_audio_system_load_music(self->audio_system, mus_path);
     tb_audio_play_music(self->audio_system, self->music);
+    */
   }
 
   // Load the known glb that has the ocean mesh
@@ -603,7 +605,7 @@ void destroy_ocean_system(OceanSystem *self) {
     tb_audio_system_release_effect_ref(self->audio_system,
                                        self->wave_sounds[i]);
   }
-  tb_audio_system_release_music_ref(self->audio_system, self->music);
+  // tb_audio_system_release_music_ref(self->audio_system, self->music);
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->ocean_patch_mesh);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {

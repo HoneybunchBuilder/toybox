@@ -6,6 +6,11 @@
 #include "tbcommon.h"
 #include "tbimgui.h"
 
+typedef struct CoreUIMenu {
+  bool *active;
+  const char *name;
+} CoreUIMenu;
+
 bool create_coreui_system(CoreUISystem *self,
                           const CoreUISystemDescriptor *desc,
                           uint32_t system_dep_count,
@@ -15,12 +20,22 @@ bool create_coreui_system(CoreUISystem *self,
   TB_CHECK_RETURN(desc, "Invalid descriptor", false);
 
   *self = (CoreUISystem){
+      .std_alloc = desc->std_alloc,
       .tmp_alloc = desc->tmp_alloc,
   };
+  TB_DYN_ARR_RESET(self->menu_registry, self->std_alloc, 8);
   return true;
 }
 
-void destroy_coreui_system(CoreUISystem *self) { *self = (CoreUISystem){0}; }
+void destroy_coreui_system(CoreUISystem *self) {
+  // Clean up registry
+  TB_DYN_ARR_FOREACH(self->menu_registry, i) {
+    CoreUIMenu menu = TB_DYN_ARR_AT(self->menu_registry, i);
+    tb_free(self->std_alloc, menu.active);
+  }
+  TB_DYN_ARR_DESTROY(self->menu_registry);
+  *self = (CoreUISystem){0};
+}
 
 void coreui_show_about(bool *open) {
   if (igBegin("About Toybox", open, 0)) {
@@ -77,6 +92,14 @@ void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
           out_coreui->show_metrics = !out_coreui->show_metrics;
           igEndMenu();
         }
+        TB_DYN_ARR_FOREACH(self->menu_registry, i) {
+          CoreUIMenu *menu = &TB_DYN_ARR_AT(self->menu_registry, i);
+          if (igBeginMenu(menu->name, true)) {
+            *menu->active = !*menu->active;
+            igEndMenu();
+          }
+        }
+
         igEndMainMenuBar();
       }
 
@@ -123,4 +146,15 @@ void tb_coreui_system_descriptor(SystemDescriptor *desc,
   desc->create = tb_create_coreui_system;
   desc->destroy = tb_destroy_coreui_system;
   desc->tick = tb_tick_coreui_system;
+}
+
+bool *tb_coreui_register_menu(CoreUISystem *self, const char *name) {
+  // Store the bool on the heap so it survives registry resizes
+  bool *active = tb_alloc_tp(self->std_alloc, bool);
+  CoreUIMenu menu = {
+      .active = active,
+      .name = name,
+  };
+  TB_DYN_ARR_APPEND(self->menu_registry, menu);
+  return active;
 }

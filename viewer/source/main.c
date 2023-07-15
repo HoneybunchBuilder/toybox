@@ -1,4 +1,3 @@
-#include "samplecore.h"
 
 #include <mimalloc.h>
 
@@ -46,6 +45,7 @@
 #include "skysystem.h"
 #include "texturesystem.h"
 #include "timeofdaysystem.h"
+#include "viewersystem.h"
 #include "viewsystem.h"
 #include "visualloggingsystem.h"
 
@@ -55,7 +55,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  SDL_Log("%s", "Entered SDL_main");
   {
     const char *app_info = "Debug";
     size_t app_info_len = strlen(app_info);
@@ -92,7 +91,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   SDL_Window *window = SDL_CreateWindow(
-      "Toybox Sample", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1920,
+      "Toybox Viewer", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1920,
       1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     const char *msg = SDL_GetError();
@@ -229,8 +228,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  ViewerSystemDescriptor viewer_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
 // Order doesn't matter here
-#define SYSTEM_COUNT 20
+#define SYSTEM_COUNT 21
   SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
@@ -238,6 +242,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_noclip_controller_system_descriptor(&system_descs[i++],
                                            &noclip_system_desc);
     tb_coreui_system_descriptor(&system_descs[i++], &coreui_system_desc);
+    tb_viewer_system_descriptor(&system_descs[i++], &viewer_system_desc);
     tb_imgui_system_descriptor(&system_descs[i++], &imgui_system_desc);
     tb_sky_system_descriptor(&system_descs[i++], &sky_system_desc);
     tb_ocean_system_descriptor(&system_descs[i++], &ocean_system_desc);
@@ -279,6 +284,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = ImGuiSystemId;
     init_order[i++] = NoClipControllerSystemId;
     init_order[i++] = CoreUISystemId;
+    init_order[i++] = ViewerSystemId;
     init_order[i++] = VisualLoggingSystemId;
     init_order[i++] = OceanSystemId;
     init_order[i++] = CameraSystemId;
@@ -306,6 +312,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tick_order[i++] = OceanSystemId;
     tick_order[i++] = TimeOfDaySystemId;
     tick_order[i++] = VisualLoggingSystemId;
+    tick_order[i++] = ViewerSystemId;
     tick_order[i++] = ImGuiSystemId;
     tick_order[i++] = RenderTargetSystemId;
     tick_order[i++] = RenderSystemId;
@@ -353,9 +360,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
   tb_world_add_entity(&world, &entity_desc);
 
-  // Load sample scene
-  tb_sample_on_start(&world);
-
   // Main loop
   bool running = true;
 
@@ -369,6 +373,20 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCFrameMarkStart("Simulation Frame");
     TracyCZoneN(trcy_ctx, "Simulation Frame", true);
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+
+    // Before we tick the world go check the ViewerSystem and see if the user
+    // requested that we change scene. In which case we perform a load before
+    // ticking
+    ViewerSystem *viewer =
+        (ViewerSystem *)tb_find_system_by_id(world.systems, world.system_count,
+                                             ViewerSystemId)
+            ->self;
+    if (viewer) {
+      if (viewer->load_scene_signal) {
+        tb_world_load_scene(&world, viewer->selected_scene);
+        viewer->load_scene_signal = false;
+      }
+    }
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter() - start_time;

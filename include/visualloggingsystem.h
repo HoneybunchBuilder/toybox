@@ -35,6 +35,8 @@ typedef struct VisualLoggingSystem {
   RenderPipelineSystem *render_pipe_system;
   MeshSystem *mesh_system;
 
+  bool *ui;
+
   TbMeshId sphere_mesh;
   uint32_t sphere_index_type;
   uint32_t sphere_index_count;
