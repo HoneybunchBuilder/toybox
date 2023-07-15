@@ -5,7 +5,9 @@
 #include "profiling.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
+#ifdef TB_COOKED
 #include "toybox_assetmanifest.h"
+#endif
 #include "world.h"
 
 bool create_viewer_system(ViewerSystem *self,
@@ -39,7 +41,7 @@ void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
 
   if (self->viewer_menu && *self->viewer_menu) {
     if (igBegin("Viewer", self->viewer_menu, 0)) {
-
+#ifdef TB_COOKED
       // Show all scenes available in the asset registry
       const char *selected_scene =
           tb_asset_database[tb_scene_database[self->selected_scene_idx]];
@@ -66,6 +68,9 @@ void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
       igSameLine(0, -1);
       if (igButton("Unload", (ImVec2){0, 0})) {
       };
+#else
+      igText("%s", "No assets were cooked");
+#endif
 
       igEnd();
     }

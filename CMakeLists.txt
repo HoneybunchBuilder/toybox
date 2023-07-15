@@ -324,6 +324,10 @@ function(cook_assets target_name out_assets_path)
   install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
                     DESTINATION ${assets_dest})
 
+  # Add a define to the target so we know that assets were cooked
+  # if they weren't we shouldn't even try to load the manifest
+  target_compile_definitions(${target_name} PRIVATE -DTB_COOKED=1)
+
   set(${out_assets_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets PARENT_SCOPE)
 endfunction()
 
