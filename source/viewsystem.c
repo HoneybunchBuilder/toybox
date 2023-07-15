@@ -37,26 +37,6 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 
   VkResult err = VK_SUCCESS;
 
-  // Create Immutable Sampler
-  {
-    VkSamplerCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
-        .maxLod = 1.0f,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-    };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Irradiance Sampler", &self->sampler);
-    TB_VK_CHECK_RET(err, "Failed to create irradiance sampler", err);
-  }
-
   // Create view descriptor set layout
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
@@ -121,7 +101,6 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 
 void destroy_view_system(ViewSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
-  tb_rnd_destroy_sampler(self->render_system, self->sampler);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     ViewSystemFrameState *state = &self->frame_states[i];

@@ -46,7 +46,6 @@ typedef struct ViewSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
-  VkSampler sampler;
   VkDescriptorSetLayout set_layout;
   ViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 

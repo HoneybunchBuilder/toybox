@@ -768,7 +768,6 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 16.0f,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
