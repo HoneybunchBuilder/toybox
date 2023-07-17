@@ -1,6 +1,6 @@
 #include "noclipcontrollersystem.h"
 
-#include "inputcomponent.h"
+#include "inputsystem.h"
 #include "noclipcomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
@@ -12,14 +12,18 @@ bool create_noclip_system(NoClipControllerSystem *self,
                           const NoClipControllerSystemDescriptor *desc,
                           uint32_t system_dep_count,
                           System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  if (!desc) {
-    return false;
-  }
+  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
+
+  InputSystem *input_system =
+      tb_get_system(system_deps, system_dep_count, InputSystem);
+  TB_CHECK_RETURN(input_system,
+                  "Failed to find input system which the noclip controller "
+                  "system depends on",
+                  false);
 
   *self = (NoClipControllerSystem){
       .tmp_alloc = desc->tmp_alloc,
+      .input = input_system,
   };
   return true;
 }
@@ -46,15 +50,8 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
     const PackedComponentStore *noclip_store =
         tb_get_column_check_id(input, 0, 1, NoClipComponentId);
 
-    const PackedComponentStore *input_store =
-        tb_get_column_check_id(input, 1, 0, InputComponentId);
-
-    // Expecting one dependency set with one input component
-    const uint32_t input_comp_count = tb_get_column_component_count(input, 1);
-
     // Make sure all dependent stores were found
-    if (transform_store != NULL && noclip_store != NULL &&
-        input_store != NULL) {
+    if (transform_store != NULL && noclip_store != NULL) {
 
       // Copy the noclip component for output
       NoClipComponent *out_noclips =
@@ -77,44 +74,38 @@ void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
 
         // Based on the input, modify all the transform components for each
         // entity
-        const InputComponent *input_comps =
-            (const InputComponent *)input_store->components;
-        for (uint32_t in_idx = 0; in_idx < input_comp_count; ++in_idx) {
-          const InputComponent *input_comp = &input_comps[in_idx];
-
-          // Keyboard and mouse input
-          {
-            const TBKeyboard *keyboard = &input_comp->keyboard;
-            if (keyboard->key_W) {
-              move_axis[1] += 1.0f;
-            }
-            if (keyboard->key_A) {
-              move_axis[0] -= 1.0f;
-            }
-            if (keyboard->key_S) {
-              move_axis[1] -= 1.0f;
-            }
-            if (keyboard->key_D) {
-              move_axis[0] += 1.0f;
-            }
-            const TBMouse *mouse = &input_comp->mouse;
-            if (mouse->left || mouse->right || mouse->middle) {
-              look_axis = -mouse->axis;
-            }
+        // Keyboard and mouse input
+        {
+          const TBKeyboard *keyboard = &self->input->keyboard;
+          if (keyboard->key_W) {
+            move_axis[1] += 1.0f;
           }
+          if (keyboard->key_A) {
+            move_axis[0] -= 1.0f;
+          }
+          if (keyboard->key_S) {
+            move_axis[1] -= 1.0f;
+          }
+          if (keyboard->key_D) {
+            move_axis[0] += 1.0f;
+          }
+          const TBMouse *mouse = &self->input->mouse;
+          if (mouse->left || mouse->right || mouse->middle) {
+            look_axis = -mouse->axis;
+          }
+        }
 
-          // Go through game controller input
-          // Just controller 0 for now but only if keyboard input wasn't
-          // specified
-          {
-            const TBGameControllerState *ctl_state =
-                &input_comp->controller_states[0];
-            if (look_axis[0] == 0 && look_axis[1] == 0) {
-              look_axis = ctl_state->right_stick;
-            }
-            if (move_axis[0] == 0 && move_axis[1] == 0) {
-              move_axis = ctl_state->left_stick;
-            }
+        // Go through game controller input
+        // Just controller 0 for now but only if keyboard input wasn't
+        // specified
+        {
+          const TBGameControllerState *ctl_state =
+              &self->input->controller_states[0];
+          if (look_axis[0] == 0 && look_axis[1] == 0) {
+            look_axis = ctl_state->right_stick;
+          }
+          if (move_axis[0] == 0 && move_axis[1] == 0) {
+            move_axis = ctl_state->left_stick;
           }
         }
 
@@ -177,9 +168,10 @@ void tb_noclip_controller_system_descriptor(
       .size = sizeof(NoClipControllerSystem),
       .id = NoClipControllerSystemId,
       .desc = (InternalDescriptor)noclip_desc,
-      .dep_count = 2,
+      .system_dep_count = 1,
+      .system_deps[0] = InputSystemId,
+      .dep_count = 1,
       .deps[0] = {2, {TransformComponentId, NoClipComponentId}},
-      .deps[1] = {1, {InputComponentId}},
       .create = tb_create_noclip_system,
       .destroy = tb_destroy_noclip_system,
       .tick = tb_tick_noclip_system,

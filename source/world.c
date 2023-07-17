@@ -12,7 +12,6 @@
 #include "json-c/linkhash.h"
 
 #include "cameracomponent.h"
-#include "inputcomponent.h"
 #include "lightcomponent.h"
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
@@ -23,6 +22,9 @@
 #include "inputsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+
+#define tb_get_system_internal(systems, count, Type)                           \
+  (Type *)tb_find_system_by_id(systems, count, Type##Id)->self;
 
 void create_component_store(ComponentStore *store,
                             const ComponentDescriptor *desc) {
@@ -386,30 +388,16 @@ bool tb_tick_world(World *world, float delta_seconds) {
 
       // Check for quit event
       {
-        ComponentStore *input_store = NULL;
-        // Find the input components
-        for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-             ++store_idx) {
-          ComponentStore *store = &world->component_stores[store_idx];
-          if (store->id == InputComponentId) {
-            input_store = store;
-            break;
-          }
-        }
+        InputSystem *in_sys = tb_get_system_internal(
+            world->systems, world->system_count, InputSystem);
 
-        if (input_store) {
-          const InputComponent *input_components =
-              (const InputComponent *)input_store->components;
-          for (uint32_t input_idx = 0; input_idx < input_store->count;
-               ++input_idx) {
-            const InputComponent *input_comp = &input_components[input_idx];
-            for (uint32_t event_idx = 0; event_idx < input_comp->event_count;
-                 ++event_idx) {
-              if (input_comp->events[event_idx].type == SDL_QUIT) {
-                TracyCZoneEnd(system_tick_ctx);
-                TracyCZoneEnd(world_tick_ctx);
-                return false;
-              }
+        if (in_sys) {
+          for (uint32_t event_idx = 0; event_idx < in_sys->event_count;
+               ++event_idx) {
+            if (in_sys->events[event_idx].type == SDL_QUIT) {
+              TracyCZoneEnd(system_tick_ctx);
+              TracyCZoneEnd(world_tick_ctx);
+              return false;
             }
           }
         }
@@ -423,46 +411,7 @@ bool tb_tick_world(World *world, float delta_seconds) {
 }
 
 void tb_destroy_world(World *world) {
-  if (world->component_store_count > 0) {
-    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-         ++store_idx) {
-      ComponentStore *store = &world->component_stores[store_idx];
-      for (EntityId entity_id = 0; entity_id < world->entity_count;
-           ++entity_id) {
-        Entity entity = world->entities[entity_id];
-        uint8_t *comp = &store->components[(store->size * entity_id)];
-        if (entity & (1 << store_idx)) {
-          uint32_t system_dep_count = 0;
-          System **system_deps = NULL;
-
-          const ComponentDescriptor *comp_desc = &store->desc;
-
-          if (comp_desc) {
-            // Find system dependencies
-            system_dep_count = comp_desc->system_dep_count;
-            if (system_dep_count > 0) {
-              system_deps =
-                  tb_alloc_nm_tp(world->tmp_alloc, system_dep_count, System *);
-              for (uint32_t dep_idx = 0; dep_idx < system_dep_count;
-                   ++dep_idx) {
-                for (uint32_t sys_idx = 0; sys_idx < world->system_count;
-                     ++sys_idx) {
-                  if (world->systems[sys_idx].id ==
-                      comp_desc->system_deps[dep_idx]) {
-                    system_deps[dep_idx] = &world->systems[sys_idx];
-                    break;
-                  }
-                }
-              }
-            }
-          }
-
-          store->destroy(comp, system_dep_count, system_deps);
-        }
-      }
-    }
-    tb_free(world->std_alloc, world->component_stores);
-  }
+  tb_world_unload_scene(world);
 
   if (world->system_count > 0) {
     // Shutdown in reverse init order
@@ -736,6 +685,55 @@ bool tb_world_load_scene(World *world, const char *scene_path) {
   return true;
 }
 
+void tb_world_unload_scene(World *world) {
+  if (world->component_store_count > 0) {
+    for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+         ++store_idx) {
+      ComponentStore *store = &world->component_stores[store_idx];
+      for (EntityId entity_id = 0; entity_id < world->entity_count;
+           ++entity_id) {
+        Entity entity = world->entities[entity_id];
+        uint8_t *comp = &store->components[(store->size * entity_id)];
+        if (entity & (1 << store_idx)) {
+          uint32_t system_dep_count = 0;
+          System **system_deps = NULL;
+
+          const ComponentDescriptor *comp_desc = &store->desc;
+
+          if (comp_desc) {
+            // Find system dependencies
+            system_dep_count = comp_desc->system_dep_count;
+            if (system_dep_count > 0) {
+              system_deps =
+                  tb_alloc_nm_tp(world->tmp_alloc, system_dep_count, System *);
+              for (uint32_t dep_idx = 0; dep_idx < system_dep_count;
+                   ++dep_idx) {
+                for (uint32_t sys_idx = 0; sys_idx < world->system_count;
+                     ++sys_idx) {
+                  if (world->systems[sys_idx].id ==
+                      comp_desc->system_deps[dep_idx]) {
+                    system_deps[dep_idx] = &world->systems[sys_idx];
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          store->destroy(comp, system_dep_count, system_deps);
+        }
+      }
+    }
+    tb_free(world->std_alloc, world->component_stores);
+  }
+
+  // Clear out entities
+  for (uint32_t i = 0; i < world->entity_count; ++i) {
+    world->entities[i] = 0;
+  }
+  world->entity_count = 0;
+}
+
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
   TracyCZoneNC(ctx, "Add Entity", TracyCategoryColorCore, true);
   // Determine if we need to grow the entity list
@@ -825,12 +823,6 @@ EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {
 
   TracyCZoneEnd(ctx);
   return entity_id;
-}
-
-bool tb_world_remove_entity(World *world, EntityId id) {
-  (void)world;
-  (void)id;
-  return false;
 }
 
 const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,

@@ -1,6 +1,5 @@
 #include "inputsystem.h"
 
-#include "inputcomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
 #include "tbsdl.h"
@@ -37,48 +36,25 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   TracyCZoneN(tick_ctx, "Input System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorInput);
 
-  // Get which entities we need to write out to
-  EntityId *entities = NULL;
-  uint32_t entity_count = 0;
-  const InputComponent *incoming_comp = NULL;
-  for (uint32_t dep_idx = 0; dep_idx < input->dep_set_count; ++dep_idx) {
-    const SystemDependencySet *set = &input->dep_sets[dep_idx];
-
-    for (uint32_t col_idx = 0; col_idx < set->column_count; ++col_idx) {
-      const PackedComponentStore *column = &set->columns[col_idx];
-      if (column->id == InputComponentId) {
-        entities = set->entity_ids;
-        entity_count = set->entity_count;
-        incoming_comp = tb_get_component(column, 0, InputComponent);
-        break;
-      }
-    }
+  self->mouse.axis = (float2){0}; // Must always clear axes
+  self->mouse.wheel = (float2){0};
+  for (uint32_t i = 0; i < TB_MAX_GAME_CONTROLLERS; ++i) {
+    self->controller_states[i] = (TBGameControllerState){0};
   }
-
-  // Make a copy of the component we want to update
-
-  InputComponent input_comp = *incoming_comp;
-  input_comp.mouse.axis = (float2){0}; // Must always clear axes
-  input_comp.mouse.wheel = (float2){0};
-  input_comp.controller_states[0] = (TBGameControllerState){.buttons = 0};
-  input_comp.controller_states[1] = (TBGameControllerState){.buttons = 0};
-  input_comp.controller_states[2] = (TBGameControllerState){.buttons = 0};
-  input_comp.controller_states[3] = (TBGameControllerState){.buttons = 0};
 
   // Read up-to InputSystemMaxEvents events from SDL and store them
   // in a buffer
   uint32_t event_index = 0;
   // Note that we must check the event index first or else we risk overrunning
   // the buffer. mimalloc should catch these cases.
-  while (event_index < InputComponentMaxEvents &&
-         SDL_PollEvent(&input_comp.events[event_index])) {
+  while (event_index < TB_MAX_EVENTS &&
+         SDL_PollEvent(&self->events[event_index])) {
     event_index++;
   }
-  input_comp.event_count = event_index;
+  self->event_count = event_index;
 
-  for (uint32_t event_idx = 0; event_idx < input_comp.event_count;
-       ++event_idx) {
-    SDL_Event event = input_comp.events[event_idx];
+  for (uint32_t event_idx = 0; event_idx < self->event_count; ++event_idx) {
+    SDL_Event event = self->events[event_idx];
     // Translate keyboard events into input events that we care about
     {
       if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
@@ -91,19 +67,19 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
         SDL_Scancode scancode = keysym->scancode;
 
         if (scancode == SDL_SCANCODE_W) {
-          input_comp.keyboard.key_W = value;
+          self->keyboard.key_W = value;
         } else if (scancode == SDL_SCANCODE_A) {
-          input_comp.keyboard.key_A = value;
+          self->keyboard.key_A = value;
         } else if (scancode == SDL_SCANCODE_S) {
-          input_comp.keyboard.key_S = value;
+          self->keyboard.key_S = value;
         } else if (scancode == SDL_SCANCODE_D) {
-          input_comp.keyboard.key_D = value;
+          self->keyboard.key_D = value;
         }
       }
 
       if (event.type == SDL_MOUSEMOTION) {
         const SDL_MouseMotionEvent *mouse_motion = &event.motion;
-        input_comp.mouse.axis = (float2){
+        self->mouse.axis = (float2){
             (float)mouse_motion->xrel / 5,
             (float)mouse_motion->yrel / 5,
         };
@@ -111,10 +87,10 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
       if (event.type == SDL_MOUSEWHEEL) {
 
         if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-          input_comp.mouse.wheel =
+          self->mouse.wheel =
               (float2){event.wheel.preciseX, event.wheel.preciseY};
         } else {
-          input_comp.mouse.wheel =
+          self->mouse.wheel =
               (float2){-event.wheel.preciseX, -event.wheel.preciseY};
         }
       }
@@ -125,13 +101,13 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
           value = true;
         }
         if (event.button.button == 1) {
-          input_comp.mouse.left = value;
+          self->mouse.left = value;
         }
         if (event.button.button == 3) {
-          input_comp.mouse.right = value;
+          self->mouse.right = value;
         }
         if (event.button.button == 2) {
-          input_comp.mouse.middle = value;
+          self->mouse.middle = value;
         }
       }
     }
@@ -143,7 +119,7 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
           SDL_GameController *controller =
               SDL_GameControllerOpen(event.cdevice.which);
           self->controllers[event.cdevice.which] = controller;
-          input_comp.controller_count++;
+          self->controller_count++;
         }
       }
 
@@ -152,7 +128,7 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
         if (controller != NULL) {
           SDL_GameControllerClose(controller);
           self->controllers[event.cdevice.which] = NULL;
-          input_comp.controller_count--;
+          self->controller_count--;
         }
       }
     }
@@ -163,45 +139,28 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   // and issue a warning that this isn't intended. Maybe in the future it
   // could be a neat feature to be able to filter input based on player at
   // this level?
-  const uint32_t out_count = entity_count;
-  if (out_count > 0) {
-    InputComponent *components =
-        tb_alloc_nm_tp(self->tmp_alloc, out_count, InputComponent);
 
-    // Query game controller state and apply it to the component
-    for (uint32_t ctl_idx = 0; ctl_idx < TB_MAX_GAME_CONTROLLERS; ++ctl_idx) {
-      SDL_GameController *controller = self->controllers[ctl_idx];
+  // Query game controller state and apply it to the component
+  for (uint32_t ctl_idx = 0; ctl_idx < TB_MAX_GAME_CONTROLLERS; ++ctl_idx) {
+    SDL_GameController *controller = self->controllers[ctl_idx];
 
-      if (controller == NULL) {
-        continue;
-      }
-
-      TBGameControllerState *ctl_state = &input_comp.controller_states[ctl_idx];
-      ctl_state->left_stick = (float2){
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY),
-      };
-      ctl_state->left_trigger =
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
-      ctl_state->right_stick = (float2){
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY),
-      };
-      ctl_state->right_trigger =
-          get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+    if (controller == NULL) {
+      continue;
     }
 
-    for (uint32_t i = 0; i < out_count; ++i) {
-      components[i] = input_comp;
-    }
-
-    output->set_count = 1;
-    output->write_sets[0] = (SystemWriteSet){
-        .id = InputComponentId,
-        .count = out_count,
-        .components = (uint8_t *)components,
-        .entities = entities,
+    TBGameControllerState *ctl_state = &self->controller_states[ctl_idx];
+    ctl_state->left_stick = (float2){
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY),
     };
+    ctl_state->left_trigger =
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+    ctl_state->right_stick = (float2){
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY),
+    };
+    ctl_state->right_trigger =
+        get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
   }
 
   TracyCZoneEnd(tick_ctx);
@@ -211,18 +170,13 @@ TB_DEFINE_SYSTEM(input, InputSystem, InputSystemDescriptor)
 
 void tb_input_system_descriptor(SystemDescriptor *desc,
                                 const InputSystemDescriptor *input_desc) {
-  desc->name = "Input";
-  desc->size = sizeof(InputSystem);
-  desc->id = InputSystemId;
-  desc->desc = (InternalDescriptor)input_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 1;
-  desc->deps[0] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {InputComponentId},
+  *desc = (SystemDescriptor){
+      .name = "Input",
+      .size = sizeof(InputSystem),
+      .id = InputSystemId,
+      .desc = (InternalDescriptor)input_desc,
+      .create = tb_create_input_system,
+      .destroy = tb_destroy_input_system,
+      .tick = tb_tick_input_system,
   };
-  desc->create = tb_create_input_system;
-  desc->destroy = tb_destroy_input_system;
-  desc->tick = tb_tick_input_system;
 }

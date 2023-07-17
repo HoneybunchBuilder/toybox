@@ -6,6 +6,7 @@
 
 #define CoreUISystemId 0xDEADBAAD
 
+typedef struct ImGuiSystem ImGuiSystem;
 typedef struct RenderThread RenderThread;
 
 typedef struct CoreUISystemDescriptor {
@@ -18,6 +19,9 @@ typedef struct CoreUIMenu CoreUIMenu;
 typedef struct CoreUISystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
+
+  ImGuiSystem *imgui;
+
   TB_DYN_ARR_OF(CoreUIMenu) menu_registry;
 
   bool *metrics;

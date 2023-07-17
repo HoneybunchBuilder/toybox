@@ -1,7 +1,6 @@
 #include "viewersystem.h"
 
 #include "coreuisystem.h"
-#include "imguicomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
@@ -67,6 +66,7 @@ void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
       }
       igSameLine(0, -1);
       if (igButton("Unload", (ImVec2){0, 0})) {
+        self->unload_scene_signal = true;
       };
 #else
       igText("%s", "No assets were cooked");

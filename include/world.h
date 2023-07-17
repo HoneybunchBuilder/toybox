@@ -231,9 +231,9 @@ bool tb_tick_world(World *world, float delta_seconds);
 void tb_destroy_world(World *world);
 
 bool tb_world_load_scene(World *world, const char *scene_path);
+void tb_world_unload_scene(World *world);
 
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc);
-bool tb_world_remove_entity(World *world, EntityId id);
 
 const PackedComponentStore *tb_get_column_check_id(const SystemInput *input,
                                                    uint32_t set, uint32_t index,
