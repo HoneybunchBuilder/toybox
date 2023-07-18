@@ -98,6 +98,7 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId luminance_pass;
   TbRenderPassId brightness_pass;
   TbRenderPassId bloom_blur_pass;
+  TbRenderPassId bloom_blur2_pass;
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
@@ -118,6 +119,7 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId tonemap_ctx;
   TbDispatchContextId bloom_copy_ctx;
   TbDispatchContextId bloom_blur_ctx;
+  TbDispatchContextId bloom_blur2_ctx;
   TbDispatchContextId ssao_blur_ctx;
 
   // New idea for bundling draw work prims

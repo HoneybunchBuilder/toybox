@@ -2506,6 +2506,48 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create bloom blur pass", false);
       self->bloom_blur_pass = id;
     }
+    // Create a different bloom blur compute pass
+    {
+      const uint32_t trans_count = 1;
+      PassTransition transitions[1] = {
+          // Make bloom blur target ready for read/write
+          {
+              .render_target = self->render_target_system->bloom_mip_chain,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = TB_BLOOM_MIP_CHAIN,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){self->luminance_pass},
+          .transition_count = trans_count,
+          .transitions = transitions,
+          .name = "Bloom Blur Pass",
+      };
+      TbRenderPassId id = create_render_pass(self, &create_info);
+      TB_CHECK_RETURN(id != InvalidRenderPassId,
+                      "Failed to create bloom blur pass", false);
+      self->bloom_blur2_pass = id;
+    }
+
     // Create tonemapping pass
     {
       const uint32_t trans_count = 1;
@@ -2535,7 +2577,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       }};
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_blur_pass},
+          .dependencies = (TbRenderPassId[1]){self->bloom_blur2_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -3259,6 +3301,19 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       self->bloom_blur_ctx =
           tb_render_pipeline_register_dispatch_context(self, &desc);
       TB_CHECK_RETURN(self->bloom_blur_ctx != InvalidDispatchContextId,
+                      "Failed to create bloom blur dispatch context", false);
+    }
+
+    // Blur2
+    {
+      DispatchContextDescriptor desc = {
+          .batch_size = sizeof(BlurBatch),
+          .dispatch_fn = record_bloom_blur,
+          .pass_id = self->bloom_blur2_pass,
+      };
+      self->bloom_blur2_ctx =
+          tb_render_pipeline_register_dispatch_context(self, &desc);
+      TB_CHECK_RETURN(self->bloom_blur2_ctx != InvalidDispatchContextId,
                       "Failed to create bloom blur dispatch context", false);
     }
 

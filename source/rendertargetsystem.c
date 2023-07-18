@@ -445,6 +445,24 @@ bool create_render_target_system(RenderTargetSystem *self,
       self->bloom_scratch = tb_create_render_target(self, &rt_desc);
     }
 
+    // Creating a different bloom mip chain target for downscale / upscale blur
+    {
+      RenderTargetDescriptor rt_desc = {
+          .name = "Bloom Mip Chain",
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = TB_BLOOM_MIP_CHAIN,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->bloom_mip_chain = tb_create_render_target(self, &rt_desc);
+    }
+
     // Import swapchain target
     {
       RenderTargetDescriptor rt_desc = {
@@ -688,6 +706,26 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
     resize_render_target(self, &self->render_targets[self->bloom_scratch],
                          &rt_desc);
   }
+
+  // Resize bloom mip chain
+  {
+    RenderTargetDescriptor rt_desc = {
+        .name = "Bloom Mip Chain",
+        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = TB_BLOOM_MIP_CHAIN,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(self, &self->render_targets[self->bloom_mip_chain],
+                         &rt_desc);
+  }
+
   // Finally reimport swapchain
   {
     RenderTargetDescriptor rt_desc = {
