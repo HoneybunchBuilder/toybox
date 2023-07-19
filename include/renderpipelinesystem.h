@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "bloom.h"
 #include "luminance.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
@@ -119,10 +120,11 @@ typedef struct RenderPipelineSystem {
   TbDrawContextId tonemap_ctx;
   TbDispatchContextId bloom_copy_ctx;
   TbDispatchContextId bloom_blur_ctx;
-  TbDispatchContextId bloom_blur2_ctx;
   TbDispatchContextId ssao_blur_ctx;
 
   // New idea for bundling draw work prims
+  DownsampleRenderWork downsample_work;
+  UpsampleRenderWork upsample_work;
   LumHistRenderWork lum_hist_work;
   LumAvgRenderWork lum_avg_work;
 

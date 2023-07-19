@@ -1,21 +1,17 @@
 #include "bloom.h"
+#include "fullscreenvert.hlsli"
 
 Texture2D input : register(t0, space0);
-RWTexture2D<float4> output : register(u1, space0);
-sampler s : register(s2, space0);
+sampler s : register(s1, space0);
 
-[[vk::push_constant]]
-ConstantBuffer<UpsamplePushConstants> consts : register(b3, space0);
+[[vk::push_constant]] ConstantBuffer<UpsamplePushConstants> consts
+    : register(b2, space0);
 
-#define GROUP_SIZE 256
-
-[numthreads(GROUP_SIZE, 1, 1)]
-void comp(int3 group_thread_id: SV_GroupThreadID,
-          int3 dispatch_thread_id: SV_DispatchThreadID) {
+float4 frag(Interpolators interp) : SV_TARGET {
   float2 resolution;
   input.GetDimensions(resolution.x, resolution.y);
 
-  float2 uv = dispatch_thread_id.xy / resolution;
+  float2 uv = 1 / resolution;
 
   // The filter kernel is applied with a radius, specified input texture
   // coordinates, so that the radius will vary across mip resolutions.
@@ -48,5 +44,5 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   upsample += (a + c + g + i);
   upsample *= 1.0 / 16.0;
 
-  output[dispatch_thread_id.xy] = float4(upsample, 0);
+  return float4(upsample, 0);
 }

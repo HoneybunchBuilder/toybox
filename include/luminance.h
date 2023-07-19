@@ -6,17 +6,16 @@ typedef struct LuminancePushConstants {
   float4 params;
 } LuminancePushConstants;
 
-// If not in a shader, make a quick static assert check
 #ifndef __HLSL_VERSION
 _Static_assert(sizeof(LuminancePushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 
-// Declare some functions for the C api
 #include "tbrendercommon.h"
 
 typedef uint32_t TbRenderPassId;
 typedef uint32_t TbDispatchContextId;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
+typedef struct RenderSystem RenderSystem;
 
 typedef struct LuminanceBatch {
   VkDescriptorSet set;
@@ -40,8 +39,6 @@ typedef struct LumAvgRenderWork {
   VkPipeline pipeline;
   TbDispatchContextId ctx;
 } LumAvgRenderWork;
-
-typedef struct RenderSystem RenderSystem;
 
 VkResult create_lum_hist_work(RenderSystem *render_system,
                               RenderPipelineSystem *render_pipe,

@@ -8,10 +8,6 @@
 
 #define PUSH_CONSTANT_BYTES 128
 
-typedef struct UpsamplePushConstants {
-  float radius;
-} UpsamplePushConstants;
-
 typedef struct BlurPushConstants {
   float horizontal;
 } BlurPushConstants;

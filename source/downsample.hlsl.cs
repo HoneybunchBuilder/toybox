@@ -58,6 +58,7 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   downsample += (a + c + g + i) * 0.03125;
   downsample += (b + d + f + h) * 0.0625;
   downsample += (j + k + l + m) * 0.125;
+  downsample = max(downsample, 0.00001f); // To prevent
 
   output[dispatch_thread_id.xy] = float4(downsample, 0);
 }

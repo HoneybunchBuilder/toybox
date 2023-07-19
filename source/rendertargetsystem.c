@@ -1,5 +1,6 @@
 #include "rendertargetsystem.h"
 
+#include "bloom.h"
 #include "common.hlsli"
 #include "rendersystem.h"
 #include "tbcommon.h"
@@ -272,7 +273,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "HDR Color",
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = width,
@@ -326,7 +327,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     {
       RenderTargetDescriptor rt_desc = {
           .name = "Sky Cubemap Capture",
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = 512,
@@ -363,7 +364,7 @@ bool create_render_target_system(RenderTargetSystem *self,
       const uint32_t mip_count = (uint32_t)(floorf(log2f(512.0f))) + 1u;
       RenderTargetDescriptor rt_desc = {
           .name = "Prefiltered Environment Map",
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = 512,
@@ -397,7 +398,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create brightness downsampled target
     {
       RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = width / 4,
@@ -414,7 +415,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create bloom blur x target
     {
       RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = width / 4,
@@ -431,7 +432,7 @@ bool create_render_target_system(RenderTargetSystem *self,
     // Create bloom blur y target
     {
       RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
                   .width = width / 4,
@@ -602,7 +603,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   {
     RenderTargetDescriptor rt_desc = {
         .name = "HDR Color",
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
             {
                 .width = width,
@@ -655,7 +656,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   {
     RenderTargetDescriptor rt_desc = {
         .name = "Brightness",
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
             {
                 .width = width,
@@ -674,7 +675,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   {
     RenderTargetDescriptor rt_desc = {
         .name = "Bloom Blur X",
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
             {
                 .width = width,
@@ -692,7 +693,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   {
     RenderTargetDescriptor rt_desc = {
         .name = "Bloom Blur Y",
-        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
             {
                 .width = width,

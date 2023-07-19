@@ -3255,10 +3255,16 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create ssao blur dispatch context", false);
     }
 
+    // Create bloom work
+    err =
+        create_downsample_work(self->render_system, self, self->sampler,
+                               self->bloom_blur2_pass, &self->downsample_work);
+    err = create_upsample_work(self->render_system, self, self->sampler,
+                               self->bloom_blur2_pass, &self->upsample_work);
+
     // Compute Luminance Histogram and Average work
     err = create_lum_hist_work(self->render_system, self, self->sampler,
                                self->luminance_pass, &self->lum_hist_work);
-
     err = create_lum_avg_work(self->render_system, self, self->luminance_pass,
                               &self->lum_avg_work);
 
@@ -3301,19 +3307,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       self->bloom_blur_ctx =
           tb_render_pipeline_register_dispatch_context(self, &desc);
       TB_CHECK_RETURN(self->bloom_blur_ctx != InvalidDispatchContextId,
-                      "Failed to create bloom blur dispatch context", false);
-    }
-
-    // Blur2
-    {
-      DispatchContextDescriptor desc = {
-          .batch_size = sizeof(BlurBatch),
-          .dispatch_fn = record_bloom_blur,
-          .pass_id = self->bloom_blur2_pass,
-      };
-      self->bloom_blur2_ctx =
-          tb_render_pipeline_register_dispatch_context(self, &desc);
-      TB_CHECK_RETURN(self->bloom_blur2_ctx != InvalidDispatchContextId,
                       "Failed to create bloom blur dispatch context", false);
     }
 
@@ -3369,6 +3362,8 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
+  destroy_downsample_work(self->render_system, &self->downsample_work);
+  destroy_upsample_work(self->render_system, &self->upsample_work);
   destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
   destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
 
