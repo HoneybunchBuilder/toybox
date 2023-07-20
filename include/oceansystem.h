@@ -56,6 +56,7 @@ typedef struct OceanSystem {
   VkBuffer ocean_geom_buffer;
 
   VkSampler sampler;
+  VkSampler shadow_sampler;
 
   TbDrawContextId trans_depth_draw_ctx;
   TbDrawContextId trans_color_draw_ctx;

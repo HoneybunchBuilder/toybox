@@ -9,9 +9,10 @@ ConstantBuffer<OceanData> ocean_data : register(b0, space0);
 Texture2D depth_map : register(t1, space0);
 Texture2D color_map : register(t2, space0);
 sampler static_sampler : register(s3, space0);
+sampler shadow_sampler : register(s4, space0);
 
 [[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
-    : register(b4, space0);
+    : register(b5, space0);
 
 // Per-view data
 ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
@@ -139,7 +140,7 @@ float4 frag(Interpolators i) : SV_TARGET {
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
-                              static_sampler);
+                              shadow_sampler);
     color *= shadow;
   }
 

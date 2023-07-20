@@ -32,7 +32,8 @@ typedef struct MaterialSystem {
   RenderSystem *render_system;
   TextureSystem *texture_system;
 
-  VkSampler sampler; // Immutable sampler for material descriptor sets
+  VkSampler sampler;        // Immutable sampler for material descriptor sets
+  VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
   VkDescriptorSetLayout set_layout;
   VkDescriptorPool mat_set_pool;
 

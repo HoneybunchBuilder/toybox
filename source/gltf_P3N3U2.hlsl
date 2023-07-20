@@ -8,9 +8,10 @@ Texture2D normal_map : register(t2, space0);
 Texture2D metal_rough_map : register(t3, space0);
 // Texture2D emissive_map : register(t4, space0);
 sampler static_sampler : register(s4, space0);
+sampler shadow_sampler : register(s5, space0);
 
 [[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts
-    : register(b5, space0);
+    : register(b6, space0);
 
 ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
 
@@ -136,7 +137,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
-                              static_sampler);
+                              shadow_sampler);
     out_color *= shadow;
 
     /*

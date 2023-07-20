@@ -469,13 +469,32 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                                 &self->sampler);
     TB_VK_CHECK_RET(err, "Failed to create ocean sampler", err);
   }
+  // Create immutable sampler for shadows
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info,
+                                "Ocean Shadow Sampler", &self->shadow_sampler);
+    TB_VK_CHECK_RET(err, "Failed to create ocean shadow sampler", err);
+  }
 
   // Create ocean descriptor set layout
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 4,
-        .pBindings = (VkDescriptorSetLayoutBinding[4]){
+        .bindingCount = 5,
+        .pBindings = (VkDescriptorSetLayoutBinding[5]){
             {
                 .binding = 0,
                 .descriptorCount = 1,
@@ -500,6 +519,13 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers = &self->sampler,
+            },
+            {
+                .binding = 4,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &self->shadow_sampler,
             },
         }};
     err = tb_rnd_create_set_layout(render_system, &create_info,
@@ -614,6 +640,7 @@ void destroy_ocean_system(OceanSystem *self) {
   }
 
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
+  tb_rnd_destroy_sampler(self->render_system, self->shadow_sampler);
 
   tb_rnd_destroy_pipeline(self->render_system, self->prepass_pipeline);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);

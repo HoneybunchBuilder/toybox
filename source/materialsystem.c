@@ -60,9 +60,32 @@ bool create_material_system(MaterialSystem *self,
                 "Material Sampler");
   }
 
+  // Create immutable sampler for sampling shadows
+  // Use nearest sampling filter because we're already doing PCF filtering
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    err =
+        vkCreateSampler(device, &create_info, vk_alloc, &self->shadow_sampler);
+    TB_VK_CHECK_RET(err, "Failed to create material shadow sampler", false);
+    SET_VK_NAME(device, self->shadow_sampler, VK_OBJECT_TYPE_SAMPLER,
+                "Material Shadow Sampler");
+  }
+
   // Create descriptor set layout for materials
   {
-    VkDescriptorSetLayoutBinding bindings[5] = {
+    VkDescriptorSetLayoutBinding bindings[6] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, NULL},
         {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -73,10 +96,12 @@ bool create_material_system(MaterialSystem *self,
          NULL},
         {4, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          &self->sampler},
+        {5, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &self->shadow_sampler},
     };
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 5,
+        .bindingCount = 6,
         .pBindings = bindings,
     };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
@@ -116,6 +141,7 @@ void destroy_material_system(MaterialSystem *self) {
 
   tb_rnd_destroy_set_layout(render_system, self->set_layout);
   tb_rnd_destroy_sampler(render_system, self->sampler);
+  tb_rnd_destroy_sampler(render_system, self->shadow_sampler);
 
   vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
 
