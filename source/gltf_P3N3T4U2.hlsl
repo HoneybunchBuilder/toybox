@@ -120,12 +120,12 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
     {
       float2 brdf =
           brdf_lut
-              .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
+              .Sample(shadow_sampler, float2(max(dot(N, V), 0.0), roughness))
               .rg;
       float3 reflection =
-          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
-      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float ao = ssao_map.Sample(static_sampler, screen_uv).r;
+          prefiltered_reflection(prefiltered_map, shadow_sampler, R, roughness);
+      float3 irradiance = irradiance_map.Sample(shadow_sampler, N).rgb;
+      float ao = ssao_map.Sample(shadow_sampler, screen_uv).r;
       out_color =
           pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
                        irradiance, light_data.color, L, V, N);

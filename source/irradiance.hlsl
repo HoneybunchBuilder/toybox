@@ -48,5 +48,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   }
   irradiance = PI * irradiance / float(sample_count);
 
+  // Clamp max values to 1 to prevent blow out
+  irradiance = min(irradiance, 1);
+
   return float4(irradiance, 1);
 }

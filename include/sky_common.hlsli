@@ -148,7 +148,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   float sundisk = smoothstep(sun_angluar_diameter_cos,
                              sun_angluar_diameter_cos + 0.00002, cos_theta);
   float3 L0 = float3(0.1, 0.1, 0.1) * fex;
-  L0 += sun_e * 1.9 * fex * sundisk;
+  L0 += sun_e * 19000 * fex * sundisk;
   float3 color = (Lin + L0) * 0.04 + float3(0.0, 0.0003, 0.00075);
   color = pow(color, 1.0 / sunfade);
 
