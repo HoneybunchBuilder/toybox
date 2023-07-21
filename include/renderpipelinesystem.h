@@ -99,7 +99,8 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId luminance_pass;
   TbRenderPassId brightness_pass;
   TbRenderPassId bloom_blur_pass;
-  TbRenderPassId bloom_blur2_pass;
+  TbRenderPassId bloom_downsample_pass;
+  TbRenderPassId bloom_upsample_pass;
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 

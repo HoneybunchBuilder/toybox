@@ -9,13 +9,16 @@ sampler s : register(s2, space0);
 [numthreads(GROUP_SIZE, 1, 1)]
 void comp(int3 group_thread_id: SV_GroupThreadID,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
-  float2 resolution;
-  input.GetDimensions(resolution.x, resolution.y);
-  float2 texel_size = 1 / resolution;
+  float2 in_res;
+  input.GetDimensions(in_res.x, in_res.y);
 
-  float2 uv = dispatch_thread_id.xy / resolution;
-  float x = uv.x;
-  float y = uv.y;
+  float2 out_res;
+  output.GetDimensions(out_res.x, out_res.y);
+
+  float2 uv = dispatch_thread_id.xy / in_res;
+  float2 texel_size = 1 / in_res;
+  float x = texel_size.x;
+  float y = texel_size.y;
 
   // Take 13 samples around current texel:
   // a - b - c
@@ -58,7 +61,7 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   downsample += (a + c + g + i) * 0.03125;
   downsample += (b + d + f + h) * 0.0625;
   downsample += (j + k + l + m) * 0.125;
-  downsample = max(downsample, 0.00001f); // To prevent
+  downsample = max(downsample, 0.00001f); // To prevent propogating zeroes
 
-  output[dispatch_thread_id.xy] = float4(downsample, 0);
+  output[uv * out_res] = float4(downsample, 0);
 }

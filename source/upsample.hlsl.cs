@@ -12,10 +12,10 @@ ConstantBuffer<UpsamplePushConstants> consts : register(b3, space0);
 [numthreads(GROUP_SIZE, 1, 1)]
 void comp(int3 group_thread_id: SV_GroupThreadID,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
-  float2 resolution;
-  input.GetDimensions(resolution.x, resolution.y);
+  float2 out_res;
+  output.GetDimensions(out_res.x, out_res.y);
 
-  float2 uv = dispatch_thread_id.xy / resolution;
+  float2 uv = dispatch_thread_id.xy / out_res;
 
   // The filter kernel is applied with a radius, specified input texture
   // coordinates, so that the radius will vary across mip resolutions.

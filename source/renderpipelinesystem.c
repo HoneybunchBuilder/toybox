@@ -1273,8 +1273,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     const TbRenderTargetId transparent_depth =
         render_target_system->depth_buffer;
     const TbRenderTargetId shadow_map = render_target_system->shadow_map;
-    const TbRenderTargetId brightness_downsample =
-        render_target_system->brightness_downsample;
+    const TbRenderTargetId brightness = render_target_system->brightness;
 
     // Create opaque depth normal pass
     {
@@ -2355,8 +2354,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   },
           },
           {
-              .render_target =
-                  self->render_target_system->brightness_downsample,
+              .render_target = self->render_target_system->brightness,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2392,7 +2390,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                   {
                       .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                       .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = brightness_downsample,
+                      .attachment = brightness,
                   },
               },
           .name = "Brightness Pass",
@@ -2415,169 +2413,125 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                       "Failed to create luminance pass", false);
       self->luminance_pass = id;
     }
-    // Create bloom blur compute pass
+    // Create one pass for downsampling
     {
-      const uint32_t trans_count = 3;
-      PassTransition transitions[3] = {
-          // Need to read brightness downsample
-          {
-              .render_target =
-                  self->render_target_system->brightness_downsample,
-              .barrier =
-                  {
-                      .src_flags =
-                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                      .barrier =
-                          {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask =
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout =
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                              .subresourceRange =
-                                  {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 1,
-                                  },
-                          },
-                  },
-          },
-          // Make both bloom targets ready for writing
-          {
-              .render_target = self->render_target_system->bloom,
-              .barrier =
-                  {
-                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                      .barrier =
-                          {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
-                                               VK_ACCESS_SHADER_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                              .subresourceRange =
-                                  {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 1,
-                                  },
-                          },
-                  },
-          },
-          {
-              .render_target = self->render_target_system->bloom_scratch,
-              .barrier =
-                  {
-                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                      .barrier =
-                          {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
-                                               VK_ACCESS_SHADER_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                              .subresourceRange =
-                                  {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = 1,
-                                      .layerCount = 1,
-                                  },
-                          },
-                  },
-          },
-      };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){self->luminance_pass},
-          .transition_count = trans_count,
-          .transitions = transitions,
-          .name = "Bloom Blur Pass",
+          .transition_count = 2,
+          .transitions =
+              (PassTransition[2]){
+                  // Need to read brightness
+                  {
+                      .render_target = self->render_target_system->brightness,
+                      .barrier =
+                          {
+                              .src_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask =
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT,
+                                      .oldLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  // We need the bloom chain to be readable and writable
+                  {
+                      .render_target =
+                          self->render_target_system->bloom_mip_chain,
+                      .barrier =
+                          {
+                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
+                                          VK_ACCESS_SHADER_READ_BIT |
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = TB_BLOOM_MIPS,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+              },
+          .name = "Bloom Downsample",
       };
       TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom blur pass", false);
-      self->bloom_blur_pass = id;
+                      "Failed to create bloom downsample pass", false);
+      self->bloom_downsample_pass = id;
     }
-    // Create a different bloom blur compute pass
+    // And one for upsampling
     {
-      const uint32_t trans_count = 1;
-      PassTransition transitions[1] = {
-          // Make bloom blur target ready for read/write
-          {
-              .render_target = self->render_target_system->bloom_mip_chain,
-              .barrier =
-                  {
-                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                      .barrier =
-                          {
-                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .srcAccessMask = VK_ACCESS_NONE,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
-                                               VK_ACCESS_SHADER_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                              .subresourceRange =
-                                  {
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .levelCount = TB_BLOOM_MIP_CHAIN,
-                                      .layerCount = 1,
-                                  },
-                          },
-                  },
-          },
-      };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->luminance_pass},
-          .transition_count = trans_count,
-          .transitions = transitions,
-          .name = "Bloom Blur Pass",
+          .dependencies = (TbRenderPassId[1]){self->bloom_downsample_pass},
+          .name = "Bloom Upsample",
       };
       TbRenderPassId id = create_render_pass(self, &create_info);
       TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom blur pass", false);
-      self->bloom_blur2_pass = id;
+                      "Failed to create bloom upsample pass", false);
+      self->bloom_upsample_pass = id;
     }
 
     // Create tonemapping pass
     {
       const uint32_t trans_count = 1;
-      // Need to read bloom blur result
-      PassTransition transitions[1] = {{
-          .render_target = self->render_target_system->bloom,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
-                                           VK_ACCESS_SHADER_WRITE_BIT,
-                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-                          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 1,
-                              },
-                      },
-              },
-      }};
+      // Need to read bloom mip chain (mip 0 only)
+      PassTransition transitions[1] = {
+          {
+              .render_target = self->render_target_system->bloom_mip_chain,
+              .barrier =
+                  {
+                      .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                      .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .barrier =
+                          {
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
+                                               VK_ACCESS_SHADER_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              .subresourceRange =
+                                  {
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = 1,
+                                      .layerCount = 1,
+                                  },
+                          },
+                  },
+          },
+      };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_blur2_pass},
+          .dependencies = (TbRenderPassId[1]){self->bloom_upsample_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -3256,11 +3210,11 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
 
     // Create bloom work
-    err =
-        create_downsample_work(self->render_system, self, self->sampler,
-                               self->bloom_blur2_pass, &self->downsample_work);
+    err = create_downsample_work(self->render_system, self, self->sampler,
+                                 self->bloom_downsample_pass,
+                                 &self->downsample_work);
     err = create_upsample_work(self->render_system, self, self->sampler,
-                               self->bloom_blur2_pass, &self->upsample_work);
+                               self->bloom_upsample_pass, &self->upsample_work);
 
     // Compute Luminance Histogram and Average work
     err = create_lum_hist_work(self->render_system, self, self->sampler,
@@ -3364,6 +3318,7 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
 
   destroy_downsample_work(self->render_system, &self->downsample_work);
   destroy_upsample_work(self->render_system, &self->upsample_work);
+
   destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
   destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
 
@@ -3508,7 +3463,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkResult err = VK_SUCCESS;
     // Allocate the known descriptor sets we need for this frame
     {
-#define SET_COUNT 11
+#define SET_COUNT 14
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
           .maxSets = SET_COUNT * 4,
@@ -3530,11 +3485,19 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
               },
       };
       VkDescriptorSetLayout layouts[SET_COUNT] = {
-          self->ssao_set_layout,         self->blur_set_layout,
-          self->blur_set_layout,         self->copy_set_layout,
-          self->copy_set_layout,         self->lum_hist_work.set_layout,
-          self->lum_avg_work.set_layout, self->comp_copy_set_layout,
-          self->blur_set_layout,         self->blur_set_layout,
+          self->ssao_set_layout,
+          self->blur_set_layout,
+          self->blur_set_layout,
+          self->copy_set_layout,
+          self->copy_set_layout,
+          self->lum_hist_work.set_layout,
+          self->lum_avg_work.set_layout,
+          self->downsample_work.set_layout,
+          self->downsample_work.set_layout,
+          self->downsample_work.set_layout,
+          self->upsample_work.set_layout,
+          self->upsample_work.set_layout,
+          self->upsample_work.set_layout,
           self->tonemap_set_layout,
       };
       err =
@@ -3558,14 +3521,20 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 5);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet bright_copy_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 8);
-    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 9);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 10);
+    VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 11);
+    VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 12);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 13);
 
     VkImageView ssao_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
@@ -3586,16 +3555,22 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
     VkBuffer lum_avg_buffer = self->lum_avg_work.lum_avg.buffer;
     VkImageView brightness_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->brightness_downsample);
-    VkImageView bloom_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->bloom);
-    VkImageView bloom_scratch_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->bloom_scratch);
+        self->render_target_system->brightness);
+    VkImageView bloom_full_view = tb_render_target_get_mip_view(
+        self->render_target_system, 0, self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+    VkImageView bloom_half_view = tb_render_target_get_mip_view(
+        self->render_target_system, 1, self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+    VkImageView bloom_quarter_view = tb_render_target_get_mip_view(
+        self->render_target_system, 2, self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+    VkImageView bloom_sixteenth_view = tb_render_target_get_mip_view(
+        self->render_target_system, 3, self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
 
 // Write the descriptor set
-#define WRITE_COUNT 23
+#define WRITE_COUNT 29
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -3780,11 +3755,11 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                     .range = sizeof(float), // Hack :(
                 },
         },
+        // Downsample writes
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bright_copy_set,
+            .dstSet = down_half_set,
             .dstBinding = 0,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo =
@@ -3795,69 +3770,138 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bright_copy_set,
+            .dstSet = down_half_set,
             .dstBinding = 1,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_view,
+                    .imageView = bloom_half_view,
                 },
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bloom_x_blur_set,
+            .dstSet = down_quarter_set,
             .dstBinding = 0,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_view,
+                    .imageView = bloom_half_view,
                 },
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bloom_x_blur_set,
+            .dstSet = down_quarter_set,
             .dstBinding = 1,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_scratch_view,
+                    .imageView = bloom_quarter_view,
                 },
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bloom_y_blur_set,
+            .dstSet = down_sixteen_set,
             .dstBinding = 0,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_scratch_view,
+                    .imageView = bloom_quarter_view,
                 },
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = bloom_y_blur_set,
+            .dstSet = down_sixteen_set,
             .dstBinding = 1,
-            .dstArrayElement = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_view,
+                    .imageView = bloom_sixteenth_view,
                 },
         },
+        // Upsample writes
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_quarter_set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_sixteenth_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_quarter_set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_quarter_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_half_set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_quarter_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_half_set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_half_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_full_set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_half_view,
+                },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = up_full_set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo =
+                &(VkDescriptorImageInfo){
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .imageView = bloom_full_view,
+                },
+        },
+        // Tonemap writes
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = tonemap_set,
@@ -3881,7 +3925,7 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
             .pImageInfo =
                 &(VkDescriptorImageInfo){
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = bloom_view,
+                    .imageView = bloom_full_view,
                 },
         },
         {
@@ -3919,14 +3963,20 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
         self->render_system, self->descriptor_pools, 5);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet bright_copy_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet bloom_x_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 8);
-    VkDescriptorSet bloom_y_blur_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 9);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+    VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 10);
+    VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 11);
+    VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 12);
+    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+        self->render_system, self->descriptor_pools, 13);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -4084,93 +4134,91 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
                                                 &batch);
       }
     }
+    // Brightness pass
     {
-      const uint32_t downscaled_width = width / 4;
-      const uint32_t downscaled_height = height / 4;
-      // Brightness pass
-      {
-        FullscreenBatch fs_batch = {
-            .set = color_set,
-        };
-        DrawBatch batch = {
-            .layout = self->copy_pipe_layout,
-            .pipeline = self->brightness_pipe,
-            .viewport = {0, downscaled_height, downscaled_width,
-                         -(float)downscaled_height, 0, 1},
-            .scissor = {{0, 0}, {downscaled_width, downscaled_height}},
-            .user_batch = &fs_batch,
-        };
-        tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
-                                            &batch);
-      }
-      // Bloom Blur Pass
-      {
-        uint32_t group_x = downscaled_width / 16;
-        uint32_t group_y = downscaled_height;
-
-        // First we want to do a quick copy from the brightness resource to the
-        // bloom target so we can more easily ping-pong multiple blur sweeps
-        // without changing targets
-        FullscreenBatch fs_copy_batch = {
-            .set = bright_copy_set,
-        };
-        DispatchBatch copy_batch = {
-            .layout = self->comp_copy_pipe_layout,
-            .pipeline = self->comp_copy_pipe,
-            .user_batch = &fs_copy_batch,
-            .group_count = 1,
-            .groups[0] = {group_x, group_y, 1},
-        };
-
-        tb_render_pipeline_issue_dispatch_batch(self, self->bloom_copy_ctx, 1,
-                                                &copy_batch);
-
-        // Do a blur on each axis
-        BlurBatch x_blur_batch = {
-            .set = bloom_x_blur_set,
-            .consts =
-                {
-                    .horizontal = 1.0f,
-                },
-        };
-        DispatchBatch x_batch = {
-            .layout = self->blur_pipe_layout,
-            .pipeline = self->blur_pipe,
-            .user_batch = &x_blur_batch,
-            .group_count = 1,
-            .groups[0] = {group_x, group_y, 1},
-        };
-        BlurBatch y_blur_batch = {
-            .set = bloom_y_blur_set,
-            .consts =
-                {
-                    .horizontal = 0.0f,
-                },
-        };
-        DispatchBatch y_batch = {
-            .layout = self->blur_pipe_layout,
-            .pipeline = self->blur_pipe,
-            .user_batch = &y_blur_batch,
-            .group_count = 1,
-            .groups[0] = {group_x, group_y, 1},
-        };
-
-#define BLUR_SWEEPS 1
-        const uint32_t batch_count = BLUR_SWEEPS * 2;
-        DispatchBatch batches[BLUR_SWEEPS * 2] = {0};
-        {
-          uint32_t idx = 0;
-          for (uint32_t i = 0; i < BLUR_SWEEPS; ++i) {
-            batches[idx++] = x_batch;
-            batches[idx++] = y_batch;
-          }
-        }
-
-        tb_render_pipeline_issue_dispatch_batch(self, self->bloom_blur_ctx,
-                                                batch_count, batches);
-#undef BLUR_SWEEPS
-      }
+      FullscreenBatch fs_batch = {
+          .set = color_set,
+      };
+      DrawBatch batch = {
+          .layout = self->copy_pipe_layout,
+          .pipeline = self->brightness_pipe,
+          .viewport = {0, height, width, -(float)height, 0, 1},
+          .scissor = {{0, 0}, {width, height}},
+          .user_batch = &fs_batch,
+      };
+      tb_render_pipeline_issue_draw_batch(self, self->brightness_ctx, 1,
+                                          &batch);
     }
+    // Blur passes
+    {
+#define BLUR_BATCH_COUNT TB_BLOOM_MIPS - 1
+      uint32_t group_x = (uint32_t)SDL_ceilf((float)width / 16.0f);
+      uint32_t group_y = (uint32_t)SDL_ceilf((float)height);
+
+      DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {
+          {.set = down_half_set},
+          {.set = down_quarter_set},
+          {.set = down_sixteen_set},
+      };
+      DispatchBatch down_batches[BLUR_BATCH_COUNT] = {
+          {
+              .layout = self->downsample_work.pipe_layout,
+              .pipeline = self->downsample_work.pipeline,
+              .user_batch = &downsample_batches[0],
+              .group_count = 1,
+              .groups[0] = {group_x, group_y, 1},
+          },
+          {
+              .layout = self->downsample_work.pipe_layout,
+              .pipeline = self->downsample_work.pipeline,
+              .user_batch = &downsample_batches[1],
+              .group_count = 1,
+              .groups[0] = {group_x / 2, group_y / 2, 1},
+          },
+          {
+              .layout = self->downsample_work.pipe_layout,
+              .pipeline = self->downsample_work.pipeline,
+              .user_batch = &downsample_batches[2],
+              .group_count = 1,
+              .groups[0] = {group_x / 4, group_y / 4, 1},
+          },
+      };
+      tb_render_pipeline_issue_dispatch_batch(self, self->downsample_work.ctx,
+                                              BLUR_BATCH_COUNT, down_batches);
+
+      UpsampleBatch upsample_batches[BLUR_BATCH_COUNT] = {
+          {.set = up_quarter_set, .consts = {.radius = 0.005f}},
+          {.set = up_half_set, .consts = {.radius = 0.005f}},
+          {.set = up_full_set, .consts = {.radius = 0.005f}},
+      };
+      DispatchBatch up_batches[BLUR_BATCH_COUNT] = {
+          {
+              .layout = self->upsample_work.pipe_layout,
+              .pipeline = self->upsample_work.pipeline,
+              .user_batch = &upsample_batches[0],
+              .group_count = 1,
+              .groups[0] = {group_x / 4, group_y / 4, 1},
+          },
+          {
+              .layout = self->upsample_work.pipe_layout,
+              .pipeline = self->upsample_work.pipeline,
+              .user_batch = &upsample_batches[1],
+              .group_count = 1,
+              .groups[0] = {group_x / 2, group_y / 2, 1},
+          },
+          {
+              .layout = self->upsample_work.pipe_layout,
+              .pipeline = self->upsample_work.pipeline,
+              .user_batch = &upsample_batches[2],
+              .group_count = 1,
+              .groups[0] = {group_x, group_y, 1},
+          },
+      };
+      tb_render_pipeline_issue_dispatch_batch(self, self->upsample_work.ctx,
+                                              BLUR_BATCH_COUNT, up_batches);
+#undef BLUR_BATCH_COUNT
+    }
+
     // Tonemapping pass
     {
       FullscreenBatch fs_batch = {

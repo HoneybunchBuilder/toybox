@@ -75,7 +75,7 @@ typedef struct DispatchContext {
   uint32_t batch_max;
 } DispatchContext;
 
-#define TB_MAX_COMMAND_BUFFERS 32
+#define TB_MAX_COMMAND_BUFFERS 64
 
 typedef struct FrameState {
   SDL_semaphore *wait_sem;

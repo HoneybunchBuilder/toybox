@@ -12,11 +12,11 @@ ConstantBuffer<BlurPushConstants> consts : register(b3, space0);
 [numthreads(GROUP_SIZE, 1, 1)]
 void comp(int3 group_thread_id: SV_GroupThreadID,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
-  float2 input_len;
-  input.GetDimensions(input_len.x, input_len.y);
-  float2 tex_offset = 1 / input_len;
+  float2 resolution;
+  input.GetDimensions(resolution.x, resolution.y);
+  float2 tex_offset = 1 / resolution;
 
-  float2 sample_point = dispatch_thread_id.xy / input_len;
-  float4 value = input.SampleLevel(static_sampler, sample_point, 0);
+  float2 uv = dispatch_thread_id.xy / resolution;
+  float4 value = input.SampleLevel(static_sampler, uv, 0);
   output[dispatch_thread_id.xy] = value;
 }

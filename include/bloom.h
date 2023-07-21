@@ -2,14 +2,9 @@
 
 #include "common.hlsli"
 
-#define TB_BLOOM_MIP_CHAIN 8
-
-typedef struct DownsamplePushConstants {
-  uint32_t mip_count;
-} DownsamplePushConstants;
+#define TB_BLOOM_MIPS 4
 
 typedef struct UpsamplePushConstants {
-  uint32_t mip_count;
   float radius;
 } UpsamplePushConstants;
 

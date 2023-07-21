@@ -51,10 +51,8 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId irradiance_map;
   TbRenderTargetId prefiltered_cube;
   TbRenderTargetId shadow_map;
-  TbRenderTargetId brightness_downsample;
+  TbRenderTargetId brightness;
   TbRenderTargetId bloom_mip_chain;
-  TbRenderTargetId bloom;         // Ideally want this to be transient
-  TbRenderTargetId bloom_scratch; // Ideally want this to be transient
 } RenderTargetSystem;
 
 void tb_render_target_system_descriptor(
@@ -68,6 +66,9 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
 
 TbRenderTargetId tb_create_render_target(RenderTargetSystem *self,
                                          const RenderTargetDescriptor *rt_desc);
+
+uint32_t tb_render_target_get_mip_count(RenderTargetSystem *self,
+                                        TbRenderTargetId rt);
 
 VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
                                        TbRenderTargetId rt);

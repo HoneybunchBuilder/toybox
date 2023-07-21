@@ -395,61 +395,9 @@ bool create_render_target_system(RenderTargetSystem *self,
       };
       self->shadow_map = tb_create_render_target(self, &rt_desc);
     }
-    // Create brightness downsampled target
+    // Create brightness target
     {
       RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-          .extent =
-              {
-                  .width = width / 4,
-                  .height = height / 4,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      self->brightness_downsample = tb_create_render_target(self, &rt_desc);
-    }
-
-    // Create bloom blur x target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-          .extent =
-              {
-                  .width = width / 4,
-                  .height = height / 4,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      self->bloom = tb_create_render_target(self, &rt_desc);
-    }
-
-    // Create bloom blur y target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-          .extent =
-              {
-                  .width = width / 4,
-                  .height = height / 4,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      self->bloom_scratch = tb_create_render_target(self, &rt_desc);
-    }
-
-    // Creating a different bloom mip chain target for downscale / upscale blur
-    {
-      RenderTargetDescriptor rt_desc = {
-          .name = "Bloom Mip Chain",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
@@ -457,7 +405,28 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = height,
                   .depth = 1,
               },
-          .mip_count = TB_BLOOM_MIP_CHAIN,
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      self->brightness = tb_create_render_target(self, &rt_desc);
+    }
+
+    // Creating a bloom mip chain target for downscale / upscale blur
+    {
+      // Minimum size for bloom target ensures we always have 4 mips
+      uint32_t bloom_width = SDL_max(width, 64);
+      uint32_t bloom_height = SDL_max(height, 64);
+      RenderTargetDescriptor rt_desc = {
+          .name = "Bloom Mip Chain",
+          .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+          .extent =
+              {
+                  .width = bloom_width,
+                  .height = bloom_height,
+                  .depth = 1,
+              },
+          .mip_count = TB_BLOOM_MIPS,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
@@ -652,7 +621,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
                          &rt_desc);
   }
 
-  // Resize brightness downsampled target
+  // Resize brightness target
   {
     RenderTargetDescriptor rt_desc = {
         .name = "Brightness",
@@ -667,59 +636,24 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         .layer_count = 1,
         .view_type = VK_IMAGE_VIEW_TYPE_2D,
     };
-    resize_render_target(
-        self, &self->render_targets[self->brightness_downsample], &rt_desc);
-  }
-
-  // Resize bloom blur x target
-  {
-    RenderTargetDescriptor rt_desc = {
-        .name = "Bloom Blur X",
-        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-        .extent =
-            {
-                .width = width,
-                .height = height,
-                .depth = 1,
-            },
-        .mip_count = 1,
-        .layer_count = 1,
-        .view_type = VK_IMAGE_VIEW_TYPE_2D,
-    };
-    resize_render_target(self, &self->render_targets[self->bloom], &rt_desc);
-  }
-
-  // Resize bloom blur y target
-  {
-    RenderTargetDescriptor rt_desc = {
-        .name = "Bloom Blur Y",
-        .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-        .extent =
-            {
-                .width = width,
-                .height = height,
-                .depth = 1,
-            },
-        .mip_count = 1,
-        .layer_count = 1,
-        .view_type = VK_IMAGE_VIEW_TYPE_2D,
-    };
-    resize_render_target(self, &self->render_targets[self->bloom_scratch],
+    resize_render_target(self, &self->render_targets[self->brightness],
                          &rt_desc);
   }
-
   // Resize bloom mip chain
   {
+    // Minimum size for bloom target ensures we always have 4 mips
+    uint32_t bloom_width = SDL_max(width, 64);
+    uint32_t bloom_height = SDL_max(height, 64);
     RenderTargetDescriptor rt_desc = {
         .name = "Bloom Mip Chain",
         .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
             {
-                .width = width,
-                .height = height,
+                .width = bloom_width,
+                .height = bloom_height,
                 .depth = 1,
             },
-        .mip_count = TB_BLOOM_MIP_CHAIN,
+        .mip_count = TB_BLOOM_MIPS,
         .layer_count = 1,
         .view_type = VK_IMAGE_VIEW_TYPE_2D,
     };
@@ -826,6 +760,14 @@ tb_create_render_target(RenderTargetSystem *self,
   TB_CHECK_RETURN(create_render_target(self, rt, rt_desc),
                   "Failed to create render target", InvalidRenderTargetId);
   return id;
+}
+
+uint32_t tb_render_target_get_mip_count(RenderTargetSystem *self,
+                                        TbRenderTargetId rt) {
+  if (rt >= self->rt_count) {
+    TB_CHECK_RETURN(false, "Render target index out of range", 0xFFFFFFFF);
+  }
+  return self->render_targets[rt].mip_count;
 }
 
 VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,

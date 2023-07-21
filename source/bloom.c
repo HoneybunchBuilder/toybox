@@ -148,7 +148,7 @@ void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &up_batch->set, 0, NULL);
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(LuminancePushConstants), &up_batch->consts);
+                       sizeof(UpsamplePushConstants), &up_batch->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];

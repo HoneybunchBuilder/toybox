@@ -62,7 +62,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 color = color_map.Sample(static_sampler, i.uv0).rgb;
   float3 bloom = bloom_map.Sample(static_sampler, i.uv0).rgb;
 
-  float3 yxy = rgb_to_yxy(color);
+  float bloom_strength = 0.1f; // Could be a parameter
+  float3 yxy = rgb_to_yxy(lerp(color, bloom, bloom_strength));
   yxy.x /= (9.6 * lum + 0.0001);
 
   color = yxy_to_rgb(yxy);
