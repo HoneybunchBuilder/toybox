@@ -2,6 +2,7 @@
 
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
+#include "dynarray.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
@@ -19,6 +20,7 @@ typedef uint64_t TbTextureId;
 typedef uint64_t TbMaterialPerm;
 
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
+typedef struct TbMaterial TbMaterial;
 
 typedef struct MaterialSystemDescriptor {
   Allocator std_alloc;
@@ -39,16 +41,9 @@ typedef struct MaterialSystem {
 
   const cgltf_material *default_material;
 
-  uint32_t mat_count;
-  TbMaterialId *mat_ids;
-  TbMaterialPerm *mat_perms;
-  uint32_t *mat_ref_counts;
-  TbBuffer *mat_gpu_buffers;
-  TbTextureId *mat_color_maps;
-  TbTextureId *mat_normal_maps;
-  TbTextureId *mat_metal_rough_maps;
+  // These two arrays are to be kept in sync
+  TB_DYN_ARR_OF(TbMaterial) materials;
   VkDescriptorSet *mat_sets;
-  uint32_t mat_max;
 } MaterialSystem;
 
 void tb_material_system_descriptor(SystemDescriptor *desc,

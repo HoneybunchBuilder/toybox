@@ -9,6 +9,16 @@
 #include "texturesystem.h"
 #include "world.h"
 
+typedef struct TbMaterial {
+  TbMaterialId id;
+  uint32_t ref_count;
+  TbMaterialPerm permutation;
+  TbBuffer gpu_buffer;
+  TbTextureId color_map;
+  TbTextureId normal_map;
+  TbTextureId metal_rough_map;
+} TbMaterial;
+
 bool create_material_system(MaterialSystem *self,
                             const MaterialSystemDescriptor *desc,
                             uint32_t system_dep_count,
@@ -32,6 +42,8 @@ bool create_material_system(MaterialSystem *self,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
+
+  TB_DYN_ARR_RESET(self->materials, self->std_alloc, 1);
 
   VkDevice device = self->render_system->render_thread->device;
   const VkAllocationCallbacks *vk_alloc =
@@ -145,11 +157,13 @@ void destroy_material_system(MaterialSystem *self) {
 
   vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
 
-  for (uint32_t i = 0; i < self->mat_count; ++i) {
-    if (self->mat_ref_counts[i] != 0) {
+  TB_DYN_ARR_FOREACH(self->materials, i) {
+    if (TB_DYN_ARR_AT(self->materials, i).ref_count != 0) {
       TB_CHECK(false, "Leaking materials");
     }
   }
+
+  TB_DYN_ARR_DESTROY(self->materials);
 
   *self = (MaterialSystem){0};
 }
@@ -166,24 +180,23 @@ TB_DEFINE_SYSTEM(material, MaterialSystem, MaterialSystemDescriptor)
 
 void tb_material_system_descriptor(SystemDescriptor *desc,
                                    const MaterialSystemDescriptor *mat_desc) {
-  desc->name = "Material";
-  desc->size = sizeof(MaterialSystem);
-  desc->id = MaterialSystemId;
-  desc->desc = (InternalDescriptor)mat_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 0;
-  desc->system_dep_count = 2;
-  desc->system_deps[0] = RenderSystemId;
-  desc->system_deps[1] = TextureSystemId;
-  desc->create = tb_create_material_system;
-  desc->destroy = tb_destroy_material_system;
-  desc->tick = tb_tick_material_system;
+  *desc = (SystemDescriptor){
+      .name = "Material",
+      .size = sizeof(MaterialSystem),
+      .desc = (InternalDescriptor)mat_desc,
+      .id = MaterialSystemId,
+      .system_dep_count = 2,
+      .system_deps[0] = RenderSystemId,
+      .system_deps[1] = TextureSystemId,
+      .create = tb_create_material_system,
+      .destroy = tb_destroy_material_system,
+      .tick = tb_tick_material_system,
+  };
 }
 
 uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
-  for (uint32_t i = 0; i < self->mat_count; ++i) {
-    if (self->mat_ids[i] == id) {
+  TB_DYN_ARR_FOREACH(self->materials, i) {
+    if (TB_DYN_ARR_AT(self->materials, i).id == id) {
       return i;
       break;
     }
@@ -212,36 +225,30 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
   // Material was not found, load it now
   if (index == SDL_MAX_UINT32) {
-    // Resize collections if necessary
-    const uint32_t new_count = self->mat_count + 1;
-    if (new_count > self->mat_max) {
-      const uint32_t new_max = new_count * 2;
+    // Determine if we will need to resize the descriptor pool after we append
+    // this new material
+    bool resize_pool = false;
+    {
+      const uint32_t new_count = TB_DYN_ARR_SIZE(self->materials) + 1;
+      resize_pool = new_count >= self->materials.capacity;
+    }
 
+    // Resize to fit a new material
+    {
+      index = TB_DYN_ARR_SIZE(self->materials);
+      TB_DYN_ARR_RESIZE(self->materials, index + 1);
+    }
+
+    if (resize_pool) {
       Allocator alloc = self->std_alloc;
-
-      self->mat_ids =
-          tb_realloc_nm_tp(alloc, self->mat_ids, new_max, TbMaterialId);
-      self->mat_perms =
-          tb_realloc_nm_tp(alloc, self->mat_perms, new_max, uint64_t);
-      self->mat_gpu_buffers =
-          tb_realloc_nm_tp(alloc, self->mat_gpu_buffers, new_max, TbBuffer);
-      self->mat_color_maps =
-          tb_realloc_nm_tp(alloc, self->mat_color_maps, new_max, TbTextureId);
-      self->mat_normal_maps =
-          tb_realloc_nm_tp(alloc, self->mat_normal_maps, new_max, TbTextureId);
-      self->mat_metal_rough_maps = tb_realloc_nm_tp(
-          alloc, self->mat_metal_rough_maps, new_max, TbTextureId);
-      self->mat_sets =
-          tb_realloc_nm_tp(alloc, self->mat_sets, new_max, VkDescriptorSet);
-      self->mat_ref_counts =
-          tb_realloc_nm_tp(alloc, self->mat_ref_counts, new_max, uint32_t);
-
-      self->mat_max = new_max;
+      self->mat_sets = tb_realloc_nm_tp(
+          alloc, self->mat_sets, self->materials.capacity, VkDescriptorSet);
 
       // Resize descriptor pool
       {
-        const uint32_t max_sets =
-            new_max * 4; // *4 because we know we have 4 bindings
+        const uint32_t desc_cap = self->materials.capacity;
+        // *4 because we know we have 4 bindings
+        const uint32_t max_sets = desc_cap * 4;
 
         if (self->mat_set_pool) {
           vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
@@ -279,14 +286,14 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
         // Reallocate descriptors
         VkDescriptorSetLayout *layouts =
-            tb_alloc_nm_tp(self->tmp_alloc, new_max, VkDescriptorSetLayout);
-        for (uint32_t i = 0; i < new_max; ++i) {
+            tb_alloc_nm_tp(self->tmp_alloc, desc_cap, VkDescriptorSetLayout);
+        for (uint32_t i = 0; i < desc_cap; ++i) {
           layouts[i] = self->set_layout;
         }
 
         VkDescriptorSetAllocateInfo alloc_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorSetCount = new_max,
+            .descriptorSetCount = desc_cap,
             .descriptorPool = self->mat_set_pool,
             .pSetLayouts = layouts,
         };
@@ -296,15 +303,16 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         TB_VK_CHECK(err, "Failed to re-allocate material descriptor sets");
 
         // Re-write bindings to re-allocated descriptor sets
-        if (self->mat_count > 0) {
-          const uint32_t write_count = self->mat_count * 4;
+        uint32_t material_count = index;
+        if (material_count > 0) {
+          const uint32_t write_count = material_count * 4;
           VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
               self->tmp_alloc, write_count, VkWriteDescriptorSet);
           VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
-              self->tmp_alloc, self->mat_count, VkDescriptorBufferInfo);
+              self->tmp_alloc, material_count, VkDescriptorBufferInfo);
           VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-              self->tmp_alloc, self->mat_count * 3, VkDescriptorImageInfo);
-          for (uint32_t i = 0; i < self->mat_count; ++i) {
+              self->tmp_alloc, material_count * 3, VkDescriptorImageInfo);
+          for (uint32_t i = 0; i < material_count; ++i) {
             uint32_t write_idx = i * 4;
 
             uint32_t img_idx = i * 3;
@@ -314,29 +322,32 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             VkDescriptorImageInfo *normal_info = &image_info[img_idx + 1];
             VkDescriptorImageInfo *metal_rough_info = &image_info[img_idx + 2];
 
+            TbMaterial *material = &TB_DYN_ARR_AT(self->materials, i);
+            VkDescriptorSet set = self->mat_sets[i];
+
             *buf_info = (VkDescriptorBufferInfo){
-                .buffer = self->mat_gpu_buffers[i].buffer,
+                .buffer = material->gpu_buffer.buffer,
                 .range = sizeof(GLTFMaterialData),
             };
             *color_info = (VkDescriptorImageInfo){
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .imageView = tb_tex_system_get_image_view(
-                    self->texture_system, self->mat_color_maps[i]),
+                .imageView = tb_tex_system_get_image_view(self->texture_system,
+                                                          material->color_map),
             };
             *normal_info = (VkDescriptorImageInfo){
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .imageView = tb_tex_system_get_image_view(
-                    self->texture_system, self->mat_normal_maps[i]),
+                .imageView = tb_tex_system_get_image_view(self->texture_system,
+                                                          material->normal_map),
             };
             *metal_rough_info = (VkDescriptorImageInfo){
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .imageView = tb_tex_system_get_image_view(
-                    self->texture_system, self->mat_metal_rough_maps[i]),
+                    self->texture_system, material->metal_rough_map),
             };
 
             writes[write_idx + 0] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[i],
+                .dstSet = set,
                 .dstBinding = 0,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -345,7 +356,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             };
             writes[write_idx + 1] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[i],
+                .dstSet = set,
                 .dstBinding = 1,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -354,7 +365,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             };
             writes[write_idx + 2] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[i],
+                .dstSet = set,
                 .dstBinding = 2,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -363,7 +374,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             };
             writes[write_idx + 3] = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = self->mat_sets[i],
+                .dstSet = set,
                 .dstBinding = 3,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
@@ -376,7 +387,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
       }
     }
 
-    index = self->mat_count;
+    TbMaterial *material = &TB_DYN_ARR_AT(self->materials, index);
 
     // Load material
     {
@@ -391,7 +402,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         char name[100] = {0};
         SDL_snprintf(name, 100, "%s Uniform Buffer", mat->name);
         err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
-                                          name, &self->mat_gpu_buffers[index]);
+                                          name, &material->gpu_buffer);
         TB_VK_CHECK_RET(err,
                         "Failed to allocate space for material uniform buffer",
                         InvalidMaterialId);
@@ -465,7 +476,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
       // Issue copy of uniform buffer
       {
-        const TbBuffer *gpu_buf = &self->mat_gpu_buffers[index];
+        const TbBuffer *gpu_buf = &material->gpu_buffer;
         BufferCopy upload = {
             .src = host_buf.buffer,
             .dst = gpu_buf->buffer,
@@ -512,8 +523,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
           }
 
-          self->mat_metal_rough_maps[index] = metal_rough_id;
-          self->mat_color_maps[index] = color_id;
+          material->metal_rough_map = metal_rough_id;
+          material->color_map = color_id;
         }
         if (mat->has_pbr_specular_glossiness) {
           feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
@@ -527,7 +538,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           } else {
             tb_tex_system_take_tex_ref(self->texture_system, color_id);
           }
-          self->mat_color_maps[index] = color_id;
+          material->color_map = color_id;
         }
         if (mat->has_clearcoat) {
           feat_perm |= GLTF_PERM_CLEARCOAT;
@@ -569,9 +580,9 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         } else {
           tb_tex_system_take_tex_ref(self->texture_system, normal_id);
         }
-        self->mat_normal_maps[index] = normal_id;
+        material->normal_map = normal_id;
 
-        self->mat_perms[index] = feat_perm;
+        material->permutation = feat_perm;
       }
     }
 
@@ -587,7 +598,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .pBufferInfo =
               &(VkDescriptorBufferInfo){
-                  .buffer = self->mat_gpu_buffers[index].buffer,
+                  .buffer = material->gpu_buffer.buffer,
                   .range = sizeof(GLTFMaterialData),
               },
       };
@@ -602,7 +613,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
               &(VkDescriptorImageInfo){
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   .imageView = tb_tex_system_get_image_view(
-                      self->texture_system, self->mat_color_maps[index]),
+                      self->texture_system, material->color_map),
               },
       };
       writes[2] = (VkWriteDescriptorSet){
@@ -616,7 +627,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
               &(VkDescriptorImageInfo){
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   .imageView = tb_tex_system_get_image_view(
-                      self->texture_system, self->mat_normal_maps[index]),
+                      self->texture_system, material->normal_map),
               },
       };
       writes[3] = (VkWriteDescriptorSet){
@@ -630,28 +641,23 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
               &(VkDescriptorImageInfo){
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   .imageView = tb_tex_system_get_image_view(
-                      self->texture_system, self->mat_metal_rough_maps[index]),
+                      self->texture_system, material->metal_rough_map),
               },
       };
       vkUpdateDescriptorSets(device, 4, writes, 0, NULL);
     }
-
-    self->mat_ids[index] = id;
-    self->mat_ref_counts[index] =
-        0; // Must initialize this or it could be garbage
-    self->mat_count++;
+    material->id = id;
+    material->ref_count = 0;
   } else {
+    TbMaterial *material = &TB_DYN_ARR_AT(self->materials, index);
     // If the material was already loaded, go through the textures and grab
     // a reference so it's known that the texture is in use
-    tb_tex_system_take_tex_ref(self->texture_system,
-                               self->mat_color_maps[index]);
-    tb_tex_system_take_tex_ref(self->texture_system,
-                               self->mat_normal_maps[index]);
-    tb_tex_system_take_tex_ref(self->texture_system,
-                               self->mat_metal_rough_maps[index]);
+    tb_tex_system_take_tex_ref(self->texture_system, material->color_map);
+    tb_tex_system_take_tex_ref(self->texture_system, material->normal_map);
+    tb_tex_system_take_tex_ref(self->texture_system, material->metal_rough_map);
   }
 
-  self->mat_ref_counts[index]++;
+  TB_DYN_ARR_AT(self->materials, index).ref_count++;
 
   TracyCZoneEnd(ctx);
   return id;
@@ -662,7 +668,7 @@ TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat) {
   if (index == SDL_MAX_UINT32) {
     TB_CHECK_RETURN(false, "Failed to find material to get permutation", 0);
   }
-  return self->mat_perms[index];
+  return TB_DYN_ARR_AT(self->materials, index).permutation;
 }
 
 VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat) {
@@ -680,31 +686,28 @@ void tb_mat_system_release_material_ref(MaterialSystem *self,
     TB_CHECK(false, "Failed to find material to release");
     return;
   }
+  TbMaterial *material = &TB_DYN_ARR_AT(self->materials, index);
 
-  if (self->mat_ref_counts[index] == 0) {
+  if (material->ref_count == 0) {
     TB_CHECK(false, "Tried to release reference to material with 0 ref count");
     return;
   }
 
-  self->mat_ref_counts[index]--;
+  material->ref_count--;
 
   // Materials should always release their texture references since materials
   // don't own their textures
+  tb_tex_system_release_texture_ref(self->texture_system, material->color_map);
+  tb_tex_system_release_texture_ref(self->texture_system, material->normal_map);
   tb_tex_system_release_texture_ref(self->texture_system,
-                                    self->mat_color_maps[index]);
-  tb_tex_system_release_texture_ref(self->texture_system,
-                                    self->mat_normal_maps[index]);
-  tb_tex_system_release_texture_ref(self->texture_system,
-                                    self->mat_metal_rough_maps[index]);
+                                    material->metal_rough_map);
 
-  if (self->mat_ref_counts[index] == 0) {
+  if (material->ref_count == 0) {
     // Free the mesh at this index
     VmaAllocator vma_alloc = self->render_system->vma_alloc;
 
-    TbBuffer *gpu_buf = &self->mat_gpu_buffers[index];
-
+    TbBuffer *gpu_buf = &material->gpu_buffer;
     vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);
-
     *gpu_buf = (TbBuffer){0};
   }
 }

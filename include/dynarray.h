@@ -33,7 +33,8 @@
   {                                                                            \
     uint32_t size = (s);                                                       \
     if (a.capacity < size) {                                                   \
-      a.data = (decltype(a.data))realloc(a.data, sizeof(a.data[0]) * size);    \
+      a.data = (decltype(a.data))tb_realloc(a.alloc, a.data,                   \
+                                            sizeof(a.data[0]) * size);         \
       a.capacity = size;                                                       \
     }                                                                          \
     a.endptr = a.data + size;                                                  \
