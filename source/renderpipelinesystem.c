@@ -3988,9 +3988,8 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
       // HACK - find which view targets the swapchain
       const View *view = NULL;
       TbViewId view_id = InvalidViewId;
-      for (uint32_t view_idx = 0; view_idx < self->view_system->view_count;
-           ++view_idx) {
-        const View *v = &self->view_system->views[view_idx];
+      TB_DYN_ARR_FOREACH(self->view_system->views, view_idx) {
+        const View *v = &TB_DYN_ARR_AT(self->view_system->views, view_idx);
         if (v->target == self->render_target_system->swapchain) {
           view = v;
           view_id = view_idx;

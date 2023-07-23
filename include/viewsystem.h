@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "common.hlsli"
+#include "dynarray.h"
 #include "tbrendercommon.h"
 
 #define ViewSystemId 0xFEE1DEAD
@@ -33,7 +34,6 @@ typedef struct ViewSystemFrameState {
 
 typedef struct View {
   TbRenderTargetId target;
-
   CommonViewData view_data;
   CommonLightData light_data;
   Frustum frustum;
@@ -49,9 +49,7 @@ typedef struct ViewSystem {
   VkDescriptorSetLayout set_layout;
   ViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
-  uint32_t view_count;
-  View *views;
-  uint32_t view_max;
+  TB_DYN_ARR_OF(View) views;
 } ViewSystem;
 
 void tb_view_system_descriptor(SystemDescriptor *desc,

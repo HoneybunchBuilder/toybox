@@ -35,6 +35,8 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
       .std_alloc = desc->std_alloc,
   };
 
+  TB_DYN_ARR_RESET(self->views, self->std_alloc, 1);
+
   VkResult err = VK_SUCCESS;
 
   // Create view descriptor set layout
@@ -100,6 +102,8 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 }
 
 void destroy_view_system(ViewSystem *self) {
+  TB_DYN_ARR_DESTROY(self->views);
+
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
@@ -119,7 +123,9 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   (void)delta_seconds;
   TracyCZoneNC(ctx, "View System Tick", TracyCategoryColorRendering, true);
 
-  if (self->view_count == 0) {
+  const uint32_t view_count = TB_DYN_ARR_SIZE(self->views);
+
+  if (view_count == 0) {
     TracyCZoneEnd(ctx);
     return;
   }
@@ -134,23 +140,23 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   // Allocate all the descriptor sets for this frame
   {
     // Resize the pool
-    if (state->set_count < self->view_count) {
+    if (state->set_count < view_count) {
       if (state->set_pool) {
         tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
       }
 
       VkDescriptorPoolCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = self->view_count * 16,
+          .maxSets = view_count * 16,
           .poolSizeCount = 2,
           .pPoolSizes =
               (VkDescriptorPoolSize[2]){
                   {
-                      .descriptorCount = self->view_count * 8,
+                      .descriptorCount = view_count * 8,
                       .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                   },
                   {
-                      .descriptorCount = self->view_count * 8,
+                      .descriptorCount = view_count * 8,
                       .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                   },
               },
@@ -161,13 +167,13 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
           "View System Frame State Descriptor Pool", &state->set_pool);
       TB_VK_CHECK(err,
                   "Failed to create view system frame state descriptor pool");
-      state->set_count = self->view_count;
+      state->set_count = view_count;
       state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
                                      state->set_count, VkDescriptorSet);
     } else {
       vkResetDescriptorPool(self->render_system->render_thread->device,
                             state->set_pool, 0);
-      state->set_count = self->view_count;
+      state->set_count = view_count;
     }
 
     VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
@@ -193,15 +199,15 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   const uint32_t write_count = buf_count + img_count;
 
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * write_count, VkWriteDescriptorSet);
+      self->tmp_alloc, view_count * write_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * buf_count, VkDescriptorBufferInfo);
+      self->tmp_alloc, view_count * buf_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * img_count, VkDescriptorImageInfo);
-  TbHostBuffer *buffers = tb_alloc_nm_tp(
-      self->tmp_alloc, self->view_count * buf_count, TbHostBuffer);
-  for (uint32_t view_idx = 0; view_idx < self->view_count; ++view_idx) {
-    const View *view = &self->views[view_idx];
+      self->tmp_alloc, view_count * img_count, VkDescriptorImageInfo);
+  TbHostBuffer *buffers =
+      tb_alloc_nm_tp(self->tmp_alloc, view_count * buf_count, TbHostBuffer);
+  TB_DYN_ARR_FOREACH(self->views, view_idx) {
+    const View *view = &TB_DYN_ARR_AT(self->views, view_idx);
     const CommonViewData *view_data = &view->view_data;
     const CommonLightData *light_data = &view->light_data;
     TbHostBuffer *view_buffer = &buffers[view_idx + 0];
@@ -334,7 +340,7 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
     };
   }
   vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         self->view_count * write_count, writes, 0, NULL);
+                         view_count * write_count, writes, 0, NULL);
 
   TracyCZoneEnd(ctx);
 }
@@ -363,17 +369,12 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
 TbViewId tb_view_system_create_view(ViewSystem *self) {
   TB_CHECK_RETURN(self, "Invalid self object", InvalidViewId);
 
-  TbViewId id = self->view_count;
-  uint32_t new_count = self->view_count + 1;
-  if (new_count > self->view_max) {
-    // Reallocate collection
-    const uint32_t new_max = new_count * 2;
-    self->views = tb_realloc_nm_tp(self->std_alloc, self->views, new_max, View);
-    self->view_max = new_max;
+  TbViewId id = TB_DYN_ARR_SIZE(self->views);
+  {
+    View v = {0};
+    TB_DYN_ARR_APPEND(self->views, v);
   }
-  self->view_count = new_count;
-
-  View *view = &self->views[id];
+  View *view = &TB_DYN_ARR_AT(self->views, id);
 
   view->view_data = (CommonViewData){
       .view_pos = {0},
@@ -392,38 +393,38 @@ TbViewId tb_view_system_create_view(ViewSystem *self) {
 
 void tb_view_system_set_view_target(ViewSystem *self, TbViewId view,
                                     TbRenderTargetId target) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->views[view].target = target;
+  TB_DYN_ARR_AT(self->views, view).target = target;
 }
 
 void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
                                   const CommonViewData *data) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->views[view].view_data = *data;
+  TB_DYN_ARR_AT(self->views, view).view_data = *data;
 }
 
 void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
                                    const CommonLightData *data) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->views[view].light_data = *data;
+  TB_DYN_ARR_AT(self->views, view).light_data = *data;
 }
 
 void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
                                      const Frustum *frust) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "View Id out of range");
   }
-  self->views[view].frustum = *frust;
+  TB_DYN_ARR_AT(self->views, view).frustum = *frust;
 }
 
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "View Id out of range");
   }
 
@@ -431,8 +432,8 @@ VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
 }
 
 const View *tb_get_view(ViewSystem *self, TbViewId view) {
-  if (view >= self->view_count) {
+  if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK_RETURN(false, "View Id out of range", NULL);
   }
-  return &self->views[view];
+  return &TB_DYN_ARR_AT(self->views, view);
 }
