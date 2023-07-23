@@ -57,7 +57,7 @@
       a.data = tmp;                                                            \
       a.endptr = &a.data[cur_size];                                            \
     }                                                                          \
-    *(a.endptr++) = v;                                                         \
+    *(a.endptr++) = (v);                                                       \
   }
 
 #define TB_DYN_ARR_CLEAR(a) (a.endptr = a.data)

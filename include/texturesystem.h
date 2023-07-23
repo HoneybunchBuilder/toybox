@@ -2,6 +2,7 @@
 
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
+#include "dynarray.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
@@ -28,19 +29,15 @@ typedef struct TextureSystemDescriptor {
   Allocator tmp_alloc;
 } TextureSystemDescriptor;
 
+typedef struct TbTexture TbTexture;
+
 typedef struct TextureSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
   RenderSystem *render_system;
 
-  uint32_t tex_count;
-  TbTextureId *tex_ids;
-  TbHostBuffer *tex_host_buffers;
-  TbImage *tex_gpu_images;
-  VkImageView *tex_image_views;
-  uint32_t *tex_ref_counts;
-  uint32_t tex_max;
+  TB_DYN_ARR_OF(TbTexture) textures;
 
   TbTextureId default_color_tex;
   TbTextureId default_normal_tex;
