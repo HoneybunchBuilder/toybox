@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "dynarray.h"
 #include "tbrendercommon.h"
 
 #define RenderObjectSystemId 0xFEEDC0DE
@@ -35,10 +36,7 @@ typedef struct RenderObjectSystem {
   VkDescriptorSetLayout set_layout;
   RenderObjectSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
-  uint32_t render_object_count;
-  TbRenderObjectId *render_object_ids;
-  CommonObjectData *render_object_data;
-  uint32_t render_object_max;
+  TB_DYN_ARR_OF(CommonObjectData) render_object_data;
 } RenderObjectSystem;
 
 void tb_render_object_system_descriptor(
