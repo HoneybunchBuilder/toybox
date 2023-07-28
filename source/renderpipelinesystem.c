@@ -83,22 +83,23 @@ void sort_passes_recursive(PassNode *node, uint32_t *pass_order,
 
 void sort_pass_graph(RenderPipelineSystem *self) {
   // Build a graph of pass nodes to determine ordering
-  PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, PassNode);
+  const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
+  PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, pass_count, PassNode);
   // All nodes have worst case pass_count children
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+  for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
     nodes[pass_idx].id = (TbRenderPassId)pass_idx;
     nodes[pass_idx].children =
-        tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, PassNode *);
+        tb_alloc_nm_tp(self->tmp_alloc, pass_count, PassNode *);
   }
 
   // Build graph
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+  for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
     TbRenderPassId pass_id = (TbRenderPassId)pass_idx;
     PassNode *node = &nodes[pass_idx];
 
     // Search all other passes for children
-    for (uint32_t i = 0; i < self->pass_count; ++i) {
-      const RenderPass *pass = &self->render_passes[i];
+    for (uint32_t i = 0; i < pass_count; ++i) {
+      const RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, i);
       if (i != pass_idx) {
         for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
           if (pass->deps[dep_idx] == pass_id) {
@@ -1011,7 +1012,7 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void register_pass(RenderPipelineSystem *self, RenderThread *thread,
                    TbRenderPassId id, uint32_t *command_buffers,
                    uint32_t command_buffer_count) {
-  RenderPass *pass = &self->render_passes[id];
+  RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
   Allocator std_alloc = self->std_alloc;
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &thread->frame_states[frame_idx];
@@ -1107,18 +1108,9 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
                                   const TbRenderPassCreateInfo *create_info) {
   TB_CHECK_RETURN(create_info, "Invalid Create Info ptr", InvalidRenderPassId);
 
-  TbRenderPassId id = self->pass_count;
-  uint32_t new_count = self->pass_count + 1;
-  if (new_count > self->pass_max) {
-    // Reallocate collection
-    const uint32_t new_max = new_count * 2;
-    self->render_passes = tb_realloc_nm_tp(self->std_alloc, self->render_passes,
-                                           new_max, RenderPass);
-    self->pass_max = new_max;
-  }
-  self->pass_count = new_count;
-
-  RenderPass *pass = &self->render_passes[id];
+  TbRenderPassId id = TB_DYN_ARR_SIZE(self->render_passes);
+  TB_DYN_ARR_APPEND(self->render_passes, (RenderPass){0});
+  RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
 
 #ifdef TRACY_ENABLE
   if (create_info->name != NULL) {
@@ -1254,6 +1246,9 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       .tmp_alloc = desc->tmp_alloc,
       .std_alloc = desc->std_alloc,
   };
+
+  // Initialize the render pass array
+  TB_DYN_ARR_RESET(self->render_passes, self->std_alloc, 8);
 
   // Create some default passes
   {
@@ -2608,8 +2603,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
   }
 
   // Calculate pass order
-  self->pass_order =
-      tb_alloc_nm_tp(self->std_alloc, self->pass_count, uint32_t);
+  const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
+  self->pass_order = tb_alloc_nm_tp(self->std_alloc, pass_count, uint32_t);
 
   sort_pass_graph(self);
 
@@ -2621,13 +2616,13 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     uint32_t command_buffer_count = 0; // Treated as an index while builiding
     // Worst case each pass needs its own command buffer
     uint32_t *command_buffer_indices =
-        tb_alloc_nm_tp(self->tmp_alloc, self->pass_count, uint32_t);
+        tb_alloc_nm_tp(self->tmp_alloc, pass_count, uint32_t);
 
     {
       // Actually it's just faster if each pass gets their own command list for
       // now
-      command_buffer_count = self->pass_count;
-      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+      command_buffer_count = pass_count;
+      for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
         command_buffer_indices[pass_idx] = pass_idx;
       }
 
@@ -2637,7 +2632,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       // list recording
 
       // Register passes in execution order
-      for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
+      for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
         const uint32_t idx = self->pass_order[pass_idx];
         register_pass(self, self->render_system->render_thread, idx,
                       command_buffer_indices, command_buffer_count);
@@ -3331,14 +3326,14 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_free_gpu_image(self->render_system, &self->ssao_noise);
   tb_rnd_destroy_image_view(self->render_system, self->ssao_noise_view);
 
-  tb_free(self->std_alloc, self->render_passes);
+  TB_DYN_ARR_DESTROY(self->render_passes);
   tb_free(self->std_alloc, self->pass_order);
 
   *self = (RenderPipelineSystem){0};
 }
 
 void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
-  RenderPass *rp = &self->render_passes[id];
+  RenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
 
   {
     RenderTargetSystem *rt_sys = self->render_target_system;
@@ -3411,8 +3406,9 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
 
   // We now need to patch every pass's transitions so that their targets point
   // at the right VkImages
-  for (uint32_t pass_idx = 0; pass_idx < self->pass_count; ++pass_idx) {
-    RenderPass *pass = &self->render_passes[pass_idx];
+  const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
+  for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
+    RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
       for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
@@ -4315,11 +4311,11 @@ void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
                                         PassAttachment *attachments) {
-  TB_CHECK(pass < self->pass_count, "Pass Id out of range");
+  TB_CHECK(pass < TB_DYN_ARR_SIZE(self->render_passes), "Pass Id out of range");
   TB_CHECK(attach_count, "Attachment count pointer must be valid");
   TB_CHECK(*attach_count <= TB_MAX_ATTACHMENTS, "Too many attachments");
 
-  const RenderPass *p = &self->render_passes[pass];
+  const RenderPass *p = &TB_DYN_ARR_AT(self->render_passes, pass);
 
   if (attachments == NULL) {
     // Attachments ptr was not specified, set the attachment count and return

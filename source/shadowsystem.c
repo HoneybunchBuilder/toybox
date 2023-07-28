@@ -78,7 +78,7 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
       tb_get_component(camera_components, 0, CameraComponent);
 
   const float near = camera_component->near;
-  const float far = 100.0f;
+  const float far = camera_component->far;
 
   // Calculate inv cam vp based on shadow draw distance
   float4x4 inv_cam_vp = {.col0 = {0}};

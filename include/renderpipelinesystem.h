@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "bloom.h"
+#include "dynarray.h"
 #include "luminance.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
@@ -104,10 +105,8 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
-  uint32_t pass_count;
-  RenderPass *render_passes;
-  uint32_t *pass_order;
-  uint32_t pass_max;
+  TB_DYN_ARR_OF(RenderPass) render_passes;
+  uint32_t *pass_order; // Array that is kept at the same size as render_passes
 
   TbBuffer ssao_params;
   TbImage ssao_noise;
