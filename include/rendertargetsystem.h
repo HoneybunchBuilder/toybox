@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "dynarray.h"
 #include "tbvk.h"
 #include <SDL2/SDL_stdinc.h>
 
@@ -34,9 +35,7 @@ typedef struct RenderTargetSystem {
 
   RenderSystem *render_system;
 
-  uint32_t rt_count;
-  RenderTarget *render_targets;
-  uint32_t rt_max;
+  TB_DYN_ARR_OF(RenderTarget) render_targets;
 
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
