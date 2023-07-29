@@ -84,6 +84,9 @@ bool create_render_system(RenderSystem *self,
     for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
       RenderSystemFrameState *state = &self->frame_states[state_idx];
 
+      TB_DYN_ARR_RESET(state->buf_copy_queue, self->std_alloc, 1);
+      TB_DYN_ARR_RESET(state->buf_img_copy_queue, self->std_alloc, 1);
+
       const uint64_t size_bytes = TB_VMA_TMP_HOST_MB * 1024 * 1024;
 
       // Create tmp host vma pool
@@ -252,6 +255,9 @@ void destroy_render_system(RenderSystem *self) {
     vmaDestroyBuffer(vma_alloc, state->tmp_host_buffer.buffer,
                      state->tmp_host_buffer.alloc);
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
+
+    TB_DYN_ARR_DESTROY(state->buf_copy_queue);
+    TB_DYN_ARR_DESTROY(state->buf_img_copy_queue);
   }
 
   vmaDestroyPool(vma_alloc, self->host_buffer_pool);
@@ -306,8 +312,8 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
       // Assign to the thread
       thread_state->buf_copy_queue = state->buf_copy_queue;
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
-      state->buf_copy_queue.req_count = 0;
-      state->buf_img_copy_queue.req_count = 0;
+      TB_DYN_ARR_CLEAR(state->buf_copy_queue);
+      TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
     }
 
     // Reset temp pool, the contents will still be intact for the render thread
@@ -331,16 +337,15 @@ TB_DEFINE_SYSTEM(render, RenderSystem, RenderSystemDescriptor)
 
 void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc) {
-  desc->name = "Render";
-  desc->size = sizeof(RenderSystem);
-  desc->id = RenderSystemId;
-  desc->desc = (InternalDescriptor)render_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 0;
-  desc->create = tb_create_render_system;
-  desc->destroy = tb_destroy_render_system;
-  desc->tick = tb_tick_render_system;
+  *desc = (SystemDescriptor){
+      .name = "Render",
+      .size = sizeof(RenderSystem),
+      .id = RenderSystemId,
+      .desc = (InternalDescriptor)render_desc,
+      .create = tb_create_render_system,
+      .destroy = tb_destroy_render_system,
+      .tick = tb_tick_render_system,
+  };
 }
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
@@ -542,49 +547,24 @@ VkResult tb_rnd_create_graphics_pipelines(
 
 void tb_rnd_upload_buffers(RenderSystem *self, BufferCopy *uploads,
                            uint32_t upload_count) {
-  const uint32_t frame_idx = self->frame_idx;
-
-  RenderSystemFrameState *state = &self->frame_states[frame_idx];
-  BufferCopyQueue *queue = &state->buf_copy_queue;
-
-  // See if we need to resize queue
-  Allocator std_alloc = self->std_alloc;
-  const uint64_t new_count = queue->req_count + upload_count;
-  if (queue->req_max < new_count) {
-    const uint64_t new_max = new_count * 2;
-    queue->reqs = tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferCopy);
-    queue->req_max = new_max;
-  }
-
+  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+  uint32_t head = TB_DYN_ARR_SIZE(state->buf_copy_queue);
+  TB_DYN_ARR_RESIZE(state->buf_copy_queue, head + upload_count);
   // Append uploads to queue
-  SDL_memcpy(&queue->reqs[queue->req_count], uploads,
-             sizeof(BufferCopy) * upload_count);
-
-  queue->req_count = new_count;
+  for (uint32_t i = 0; i < upload_count; ++i) {
+    TB_DYN_ARR_AT(state->buf_copy_queue, head + i) = uploads[i];
+  }
 }
 
 void tb_rnd_upload_buffer_to_image(RenderSystem *self, BufferImageCopy *uploads,
                                    uint32_t upload_count) {
-  const uint32_t frame_idx = self->frame_idx;
-
-  RenderSystemFrameState *state = &self->frame_states[frame_idx];
-  BufferImageCopyQueue *queue = &state->buf_img_copy_queue;
-
-  // See if we need to resize queue
-  Allocator std_alloc = self->std_alloc;
-  const uint64_t new_count = queue->req_count + upload_count;
-  if (queue->req_max < new_count) {
-    const uint64_t new_max = new_count * 2;
-    queue->reqs =
-        tb_realloc_nm_tp(std_alloc, queue->reqs, new_max, BufferImageCopy);
-    queue->req_max = new_max;
-  }
-
+  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+  uint32_t head = TB_DYN_ARR_SIZE(state->buf_img_copy_queue);
+  TB_DYN_ARR_RESIZE(state->buf_img_copy_queue, head + upload_count);
   // Append uploads to queue
-  SDL_memcpy(&queue->reqs[queue->req_count], uploads,
-             sizeof(BufferImageCopy) * upload_count);
-
-  queue->req_count = new_count;
+  for (uint32_t i = 0; i < upload_count; ++i) {
+    TB_DYN_ARR_AT(state->buf_img_copy_queue, head + i) = uploads[i];
+  }
 }
 
 void tb_rnd_free_gpu_buffer(RenderSystem *self, TbBuffer *buffer) {

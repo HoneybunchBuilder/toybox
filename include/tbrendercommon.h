@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dynarray.h"
 #include "tbvk.h"
 #include "tbvma.h"
 #include "vkdbg.h"
@@ -27,17 +28,9 @@ typedef struct BufferImageCopy {
   VkImageSubresourceRange range;
 } BufferImageCopy;
 
-typedef struct BufferCopyQueue {
-  uint32_t req_count;
-  BufferCopy *reqs;
-  uint32_t req_max;
-} BufferCopyQueue;
+typedef TB_DYN_ARR_OF(BufferCopy) BufferCopyQueue;
 
-typedef struct BufferImageCopyQueue {
-  uint32_t req_count;
-  BufferImageCopy *reqs;
-  uint32_t req_max;
-} BufferImageCopyQueue;
+typedef TB_DYN_ARR_OF(BufferImageCopy) BufferImageCopyQueue;
 
 typedef struct TbHostBuffer {
   VkBuffer buffer;

@@ -1260,19 +1260,21 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       TracyCZoneN(up_ctx, "Record Upload", true);
       TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1, true);
       // Upload all buffer requests
-      if (state->buf_copy_queue.req_count > 0) {
-        for (int32_t i = state->buf_copy_queue.req_count - 1; i >= 0; i--) {
-          const BufferCopy *up = &state->buf_copy_queue.reqs[i];
+      if (TB_DYN_ARR_SIZE(state->buf_copy_queue) > 0) {
+        for (int32_t i = TB_DYN_ARR_SIZE(state->buf_copy_queue) - 1; i >= 0;
+             i--) {
+          const BufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
           vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
         }
-
-        state->buf_copy_queue.req_count = 0;
+        TB_DYN_ARR_CLEAR(state->buf_copy_queue);
       }
 
       // Upload all buffer to image requests
-      if (state->buf_img_copy_queue.req_count > 0) {
-        for (int32_t i = state->buf_img_copy_queue.req_count - 1; i >= 0; i--) {
-          const BufferImageCopy *up = &state->buf_img_copy_queue.reqs[i];
+      if (TB_DYN_ARR_SIZE(state->buf_img_copy_queue) > 0) {
+        for (int32_t i = TB_DYN_ARR_SIZE(state->buf_img_copy_queue) - 1; i >= 0;
+             i--) {
+          const BufferImageCopy *up =
+              &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
 
           // Transition target image to copy dst
           {
@@ -1313,7 +1315,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           }
         }
 
-        state->buf_img_copy_queue.req_count = 0;
+        TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
       }
 
       TracyCVkZoneEnd(upload_scope);
