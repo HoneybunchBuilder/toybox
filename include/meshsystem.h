@@ -2,6 +2,7 @@
 
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
+#include "dynarray.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
@@ -22,6 +23,7 @@ typedef struct MeshComponent MeshComponent;
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
+typedef struct TbMesh TbMesh;
 static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
@@ -100,17 +102,7 @@ typedef struct MeshSystem {
   VkPipelineLayout shadow_pipe_layout;
   VkPipeline shadow_pipeline;
 
-  uint32_t mesh_count;
-  TbMeshId *mesh_ids;
-  TbHostBuffer *mesh_host_buffers;
-  TbBuffer *mesh_gpu_buffers;
-  uint32_t *mesh_ref_counts;
-  VkCommandBuffer *mesh_command_buffers;
-  uint32_t mesh_max;
-
-  uint32_t cmd_pool_count;
-  MeshCommandPool *cmd_pools;
-  uint32_t cmd_pool_max;
+  TB_DYN_ARR_OF(TbMesh) meshes;
 } MeshSystem;
 
 void tb_mesh_system_descriptor(SystemDescriptor *desc,

@@ -109,6 +109,13 @@ typedef struct VisibleSet {
   MeshComponent const **meshes;
 } VisibleSet;
 
+typedef struct TbMesh {
+  TbMeshId id;
+  uint32_t ref_count;
+  TbHostBuffer host_buffer;
+  TbBuffer gpu_buffer;
+} TbMesh;
+
 VkResult create_shadow_pipeline(RenderSystem *render_system,
                                 VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
@@ -1035,6 +1042,7 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       .render_pipe_system = render_pipe_system,
   };
 
+  TB_DYN_ARR_RESET(self->meshes, self->std_alloc, 8);
   TbRenderPassId prepass_id =
       self->render_pipe_system->opaque_depth_normal_pass;
   TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
@@ -1231,11 +1239,13 @@ void destroy_mesh_system(MeshSystem *self) {
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->prepass_layout);
 
-  for (uint32_t i = 0; i < self->mesh_count; ++i) {
-    if (self->mesh_ref_counts[i] != 0) {
+  TB_DYN_ARR_FOREACH(self->meshes, i) {
+    if (TB_DYN_ARR_AT(self->meshes, i).ref_count != 0) {
       TB_CHECK(false, "Leaking meshes");
     }
   }
+
+  TB_DYN_ARR_DESTROY(self->meshes);
 
   *self = (MeshSystem){0};
 }
@@ -1908,8 +1918,8 @@ void tb_mesh_system_descriptor(SystemDescriptor *desc,
 }
 
 uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
-  for (uint32_t i = 0; i < self->mesh_count; ++i) {
-    if (self->mesh_ids[i] == id) {
+  TB_DYN_ARR_FOREACH(self->meshes, i) {
+    if (TB_DYN_ARR_AT(self->meshes, i).id == id) {
       return i;
       break;
     }
@@ -1993,23 +2003,6 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
   return cgltf_result_success;
 }
 
-typedef struct MeshCommandPool {
-  VkCommandPool pool;
-  VkCommandBuffer *buffers;
-} MeshCommandPool;
-
-MeshCommandPool *mesh_get_cmd_pool(MeshSystem *self) {
-  uint32_t pool_idx = self->mesh_count / TB_MESH_CMD_PAGE_SIZE;
-  return &self->cmd_pools[pool_idx];
-}
-
-VkCommandBuffer mesh_get_cmd_buff(MeshSystem *self) {
-  uint32_t cmd_idx = self->mesh_count % TB_MESH_CMD_PAGE_SIZE;
-  MeshCommandPool *pool = mesh_get_cmd_pool(self);
-  self->mesh_count++;
-  return pool->buffers[cmd_idx];
-}
-
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node) {
   // Hash the mesh's path and gltf name to get the id
@@ -2023,26 +2016,12 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
   // Mesh was not found, load it now
   if (index == SDL_MAX_UINT32) {
-    const uint32_t new_count = self->mesh_count + 1;
-    if (new_count > self->mesh_max) {
-      // Re-allocate space for meshes
-      const uint32_t new_max = new_count * 2;
-
-      Allocator alloc = self->std_alloc;
-
-      self->mesh_ids =
-          tb_realloc_nm_tp(alloc, self->mesh_ids, new_max, TbMeshId);
-      self->mesh_host_buffers = tb_realloc_nm_tp(alloc, self->mesh_host_buffers,
-                                                 new_max, TbHostBuffer);
-      self->mesh_gpu_buffers =
-          tb_realloc_nm_tp(alloc, self->mesh_gpu_buffers, new_max, TbBuffer);
-      self->mesh_ref_counts =
-          tb_realloc_nm_tp(alloc, self->mesh_ref_counts, new_max, uint32_t);
-
-      self->mesh_max = new_max;
+    index = TB_DYN_ARR_SIZE(self->meshes);
+    {
+      TbMesh m = {.id = id};
+      TB_DYN_ARR_APPEND(self->meshes, m);
     }
-
-    index = self->mesh_count;
+    TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, index);
 
     // Determine how big this mesh is
     uint64_t geom_size = 0;
@@ -2099,7 +2078,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       SDL_snprintf(name, 100, "%s Host Geom Buffer", mesh->name);
 
       err = tb_rnd_sys_alloc_host_buffer(self->render_system, &create_info,
-                                         name, &self->mesh_host_buffers[index]);
+                                         name, &tb_mesh->host_buffer);
       TB_VK_CHECK_RET(err, "Failed to create host mesh buffer", false);
     }
 
@@ -2117,13 +2096,13 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       SDL_snprintf(name, 100, "%s GPU Geom Buffer", mesh->name);
 
       err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info, name,
-                                        &self->mesh_gpu_buffers[index]);
+                                        &tb_mesh->gpu_buffer);
       TB_VK_CHECK_RET(err, "Failed to create gpu mesh buffer", false);
     }
 
     // Read the cgltf mesh into the driver owned memory
     {
-      TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
+      TbHostBuffer *host_buf = &tb_mesh->host_buffer;
       uint64_t idx_offset = 0;
       uint64_t vtx_offset = vertex_offset;
       for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
@@ -2196,28 +2175,22 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
     // Instruct the render system to upload this
     {
       BufferCopy copy = {
-          .src = self->mesh_host_buffers[index].buffer,
-          .dst = self->mesh_gpu_buffers[index].buffer,
+          .src = tb_mesh->host_buffer.buffer,
+          .dst = tb_mesh->gpu_buffer.buffer,
           .region = {.size = geom_size},
       };
       tb_rnd_upload_buffers(self->render_system, &copy, 1);
     }
-
-    self->mesh_ids[index] = id;
-    self->mesh_ref_counts[index] =
-        0; // Must initialize this or it could be garbage
-    self->mesh_count++;
   }
 
-  self->mesh_ref_counts[index]++;
-
+  TB_DYN_ARR_AT(self->meshes, index).ref_count++;
   return id;
 }
 
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id) {
   uint32_t index = find_mesh_by_id(self, id);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh", false);
-  self->mesh_ref_counts[index]++;
+  TB_DYN_ARR_AT(self->meshes, index).ref_count++;
   return true;
 }
 
@@ -2226,7 +2199,7 @@ VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id) {
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh",
                   VK_NULL_HANDLE);
 
-  VkBuffer buffer = self->mesh_gpu_buffers[index].buffer;
+  VkBuffer buffer = TB_DYN_ARR_AT(self->meshes, index).gpu_buffer.buffer;
   TB_CHECK_RETURN(buffer, "Failed to retrieve buffer", VK_NULL_HANDLE);
 
   return buffer;
@@ -2240,19 +2213,21 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
     return;
   }
 
-  if (self->mesh_ref_counts[index] == 0) {
+  TbMesh *mesh = &TB_DYN_ARR_AT(self->meshes, index);
+
+  if (mesh->ref_count == 0) {
     TB_CHECK(false, "Tried to release reference to mesh with 0 ref count");
     return;
   }
 
-  self->mesh_ref_counts[index]--;
+  mesh->ref_count--;
 
-  if (self->mesh_ref_counts[index] == 0) {
+  if (mesh->ref_count == 0) {
     // Free the mesh at this index
     VmaAllocator vma_alloc = self->render_system->vma_alloc;
 
-    TbHostBuffer *host_buf = &self->mesh_host_buffers[index];
-    TbBuffer *gpu_buf = &self->mesh_gpu_buffers[index];
+    TbHostBuffer *host_buf = &mesh->host_buffer;
+    TbBuffer *gpu_buf = &mesh->gpu_buffer;
 
     vmaUnmapMemory(vma_alloc, host_buf->alloc);
 
