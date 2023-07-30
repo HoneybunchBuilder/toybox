@@ -251,7 +251,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         const uint32_t max_sets = desc_cap * 4;
 
         if (self->mat_set_pool) {
-          vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
+          tb_rnd_destroy_descriptor_pool(self->render_system,
+                                         self->mat_set_pool);
         }
 
 // NOTE: Due to behavior in AMD drivers we use max_sets for the
@@ -278,11 +279,10 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         };
 #undef POOL_SIZE_COUNT
-        err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
-                                     &self->mat_set_pool);
+        err = tb_rnd_create_descriptor_pool(self->render_system, &create_info,
+                                            "Material Set Pool",
+                                            &self->mat_set_pool);
         TB_VK_CHECK(err, "Failed to create material descriptor pool");
-        SET_VK_NAME(device, self->mat_set_pool, VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-                    "Material Set Pool");
 
         // Reallocate descriptors
         VkDescriptorSetLayout *layouts =
