@@ -1,6 +1,7 @@
 #pragma once
 
 #include "allocator.h"
+#include "dynarray.h"
 #include "simd.h"
 
 #define VisualLoggingSystemId 0x1337F001
@@ -52,9 +53,7 @@ typedef struct VisualLoggingSystem {
   int32_t log_frame_idx;
 
   bool recording;
-  uint32_t frame_count;
-  VLogFrame *frames;
-  uint32_t frame_max;
+  TB_DYN_ARR_OF(VLogFrame) frames;
 
 } VisualLoggingSystem;
 

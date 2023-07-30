@@ -157,11 +157,8 @@ VLogFrame *get_current_frame(VisualLoggingSystem *vlog) {
   // Expecting that upon creation the vlogger system has at least some space
   // allocated and that upon ticking the system will ensure that there will
   // always be a frame to put draws into.
-  TB_CHECK_RETURN(vlog->frames, "Invalid frame collection", NULL);
-  TB_CHECK_RETURN(vlog->frame_count < vlog->frame_max, "Frame out of range",
-                  NULL);
-
-  VLogFrame *frame = &vlog->frames[vlog->frame_count];
+  uint32_t tail = TB_DYN_ARR_SIZE(vlog->frames) - 1;
+  VLogFrame *frame = &TB_DYN_ARR_AT(vlog->frames, tail);
   TB_CHECK(frame, "Invalid frame");
   return frame;
 }
@@ -369,6 +366,8 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
   };
 
+  TB_DYN_ARR_RESET(self->frames, self->std_alloc, 128);
+
   // Load some default meshes, load some simple shader pipelines
   VkResult err = VK_SUCCESS;
 
@@ -494,6 +493,8 @@ void destroy_visual_logging_system(VisualLoggingSystem *self) {
 
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
+
+  TB_DYN_ARR_DESTROY(self->frames);
 #endif
   *self = (VisualLoggingSystem){0};
 }
@@ -509,9 +510,12 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System", TracyCategoryColorCore, true);
 
+  uint32_t frame_count = TB_DYN_ARR_SIZE(self->frames);
+  uint32_t frame_cap = self->frames.capacity;
+
   // Render primitives from selected frame
-  if (self->logging && self->frame_max > 0) {
-    const VLogFrame *frame = &self->frames[self->log_frame_idx];
+  if (self->logging && frame_cap > 0) {
+    const VLogFrame *frame = &TB_DYN_ARR_AT(self->frames, self->log_frame_idx);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -521,44 +525,46 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
     // Get the vp matrix for the primary view
     const PackedComponentStore *camera_store =
         tb_get_column_check_id(input, 0, 0, CameraComponentId);
-    const CameraComponent *camera =
-        tb_get_component(camera_store, 0, CameraComponent);
+    if (camera_store) {
+      const CameraComponent *camera =
+          tb_get_component(camera_store, 0, CameraComponent);
 
-    for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
-      const VLogLine *line = &frame->line_draws[i];
-      (void)line;
-      // TODO: Encode line draws into the line batch
+      for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
+        const VLogLine *line = &frame->line_draws[i];
+        (void)line;
+        // TODO: Encode line draws into the line batch
+      }
+
+      VLogDrawBatch *loc_batch = tb_alloc_tp(self->tmp_alloc, VLogDrawBatch);
+      *loc_batch = (VLogDrawBatch){
+          .index_count = self->sphere_index_count,
+          .pos_offset = self->sphere_pos_offset,
+          .shape_geom_buffer = self->sphere_geom_buffer,
+          .shape_scale = self->sphere_scale,
+          .type = TB_VLOG_SHAPE_LOCATION,
+          .view_set =
+              tb_view_system_get_descriptor(self->view_system, camera->view_id),
+      };
+
+      DrawBatch *batch = tb_alloc_tp(self->tmp_alloc, DrawBatch);
+      *batch = (DrawBatch){
+          .layout = self->pipe_layout,
+          .pipeline = self->pipeline,
+          .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
+          .scissor = (VkRect2D){{0, 0}, {width, height}},
+          .user_batch = loc_batch,
+          .draw_count = frame->loc_draw_count,
+          .draw_size = sizeof(VLogShape),
+          .draws =
+              tb_alloc_nm_tp(self->tmp_alloc, frame->loc_draw_count, VLogShape),
+      };
+      for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
+        ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
+      }
+
+      tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                          self->draw_ctx, 1, batch);
     }
-
-    VLogDrawBatch *loc_batch = tb_alloc_tp(self->tmp_alloc, VLogDrawBatch);
-    *loc_batch = (VLogDrawBatch){
-        .index_count = self->sphere_index_count,
-        .pos_offset = self->sphere_pos_offset,
-        .shape_geom_buffer = self->sphere_geom_buffer,
-        .shape_scale = self->sphere_scale,
-        .type = TB_VLOG_SHAPE_LOCATION,
-        .view_set =
-            tb_view_system_get_descriptor(self->view_system, camera->view_id),
-    };
-
-    DrawBatch *batch = tb_alloc_tp(self->tmp_alloc, DrawBatch);
-    *batch = (DrawBatch){
-        .layout = self->pipe_layout,
-        .pipeline = self->pipeline,
-        .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
-        .scissor = (VkRect2D){{0, 0}, {width, height}},
-        .user_batch = loc_batch,
-        .draw_count = frame->loc_draw_count,
-        .draw_size = sizeof(VLogShape),
-        .draws =
-            tb_alloc_nm_tp(self->tmp_alloc, frame->loc_draw_count, VLogShape),
-    };
-    for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
-      ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
-    }
-
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->draw_ctx, 1, batch);
   }
 
   // UI for recording visual logs
@@ -577,25 +583,27 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
       }
 
       if (self->recording) {
-        igText("Recording Frame %d", self->frame_count);
+        igText("Recording Frame %d", frame_count);
       } else {
-        igText("Recorded %d Frames", self->frame_count);
+        igText("Recorded %d Frames", frame_count);
       }
-      igText("%d frames allocated", self->frame_max);
+      igText("%d frames allocated", frame_cap);
 
       igSeparator();
 
-      igText("Selected Frame:");
-      igSliderInt("##frame", &self->log_frame_idx, 0, self->frame_max, "%d", 0);
-      if (self->log_frame_idx < 0 || self->frame_max == 0) {
-        self->log_frame_idx = 0;
-      } else if (self->frame_count > 0 &&
-                 self->log_frame_idx >= (int32_t)self->frame_count) {
-        self->log_frame_idx = (int32_t)self->frame_count - 1;
-      }
       if (igButton(self->logging ? "Stop Rendering" : "Start Rendering",
                    (ImVec2){0})) {
         self->logging = !self->logging;
+      }
+
+      static bool render_latest = true;
+      igCheckbox("Render Latest Frame", &render_latest);
+      if (render_latest) {
+        self->log_frame_idx = frame_count;
+      } else {
+
+        igText("Selected Frame:");
+        igSliderInt("##frame", &self->log_frame_idx, 0, frame_cap, "%d", 0);
       }
 
       igEnd();
@@ -605,16 +613,15 @@ void tick_visual_logging_system(VisualLoggingSystem *self,
   if (self->recording) {
     // If we're recording make sure that we're properly keeping the frame
     // collection large enough so that the next frame can issue draws
-    uint32_t next_frame_count = self->frame_count + 1;
-    if (next_frame_count >= self->frame_max) {
-      // Add 128 frames of buffer at a time, this means we're not constantly
-      // allocating but we also won't be allocating any extremely large chunks
-      // which could result in a stall at later points
-      self->frame_max = next_frame_count + 127;
-      self->frames = tb_realloc_nm_tp(self->std_alloc, self->frames,
-                                      self->frame_max, VLogFrame);
+    if (frame_count + 1 >= frame_cap) {
+      // TODO: Resizing a collection like this can cause serious stutter when
+      // the collection gets large enough. We should probably instead allocate
+      // from a free-list of buckets so that we're never re-sizing a large
+      // collection
+      TB_DYN_ARR_RESERVE(self->frames, frame_cap + 1024);
     }
-    self->frame_count = next_frame_count;
+    // If recording, insert a new frame
+    TB_DYN_ARR_APPEND(self->frames, (VLogFrame){0});
   }
 
   TracyCZoneEnd(ctx);
@@ -641,7 +648,7 @@ void tb_vlog_end_recording(VisualLoggingSystem *vlog) {
 void tb_vlog_clear(VisualLoggingSystem *vlog) {
   (void)vlog;
 #ifndef FINAL
-  vlog->frame_count = 0;
+  TB_DYN_ARR_CLEAR(vlog->frames);
 #endif
 }
 

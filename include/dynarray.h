@@ -40,6 +40,18 @@
     a.endptr = a.data + size;                                                  \
   }
 
+#define TB_DYN_ARR_RESERVE(a, c)                                               \
+  {                                                                            \
+    uint32_t cap = (c);                                                        \
+    if (a.capacity < cap) {                                                    \
+      ptrdiff_t cur_size = a.endptr - a.data;                                  \
+      a.data = (decltype(a.data))tb_realloc(a.alloc, a.data,                   \
+                                            sizeof(a.data[0]) * cap);          \
+      a.capacity = cap;                                                        \
+      a.endptr = a.data + cur_size;                                            \
+    }                                                                          \
+  }
+
 #define TB_DYN_ARR_DESTROY(a)                                                  \
   if (a.data != NULL) {                                                        \
     tb_free(a.alloc, a.data);                                                  \
