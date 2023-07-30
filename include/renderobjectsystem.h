@@ -22,10 +22,8 @@ typedef struct RenderObjectSystemDescriptor {
 } RenderObjectSystemDescriptor;
 
 typedef struct RenderObjectSystemFrameState {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
-  VkDescriptorSet *sets;
-  uint32_t set_max;
+  VkDescriptorPool pool;
+  TB_DYN_ARR_OF(VkDescriptorSet) sets;
 } RenderObjectSystemFrameState;
 
 typedef struct RenderObjectSystem {
