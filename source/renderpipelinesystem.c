@@ -1037,21 +1037,12 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
       }
     }
 
-    const uint32_t new_count = state->pass_ctx_count + 1;
-    if (new_count > state->pass_ctx_max) {
-      const uint32_t new_max = new_count * 2;
-      state->pass_contexts = tb_realloc_nm_tp(std_alloc, state->pass_contexts,
-                                              new_max, PassContext);
-      state->pass_ctx_max = new_max;
-    }
-
+    TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
     TbRenderTargetId target_id = pass->attachments[0].attachment;
     VkExtent3D target_ext = tb_render_target_get_mip_extent(
         self->render_target_system, pass->attachments[0].mip, target_id);
 
-    PassContext *pass_context = &state->pass_contexts[state->pass_ctx_count];
-    TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
-    *pass_context = (PassContext){
+    PassContext pass_context = (PassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
         .attachment_count = pass->attach_count,
@@ -1060,8 +1051,9 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
         .height = target_ext.height,
         .render_info = &pass->info[frame_idx],
     };
+
     for (uint32_t i = 0; i < pass->attach_count; ++i) {
-      pass_context->clear_values[i] = pass->attachments[i].clear_value;
+      pass_context.clear_values[i] = pass->attachments[i].clear_value;
     }
 #ifdef TRACY_ENABLE
     SDL_strlcpy(pass_context->label, pass->label, TB_RP_LABEL_LEN);
@@ -1071,13 +1063,13 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
       const PassTransition *transition = &pass->transitions[trans_idx];
-      ImageTransition *barrier = &pass_context->barriers[trans_idx];
+      ImageTransition *barrier = &pass_context.barriers[trans_idx];
       *barrier = transition->barrier;
       barrier->barrier.image = tb_render_target_get_image(
           self->render_target_system, frame_idx, transition->render_target);
     }
 
-    state->pass_ctx_count = new_count;
+    TB_DYN_ARR_APPEND(state->pass_contexts, pass_context);
   }
 }
 
@@ -3346,7 +3338,7 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
       {
         FrameState *state =
             &self->render_system->render_thread->frame_states[i];
-        PassContext *context = &state->pass_contexts[id];
+        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
         context->width = extent.width;
         context->height = extent.height;
 
@@ -3406,16 +3398,15 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
 
   // We now need to patch every pass's transitions so that their targets point
   // at the right VkImages
-  const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
-  for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
+  TB_DYN_ARR_FOREACH(self->render_passes, pass_idx) {
     RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
       for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
            ++frame_idx) {
-        PassContext *context =
-            &self->render_system->render_thread->frame_states[frame_idx]
-                 .pass_contexts[pass_idx];
+        FrameState *state =
+            &self->render_system->render_thread->frame_states[frame_idx];
+        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
         const PassTransition *transition = &pass->transitions[trans_idx];
         ImageTransition *barrier = &context->barriers[trans_idx];
         *barrier = transition->barrier;
@@ -3431,12 +3422,13 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state =
         &self->render_system->render_thread->frame_states[frame_idx];
-    for (uint32_t ctx_idx = 0; ctx_idx < state->draw_ctx_count; ++ctx_idx) {
-      DrawContext *draw_ctx = &state->draw_contexts[ctx_idx];
+    TB_DYN_ARR_FOREACH(state->draw_contexts, ctx_idx) {
+      DrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
       draw_ctx->batch_count = 0;
     }
-    for (uint32_t ctx_idx = 0; ctx_idx < state->dispatch_ctx_count; ++ctx_idx) {
-      DispatchContext *dispatch_ctx = &state->dispatch_contexts[ctx_idx];
+    TB_DYN_ARR_FOREACH(state->dispatch_contexts, ctx_idx) {
+      DispatchContext *dispatch_ctx =
+          &TB_DYN_ARR_AT(state->dispatch_contexts, ctx_idx);
       dispatch_ctx->batch_count = 0;
     }
   }
@@ -4259,24 +4251,15 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
                                          const DrawContextDescriptor *desc) {
   Allocator std_alloc = self->std_alloc;
   RenderThread *thread = self->render_system->render_thread;
-  TbDrawContextId id = thread->frame_states[0].draw_ctx_count;
+  TbDrawContextId id = TB_DYN_ARR_SIZE(thread->frame_states[0].draw_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &thread->frame_states[frame_idx];
-
-    const uint32_t new_count = state->draw_ctx_count + 1;
-    if (new_count > state->draw_ctx_max) {
-      const uint32_t new_max = new_count * 2;
-      state->draw_contexts = tb_realloc_nm_tp(std_alloc, state->draw_contexts,
-                                              new_max, DrawContext);
-      state->draw_ctx_max = new_max;
-    }
-    state->draw_ctx_count = new_count;
-
-    state->draw_contexts[id] = (DrawContext){
+    DrawContext ctx = {
         .pass_id = desc->pass_id,
         .user_batch_size = desc->batch_size,
         .record_fn = desc->draw_fn,
     };
+    TB_DYN_ARR_APPEND(state->draw_contexts, ctx);
   }
   return id;
 }
@@ -4285,24 +4268,16 @@ TbDispatchContextId tb_render_pipeline_register_dispatch_context(
     RenderPipelineSystem *self, const DispatchContextDescriptor *desc) {
   Allocator std_alloc = self->std_alloc;
   RenderThread *thread = self->render_system->render_thread;
-  TbDispatchContextId id = thread->frame_states[0].dispatch_ctx_count;
+  TbDispatchContextId id =
+      TB_DYN_ARR_SIZE(thread->frame_states[0].dispatch_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &thread->frame_states[frame_idx];
-
-    const uint32_t new_count = state->dispatch_ctx_count + 1;
-    if (new_count > state->dispatch_ctx_max) {
-      const uint32_t new_max = new_count * 2;
-      state->dispatch_contexts = tb_realloc_nm_tp(
-          std_alloc, state->dispatch_contexts, new_max, DispatchContext);
-      state->dispatch_ctx_max = new_max;
-    }
-    state->dispatch_ctx_count = new_count;
-
-    state->dispatch_contexts[id] = (DispatchContext){
+    DispatchContext ctx = {
         .pass_id = desc->pass_id,
         .user_batch_size = desc->batch_size,
         .record_fn = desc->dispatch_fn,
     };
+    TB_DYN_ARR_APPEND(state->dispatch_contexts, ctx);
   }
   return id;
 }
@@ -4335,12 +4310,12 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                          const DrawBatch *batches) {
   RenderThread *thread = self->render_system->render_thread;
   FrameState *state = &thread->frame_states[self->render_system->frame_idx];
-  if (draw_ctx >= state->draw_ctx_count) {
+  if (draw_ctx >= TB_DYN_ARR_SIZE(state->draw_contexts)) {
     TB_CHECK(false, "Draw Context Id out of range");
     return;
   }
 
-  DrawContext *ctx = &state->draw_contexts[draw_ctx];
+  DrawContext *ctx = &TB_DYN_ARR_AT(state->draw_contexts, draw_ctx);
 
   const uint32_t write_head = ctx->batch_count;
   const uint32_t new_count = ctx->batch_count + batch_count;
@@ -4381,12 +4356,12 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
                                              const DispatchBatch *batches) {
   RenderThread *thread = self->render_system->render_thread;
   FrameState *state = &thread->frame_states[self->render_system->frame_idx];
-  if (dispatch_ctx >= state->dispatch_ctx_count) {
+  if (dispatch_ctx >= TB_DYN_ARR_SIZE(state->dispatch_contexts)) {
     TB_CHECK(false, "Dispatch Context Id out of range");
     return;
   }
 
-  DispatchContext *ctx = &state->dispatch_contexts[dispatch_ctx];
+  DispatchContext *ctx = &TB_DYN_ARR_AT(state->dispatch_contexts, dispatch_ctx);
 
   const uint32_t write_head = ctx->batch_count;
   const uint32_t new_count = ctx->batch_count + batch_count;

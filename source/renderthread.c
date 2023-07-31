@@ -1393,14 +1393,13 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
     // Record registered passes
     VkSemaphore pre_final_sem = upload_complete_sem;
-    if (state->pass_ctx_count > 0) {
+    if (TB_DYN_ARR_SIZE(state->pass_contexts) > 0) {
       TracyCZoneN(pass_ctx, "Record Passes", true);
       pre_final_sem = render_complete_sem;
       uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
       void *cmd_scope = NULL;
-      for (uint32_t pass_idx = 0; pass_idx < state->pass_ctx_count;
-           ++pass_idx) {
-        PassContext *pass = &state->pass_contexts[pass_idx];
+      TB_DYN_ARR_FOREACH(state->pass_contexts, pass_idx) {
+        PassContext *pass = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
 
         VkCommandBuffer pass_buffer =
             state->pass_command_buffers[pass->command_buffer_index];
@@ -1464,18 +1463,17 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
         if (pass->attachment_count > 0) {
-          for (uint32_t draw_idx = 0; draw_idx < state->draw_ctx_count;
-               ++draw_idx) {
-            DrawContext *draw = &state->draw_contexts[draw_idx];
+          TB_DYN_ARR_FOREACH(state->draw_contexts, draw_idx) {
+            DrawContext *draw = &TB_DYN_ARR_AT(state->draw_contexts, draw_idx);
             if (draw->pass_id == pass->id && draw->batch_count > 0) {
               draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
                               draw->batches);
             }
           }
         } else {
-          for (uint32_t dispatch_idx = 0;
-               dispatch_idx < state->dispatch_ctx_count; ++dispatch_idx) {
-            DispatchContext *dispatch = &state->dispatch_contexts[dispatch_idx];
+          TB_DYN_ARR_FOREACH(state->dispatch_contexts, disp_idx) {
+            DispatchContext *dispatch =
+                &TB_DYN_ARR_AT(state->dispatch_contexts, disp_idx);
             if (dispatch->pass_id == pass->id && dispatch->batch_count > 0) {
               dispatch->record_fn(gpu_ctx, pass_buffer, dispatch->batch_count,
                                   dispatch->batches);

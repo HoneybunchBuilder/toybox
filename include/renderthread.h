@@ -106,18 +106,9 @@ typedef struct FrameState {
 
   ArenaAllocator tmp_alloc;
 
-  uint32_t pass_ctx_count;
-  PassContext *pass_contexts;
-  uint32_t pass_ctx_max;
-
-  uint32_t draw_ctx_count;
-  DrawContext *draw_contexts;
-  uint32_t draw_ctx_max;
-
-  uint32_t dispatch_ctx_count;
-  DispatchContext *dispatch_contexts;
-  uint32_t dispatch_ctx_max;
-
+  TB_DYN_ARR_OF(PassContext) pass_contexts;
+  TB_DYN_ARR_OF(DrawContext) draw_contexts;
+  TB_DYN_ARR_OF(DispatchContext) dispatch_contexts;
 } FrameState;
 
 typedef struct Swapchain {

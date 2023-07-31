@@ -226,11 +226,11 @@ bool tb_tick_world(World *world, float delta_seconds) {
         FrameState *state = &render_system->render_thread
                                  ->frame_states[render_system->frame_idx];
 
-        for (uint32_t i = 0; i < state->draw_ctx_count; ++i) {
-          state->draw_contexts[i].batch_count = 0;
+        TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
+          TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
         }
-        for (uint32_t i = 0; i < state->dispatch_ctx_count; ++i) {
-          state->dispatch_contexts[i].batch_count = 0;
+        TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
+          TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
         }
       }
     }

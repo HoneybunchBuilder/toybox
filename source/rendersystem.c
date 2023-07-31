@@ -21,6 +21,17 @@ bool create_render_system(RenderSystem *self,
       .render_thread = thread,
   };
 
+  // Initialze some arrays who are primarily owned by the render thread
+  // but which are primarily interacted with via the game thread
+  // TODO: Think of a better way to do this; the ownership practice here is
+  // sloppy
+  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
+    FrameState *state = &self->render_thread->frame_states[state_idx];
+    TB_DYN_ARR_RESET(state->pass_contexts, self->std_alloc, 1);
+    TB_DYN_ARR_RESET(state->draw_contexts, self->std_alloc, 1);
+    TB_DYN_ARR_RESET(state->dispatch_contexts, self->std_alloc, 1);
+  }
+
   // Should be safe to assume that the render thread is initialized by now
   {
     VkResult err = VK_SUCCESS;
@@ -258,6 +269,17 @@ void destroy_render_system(RenderSystem *self) {
 
     TB_DYN_ARR_DESTROY(state->buf_copy_queue);
     TB_DYN_ARR_DESTROY(state->buf_img_copy_queue);
+  }
+
+  // Clean up main thread owned memory that the render thread held the primary
+  // reference on
+  // TODO: Think of a better way to do this; the ownership practice here is
+  // sloppy
+  for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
+    FrameState *state = &self->render_thread->frame_states[state_idx];
+    TB_DYN_ARR_DESTROY(state->pass_contexts);
+    TB_DYN_ARR_DESTROY(state->draw_contexts);
+    TB_DYN_ARR_DESTROY(state->dispatch_contexts);
   }
 
   vmaDestroyPool(vma_alloc, self->host_buffer_pool);
