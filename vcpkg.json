@@ -5,7 +5,6 @@
   "dependencies": [
     "cgltf",
     "imgui",
-    "ktx",
     {
       "name": "meshoptimizer"
     },
@@ -34,6 +33,7 @@
       "name": "ktx",
       "host": true,
       "features": [
+        "vulkan",
         "tools"
       ]
     },
