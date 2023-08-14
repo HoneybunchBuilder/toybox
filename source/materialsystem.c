@@ -218,8 +218,6 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
   id = sdbm(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
 
   VkDevice device = self->render_system->render_thread->device;
-  const VkAllocationCallbacks *vk_alloc =
-      &self->render_system->vk_host_alloc_cb;
 
   uint32_t index = find_mat_by_id(self, id);
 

@@ -1013,7 +1013,6 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
                    TbRenderPassId id, uint32_t *command_buffers,
                    uint32_t command_buffer_count) {
   RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
-  Allocator std_alloc = self->std_alloc;
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     FrameState *state = &thread->frame_states[frame_idx];
 
@@ -4249,7 +4248,6 @@ void tb_render_pipeline_system_descriptor(
 TbDrawContextId
 tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
                                          const DrawContextDescriptor *desc) {
-  Allocator std_alloc = self->std_alloc;
   RenderThread *thread = self->render_system->render_thread;
   TbDrawContextId id = TB_DYN_ARR_SIZE(thread->frame_states[0].draw_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
@@ -4266,7 +4264,6 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
 
 TbDispatchContextId tb_render_pipeline_register_dispatch_context(
     RenderPipelineSystem *self, const DispatchContextDescriptor *desc) {
-  Allocator std_alloc = self->std_alloc;
   RenderThread *thread = self->render_system->render_thread;
   TbDispatchContextId id =
       TB_DYN_ARR_SIZE(thread->frame_states[0].dispatch_contexts);
