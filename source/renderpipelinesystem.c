@@ -1056,7 +1056,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
       pass_context.clear_values[i] = pass->attachments[i].clear_value;
     }
 #ifdef TRACY_ENABLE
-    SDL_strlcpy(pass_context->label, pass->label, TB_RP_LABEL_LEN);
+    SDL_strlcpy(pass_context.label, pass->label, TB_RP_LABEL_LEN);
 #endif
 
     // Construct barriers
