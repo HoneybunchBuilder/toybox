@@ -5,6 +5,7 @@
   "dependencies": [
     "cgltf",
     "imgui",
+    "ktx",
     {
       "name": "meshoptimizer"
     },
@@ -50,7 +51,7 @@
     },
     {
       "name": "ktx",
-      "version": "4.1.0-rc2"
+      "version": "4.1.0"
     },
     {
       "name": "meshoptimizer",
