@@ -41,7 +41,7 @@ typedef struct SkySystem {
   TbDrawContextId irradiance_ctx;
   TbDrawContextId prefilter_ctxs[PREFILTER_PASS_COUNT];
 
-  VkSampler sampler;
+  VkSampler irradiance_sampler;
   VkDescriptorSetLayout sky_set_layout;
   VkPipelineLayout sky_pipe_layout;
   VkDescriptorSetLayout irr_set_layout;

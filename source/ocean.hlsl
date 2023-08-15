@@ -1,6 +1,7 @@
 // Adapted heavily from https://catlikecoding.com/unity/tutorials/flow/waves/
 
 #include "common.hlsli"
+#include "gltf.hlsli"
 #include "lighting.hlsli"
 #include "ocean.hlsli"
 #include "pbr.hlsli"
@@ -8,20 +9,12 @@
 ConstantBuffer<OceanData> ocean_data : register(b0, space0);
 Texture2D depth_map : register(t1, space0);
 Texture2D color_map : register(t2, space0);
-sampler static_sampler : register(s3, space0);
+sampler material_sampler : register(s3, space0);
 sampler shadow_sampler : register(s4, space0);
-
 [[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
     : register(b5, space0);
 
-// Per-view data
-ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
-TextureCube irradiance_map : register(t1, space1);
-TextureCube prefiltered_map : register(t2, space1);
-Texture2D brdf_lut : register(t3, space1);
-ConstantBuffer<CommonLightData> light_data : register(b4, space1);
-Texture2D shadow_map : register(t5, space1);
-Texture2D ssao_map : register(s6, space1);
+GLTF_VIEW_SET(space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -84,14 +77,14 @@ float4 frag(Interpolators i) : SV_TARGET {
 
     // World position depth
     float scene_eye_depth =
-        linear_depth(depth_map.Sample(static_sampler, uv).r, near, far);
+        linear_depth(depth_map.Sample(material_sampler, uv).r, near, far);
     float fragment_eye_depth = -i.view_pos.z;
     float3 world_pos = camera_data.view_pos -
                        ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
     float depth_diff = world_pos.y;
 
     float fog = saturate(exp(fog_density * depth_diff));
-    float3 background_color = color_map.Sample(static_sampler, uv).rgb;
+    float3 background_color = color_map.Sample(material_sampler, uv).rgb;
     albedo = lerp(fog_color, background_color, fog);
   }
 
@@ -115,13 +108,13 @@ float4 frag(Interpolators i) : SV_TARGET {
     // Lighting
     {
       float2 brdf =
-          brdf_lut
-              .Sample(static_sampler, float2(max(dot(N, V), 0.0), roughness))
+          brdf_lut.Sample(brdf_sampler, float2(max(dot(N, V), 0.0), roughness))
               .rg;
-      float3 reflection =
-          prefiltered_reflection(prefiltered_map, static_sampler, R, roughness);
-      float3 irradiance = irradiance_map.Sample(static_sampler, N).rgb;
-      float ao = ssao_map.Sample(static_sampler, screen_uv).r;
+      float3 reflection = prefiltered_reflection(
+          prefiltered_map, filtered_env_sampler, R, roughness);
+      float3 irradiance =
+          irradiance_map.SampleLevel(filtered_env_sampler, N, 0).rgb;
+      float ao = ssao_map.Sample(shadow_sampler, screen_uv).r;
       color = pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
                            irradiance, light_data.color, L, V, N);
     }
@@ -139,8 +132,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     float4 shadow_coord =
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
-    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
-                              shadow_sampler);
+    float shadow =
+        pcf_filter(shadow_coord, shadow_map, cascade_idx, shadow_sampler);
     color *= shadow;
   }
 

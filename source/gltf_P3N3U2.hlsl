@@ -2,26 +2,9 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
-Texture2D base_color_map : register(t1, space0);
-Texture2D normal_map : register(t2, space0);
-Texture2D metal_rough_map : register(t3, space0);
-// Texture2D emissive_map : register(t4, space0);
-sampler static_sampler : register(s4, space0);
-sampler shadow_sampler : register(s5, space0);
-
-[[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts
-    : register(b6, space0);
-
-ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
-
-ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
-TextureCube irradiance_map : register(t1, space2);
-TextureCube prefiltered_map : register(t2, space2);
-Texture2D brdf_lut : register(t3, space2);
-ConstantBuffer<CommonLightData> light_data : register(b4, space2);
-Texture2D shadow_map : register(t5, space2);
-Texture2D ssao_map : register(s6, space2);
+GLTF_MATERIAL_SET(space0)
+GLTF_OBJECT_SET(space1);
+GLTF_VIEW_SET(space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -56,7 +39,7 @@ Interpolators vert(VertexIn i) {
 
 float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
   // Sample textures up-front
-  float3 albedo = base_color_map.Sample(static_sampler, i.uv).rgb;
+  float3 albedo = base_color_map.Sample(material_sampler, i.uv).rgb;
 
   float3 N = normalize(i.normal);
   N = front_face ? N : -N;
@@ -78,7 +61,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
       float4 pbr_color_factor =
           material_data.pbr_metallic_roughness.base_color_factor;
       float4 pbr_base_color =
-          base_color_map.Sample(static_sampler, i.uv) * pbr_color_factor;
+          base_color_map.Sample(material_sampler, i.uv) * pbr_color_factor;
       albedo = pbr_base_color.rgb;
       alpha = pbr_base_color.a;
       if (consts.perm & GLTF_PERM_ALPHA_CLIP) {
@@ -91,7 +74,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
     if (consts.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) {
       // The red channel of this texture *may* store occlusion.
       // TODO: Check the perm for occlusion
-      float4 mr_sample = metal_rough_map.Sample(static_sampler, i.uv);
+      float4 mr_sample = metal_rough_map.Sample(material_sampler, i.uv);
       roughness = mr_sample.g * roughness;
       metallic = mr_sample.b * metallic;
     }
@@ -99,12 +82,12 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
     // Lighting
     {
       float2 brdf =
-          brdf_lut
-              .Sample(shadow_sampler, float2(max(dot(N, V), 0.0), roughness))
+          brdf_lut.Sample(brdf_sampler, float2(max(dot(N, V), 0.0), roughness))
               .rg;
-      float3 reflection =
-          prefiltered_reflection(prefiltered_map, shadow_sampler, R, roughness);
-      float3 irradiance = irradiance_map.Sample(shadow_sampler, N).rgb;
+      float3 reflection = prefiltered_reflection(
+          prefiltered_map, filtered_env_sampler, R, roughness);
+      float3 irradiance =
+          irradiance_map.SampleLevel(filtered_env_sampler, N, 0).rgb;
       float ao = ssao_map.Sample(shadow_sampler, screen_uv).r;
       out_color =
           pbr_lighting(ao, albedo, metallic, roughness, brdf, reflection,
@@ -136,9 +119,9 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
     float4 shadow_coord =
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
-    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
-                              shadow_sampler);
-    out_color *= shadow;
+    float shadow =
+        pcf_filter(shadow_coord, shadow_map, cascade_idx, shadow_sampler);
+    // out_color *= shadow;
 
     /*
     switch(cascade_idx)

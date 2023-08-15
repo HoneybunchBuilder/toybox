@@ -59,7 +59,7 @@ typedef struct PACKED MaterialPushConstants {
   uint perm;
 } MaterialPushConstants;
 
-// If a shader, provide some helper functions
+// If a shader, provide some helper functions and macros
 #ifdef __HLSL_VERSION
 float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   // Must dequantize UV from integer to float before applying the transform
@@ -68,6 +68,33 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   uv += trans.offset;
   return uv;
 }
+
+#define GLTF_MATERIAL_SET(space)                                               \
+  ConstantBuffer<GLTFMaterialData> material_data : register(b0, space);        \
+  Texture2D base_color_map : register(t1, space);                              \
+  Texture2D normal_map : register(t2, space);                                  \
+  Texture2D metal_rough_map : register(t3, space);                             \
+  sampler material_sampler : register(s4, space);                              \
+  sampler shadow_sampler : register(s5, space);                                \
+  [[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts           \
+      : register(b6, space);
+
+// TODO: should probably move this somewhere outside of the GLTF concept
+#define GLTF_OBJECT_SET(space)                                                 \
+  ConstantBuffer<CommonObjectData> object_data : register(b0, space);
+
+// TODO: should probably move this somewhere outside of the GLTF concept
+#define GLTF_VIEW_SET(space)                                                   \
+  ConstantBuffer<CommonViewData> camera_data : register(b0, space);            \
+  TextureCube irradiance_map : register(t1, space);                            \
+  TextureCube prefiltered_map : register(t2, space);                           \
+  Texture2D brdf_lut : register(t3, space);                                    \
+  ConstantBuffer<CommonLightData> light_data : register(b4, space);            \
+  Texture2D shadow_map : register(t5, space);                                  \
+  Texture2D ssao_map : register(s6, space);                                    \
+  sampler filtered_env_sampler : register(s7, space);                          \
+  sampler brdf_sampler : register(s8, space);
+
 #else
 _Static_assert(sizeof(MaterialPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");

@@ -2,28 +2,9 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-ConstantBuffer<GLTFMaterialData> material_data : register(b0, space0);
-Texture2D base_color_map : register(t1, space0);
-Texture2D normal_map : register(t2, space0);
-Texture2D metal_rough_map : register(t3, space0);
-// Texture2D emissive_map : register(t4, space0);
-sampler static_sampler : register(s4, space0);
-sampler shadow_sampler : register(s5, space0);
-
-[[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts
-    : register(b6, space0);
-
-// Per-object data - Vertex Stage Only
-ConstantBuffer<CommonObjectData> object_data : register(b0, space1);
-
-// Per-view data
-ConstantBuffer<CommonViewData> camera_data : register(b0, space2);
-TextureCube irradiance_map : register(t1, space2);
-TextureCube prefiltered_map : register(t2, space2);
-Texture2D brdf_lut : register(t3, space2);
-ConstantBuffer<CommonLightData> light_data : register(b4, space2);
-Texture2D shadow_map : register(t5, space2);
-Texture2D ssao_map : register(s6, space2);
+GLTF_MATERIAL_SET(space0)
+GLTF_OBJECT_SET(space1);
+GLTF_VIEW_SET(space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -93,9 +74,10 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
           brdf_lut
               .Sample(shadow_sampler, float2(max(dot(N, V), 0.0), roughness))
               .rg;
-      float3 reflection =
-          prefiltered_reflection(prefiltered_map, shadow_sampler, R, roughness);
-      float3 irradiance = irradiance_map.Sample(shadow_sampler, N).rgb;
+      float3 reflection = prefiltered_reflection(
+          prefiltered_map, filtered_env_sampler, R, roughness);
+      float3 irradiance =
+          irradiance_map.SampleLevel(filtered_env_sampler, N, 0).rgb;
 
       float ao = ssao_map.Sample(shadow_sampler, screen_uv).r;
       out_color =
@@ -126,8 +108,8 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
         mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
 
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
-    float shadow = pcf_filter(shadow_coord, AMBIENT, shadow_map, cascade_idx,
-                              shadow_sampler);
+    float shadow =
+        pcf_filter(shadow_coord, shadow_map, cascade_idx, shadow_sampler);
     out_color *= shadow;
 
     /*

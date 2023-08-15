@@ -2,58 +2,52 @@
 
 #include "pbr.hlsli"
 
-#define AMBIENT 0.7
-
-float3 specular_contribution(float3 light_color, float3 albedo, float3 L,
-                             float3 V, float3 N, float3 f0, float metallic,
-                             float roughness) {
-  float3 H = normalize(V + L);
-  float NdotL = clamp(dot(N, L), 0.001, 1.0);
-  float NdotH = clamp(dot(N, H), 0.001, 1.0);
-  float NdotV = clamp(dot(N, V), 0.001, 1.0);
-
-  float3 color = float3(0, 0, 0);
-
-  if (NdotL > 0.0f) {
-    float alpha = roughness * roughness;
-    float D = microfacetDistribution(alpha, NdotH);
-    float G = geometricOcclusion(NdotL, NdotV, roughness);
-    float3 F = fresnel_schlick_roughness(NdotV, f0, roughness);
-
-    float3 spec = D * F * G / (4.0 * NdotL * NdotV + 0.001);
-    float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
-    color += (kD * albedo / PI + spec) * NdotL;
-  }
-
-  return color;
-}
-
 float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness,
                     float2 brdf, float3 reflection, float3 irradiance,
                     float3 light_color, float3 L, float3 V, float3 N) {
-  float3 f0 = float3(0.04, 0.04, 0.04);
-  f0 = lerp(f0, albedo, metallic);
+  float3 F0 = lerp(0.04, albedo, metallic);
 
-  float3 direct = float3(0, 0, 0);
-  // TODO: Handle more than one direct light
+  float3 Lo = 0;
+  // Calculate direct lighting
+  // TODO: Should be from multiple sources but for now this is all for one light
   {
-    direct += specular_contribution(light_color, albedo, L, V, N, f0, metallic,
-                                    roughness);
+    float3 H = normalize(V + L);
+    float distance = 1.0f; // TODO: account for attenuation
+    float attenuation = 1.0 / (distance * distance);
+    float3 radiance = light_color * attenuation;
+
+    float NdotH = max(dot(N, H), 0.0f);
+    float NdotL = max(dot(N, L), 0.0f);
+    float NdotV = max(dot(N, V), 0.0f);
+
+    // Cook-Torrance BRDF
+    float NDF = microfacetDistribution(roughness, NdotH);
+    float G = geometricOcclusion(NdotL, NdotV, roughness);
+    float3 F = fresnesl_schlick(max(dot(H, V), 0), F0);
+
+    float3 numerator = NDF * G * F;
+    // + 0.0001 to prevent divide by zero
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+    float3 specular = numerator / denominator;
+
+    float3 kS = F;
+    float3 kD = (1.0 - kS) * (1.0 - metallic);
+
+    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
   }
 
-  // Diffuse
+  // Calculate ambient light
+  float3 F = fresnel_schlick_roughness(max(dot(N, V), 0.0), F0, roughness);
+  float3 kS = F;
+  float3 kD = (1.0 - kS) * (1.0 - metallic);
+
   float3 diffuse = irradiance * albedo;
+  // Reflection is assumed to be pre-filtered by the caller
+  float3 specular = reflection * (F * brdf.x + brdf.y);
 
-  // Specular
-  float3 kS = fresnel_schlick_roughness(max(dot(N, V), 0.0f), f0, roughness);
-  float3 specular = reflection * (kS * brdf.x + brdf.y);
-
-  // Ambient
-  float3 kD = 1.0 - kS;
-  kD *= 1.0 - metallic;
   float3 ambient = (kD * diffuse + specular) * ao;
 
-  return ambient + direct;
+  return ambient + Lo;
 }
 
 float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
@@ -73,9 +67,9 @@ float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
 }
 
 // Shadowing
-
+#define AMBIENT 0.7
 float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
-                   float ambient, Texture2D shadow_map, sampler samp) {
+                   Texture2D shadow_map, sampler samp) {
   float bias = 0.0005;
 
   float4 proj_coord = shadow_coord;
@@ -93,12 +87,12 @@ float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
       shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
 
   return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias)
-             ? saturate(1 - ambient)
+             ? saturate(1 - AMBIENT)
              : 1.0f;
 }
 
-float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
-                 uint cascade_idx, sampler samp) {
+float pcf_filter(float4 shadow_coord, Texture2D shadow_map, uint cascade_idx,
+                 sampler samp) {
   int2 tex_dim;
   shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
 
@@ -113,8 +107,8 @@ float pcf_filter(float4 shadow_coord, float ambient, Texture2D shadow_map,
   for (int x = -range; x <= range; ++x) {
     for (int y = -range; y <= range; ++y) {
       float2 offset = float2(dx * x, dy * y);
-      shadow_factor += texture_proj(shadow_coord, offset, cascade_idx, ambient,
-                                    shadow_map, samp);
+      shadow_factor +=
+          texture_proj(shadow_coord, offset, cascade_idx, shadow_map, samp);
       count++;
     }
   }

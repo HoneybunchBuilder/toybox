@@ -39,13 +39,50 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 
   VkResult err = VK_SUCCESS;
 
+  // Create a filtered env sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .maxLod = 9.0f, // TODO: Fix hack
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info,
+                                "Filtered Env Sampler",
+                                &self->filtered_env_sampler);
+    TB_VK_CHECK_RET(err, "Failed to create filtered env sampler", false);
+  }
+
+  // Create a BRDF sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info, "BRDF Sampler",
+                                &self->brdf_sampler);
+    TB_VK_CHECK_RET(err, "Failed to create brdf sampler", false);
+  }
+
   // Create view descriptor set layout
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 7,
+        .bindingCount = 9,
         .pBindings =
-            (VkDescriptorSetLayoutBinding[7]){
+            (VkDescriptorSetLayoutBinding[9]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -90,6 +127,20 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
+                {
+                    .binding = 7,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->filtered_env_sampler,
+                },
+                {
+                    .binding = 8,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &self->brdf_sampler,
+                },
             },
     };
     err = tb_rnd_create_set_layout(render_system, &create_info,
@@ -104,6 +155,8 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
 void destroy_view_system(ViewSystem *self) {
   TB_DYN_ARR_DESTROY(self->views);
 
+  tb_rnd_destroy_sampler(self->render_system, self->brdf_sampler);
+  tb_rnd_destroy_sampler(self->render_system, self->filtered_env_sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {

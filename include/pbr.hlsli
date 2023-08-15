@@ -22,15 +22,17 @@ float3 specularReflection(float3 reflectance_0, float3 reflectance_90,
          (reflectance_90, -reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
 }
 
-float3 fresnesl_schlick(float cos_theta, float3 f0){
-  return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+float3 fresnesl_schlick(float cos_theta, float3 f0) {
+  return f0 + (1.0 - f0) * pow(saturate(1.0 - cos_theta), 5.0);
 }
 
 float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
-  return F0 + (max((1.0 - roughness).xxx, F0) - F0) * pow(1.0 - cos_theta, 5.0);
+  return F0 + (max((1.0 - roughness).xxx, F0) - F0) *
+                  pow(saturate(1.0 - cos_theta), 5.0);
 }
 
-float3 prefiltered_reflection(TextureCube map, SamplerState s,  float3 R, float roughness) {
+float3 prefiltered_reflection(TextureCube map, SamplerState s, float3 R,
+                              float roughness) {
   const float MAX_REFLECTION_LOD = 9.0; // todo: param/const
   float lod = roughness * MAX_REFLECTION_LOD;
   float lodf = floor(lod);

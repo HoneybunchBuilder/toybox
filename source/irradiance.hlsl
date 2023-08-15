@@ -3,7 +3,7 @@
 #include "pbr.hlsli"
 
 TextureCube env_map : register(t0, space0);    // Fragment Stage Only
-sampler static_sampler : register(s1, space0); // Immutable Sampler
+sampler material_sampler : register(s1, space0); // Immutable Sampler
 
 struct VertexIn {
   float3 local_pos : POSITION0;
@@ -41,15 +41,13 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 tmp_vec = cos(phi) * right + sin(phi) * up;
       float3 sample_vec = cos(theta) * normal + sin(theta) * tmp_vec;
 
-      irradiance += env_map.Sample(static_sampler, sample_vec).rgb *
+      // Clamp each sample to 1 to avoid blowout
+      irradiance += min(env_map.Sample(material_sampler, sample_vec).rgb, 1) *
                     cos(theta) * sin(theta);
       sample_count++;
     }
   }
   irradiance = PI * irradiance / float(sample_count);
-
-  // Clamp max values to 1 to prevent blow out
-  irradiance = min(irradiance, 1);
 
   return float4(irradiance, 1);
 }

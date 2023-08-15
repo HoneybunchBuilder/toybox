@@ -32,6 +32,9 @@
 #include "viewsystem.h"
 #include "world.h"
 
+#define FILTERED_ENV_DIM 512
+#define FILTERED_ENV_MIPS ((uint32_t)(SDL_floorf(log2f(FILTERED_ENV_DIM))) + 1u)
+
 typedef struct SkyDrawBatch {
   VkPushConstantRange const_range;
   SkyPushConstants consts;
@@ -757,13 +760,13 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
   TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
 
-  // Create immutable sampler
+  // Create irradiance sampler
   {
     VkSamplerCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_NEAREST,
-        .minFilter = VK_FILTER_NEAREST,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -771,8 +774,9 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Irradiance Sampler", &self->sampler);
+    err =
+        tb_rnd_create_sampler(render_system, &create_info, "Irradiance Sampler",
+                              &self->irradiance_sampler);
     TB_VK_CHECK_RET(err, "Failed to create irradiance sampler", false);
   }
 
@@ -801,7 +805,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                 {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
                  VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
                 {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                 &self->sampler},
+                 &self->irradiance_sampler},
             },
     };
     err = tb_rnd_create_set_layout(render_system, &create_info,
@@ -1039,7 +1043,7 @@ void destroy_sky_system(SkySystem *self) {
   tb_rnd_destroy_set_layout(render_system, self->irr_set_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->irr_pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->prefilter_pipe_layout);
-  tb_rnd_destroy_sampler(render_system, self->sampler);
+  tb_rnd_destroy_sampler(render_system, self->irradiance_sampler);
   tb_rnd_destroy_pipeline(render_system, self->sky_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->env_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->irradiance_pipeline);
@@ -1309,10 +1313,8 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     PrefilterBatch *prefilter_batches =
         tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
     {
-      const float dim = 512;
-      const uint32_t mip_count = (uint32_t)(SDL_floorf(log2f(dim))) + 1u;
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-        const float mip_dim = dim * SDL_powf(0.5f, i);
+        const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, i);
 
         pre_draw_batches[i] = (DrawBatch){
             .layout = self->prefilter_pipe_layout,
@@ -1329,7 +1331,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
             .vertex_offset = get_skydome_vert_offset(),
             .consts =
                 {
-                    .roughness = (float)i / (float)(mip_count - 1),
+                    .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
                     .sample_count = 16,
                 },
         };
