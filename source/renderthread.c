@@ -45,6 +45,14 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
 
 void tb_wait_thread_initialized(RenderThread *thread) {
   SDL_SemWait(thread->initialized);
+  // Pump the first frame if necessary
+  SDL_semaphore *sem = thread->frame_states[0].signal_sem;
+  if (SDL_SemValue(sem) != 0) {
+    // Make sure the gpu is idle
+    vkWaitForFences(thread->device, 1, &thread->frame_states[0].fence, VK_TRUE,
+                    SDL_MAX_UINT64);
+    SDL_SemPost(sem);
+  }
 }
 
 void tb_stop_render_thread(RenderThread *thread) {
@@ -52,7 +60,7 @@ void tb_stop_render_thread(RenderThread *thread) {
   // Set the stop signal
   thread->stop_signal = 1;
   // Signal Render thread
-  SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
+  tb_signal_render(thread, frame_idx);
 
   // Wait for the thread to stop
   int32_t thread_code = 0;
