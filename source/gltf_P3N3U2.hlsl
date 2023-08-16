@@ -121,7 +121,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
 
     float shadow =
         pcf_filter(shadow_coord, shadow_map, cascade_idx, shadow_sampler);
-    // out_color *= shadow;
+    out_color *= shadow;
 
     /*
     switch(cascade_idx)

@@ -1068,6 +1068,9 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
       tb_get_column_check_id(input, 2, 0, DirectionalLightComponentId);
   const uint32_t dir_light_count = tb_get_column_component_count(input, 2);
 
+  static float time = 0.0f;
+  time += delta_seconds;
+
   if (skys == NULL || cameras == NULL || transforms == NULL) {
     return;
   }
@@ -1159,7 +1162,7 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
     for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
       const SkyComponent *comp = tb_get_component(skys, sky_idx, SkyComponent);
       SkyData data = {
-          .time = comp->time,
+          .time = time,
           .cirrus = comp->cirrus,
           .cumulus = comp->cumulus,
           .sun_dir = comp->sun_dir,
