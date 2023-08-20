@@ -21,3 +21,13 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+
+#ifndef FINAL
+#define TB_LOG(verbosity, category, fmt)                                       \
+  SDL_Log##verbosity(SDL_LOG_CATEGORY_##category, fmt)
+#define TB_LOG_VA(verbosity, category, fmt, ...)                               \
+  SDL_Log##verbosity(SDL_LOG_CATEGORY_##category, fmt, __VA_ARGS__)
+#else
+#define TB_LOG(verbosity, category, fmt)
+#define TB_LOG_VA(verbosity, category, fmt, ...)
+#endif
