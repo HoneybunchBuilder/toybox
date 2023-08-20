@@ -357,6 +357,24 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
 
 TB_DEFINE_SYSTEM(render, RenderSystem, RenderSystemDescriptor)
 
+void tick_frame_begin(void *self, const SystemInput *input,
+                      SystemOutput *output, float delta_seconds) {
+  (void)self;
+  (void)input;
+  (void)output;
+  (void)delta_seconds;
+  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Frame Start Tick");
+}
+
+void tick_frame_end(void *self, const SystemInput *input, SystemOutput *output,
+                    float delta_seconds) {
+  (void)self;
+  (void)input;
+  (void)output;
+  (void)delta_seconds;
+  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Frame End Tick");
+}
+
 void tb_render_system_descriptor(SystemDescriptor *desc,
                                  const RenderSystemDescriptor *render_desc) {
   *desc = (SystemDescriptor){
@@ -367,6 +385,17 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_render_system,
       .destroy = tb_destroy_render_system,
       .tick = tb_tick_render_system,
+      .tick_fns =
+          {
+              {
+                  .order = E_TICK_TOP_OF_FRAME,
+                  .function = tick_frame_begin,
+              },
+              {
+                  .order = E_TICK_BOTTOM_OF_FRAME,
+                  .function = tick_frame_end,
+              },
+          },
   };
 }
 

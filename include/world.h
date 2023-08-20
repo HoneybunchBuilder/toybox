@@ -1,6 +1,9 @@
 #pragma once
 
 #include "allocator.h"
+#include "dynarray.h"
+
+#include <SDL2/SDL_stdinc.h>
 
 typedef struct json_object json_object;
 
@@ -63,6 +66,7 @@ static const uint32_t InvalidComponentId = 0xFFFF;
 #define MAX_DEPENDENCY_SET_COUNT 4
 #define MAX_SYSTEM_DEP_COUNT 8
 #define MAX_OUTPUT_SET_COUNT 4
+#define MAX_TICK_FN_COUNT 4
 
 typedef uint32_t Entity;
 typedef struct EntityDescriptor {
@@ -162,6 +166,32 @@ typedef bool (*SystemCreateFn)(void *self, InternalDescriptor desc,
 typedef void (*SystemDestroyFn)(void *self);
 typedef void (*SystemTickFn)(void *self, const SystemInput *input,
                              SystemOutput *output, float delta_seconds);
+
+typedef enum TickOrder {
+  E_TICK_TOP_OF_FRAME = 0,
+  E_TICK_PRE_PHYSICS = 0x0010,
+  E_TICK_POST_PHYSICS = 0x0020,
+  E_TICK_PRE_RENDER = 0x0100,
+  E_TICK_POST_RENDER = 0x0200,
+  E_TICK_BOTTOM_OF_FRAME = SDL_MAX_SINT32,
+} TickOrder;
+
+// Used for registering a ticking event with the world
+typedef struct TickFunctionDescriptor {
+  TickOrder order;
+  uint32_t dep_count;
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
+  SystemTickFn function;
+} TickFunctionDescriptor;
+
+typedef struct TickFunction {
+  uint32_t dep_count;
+  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
+  // Dependencies will be evaluated and fed into this function
+  System *system;
+  SystemTickFn function;
+} TickFunction;
+
 typedef struct SystemDescriptor {
   const char *name;
   uint64_t size;
@@ -177,6 +207,10 @@ typedef struct SystemDescriptor {
   SystemCreateFn create;
   SystemDestroyFn destroy;
   SystemTickFn tick;
+
+  // Tick V2
+  TickFunctionDescriptor tick_fns[MAX_TICK_FN_COUNT];
+
 } SystemDescriptor;
 typedef struct System {
   const char *name;
@@ -223,6 +257,10 @@ typedef struct World {
   System *systems;
   uint32_t *init_order;
   uint32_t *tick_order;
+
+  // Tick V2
+  uint32_t tick_fn_count;
+  TickFunction *tick_functions;
 
 } World;
 
