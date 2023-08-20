@@ -181,6 +181,7 @@ typedef struct TickFunctionDescriptor {
   TickOrder order;
   uint32_t dep_count;
   SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
+  SystemId system_id;
   SystemTickFn function;
 } TickFunctionDescriptor;
 
@@ -209,6 +210,7 @@ typedef struct SystemDescriptor {
   SystemTickFn tick;
 
   // Tick V2
+  uint32_t tick_fn_count;
   TickFunctionDescriptor tick_fns[MAX_TICK_FN_COUNT];
 
 } SystemDescriptor;

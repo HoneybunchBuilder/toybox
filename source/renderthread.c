@@ -1682,6 +1682,12 @@ int32_t render_thread(void *data) {
     }
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
+    // If we got a stop signal, stop
+    if (thread->stop_signal > 0) {
+      TracyCZoneEnd(ctx);
+      break;
+    }
+
     // If the swapchain was resized, wait for the main thread to report that
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
@@ -1707,13 +1713,7 @@ int32_t render_thread(void *data) {
       TracyCZoneEnd(wait_ctx);
     }
 
-    // If we got a stop signal, stop
-    if (thread->stop_signal > 0) {
-      TracyCZoneEnd(ctx);
-      break;
-    }
-
-    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+        FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
     tick_render_thread(thread, frame_state);
 

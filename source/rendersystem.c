@@ -385,15 +385,18 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_render_system,
       .destroy = tb_destroy_render_system,
       .tick = tb_tick_render_system,
+      .tick_fn_count = 2,
       .tick_fns =
           {
               {
-                  .order = E_TICK_TOP_OF_FRAME,
-                  .function = tick_frame_begin,
-              },
-              {
+                  .system_id = RenderSystemId,
                   .order = E_TICK_BOTTOM_OF_FRAME,
                   .function = tick_frame_end,
+              },
+              {
+                  .system_id = RenderSystemId,
+                  .order = E_TICK_TOP_OF_FRAME,
+                  .function = tick_frame_begin,
               },
           },
   };

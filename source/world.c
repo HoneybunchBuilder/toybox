@@ -95,6 +95,12 @@ uint32_t find_system_idx_by_id(const SystemDescriptor *descs,
   return SDL_MAX_UINT32;
 }
 
+int tick_desc_sort(const void *lhs, const void *rhs) {
+  const TickFunctionDescriptor *a = (const TickFunctionDescriptor *)lhs;
+  const TickFunctionDescriptor *b = (const TickFunctionDescriptor *)rhs;
+  return a->order - b->order;
+}
+
 bool tb_create_world(const WorldDescriptor *desc, World *world) {
   if (desc == NULL || world == NULL) {
     return false;
@@ -162,6 +168,42 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
         world->tick_order[i] = find_system_idx_by_id(
             desc->system_descs, desc->system_count, desc->tick_order[i]);
       }
+
+      // Tick V2
+      // Gather a list of all tick functions from every system
+      TB_DYN_ARR_OF(TickFunctionDescriptor) sorted_tick_descs;
+      TB_DYN_ARR_RESET(sorted_tick_descs, std_alloc, 16);
+      for (uint32_t sys_idx = 0; sys_idx < desc->system_count; ++sys_idx) {
+        const SystemDescriptor *sys_desc = &desc->system_descs[sys_idx];
+        for (uint32_t i = 0; i < sys_desc->tick_fn_count; ++i) {
+          TB_DYN_ARR_APPEND(sorted_tick_descs, sys_desc->tick_fns[i]);
+        }
+      }
+      if (!TB_DYN_ARR_EMPTY(sorted_tick_descs)) {
+        // Sort the list of tick funcions
+        SDL_qsort(sorted_tick_descs.data, TB_DYN_ARR_SIZE(sorted_tick_descs),
+                  sizeof(TickFunctionDescriptor), tick_desc_sort);
+      }
+
+      // Create a tick function for each now sorted descriptor
+      world->tick_fn_count = TB_DYN_ARR_SIZE(sorted_tick_descs);
+      world->tick_functions =
+          tb_alloc_nm_tp(std_alloc, world->tick_fn_count, TickFunction);
+      TB_DYN_ARR_FOREACH(sorted_tick_descs, i) {
+        const TickFunctionDescriptor *fn_desc =
+            &TB_DYN_ARR_AT(sorted_tick_descs, i);
+        TickFunction *fn = &world->tick_functions[i];
+        *fn = (TickFunction){
+            .dep_count = fn_desc->dep_count,
+            .system = tb_find_system_by_id(world->systems, world->system_count,
+                                           fn_desc->system_id),
+            .function = fn_desc->function,
+        };
+        SDL_memcpy(fn->deps, fn_desc->deps,
+                   fn_desc->dep_count * sizeof(SystemComponentDependencies));
+      }
+
+      TB_DYN_ARR_DESTROY(sorted_tick_descs);
     }
   }
 
@@ -585,6 +627,7 @@ void tb_destroy_world(World *world) {
     }
     tb_free(world->std_alloc, world->systems);
   }
+  tb_free(world->std_alloc, world->tick_functions);
 
   *world = (World){0};
 }
