@@ -72,6 +72,7 @@ void destroy_audio_system(AudioSystem *self) {
 
 void tick_audio_system(AudioSystem *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Audio System (Dud)");
   (void)self;
   (void)input;
   (void)output;

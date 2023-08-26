@@ -170,6 +170,7 @@ void destroy_material_system(MaterialSystem *self) {
 
 void tick_material_system(MaterialSystem *self, const SystemInput *input,
                           SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Material System (Dud)");
   (void)self;
   (void)input;
   (void)output;

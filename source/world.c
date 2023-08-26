@@ -277,165 +277,172 @@ bool tb_tick_world(World *world, float delta_seconds) {
       }
     }
 
+    bool v2_tick = false;
+
     // Note: Even if delta time is 0, we still need to tick
     // because above here where we wait on the render thread
     // can deadlock if the render system isn't ticked.
     // Ideally this hack is removed and then we can no longer
     // require a tick with a delta_time of 0
 
-    // Tick in specified order
-    for (uint32_t idx = 0; idx < world->system_count; idx++) {
-      uint32_t system_idx = world->tick_order[idx];
-      System *system = &world->systems[system_idx];
+    if (!v2_tick) {
+      // Tick in specified order
+      for (uint32_t idx = 0; idx < world->system_count; idx++) {
+        uint32_t system_idx = world->tick_order[idx];
+        System *system = &world->systems[system_idx];
 
-      // Gather and pack component columns for this system's input
-      const uint32_t set_count = system->dep_count;
+        // Gather and pack component columns for this system's input
+        const uint32_t set_count = system->dep_count;
 
-      SystemInput input = (SystemInput){
-          .dep_set_count = set_count,
-          .dep_sets = {{0}},
-      };
+        SystemInput input = (SystemInput){
+            .dep_set_count = set_count,
+            .dep_sets = {{0}},
+        };
 
-      // Each dependency set can have a number of dependent columns
-      for (uint32_t set_idx = 0; set_idx < set_count; ++set_idx) {
-        // Gather the components that this dependency set requires
-        const SystemComponentDependencies *dep = &system->deps[set_idx];
-        SystemDependencySet *set = &input.dep_sets[set_idx];
+        // Each dependency set can have a number of dependent columns
+        for (uint32_t set_idx = 0; set_idx < set_count; ++set_idx) {
+          // Gather the components that this dependency set requires
+          const SystemComponentDependencies *dep = &system->deps[set_idx];
+          SystemDependencySet *set = &input.dep_sets[set_idx];
 
-        // Find the entities that have the required components
-        uint32_t entity_count = 0;
-        for (EntityId entity_id = 0; entity_id < world->entity_count;
-             ++entity_id) {
-          Entity entity = world->entities[entity_id];
-          uint32_t matched_component_count = 0;
-          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-               ++store_idx) {
-            const ComponentId store_id = world->component_stores[store_idx].id;
-            for (uint32_t i = 0; i < dep->count; ++i) {
-              if (store_id == dep->dependent_ids[i]) {
-                if (entity & (1 << store_idx)) {
-                  matched_component_count++;
+          // Find the entities that have the required components
+          uint32_t entity_count = 0;
+          for (EntityId entity_id = 0; entity_id < world->entity_count;
+               ++entity_id) {
+            Entity entity = world->entities[entity_id];
+            uint32_t matched_component_count = 0;
+            for (uint32_t store_idx = 0;
+                 store_idx < world->component_store_count; ++store_idx) {
+              const ComponentId store_id =
+                  world->component_stores[store_idx].id;
+              for (uint32_t i = 0; i < dep->count; ++i) {
+                if (store_id == dep->dependent_ids[i]) {
+                  if (entity & (1 << store_idx)) {
+                    matched_component_count++;
+                  }
+                  break;
                 }
+              }
+            }
+            // Count if this entity has all required components
+            if (matched_component_count == dep->count) {
+              entity_count++;
+            }
+          }
+
+          // Allocate collection of entities
+          EntityId *entities =
+              tb_alloc_nm_tp(tmp_alloc, entity_count, EntityId);
+          entity_count = 0;
+          for (EntityId entity_id = 0; entity_id < world->entity_count;
+               ++entity_id) {
+            Entity entity = world->entities[entity_id];
+            uint32_t matched_component_count = 0;
+            for (uint32_t store_idx = 0;
+                 store_idx < world->component_store_count; ++store_idx) {
+              const ComponentId store_id =
+                  world->component_stores[store_idx].id;
+              for (uint32_t i = 0; i < dep->count; ++i) {
+                if (store_id == dep->dependent_ids[i]) {
+                  if (entity & (1 << store_idx)) {
+                    matched_component_count++;
+                  }
+                  break;
+                }
+              }
+            }
+            // Count if this entity has all required components
+            if (matched_component_count == dep->count) {
+              entities[entity_count] = entity_id;
+              entity_count++;
+            }
+          }
+          set->entity_count = entity_count;
+          set->entity_ids = entities;
+
+          // Now we know how much we need to allocate for eached packed
+          // component store
+          set->column_count = dep->count;
+          for (uint32_t col_id = 0; col_id < dep->count; ++col_id) {
+            const ComponentId id = dep->dependent_ids[col_id];
+
+            uint64_t components_size = 0;
+            const ComponentStore *world_store = NULL;
+            // Find world component store for this id and determine how much
+            // space we need for the packed component store
+            for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
+                 ++comp_idx) {
+              const ComponentStore *store = &world->component_stores[comp_idx];
+              if (store->id == id) {
+                world_store = store;
+                components_size = entity_count * store->size;
                 break;
               }
             }
-          }
-          // Count if this entity has all required components
-          if (matched_component_count == dep->count) {
-            entity_count++;
-          }
-        }
+            if (components_size > 0) {
+              uint8_t *components =
+                  tb_alloc_nm_tp(tmp_alloc, components_size, uint8_t);
+              const uint64_t comp_size = world_store->size;
 
-        // Allocate collection of entities
-        EntityId *entities = tb_alloc_nm_tp(tmp_alloc, entity_count, EntityId);
-        entity_count = 0;
-        for (EntityId entity_id = 0; entity_id < world->entity_count;
-             ++entity_id) {
-          Entity entity = world->entities[entity_id];
-          uint32_t matched_component_count = 0;
-          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-               ++store_idx) {
-            const ComponentId store_id = world->component_stores[store_idx].id;
-            for (uint32_t i = 0; i < dep->count; ++i) {
-              if (store_id == dep->dependent_ids[i]) {
-                if (entity & (1 << store_idx)) {
-                  matched_component_count++;
-                }
-                break;
+              // Copy from the world store based on entity index into the packed
+              // store
+              for (uint32_t entity_idx = 0; entity_idx < entity_count;
+                   ++entity_idx) {
+                EntityId entity_id = entities[entity_idx];
+
+                const uint8_t *in_comp =
+                    &world_store->components[entity_id * comp_size];
+                uint8_t *out_comp = &components[entity_idx * comp_size];
+
+                SDL_memcpy(out_comp, in_comp, comp_size);
               }
+
+              set->columns[col_id] = (PackedComponentStore){
+                  .id = id,
+                  .components = components,
+              };
             }
           }
-          // Count if this entity has all required components
-          if (matched_component_count == dep->count) {
-            entities[entity_count] = entity_id;
-            entity_count++;
-          }
         }
-        set->entity_count = entity_count;
-        set->entity_ids = entities;
 
-        // Now we know how much we need to allocate for eached packed
-        // component store
-        set->column_count = dep->count;
-        for (uint32_t col_id = 0; col_id < dep->count; ++col_id) {
-          const ComponentId id = dep->dependent_ids[col_id];
+        SystemOutput output = (SystemOutput){0};
+        system->tick(system->self, &input, &output, delta_seconds);
 
-          uint64_t components_size = 0;
-          const ComponentStore *world_store = NULL;
-          // Find world component store for this id and determine how much
-          // space we need for the packed component store
-          for (uint32_t comp_idx = 0; comp_idx < world->component_store_count;
-               ++comp_idx) {
-            const ComponentStore *store = &world->component_stores[comp_idx];
-            if (store->id == id) {
-              world_store = store;
-              components_size = entity_count * store->size;
+        // Write output back to world stores
+        TB_CHECK(output.set_count <= MAX_OUTPUT_SET_COUNT,
+                 "Too many output sets");
+        for (uint32_t set_idx = 0; set_idx < output.set_count; ++set_idx) {
+          const SystemWriteSet *set = &output.write_sets[set_idx];
+
+          // Get the world component store that matches this set's component id
+          ComponentStore *comp_store = NULL;
+          for (uint32_t store_idx = 0; store_idx < world->component_store_count;
+               ++store_idx) {
+            ComponentStore *store = &world->component_stores[store_idx];
+            if (set->id == store->id) {
+              comp_store = store;
               break;
             }
           }
-          if (components_size > 0) {
-            uint8_t *components =
-                tb_alloc_nm_tp(tmp_alloc, components_size, uint8_t);
-            const uint64_t comp_size = world_store->size;
+          TB_CHECK(comp_store, "Failed to retrieve component store");
 
-            // Copy from the world store based on entity index into the packed
-            // store
-            for (uint32_t entity_idx = 0; entity_idx < entity_count;
-                 ++entity_idx) {
-              EntityId entity_id = entities[entity_idx];
+          // Write out the components from the output set
+          for (uint32_t entity_idx = 0; entity_idx < set->count; ++entity_idx) {
+            EntityId entity_id = set->entities[entity_idx];
 
-              const uint8_t *in_comp =
-                  &world_store->components[entity_id * comp_size];
-              uint8_t *out_comp = &components[entity_idx * comp_size];
+            const uint64_t comp_size = comp_store->size;
 
-              SDL_memcpy(out_comp, in_comp, comp_size);
-            }
+            const uint8_t *src = &set->components[entity_idx * comp_size];
+            uint8_t *dst = &comp_store->components[entity_id * comp_size];
 
-            set->columns[col_id] = (PackedComponentStore){
-                .id = id,
-                .components = components,
-            };
+            SDL_memcpy(dst, src, comp_size);
           }
-        }
-      }
-
-      SystemOutput output = (SystemOutput){0};
-      system->tick(system->self, &input, &output, delta_seconds);
-
-      // Write output back to world stores
-      TB_CHECK(output.set_count <= MAX_OUTPUT_SET_COUNT,
-               "Too many output sets");
-      for (uint32_t set_idx = 0; set_idx < output.set_count; ++set_idx) {
-        const SystemWriteSet *set = &output.write_sets[set_idx];
-
-        // Get the world component store that matches this set's component id
-        ComponentStore *comp_store = NULL;
-        for (uint32_t store_idx = 0; store_idx < world->component_store_count;
-             ++store_idx) {
-          ComponentStore *store = &world->component_stores[store_idx];
-          if (set->id == store->id) {
-            comp_store = store;
-            break;
-          }
-        }
-        TB_CHECK(comp_store, "Failed to retrieve component store");
-
-        // Write out the components from the output set
-        for (uint32_t entity_idx = 0; entity_idx < set->count; ++entity_idx) {
-          EntityId entity_id = set->entities[entity_idx];
-
-          const uint64_t comp_size = comp_store->size;
-
-          const uint8_t *src = &set->components[entity_idx * comp_size];
-          uint8_t *dst = &comp_store->components[entity_id * comp_size];
-
-          SDL_memcpy(dst, src, comp_size);
         }
       }
     }
 
     // Tick V2
-    {
+    if (v2_tick) {
       // Tick functions should already be in the correct order
       for (uint32_t tick_idx = 0; tick_idx < world->tick_fn_count; ++tick_idx) {
         const TickFunction *tick_fn = &world->tick_functions[tick_idx];
@@ -594,7 +601,6 @@ bool tb_tick_world(World *world, float delta_seconds) {
     {
       InputSystem *in_sys = tb_get_system_internal(
           world->systems, world->system_count, InputSystem);
-
       if (in_sys) {
         for (uint32_t event_idx = 0; event_idx < in_sys->event_count;
              ++event_idx) {

@@ -29,8 +29,8 @@ bool create_camera_system(CameraSystem *self,
 
 void destroy_camera_system(CameraSystem *self) { *self = (CameraSystem){0}; }
 
-void tick_camera_system(CameraSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
+void tick_camera_system_internal(CameraSystem *self, const SystemInput *input,
+                                 SystemOutput *output, float delta_seconds) {
   (void)output;
   (void)delta_seconds;
   TracyCZoneNC(ctx, "Camera System Tick", TracyCategoryColorCore, true);
@@ -94,7 +94,20 @@ void tick_camera_system(CameraSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_camera_system(CameraSystem *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Camera System");
+  tick_camera_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(camera, CameraSystem, CameraSystemDescriptor)
+
+void tick_camera(void *self, const SystemInput *input, SystemOutput *output,
+                 float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Camera System");
+  tick_camera_system_internal((CameraSystem *)self, input, output,
+                              delta_seconds);
+}
 
 void tb_camera_system_descriptor(SystemDescriptor *desc,
                                  const CameraSystemDescriptor *camera_desc) {
@@ -110,5 +123,16 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_camera_system,
       .destroy = tb_destroy_camera_system,
       .tick = tb_tick_camera_system,
+      .tick_fn_count = 1,
+      .tick_fns =
+          {
+              {
+                  .dep_count = 1,
+                  .deps[0] = {2, {CameraComponentId, TransformComponentId}},
+                  .system_id = CameraSystemId,
+                  .order = E_TICK_POST_PHYSICS,
+                  .function = tick_camera,
+              },
+          },
   };
 }

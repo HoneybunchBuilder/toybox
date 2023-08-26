@@ -297,6 +297,7 @@ void destroy_render_system(RenderSystem *self) {
 
 void tick_render_system(RenderSystem *self, const SystemInput *input,
                         SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Render System");
   (void)self;
   (void)input;
   (void)output; // Won't actually have output to the world but will write to
@@ -363,7 +364,7 @@ void tick_frame_begin(void *self, const SystemInput *input,
   (void)input;
   (void)output;
   (void)delta_seconds;
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Frame Start Tick");
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Frame Start Tick");
 }
 
 void tick_frame_end(void *self, const SystemInput *input, SystemOutput *output,
@@ -372,7 +373,7 @@ void tick_frame_end(void *self, const SystemInput *input, SystemOutput *output,
   (void)input;
   (void)output;
   (void)delta_seconds;
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Frame End Tick");
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Frame End Tick");
 }
 
 void tb_render_system_descriptor(SystemDescriptor *desc,

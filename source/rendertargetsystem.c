@@ -490,6 +490,7 @@ void destroy_render_target_system(RenderTargetSystem *self) {
 void tick_render_target_system(RenderTargetSystem *self,
                                const SystemInput *input, SystemOutput *output,
                                float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderTarget System (Dud)");
   (void)self;
   (void)input;
   (void)output;

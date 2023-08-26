@@ -127,8 +127,10 @@ float3 lookup_sun_color(float norm) {
   return color;
 }
 
-void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
-                             SystemOutput *output, float delta_seconds) {
+void tick_time_of_day_system_internal(TimeOfDaySystem *self,
+                                      const SystemInput *input,
+                                      SystemOutput *output,
+                                      float delta_seconds) {
   TracyCZoneNC(ctx, "Time Of Day Tick", TracyCategoryColorGame, true);
   const float time_scale = 0.05f;
   self->time += (delta_seconds * time_scale);
@@ -214,7 +216,20 @@ void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
+                             SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick TimeOfDay System");
+  tick_time_of_day_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(time_of_day, TimeOfDaySystem, TimeOfDaySystemDescriptor)
+
+void tick_time_of_day(void *self, const SystemInput *input,
+                      SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick TimeOfDay System");
+  tick_time_of_day_system_internal((TimeOfDaySystem *)self, input, output,
+                                   delta_seconds);
+}
 
 void tb_time_of_day_system_descriptor(
     SystemDescriptor *desc, const TimeOfDaySystemDescriptor *tod_desc) {
@@ -231,5 +246,16 @@ void tb_time_of_day_system_descriptor(
       .create = tb_create_time_of_day_system,
       .destroy = tb_destroy_time_of_day_system,
       .tick = tb_tick_time_of_day_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 2,
+              .deps[0] = {1, {SkyComponentId}},
+              .deps[1] = {2,
+                          {DirectionalLightComponentId, TransformComponentId}},
+              .system_id = TimeOfDaySystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_time_of_day,
+          },
   };
 }

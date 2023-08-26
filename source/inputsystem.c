@@ -27,8 +27,8 @@ float get_axis_float(SDL_GameController *controller,
   return raw_axis / (float)SDL_MAX_SINT16;
 }
 
-void tick_input_system(InputSystem *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
+void tick_input_system_internal(InputSystem *self, const SystemInput *input,
+                                SystemOutput *output, float delta_seconds) {
   (void)input;  // We have no input
   (void)output; // Results of this system output to the system itself rather
                 // than an output column
@@ -166,7 +166,19 @@ void tick_input_system(InputSystem *self, const SystemInput *input,
   TracyCZoneEnd(tick_ctx);
 }
 
+void tick_input_system(InputSystem *self, const SystemInput *input,
+                       SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Input System");
+  tick_input_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(input, InputSystem, InputSystemDescriptor)
+
+void tick_input(void *self, const SystemInput *input, SystemOutput *output,
+                float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Input System");
+  tick_input_system_internal((InputSystem *)self, input, output, delta_seconds);
+}
 
 void tb_input_system_descriptor(SystemDescriptor *desc,
                                 const InputSystemDescriptor *input_desc) {
@@ -178,5 +190,14 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_input_system,
       .destroy = tb_destroy_input_system,
       .tick = tb_tick_input_system,
+      .tick_fn_count = 1,
+      .tick_fns =
+          {
+              {
+                  .system_id = InputSystemId,
+                  .order = E_TICK_INPUT,
+                  .function = tick_input,
+              },
+          },
   };
 }

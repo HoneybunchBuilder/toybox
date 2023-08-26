@@ -37,8 +37,8 @@ bool create_shadow_system(ShadowSystem *self,
 
 void destroy_shadow_system(ShadowSystem *self) { *self = (ShadowSystem){0}; }
 
-void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
+void tick_shadow_system_internal(ShadowSystem *self, const SystemInput *input,
+                                 SystemOutput *output, float delta_seconds) {
   (void)output;
   (void)delta_seconds;
   TracyCZoneNC(ctx, "Shadow System Tick", TracyCategoryColorRendering, true);
@@ -213,7 +213,20 @@ void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Shadow System");
+  tick_shadow_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(shadow, ShadowSystem, ShadowSystemDescriptor)
+
+void tick_shadows(void *self, const SystemInput *input, SystemOutput *output,
+                  float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Shadow System");
+  tick_shadow_system_internal((ShadowSystem *)self, input, output,
+                              delta_seconds);
+}
 
 void tb_shadow_system_descriptor(SystemDescriptor *desc,
                                  const ShadowSystemDescriptor *shadow_desc) {
@@ -234,5 +247,15 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_shadow_system,
       .destroy = tb_destroy_shadow_system,
       .tick = tb_tick_shadow_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 2,
+              .deps = {{2, {DirectionalLightComponentId, TransformComponentId}},
+                       {2, {CameraComponentId, TransformComponentId}}},
+              .system_id = ShadowSystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_shadows,
+          },
   };
 }

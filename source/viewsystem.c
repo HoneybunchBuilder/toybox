@@ -167,9 +167,10 @@ void destroy_view_system(ViewSystem *self) {
   *self = (ViewSystem){0};
 }
 
-void tick_view_system(ViewSystem *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
-  // This system doesn't interact with the ECS so these parameters can be
+void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
+                               SystemOutput *output, float delta_seconds) {
+  // This system doesn't interact with the ECS so these
+  // parameters can be
   // ignored
   (void)input;
   (void)output;
@@ -398,7 +399,20 @@ void tick_view_system(ViewSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_view_system(ViewSystem *self, const SystemInput *input,
+                      SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick View System");
+  tick_view_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(view, ViewSystem, ViewSystemDescriptor)
+
+void tick_views(void *self, const SystemInput *input, SystemOutput *output,
+                float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick View System");
+  ViewSystem *view_sys = (ViewSystem *)self;
+  tick_view_system_internal(view_sys, input, output, delta_seconds);
+}
 
 void tb_view_system_descriptor(SystemDescriptor *desc,
                                const ViewSystemDescriptor *view_desc) {
@@ -416,6 +430,15 @@ void tb_view_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_view_system,
       .destroy = tb_destroy_view_system,
       .tick = tb_tick_view_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 1,
+              .deps[0] = {2, {CameraComponentId, TransformComponentId}},
+              .system_id = ViewSystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_views,
+          },
   };
 }
 

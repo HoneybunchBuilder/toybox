@@ -1052,8 +1052,8 @@ void destroy_sky_system(SkySystem *self) {
   *self = (SkySystem){0};
 }
 
-void tick_sky_system(SkySystem *self, const SystemInput *input,
-                     SystemOutput *output, float delta_seconds) {
+void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
+                              SystemOutput *output, float delta_seconds) {
   (void)output;
   (void)delta_seconds;
   const PackedComponentStore *skys =
@@ -1357,7 +1357,19 @@ void tick_sky_system(SkySystem *self, const SystemInput *input,
   }
 }
 
+void tick_sky_system(SkySystem *self, const SystemInput *input,
+                     SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Sky System");
+  tick_sky_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(sky, SkySystem, SkySystemDescriptor)
+
+void tick_sky(void *self, const SystemInput *input, SystemOutput *output,
+              float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Sky System");
+  tick_sky_system_internal((SkySystem *)self, input, output, delta_seconds);
+}
 
 void tb_sky_system_descriptor(SystemDescriptor *desc,
                               const SkySystemDescriptor *sky_desc) {
@@ -1391,5 +1403,17 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
       .create = tb_create_sky_system,
       .destroy = tb_destroy_sky_system,
       .tick = tb_tick_sky_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 3,
+              .deps = {{1, {SkyComponentId}},
+                       {2, {CameraComponentId, TransformComponentId}},
+                       {2,
+                        {DirectionalLightComponentId, TransformComponentId}}},
+              .system_id = SkySystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_sky,
+          },
   };
 }

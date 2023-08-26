@@ -31,6 +31,7 @@ void destroy_viewer_system(ViewerSystem *self) { *self = (ViewerSystem){0}; }
 
 void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
                         SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Viewer System");
   (void)self;
   (void)input;
   (void)output;

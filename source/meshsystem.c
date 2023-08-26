@@ -1268,10 +1268,9 @@ uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
                   SDL_MAX_UINT32);
 }
 
-void tick_mesh_system(MeshSystem *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
+void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
+                               SystemOutput *output, float delta_seconds) {
   (void)delta_seconds;
-
   TracyCZoneNC(ctx, "Mesh System", TracyCategoryColorRendering, true);
 
   const uint32_t camera_count = tb_get_column_component_count(input, 0);
@@ -1883,38 +1882,47 @@ void tick_mesh_system(MeshSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_mesh_system(MeshSystem *self, const SystemInput *input,
+                      SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Mesh System");
+  tick_mesh_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(mesh, MeshSystem, MeshSystemDescriptor)
+
+void tick_meshes(void *self, const SystemInput *input, SystemOutput *output,
+                 float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Mesh System");
+  tick_mesh_system_internal((MeshSystem *)self, input, output, delta_seconds);
+}
 
 void tb_mesh_system_descriptor(SystemDescriptor *desc,
                                const MeshSystemDescriptor *mesh_desc) {
-  desc->name = "Mesh";
-  desc->size = sizeof(MeshSystem);
-  desc->id = MeshSystemId;
-  desc->desc = (InternalDescriptor)mesh_desc;
-  SDL_memset(desc->deps, 0,
-             sizeof(SystemComponentDependencies) * MAX_DEPENDENCY_SET_COUNT);
-  desc->dep_count = 3;
-  desc->deps[0] = (SystemComponentDependencies){
-      .count = 2,
-      .dependent_ids = {CameraComponentId, TransformComponentId},
-  };
-  desc->deps[1] = (SystemComponentDependencies){
-      .count = 1,
-      .dependent_ids = {DirectionalLightComponentId},
-  };
-  desc->deps[2] = (SystemComponentDependencies){
-      .count = 2,
-      .dependent_ids = {MeshComponentId, TransformComponentId},
-  };
-  desc->system_dep_count = 5;
-  desc->system_deps[0] = RenderSystemId;
-  desc->system_deps[1] = MaterialSystemId;
-  desc->system_deps[2] = ViewSystemId;
-  desc->system_deps[3] = RenderObjectSystemId;
-  desc->system_deps[4] = RenderPipelineSystemId;
-  desc->create = tb_create_mesh_system;
-  desc->destroy = tb_destroy_mesh_system;
-  desc->tick = tb_tick_mesh_system;
+  *desc = (SystemDescriptor){
+      .name = "Mesh",
+      .size = sizeof(MeshSystem),
+      .id = MeshSystemId,
+      .desc = (InternalDescriptor)mesh_desc,
+      .dep_count = 3,
+      .deps[0] = {2, {CameraComponentId, TransformComponentId}},
+      .deps[1] = {1, {DirectionalLightComponentId}},
+      .deps[2] = {2, {MeshComponentId, TransformComponentId}},
+      .system_dep_count = 5,
+      .system_deps = {RenderSystemId, MaterialSystemId, ViewSystemId,
+                      RenderObjectSystemId, RenderPipelineSystemId},
+      .create = tb_create_mesh_system,
+      .destroy = tb_destroy_mesh_system,
+      .tick = tb_tick_mesh_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] = {
+          .dep_count = 3,
+          .deps[0] = {2, {CameraComponentId, TransformComponentId}},
+          .deps[1] = {1, {DirectionalLightComponentId}},
+          .deps[2] = {2, {MeshComponentId, TransformComponentId}},
+          .system_id = MeshSystemId,
+          .order = E_TICK_PRE_RENDER,
+          .function = tick_meshes,
+      }};
 }
 
 uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {

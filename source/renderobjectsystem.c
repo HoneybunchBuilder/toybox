@@ -66,9 +66,10 @@ void destroy_render_object_system(RenderObjectSystem *self) {
   *self = (RenderObjectSystem){0};
 }
 
-void tick_render_object_system(RenderObjectSystem *self,
-                               const SystemInput *input, SystemOutput *output,
-                               float delta_seconds) {
+void tick_render_object_system_internal(RenderObjectSystem *self,
+                                        const SystemInput *input,
+                                        SystemOutput *output,
+                                        float delta_seconds) {
   (void)input;
   (void)output;
   (void)delta_seconds;
@@ -195,8 +196,22 @@ void tick_render_object_system(RenderObjectSystem *self,
   TracyCZoneEnd(ctx);
 }
 
+void tick_render_object_system(RenderObjectSystem *self,
+                               const SystemInput *input, SystemOutput *output,
+                               float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderObject System");
+  tick_render_object_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(render_object, RenderObjectSystem,
                  RenderObjectSystemDescriptor)
+
+void tick_render_objects(void *self, const SystemInput *input,
+                         SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderObject System");
+  tick_render_object_system_internal((RenderObjectSystem *)self, input, output,
+                                     delta_seconds);
+}
 
 void tb_render_object_system_descriptor(
     SystemDescriptor *desc, const RenderObjectSystemDescriptor *object_desc) {
@@ -212,6 +227,15 @@ void tb_render_object_system_descriptor(
       .create = tb_create_render_object_system,
       .destroy = tb_destroy_render_object_system,
       .tick = tb_tick_render_object_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 1,
+              .deps[0] = {2, {MeshComponentId, TransformComponentId}},
+              .system_id = RenderObjectSystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_render_objects,
+          },
   };
 }
 

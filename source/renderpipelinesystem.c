@@ -3433,9 +3433,10 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   }
 }
 
-void tick_render_pipeline_system(RenderPipelineSystem *self,
-                                 const SystemInput *input, SystemOutput *output,
-                                 float delta_seconds) {
+void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
+                                          const SystemInput *input,
+                                          SystemOutput *output,
+                                          float delta_seconds) {
   (void)input;
   (void)output;
   (void)delta_seconds;
@@ -4224,8 +4225,22 @@ void tick_render_pipeline_system(RenderPipelineSystem *self,
   TracyCZoneEnd(ctx);
 }
 
+void tick_render_pipeline_system(RenderPipelineSystem *self,
+                                 const SystemInput *input, SystemOutput *output,
+                                 float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderPipeline System");
+  tick_render_pipeline_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(render_pipeline, RenderPipelineSystem,
                  RenderPipelineSystemDescriptor)
+
+void tick_render_pipeline(void *self, const SystemInput *input,
+                          SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderPipeline System");
+  tick_render_pipeline_system_internal((RenderPipelineSystem *)self, input,
+                                       output, delta_seconds);
+}
 
 void tb_render_pipeline_system_descriptor(
     SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc) {
@@ -4242,6 +4257,13 @@ void tb_render_pipeline_system_descriptor(
       .create = tb_create_render_pipeline_system,
       .destroy = tb_destroy_render_pipeline_system,
       .tick = tb_tick_render_pipeline_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .system_id = RenderPipelineSystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_render_pipeline,
+          },
   };
 }
 

@@ -369,6 +369,7 @@ void destroy_texture_system(TextureSystem *self) {
 
 void tick_texture_system(TextureSystem *self, const SystemInput *input,
                          SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Texture System (Dud)");
   (void)self;
   (void)input;
   (void)output;

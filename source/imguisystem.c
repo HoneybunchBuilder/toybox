@@ -525,8 +525,8 @@ void destroy_imgui_system(ImGuiSystem *self) {
   *self = (ImGuiSystem){0};
 }
 
-void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
+void tick_imgui_system_internal(ImGuiSystem *self, const SystemInput *input,
+                                SystemOutput *output, float delta_seconds) {
   (void)input;
   (void)output;
   TracyCZoneN(ctx, "ImGui System", true);
@@ -822,7 +822,19 @@ void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
+                       SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick ImGUI System");
+  tick_imgui_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
+
+void tick_imgui(void *self, const SystemInput *input, SystemOutput *output,
+                float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick ImGUI System");
+  tick_imgui_system_internal((ImGuiSystem *)self, input, output, delta_seconds);
+}
 
 void tb_imgui_system_descriptor(SystemDescriptor *desc,
                                 const ImGuiSystemDescriptor *imgui_desc) {
@@ -832,12 +844,17 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
       .id = ImGuiSystemId,
       .desc = (InternalDescriptor)imgui_desc,
       .system_dep_count = 4,
-      .system_deps[0] = RenderSystemId,
-      .system_deps[1] = RenderPipelineSystemId,
-      .system_deps[2] = RenderTargetSystemId,
-      .system_deps[3] = InputSystemId,
+      .system_deps = {RenderSystemId, RenderPipelineSystemId,
+                      RenderTargetSystemId, InputSystemId},
       .create = tb_create_imgui_system,
       .destroy = tb_destroy_imgui_system,
       .tick = tb_tick_imgui_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .system_id = ImGuiSystemId,
+              .order = E_TICK_UI,
+              .function = tick_imgui,
+          },
   };
 }
