@@ -651,8 +651,8 @@ void destroy_ocean_system(OceanSystem *self) {
   *self = (OceanSystem){0};
 }
 
-void tick_ocean_system(OceanSystem *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
+void tick_ocean_system_internal(OceanSystem *self, const SystemInput *input,
+                                SystemOutput *output, float delta_seconds) {
   TracyCZoneNC(ctx, "Ocean System Tick", TracyCategoryColorRendering, true);
 
   EntityId *ocean_entities = tb_get_column_entity_ids(input, 0);
@@ -1002,7 +1002,19 @@ void tick_ocean_system(OceanSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
+void tick_ocean_system(OceanSystem *self, const SystemInput *input,
+                       SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Ocean System");
+  tick_ocean_system_internal(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(ocean, OceanSystem, OceanSystemDescriptor)
+
+void tick_ocean(void *self, const SystemInput *input, SystemOutput *output,
+                float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Ocean System");
+  tick_ocean_system_internal((OceanSystem *)self, input, output, delta_seconds);
+}
 
 void tb_ocean_system_descriptor(SystemDescriptor *desc,
                                 const OceanSystemDescriptor *ocean_desc) {
@@ -1015,15 +1027,21 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
       .deps[0] = {1, {OceanComponentId}},
       .deps[1] = {2, {CameraComponentId, TransformComponentId}},
       .system_dep_count = 7,
-      .system_deps[0] = RenderSystemId,
-      .system_deps[1] = MeshSystemId,
-      .system_deps[2] = ViewSystemId,
-      .system_deps[3] = RenderPipelineSystemId,
-      .system_deps[4] = RenderTargetSystemId,
-      .system_deps[5] = VisualLoggingSystemId,
-      .system_deps[6] = AudioSystemId,
+      .system_deps = {RenderSystemId, MeshSystemId, ViewSystemId,
+                      RenderPipelineSystemId, RenderTargetSystemId,
+                      VisualLoggingSystemId, AudioSystemId},
       .create = tb_create_ocean_system,
       .destroy = tb_destroy_ocean_system,
       .tick = tb_tick_ocean_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 2,
+              .deps[0] = {1, {OceanComponentId}},
+              .deps[1] = {2, {CameraComponentId, TransformComponentId}},
+              .system_id = OceanSystemId,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_ocean,
+          },
   };
 }

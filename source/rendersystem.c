@@ -295,9 +295,8 @@ void destroy_render_system(RenderSystem *self) {
   *self = (RenderSystem){0};
 }
 
-void tick_render_system(RenderSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Render System");
+void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
+                                  SystemOutput *output, float delta_seconds) {
   (void)self;
   (void)input;
   (void)output; // Won't actually have output to the world but will write to
@@ -356,24 +355,48 @@ void tick_render_system(RenderSystem *self, const SystemInput *input,
   TracyCZoneEnd(tick_ctx);
 }
 
+void tick_render_system(RenderSystem *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Render System");
+  tick_render_system_end_frame(self, input, output, delta_seconds);
+}
+
 TB_DEFINE_SYSTEM(render, RenderSystem, RenderSystemDescriptor)
 
 void tick_frame_begin(void *self, const SystemInput *input,
                       SystemOutput *output, float delta_seconds) {
-  (void)self;
   (void)input;
   (void)output;
   (void)delta_seconds;
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Frame Start Tick");
+
+  RenderSystem *rnd_sys = (RenderSystem *)self;
+
+  TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
+               true);
+  TracyCZoneValue(wait_ctx, rnd_sys->frame_idx);
+  tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
+  TracyCZoneEnd(wait_ctx);
+
+  // Also
+  // Manually zero out the previous frame's draw batches here
+  // It's cleaner to do it here than dedicate a whole system to this
+  // operation on tick
+  FrameState *state = &rnd_sys->render_thread->frame_states[rnd_sys->frame_idx];
+
+  TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
+    TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
+  }
+  TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
+    TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
+  }
 }
 
 void tick_frame_end(void *self, const SystemInput *input, SystemOutput *output,
                     float delta_seconds) {
-  (void)self;
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Frame End Tick");
+  tick_render_system_end_frame((RenderSystem *)self, input, output,
+                               delta_seconds);
 }
 
 void tb_render_system_descriptor(SystemDescriptor *desc,

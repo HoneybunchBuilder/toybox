@@ -233,7 +233,7 @@ void tb_render_object_system_descriptor(
               .dep_count = 1,
               .deps[0] = {2, {MeshComponentId, TransformComponentId}},
               .system_id = RenderObjectSystemId,
-              .order = E_TICK_PRE_RENDER,
+              .order = E_TICK_POST_PHYSICS,
               .function = tick_render_objects,
           },
   };

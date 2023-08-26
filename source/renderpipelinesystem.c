@@ -4242,6 +4242,38 @@ void tick_render_pipeline(void *self, const SystemInput *input,
                                        output, delta_seconds);
 }
 
+void check_swapchain_resize(void *self, const SystemInput *input,
+                            SystemOutput *output, float delta_seconds) {
+  (void)input;
+  (void)output;
+  (void)delta_seconds;
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderPipeline Check Resize");
+  RenderPipelineSystem *rnd_pipe_sys = (RenderPipelineSystem *)self;
+  RenderSystem *rnd_sys = rnd_pipe_sys->render_system;
+  if (rnd_sys->render_thread->swapchain_resize_signal) {
+    TracyCZoneN(resize_ctx, "Resize", true);
+    tb_rnd_on_swapchain_resize(rnd_pipe_sys);
+
+    rnd_sys->frame_idx = 0;
+
+    // Re-create all render thread semaphores
+    for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+      SDL_DestroySemaphore(
+          rnd_sys->render_thread->frame_states[frame_idx].wait_sem);
+      rnd_sys->render_thread->frame_states[frame_idx].wait_sem =
+          SDL_CreateSemaphore(1);
+    }
+
+    // Let the render thread know we're done handling the resize on the
+    // main thread
+    SDL_SemPost(rnd_sys->render_thread->resized);
+
+    // Let the render thread process frame index 0
+    tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
+    TracyCZoneEnd(resize_ctx);
+  }
+}
+
 void tb_render_pipeline_system_descriptor(
     SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc) {
   *desc = (SystemDescriptor){
@@ -4257,8 +4289,16 @@ void tb_render_pipeline_system_descriptor(
       .create = tb_create_render_pipeline_system,
       .destroy = tb_destroy_render_pipeline_system,
       .tick = tb_tick_render_pipeline_system,
-      .tick_fn_count = 1,
+      .tick_fn_count = 2,
       .tick_fns[0] =
+          {
+              .system_id = RenderPipelineSystemId,
+              .order =
+                  E_TICK_TOP_OF_FRAME + 1, // We need this tick to happen right
+                                           // after the render system ticks
+              .function = check_swapchain_resize,
+          },
+      .tick_fns[1] =
           {
               .system_id = RenderPipelineSystemId,
               .order = E_TICK_PRE_RENDER,

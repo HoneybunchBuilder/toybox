@@ -169,8 +169,8 @@ typedef void (*SystemTickFn)(void *self, const SystemInput *input,
 
 typedef enum TickOrder {
   E_TICK_TOP_OF_FRAME = 0,
-  E_TICK_INPUT = 0x0001,
-  E_TICK_POST_INPUT = 0x0002,
+  E_TICK_INPUT = 0x0004,
+  E_TICK_POST_INPUT = 0x0008,
   E_TICK_PRE_PHYSICS = 0x0010,
   E_TICK_PHYSICS = 0x0020,
   E_TICK_POST_PHYSICS = 0x0040,

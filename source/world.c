@@ -220,72 +220,75 @@ bool tb_tick_world(World *world, float delta_seconds) {
     TracyCZoneN(system_tick_ctx, "Tick Systems", true);
     TracyCZoneColor(system_tick_ctx, TracyCategoryColorCore);
 
-    // HACK: Find the rendering system and manually make sure that we don't
-    // have to wait for the render thread
-    {
-      System *system = tb_find_system_by_id(world->systems, world->system_count,
-                                            RenderSystemId);
-      if (system) {
-        RenderSystem *render_system = (RenderSystem *)system->self;
-        TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
-                     true);
-        TracyCZoneValue(wait_ctx, render_system->frame_idx);
-        tb_wait_render(render_system->render_thread, render_system->frame_idx);
-        TracyCZoneEnd(wait_ctx);
-
-        // Check for signal that the render thread got a resize event
-        if (render_system->render_thread->swapchain_resize_signal) {
-          TracyCZoneN(resize_ctx, "Resize", true);
-          System *rp_sys = tb_find_system_by_id(
-              world->systems, world->system_count, RenderPipelineSystemId);
-          tb_rnd_on_swapchain_resize((RenderPipelineSystem *)rp_sys->self);
-
-          render_system->frame_idx = 0;
-
-          // Re-create all render thread semaphores
-          for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
-               ++frame_idx) {
-            SDL_DestroySemaphore(
-                render_system->render_thread->frame_states[frame_idx].wait_sem);
-            render_system->render_thread->frame_states[frame_idx].wait_sem =
-                SDL_CreateSemaphore(1);
-          }
-
-          // Let the render thread know we're done handling the resize on the
-          // main thread
-          SDL_SemPost(render_system->render_thread->resized);
-
-          // Let the render thread process frame index 0
-          tb_wait_render(render_system->render_thread,
-                         render_system->frame_idx);
-          TracyCZoneEnd(resize_ctx);
-        }
-
-        // While we're here and hacking,
-        // Manually zero out the previous frame's draw batches here
-        // It's cleaner to do it here than dedicate a whole system to this
-        // operation on tick
-        FrameState *state = &render_system->render_thread
-                                 ->frame_states[render_system->frame_idx];
-
-        TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
-          TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
-        }
-        TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
-          TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
-        }
-      }
-    }
-
-    bool v2_tick = false;
-
-    // Note: Even if delta time is 0, we still need to tick
-    // because above here where we wait on the render thread
-    // can deadlock if the render system isn't ticked.
-    // Ideally this hack is removed and then we can no longer
-    // require a tick with a delta_time of 0
+    bool v2_tick = true;
 
     if (!v2_tick) {
+
+      // HACK: Find the rendering system and manually make sure that we don't
+      // have to wait for the render thread
+      {
+        System *system = tb_find_system_by_id(
+            world->systems, world->system_count, RenderSystemId);
+        if (system) {
+          RenderSystem *render_system = (RenderSystem *)system->self;
+          TracyCZoneNC(wait_ctx, "Wait for Render Thread",
+                       TracyCategoryColorWait, true);
+          TracyCZoneValue(wait_ctx, render_system->frame_idx);
+          tb_wait_render(render_system->render_thread,
+                         render_system->frame_idx);
+          TracyCZoneEnd(wait_ctx);
+
+          // Check for signal that the render thread got a resize event
+          if (render_system->render_thread->swapchain_resize_signal) {
+            TracyCZoneN(resize_ctx, "Resize", true);
+            System *rp_sys = tb_find_system_by_id(
+                world->systems, world->system_count, RenderPipelineSystemId);
+            tb_rnd_on_swapchain_resize((RenderPipelineSystem *)rp_sys->self);
+
+            render_system->frame_idx = 0;
+
+            // Re-create all render thread semaphores
+            for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
+                 ++frame_idx) {
+              SDL_DestroySemaphore(
+                  render_system->render_thread->frame_states[frame_idx]
+                      .wait_sem);
+              render_system->render_thread->frame_states[frame_idx].wait_sem =
+                  SDL_CreateSemaphore(1);
+            }
+
+            // Let the render thread know we're done handling the resize on the
+            // main thread
+            SDL_SemPost(render_system->render_thread->resized);
+
+            // Let the render thread process frame index 0
+            tb_wait_render(render_system->render_thread,
+                           render_system->frame_idx);
+            TracyCZoneEnd(resize_ctx);
+          }
+
+          // While we're here and hacking,
+          // Manually zero out the previous frame's draw batches here
+          // It's cleaner to do it here than dedicate a whole system to this
+          // operation on tick
+          FrameState *state = &render_system->render_thread
+                                   ->frame_states[render_system->frame_idx];
+
+          TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
+            TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
+          }
+          TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
+            TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
+          }
+        }
+      }
+
+      // Note: Even if delta time is 0, we still need to tick
+      // because above here where we wait on the render thread
+      // can deadlock if the render system isn't ticked.
+      // Ideally this hack is removed and then we can no longer
+      // require a tick with a delta_time of 0
+
       // Tick in specified order
       for (uint32_t idx = 0; idx < world->system_count; idx++) {
         uint32_t system_idx = world->tick_order[idx];
@@ -562,7 +565,8 @@ bool tb_tick_world(World *world, float delta_seconds) {
         }
 
         SystemOutput output = (SystemOutput){0};
-        tick_fn->function(tick_fn->system, &input, &output, delta_seconds);
+        tick_fn->function(tick_fn->system->self, &input, &output,
+                          delta_seconds);
 
         // Write output back to world stores
         TB_CHECK(output.set_count <= MAX_OUTPUT_SET_COUNT,

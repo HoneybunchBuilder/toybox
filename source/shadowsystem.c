@@ -254,7 +254,7 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
               .deps = {{2, {DirectionalLightComponentId, TransformComponentId}},
                        {2, {CameraComponentId, TransformComponentId}}},
               .system_id = ShadowSystemId,
-              .order = E_TICK_PRE_RENDER,
+              .order = E_TICK_POST_PHYSICS + 1,
               .function = tick_shadows,
           },
   };
