@@ -487,16 +487,6 @@ void destroy_render_target_system(RenderTargetSystem *self) {
   *self = (RenderTargetSystem){0};
 }
 
-void tick_render_target_system(RenderTargetSystem *self,
-                               const SystemInput *input, SystemOutput *output,
-                               float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderTarget System (Dud)");
-  (void)self;
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
-}
-
 TB_DEFINE_SYSTEM(render_target, RenderTargetSystem,
                  RenderTargetSystemDescriptor)
 
@@ -507,12 +497,10 @@ void tb_render_target_system_descriptor(
       .size = sizeof(RenderTargetSystem),
       .id = RenderTargetSystemId,
       .desc = (InternalDescriptor)rt_desc,
-      .dep_count = 0,
       .system_dep_count = 1,
       .system_deps[0] = RenderSystemId,
       .create = tb_create_render_target_system,
       .destroy = tb_destroy_render_target_system,
-      .tick = tb_tick_render_target_system,
   };
 }
 

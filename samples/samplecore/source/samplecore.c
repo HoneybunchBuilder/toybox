@@ -283,31 +283,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = RotatorSystemId;
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
-  SystemId tick_order[SYSTEM_COUNT];
-  {
-    uint32_t i = 0;
-    tick_order[i++] = InputSystemId;
-    tick_order[i++] = NoClipControllerSystemId;
-    tick_order[i++] = RotatorSystemId;
-    tick_order[i++] = CoreUISystemId;
-    tick_order[i++] = CameraSystemId;
-    tick_order[i++] = ShadowSystemId;
-    tick_order[i++] = SkySystemId;
-    tick_order[i++] = ViewSystemId;
-    tick_order[i++] = RenderPipelineSystemId;
-    tick_order[i++] = RenderObjectSystemId;
-    tick_order[i++] = TextureSystemId;
-    tick_order[i++] = MaterialSystemId;
-    tick_order[i++] = MeshSystemId;
-    tick_order[i++] = OceanSystemId;
-    tick_order[i++] = TimeOfDaySystemId;
-    tick_order[i++] = VisualLoggingSystemId;
-    tick_order[i++] = ImGuiSystemId;
-    tick_order[i++] = RenderTargetSystemId;
-    tick_order[i++] = RenderSystemId;
-    tick_order[i++] = AudioSystemId;
-    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
-  }
 
   WorldDescriptor world_desc = {
       .std_alloc = std_alloc.alloc,
@@ -317,7 +292,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .system_count = SYSTEM_COUNT,
       .system_descs = system_descs,
       .init_order = init_order,
-      .tick_order = tick_order,
   };
 #undef COMP_COUNT
 #undef SYSTEM_COUNT

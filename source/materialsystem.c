@@ -168,15 +168,6 @@ void destroy_material_system(MaterialSystem *self) {
   *self = (MaterialSystem){0};
 }
 
-void tick_material_system(MaterialSystem *self, const SystemInput *input,
-                          SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Material System (Dud)");
-  (void)self;
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
-}
-
 TB_DEFINE_SYSTEM(material, MaterialSystem, MaterialSystemDescriptor)
 
 void tb_material_system_descriptor(SystemDescriptor *desc,
@@ -191,7 +182,6 @@ void tb_material_system_descriptor(SystemDescriptor *desc,
       .system_deps[1] = TextureSystemId,
       .create = tb_create_material_system,
       .destroy = tb_destroy_material_system,
-      .tick = tb_tick_material_system,
   };
 }
 

@@ -196,19 +196,12 @@ void tick_render_object_system_internal(RenderObjectSystem *self,
   TracyCZoneEnd(ctx);
 }
 
-void tick_render_object_system(RenderObjectSystem *self,
-                               const SystemInput *input, SystemOutput *output,
-                               float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderObject System");
-  tick_render_object_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(render_object, RenderObjectSystem,
                  RenderObjectSystemDescriptor)
 
-void tick_render_objects(void *self, const SystemInput *input,
-                         SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderObject System");
+void tick_render_object_system(void *self, const SystemInput *input,
+                               SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderObject System");
   tick_render_object_system_internal((RenderObjectSystem *)self, input, output,
                                      delta_seconds);
 }
@@ -220,13 +213,10 @@ void tb_render_object_system_descriptor(
       .size = sizeof(RenderObjectSystem),
       .id = RenderObjectSystemId,
       .desc = (InternalDescriptor)object_desc,
-      .dep_count = 1,
-      .deps[0] = {2, {MeshComponentId, TransformComponentId}},
       .system_dep_count = 1,
       .system_deps[0] = RenderSystemId,
       .create = tb_create_render_object_system,
       .destroy = tb_destroy_render_object_system,
-      .tick = tb_tick_render_object_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
@@ -234,7 +224,7 @@ void tb_render_object_system_descriptor(
               .deps[0] = {2, {MeshComponentId, TransformComponentId}},
               .system_id = RenderObjectSystemId,
               .order = E_TICK_POST_PHYSICS,
-              .function = tick_render_objects,
+              .function = tick_render_object_system,
           },
   };
 }

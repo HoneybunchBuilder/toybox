@@ -94,17 +94,11 @@ void tick_camera_system_internal(CameraSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
-void tick_camera_system(CameraSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Camera System");
-  tick_camera_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(camera, CameraSystem, CameraSystemDescriptor)
 
-void tick_camera(void *self, const SystemInput *input, SystemOutput *output,
-                 float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Camera System");
+void tick_camera_system(void *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Camera System");
   tick_camera_system_internal((CameraSystem *)self, input, output,
                               delta_seconds);
 }
@@ -116,13 +110,10 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(CameraSystem),
       .id = CameraSystemId,
       .desc = (InternalDescriptor)camera_desc,
-      .dep_count = 1,
-      .deps[0] = {2, {CameraComponentId, TransformComponentId}},
       .system_dep_count = 1,
       .system_deps[0] = ViewSystemId,
       .create = tb_create_camera_system,
       .destroy = tb_destroy_camera_system,
-      .tick = tb_tick_camera_system,
       .tick_fn_count = 1,
       .tick_fns =
           {
@@ -131,7 +122,7 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
                   .deps[0] = {2, {CameraComponentId, TransformComponentId}},
                   .system_id = CameraSystemId,
                   .order = E_TICK_PRE_PHYSICS,
-                  .function = tick_camera,
+                  .function = tick_camera_system,
               },
           },
   };

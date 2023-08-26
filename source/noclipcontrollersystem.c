@@ -158,18 +158,12 @@ void tick_noclip_system_internal(NoClipControllerSystem *self,
   TracyCZoneEnd(tick_ctx);
 }
 
-void tick_noclip_system(NoClipControllerSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick NoClip System");
-  tick_noclip_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(noclip, NoClipControllerSystem,
                  NoClipControllerSystemDescriptor)
 
-void tick_noclip(void *self, const SystemInput *input, SystemOutput *output,
-                 float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick NoClip System");
+void tick_noclip_system(void *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick NoClip System");
   tick_noclip_system_internal((NoClipControllerSystem *)self, input, output,
                               delta_seconds);
 }
@@ -184,18 +178,15 @@ void tb_noclip_controller_system_descriptor(
       .desc = (InternalDescriptor)noclip_desc,
       .system_dep_count = 1,
       .system_deps[0] = InputSystemId,
-      .dep_count = 1,
-      .deps[0] = {2, {TransformComponentId, NoClipComponentId}},
       .create = tb_create_noclip_system,
       .destroy = tb_destroy_noclip_system,
-      .tick = tb_tick_noclip_system,
       .tick_fn_count = 1,
       .tick_fns =
           {
               {
                   .system_id = NoClipControllerSystemId,
                   .order = E_TICK_POST_INPUT,
-                  .function = tick_noclip,
+                  .function = tick_noclip_system,
                   .dep_count = 1,
                   .deps[0] = {2, {TransformComponentId, NoClipComponentId}},
               },

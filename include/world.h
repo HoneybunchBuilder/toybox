@@ -27,8 +27,6 @@ typedef struct json_object json_object;
                                     uint32_t system_dep_count,                 \
                                     System *const *system_deps);               \
   void destroy_##lower_name##_system(self_type *self);                         \
-  void tick_##lower_name##_system(self_type *self, const SystemInput *input,   \
-                                  SystemOutput *output, float delta_seconds);  \
                                                                                \
   bool tb_create_##lower_name##_system(void *self, InternalDescriptor desc,    \
                                        uint32_t system_dep_count,              \
@@ -40,13 +38,6 @@ typedef struct json_object json_object;
                                                                                \
   void tb_destroy_##lower_name##_system(void *self) {                          \
     destroy_##lower_name##_system((self_type *)self);                          \
-  }                                                                            \
-                                                                               \
-  void tb_tick_##lower_name##_system(void *self, const SystemInput *input,     \
-                                     SystemOutput *output,                     \
-                                     float delta_seconds) {                    \
-    tick_##lower_name##_system((self_type *)self, input, output,               \
-                               delta_seconds);                                 \
   }
 
 typedef struct World World;
@@ -205,17 +196,12 @@ typedef struct SystemDescriptor {
   SystemId id;
   InternalDescriptor desc;
 
-  uint32_t dep_count;
-  SystemComponentDependencies deps[MAX_DEPENDENCY_SET_COUNT];
-
   uint32_t system_dep_count;
   SystemId system_deps[MAX_SYSTEM_DEP_COUNT];
 
   SystemCreateFn create;
   SystemDestroyFn destroy;
-  SystemTickFn tick;
 
-  // Tick V2
   uint32_t tick_fn_count;
   TickFunctionDescriptor tick_fns[MAX_TICK_FN_COUNT];
 
@@ -246,7 +232,6 @@ typedef struct WorldDescriptor {
   uint32_t system_count;
   const SystemDescriptor *system_descs;
   const SystemId *init_order;
-  const SystemId *tick_order;
 
 } WorldDescriptor;
 
@@ -264,7 +249,6 @@ typedef struct World {
   uint32_t system_count;
   System *systems;
   uint32_t *init_order;
-  uint32_t *tick_order;
 
   // Tick V2
   uint32_t tick_fn_count;

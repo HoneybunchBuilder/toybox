@@ -130,8 +130,8 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void tick_visual_logging(void *self, const SystemInput *input,
-                         SystemOutput *output, float delta_seconds);
+void tick_visual_logging_system(void *self, const SystemInput *input,
+                                SystemOutput *output, float delta_seconds);
 
 void tb_visual_logging_system_descriptor(
     SystemDescriptor *desc, const VisualLoggingSystemDescriptor *vlog_desc) {
@@ -140,14 +140,11 @@ void tb_visual_logging_system_descriptor(
       .size = sizeof(VisualLoggingSystem),
       .id = VisualLoggingSystemId,
       .desc = (InternalDescriptor)vlog_desc,
-      .dep_count = 1,
-      .deps[0] = {2, {CameraComponentId, TransformComponentId}},
       .system_dep_count = 6,
       .system_deps = {RenderSystemId, ViewSystemId, RenderObjectSystemId,
                       RenderPipelineSystemId, MeshSystemId, CoreUISystemId},
       .create = tb_create_visual_logging_system,
       .destroy = tb_destroy_visual_logging_system,
-      .tick = tb_tick_visual_logging_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
@@ -155,7 +152,7 @@ void tb_visual_logging_system_descriptor(
               .deps[0] = {2, {CameraComponentId, TransformComponentId}},
               .system_id = VisualLoggingSystemId,
               .order = E_TICK_PRE_RENDER,
-              .function = tick_visual_logging,
+              .function = tick_visual_logging_system,
           },
   };
 }
@@ -636,18 +633,11 @@ void tick_visual_logging_system_internal(VisualLoggingSystem *self,
 #endif
 }
 
-void tick_visual_logging(void *self, const SystemInput *input,
-                         SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick VisualLogging System");
+void tick_visual_logging_system(void *self, const SystemInput *input,
+                                SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick VisualLogging System");
   tick_visual_logging_system_internal((VisualLoggingSystem *)self, input,
                                       output, delta_seconds);
-}
-
-void tick_visual_logging_system(VisualLoggingSystem *self,
-                                const SystemInput *input, SystemOutput *output,
-                                float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick VisualLogging System");
-  tick_visual_logging_system_internal(self, input, output, delta_seconds);
 }
 
 // The public API down here is expected to be elided by the compiler when

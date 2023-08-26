@@ -129,7 +129,7 @@ void tick_shadow_system_internal(ShadowSystem *self, const SystemInput *input,
          ++cascade_idx) {
       float split_dist = cascade_splits[cascade_idx];
 
-      float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {0};
+      float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {{0}};
       // Project into world space
       for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
         const float3 corner = tb_frustum_corners[i];
@@ -213,17 +213,11 @@ void tick_shadow_system_internal(ShadowSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
-void tick_shadow_system(ShadowSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Shadow System");
-  tick_shadow_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(shadow, ShadowSystem, ShadowSystemDescriptor)
 
-void tick_shadows(void *self, const SystemInput *input, SystemOutput *output,
-                  float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Shadow System");
+void tick_shadow_system(void *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Shadow System");
   tick_shadow_system_internal((ShadowSystem *)self, input, output,
                               delta_seconds);
 }
@@ -235,18 +229,11 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(ShadowSystem),
       .id = ShadowSystemId,
       .desc = (InternalDescriptor)shadow_desc,
-      .dep_count = 2,
-      .deps[0] = {.count = 2,
-                  .dependent_ids = {DirectionalLightComponentId,
-                                    TransformComponentId}},
-      .deps[1] = {.count = 2,
-                  .dependent_ids = {CameraComponentId, TransformComponentId}},
       .system_dep_count = 2,
       .system_deps[0] = ViewSystemId,
       .system_deps[1] = VisualLoggingSystemId,
       .create = tb_create_shadow_system,
       .destroy = tb_destroy_shadow_system,
-      .tick = tb_tick_shadow_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
@@ -254,8 +241,8 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
               .deps = {{2, {DirectionalLightComponentId, TransformComponentId}},
                        {2, {CameraComponentId, TransformComponentId}}},
               .system_id = ShadowSystemId,
-              .order = E_TICK_POST_PHYSICS + 1,
-              .function = tick_shadows,
+              .order = E_TICK_PRE_RENDER,
+              .function = tick_shadow_system,
           },
   };
 }

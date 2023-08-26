@@ -90,17 +90,11 @@ void tick_coreui_system_internal(CoreUISystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
-void tick_coreui_system(CoreUISystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick CoreUI System");
-  tick_coreui_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(coreui, CoreUISystem, CoreUISystemDescriptor)
 
-void tick_coreui(void *self, const SystemInput *input, SystemOutput *output,
-                 float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick CoreUI System");
+void tick_coreui_system(void *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick CoreUI System");
   tick_coreui_system_internal((CoreUISystem *)self, input, output,
                               delta_seconds);
 }
@@ -116,12 +110,11 @@ void tb_coreui_system_descriptor(SystemDescriptor *desc,
       .system_deps[0] = ImGuiSystemId,
       .create = tb_create_coreui_system,
       .destroy = tb_destroy_coreui_system,
-      .tick = tb_tick_coreui_system,
       .tick_fn_count = 1,
       .tick_fns = {{
           .system_id = CoreUISystemId,
           .order = E_TICK_PRE_UI,
-          .function = tick_coreui,
+          .function = tick_coreui_system,
       }},
   };
 }

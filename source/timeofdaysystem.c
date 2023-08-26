@@ -216,17 +216,11 @@ void tick_time_of_day_system_internal(TimeOfDaySystem *self,
   TracyCZoneEnd(ctx);
 }
 
-void tick_time_of_day_system(TimeOfDaySystem *self, const SystemInput *input,
-                             SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick TimeOfDay System");
-  tick_time_of_day_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(time_of_day, TimeOfDaySystem, TimeOfDaySystemDescriptor)
 
-void tick_time_of_day(void *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick TimeOfDay System");
+void tick_time_of_day_system(void *self, const SystemInput *input,
+                             SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick TimeOfDay System");
   tick_time_of_day_system_internal((TimeOfDaySystem *)self, input, output,
                                    delta_seconds);
 }
@@ -240,12 +234,8 @@ void tb_time_of_day_system_descriptor(
       .desc = (InternalDescriptor)tod_desc,
       .system_dep_count = 1,
       .system_deps[0] = ViewSystemId,
-      .dep_count = 2,
-      .deps[0] = {1, {SkyComponentId}},
-      .deps[1] = {2, {DirectionalLightComponentId, TransformComponentId}},
       .create = tb_create_time_of_day_system,
       .destroy = tb_destroy_time_of_day_system,
-      .tick = tb_tick_time_of_day_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
@@ -254,8 +244,8 @@ void tb_time_of_day_system_descriptor(
               .deps[1] = {2,
                           {DirectionalLightComponentId, TransformComponentId}},
               .system_id = TimeOfDaySystemId,
-              .order = E_TICK_PRE_RENDER,
-              .function = tick_time_of_day,
+              .order = E_TICK_PRE_PHYSICS,
+              .function = tick_time_of_day_system,
           },
   };
 }

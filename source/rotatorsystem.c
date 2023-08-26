@@ -2,6 +2,8 @@
 
 #include "transformcomponent.h"
 #include "transformercomponents.h"
+
+#include <SDL2/SDL_log.h>
 #include <SDL2/SDL_stdinc.h>
 
 bool create_rotator_system(RotatorSystem *self,
@@ -23,8 +25,10 @@ bool create_rotator_system(RotatorSystem *self,
 
 void destroy_rotator_system(RotatorSystem *self) { *self = (RotatorSystem){0}; }
 
-void tick_rotator_system(RotatorSystem *self, const SystemInput *input,
-                         SystemOutput *output, float delta_seconds) {
+TB_DEFINE_SYSTEM(rotator, RotatorSystem, RotatorSystemDescriptor)
+
+void tick_rotator_system_internal(RotatorSystem *self, const SystemInput *input,
+                                  SystemOutput *output, float delta_seconds) {
   EntityId *entities = tb_get_column_entity_ids(input, 0);
   const uint32_t entity_count = tb_get_column_component_count(input, 0);
   const PackedComponentStore *rotators =
@@ -67,7 +71,12 @@ void tick_rotator_system(RotatorSystem *self, const SystemInput *input,
   };
 }
 
-TB_DEFINE_SYSTEM(rotator, RotatorSystem, RotatorSystemDescriptor)
+void tick_rotator_system(void *self, const SystemInput *input,
+                         SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Rotator System");
+  tick_rotator_system_internal((RotatorSystem *)self, input, output,
+                               delta_seconds);
+}
 
 void tb_rotator_system_descriptor(SystemDescriptor *desc,
                                   const RotatorSystemDescriptor *rotator_desc) {
@@ -76,15 +85,17 @@ void tb_rotator_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(RotatorSystem),
       .id = RotatorSystemId,
       .desc = (InternalDescriptor)rotator_desc,
-      .dep_count = 1,
-      .deps[0] =
-          {
-              .count = 2,
-              .dependent_ids = {RotatorComponentId, TransformComponentId},
-          },
       .system_dep_count = 0,
       .create = tb_create_rotator_system,
       .destroy = tb_destroy_rotator_system,
-      .tick = tb_tick_rotator_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .dep_count = 1,
+              .deps[0] = {2, {RotatorComponentId, TransformComponentId}},
+              .system_id = RotatorSystemId,
+              .order = E_TICK_PRE_PHYSICS,
+              .function = tick_rotator_system,
+          },
   };
 }

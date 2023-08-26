@@ -2997,7 +2997,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
         // Fill out buffer on the CPU side
         {
-          float2 noise[16] = {0};
+          float2 noise[16] = {{0}};
           for (uint32_t i = 0; i < 16; ++i) {
             noise[i] = normf2((float2){
                 tb_randf(-1.0f, 1.0f),
@@ -4225,19 +4225,12 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
   TracyCZoneEnd(ctx);
 }
 
-void tick_render_pipeline_system(RenderPipelineSystem *self,
-                                 const SystemInput *input, SystemOutput *output,
-                                 float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick RenderPipeline System");
-  tick_render_pipeline_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(render_pipeline, RenderPipelineSystem,
                  RenderPipelineSystemDescriptor)
 
-void tick_render_pipeline(void *self, const SystemInput *input,
-                          SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderPipeline System");
+void tick_render_pipeline_system(void *self, const SystemInput *input,
+                                 SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline System");
   tick_render_pipeline_system_internal((RenderPipelineSystem *)self, input,
                                        output, delta_seconds);
 }
@@ -4247,7 +4240,7 @@ void check_swapchain_resize(void *self, const SystemInput *input,
   (void)input;
   (void)output;
   (void)delta_seconds;
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick RenderPipeline Check Resize");
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline Check Resize");
   RenderPipelineSystem *rnd_pipe_sys = (RenderPipelineSystem *)self;
   RenderSystem *rnd_sys = rnd_pipe_sys->render_system;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
@@ -4281,14 +4274,12 @@ void tb_render_pipeline_system_descriptor(
       .size = sizeof(RenderPipelineSystem),
       .id = RenderPipelineSystemId,
       .desc = (InternalDescriptor)pipe_desc,
-      .dep_count = 0,
       .system_dep_count = 3,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = RenderTargetSystemId,
       .system_deps[2] = ViewSystemId,
       .create = tb_create_render_pipeline_system,
       .destroy = tb_destroy_render_pipeline_system,
-      .tick = tb_tick_render_pipeline_system,
       .tick_fn_count = 2,
       .tick_fns[0] =
           {
@@ -4301,8 +4292,8 @@ void tb_render_pipeline_system_descriptor(
       .tick_fns[1] =
           {
               .system_id = RenderPipelineSystemId,
-              .order = E_TICK_PRE_RENDER,
-              .function = tick_render_pipeline,
+              .order = E_TICK_RENDER - 1, // Tick before the render system
+              .function = tick_render_pipeline_system,
           },
   };
 }

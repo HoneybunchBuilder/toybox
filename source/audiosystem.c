@@ -70,15 +70,6 @@ void destroy_audio_system(AudioSystem *self) {
   *self = (AudioSystem){0};
 }
 
-void tick_audio_system(AudioSystem *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Audio System (Dud)");
-  (void)self;
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
-}
-
 TB_DEFINE_SYSTEM(audio, AudioSystem, AudioSystemDescriptor)
 
 void tb_audio_system_descriptor(SystemDescriptor *desc,
@@ -90,7 +81,6 @@ void tb_audio_system_descriptor(SystemDescriptor *desc,
       .desc = (InternalDescriptor)audio_desc,
       .create = tb_create_audio_system,
       .destroy = tb_destroy_audio_system,
-      .tick = tb_tick_audio_system,
   };
 }
 

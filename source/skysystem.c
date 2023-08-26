@@ -1357,17 +1357,11 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
   }
 }
 
-void tick_sky_system(SkySystem *self, const SystemInput *input,
-                     SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Sky System");
-  tick_sky_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(sky, SkySystem, SkySystemDescriptor)
 
-void tick_sky(void *self, const SystemInput *input, SystemOutput *output,
-              float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick Sky System");
+void tick_sky_system(void *self, const SystemInput *input, SystemOutput *output,
+                     float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Sky System");
   tick_sky_system_internal((SkySystem *)self, input, output, delta_seconds);
 }
 
@@ -1378,23 +1372,6 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
       .size = sizeof(SkySystem),
       .id = SkySystemId,
       .desc = (InternalDescriptor)sky_desc,
-      .dep_count = 3,
-      .deps[0] =
-          {
-              .count = 1,
-              .dependent_ids = {SkyComponentId},
-          },
-      .deps[1] =
-          {
-              .count = 2,
-              .dependent_ids = {CameraComponentId, TransformComponentId},
-          },
-      .deps[2] =
-          {
-              .count = 2,
-              .dependent_ids = {DirectionalLightComponentId,
-                                TransformComponentId},
-          },
       .system_dep_count = 4,
       .system_deps[0] = RenderSystemId,
       .system_deps[1] = RenderPipelineSystemId,
@@ -1402,7 +1379,6 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
       .system_deps[3] = ViewSystemId,
       .create = tb_create_sky_system,
       .destroy = tb_destroy_sky_system,
-      .tick = tb_tick_sky_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
@@ -1413,7 +1389,7 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
                         {DirectionalLightComponentId, TransformComponentId}}},
               .system_id = SkySystemId,
               .order = E_TICK_PRE_RENDER,
-              .function = tick_sky,
+              .function = tick_sky_system,
           },
   };
 }

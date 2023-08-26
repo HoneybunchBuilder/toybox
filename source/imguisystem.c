@@ -534,7 +534,7 @@ void tick_imgui_system_internal(ImGuiSystem *self, const SystemInput *input,
 
   VkResult err = VK_SUCCESS;
 
-  if (self->context_count > 0) {
+  if (self->context_count > 0 && delta_seconds > 0) {
     RenderSystem *render_system = self->render_system;
 
     ImGuiFrameState *state = &self->frame_states[render_system->frame_idx];
@@ -822,17 +822,11 @@ void tick_imgui_system_internal(ImGuiSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
-void tick_imgui_system(ImGuiSystem *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick ImGUI System");
-  tick_imgui_system_internal(self, input, output, delta_seconds);
-}
-
 TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
 
-void tick_imgui(void *self, const SystemInput *input, SystemOutput *output,
-                float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "V2 Tick ImGUI System");
+void tick_imgui_system(void *self, const SystemInput *input,
+                       SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick ImGUI System");
   tick_imgui_system_internal((ImGuiSystem *)self, input, output, delta_seconds);
 }
 
@@ -848,13 +842,12 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
                       RenderTargetSystemId, InputSystemId},
       .create = tb_create_imgui_system,
       .destroy = tb_destroy_imgui_system,
-      .tick = tb_tick_imgui_system,
       .tick_fn_count = 1,
       .tick_fns[0] =
           {
               .system_id = ImGuiSystemId,
               .order = E_TICK_UI,
-              .function = tick_imgui,
+              .function = tick_imgui_system,
           },
   };
 }

@@ -29,10 +29,10 @@ bool create_viewer_system(ViewerSystem *self,
 
 void destroy_viewer_system(ViewerSystem *self) { *self = (ViewerSystem){0}; }
 
-void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
-                        SystemOutput *output, float delta_seconds) {
-  SDL_LogVerbose(SDL_LOG_CATEGORY_SYSTEM, "V1 Tick Viewer System");
-  (void)self;
+TB_DEFINE_SYSTEM(viewer, ViewerSystem, ViewerSystemDescriptor)
+
+void tick_viewer_system_internal(ViewerSystem *self, const SystemInput *input,
+                                 SystemOutput *output, float delta_seconds) {
   (void)input;
   (void)output;
   (void)delta_seconds;
@@ -80,7 +80,12 @@ void tick_viewer_system(ViewerSystem *self, const SystemInput *input,
   TracyCZoneEnd(ctx);
 }
 
-TB_DEFINE_SYSTEM(viewer, ViewerSystem, ViewerSystemDescriptor)
+void tick_viewer_system(void *self, const SystemInput *input,
+                        SystemOutput *output, float delta_seconds) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Viewer System");
+  tick_viewer_system_internal((ViewerSystem *)self, input, output,
+                              delta_seconds);
+}
 
 void tb_viewer_system_descriptor(SystemDescriptor *desc,
                                  const ViewerSystemDescriptor *viewer_desc) {
@@ -93,6 +98,12 @@ void tb_viewer_system_descriptor(SystemDescriptor *desc,
       .system_deps[0] = CoreUISystemId,
       .create = tb_create_viewer_system,
       .destroy = tb_destroy_viewer_system,
-      .tick = tb_tick_viewer_system,
+      .tick_fn_count = 1,
+      .tick_fns[0] =
+          {
+              .system_id = ViewerSystemId,
+              .order = E_TICK_PRE_UI,
+              .function = tick_viewer_system,
+          },
   };
 }
