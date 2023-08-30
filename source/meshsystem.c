@@ -2002,12 +2002,13 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node) {
-  // Hash the mesh's path and gltf name to get the id
+  // Hash the mesh's path and the cgltf_mesh structure to get an id
+  // We'd prefer to use a name but gltfpack is currently stripping mesh names
   const cgltf_mesh *mesh = node->mesh;
   TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
 
   TbMeshId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)mesh->name, SDL_strlen(mesh->name));
+  id = sdbm(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
 
   uint32_t index = find_mesh_by_id(self, id);
 

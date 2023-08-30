@@ -510,14 +510,6 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
     if (node->mesh) {
       MeshComponentDescriptor *mesh_desc =
           tb_alloc_tp(world->tmp_alloc, MeshComponentDescriptor);
-      // Must put mesh name on std_alloc for proper cleanup
-      {
-        const char *parent_name = node->parent->name;
-        const size_t name_len = SDL_strlen(parent_name) + 1;
-        char *name = tb_alloc_nm_tp(world->std_alloc, name_len, char);
-        SDL_snprintf(name, name_len, "%s", parent_name);
-        node->mesh->name = name;
-      }
       *mesh_desc = (MeshComponentDescriptor){
           .node = node,
           .source_path = root_scene_path,

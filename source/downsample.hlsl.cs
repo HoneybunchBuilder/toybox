@@ -6,11 +6,25 @@ sampler s : register(s2, space0);
 
 #define GROUP_SIZE 256
 
+float3 to_srgb(float3 v) {
+  const float inv_gamma = 1.0 / 2.2;
+  return pow(v, inv_gamma);
+}
+
+float rgb_to_lum(float3 c) { return dot(c, float3(0.2126f, 0.7152f, 0.0722f)); }
+
+float karis_average(float3 c) {
+  float luma = rgb_to_lum(to_srgb(c)) * 0.25f;
+  return 1.0f / (1.0f + luma);
+}
+
 [numthreads(GROUP_SIZE, 1, 1)]
 void comp(int3 group_thread_id: SV_GroupThreadID,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
+  uint mip_level;
+  uint num_levels;
   float2 in_res;
-  input.GetDimensions(in_res.x, in_res.y);
+  input.GetDimensions(mip_level, in_res.x, in_res.y, num_levels);
 
   float2 out_res;
   output.GetDimensions(out_res.x, out_res.y);
@@ -23,7 +37,7 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   // Take 13 samples around current texel:
   // a - b - c
   // - j - k -
-  // d - e - f
+  // d - e - f0
   // - l - m -
   // g - h - i
   // === ('e' is the current texel) ===
@@ -57,10 +71,33 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   // (e.g.) contribute 0.5 to the final color output. The code below is written
   // to effectively yield this sum. We get:
   // 0.125*5 + 0.03125*4 + 0.0625*4 = 1
-  float3 downsample = e * 0.125;
-  downsample += (a + c + g + i) * 0.03125;
-  downsample += (b + d + f + h) * 0.0625;
-  downsample += (j + k + l + m) * 0.125;
+  float3 groups[5];
+  float3 downsample = 0;
+  switch (mip_level) {
+  case 0:
+    // We are writing to mip 0, so we need to apply Karis average to each block
+    // of 4 samples to prevent fireflies (very bright subpixels, leads to
+    // pulsating artifacts).
+    groups[0] = (a + b + d + e) * (0.125f / 4.0f);
+    groups[1] = (b + c + e + f) * (0.125f / 4.0f);
+    groups[2] = (d + e + g + h) * (0.125f / 4.0f);
+    groups[3] = (e + f + h + i) * (0.125f / 4.0f);
+    groups[4] = (j + k + l + m) * (0.5f / 4.0f);
+    groups[0] *= karis_average(groups[0]);
+    groups[1] *= karis_average(groups[1]);
+    groups[2] *= karis_average(groups[2]);
+    groups[3] *= karis_average(groups[3]);
+    groups[4] *= karis_average(groups[4]);
+    downsample = groups[0] + groups[1] + groups[2] + groups[3] + groups[4];
+    break;
+  default:
+    downsample = e * 0.125;
+    downsample += (a + c + g + i) * 0.03125;
+    downsample += (b + d + f + h) * 0.0625;
+    downsample += (j + k + l + m) * 0.125;
+    break;
+  }
+
   downsample = max(downsample, 0.00001f); // To prevent propogating zeroes
 
   output[uv * out_res] = float4(downsample, 0);

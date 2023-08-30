@@ -55,8 +55,7 @@
     },
     {
       "name": "meshoptimizer",
-      "version": "0.18",
-      "port-version": 1
+      "version": "0.19"
     },
     {
       "name": "mimalloc",

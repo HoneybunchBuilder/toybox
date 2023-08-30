@@ -410,8 +410,6 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       const cgltf_node *node = &data->nodes[0];
       self->sphere_mesh =
           tb_mesh_system_load_mesh(mesh_system, asset_path, node);
-
-      TB_CHECK(node->has_scale, "Unexpected");
       self->sphere_scale =
           (float3){node->scale[0], node->scale[1], node->scale[2]};
     }
