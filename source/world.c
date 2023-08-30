@@ -561,6 +561,7 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
               if (store->deserialize &&
                   SDL_strcmp(store->id_str, id_str) == 0) {
                 void *comp_desc = tb_alloc(world->tmp_alloc, store->desc_size);
+                SDL_memset(comp_desc, 0, store->desc_size);
                 store->deserialize(json, comp_desc);
                 component_ids[component_idx] = store->id;
                 component_descriptors[component_idx] = comp_desc;
