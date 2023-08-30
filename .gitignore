@@ -3,6 +3,7 @@
 out/*
 
 *.blend1
+*.cats.*
 
 .vscode/
 .vs/
