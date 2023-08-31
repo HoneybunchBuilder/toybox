@@ -653,6 +653,8 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   record_sky_common(buffer, batch_count, batches);
 
+  // TODO: After capturing the environment map we need to mip it down
+
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
@@ -1258,13 +1260,6 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
       }
 
       for (uint32_t sky_idx = 0; sky_idx < sky_count; ++sky_idx) {
-        sky_draw_batches[batch_count] = (DrawBatch){
-            .layout = self->sky_pipe_layout,
-            .pipeline = self->sky_pipeline,
-            .viewport = {0, height, width, -(float)height, 0, 1},
-            .scissor = {{0, 0}, {width, height}},
-            .user_batch = &sky_batches[batch_count],
-        };
         sky_batches[batch_count] = (SkyDrawBatch){
             .const_range =
                 (VkPushConstantRange){
@@ -1280,6 +1275,16 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
         };
+        sky_draw_batches[batch_count] = (DrawBatch){
+            .layout = self->sky_pipe_layout,
+            .pipeline = self->sky_pipeline,
+            .viewport = {0, height, width, -(float)height, 0, 1},
+            .scissor = {{0, 0}, {width, height}},
+            .user_batch = &sky_batches[batch_count],
+        };
+        // TODO: We need to capture the environment once per
+        // pre-filtered reflection mip in order to
+        // avoid sun intensity artifacts
         env_draw_batches[batch_count] = (DrawBatch){
             .layout = self->sky_pipe_layout,
             .pipeline = self->env_pipeline,
@@ -1335,7 +1340,7 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
             .consts =
                 {
                     .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
-                    .sample_count = 16,
+                    .sample_count = 32,
                 },
         };
       }

@@ -8,10 +8,6 @@
 
 #define PUSH_CONSTANT_BYTES 128
 
-typedef struct BlurPushConstants {
-  float horizontal;
-} BlurPushConstants;
-
 typedef struct SkyPushConstants {
   float4x4 vp;
 } SkyPushConstants;

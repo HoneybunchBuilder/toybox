@@ -4,9 +4,6 @@ Texture2D input : register(t0, space0);
 RWTexture2D<float4> output : register(u1, space0);
 sampler static_sampler : register(s2, space0);
 
-[[vk::push_constant]]
-ConstantBuffer<BlurPushConstants> consts : register(b3, space0);
-
 #define GROUP_SIZE 256
 
 [numthreads(GROUP_SIZE, 1, 1)]

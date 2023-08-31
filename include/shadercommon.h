@@ -6,8 +6,6 @@
 #include "imgui.hlsli"
 #include "shadow.hlsli"
 
-_Static_assert(sizeof(BlurPushConstants) <= PUSH_CONSTANT_BYTES,
-               "Too Many Push Constants");
 _Static_assert(sizeof(SkyPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 _Static_assert(sizeof(ImGuiPushConstants) <= PUSH_CONSTANT_BYTES,

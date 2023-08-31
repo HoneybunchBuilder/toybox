@@ -141,7 +141,8 @@ typedef struct RenderPipelineSystem {
   VkPipelineLayout comp_copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
   VkPipeline ssao_pipe;
-  VkPipeline blur_pipe; // Compute blur pipe
+  VkPipeline blur_h_pipe;
+  VkPipeline blur_v_pipe;
   VkPipeline depth_copy_pipe;
   VkPipeline color_copy_pipe;
   VkPipeline brightness_pipe;

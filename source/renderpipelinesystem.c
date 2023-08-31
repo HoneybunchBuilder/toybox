@@ -13,7 +13,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
-#include "blur_comp.h"
+#include "blur_h_comp.h"
+#include "blur_v_comp.h"
 #include "brightness_frag.h"
 #include "brightness_vert.h"
 #include "colorcopy_frag.h"
@@ -129,7 +130,6 @@ typedef struct SSAOBatch {
 
 typedef struct BlurBatch {
   VkDescriptorSet set;
-  BlurPushConstants consts;
 } BlurBatch;
 
 VkResult create_depth_pipeline(RenderSystem *render_system,
@@ -522,38 +522,71 @@ VkResult create_comp_copy_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_blur_pipeline(RenderSystem *render_system,
-                              VkPipelineLayout layout, VkPipeline *pipeline) {
+VkResult create_blur_pipelines(RenderSystem *render_system,
+                               VkPipelineLayout layout, VkPipeline *h_pipe,
+                               VkPipeline *v_pipe) {
   VkResult err = VK_SUCCESS;
-  VkShaderModule blur_comp_mod = VK_NULL_HANDLE;
+  VkShaderModule blur_h_comp_mod = VK_NULL_HANDLE;
+  VkShaderModule blur_v_comp_mod = VK_NULL_HANDLE;
 
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(blur_comp);
-    create_info.pCode = (const uint32_t *)blur_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Blur Comp",
-                               &blur_comp_mod);
+    create_info.codeSize = sizeof(blur_h_comp);
+    create_info.pCode = (const uint32_t *)blur_h_comp;
+    err = tb_rnd_create_shader(render_system, &create_info, "Blur H Comp",
+                               &blur_h_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
   }
 
-  VkComputePipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-      .stage =
-          (VkPipelineShaderStageCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = blur_comp_mod,
-              .pName = "comp",
-          },
-      .layout = layout,
-  };
-  err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
-                                        "Blur Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create blur pipeline", err);
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(blur_v_comp);
+    create_info.pCode = (const uint32_t *)blur_v_comp;
+    err = tb_rnd_create_shader(render_system, &create_info, "Blur V Comp",
+                               &blur_v_comp_mod);
+    TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
+  }
 
-  tb_rnd_destroy_shader(render_system, blur_comp_mod);
+  {
+    VkComputePipelineCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage =
+            (VkPipelineShaderStageCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                .module = blur_h_comp_mod,
+                .pName = "comp",
+            },
+        .layout = layout,
+    };
+    err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+                                          "Blur H Pipeline", h_pipe);
+    TB_VK_CHECK_RET(err, "Failed to create horizontal blur pipeline", err);
+  }
+
+  {
+    VkComputePipelineCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage =
+            (VkPipelineShaderStageCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+                .module = blur_v_comp_mod,
+                .pName = "comp",
+            },
+        .layout = layout,
+    };
+    err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+                                          "Blur V Pipeline", v_pipe);
+    TB_VK_CHECK_RET(err, "Failed to create vertical blur pipeline", err);
+  }
+
+  tb_rnd_destroy_shader(render_system, blur_h_comp_mod);
+  tb_rnd_destroy_shader(render_system, blur_v_comp_mod);
 
   return err;
 }
@@ -928,8 +961,6 @@ void record_ssao_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &blur_batch->set, 0, NULL);
-    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(BlurPushConstants), &blur_batch->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -976,8 +1007,6 @@ void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &blur_batch->set, 0, NULL);
-    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(BlurPushConstants), &blur_batch->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -2642,12 +2671,12 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
       {
         VkSamplerCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            .magFilter = VK_FILTER_NEAREST,
-            .minFilter = VK_FILTER_NEAREST,
-            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
             .anisotropyEnable = VK_FALSE,
             .maxAnisotropy = 1.0f,
             .maxLod = 1.0f,
@@ -3164,15 +3193,6 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                 (VkDescriptorSetLayout[1]){
                     self->blur_set_layout,
                 },
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges =
-                (VkPushConstantRange[1]){
-                    {
-                        .offset = 0,
-                        .size = sizeof(BlurPushConstants),
-                        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                    },
-                },
         };
         err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
                                             "Blur Pipeline Layout",
@@ -3180,8 +3200,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         TB_VK_CHECK_RET(err, "Failed to create blur pipeline layout", false);
       }
 
-      err = create_blur_pipeline(self->render_system, self->blur_pipe_layout,
-                                 &self->blur_pipe);
+      err = create_blur_pipelines(self->render_system, self->blur_pipe_layout,
+                                  &self->blur_h_pipe, &self->blur_v_pipe);
       TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
 
       DispatchContextDescriptor desc = {
@@ -3295,7 +3315,8 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipe_layout(self->render_system, self->comp_copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
   tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->blur_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->blur_h_pipe);
+  tb_rnd_destroy_pipeline(self->render_system, self->blur_v_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->comp_copy_pipe);
@@ -4012,36 +4033,27 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
     }
     // SSAO Blur Pass
     {
-      uint32_t group_x = width / 16;
-      uint32_t group_y = height;
       // Do a blur on each axis
       BlurBatch x_blur_batch = {
           .set = ssao_blur_x_set,
-          .consts =
-              {
-                  .horizontal = 1.0f,
-              },
       };
       DispatchBatch x_batch = {
           .layout = self->blur_pipe_layout,
-          .pipeline = self->blur_pipe,
+          .pipeline = self->blur_h_pipe,
           .user_batch = &x_blur_batch,
           .group_count = 1,
-          .groups[0] = {group_x, group_y, 1},
+          .groups[0] = {(width + 64 - 1) / 64, height, 1},
+
       };
       BlurBatch y_blur_batch = {
           .set = ssao_blur_y_set,
-          .consts =
-              {
-                  .horizontal = 0.0f,
-              },
       };
       DispatchBatch y_batch = {
           .layout = self->blur_pipe_layout,
-          .pipeline = self->blur_pipe,
+          .pipeline = self->blur_v_pipe,
           .user_batch = &y_blur_batch,
           .group_count = 1,
-          .groups[0] = {group_x, group_y, 1},
+          .groups[0] = {width, (height + 64 - 1) / 64, 1},
       };
 
       tb_render_pipeline_issue_dispatch_batch(self, self->ssao_blur_ctx, 1,
