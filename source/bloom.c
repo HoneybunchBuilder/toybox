@@ -147,8 +147,6 @@ void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &up_batch->set, 0, NULL);
-    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(UpsamplePushConstants), &up_batch->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -205,15 +203,6 @@ VkResult create_upsample_pipe_layout(RenderSystem *render_system,
       .pSetLayouts =
           (VkDescriptorSetLayout[1]){
               set_layout,
-          },
-      .pushConstantRangeCount = 1,
-      .pPushConstantRanges =
-          (VkPushConstantRange[1]){
-              {
-                  .offset = 0,
-                  .size = sizeof(UpsamplePushConstants),
-                  .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-              },
           },
   };
   VkResult err = tb_rnd_create_pipeline_layout(

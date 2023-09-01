@@ -4,10 +4,6 @@
 
 #define TB_BLOOM_MIPS 4
 
-typedef struct UpsamplePushConstants {
-  float radius;
-} UpsamplePushConstants;
-
 #ifndef __HLSL_VERSION
 
 #include "tbrendercommon.h"
@@ -30,7 +26,6 @@ typedef struct DownsampleRenderWork {
 
 typedef struct UpsampleBatch {
   VkDescriptorSet set;
-  UpsamplePushConstants consts;
 } UpsampleBatch;
 
 typedef struct UpsampleRenderWork {

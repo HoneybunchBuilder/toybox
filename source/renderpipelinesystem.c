@@ -4151,9 +4151,6 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
     // Blur passes
     {
 #define BLUR_BATCH_COUNT TB_BLOOM_MIPS - 1
-      uint32_t group_x = (uint32_t)SDL_ceilf((float)width / 16.0f);
-      uint32_t group_y = (uint32_t)SDL_ceilf((float)height);
-
       DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {
           {.set = down_half_set},
           {.set = down_quarter_set},
@@ -4165,30 +4162,30 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
               .pipeline = self->downsample_work.pipeline,
               .user_batch = &downsample_batches[0],
               .group_count = 1,
-              .groups[0] = {group_x, group_y, 1},
+              .groups[0] = {(width / 16) + 1, (height / 16) + 1, 1},
           },
           {
               .layout = self->downsample_work.pipe_layout,
               .pipeline = self->downsample_work.pipeline,
               .user_batch = &downsample_batches[1],
               .group_count = 1,
-              .groups[0] = {group_x / 2, group_y / 2, 1},
+              .groups[0] = {((width / 2) / 16) + 1, ((height / 2) / 16) + 1, 1},
           },
           {
               .layout = self->downsample_work.pipe_layout,
               .pipeline = self->downsample_work.pipeline,
               .user_batch = &downsample_batches[2],
               .group_count = 1,
-              .groups[0] = {group_x / 4, group_y / 4, 1},
+              .groups[0] = {((width / 4) / 16) + 1, ((height / 4) / 16) + 1, 1},
           },
       };
       tb_render_pipeline_issue_dispatch_batch(self, self->downsample_work.ctx,
                                               BLUR_BATCH_COUNT, down_batches);
 
       UpsampleBatch upsample_batches[BLUR_BATCH_COUNT] = {
-          {.set = up_quarter_set, .consts = {.radius = 0.005f}},
-          {.set = up_half_set, .consts = {.radius = 0.005f}},
-          {.set = up_full_set, .consts = {.radius = 0.005f}},
+          {.set = up_quarter_set},
+          {.set = up_half_set},
+          {.set = up_full_set},
       };
       DispatchBatch up_batches[BLUR_BATCH_COUNT] = {
           {
@@ -4196,21 +4193,21 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
               .pipeline = self->upsample_work.pipeline,
               .user_batch = &upsample_batches[0],
               .group_count = 1,
-              .groups[0] = {group_x / 4, group_y / 4, 1},
+              .groups[0] = {((width / 4) / 16) + 1, ((height / 4) / 16) + 1, 1},
           },
           {
               .layout = self->upsample_work.pipe_layout,
               .pipeline = self->upsample_work.pipeline,
               .user_batch = &upsample_batches[1],
               .group_count = 1,
-              .groups[0] = {group_x / 2, group_y / 2, 1},
+              .groups[0] = {((width / 2) / 16) + 1, ((height / 2) / 16) + 1, 1},
           },
           {
               .layout = self->upsample_work.pipe_layout,
               .pipeline = self->upsample_work.pipeline,
               .user_batch = &upsample_batches[2],
               .group_count = 1,
-              .groups[0] = {group_x, group_y, 1},
+              .groups[0] = {(width / 16) + 1, (height / 16) + 1, 1},
           },
       };
       tb_render_pipeline_issue_dispatch_batch(self, self->upsample_work.ctx,
