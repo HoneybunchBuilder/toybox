@@ -16,27 +16,24 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   int2 src_coord = uv * in_res;
 
   // Downsample with box filter
-  float4 A = input[src_coord + int2(-2, -2)];
-  float4 B = input[src_coord + int2(0, -2)];
-  float4 C = input[src_coord + int2(2, -2)];
-  float4 D = input[src_coord + int2(-1, -1)];
-  float4 E = input[src_coord + int2(1, -1)];
-  float4 F = input[src_coord + int2(-2, 0)];
-  float4 G = input[src_coord];
-  float4 H = input[src_coord + int2(2, 0)];
-  float4 I = input[src_coord + int2(-1, 1)];
-  float4 J = input[src_coord + int2(1, 1)];
-  float4 K = input[src_coord + int2(-2, 2)];
-  float4 L = input[src_coord + int2(0, 2)];
-  float4 M = input[src_coord + int2(2, 2)];
+  float4 a = input[src_coord + int2(-2, -2)];
+  float4 b = input[src_coord + int2(0, -2)];
+  float4 c = input[src_coord + int2(2, -2)];
+  float4 d = input[src_coord + int2(-1, -1)];
+  float4 e = input[src_coord + int2(1, -1)];
+  float4 f = input[src_coord + int2(-2, 0)];
+  float4 g = input[src_coord];
+  float4 h = input[src_coord + int2(2, 0)];
+  float4 i = input[src_coord + int2(-1, 1)];
+  float4 j = input[src_coord + int2(1, 1)];
+  float4 k = input[src_coord + int2(-2, 2)];
+  float4 l = input[src_coord + int2(0, 2)];
+  float4 m = input[src_coord + int2(2, 2)];
 
-  float2 div = (1.0f / 4.0f) * float2(0.5f, 0.125f);
+  float4 downsample = e * 0.125;
+  downsample += (a + c + g + i) * 0.03125;
+  downsample += (b + d + f + h) * 0.0625;
+  downsample += (j + k + l + m) * 0.125;
 
-  float4 o = (D + E + I + J) * div.x;
-  o += (A + B + G + F) * div.y;
-  o += (B + C + H + G) * div.y;
-  o += (F + G + L + K) * div.y;
-  o += (G + H + M + L) * div.y;
-
-  output[dispatch_thread_id.xy] = o;
+  output[dispatch_thread_id.xy] = downsample;
 }

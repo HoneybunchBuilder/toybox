@@ -16,17 +16,22 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   int2 src_coord = uv * in_res;
 
   // Upsample with tent filter
-  int4 d = int4(1, 1, -1, 0);
+  float r = 0.005;
 
-  float4 s = input[src_coord - d.xy];
-  s += input[src_coord - d.wy] * 2.0f;
-  s += input[src_coord - d.zy];
-  s += input[src_coord + d.zw] * 2.0f;
-  s += input[src_coord] * 4.0f;
-  s += input[src_coord + d.xw] * 2.0f;
-  s += input[src_coord + d.zy];
-  s += input[src_coord + d.wy] * 2.0f;
-  s += input[src_coord + d.xy];
+  float4 a = input[src_coord + int2(-r, r)];
+  float4 b = input[src_coord + int2(0, r)];
+  float4 c = input[src_coord + int2(r, r)];
+  float4 d = input[src_coord + int2(-r, r)];
+  float4 e = input[src_coord + int2(0, 0)];
+  float4 f = input[src_coord + int2(r, r)];
+  float4 g = input[src_coord + int2(-r, -r)];
+  float4 h = input[src_coord + int2(0, -r)];
+  float4 i = input[src_coord + int2(r, -r)];
 
-  output[dispatch_thread_id.xy] = s * (1.0f / 16.0f);
+  float4 upsample = e * 4.0;
+  upsample += (b + d + f + h) * 2;
+  upsample += (a + c + g + i);
+  upsample *= 1.0f / 16.0f;
+
+  output[dispatch_thread_id.xy] = upsample;
 }

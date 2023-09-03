@@ -57,9 +57,10 @@ float geometricOcclusion(float NdotL, float NdotV, float roughness) {
 // Representation of a Roughened Surface for Ray Reflection" by T. S.
 // Trowbridge, and K. P. Reitz
 float microfacetDistribution(float alpha_roughness, float NdotH) {
-  float roughnessSq = alpha_roughness * alpha_roughness;
-  float denom = NdotH * NdotH * (roughnessSq - 1.0) + 1.0;
-  return roughnessSq / (PI * denom * denom);
+  float a = alpha_roughness * alpha_roughness;
+  float a2 = a * a;
+  float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+  return a2 / (PI * denom * denom);
 }
 
 #endif

@@ -168,5 +168,5 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
-  return color;
+  return color; // 0.050876;
 }
