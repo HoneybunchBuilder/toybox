@@ -1171,7 +1171,8 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
       };
 
       // HACK: Also send this lighting data to the view
-      CommonLightData light_data = {.light_dir = data.sun_dir,
+      CommonLightData light_data = {.color = dir_light->color,
+                                    .light_dir = data.sun_dir,
                                     .cascade_splits =
                                         dir_light->cascade_splits};
       for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
@@ -1340,7 +1341,7 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
             .consts =
                 {
                     .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
-                    .sample_count = 32,
+                    .sample_count = 128,
                 },
         };
       }

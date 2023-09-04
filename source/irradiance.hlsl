@@ -31,8 +31,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 right = normalize(cross(up, normal));
   up = normalize(cross(normal, right));
 
-  const float phi_delta = TAU / 16.0f;
-  const float theta_delta = PI_2 / 8.0f;
+  const float phi_delta = TAU / 128.0f;
+  const float theta_delta = PI_2 / 32.0f;
   uint sample_count = 0u;
 
   float3 irradiance = float3(0, 0, 0);
