@@ -24,8 +24,7 @@ typedef struct OceanComponent {
 
 typedef struct OceanSample {
   float3 pos;
-  float3 tangent;
-  float3 binormal;
+  float3 normal;
 } OceanSample;
 
 void tb_ocean_component_descriptor(ComponentDescriptor *desc);
