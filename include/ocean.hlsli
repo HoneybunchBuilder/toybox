@@ -3,7 +3,7 @@
 #include "common.hlsli"
 #include "pi.h"
 
-#define TB_WAVE_MAX 16
+#define TB_WAVE_MAX 12
 
 // To avoid struct packing issues
 typedef float4 OceanWave; // xy = dir, z = steep, w = wavelength
@@ -46,7 +46,7 @@ float iter_wave_height(float2 pos, OceanData data) {
   }
 
   float weight = 1.0f;
-  float time_mul = 2.0f;
+  float time_mul = 1.0f;
   float value_sum = 0.0f;
   float weight_sum = 0.0f;
 
@@ -57,7 +57,7 @@ float iter_wave_height(float2 pos, OceanData data) {
     weight_sum += weight;
 
     wave *= 0.82;
-    time_mul *= 1.07;
+    time_mul *= 1.09;
   }
   return value_sum / weight_sum;
 }

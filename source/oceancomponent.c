@@ -21,19 +21,20 @@ bool create_ocean_component(OceanComponent *comp,
   };
   SDL_memcpy(comp->waves, desc->waves, sizeof(OceanWave) * desc->wave_count);
 
-  // TEMP: Creating some hard coded wave data for testing
+  // Creating some randomly generated but artistically driven waves
   comp->wave_count = TB_WAVE_MAX;
   OceanWave waves[TB_WAVE_MAX] = {{0}};
   float iter = 0;
-  float wavelength = 300.0f;
+  float wavelength = 76.0f;
   float steep = 0.7f;
   for (uint32_t i = 0; i < TB_WAVE_MAX; ++i) {
     float2 dir = (float2){sin(iter), cos(iter)};
 
     waves[i] = make_wave(dir, steep, wavelength),
 
-    wavelength *= 0.76;
-    steep *= 1.03;
+    wavelength *= 0.74;
+    steep *= 1.04;
+    steep = clampf(steep, 0, 1);
     iter += 132.963;
   }
 
@@ -107,7 +108,7 @@ float iter_wave_height(float2 pos, const OceanComponent *ocean) {
   }
 
   float weight = 1.0f;
-  float time_mul = 2.0f;
+  float time_mul = 1.0f;
   float value_sum = 0.0f;
   float weight_sum = 0.0f;
 
@@ -118,7 +119,7 @@ float iter_wave_height(float2 pos, const OceanComponent *ocean) {
     weight_sum += weight;
 
     wave *= 0.82;
-    time_mul *= 1.07;
+    time_mul *= 1.09;
   }
   return value_sum / weight_sum;
 }
