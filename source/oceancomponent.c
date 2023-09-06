@@ -24,17 +24,17 @@ bool create_ocean_component(OceanComponent *comp,
   comp->wave_count = TB_WAVE_MAX;
   OceanWave waves[TB_WAVE_MAX] = {{0}};
   float iter = 0;
-  float wavelength = 128.0f;
-  float steep = 0.5f;
+  float wavelength = 512.0f;
+  float steep = 0.25f;
   for (uint32_t i = 0; i < TB_WAVE_MAX; ++i) {
     float2 dir = (float2){SDL_sinf(iter), SDL_cosf(iter)};
 
     waves[i] = make_wave(dir, steep, wavelength),
 
-    wavelength *= 0.82;
-    steep *= 1.04;
+    wavelength *= 0.65;
+    steep *= 1.13;
     steep = clampf(steep, 0, 1);
-    iter += 132.963;
+    iter += 1323.963;
   }
   SDL_memcpy(comp->waves, waves, sizeof(OceanWave) * TB_WAVE_MAX);
 
@@ -87,30 +87,26 @@ void tb_ocean_component_descriptor(ComponentDescriptor *desc) {
 
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and
 // bitangent
-OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
-  float3 p = sample.pos;
-
+void gerstner_wave(OceanWave wave, float time, float2 pos, float *height,
+                   float3 *tangent, float3 *binormal) {
   float steepness = wave[2];
   float k = 2.0f * PI / wave[3];
   float c = SDL_sqrtf(9.8f / k);
   float2 d = normf2(f2(wave[0], wave[1]));
-  float f = k * (dotf2(d, (float2){p[0], p[2]}) - c * time);
+  float f = k * (dotf2(d, (float2){pos[0], pos[1]}) - c * time);
   float a = steepness / k;
 
   float sinf = SDL_sinf(f);
   float cosf = SDL_cosf(f);
 
-  p = (float3){d[0] * (a * cosf), a * sinf, d[1] * (a * cosf)};
-  float3 t = {-d[0] * d[0] * (steepness * sinf), d[0] * (steepness * cosf),
-              -d[0] * d[1] * (steepness * sinf)};
-  float3 b = {-d[0] * d[1] * (steepness * sinf), d[1] * (steepness * cosf),
-              -d[1] * d[1] * (steepness * sinf)};
+  *tangent =
+      (float3){-d[0] * d[0] * (steepness * sinf), d[0] * (steepness * cosf),
+               -d[0] * d[1] * (steepness * sinf)};
+  *binormal =
+      (float3){-d[0] * d[1] * (steepness * sinf), d[1] * (steepness * cosf),
+               -d[1] * d[1] * (steepness * sinf)};
 
-  return (OceanSample){
-      .pos = sample.pos + p,
-      .tangent = sample.tangent + t,
-      .binormal = sample.binormal + b,
-  };
+  *height = a * sinf;
 }
 
 OceanSample tb_sample_ocean(const OceanComponent *ocean,
@@ -122,16 +118,37 @@ OceanSample tb_sample_ocean(const OceanComponent *ocean,
     wave_count = TB_WAVE_MAX;
   }
 
-  OceanSample sample = {
-      .pos = f4tof3(mulf44(mat, (float4){pos[0], 0, pos[1], 1})),
-      .tangent = TB_RIGHT,
-      .binormal = TB_FORWARD,
-  };
+  float height = {0};
+  float3 tangent = TB_RIGHT;
+  float3 binormal = TB_FORWARD;
+
+  float3 world_pos = f4tof3(mulf44(mat, (float4){pos[0], 0, pos[1], 1}));
+  float2 p = f2(world_pos[0], world_pos[2]);
+
+  float weight = 1.0f;
+  float time_mul = 1.0f;
+  float weight_sum = 0.0f;
   for (uint32_t i = 0; i < wave_count; ++i) {
-    sample = gerstner_wave(ocean->waves[i], sample, ocean->time);
+    float h = 0;
+    float3 t = {0};
+    float3 b = {0};
+    gerstner_wave(ocean->waves[i], ocean->time * time_mul, p, &h, &t, &b);
+
+    height += h * weight;
+    tangent += t;
+    binormal += b;
+    weight_sum += weight;
+
+    weight *= 0.82;
+    time_mul *= 1.07;
   }
-  sample.tangent = normf3(sample.tangent);
-  sample.binormal = normf3(sample.binormal);
+  height = height / weight_sum;
+
+  OceanSample sample = {
+      .pos = (float3){p[0], height, p[2]},
+      .tangent = normf3(tangent),
+      .binormal = normf3(binormal),
+  };
 
   return sample;
 }
