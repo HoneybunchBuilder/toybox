@@ -27,11 +27,13 @@ struct Interpolators {
   float3 view_pos : POSITION1;
   float4 screen_pos : POSITION2;
   float4 clip : TEXCOORD0;
+  float3 normal : NORMAL0;
 };
 
 Interpolators vert(VertexIn i) {
   float3 pos = mul(consts.m, float4(i.local_pos, 1)).xyz + i.inst_offset.xyz;
   pos = calc_wave_pos(pos.xz, ocean_data);
+  float3 normal = calc_wave_normal(pos.xz, ocean_data);
 
   float4 clip_pos = mul(camera_data.vp, float4(pos, 1));
   float4 world_pos = float4(pos, 1.0);
@@ -42,6 +44,7 @@ Interpolators vert(VertexIn i) {
   o.view_pos = mul(camera_data.v, world_pos).xyz;
   o.screen_pos = clip_to_screen(clip_pos);
   o.clip = clip_pos;
+  o.normal = normal;
 
   return o;
 }
@@ -50,7 +53,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 view_dir_vec = camera_data.view_pos - i.world_pos;
 
   // Calculate normal after interpolation
-  float3 N = normalize(calc_wave_normal(i.world_pos.xz, ocean_data));
+  float3 N = normalize(i.normal);
   float3 V = normalize(view_dir_vec);
   float3 R = reflect(-V, N);
   float3 L = light_data.light_dir;
