@@ -34,6 +34,7 @@
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
 #include "oceansystem.h"
+#include "physicssystem.h"
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
@@ -225,8 +226,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .tmp_alloc = arena.alloc,
   };
 
+  PhysicsSystemDescriptor physics_system_desc = {
+      .std_alloc = std_alloc.alloc,
+      .tmp_alloc = arena.alloc,
+  };
+
 // Order doesn't matter here
-#define SYSTEM_COUNT 20
+#define SYSTEM_COUNT 21
   SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
   {
     uint32_t i = 0;
@@ -254,6 +260,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     tb_visual_logging_system_descriptor(&system_descs[i++], &vlog_system_desc);
     tb_rotator_system_descriptor(&system_descs[i++], &rotator_system_desc);
     tb_audio_system_descriptor(&system_descs[i++], &audio_system_desc);
+    tb_physics_system_descriptor(&system_descs[i++], &physics_system_desc);
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 
@@ -281,6 +288,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     init_order[i++] = ShadowSystemId;
     init_order[i++] = TimeOfDaySystemId;
     init_order[i++] = RotatorSystemId;
+    init_order[i++] = PhysicsSystemId;
     TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
   }
 

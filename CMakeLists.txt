@@ -103,6 +103,8 @@ find_package(mimalloc CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_path(JOLTPHYSICS_INCLUDE_DIRS "Jolt/Jolt.h" REQUIRED)
+find_library(JOLT_LIB Jolt REQUIRED)
 if(PROFILE_TRACY)
   find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -132,7 +134,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
+set(library_list "${JOLT_LIB};SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
@@ -383,6 +385,7 @@ configure_file(source/config.h.in ${engine_config_include_dir}/tbengineconfig.h 
 
 target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${engine_config_include_dir}")
+target_include_directories(toybox PRIVATE ${JOLTPHYSICS_INCLUDE_DIRS})
 # Mingw generates warnings from generated shader headers. Include as a system directory to ignore
 target_include_directories(toybox SYSTEM PUBLIC "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_compile_definitions(toybox PUBLIC "-DTB_CONFIG=\"$<CONFIG>\"")
@@ -402,6 +405,7 @@ endif()
 target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
 
 target_compile_features(toybox PUBLIC c_std_11)
+target_compile_features(toybox PUBLIC cxx_std_20)
 
 # Turn on warnings
 target_compile_options(toybox PUBLIC
