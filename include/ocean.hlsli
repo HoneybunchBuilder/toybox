@@ -26,7 +26,7 @@ _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
 #ifdef __HLSL_VERSION
 void gerstner_wave(OceanWave wave, float time, inout float3 pos,
                    inout float3 tangent, inout float3 binormal) {
-  float steepness = wave.z;
+  float steepness = saturate(wave.z);
   float k = 2 * PI / wave.w;
   float c = sqrt(9.8 / k);
   float2 d = normalize(wave.xy);
