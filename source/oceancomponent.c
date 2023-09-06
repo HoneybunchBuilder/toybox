@@ -24,14 +24,14 @@ bool create_ocean_component(OceanComponent *comp,
   comp->wave_count = TB_WAVE_MAX;
   OceanWave waves[TB_WAVE_MAX] = {{0}};
   float iter = 0;
-  float wavelength = 76.0f;
-  float steep = 0.7f;
+  float wavelength = 128.0f;
+  float steep = 0.5f;
   for (uint32_t i = 0; i < TB_WAVE_MAX; ++i) {
     float2 dir = (float2){SDL_sinf(iter), SDL_cosf(iter)};
 
     waves[i] = make_wave(dir, steep, wavelength),
 
-    wavelength *= 0.74;
+    wavelength *= 0.82;
     steep *= 1.04;
     steep = clampf(steep, 0, 1);
     iter += 132.963;
