@@ -3,7 +3,6 @@
   "name": "toybox",
   "version": "0.1.0",
   "dependencies": [
-    "joltphysics",
     "cgltf",
     "imgui",
     "ktx",
@@ -42,10 +41,6 @@
     "json-c"
   ],
   "overrides": [
-    {
-      "name": "joltphysics",
-      "version": "3.0.1"
-    },
     {
       "name": "cgltf",
       "version": "1.13"
