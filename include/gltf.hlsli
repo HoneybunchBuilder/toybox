@@ -95,6 +95,37 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   sampler filtered_env_sampler : register(s7, space);                          \
   sampler brdf_sampler : register(s8, space);
 
+#define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
+  {                                                                            \
+    View v;                                                                    \
+    v.irradiance_map = irradiance_map;                                         \
+    v.prefiltered_map = prefiltered_map;                                       \
+    v.brdf_lut = brdf_lut;                                                     \
+    v.ssao_map = ssao_map;                                                     \
+    v.filtered_env_sampler = filtered_env_sampler;                             \
+    v.brdf_sampler = brdf_sampler;                                             \
+                                                                               \
+    Light l;                                                                   \
+    l.light = light_data;                                                      \
+    l.shadow_map = shadow_map;                                                 \
+    l.shadow_sampler = shadow_sampler;                                         \
+                                                                               \
+    Surface s;                                                                 \
+    s.base_color = color;                                                      \
+    s.view_pos = i.view_pos;                                                   \
+    s.world_pos = i.world_pos;                                                 \
+    s.screen_uv = s_uv;                                                        \
+    s.metallic = met;                                                          \
+    s.roughness = rough;                                                       \
+    s.N = normal;                                                              \
+    s.V = view;                                                                \
+    s.R = refl;                                                                \
+    s.emissives = material_data.emissives;                                     \
+                                                                               \
+    out.rgb = pbr_lighting_common(v, l, s);                                    \
+    out.a = color.a;                                                           \
+  }
+
 #else
 _Static_assert(sizeof(MaterialPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");

@@ -9,11 +9,6 @@
 static const float3 Fdielectric = 0.04;
 static const float Epsilon = 0.00001;
 
-// Basic Lambertian diffuse
-// Implementation from Lambert's Photometria
-// https://archive.org/details/lambertsphotome00lambgoog
-float3 diffuse(float3 color) { return color / PI; }
-
 // The following equation models the Fresnel reflectance term of the spec
 // equation (aka F())
 float3 specular_reflection(float3 reflectance_0, float3 reflectance_90,

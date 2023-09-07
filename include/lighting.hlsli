@@ -2,7 +2,9 @@
 
 #include "pbr.hlsli"
 
-float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L, float3 light_radiance, float3 albedo, float metallic, float roughness) {
+float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
+                  float3 light_radiance, float3 albedo, float metallic,
+                  float roughness) {
   float3 direct = 0;
 
   // TODO: For each light
@@ -22,7 +24,7 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L, float3 l
     float D = microfacet_distribution(roughness, NdotH);
     // Geometric attenuation for specular brdf
     float G = geometric_occlusion(NdotL, NdotV, roughness);
-    
+
     // Diffuse scattering
     float3 kd = lerp(1 - F, 0, metallic);
 
@@ -38,7 +40,9 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L, float3 l
   return direct;
 }
 
-float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection, float2 brdf, float3 albedo, float metallic, float roughness){
+float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
+                   float2 brdf, float3 albedo, float metallic,
+                   float roughness) {
   float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
 
   float3 kd = lerp(1.0f - F, 0.0f, metallic);
@@ -57,8 +61,10 @@ float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness,
   float3 F0 = lerp(0.04, albedo, metallic);
   float NdotV = max(dot(N, V), 0);
 
-  float3 direct = pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
-  float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo, metallic, roughness);
+  float3 direct =
+      pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
+  float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
+                               metallic, roughness);
 
   return direct + ambient;
 }
@@ -127,4 +133,83 @@ float pcf_filter(float4 shadow_coord, Texture2D shadow_map, uint cascade_idx,
   }
 
   return shadow_factor / count;
+}
+
+struct View {
+  TextureCube irradiance_map;
+  TextureCube prefiltered_map;
+  Texture2D brdf_lut;
+  Texture2D ssao_map;
+  sampler filtered_env_sampler;
+  sampler brdf_sampler;
+};
+
+struct Light {
+  CommonLightData light;
+  Texture2D shadow_map;
+  sampler shadow_sampler;
+};
+
+struct Surface {
+  float4 base_color;
+  float3 view_pos;
+  float3 world_pos;
+  float2 screen_uv;
+  float metallic;
+  float roughness;
+  float3 N;
+  float3 V;
+  float3 R;
+  float4 emissives;
+};
+
+float3 pbr_lighting_common(View v, Light l, Surface s) {
+  float3 out_color = 0;
+
+  // Lighting
+  {
+    float3 L = l.light.light_dir;
+
+    float3 albedo = s.base_color.rgb;
+    float3 alpha = s.base_color.a;
+
+    float2 brdf = v.brdf_lut
+                      .Sample(v.brdf_sampler,
+                              float2(max(dot(s.N, s.V), 0.0), s.roughness))
+                      .rg;
+    float3 reflection = prefiltered_reflection(
+        v.prefiltered_map, v.filtered_env_sampler, s.R, s.roughness);
+    float3 irradiance =
+        v.irradiance_map.SampleLevel(v.filtered_env_sampler, s.N, 0).rgb;
+    float ao = v.ssao_map.Sample(l.shadow_sampler, s.screen_uv).r;
+    out_color =
+        pbr_lighting(ao, albedo, s.metallic, s.roughness, brdf, reflection,
+                     irradiance, l.light.color, L, s.V, s.N);
+  }
+
+  // Shadow cascades
+  {
+    uint cascade_idx = 0;
+    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
+      if (s.view_pos.z < l.light.cascade_splits[c]) {
+        cascade_idx = c + 1;
+      }
+    }
+
+    float4 shadow_coord =
+        mul(l.light.cascade_vps[cascade_idx], float4(s.world_pos, 1.0));
+
+    float shadow =
+        pcf_filter(shadow_coord, l.shadow_map, cascade_idx, l.shadow_sampler);
+    out_color *= shadow;
+  }
+
+  // Add emissive
+  {
+    float3 emissive_factor = s.emissives.rgb;
+    float emissive_strength = s.emissives.w;
+    out_color += emissive_factor * emissive_strength;
+  }
+
+  return out_color;
 }
