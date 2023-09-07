@@ -63,14 +63,12 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
   float3 R = reflect(-V, N);
   float2 screen_uv = (i.clip.xy / i.clip.w) * 0.5 + 0.5;
 
-  float metallic = 0.5f;
-  float roughness = 0.5f;
-
   float4 out_color = 0;
-
   if (consts.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
-    metallic = material_data.pbr_metallic_roughness.metal_rough_factors[0];
-    roughness = material_data.pbr_metallic_roughness.metal_rough_factors[1];
+    float metallic =
+        material_data.pbr_metallic_roughness.metal_rough_factors[0];
+    float roughness =
+        material_data.pbr_metallic_roughness.metal_rough_factors[1];
 
     // TODO: Handle alpha masking
     {
@@ -92,10 +90,10 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
       roughness *= mr_sample.g;
       metallic *= mr_sample.b;
     }
-  }
 
-  GLTF_OPAQUE_LIGHTING(out_color, base_color, N, V, R, screen_uv, metallic,
-                       roughness);
+    GLTF_OPAQUE_LIGHTING(out_color, base_color, N, V, R, screen_uv, metallic,
+                         roughness);
+  }
 
   return out_color;
 }

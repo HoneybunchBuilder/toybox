@@ -55,16 +55,23 @@ float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
   return diffuse_ibl + specular_ibl;
 }
 
-float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness,
-                    float2 brdf, float3 reflection, float3 irradiance,
-                    float3 light_color, float3 L, float3 V, float3 N) {
+float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
+                    float roughness, float2 brdf, float3 reflection,
+                    float3 irradiance, float3 light_color, float3 L, float3 V,
+                    float3 N) {
   float3 F0 = lerp(0.04, albedo, metallic);
   float NdotV = max(dot(N, V), 0);
 
-  float3 direct =
-      pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
-                               metallic, roughness);
+                               metallic, roughness) *
+                   ao;
+  float3 direct = 0;
+  if (shadow >= 0.3f) {
+    direct = pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic,
+                        roughness);
+  }
+
+  ambient *= shadow;
 
   return direct + ambient;
 }
@@ -166,6 +173,23 @@ struct Surface {
 float3 pbr_lighting_common(View v, Light l, Surface s) {
   float3 out_color = 0;
 
+  // Calculate shadow first
+  float shadow = 1.0f; // A value of 0 means the pixel is completely lit
+  {
+    uint cascade_idx = 0;
+    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
+      if (s.view_pos.z < l.light.cascade_splits[c]) {
+        cascade_idx = c + 1;
+      }
+    }
+
+    float4 shadow_coord =
+        mul(l.light.cascade_vps[cascade_idx], float4(s.world_pos, 1.0));
+
+    shadow =
+        pcf_filter(shadow_coord, l.shadow_map, cascade_idx, l.shadow_sampler);
+  }
+
   // Lighting
   {
     float3 L = l.light.light_dir;
@@ -183,25 +207,8 @@ float3 pbr_lighting_common(View v, Light l, Surface s) {
         v.irradiance_map.SampleLevel(v.filtered_env_sampler, s.N, 0).rgb;
     float ao = v.ssao_map.Sample(l.shadow_sampler, s.screen_uv).r;
     out_color =
-        pbr_lighting(ao, albedo, s.metallic, s.roughness, brdf, reflection,
-                     irradiance, l.light.color, L, s.V, s.N);
-  }
-
-  // Shadow cascades
-  {
-    uint cascade_idx = 0;
-    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
-      if (s.view_pos.z < l.light.cascade_splits[c]) {
-        cascade_idx = c + 1;
-      }
-    }
-
-    float4 shadow_coord =
-        mul(l.light.cascade_vps[cascade_idx], float4(s.world_pos, 1.0));
-
-    float shadow =
-        pcf_filter(shadow_coord, l.shadow_map, cascade_idx, l.shadow_sampler);
-    out_color *= shadow;
+        pbr_lighting(shadow, ao, albedo, s.metallic, s.roughness, brdf,
+                     reflection, irradiance, l.light.color, L, s.V, s.N);
   }
 
   // Add emissive
