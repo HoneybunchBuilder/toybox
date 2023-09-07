@@ -1341,7 +1341,7 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
             .consts =
                 {
                     .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
-                    .sample_count = 128,
+                    .sample_count = 16,
                 },
         };
       }
