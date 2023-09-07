@@ -2,52 +2,65 @@
 
 #include "pbr.hlsli"
 
+float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L, float3 light_radiance, float3 albedo, float metallic, float roughness) {
+  float3 direct = 0;
+
+  // TODO: For each light
+  {
+    float3 H = normalize(V + L);
+    float distance = 1.0f; // TODO: account for attenuation
+    float attenuation = 1.0f / (distance * distance);
+    float3 radiance = light_radiance * attenuation;
+
+    float NdotH = max(dot(N, H), 0.0f);
+    float NdotL = max(dot(N, L), 0.0f);
+    float HdotV = max(dot(H, V), 0.0f);
+
+    // Fresnel from direct lighting
+    float3 F = fresnel_schlick(HdotV, F0);
+    // Normal distribution for specular brdf
+    float D = microfacet_distribution(roughness, NdotH);
+    // Geometric attenuation for specular brdf
+    float G = geometric_occlusion(NdotL, NdotV, roughness);
+    
+    // Diffuse scattering
+    float3 kd = lerp(1 - F, 0, metallic);
+
+    // Lambert diffuse brdf
+    float3 diffuse = kd * albedo;
+
+    // Cook-Torrance specular BRDF
+    float3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.0001);
+
+    direct += (diffuse + specular) * radiance * NdotL;
+  }
+
+  return direct;
+}
+
+float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection, float2 brdf, float3 albedo, float metallic, float roughness){
+  float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
+
+  float3 kd = lerp(1.0f - F, 0.0f, metallic);
+
+  float3 diffuse_ibl = kd * albedo * irradiance;
+
+  float3 specular_irradiance = reflection;
+  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
+
+  return diffuse_ibl + specular_ibl;
+}
+
 float3 pbr_lighting(float ao, float3 albedo, float metallic, float roughness,
                     float2 brdf, float3 reflection, float3 irradiance,
                     float3 light_color, float3 L, float3 V, float3 N) {
   float3 F0 = lerp(0.04, albedo, metallic);
+  float NdotV = max(dot(N, V), 0);
 
-  float3 Lo = 0;
-  // Calculate direct lighting
-  // TODO: Should be from multiple sources but for now this is all for one light
-  {
-    float3 H = normalize(V + L);
-    float distance = 1.0f; // TODO: account for attenuation
-    float attenuation = 1.0 / (distance * distance);
-    float3 radiance = light_color * attenuation;
+  float3 direct = pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
+  float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo, metallic, roughness);
 
-    float NdotH = max(dot(N, H), 0.0f);
-    float NdotL = max(dot(N, L), 0.0f);
-    float NdotV = max(dot(N, V), 0.0f);
-
-    // Cook-Torrance BRDF
-    float NDF = microfacetDistribution(roughness, NdotH);
-    float G = geometricOcclusion(NdotL, NdotV, roughness);
-    float3 F = fresnesl_schlick(max(dot(H, V), 0), F0);
-
-    float3 numerator = NDF * G * F;
-    // + 0.0001 to prevent divide by zero
-    float denominator = 4.0 * NdotV * NdotL + 0.0001;
-    float3 specular = numerator / denominator;
-
-    float3 kS = F;
-    float3 kD = (1.0 - kS) * (1.0 - metallic);
-
-    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-  }
-
-  // Calculate ambient light
-  float3 F = fresnel_schlick_roughness(max(dot(N, V), 0.0), F0, roughness);
-  float3 kS = F;
-  float3 kD = (1.0 - kS) * (1.0 - metallic);
-
-  float3 diffuse = irradiance * albedo;
-  // Reflection is assumed to be pre-filtered by the caller
-  float3 specular = reflection * (F * brdf.x + brdf.y);
-
-  float3 ambient = (kD * diffuse + specular) * ao;
-
-  return ambient + Lo;
+  return direct + ambient;
 }
 
 float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,

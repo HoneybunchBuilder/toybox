@@ -16,13 +16,13 @@ float3 diffuse(float3 color) { return color / PI; }
 
 // The following equation models the Fresnel reflectance term of the spec
 // equation (aka F())
-float3 specularReflection(float3 reflectance_0, float3 reflectance_90,
-                          float VdotH) {
+float3 specular_reflection(float3 reflectance_0, float3 reflectance_90,
+                           float VdotH) {
   return reflectance_0 +
          (reflectance_90, -reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
 }
 
-float3 fresnesl_schlick(float cos_theta, float3 f0) {
+float3 fresnel_schlick(float cos_theta, float3 f0) {
   return f0 + (1.0 - f0) * pow(saturate(1.0 - cos_theta), 5.0);
 }
 
@@ -44,7 +44,7 @@ float3 prefiltered_reflection(TextureCube map, SamplerState s, float3 R,
 
 // This calculates the specular geometric attenuation (aka G()),
 // where rougher material will reflect less light back to the viewer.
-float geometricOcclusion(float NdotL, float NdotV, float roughness) {
+float geometric_occlusion(float NdotL, float NdotV, float roughness) {
   float r = roughness + 1;
   float k = (r * r) / 8.0;
   float GL = NdotL / (NdotL * (1.0 - k) + k);
@@ -56,10 +56,10 @@ float geometricOcclusion(float NdotL, float NdotV, float roughness) {
 // the area being drawn (aka D()) Implementation from "Average Irregularity
 // Representation of a Roughened Surface for Ray Reflection" by T. S.
 // Trowbridge, and K. P. Reitz
-float microfacetDistribution(float alpha_roughness, float NdotH) {
-  float a = alpha_roughness * alpha_roughness;
+float microfacet_distribution(float roughness, float NdotH) {
+  float a = roughness * roughness;
   float a2 = a * a;
-  float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+  float denom = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
   return a2 / (PI * denom * denom);
 }
 
