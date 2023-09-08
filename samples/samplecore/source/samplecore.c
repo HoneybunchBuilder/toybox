@@ -115,7 +115,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
-#define NEW_TICK
+  // #define NEW_TICK
 
 #ifndef NEW_TICK
 // Order does not matter
@@ -317,27 +317,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 #else
   // Register Gen 2 Systems and Components
-  ecs_world_t *ecs_world = ecs_init();
-  tb_register_audio_sys(ecs_world, std_alloc, tmp_alloc);
-  tb_register_render_sys(ecs_world, std_alloc, tmp_alloc, render_thread);
-  tb_register_input_sys(ecs_world, tmp_alloc, window);
-  tb_register_render_target_sys(ecs_world, std_alloc, tmp_alloc);
-  tb_register_texture_sys(ecs_world, std_alloc, tmp_alloc);
-  tb_register_view_sys(ecs_world, std_alloc, tmp_alloc);
-  // render object
-  // render pipeline
-  // material
-  // sky
-  // imgui
-  tb_register_noclip_sys(ecs_world, tmp_alloc);
-  // core ui
-  // visual logging
-  // ocean
-  tb_register_camera_sys(ecs_world, std_alloc, tmp_alloc);
-  // shadow
-  // time of day
-  // rotator
-
+  ecs_world_t *ecs_world =
+      tb_init_world(std_alloc, tmp_alloc, render_thread, window);
 #endif
 
   // Main loop
@@ -370,26 +351,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       break;
     }
 #else
-    // Tick with flecs
-    if (!ecs_progress(ecs_world, delta_time_seconds)) {
+    if (!tb_tick_world2(ecs_world, delta_time_seconds)) {
       running = false;
       TracyCZoneEnd(trcy_ctx);
       TracyCFrameMarkEnd("Simulation Frame");
       break;
-    }
-    // Manually check flecs for quit event
-    ECS_COMPONENT(ecs_world, InputSystem);
-    const InputSystem *in_sys = ecs_singleton_get(ecs_world, InputSystem);
-    if (in_sys) {
-      for (uint32_t event_idx = 0; event_idx < in_sys->event_count;
-           ++event_idx) {
-        if (in_sys->events[event_idx].type == SDL_QUIT) {
-          running = false;
-          TracyCZoneEnd(trcy_ctx);
-          TracyCFrameMarkEnd("Simulation Frame");
-          break;
-        }
-      }
     }
 #endif
 
@@ -406,6 +372,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #ifndef NEW_TICK
   tb_destroy_world(&world);
 #else
+  tb_unregister_render_object_sys(ecs_world);
   tb_unregister_view_sys(ecs_world);
   tb_unregister_texture_sys(ecs_world);
   tb_unregister_render_target_system(ecs_world);

@@ -50,3 +50,8 @@ VkDescriptorSet tb_render_object_system_get_descriptor(RenderObjectSystem *self,
 const CommonObjectData *
 tb_render_object_system_get_data(RenderObjectSystem *self,
                                  TbRenderObjectId object);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc);
+void tb_unregister_render_object_sys(ecs_world_t *ecs);

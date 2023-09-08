@@ -8,21 +8,16 @@
 #include "transformcomponent.h"
 #include "world.h"
 
-bool create_render_object_system(RenderObjectSystem *self,
-                                 const RenderObjectSystemDescriptor *desc,
-                                 uint32_t system_dep_count,
-                                 System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which render objects depend on",
-                  false);
+#include <flecs.h>
 
+bool create_render_object_system_internal(RenderObjectSystem *self,
+                                          Allocator std_alloc,
+                                          Allocator tmp_alloc,
+                                          RenderSystem *rnd_sys) {
   *self = (RenderObjectSystem){
-      .render_system = render_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+      .render_system = rnd_sys,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
   };
 
   TB_DYN_ARR_RESET(self->render_object_data, self->std_alloc, 8);
@@ -42,7 +37,7 @@ bool create_render_object_system(RenderObjectSystem *self,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             },
     };
-    err = tb_rnd_create_set_layout(render_system, &create_info,
+    err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                    "Object Descriptor Set Layout",
                                    &self->set_layout);
     TB_VK_CHECK_RET(err, "Failed to create render object descriptor set",
@@ -50,6 +45,21 @@ bool create_render_object_system(RenderObjectSystem *self,
   }
 
   return true;
+}
+
+bool create_render_object_system(RenderObjectSystem *self,
+                                 const RenderObjectSystemDescriptor *desc,
+                                 uint32_t system_dep_count,
+                                 System *const *system_deps) {
+  // Find the necessary systems
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which render objects depend on",
+                  false);
+
+  return create_render_object_system_internal(self, desc->std_alloc,
+                                              desc->tmp_alloc, render_system);
 }
 
 void destroy_render_object_system(RenderObjectSystem *self) {
@@ -260,4 +270,21 @@ tb_render_object_system_get_data(RenderObjectSystem *self,
   TB_CHECK(object < TB_DYN_ARR_SIZE(self->render_object_data),
            "Render Object Id out of range");
   return &TB_DYN_ARR_AT(self->render_object_data, object);
+}
+
+void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderObjectSystem sys = {0};
+  create_render_object_system_internal(&sys, std_alloc, tmp_alloc, rnd_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderObjectSystem), RenderObjectSystem, &sys);
+}
+
+void tb_unregister_render_object_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  RenderObjectSystem *sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  destroy_render_object_system(sys);
 }

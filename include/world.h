@@ -256,6 +256,13 @@ typedef struct World {
 
 } World;
 
+typedef struct ecs_world_t ecs_world_t;
+typedef struct RenderThread RenderThread;
+typedef struct SDL_Window SDL_Window;
+ecs_world_t *tb_init_world(Allocator std_alloc, Allocator tmp_alloc,
+                           RenderThread *render_thread, SDL_Window *window);
+bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds);
+
 bool tb_create_world(const WorldDescriptor *desc, World *world);
 bool tb_tick_world(World *world, float delta_seconds);
 void tb_destroy_world(World *world);

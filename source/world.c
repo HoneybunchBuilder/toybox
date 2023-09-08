@@ -18,10 +18,30 @@
 #include "oceancomponent.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
+#include "transformercomponents.h"
 
+#include "audiosystem.h"
+#include "camerasystem.h"
+#include "coreuisystem.h"
+#include "imguisystem.h"
 #include "inputsystem.h"
+#include "materialsystem.h"
+#include "meshsystem.h"
+#include "noclipcontrollersystem.h"
+#include "oceansystem.h"
+#include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "rendertargetsystem.h"
+#include "rotatorsystem.h"
+#include "shadowsystem.h"
+#include "skysystem.h"
+#include "texturesystem.h"
+#include "timeofdaysystem.h"
+#include "viewsystem.h"
+#include "visualloggingsystem.h"
+
+#include <flecs.h>
 
 #define tb_get_system_internal(systems, count, Type)                           \
   (Type *)tb_find_system_by_id(systems, count, Type##Id)->self;
@@ -91,6 +111,49 @@ int tick_desc_sort(const void *lhs, const void *rhs) {
   const TickFunctionDescriptor *a = (const TickFunctionDescriptor *)lhs;
   const TickFunctionDescriptor *b = (const TickFunctionDescriptor *)rhs;
   return a->order - b->order;
+}
+
+ecs_world_t *tb_init_world(Allocator std_alloc, Allocator tmp_alloc,
+                           RenderThread *render_thread, SDL_Window *window) {
+  ecs_world_t *ecs = ecs_init();
+  tb_register_audio_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
+  tb_register_input_sys(ecs, tmp_alloc, window);
+  tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_view_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
+  // render pipeline
+  // material
+  // sky
+  // imgui
+  tb_register_noclip_sys(ecs, tmp_alloc);
+  // core ui
+  // visual logging
+  // ocean
+  tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
+  // shadow
+  // time of day
+  // rotator
+  return ecs;
+}
+
+bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds) {
+  // Tick with flecs
+  if (!ecs_progress(ecs, delta_seconds)) {
+    return false;
+  }
+  // Manually check flecs for quit event
+  ECS_COMPONENT(ecs, InputSystem);
+  const InputSystem *in_sys = ecs_singleton_get(ecs, InputSystem);
+  if (in_sys) {
+    for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {
+      if (in_sys->events[event_idx].type == SDL_QUIT) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 bool tb_create_world(const WorldDescriptor *desc, World *world) {
