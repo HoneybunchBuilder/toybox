@@ -1571,65 +1571,73 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
     }
     // Create env capture pass
     {
-      TbRenderPassCreateInfo create_info = {
-          .view_mask = 0x0000003F, // 0b00111111
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
-          .transition_count = 1,
-          .transitions =
-              (PassTransition[1]){
+      for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+        uint32_t trans_count = 0;
+        PassTransition transitions[1] = {0};
+
+        // Do all mip transitions up-front
+        if (i == 0) {
+          trans_count = 1;
+          transitions[0] = (PassTransition){
+              .render_target = env_cube,
+              .barrier =
                   {
-                      .render_target = self->render_target_system->env_cube,
+                      .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                      .dst_flags =
+                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       .barrier =
                           {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .barrier =
+                              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .srcAccessMask = VK_ACCESS_NONE,
+                              .dstAccessMask =
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                              .newLayout =
+                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              .subresourceRange =
                                   {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask = VK_ACCESS_NONE,
-                                      .dstAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 6,
-                                          },
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .levelCount = PREFILTER_PASS_COUNT,
+                                      .layerCount = 6,
                                   },
                           },
                   },
-              },
-          .attachment_count = 1,
-          .attachments =
-              (TbAttachmentInfo[1]){
-                  {
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = env_cube,
-                  },
-              },
-          .name = "Env Capture Pass",
-      };
+          };
+        }
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create env capture pass", false);
-      self->env_capture_pass = id;
+        TbRenderPassCreateInfo create_info = {
+            .view_mask = 0x0000003F, // 0b00111111
+            .dependency_count = 1,
+            .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
+            .transition_count = trans_count,
+            .transitions = transitions,
+            .attachment_count = 1,
+            .attachments =
+                (TbAttachmentInfo[1]){
+                    {
+                        .mip = i,
+                        .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                        .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                        .attachment = env_cube,
+                    },
+                },
+            .name = "Env Capture Pass",
+        };
+
+        TbRenderPassId id = create_render_pass(self, &create_info);
+        TB_CHECK_RETURN(id != InvalidRenderPassId,
+                        "Failed to create env capture pass", false);
+        self->env_cap_passes[i] = id;
+      }
     }
     // Create irradiance convolution pass
     {
       TbRenderPassCreateInfo create_info = {
           .view_mask = 0x0000003F, // 0b00111111
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+          .dependencies =
+              (TbRenderPassId[1]){
+                  self->env_cap_passes[PREFILTER_PASS_COUNT - 1]},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
@@ -1657,7 +1665,8 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
                                           {
                                               .aspectMask =
                                                   VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
+                                              .levelCount =
+                                                  PREFILTER_PASS_COUNT,
                                               .layerCount = 6,
                                           },
                                   },
@@ -1749,7 +1758,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
         TbRenderPassCreateInfo create_info = {
             .view_mask = 0x0000003F, // 0b00111111
             .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+            .dependencies = (TbRenderPassId[1]){self->irradiance_pass},
             .transition_count = trans_count,
             .transitions = transitions,
             .attachment_count = 1,
@@ -1807,7 +1816,7 @@ bool create_render_pipeline_system(RenderPipelineSystem *self,
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->env_capture_pass},
+          .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,

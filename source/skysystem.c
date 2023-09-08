@@ -759,7 +759,6 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
 
   // Get passes
   TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
-  TbRenderPassId env_cap_id = self->render_pipe_system->env_capture_pass;
   TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
 
   // Create irradiance sampler
@@ -773,7 +772,7 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_FALSE,
-        .maxLod = 1.0f,
+        .maxLod = FILTERED_ENV_MIPS,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
     err =
@@ -899,12 +898,12 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   {
     uint32_t attach_count = 0;
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->env_capture_pass,
+        self->render_pipe_system, self->render_pipe_system->env_cap_passes[0],
         &attach_count, NULL);
     TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
     PassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->env_capture_pass,
+        self->render_pipe_system, self->render_pipe_system->env_cap_passes[0],
         &attach_count, &attach_info);
 
     VkFormat color_format = tb_render_target_get_format(
@@ -962,12 +961,6 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                               .draw_fn = record_sky,
                               .pass_id = sky_pass_id,
                           });
-  self->env_capture_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(SkyDrawBatch),
-                              .draw_fn = record_env_capture,
-                              .pass_id = env_cap_id,
-                          });
   self->irradiance_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(IrradianceBatch),
@@ -975,6 +968,13 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                               .pass_id = irr_pass_id,
                           });
   for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+    self->env_capture_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system,
+        &(DrawContextDescriptor){
+            .batch_size = sizeof(SkyDrawBatch),
+            .draw_fn = record_env_capture,
+            .pass_id = self->render_pipe_system->env_cap_passes[i],
+        });
     self->prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
         render_pipe_system,
         &(DrawContextDescriptor){
@@ -1240,10 +1240,11 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
                               .tmp_alloc.alloc;
     DrawBatch *sky_draw_batches =
         tb_alloc_nm_tp(tmp_alloc, num_batches, DrawBatch);
-    DrawBatch *env_draw_batches =
-        tb_alloc_nm_tp(tmp_alloc, num_batches, DrawBatch);
     SkyDrawBatch *sky_batches =
         tb_alloc_nm_tp(tmp_alloc, num_batches, SkyDrawBatch);
+
+    DrawBatch *env_draw_batches = tb_alloc_nm_tp(
+        tmp_alloc, num_batches * PREFILTER_PASS_COUNT, DrawBatch);
 
     // Submit a sky draw for each camera, for each sky
     for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
@@ -1283,82 +1284,89 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
             .scissor = {{0, 0}, {width, height}},
             .user_batch = &sky_batches[batch_count],
         };
-        // TODO: We need to capture the environment once per
+        // We need to capture the environment once per
         // pre-filtered reflection mip in order to
         // avoid sun intensity artifacts
-        env_draw_batches[batch_count] = (DrawBatch){
-            .layout = self->sky_pipe_layout,
-            .pipeline = self->env_pipeline,
-            .viewport = {0, 512.0f, 512.0f, -512.0f, 0, 1},
-            .scissor = {{0, 0}, {512, 512}},
-            .user_batch = &sky_batches[batch_count],
-        };
+        for (uint32_t env_idx = 0; env_idx < PREFILTER_PASS_COUNT; ++env_idx) {
+          const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, env_idx);
+          uint32_t env_batch_count = env_idx * (batch_count + 1);
+          env_draw_batches[env_batch_count] = (DrawBatch){
+              .layout = self->sky_pipe_layout,
+              .pipeline = self->env_pipeline,
+              .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
+              .scissor = {{0, 0}, {mip_dim, mip_dim}},
+              .user_batch = &sky_batches[batch_count],
+          };
+        }
         batch_count++;
       }
-    }
 
-    // Generate the batch for the irradiance pass
-    DrawBatch *irr_draw_batch = tb_alloc_tp(tmp_alloc, DrawBatch);
-    IrradianceBatch *irradiance_batch = tb_alloc_tp(tmp_alloc, IrradianceBatch);
-    {
-      *irr_draw_batch = (DrawBatch){
-          .layout = self->irr_pipe_layout,
-          .pipeline = self->irradiance_pipeline,
-          .viewport = {0, 64, 64, -64, 0, 1},
-          .scissor = {{0, 0}, {64, 64}},
-          .user_batch = irradiance_batch,
-      };
-      *irradiance_batch = (IrradianceBatch){
-          .set = state->sets[state->set_count - 1],
-          .geom_buffer = self->sky_geom_gpu_buffer.buffer,
-          .index_count = get_skydome_index_count(),
-          .vertex_offset = get_skydome_vert_offset(),
-      };
-    }
-
-    // Generate batch for prefiltering the environment map
-    DrawBatch *pre_draw_batches =
-        tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
-    PrefilterBatch *prefilter_batches =
-        tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
-    {
-      for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-        const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, i);
-
-        pre_draw_batches[i] = (DrawBatch){
-            .layout = self->prefilter_pipe_layout,
-            .pipeline = self->prefilter_pipeline,
-            .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
-            .scissor = {{0, 0}, {mip_dim, mip_dim}},
-            .user_batch = &prefilter_batches[i],
+      // Generate the batch for the irradiance pass
+      DrawBatch *irr_draw_batch = tb_alloc_tp(tmp_alloc, DrawBatch);
+      IrradianceBatch *irradiance_batch =
+          tb_alloc_tp(tmp_alloc, IrradianceBatch);
+      {
+        *irr_draw_batch = (DrawBatch){
+            .layout = self->irr_pipe_layout,
+            .pipeline = self->irradiance_pipeline,
+            .viewport = {0, 64, 64, -64, 0, 1},
+            .scissor = {{0, 0}, {64, 64}},
+            .user_batch = irradiance_batch,
         };
-
-        prefilter_batches[i] = (PrefilterBatch){
+        *irradiance_batch = (IrradianceBatch){
             .set = state->sets[state->set_count - 1],
             .geom_buffer = self->sky_geom_gpu_buffer.buffer,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
-            .consts =
-                {
-                    .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
-                    .sample_count = 16,
-                },
         };
       }
-    }
 
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->sky_draw_ctx, batch_count,
-                                        sky_draw_batches);
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->env_capture_ctx, batch_count,
-                                        env_draw_batches);
-    tb_render_pipeline_issue_draw_batch(
-        self->render_pipe_system, self->irradiance_ctx, 1, irr_draw_batch);
-    for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+      // Generate batch for prefiltering the environment map
+      DrawBatch *pre_draw_batches =
+          tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
+      PrefilterBatch *prefilter_batches =
+          tb_alloc_nm_tp(tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
+      {
+        for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+          const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, i);
+
+          pre_draw_batches[i] = (DrawBatch){
+              .layout = self->prefilter_pipe_layout,
+              .pipeline = self->prefilter_pipeline,
+              .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
+              .scissor = {{0, 0}, {mip_dim, mip_dim}},
+              .user_batch = &prefilter_batches[i],
+          };
+
+          prefilter_batches[i] = (PrefilterBatch){
+              .set = state->sets[state->set_count - 1],
+              .geom_buffer = self->sky_geom_gpu_buffer.buffer,
+              .index_count = get_skydome_index_count(),
+              .vertex_offset = get_skydome_vert_offset(),
+              .consts =
+                  {
+                      .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
+                      .sample_count = 16,
+                  },
+          };
+        }
+      }
+
       tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                          self->prefilter_ctxs[i], 1,
-                                          &pre_draw_batches[i]);
+                                          self->sky_draw_ctx, batch_count,
+                                          sky_draw_batches);
+
+      tb_render_pipeline_issue_draw_batch(
+          self->render_pipe_system, self->irradiance_ctx, 1, irr_draw_batch);
+      for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+        // Note: this will only draw the first sky... don't really care
+        tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                            self->env_capture_ctxs[i], 1,
+                                            &env_draw_batches[i]);
+        tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
+                                            self->prefilter_ctxs[i], 1,
+                                            &pre_draw_batches[i]);
+      }
     }
   }
 }

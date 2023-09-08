@@ -327,6 +327,7 @@ bool create_render_target_system(RenderTargetSystem *self,
 
     // Create sky capture cube
     {
+      const uint32_t mip_count = (uint32_t)(floorf(log2f(512.0f))) + 1u;
       RenderTargetDescriptor rt_desc = {
           .name = "Sky Cubemap Capture",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
@@ -336,7 +337,7 @@ bool create_render_target_system(RenderTargetSystem *self,
                   .height = 512,
                   .depth = 1,
               },
-          .mip_count = 1,
+          .mip_count = mip_count,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };

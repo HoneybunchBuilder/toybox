@@ -37,7 +37,7 @@ typedef struct SkySystem {
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   TbDrawContextId sky_draw_ctx;
-  TbDrawContextId env_capture_ctx;
+  TbDrawContextId env_capture_ctxs[PREFILTER_PASS_COUNT];
   TbDrawContextId irradiance_ctx;
   TbDrawContextId prefilter_ctxs[PREFILTER_PASS_COUNT];
 

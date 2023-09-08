@@ -42,7 +42,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       float3 sample_vec = cos(theta) * normal + sin(theta) * tmp_vec;
 
       // Clamp each sample to 1 to avoid blowout
-      irradiance += min(env_map.Sample(material_sampler, sample_vec).rgb, 1) *
+      irradiance += min(env_map.Sample(material_sampler, sample_vec).rgb, 10) *
                     cos(theta) * sin(theta);
       sample_count++;
     }

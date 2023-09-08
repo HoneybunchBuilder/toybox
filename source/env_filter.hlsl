@@ -110,7 +110,8 @@ float3 prefilter_env_map(float3 R, float roughness) {
       float mip_level = roughness == 0.0
                             ? 0.0
                             : max(0.5 * log2(omega_s / omega_p) + 1.0, 0.0f);
-      color += env_texture.SampleLevel(env_sampler, L, mip_level).rgb * dot_NL;
+      color += min(env_texture.SampleLevel(env_sampler, L, mip_level).rgb, 10) *
+               dot_NL;
       total_weight += dot_NL;
     }
   }
