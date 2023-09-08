@@ -54,9 +54,6 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId bloom_mip_chain;
 } RenderTargetSystem;
 
-void tb_render_target_system_descriptor(
-    SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc);
-
 void tb_reimport_swapchain(RenderTargetSystem *self);
 
 TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
@@ -83,3 +80,11 @@ VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
                                           TbRenderTargetId rt);
 VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
                                    TbRenderTargetId rt);
+
+void tb_render_target_system_descriptor(
+    SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_render_target_system(ecs_world_t *ecs, Allocator std_alloc,
+                                      Allocator tmp_alloc);
+void tb_unregister_render_target_system(ecs_world_t *ecs);

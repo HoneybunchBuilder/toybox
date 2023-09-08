@@ -20,3 +20,7 @@ typedef struct CameraSystem {
 
 void tb_camera_system_descriptor(SystemDescriptor *desc,
                                  const CameraSystemDescriptor *camera_desc);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_camera(ecs_world_t *ecs, Allocator std_alloc,
+                        Allocator tmp_alloc);

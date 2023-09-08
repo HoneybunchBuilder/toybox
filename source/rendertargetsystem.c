@@ -6,6 +6,8 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 typedef struct RenderTargetMipView {
   VkExtent3D extent;
   VkImageView views[TB_MAX_FRAME_STATES];
@@ -176,21 +178,14 @@ void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
   }
 }
 
-bool create_render_target_system(RenderTargetSystem *self,
-                                 const RenderTargetSystemDescriptor *desc,
-                                 uint32_t system_dep_count,
-                                 System *const *system_deps) {
-  // Find necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which render targets depend on",
-                  false);
-
+bool create_render_target_system_internal(RenderTargetSystem *self,
+                                          RenderSystem *render_system,
+                                          Allocator std_alloc,
+                                          Allocator tmp_alloc) {
   *self = (RenderTargetSystem){
       .render_system = render_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
   };
 
   TB_DYN_ARR_RESET(self->render_targets, self->std_alloc, 8);
@@ -461,6 +456,31 @@ bool create_render_target_system(RenderTargetSystem *self,
   }
 
   return true;
+}
+
+// Flecs
+RenderTargetSystem create_render_target_system2(RenderSystem *render_system,
+                                                Allocator std_alloc,
+                                                Allocator tmp_alloc) {
+  RenderTargetSystem sys = {0};
+  create_render_target_system_internal(&sys, render_system, std_alloc,
+                                       tmp_alloc);
+  return sys;
+}
+
+// Legacy
+bool create_render_target_system(RenderTargetSystem *self,
+                                 const RenderTargetSystemDescriptor *desc,
+                                 uint32_t system_dep_count,
+                                 System *const *system_deps) {
+  // Find necessary systems
+  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, RenderSystemId);
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which render targets depend on",
+                  false);
+  return create_render_target_system_internal(self, render_system,
+                                              desc->std_alloc, desc->tmp_alloc);
 }
 
 void destroy_render_target_system(RenderTargetSystem *self) {
@@ -805,4 +825,23 @@ VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", VK_NULL_HANDLE);
   return TB_DYN_ARR_AT(self->render_targets, rt).images[frame_idx].image;
+}
+
+void tb_register_render_target_system(ecs_world_t *ecs, Allocator std_alloc,
+                                      Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, RenderSystem);
+
+  RenderSystem *render_system = ecs_singleton_get_mut(ecs, RenderSystem);
+
+  RenderTargetSystem sys =
+      create_render_target_system2(render_system, std_alloc, tmp_alloc);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderTargetSystem), RenderTargetSystem, &sys);
+}
+
+void tb_unregister_render_target_system(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  RenderTargetSystem *sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  destroy_render_target_system(sys);
 }

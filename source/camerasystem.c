@@ -9,6 +9,8 @@
 #include "viewsystem.h"
 #include "world.h"
 
+#include <flecs.h>
+
 bool create_camera_system(CameraSystem *self,
                           const CameraSystemDescriptor *desc,
                           uint32_t system_dep_count,
@@ -126,4 +128,62 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
               },
           },
   };
+}
+
+void flecs_tick_camera(ecs_iter_t *it) {
+  CameraSystem *sys = ecs_field(it, CameraSystem, 1);
+  CameraComponent *camera = ecs_field(it, CameraComponent, 2);
+  TransformComponent *transform = ecs_field(it, TransformComponent, 3);
+
+  // Eval transform heirarchy
+  CommonViewData view_data = {
+      .view_pos = transform->transform.position,
+  };
+
+  const float3 forward = transform_get_forward(&transform->transform);
+  float4x4 view = look_forward(transform->transform.position, forward, TB_UP);
+
+  float4x4 proj =
+      perspective(camera->fov, camera->aspect_ratio, camera->near, camera->far);
+
+  view_data.v = view;
+  view_data.p = proj;
+  view_data.inv_proj = inv_mf44(proj);
+  view_data.proj_params =
+      (float4){camera->near, camera->far, camera->aspect_ratio, camera->fov};
+
+  // Calculate view projection matrix
+  view_data.vp = mulmf44(proj, view);
+
+  // Inverse
+  view_data.inv_vp = inv_mf44(view_data.vp);
+
+  Frustum frustum = frustum_from_view_proj(&view_data.vp);
+
+  // HACK - setting target here to the swapchain in a janky way that's
+  // just used to facilitate other hacks
+  // The render pipeline will use whatever view targets the swapchain
+  // to do SSAO
+  tb_view_system_set_view_target(
+      sys->view_system, camera->view_id,
+      sys->view_system->render_target_system->swapchain);
+  tb_view_system_set_view_data(sys->view_system, camera->view_id, &view_data);
+  tb_view_system_set_view_frustum(sys->view_system, camera->view_id, &frustum);
+}
+
+void tb_register_camera(ecs_world_t *ecs, Allocator std_alloc,
+                        Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, CameraSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+
+  ecs_singleton_set(ecs, CameraSystem,
+                    {
+                        .view_system = ecs_singleton_get_mut(ecs, ViewSystem),
+                        .tmp_alloc = tmp_alloc,
+                        .std_alloc = std_alloc,
+                    });
+  ECS_SYSTEM(ecs, flecs_tick_camera, EcsOnUpdate, CameraSystem(CameraSystem),
+             CameraComponent, TransformComponent);
 }

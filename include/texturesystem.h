@@ -59,3 +59,8 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
                                        const cgltf_texture *texture);
 bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id);
 void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
+                             Allocator tmp_alloc);
+void tb_unregister_texture_sys(ecs_world_t *ecs);

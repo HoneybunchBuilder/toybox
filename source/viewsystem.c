@@ -504,3 +504,8 @@ const View *tb_get_view(ViewSystem *self, TbViewId view) {
   }
   return &TB_DYN_ARR_AT(self->views, view);
 }
+
+void tb_register_view(ecs_world_t *ecs, Allocator std_alloc,
+                      Allocator tmp_alloc) {}
+
+void tb_unregister_view(ecs_world_t *ecs) {}

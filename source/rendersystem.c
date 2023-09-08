@@ -6,6 +6,8 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 bool create_render_system(RenderSystem *self,
                           const RenderSystemDescriptor *desc,
                           uint32_t system_dep_count,
@@ -315,7 +317,7 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
         &self->render_thread->frame_states[self->frame_idx];
 
     // Copy this frame state's temp buffer to the gpu
-    {
+    if (state->tmp_host_buffer.info.size > 0) {
       BufferCopy up = {
           .dst = thread_state->tmp_gpu_buffer,
           .src = state->tmp_host_buffer.buffer,
@@ -723,4 +725,41 @@ VkDescriptorSet tb_rnd_frame_desc_pool_get_set(RenderSystem *self,
                                                FrameDescriptorPool *pools,
                                                uint32_t set_idx) {
   return pools[self->frame_idx].sets[set_idx];
+}
+
+// Flecs version
+
+void render_frame_begin(ecs_iter_t *it) {
+  RenderSystem *sys = ecs_field(it, RenderSystem, 1);
+  tick_frame_begin(sys, NULL, NULL, it->delta_time);
+}
+
+void render_frame_end(ecs_iter_t *it) {
+  RenderSystem *sys = ecs_field(it, RenderSystem, 1);
+  tick_frame_end(sys, NULL, NULL, it->delta_time);
+}
+
+void tb_register_render_system(ecs_world_t *ecs, Allocator std_alloc,
+                               Allocator tmp_alloc,
+                               RenderThread *render_thread) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  RenderSystem sys = {0};
+  create_render_system(&sys,
+                       &(RenderSystemDescriptor){
+                           .std_alloc = std_alloc,
+                           .tmp_alloc = tmp_alloc,
+                           .render_thread = render_thread,
+                       },
+                       0, NULL);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderSystem), RenderSystem, &sys);
+
+  ECS_SYSTEM(ecs, render_frame_begin, EcsPreFrame, RenderSystem(RenderSystem));
+  ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, RenderSystem(RenderSystem));
+}
+
+void tb_unregister_render_system(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  RenderSystem *sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  destroy_render_system(sys);
 }

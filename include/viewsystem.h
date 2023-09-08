@@ -68,3 +68,8 @@ void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
                                      const Frustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);
 const View *tb_get_view(ViewSystem *self, TbViewId view);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
+                      Allocator tmp_alloc);
+void tb_unregister_view_sys(ecs_world_t *ecs);

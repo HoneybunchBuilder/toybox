@@ -8,6 +8,8 @@
 #include "tbktx.h"
 #include "world.h"
 
+#include <flecs.h>
+
 typedef struct TbTexture {
   TbTextureId id;
   uint32_t ref_count;
@@ -263,20 +265,12 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
   return id;
 }
 
-bool create_texture_system(TextureSystem *self,
-                           const TextureSystemDescriptor *desc,
-                           uint32_t system_dep_count,
-                           System *const *system_deps) {
-  // Find the render system
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which textures depend on",
-                  false);
-
+bool create_texture_system_internal(TextureSystem *self, Allocator std_alloc,
+                                    Allocator tmp_alloc,
+                                    RenderSystem *render_system) {
   *self = (TextureSystem){
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
       .render_system = render_system,
       .default_color_tex = InvalidTextureId,
       .default_normal_tex = InvalidTextureId,
@@ -345,6 +339,27 @@ bool create_texture_system(TextureSystem *self,
   }
 
   return true;
+}
+
+bool create_texture_system(TextureSystem *self,
+                           const TextureSystemDescriptor *desc,
+                           uint32_t system_dep_count,
+                           System *const *system_deps) {
+  // Find the render system
+  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, RenderSystemId);
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which textures depend on",
+                  false);
+  return create_texture_system_internal(self, desc->std_alloc, desc->tmp_alloc,
+                                        render_system);
+}
+
+TextureSystem create_texture_system2(Allocator std_alloc, Allocator tmp_alloc,
+                                     RenderSystem *render_system) {
+  TextureSystem sys = {0};
+  create_texture_system_internal(&sys, std_alloc, tmp_alloc, render_system);
+  return sys;
 }
 
 void destroy_texture_system(TextureSystem *self) {
@@ -730,4 +745,23 @@ void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
     *gpu_img = (TbImage){0};
     *view = VK_NULL_HANDLE;
   }
+}
+
+// flecs system
+
+void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
+                             Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, TextureSystem);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+
+  TextureSystem sys = create_texture_system2(std_alloc, tmp_alloc, rnd_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(TextureSystem), TextureSystem, &sys);
+}
+
+void tb_unregister_texture_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, TextureSystem);
+  TextureSystem *sys = ecs_singleton_get_mut(ecs, TextureSystem);
+  destroy_texture_system(sys);
 }

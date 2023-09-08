@@ -476,9 +476,11 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     vkFreeCommandBuffers(device, state->command_pool, 2,
                          state->base_command_buffers);
-    vkFreeCommandBuffers(device, state->command_pool,
-                         state->pass_command_buffer_count,
-                         state->pass_command_buffers);
+    if (state->pass_command_buffer_count) {
+      vkFreeCommandBuffers(device, state->command_pool,
+                           state->pass_command_buffer_count,
+                           state->pass_command_buffers);
+    }
     vkDestroyCommandPool(device, state->command_pool, vk_alloc);
 
     TracyCVkContextDestroy(state->tracy_gpu_context);
@@ -1713,7 +1715,7 @@ int32_t render_thread(void *data) {
       TracyCZoneEnd(wait_ctx);
     }
 
-        FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
     tick_render_thread(thread, frame_state);
 

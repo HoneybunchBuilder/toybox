@@ -210,5 +210,5 @@ void tb_register_input(ecs_world_t *ecs, Allocator tmp_alloc,
                         .tmp_alloc = tmp_alloc,
                         .window = desc->window,
                     });
-  ECS_SYSTEM(ecs, flecs_tick_input, EcsOnUpdate, InputSystem);
+  ECS_SYSTEM(ecs, flecs_tick_input, EcsPreFrame, InputSystem($));
 }

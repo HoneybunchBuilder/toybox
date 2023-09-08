@@ -273,14 +273,13 @@ void flecs_tick_noclip(ecs_iter_t *it) {
 void tb_register_noclip(ecs_world_t *ecs, Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, NoClipComponent);
-  ECS_COMPONENT(ecs, NoClipControllerSystem);
 
-  ecs_singleton_add(ecs, NoClipControllerSystem);
+  ECS_COMPONENT(ecs, NoClipControllerSystem);
   ecs_singleton_set(ecs, NoClipControllerSystem,
                     {
                         .tmp_alloc = tmp_alloc,
                     });
 
-  ECS_SYSTEM(ecs, flecs_tick_noclip, EcsOnUpdate, NoClipControllerSystem,
-             TransformComponent, NoClipComponent)
+  ECS_SYSTEM(ecs, flecs_tick_noclip, EcsOnUpdate, NoClipControllerSystem($),
+             [out] TransformComponent, [out] NoClipComponent)
 }

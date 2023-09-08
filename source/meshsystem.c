@@ -19,7 +19,8 @@
 #include "vkdbg.h"
 #include "world.h"
 
-#include "meshoptimizer.h"
+#include <flecs.h>
+#include <meshoptimizer.h>
 
 // Ignore some warnings for the generated headers
 #ifdef __clang__
@@ -2235,4 +2236,25 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
     *host_buf = (TbHostBuffer){0};
     *gpu_buf = (TbBuffer){0};
   }
+}
+
+// Flecs version
+void mesh_tick(ecs_iter_t *it) {}
+
+void tb_register_mesh(ecs_world_t *ecs, Allocator std_alloc,
+                      Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, MeshComponent);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, RenderSystem);
+
+  RenderSystem *render_system = ecs_singleton_get_mut(ecs, RenderSystem);
+
+  ecs_singleton_set(ecs, MeshSystem,
+                    {
+                        .std_alloc = std_alloc,
+                        .tmp_alloc = tmp_alloc,
+                        .render_system = render_system,
+                    });
+
+  ECS_SYSTEM(ecs, mesh_tick, EcsOnUpdate, MeshSystem(MeshSystem));
 }

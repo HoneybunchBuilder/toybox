@@ -71,11 +71,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     create_arena_allocator("Main Arena", &arena, arena_alloc_size);
   }
 
-  StandardAllocator std_alloc = {0};
+  StandardAllocator gp_alloc = {0};
   {
     SDL_Log("%s", "Creating Standard Allocator");
-    create_standard_allocator(&std_alloc, "std_alloc");
+    create_standard_allocator(&gp_alloc, "std_alloc");
   }
+
+  Allocator std_alloc = gp_alloc.alloc;
+  Allocator tmp_alloc = arena.alloc;
 
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
@@ -102,13 +105,19 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Must create render thread on the heap like this
-  RenderThread *render_thread = tb_alloc_tp(std_alloc.alloc, RenderThread);
+  RenderThread *render_thread = tb_alloc_tp(gp_alloc.alloc, RenderThread);
   RenderThreadDescriptor render_thread_desc = {
       .window = window,
   };
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
            "Failed to start render thread");
 
+  // Do not go initializing anything until we know the render thread is ready
+  tb_wait_thread_initialized(render_thread);
+
+#define NEW_TICK
+
+#ifndef NEW_TICK
 // Order does not matter
 #define COMP_COUNT 8
   ComponentDescriptor component_descs[COMP_COUNT] = {0};
@@ -136,85 +145,85 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   CoreUISystemDescriptor coreui_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   ImGuiSystemDescriptor imgui_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
       .context_count = 1,
       .context_atlases[0] = NULL,
   };
 
   SkySystemDescriptor sky_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   MeshSystemDescriptor mesh_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   OceanSystemDescriptor ocean_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   MaterialSystemDescriptor material_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   TextureSystemDescriptor texture_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   ViewSystemDescriptor view_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   RenderObjectSystemDescriptor render_object_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   RenderSystemDescriptor render_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
       .render_thread = render_thread,
   };
 
   CameraSystemDescriptor camera_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   RenderTargetSystemDescriptor render_target_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   RenderPipelineSystemDescriptor render_pipeline_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   ShadowSystemDescriptor shadow_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   TimeOfDaySystemDescriptor tod_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
   VisualLoggingSystemDescriptor vlog_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
@@ -223,7 +232,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   };
 
   AudioSystemDescriptor audio_system_desc = {
-      .std_alloc = std_alloc.alloc,
+      .std_alloc = gp_alloc.alloc,
       .tmp_alloc = arena.alloc,
   };
 
@@ -287,27 +296,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   WorldDescriptor world_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
       .component_count = COMP_COUNT,
       .component_descs = component_descs,
       .system_count = SYSTEM_COUNT,
       .system_descs = system_descs,
       .init_order = init_order,
   };
-#undef COMP_COUNT
-#undef SYSTEM_COUNT
-
-  // Register Gen 2 Systems and Components
-  ecs_world_t *ecs_world = ecs_init();
-  tb_register_input(ecs_world, arena.alloc,
-                    &(InputSystemDescriptor){
-                        .window = window,
-                    });
-  tb_register_noclip(ecs_world, arena.alloc);
-
-  // Do not go initializing anything until we know the render thread is ready
-  tb_wait_thread_initialized(render_thread);
 
   World world = {0};
   bool success = tb_create_world(&world_desc, &world);
@@ -315,6 +311,23 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Load sample scene
   tb_sample_on_start(&world);
+
+#undef COMP_COUNT
+#undef SYSTEM_COUNT
+
+#else
+  // Register Gen 2 Systems and Components
+  ecs_world_t *ecs_world = ecs_init();
+  tb_register_input(ecs_world, tmp_alloc,
+                    &(InputSystemDescriptor){
+                        .window = window,
+                    });
+  tb_register_noclip(ecs_world, tmp_alloc);
+  tb_register_render_system(ecs_world, std_alloc, tmp_alloc, render_thread);
+  tb_register_render_target_system(ecs_world, std_alloc, tmp_alloc);
+  tb_register_texture_sys(ecs_world, std_alloc, tmp_alloc);
+  tb_register_camera(ecs_world, std_alloc, tmp_alloc);
+#endif
 
   // Main loop
   bool running = true;
@@ -337,13 +350,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         (float)((double)delta_time / (double)(SDL_GetPerformanceFrequency()));
     last_time = time;
 
-    if (!ecs_progress(ecs_world, delta_time_seconds)) {
-      running = false;
-      TracyCZoneEnd(trcy_ctx);
-      TracyCFrameMarkEnd("Simulation Frame");
-      break;
-    }
-
+#ifndef NEW_TICK
     // Tick the world
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false;
@@ -351,6 +358,29 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
+#else
+    // Tick with flecs
+    if (!ecs_progress(ecs_world, delta_time_seconds)) {
+      running = false;
+      TracyCZoneEnd(trcy_ctx);
+      TracyCFrameMarkEnd("Simulation Frame");
+      break;
+    }
+    // Manually check flecs for quit event
+    ECS_COMPONENT(ecs_world, InputSystem);
+    const InputSystem *in_sys = ecs_singleton_get(ecs_world, InputSystem);
+    if (in_sys) {
+      for (uint32_t event_idx = 0; event_idx < in_sys->event_count;
+           ++event_idx) {
+        if (in_sys->events[event_idx].type == SDL_QUIT) {
+          running = false;
+          TracyCZoneEnd(trcy_ctx);
+          TracyCFrameMarkEnd("Simulation Frame");
+          break;
+        }
+      }
+    }
+#endif
 
     // Reset the arena allocator
     arena = reset_arena(arena, true); // Just allow it to grow for now
@@ -362,20 +392,26 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(render_thread);
 
-  ecs_fini(ecs_world);
-
+#ifndef NEW_TICK
   tb_destroy_world(&world);
+#else
+  tb_unregister_texture_sys(ecs_world);
+  tb_unregister_render_target_system(ecs_world);
+  tb_unregister_render_system(ecs_world);
+
+  ecs_fini(ecs_world);
+#endif
 
   // Destroying the render thread will also close the window
   tb_destroy_render_thread(render_thread);
-  tb_free(std_alloc.alloc, render_thread);
+  tb_free(gp_alloc.alloc, render_thread);
   render_thread = NULL;
   window = NULL;
 
   SDL_Quit();
 
   destroy_arena_allocator(arena);
-  destroy_standard_allocator(std_alloc);
+  destroy_standard_allocator(gp_alloc);
 
   return 0;
 }
