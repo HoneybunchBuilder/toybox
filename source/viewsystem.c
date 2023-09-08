@@ -10,29 +10,18 @@
 #include "transformcomponent.h"
 #include "world.h"
 
-bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
-                        uint32_t system_dep_count, System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which view depends on", false);
-  RenderTargetSystem *render_target_system =
-      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find render target system which view depends on",
-                  false);
-  TextureSystem *texture_system =
-      tb_get_system(system_deps, system_dep_count, TextureSystem);
-  TB_CHECK_RETURN(texture_system,
-                  "Failed to find texture system which view depends on", false);
+#include <flecs.h>
 
+bool create_view_system_internal(ViewSystem *self, Allocator std_alloc,
+                                 Allocator tmp_alloc, RenderSystem *rnd_sys,
+                                 RenderTargetSystem *rt_sys,
+                                 TextureSystem *tex_sys) {
   *self = (ViewSystem){
-      .render_system = render_system,
-      .render_target_system = render_target_system,
-      .texture_system = texture_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+      .render_system = rnd_sys,
+      .render_target_system = rt_sys,
+      .texture_system = tex_sys,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
   };
 
   TB_DYN_ARR_RESET(self->views, self->std_alloc, 1);
@@ -52,8 +41,7 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
         .maxLod = 9.0f, // TODO: Fix hack
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Filtered Env Sampler",
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Filtered Env Sampler",
                                 &self->filtered_env_sampler);
     TB_VK_CHECK_RET(err, "Failed to create filtered env sampler", false);
   }
@@ -71,7 +59,7 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info, "BRDF Sampler",
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "BRDF Sampler",
                                 &self->brdf_sampler);
     TB_VK_CHECK_RET(err, "Failed to create brdf sampler", false);
   }
@@ -143,13 +131,44 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                 },
             },
     };
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "View Descriptor Set Layout",
-                                   &self->set_layout);
+    err = tb_rnd_create_set_layout(
+        rnd_sys, &create_info, "View Descriptor Set Layout", &self->set_layout);
     TB_VK_CHECK_RET(err, "Failed to create view descriptor set", false);
   }
 
   return true;
+}
+
+bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
+                        uint32_t system_dep_count, System *const *system_deps) {
+  // Find the necessary systems
+  RenderSystem *render_system =
+      tb_get_system(system_deps, system_dep_count, RenderSystem);
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which view depends on", false);
+  RenderTargetSystem *render_target_system =
+      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
+  TB_CHECK_RETURN(render_target_system,
+                  "Failed to find render target system which view depends on",
+                  false);
+  TextureSystem *texture_system =
+      tb_get_system(system_deps, system_dep_count, TextureSystem);
+  TB_CHECK_RETURN(texture_system,
+                  "Failed to find texture system which view depends on", false);
+
+  return create_view_system_internal(self, desc->std_alloc, desc->tmp_alloc,
+                                     render_system, render_target_system,
+                                     texture_system);
+}
+
+ViewSystem create_view_system2(Allocator std_alloc, Allocator tmp_alloc,
+                               RenderSystem *rnd_sys,
+                               RenderTargetSystem *rt_sys,
+                               TextureSystem *tex_sys) {
+  ViewSystem s = {0};
+  create_view_system_internal(&s, std_alloc, tmp_alloc, rnd_sys, rt_sys,
+                              tex_sys);
+  return s;
 }
 
 void destroy_view_system(ViewSystem *self) {
@@ -505,7 +524,32 @@ const View *tb_get_view(ViewSystem *self, TbViewId view) {
   return &TB_DYN_ARR_AT(self->views, view);
 }
 
-void tb_register_view(ecs_world_t *ecs, Allocator std_alloc,
-                      Allocator tmp_alloc) {}
+void flecs_tick_views(ecs_iter_t *it) {
+  ViewSystem *sys = ecs_field(it, ViewSystem, 1);
+  tick_view_system_internal(sys, NULL, NULL, 0.0f);
+}
 
-void tb_unregister_view(ecs_world_t *ecs) {}
+void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, TextureSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+
+  ViewSystem sys =
+      create_view_system2(std_alloc, tmp_alloc, rnd_sys, rt_sys, tex_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(ViewSystem), ViewSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_tick_views, EcsOnUpdate, ViewSystem(ViewSystem));
+}
+
+void tb_unregister_view_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ViewSystem);
+  ViewSystem *sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  destroy_view_system(sys);
+}

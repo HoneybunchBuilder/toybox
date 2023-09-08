@@ -324,6 +324,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   tb_register_render_target_sys(ecs_world, std_alloc, tmp_alloc);
   tb_register_texture_sys(ecs_world, std_alloc, tmp_alloc);
   tb_register_camera_sys(ecs_world, std_alloc, tmp_alloc);
+  tb_register_view_sys(ecs_world, std_alloc, tmp_alloc);
 #endif
 
   // Main loop
@@ -392,6 +393,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #ifndef NEW_TICK
   tb_destroy_world(&world);
 #else
+  tb_unregister_view_sys(ecs_world);
   tb_unregister_texture_sys(ecs_world);
   tb_unregister_render_target_system(ecs_world);
   tb_unregister_render_system(ecs_world);
