@@ -113,8 +113,8 @@ int tick_desc_sort(const void *lhs, const void *rhs) {
   return a->order - b->order;
 }
 
-ecs_world_t *tb_init_world(Allocator std_alloc, Allocator tmp_alloc,
-                           RenderThread *render_thread, SDL_Window *window) {
+ecs_world_t *tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
+                              RenderThread *render_thread, SDL_Window *window) {
   ecs_world_t *ecs = ecs_init();
   tb_register_audio_sys(ecs, std_alloc, tmp_alloc);
   tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
@@ -123,18 +123,19 @@ ecs_world_t *tb_init_world(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
   tb_register_view_sys(ecs, std_alloc, tmp_alloc);
   tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
-  // render pipeline
-  // material
-  // sky
-  // imgui
+  tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_material_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
   tb_register_noclip_sys(ecs, tmp_alloc);
-  // core ui
-  // visual logging
-  // ocean
+  // tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
   tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
-  // shadow
-  // time of day
-  // rotator
+  // tb_register_shadow_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_time_of_day_sys(ecs, std_alloc, tmp_alloc);
+  // tb_register_rotator_sys(ecs, std_alloc, tmp_alloc);
   return ecs;
 }
 
@@ -154,6 +155,17 @@ bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds) {
     }
   }
   return true;
+}
+
+void tb_destroy_world2(ecs_world_t *ecs) {
+  tb_unregister_render_pipeline_sys(ecs);
+  tb_unregister_render_object_sys(ecs);
+  tb_unregister_view_sys(ecs);
+  tb_unregister_texture_sys(ecs);
+  tb_unregister_render_target_system(ecs);
+  tb_unregister_render_system(ecs);
+
+  ecs_fini(ecs);
 }
 
 bool tb_create_world(const WorldDescriptor *desc, World *world) {

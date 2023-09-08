@@ -115,7 +115,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
-  // #define NEW_TICK
+#define NEW_TICK
 
 #ifndef NEW_TICK
 // Order does not matter
@@ -318,7 +318,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #else
   // Register Gen 2 Systems and Components
   ecs_world_t *ecs_world =
-      tb_init_world(std_alloc, tmp_alloc, render_thread, window);
+      tb_create_world2(std_alloc, tmp_alloc, render_thread, window);
 #endif
 
   // Main loop
@@ -372,13 +372,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #ifndef NEW_TICK
   tb_destroy_world(&world);
 #else
-  tb_unregister_render_object_sys(ecs_world);
-  tb_unregister_view_sys(ecs_world);
-  tb_unregister_texture_sys(ecs_world);
-  tb_unregister_render_target_system(ecs_world);
-  tb_unregister_render_system(ecs_world);
-
-  ecs_fini(ecs_world);
+  tb_destroy_world2(ecs_world);
 #endif
 
   // Destroying the render thread will also close the window

@@ -178,3 +178,8 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
                                              TbDispatchContextId dispatch_ctx,
                                              uint32_t batch_count,
                                              const DispatchBatch *batches);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                     Allocator tmp_alloc);
+void tb_unregister_render_pipeline_sys(ecs_world_t *ecs);
