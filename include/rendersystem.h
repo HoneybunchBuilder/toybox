@@ -135,8 +135,7 @@ void tb_render_system_descriptor(SystemDescriptor *desc,
 
 // Flecs
 typedef struct ecs_world_t ecs_world_t;
-void tb_register_render_system(ecs_world_t *ecs, Allocator std_alloc,
-                               Allocator tmp_alloc,
-                               RenderThread *render_thread);
+void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc, RenderThread *render_thread);
 
 void tb_unregister_render_system(ecs_world_t *ecs);

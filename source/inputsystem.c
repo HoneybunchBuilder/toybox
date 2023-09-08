@@ -202,13 +202,13 @@ void flecs_tick_input(ecs_iter_t *it) {
   tick_input_system_internal(self, NULL, NULL, 0);
 }
 
-void tb_register_input(ecs_world_t *ecs, Allocator tmp_alloc,
-                       const InputSystemDescriptor *desc) {
+void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
+                           SDL_Window *window) {
   ECS_COMPONENT(ecs, InputSystem);
   ecs_singleton_set(ecs, InputSystem,
                     {
                         .tmp_alloc = tmp_alloc,
-                        .window = desc->window,
+                        .window = window,
                     });
-  ECS_SYSTEM(ecs, flecs_tick_input, EcsPreFrame, InputSystem($));
+  ECS_SYSTEM(ecs, flecs_tick_input, EcsPreFrame, InputSystem(InputSystem));
 }

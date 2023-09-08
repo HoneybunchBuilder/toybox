@@ -113,5 +113,5 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
                                 const InputSystemDescriptor *input_desc);
 
 typedef struct ecs_world_t ecs_world_t;
-void tb_register_input(ecs_world_t *ecs, Allocator tmp_alloc,
-                       const InputSystemDescriptor *desc);
+void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
+                           SDL_Window *window);

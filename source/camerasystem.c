@@ -171,8 +171,8 @@ void flecs_tick_camera(ecs_iter_t *it) {
   tb_view_system_set_view_frustum(sys->view_system, camera->view_id, &frustum);
 }
 
-void tb_register_camera(ecs_world_t *ecs, Allocator std_alloc,
-                        Allocator tmp_alloc) {
+void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, CameraComponent);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, CameraSystem);

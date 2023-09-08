@@ -270,7 +270,7 @@ void flecs_tick_noclip(ecs_iter_t *it) {
   rotate(&transform->transform, angular_velocity);
 }
 
-void tb_register_noclip(ecs_world_t *ecs, Allocator tmp_alloc) {
+void tb_register_noclip_sys(ecs_world_t *ecs, Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, NoClipComponent);
 
@@ -280,6 +280,7 @@ void tb_register_noclip(ecs_world_t *ecs, Allocator tmp_alloc) {
                         .tmp_alloc = tmp_alloc,
                     });
 
-  ECS_SYSTEM(ecs, flecs_tick_noclip, EcsOnUpdate, NoClipControllerSystem($),
+  ECS_SYSTEM(ecs, flecs_tick_noclip, EcsOnUpdate,
+             NoClipControllerSystem(NoClipControllerSystem),
              [out] TransformComponent, [out] NoClipComponent)
 }

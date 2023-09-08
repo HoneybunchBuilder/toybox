@@ -318,15 +318,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #else
   // Register Gen 2 Systems and Components
   ecs_world_t *ecs_world = ecs_init();
-  tb_register_input(ecs_world, tmp_alloc,
-                    &(InputSystemDescriptor){
-                        .window = window,
-                    });
-  tb_register_noclip(ecs_world, tmp_alloc);
-  tb_register_render_system(ecs_world, std_alloc, tmp_alloc, render_thread);
-  tb_register_render_target_system(ecs_world, std_alloc, tmp_alloc);
+  tb_register_input_sys(ecs_world, tmp_alloc, window);
+  tb_register_noclip_sys(ecs_world, tmp_alloc);
+  tb_register_render_sys(ecs_world, std_alloc, tmp_alloc, render_thread);
+  tb_register_render_target_sys(ecs_world, std_alloc, tmp_alloc);
   tb_register_texture_sys(ecs_world, std_alloc, tmp_alloc);
-  tb_register_camera(ecs_world, std_alloc, tmp_alloc);
+  tb_register_camera_sys(ecs_world, std_alloc, tmp_alloc);
 #endif
 
   // Main loop

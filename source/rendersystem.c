@@ -739,9 +739,8 @@ void render_frame_end(ecs_iter_t *it) {
   tick_frame_end(sys, NULL, NULL, it->delta_time);
 }
 
-void tb_register_render_system(ecs_world_t *ecs, Allocator std_alloc,
-                               Allocator tmp_alloc,
-                               RenderThread *render_thread) {
+void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc, RenderThread *render_thread) {
   ECS_COMPONENT(ecs, RenderSystem);
   RenderSystem sys = {0};
   create_render_system(&sys,

@@ -827,8 +827,8 @@ VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
   return TB_DYN_ARR_AT(self->render_targets, rt).images[frame_idx].image;
 }
 
-void tb_register_render_target_system(ecs_world_t *ecs, Allocator std_alloc,
-                                      Allocator tmp_alloc) {
+void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, RenderSystem);
 
