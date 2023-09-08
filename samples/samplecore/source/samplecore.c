@@ -318,7 +318,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #else
   // Register Gen 2 Systems and Components
   ecs_world_t *ecs_world = ecs_init();
-  // audio
+  tb_register_audio_sys(ecs_world, std_alloc, tmp_alloc);
   tb_register_render_sys(ecs_world, std_alloc, tmp_alloc, render_thread);
   tb_register_input_sys(ecs_world, tmp_alloc, window);
   tb_register_render_target_sys(ecs_world, std_alloc, tmp_alloc);

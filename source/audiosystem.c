@@ -4,6 +4,8 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 #include <SDL2/SDL_mixer.h>
 
 typedef struct TbMusic {
@@ -159,4 +161,47 @@ void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id) {
   Mix_PlayChannel(-1, effect->chunk, 1);
 
   TracyCZoneEnd(ctx);
+}
+
+void tb_register_audio_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, AudioSystem);
+
+  int32_t ret = Mix_Init(MIX_INIT_OGG);
+  TB_CHECK(ret != 0, "Failed to initialize SDL2 Mixer");
+
+  // Default to 44khz 16-bit stereo for now
+  // But allow the mixer to change these if the device wants something specific
+  ret = Mix_OpenAudioDevice(44100, AUDIO_S16SYS, 2, TB_AUDIO_CHUNK_SIZE, NULL,
+                            SDL_AUDIO_ALLOW_ANY_CHANGE);
+  TB_CHECK(ret == 0, "Failed to open default audio device");
+
+  int32_t freq = 0;
+  uint16_t format = 0;
+  int32_t channels = 0;
+  ret = Mix_QuerySpec(&freq, &format, &channels);
+  TB_CHECK(ret == 1, "Failed to query audio device");
+
+  // Set the number of audio tracks to 8 for starters
+  ret = Mix_AllocateChannels(8);
+  TB_CHECK(ret != 0, "Failed to allocate tracks for audio device");
+
+  AudioSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .frequency = freq,
+      .format = format,
+      .channels = channels,
+  };
+  TB_DYN_ARR_RESET(sys.music, std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.sfx, std_alloc, 8);
+
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(AudioSystem), AudioSystem, &sys);
+}
+
+void tb_unregister_audio_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AudioSystem);
+  AudioSystem *sys = ecs_singleton_get_mut(ecs, AudioSystem);
+  destroy_audio_system(sys);
 }
