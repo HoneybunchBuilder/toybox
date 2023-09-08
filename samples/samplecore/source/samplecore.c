@@ -2,6 +2,8 @@
 
 #include <mimalloc.h>
 
+#include <flecs.h>
+
 #include "allocator.h"
 #include "pi.h"
 #include "profiling.h"
@@ -296,6 +298,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #undef COMP_COUNT
 #undef SYSTEM_COUNT
 
+  // Register Gen 2 Systems and Components
+  ecs_world_t *ecs_world = ecs_init();
+  tb_register_input(ecs_world, arena.alloc,
+                    &(InputSystemDescriptor){
+                        .window = window,
+                    });
+  tb_register_noclip(ecs_world, arena.alloc);
+
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
@@ -327,6 +337,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         (float)((double)delta_time / (double)(SDL_GetPerformanceFrequency()));
     last_time = time;
 
+    if (!ecs_progress(ecs_world, delta_time_seconds)) {
+      running = false;
+      TracyCZoneEnd(trcy_ctx);
+      TracyCFrameMarkEnd("Simulation Frame");
+      break;
+    }
+
     // Tick the world
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false;
@@ -344,6 +361,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(render_thread);
+
+  ecs_fini(ecs_world);
 
   tb_destroy_world(&world);
 

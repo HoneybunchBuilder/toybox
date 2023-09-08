@@ -20,3 +20,6 @@ typedef struct NoClipControllerSystem {
 void tb_noclip_controller_system_descriptor(
     SystemDescriptor *desc,
     const NoClipControllerSystemDescriptor *noclip_desc);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_noclip(ecs_world_t *ecs, Allocator tmp_alloc);

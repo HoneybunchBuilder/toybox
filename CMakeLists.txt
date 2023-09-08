@@ -103,6 +103,7 @@ find_package(mimalloc CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(flecs CONFIG REQUIRED)
 if(PROFILE_TRACY)
   find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -132,7 +133,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
+set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)

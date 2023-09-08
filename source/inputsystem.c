@@ -4,6 +4,8 @@
 #include "tbcommon.h"
 #include "tbsdl.h"
 
+#include <flecs.h>
+
 bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
@@ -193,4 +195,20 @@ void tb_input_system_descriptor(SystemDescriptor *desc,
               },
           },
   };
+}
+
+void flecs_tick_input(ecs_iter_t *it) {
+  InputSystem *self = ecs_field(it, InputSystem, 1);
+  tick_input_system_internal(self, NULL, NULL, 0);
+}
+
+void tb_register_input(ecs_world_t *ecs, Allocator tmp_alloc,
+                       const InputSystemDescriptor *desc) {
+  ECS_COMPONENT(ecs, InputSystem);
+  ecs_singleton_set(ecs, InputSystem,
+                    {
+                        .tmp_alloc = tmp_alloc,
+                        .window = desc->window,
+                    });
+  ECS_SYSTEM(ecs, flecs_tick_input, EcsOnUpdate, InputSystem);
 }
