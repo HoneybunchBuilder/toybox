@@ -58,3 +58,8 @@ TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat);
 VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat);
 
 void tb_mat_system_release_material_ref(MaterialSystem *self, TbMaterialId mat);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
+                              Allocator tmp_alloc);
+void tb_unregister_material_sys(ecs_world_t *ecs);

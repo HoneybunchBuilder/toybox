@@ -9,6 +9,8 @@
 #include "texturesystem.h"
 #include "world.h"
 
+#include <flecs.h>
+
 typedef struct TbMaterial {
   TbMaterialId id;
   uint32_t ref_count;
@@ -19,35 +21,21 @@ typedef struct TbMaterial {
   TbTextureId metal_rough_map;
 } TbMaterial;
 
-bool create_material_system(MaterialSystem *self,
-                            const MaterialSystemDescriptor *desc,
-                            uint32_t system_dep_count,
-                            System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which materials depend on",
-                  false);
-  TextureSystem *texture_system =
-      (TextureSystem *)tb_find_system_dep_self_by_id(
-          system_deps, system_dep_count, TextureSystemId);
-  TB_CHECK_RETURN(texture_system,
-                  "Failed to find texture system which materials depend on",
-                  false);
-
-  *self = (MaterialSystem){
-      .render_system = render_system,
-      .texture_system = texture_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+MaterialSystem create_material_system_internal(Allocator std_alloc,
+                                               Allocator tmp_alloc,
+                                               RenderSystem *rnd_sys,
+                                               TextureSystem *tex_sys) {
+  MaterialSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .render_system = rnd_sys,
+      .texture_system = tex_sys,
   };
 
-  TB_DYN_ARR_RESET(self->materials, self->std_alloc, 1);
+  TB_DYN_ARR_RESET(sys.materials, std_alloc, 1);
 
-  VkDevice device = self->render_system->render_thread->device;
-  const VkAllocationCallbacks *vk_alloc =
-      &self->render_system->vk_host_alloc_cb;
+  VkDevice device = rnd_sys->render_thread->device;
+  const VkAllocationCallbacks *vk_alloc = &rnd_sys->vk_host_alloc_cb;
 
   VkResult err = VK_SUCCESS;
 
@@ -66,9 +54,9 @@ bool create_material_system(MaterialSystem *self,
         .maxLod = 14.0f,        // Hack; known number of mips for 8k textures
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
-    err = vkCreateSampler(device, &create_info, vk_alloc, &self->sampler);
-    TB_VK_CHECK_RET(err, "Failed to create material sampler", false);
-    SET_VK_NAME(device, self->sampler, VK_OBJECT_TYPE_SAMPLER,
+    err = vkCreateSampler(device, &create_info, vk_alloc, &sys.sampler);
+    TB_VK_CHECK(err, "Failed to create material sampler");
+    SET_VK_NAME(device, sys.sampler, VK_OBJECT_TYPE_SAMPLER,
                 "Material Sampler");
   }
 
@@ -88,10 +76,9 @@ bool create_material_system(MaterialSystem *self,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err =
-        vkCreateSampler(device, &create_info, vk_alloc, &self->shadow_sampler);
-    TB_VK_CHECK_RET(err, "Failed to create material shadow sampler", false);
-    SET_VK_NAME(device, self->shadow_sampler, VK_OBJECT_TYPE_SAMPLER,
+    err = vkCreateSampler(device, &create_info, vk_alloc, &sys.shadow_sampler);
+    TB_VK_CHECK(err, "Failed to create material shadow sampler");
+    SET_VK_NAME(device, sys.shadow_sampler, VK_OBJECT_TYPE_SAMPLER,
                 "Material Shadow Sampler");
   }
 
@@ -107,9 +94,9 @@ bool create_material_system(MaterialSystem *self,
         {3, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          NULL},
         {4, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         &self->sampler},
+         &sys.sampler},
         {5, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         &self->shadow_sampler},
+         &sys.shadow_sampler},
     };
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -117,10 +104,9 @@ bool create_material_system(MaterialSystem *self,
         .pBindings = bindings,
     };
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &self->set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create material descriptor set layout",
-                    false);
-    SET_VK_NAME(device, self->set_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+                                      &sys.set_layout);
+    TB_VK_CHECK(err, "Failed to create material descriptor set layout");
+    SET_VK_NAME(device, sys.set_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
                 "Material DS Layout");
   }
 
@@ -128,7 +114,7 @@ bool create_material_system(MaterialSystem *self,
   // It uses the metallic roughness flow
   // it does not supply textures, those will be provided by default since
   // it is marked to use pbr metal rough but provides no texture views
-  cgltf_material *default_mat = tb_alloc_tp(self->std_alloc, cgltf_material);
+  cgltf_material *default_mat = tb_alloc_tp(std_alloc, cgltf_material);
   *default_mat = (cgltf_material){
       .name = "default",
       .has_pbr_metallic_roughness = true,
@@ -139,7 +125,30 @@ bool create_material_system(MaterialSystem *self,
               .roughness_factor = 0.5f,
           },
   };
-  self->default_material = default_mat;
+  sys.default_material = default_mat;
+
+  return sys;
+}
+
+bool create_material_system(MaterialSystem *self,
+                            const MaterialSystemDescriptor *desc,
+                            uint32_t system_dep_count,
+                            System *const *system_deps) {
+  // Find the necessary systems
+  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
+      system_deps, system_dep_count, RenderSystemId);
+  TB_CHECK_RETURN(render_system,
+                  "Failed to find render system which materials depend on",
+                  false);
+  TextureSystem *texture_system =
+      (TextureSystem *)tb_find_system_dep_self_by_id(
+          system_deps, system_dep_count, TextureSystemId);
+  TB_CHECK_RETURN(texture_system,
+                  "Failed to find texture system which materials depend on",
+                  false);
+
+  *self = create_material_system_internal(desc->std_alloc, desc->tmp_alloc,
+                                          render_system, texture_system);
 
   return true;
 }
@@ -699,4 +708,25 @@ void tb_mat_system_release_material_ref(MaterialSystem *self,
     vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);
     *gpu_buf = (TbBuffer){0};
   }
+}
+
+void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
+                              Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, TextureSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+
+  MaterialSystem sys =
+      create_material_system_internal(std_alloc, tmp_alloc, rnd_sys, tex_sys);
+
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(MaterialSystem), MaterialSystem, &sys);
+}
+void tb_unregister_material_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, MaterialSystem);
+  MaterialSystem *sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  destroy_material_system(sys);
 }

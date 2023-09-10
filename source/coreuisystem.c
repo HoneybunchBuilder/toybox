@@ -6,10 +6,29 @@
 #include "tbengineconfig.h"
 #include "tbimgui.h"
 
+#include <flecs.h>
+
 typedef struct CoreUIMenu {
   bool *active;
   const char *name;
 } CoreUIMenu;
+
+CoreUISystem create_coreui_system_internal(Allocator std_alloc,
+                                           Allocator tmp_alloc,
+                                           ImGuiSystem *imgui_system) {
+  CoreUISystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .imgui = imgui_system,
+  };
+
+  TB_DYN_ARR_RESET(sys.menu_registry, std_alloc, 1);
+
+  sys.metrics = tb_coreui_register_menu(&sys, "Metrics");
+  sys.about = tb_coreui_register_menu(&sys, "About");
+
+  return sys;
+}
 
 bool create_coreui_system(CoreUISystem *self,
                           const CoreUISystemDescriptor *desc,
@@ -22,16 +41,8 @@ bool create_coreui_system(CoreUISystem *self,
   TB_CHECK_RETURN(imgui_system,
                   "Failed to find imgui system which coreui depends on", false);
 
-  *self = (CoreUISystem){
-      .std_alloc = desc->std_alloc,
-      .tmp_alloc = desc->tmp_alloc,
-      .imgui = imgui_system,
-  };
-  TB_DYN_ARR_RESET(self->menu_registry, self->std_alloc, 1);
-
-  self->metrics = tb_coreui_register_menu(self, "Metrics");
-  self->about = tb_coreui_register_menu(self, "About");
-
+  *self = create_coreui_system_internal(desc->std_alloc, desc->tmp_alloc,
+                                        imgui_system);
   return true;
 }
 
@@ -55,12 +66,7 @@ void coreui_show_about(bool *open) {
   }
 }
 
-void tick_coreui_system_internal(CoreUISystem *self, const SystemInput *input,
-                                 SystemOutput *output, float delta_seconds) {
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
-
+void tick_coreui_system_internal(CoreUISystem *self) {
   TracyCZoneN(ctx, "Core UI System Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
 
@@ -94,9 +100,11 @@ TB_DEFINE_SYSTEM(coreui, CoreUISystem, CoreUISystemDescriptor)
 
 void tick_coreui_system(void *self, const SystemInput *input,
                         SystemOutput *output, float delta_seconds) {
+  (void)input;
+  (void)output;
+  (void)delta_seconds;
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick CoreUI System");
-  tick_coreui_system_internal((CoreUISystem *)self, input, output,
-                              delta_seconds);
+  tick_coreui_system_internal((CoreUISystem *)self);
 }
 
 void tb_coreui_system_descriptor(SystemDescriptor *desc,
@@ -128,4 +136,30 @@ bool *tb_coreui_register_menu(CoreUISystem *self, const char *name) {
   };
   TB_DYN_ARR_APPEND(self->menu_registry, menu);
   return active;
+}
+
+void flecs_core_ui_tick(ecs_iter_t *it) {
+  CoreUISystem *sys = ecs_field(it, CoreUISystem, 1);
+  tick_coreui_system_internal(sys);
+}
+
+void tb_register_core_ui_sys(ecs_world_t *ecs, Allocator std_alloc,
+                             Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, ImGuiSystem);
+  ECS_COMPONENT(ecs, CoreUISystem);
+
+  ImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, ImGuiSystem);
+  CoreUISystem sys =
+      create_coreui_system_internal(std_alloc, tmp_alloc, imgui_sys);
+
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(CoreUISystem), CoreUISystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_core_ui_tick, EcsOnUpdate, CoreUISystem(CoreUISystem));
+}
+
+void tb_unregister_core_ui_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, CoreUISystem);
+  CoreUISystem *sys = ecs_singleton_get_mut(ecs, CoreUISystem);
+  destroy_coreui_system(sys);
 }

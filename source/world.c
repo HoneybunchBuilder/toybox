@@ -124,12 +124,12 @@ ecs_world_t *tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_view_sys(ecs, std_alloc, tmp_alloc);
   tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
   tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
-  // tb_register_material_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_material_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
-  // tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
   tb_register_noclip_sys(ecs, tmp_alloc);
-  // tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
   tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
@@ -158,6 +158,9 @@ bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds) {
 }
 
 void tb_destroy_world2(ecs_world_t *ecs) {
+  tb_unregister_core_ui_sys(ecs);
+  tb_unregister_imgui_sys(ecs);
+  tb_unregister_material_sys(ecs);
   tb_unregister_render_pipeline_sys(ecs);
   tb_unregister_render_object_sys(ecs);
   tb_unregister_view_sys(ecs);

@@ -22,6 +22,8 @@
 #include "tbvma.h"
 #include "vkdbg.h"
 
+#include <flecs.h>
+
 typedef struct ImGuiDraw {
   VkBuffer geom_buffer;
   uint64_t index_offset;
@@ -407,6 +409,81 @@ void ui_context_destroy(RenderSystem *render_system, UIContext *context) {
   *context = (UIContext){0};
 }
 
+ImGuiSystem create_imgui_system_internal(
+    const ImGuiSystemDescriptor *desc, RenderSystem *render_system,
+    RenderPipelineSystem *render_pipe_system,
+    RenderTargetSystem *render_target_system, InputSystem *input_system) {
+
+  ImGuiSystem sys = {
+      .render_system = render_system,
+      .render_pipe_system = render_pipe_system,
+      .render_target_system = render_target_system,
+      .input = input_system,
+      .tmp_alloc = desc->tmp_alloc,
+      .std_alloc = desc->std_alloc,
+      .context_count = desc->context_count,
+  };
+
+  VkResult err = VK_SUCCESS;
+
+  // Initialize each context
+  for (uint32_t i = 0; i < sys.context_count; ++i) {
+    err = ui_context_init(render_system, desc->context_atlases[i],
+                          &sys.contexts[i]);
+    TB_VK_CHECK(err, "Failed to initialize UI context");
+  }
+
+  // Look up UI pipeline
+  TbRenderPassId ui_pass_id = render_pipe_system->ui_pass;
+
+  uint32_t attach_count = 0;
+  tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
+                                     &attach_count, NULL);
+  TB_CHECK(attach_count == 1, "Unexpected");
+  PassAttachment ui_info = {0};
+  tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
+                                     &attach_count, &ui_info);
+
+  VkFormat ui_target_format =
+      tb_render_target_get_format(render_target_system, ui_info.attachment);
+
+  // Create Immutable Sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info, "ImGui Sampler",
+                                &sys.sampler);
+    TB_VK_CHECK(err, "Failed to create imgui sampler");
+  }
+
+  // Create imgui pipeline
+  err = create_imgui_pipeline(
+      render_system->render_thread->device, &render_system->vk_host_alloc_cb,
+      render_system->pipeline_cache, sys.sampler, ui_target_format,
+      &sys.pipe_layout, &sys.set_layout, &sys.pipeline);
+  TB_VK_CHECK(err, "Failed to create imgui pipeline");
+
+  sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(ImGuiDrawBatch),
+                              .draw_fn = imgui_pass_record,
+                              .pass_id = ui_pass_id,
+                          });
+
+  return sys;
+}
+
 bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
                          uint32_t system_dep_count,
                          System *const *system_deps) {
@@ -435,72 +512,8 @@ bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
   TB_CHECK_RETURN(input_system,
                   "Failed to find input system which imgui depends on", false);
 
-  *self = (ImGuiSystem){
-      .render_system = render_system,
-      .render_pipe_system = render_pipe_system,
-      .render_target_system = render_target_system,
-      .input = input_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
-      .context_count = desc->context_count,
-  };
-
-  VkResult err = VK_SUCCESS;
-
-  // Initialize each context
-  for (uint32_t i = 0; i < self->context_count; ++i) {
-    err = ui_context_init(self->render_system, desc->context_atlases[i],
-                          &self->contexts[i]);
-    TB_VK_CHECK_RET(err, "Failed to initialize UI context", false);
-  }
-
-  // Look up UI pipeline
-  TbRenderPassId ui_pass_id = self->render_pipe_system->ui_pass;
-
-  uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
-                                     &attach_count, NULL);
-  TB_CHECK(attach_count == 1, "Unexpected");
-  PassAttachment ui_info = {0};
-  tb_render_pipeline_get_attachments(self->render_pipe_system, ui_pass_id,
-                                     &attach_count, &ui_info);
-
-  VkFormat ui_target_format = tb_render_target_get_format(
-      self->render_target_system, ui_info.attachment);
-
-  // Create Immutable Sampler
-  {
-    VkSamplerCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
-        .maxAnisotropy = 1.0f,
-        .maxLod = 1.0f,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-    };
-    err = tb_rnd_create_sampler(render_system, &create_info, "ImGui Sampler",
-                                &self->sampler);
-    TB_VK_CHECK_RET(err, "Failed to create imgui sampler", err);
-  }
-
-  // Create imgui pipeline
-  err = create_imgui_pipeline(
-      render_system->render_thread->device, &render_system->vk_host_alloc_cb,
-      render_system->pipeline_cache, self->sampler, ui_target_format,
-      &self->pipe_layout, &self->set_layout, &self->pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
-
-  self->imgui_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(ImGuiDrawBatch),
-                              .draw_fn = imgui_pass_record,
-                              .pass_id = ui_pass_id,
-                          });
+  *self = create_imgui_system_internal(desc, render_system, render_pipe_system,
+                                       render_target_system, input_system);
 
   return true;
 }
@@ -525,10 +538,7 @@ void destroy_imgui_system(ImGuiSystem *self) {
   *self = (ImGuiSystem){0};
 }
 
-void tick_imgui_system_internal(ImGuiSystem *self, const SystemInput *input,
-                                SystemOutput *output, float delta_seconds) {
-  (void)input;
-  (void)output;
+void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
   TracyCZoneN(ctx, "ImGui System", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
 
@@ -826,8 +836,10 @@ TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
 
 void tick_imgui_system(void *self, const SystemInput *input,
                        SystemOutput *output, float delta_seconds) {
+  (void)input;
+  (void)output;
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick ImGUI System");
-  tick_imgui_system_internal((ImGuiSystem *)self, input, output, delta_seconds);
+  tick_imgui_system_internal((ImGuiSystem *)self, delta_seconds);
 }
 
 void tb_imgui_system_descriptor(SystemDescriptor *desc,
@@ -850,4 +862,44 @@ void tb_imgui_system_descriptor(SystemDescriptor *desc,
               .function = tick_imgui_system,
           },
   };
+}
+
+void flecs_imgui_tick(ecs_iter_t *it) {
+  ImGuiSystem *sys = ecs_field(it, ImGuiSystem, 1);
+  tick_imgui_system_internal(sys, it->delta_time);
+}
+
+void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, InputSystem);
+  ECS_COMPONENT(ecs, ImGuiSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  InputSystem *in_sys = ecs_singleton_get_mut(ecs, InputSystem);
+
+  // HACK: This sucks. Do we even care about custom atlases anymore?
+  ImGuiSystem sys = create_imgui_system_internal(
+      &(ImGuiSystemDescriptor){
+          .std_alloc = std_alloc,
+          .tmp_alloc = tmp_alloc,
+          .context_count = 1,
+          .context_atlases[0] = NULL,
+      },
+      rnd_sys, rp_sys, rt_sys, in_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(ImGuiSystem), ImGuiSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_imgui_tick, EcsOnUpdate, ImGuiSystem(ImGuiSystem));
+}
+
+void tb_unregister_imgui_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ImGuiSystem);
+  ImGuiSystem *sys = ecs_singleton_get_mut(ecs, ImGuiSystem);
+  destroy_imgui_system(sys);
 }
