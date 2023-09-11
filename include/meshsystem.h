@@ -113,3 +113,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id);
 VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id);
 void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc);
+void tb_unregister_mesh_sys(ecs_world_t *ecs);

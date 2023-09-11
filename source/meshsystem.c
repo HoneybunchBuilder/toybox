@@ -1,5 +1,6 @@
 #include "meshsystem.h"
 
+#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
 #include "common.hlsli"
@@ -1006,6 +1007,199 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
+MeshSystem create_mesh_system_internal(
+    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    MaterialSystem *material_system, ViewSystem *view_system,
+    RenderObjectSystem *render_object_system,
+    RenderPipelineSystem *render_pipe_system) {
+  MeshSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .render_system = render_system,
+      .material_system = material_system,
+      .view_system = view_system,
+      .render_object_system = render_object_system,
+      .render_pipe_system = render_pipe_system,
+  };
+  TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
+  TbRenderPassId prepass_id = render_pipe_system->opaque_depth_normal_pass;
+  TbRenderPassId opaque_pass_id = render_pipe_system->opaque_color_pass;
+  TbRenderPassId transparent_pass_id =
+      render_pipe_system->transparent_color_pass;
+
+  // Setup mesh system for rendering
+  {
+    VkResult err = VK_SUCCESS;
+
+    // Get descriptor set layouts from related systems
+    {
+      sys.obj_set_layout = render_object_system->set_layout;
+      sys.view_set_layout = view_system->set_layout;
+    }
+
+    // Create prepass pipeline layout
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = 2,
+          .pSetLayouts =
+              (VkDescriptorSetLayout[2]){
+                  sys.obj_set_layout,
+                  sys.view_set_layout,
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "Opaque Depth Normal Prepass Layout",
+                                          &sys.prepass_layout);
+    }
+
+    // Create prepass pipeline
+    {
+      VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
+      err = create_prepass_pipeline(sys.render_system, depth_format,
+                                    sys.prepass_layout, &sys.prepass_pipe);
+      TB_VK_CHECK(err, "Failed to create opaque prepass pipeline");
+    }
+
+    // Create pipeline layouts
+    {
+#define LAYOUT_COUNT 3
+      VkDescriptorSetLayout layouts[LAYOUT_COUNT] = {
+          material_system->set_layout,
+          sys.obj_set_layout,
+          sys.view_set_layout,
+      };
+
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = LAYOUT_COUNT,
+          .pSetLayouts = layouts,
+          .pushConstantRangeCount = 1,
+          .pPushConstantRanges =
+              (VkPushConstantRange[1]){
+                  {
+                      .offset = 0,
+                      .size = sizeof(MaterialPushConstants),
+                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  },
+              },
+      };
+#undef LAYOUT_COUNT
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "GLTF Pipeline Layout",
+                                          &sys.pipe_layout);
+    }
+
+    // Create opaque and transparent pipelines
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(
+          sys.render_pipe_system,
+          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
+          NULL);
+      TB_CHECK(attach_count == 2, "Unexpected");
+      PassAttachment depth_info = {0};
+      tb_render_pipeline_get_attachments(
+          sys.render_pipe_system,
+          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
+          &depth_info);
+
+      VkFormat depth_format = tb_render_target_get_format(
+          sys.render_pipe_system->render_target_system, depth_info.attachment);
+
+      VkFormat color_format = VK_FORMAT_UNDEFINED;
+      tb_render_pipeline_get_attachments(
+          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
+          &attach_count, NULL);
+      TB_CHECK(attach_count == 2, "Unexpected");
+      PassAttachment attach_info[2] = {0};
+      tb_render_pipeline_get_attachments(
+          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
+          &attach_count, attach_info);
+
+      for (uint32_t i = 0; i < attach_count; i++) {
+        VkFormat format = tb_render_target_get_format(
+            sys.render_pipe_system->render_target_system,
+            attach_info[i].attachment);
+        if (format != VK_FORMAT_D32_SFLOAT) {
+          color_format = format;
+          break;
+        }
+      }
+      err = create_mesh_pipelines(sys.render_system, sys.std_alloc,
+                                  color_format, depth_format, sys.pipe_layout,
+                                  &sys.pipe_count, &sys.opaque_pipelines,
+                                  &sys.transparent_pipelines);
+      TB_VK_CHECK(err, "Failed to create mesh pipelines");
+    }
+
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .pushConstantRangeCount = 1,
+          .pPushConstantRanges =
+              (VkPushConstantRange[1]){
+                  {
+                      .size = sizeof(ShadowConstants),
+                      .offset = 0,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                          "Shadow Pipeline Layout",
+                                          &sys.shadow_pipe_layout);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline layout");
+    }
+
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(sys.render_pipe_system,
+                                         sys.render_pipe_system->shadow_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment depth_info = {0};
+      tb_render_pipeline_get_attachments(sys.render_pipe_system,
+                                         sys.render_pipe_system->shadow_pass,
+                                         &attach_count, &depth_info);
+
+      VkFormat depth_format = tb_render_target_get_format(
+          sys.render_pipe_system->render_target_system, depth_info.attachment);
+      err =
+          create_shadow_pipeline(sys.render_system, depth_format,
+                                 sys.shadow_pipe_layout, &sys.shadow_pipeline);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline");
+    }
+  }
+  // Register drawing with the pipelines
+  sys.prepass_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = prepass_record,
+                              .pass_id = prepass_id,
+                          });
+
+  sys.opaque_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = opaque_pass_record,
+                              .pass_id = opaque_pass_id,
+                          });
+  sys.transparent_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = transparent_pass_record,
+                              .pass_id = transparent_pass_id,
+                          });
+  sys.shadow_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(MeshDrawBatch),
+                              .draw_fn = shadow_pass_record,
+                              .pass_id = render_pipe_system->shadow_pass,
+                          });
+  return sys;
+}
+
 bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
                         uint32_t system_dep_count, System *const *system_deps) {
   // Find the necessary systems
@@ -1033,196 +1227,10 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       render_pipe_system,
       "Failed to find render pipeline system which meshes depend on", false);
 
-  *self = (MeshSystem){
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
-      .render_system = render_system,
-      .material_system = material_system,
-      .view_system = view_system,
-      .render_object_system = render_object_system,
-      .render_pipe_system = render_pipe_system,
-  };
+  *self = create_mesh_system_internal(
+      desc->std_alloc, desc->std_alloc, render_system, material_system,
+      view_system, render_object_system, render_pipe_system);
 
-  TB_DYN_ARR_RESET(self->meshes, self->std_alloc, 8);
-  TbRenderPassId prepass_id =
-      self->render_pipe_system->opaque_depth_normal_pass;
-  TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
-  TbRenderPassId transparent_pass_id =
-      self->render_pipe_system->transparent_color_pass;
-
-  // Setup mesh system for rendering
-  {
-    VkResult err = VK_SUCCESS;
-
-    // Get descriptor set layouts from related systems
-    {
-      self->obj_set_layout = render_object_system->set_layout;
-      self->view_set_layout = view_system->set_layout;
-    }
-
-    // Create prepass pipeline layout
-    {
-      VkPipelineLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 2,
-          .pSetLayouts =
-              (VkDescriptorSetLayout[2]){
-                  self->obj_set_layout,
-                  self->view_set_layout,
-              },
-      };
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                          "Opaque Depth Normal Prepass Layout",
-                                          &self->prepass_layout);
-    }
-
-    // Create prepass pipeline
-    {
-      VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-      err = create_prepass_pipeline(self->render_system, depth_format,
-                                    self->prepass_layout, &self->prepass_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", false);
-    }
-
-    // Create pipeline layouts
-    {
-#define LAYOUT_COUNT 3
-      VkDescriptorSetLayout layouts[LAYOUT_COUNT] = {
-          material_system->set_layout,
-          self->obj_set_layout,
-          self->view_set_layout,
-      };
-
-      VkPipelineLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = LAYOUT_COUNT,
-          .pSetLayouts = layouts,
-          .pushConstantRangeCount = 1,
-          .pPushConstantRanges =
-              (VkPushConstantRange[1]){
-                  {
-                      .offset = 0,
-                      .size = sizeof(MaterialPushConstants),
-                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  },
-              },
-      };
-#undef LAYOUT_COUNT
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                          "GLTF Pipeline Layout",
-                                          &self->pipe_layout);
-    }
-
-    // Create opaque and transparent pipelines
-    {
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system,
-          self->render_pipe_system->opaque_depth_normal_pass, &attach_count,
-          NULL);
-      TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-      PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system,
-          self->render_pipe_system->opaque_depth_normal_pass, &attach_count,
-          &depth_info);
-
-      VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
-          depth_info.attachment);
-
-      VkFormat color_format = VK_FORMAT_UNDEFINED;
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->opaque_color_pass,
-          &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-      PassAttachment attach_info[2] = {0};
-      tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->opaque_color_pass,
-          &attach_count, attach_info);
-
-      for (uint32_t i = 0; i < attach_count; i++) {
-        VkFormat format = tb_render_target_get_format(
-            self->render_pipe_system->render_target_system,
-            attach_info[i].attachment);
-        if (format != VK_FORMAT_D32_SFLOAT) {
-          color_format = format;
-          break;
-        }
-      }
-      err = create_mesh_pipelines(self->render_system, self->std_alloc,
-                                  color_format, depth_format, self->pipe_layout,
-                                  &self->pipe_count, &self->opaque_pipelines,
-                                  &self->transparent_pipelines);
-      TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
-    }
-
-    {
-      VkPipelineLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .pushConstantRangeCount = 1,
-          .pPushConstantRanges =
-              (VkPushConstantRange[1]){
-                  {
-                      .size = sizeof(ShadowConstants),
-                      .offset = 0,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-              },
-      };
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                          "Shadow Pipeline Layout",
-                                          &self->shadow_pipe_layout);
-      TB_VK_CHECK_RET(err, "Failed to create shadow pipeline layout", false);
-    }
-
-    {
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self->render_pipe_system,
-                                         self->render_pipe_system->shadow_pass,
-                                         &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
-      PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(self->render_pipe_system,
-                                         self->render_pipe_system->shadow_pass,
-                                         &attach_count, &depth_info);
-
-      VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
-          depth_info.attachment);
-      err = create_shadow_pipeline(self->render_system, depth_format,
-                                   self->shadow_pipe_layout,
-                                   &self->shadow_pipeline);
-      TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", false);
-    }
-  }
-
-  // Register drawing with the pipelines
-  self->prepass_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = prepass_record,
-                              .pass_id = prepass_id,
-                          });
-
-  self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = opaque_pass_record,
-                              .pass_id = opaque_pass_id,
-                          });
-  self->transparent_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = transparent_pass_record,
-                              .pass_id = transparent_pass_id,
-                          });
-  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = shadow_pass_record,
-                              .pass_id = render_pipe_system->shadow_pass,
-                          });
   return true;
 }
 
@@ -2239,22 +2247,90 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
 }
 
 // Flecs version
-void mesh_tick(ecs_iter_t *it) {}
+void flecs_mesh_tick(ecs_iter_t *it) {
+  ecs_world_t *ecs = it->world;
+  // MeshSystem *sys = ecs_field(it, MeshSystem, 1);
 
-void tb_register_mesh(ecs_world_t *ecs, Allocator std_alloc,
-                      Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, MeshComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+
+  ecs_filter_t *camera_filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {ecs_id(CameraComponent)},
+                                  {ecs_id(TransformComponent)},
+                              },
+                      });
+  ecs_filter_t *mesh_filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {ecs_id(MeshComponent)},
+                                  //{ecs_id(TransformComponent)},
+                              },
+                      });
+
+  // For each camera
+  ecs_iter_t cam_it = ecs_filter_iter(ecs, camera_filter);
+  while (ecs_filter_next(&cam_it)) {
+    // This should be done in the view system
+
+    // For each mesh
+    ecs_iter_t mesh_it = ecs_filter_iter(ecs, mesh_filter);
+    while (ecs_filter_next(&mesh_it)) {
+      MeshComponent *mesh = ecs_field(&mesh_it, MeshComponent, 1);
+      TransformComponent *trans = ecs_field(&mesh_it, TransformComponent, 2);
+    }
+  }
+}
+
+void destroy_mesh_sys(ecs_iter_t *it) {
+  MeshSystem *sys = ecs_field(it, MeshSystem, 1);
+  destroy_mesh_system(sys);
+}
+
+void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
   ECS_COMPONENT(ecs, MeshComponent);
   ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, AssetSystem);
 
-  RenderSystem *render_system = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
 
-  ecs_singleton_set(ecs, MeshSystem,
-                    {
-                        .std_alloc = std_alloc,
-                        .tmp_alloc = tmp_alloc,
-                        .render_system = render_system,
-                    });
+  MeshSystem sys = create_mesh_system_internal(
+      std_alloc, tmp_alloc, rnd_sys, mat_sys, view_sys, ro_sys, rp_sys);
 
-  ECS_SYSTEM(ecs, mesh_tick, EcsOnUpdate, MeshSystem(MeshSystem));
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(MeshSystem), MeshSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_mesh_tick, EcsOnUpdate, MeshSystem(MeshSystem));
+
+  // Mark the mesh system entity as also having an asset system that can
+  // parse and load mesh components
+  AssetSystem asset = {
+      .id = 0xBEEFBABE,
+      .id_str = "0xBEEFBABE",
+      .add_fn = tb_create_mesh_component2,
+      .rem_fn = tb_destroy_mesh_component2,
+  };
+  ecs_set_ptr(ecs, ecs_id(AssetSystem), AssetSystem, &asset);
+
+  ECS_OBSERVER(ecs, destroy_mesh_sys, EcsOnRemove, MeshSystem(MeshSystem));
+}
+
+void tb_unregister_mesh_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, MeshSystem);
+  ecs_singleton_remove(ecs, MeshSystem);
 }

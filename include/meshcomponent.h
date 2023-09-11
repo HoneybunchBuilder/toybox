@@ -46,3 +46,13 @@ typedef struct MeshComponent {
 } MeshComponent;
 
 void tb_mesh_component_descriptor(ComponentDescriptor *desc);
+
+typedef struct ecs_world_t ecs_world_t;
+typedef struct ecs_iter_t ecs_iter_t;
+typedef uint64_t ecs_entity_t;
+typedef struct cgltf_node cgltf_node;
+typedef struct json_object json_object;
+bool tb_create_mesh_component2(ecs_world_t *ecs, ecs_entity_t e,
+                               const char *source_path, cgltf_node *node,
+                               json_object *extra);
+void tb_destroy_mesh_component2(ecs_world_t *ecs);

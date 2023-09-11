@@ -76,13 +76,7 @@ void destroy_render_object_system(RenderObjectSystem *self) {
   *self = (RenderObjectSystem){0};
 }
 
-void tick_render_object_system_internal(RenderObjectSystem *self,
-                                        const SystemInput *input,
-                                        SystemOutput *output,
-                                        float delta_seconds) {
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
+void tick_render_object_system_internal(RenderObjectSystem *self) {
   TracyCZoneNC(ctx, "Render Object System Tick", TracyCategoryColorRendering,
                true);
 
@@ -211,9 +205,11 @@ TB_DEFINE_SYSTEM(render_object, RenderObjectSystem,
 
 void tick_render_object_system(void *self, const SystemInput *input,
                                SystemOutput *output, float delta_seconds) {
+  (void)input;
+  (void)output;
+  (void)delta_seconds;
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderObject System");
-  tick_render_object_system_internal((RenderObjectSystem *)self, input, output,
-                                     delta_seconds);
+  tick_render_object_system_internal((RenderObjectSystem *)self);
 }
 
 void tb_render_object_system_descriptor(
@@ -272,6 +268,11 @@ tb_render_object_system_get_data(RenderObjectSystem *self,
   return &TB_DYN_ARR_AT(self->render_object_data, object);
 }
 
+void flecs_render_object_tick(ecs_iter_t *it) {
+  RenderObjectSystem *sys = ecs_field(it, RenderObjectSystem, 1);
+  tick_render_object_system_internal(sys);
+}
+
 void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
                                    Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
@@ -281,6 +282,9 @@ void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
   create_render_object_system_internal(&sys, std_alloc, tmp_alloc, rnd_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(RenderObjectSystem), RenderObjectSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_render_object_tick, EcsOnUpdate,
+             RenderObjectSystem(RenderObjectSystem));
 }
 
 void tb_unregister_render_object_sys(ecs_world_t *ecs) {

@@ -163,8 +163,8 @@ void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_audio_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc) {
+void tb_register_audio_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, AudioSystem);
 
   int32_t ret = Mix_Init(MIX_INIT_OGG);
@@ -187,20 +187,21 @@ void tb_register_audio_sys(ecs_world_t *ecs, Allocator std_alloc,
   TB_CHECK(ret != 0, "Failed to allocate tracks for audio device");
 
   AudioSystem sys = {
-      .std_alloc = std_alloc,
-      .tmp_alloc = tmp_alloc,
+      .std_alloc = world->std_alloc,
+      .tmp_alloc = world->tmp_alloc,
       .frequency = freq,
       .format = format,
       .channels = channels,
   };
-  TB_DYN_ARR_RESET(sys.music, std_alloc, 8);
-  TB_DYN_ARR_RESET(sys.sfx, std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.music, sys.std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.sfx, sys.std_alloc, 8);
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(AudioSystem), AudioSystem, &sys);
 }
 
-void tb_unregister_audio_sys(ecs_world_t *ecs) {
+void tb_unregister_audio_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, AudioSystem);
   AudioSystem *sys = ecs_singleton_get_mut(ecs, AudioSystem);
   destroy_audio_system(sys);

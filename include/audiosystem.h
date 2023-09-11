@@ -44,7 +44,6 @@ void tb_audio_system_release_effect_ref(AudioSystem *self, TbSoundEffectId id);
 void tb_audio_play_music(AudioSystem *self, TbMusicId id);
 void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id);
 
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_audio_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc);
-void tb_unregister_audio_sys(ecs_world_t *ecs);
+typedef struct TbWorld TbWorld;
+void tb_register_audio_sys(TbWorld *world);
+void tb_unregister_audio_sys(TbWorld *world);

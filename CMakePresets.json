@@ -19,7 +19,7 @@
         "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "FINAL": "OFF",
-        "PROFILE_TRACY": "OFF"
+        "PROFILE_TRACY": "ON"
       },
       "condition": {
         "type": "equals",

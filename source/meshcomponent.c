@@ -2,39 +2,29 @@
 
 #include "simd.h"
 
-#include "cgltf.h"
 #include "common.hlsli"
 #include "materialsystem.h"
 #include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
+#include "tbgltf.h"
 #include "world.h"
 
-bool create_mesh_component(MeshComponent *self,
-                           const MeshComponentDescriptor *desc,
-                           uint32_t system_dep_count,
-                           System *const *system_deps) {
-  TracyCZoneN(ctx, "Create Mesh Component", true);
-  // Ensure we have a reference to the necessary systems
-  MeshSystem *mesh_system =
-      tb_get_system(system_deps, system_dep_count, MeshSystem);
-  TB_CHECK_RETURN(mesh_system, "Failed to get mesh system reference", false);
-  MaterialSystem *mat_system =
-      tb_get_system(system_deps, system_dep_count, MaterialSystem);
-  TB_CHECK_RETURN(mat_system, "Failed to get material system reference", false);
-  RenderObjectSystem *render_object_system =
-      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
-  TB_CHECK_RETURN(render_object_system,
-                  "Failed to get render object system reference", false);
+#include <flecs.h>
 
-  TbMeshId id =
-      tb_mesh_system_load_mesh(mesh_system, desc->source_path, desc->node);
+bool create_mesh_component_internal(MeshComponent *self,
+                                    const char *source_path,
+                                    const cgltf_node *node,
+                                    MeshSystem *mesh_system,
+                                    MaterialSystem *mat_system,
+                                    RenderObjectSystem *render_object_system) {
+  TbMeshId id = tb_mesh_system_load_mesh(mesh_system, source_path, node);
   TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
 
   TbRenderObjectId obj_id =
       tb_render_object_system_create(render_object_system);
 
-  const uint32_t submesh_count = desc->node->mesh->primitives_count;
+  const uint32_t submesh_count = node->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
   *self = (MeshComponent){
@@ -48,7 +38,7 @@ bool create_mesh_component(MeshComponent *self,
   {
     TracyCZoneN(prim_ctx, "load primitives", true);
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
-      const cgltf_primitive *prim = &desc->node->mesh->primitives[prim_idx];
+      const cgltf_primitive *prim = &node->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
 
       VkIndexType index_type = VK_INDEX_TYPE_UINT16;
@@ -69,7 +59,7 @@ bool create_mesh_component(MeshComponent *self,
 
       // Load materials
       self->submeshes[prim_idx].material =
-          tb_mat_system_load_material(mat_system, desc->source_path, material);
+          tb_mat_system_load_material(mat_system, source_path, material);
       TB_CHECK_RETURN(self->submeshes[prim_idx].material,
                       "Failed to load material", false);
 
@@ -85,7 +75,7 @@ bool create_mesh_component(MeshComponent *self,
 
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
-      const cgltf_primitive *prim = &desc->node->mesh->primitives[prim_idx];
+      const cgltf_primitive *prim = &node->mesh->primitives[prim_idx];
 
       self->submeshes[prim_idx].vertex_offset = offset;
 
@@ -182,9 +172,43 @@ bool create_mesh_component(MeshComponent *self,
 
     TracyCZoneEnd(prim_ctx);
   }
+  return true;
+}
+
+bool create_mesh_component(MeshComponent *self,
+                           const MeshComponentDescriptor *desc,
+                           uint32_t system_dep_count,
+                           System *const *system_deps) {
+  TracyCZoneN(ctx, "Create Mesh Component", true);
+  // Ensure we have a reference to the necessary systems
+  MeshSystem *mesh_system =
+      tb_get_system(system_deps, system_dep_count, MeshSystem);
+  TB_CHECK_RETURN(mesh_system, "Failed to get mesh system reference", false);
+  MaterialSystem *mat_system =
+      tb_get_system(system_deps, system_dep_count, MaterialSystem);
+  TB_CHECK_RETURN(mat_system, "Failed to get material system reference", false);
+  RenderObjectSystem *render_object_system =
+      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
+  TB_CHECK_RETURN(render_object_system,
+                  "Failed to get render object system reference", false);
+
+  bool ret = create_mesh_component_internal(self, desc->source_path, desc->node,
+                                            mesh_system, mat_system,
+                                            render_object_system);
 
   TracyCZoneEnd(ctx);
-  return true;
+  return ret;
+}
+
+void destroy_mesh_component_internal(MeshComponent *self,
+                                     MeshSystem *mesh_system,
+                                     MaterialSystem *mat_system) {
+  for (uint32_t i = 0; i < self->submesh_count; ++i) {
+    tb_mat_system_release_material_ref(mat_system, self->submeshes[i].material);
+  }
+  tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
+
+  *self = (MeshComponent){0};
 }
 
 void destroy_mesh_component(MeshComponent *self, uint32_t system_dep_count,
@@ -197,13 +221,7 @@ void destroy_mesh_component(MeshComponent *self, uint32_t system_dep_count,
       system_deps, system_dep_count, MaterialSystemId);
   TB_CHECK(mat_system, "Failed to get material system reference");
 
-  for (uint32_t i = 0; i < self->submesh_count; ++i) {
-    tb_mat_system_release_material_ref(mat_system, self->submeshes[i].material);
-  }
-
-  tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
-
-  *self = (MeshComponent){0};
+  destroy_mesh_component_internal(self, mesh_system, mat_system);
 }
 
 TB_DEFINE_COMPONENT(mesh, MeshComponent, MeshComponentDescriptor)
@@ -220,4 +238,53 @@ void tb_mesh_component_descriptor(ComponentDescriptor *desc) {
       .create = tb_create_mesh_component,
       .destroy = tb_destroy_mesh_component,
   };
+}
+
+bool tb_create_mesh_component2(ecs_world_t *ecs, ecs_entity_t e,
+                               const char *source_path, cgltf_node *node,
+                               json_object *extra) {
+  (void)extra;
+  bool ret = true;
+  if (node->mesh) {
+    ECS_COMPONENT(ecs, MeshSystem);
+    ECS_COMPONENT(ecs, MaterialSystem);
+    ECS_COMPONENT(ecs, RenderObjectSystem);
+    ECS_COMPONENT(ecs, MeshComponent);
+
+    MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+    MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+    RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+
+    MeshComponent comp = {0};
+    ret = create_mesh_component_internal(&comp, source_path, node, mesh_sys,
+                                         mat_sys, ro_sys);
+    ecs_set_ptr(ecs, e, MeshComponent, &comp);
+  }
+  return ret;
+}
+
+void tb_destroy_mesh_component2(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+  ECS_COMPONENT(ecs, MeshComponent);
+
+  // Remove mesh component from entity
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(MeshComponent)},
+                              },
+                      });
+
+  ecs_iter_t mesh_it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&mesh_it)) {
+    MeshComponent *mesh = ecs_field(&mesh_it, MeshComponent, 1);
+    MeshSystem *mesh_sys = ecs_singleton_get_mut(mesh_it.world, MeshSystem);
+    MaterialSystem *mat_sys =
+        ecs_singleton_get_mut(mesh_it.world, MaterialSystem);
+    destroy_mesh_component_internal(mesh, mesh_sys, mat_sys);
+    ecs_singleton_modified(mesh_it.world, MeshSystem);
+    ecs_singleton_modified(mesh_it.world, MaterialSystem);
+  }
 }

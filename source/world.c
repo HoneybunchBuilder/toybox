@@ -2,6 +2,7 @@
 
 #include "allocator.h"
 #include "assets.h"
+#include "assetsystem.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -42,6 +43,7 @@
 #include "visualloggingsystem.h"
 
 #include <flecs.h>
+#include <mimalloc.h>
 
 #define tb_get_system_internal(systems, count, Type)                           \
   (Type *)tb_find_system_by_id(systems, count, Type##Id)->self;
@@ -113,10 +115,62 @@ int tick_desc_sort(const void *lhs, const void *rhs) {
   return a->order - b->order;
 }
 
-ecs_world_t *tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
-                              RenderThread *render_thread, SDL_Window *window) {
-  ecs_world_t *ecs = ecs_init();
-  tb_register_audio_sys(ecs, std_alloc, tmp_alloc);
+void *ecs_malloc(ecs_size_t size) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  void *ptr = mi_malloc(size);
+  TracyCAllocN(ptr, size, "ECS");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+void ecs_free(void *ptr) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(ptr, "ECS");
+  mi_free(ptr);
+  TracyCZoneEnd(ctx);
+}
+
+void *ecs_calloc(ecs_size_t size) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  void *ptr = mi_calloc(1, size);
+  TracyCAllocN(ptr, size, "ECS");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+void *ecs_realloc(void *original, ecs_size_t size) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(original, "ECS");
+  void *ptr = mi_realloc(original, size);
+  TracyCAllocN(ptr, size, "ECS");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
+                         RenderThread *render_thread, SDL_Window *window) {
+  // Ensure the instrumented allocator is used
+  ecs_os_set_api_defaults();
+  ecs_os_api_t os_api = ecs_os_api;
+  os_api.malloc_ = ecs_malloc;
+  os_api.free_ = ecs_free;
+  os_api.calloc_ = ecs_calloc;
+  os_api.realloc_ = ecs_realloc;
+  ecs_os_set_api(&os_api);
+
+  TbWorld world = {
+      .ecs = ecs_init(),
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+  };
+  TB_DYN_ARR_RESET(world.scenes, std_alloc, 1);
+
+  ecs_world_t *ecs = world.ecs;
+  tb_register_audio_sys(&world);
   tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
   tb_register_input_sys(ecs, tmp_alloc, window);
   tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
@@ -125,7 +179,7 @@ ecs_world_t *tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
   tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
   tb_register_material_sys(ecs, std_alloc, tmp_alloc);
-  // tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
   tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
   tb_register_noclip_sys(ecs, tmp_alloc);
@@ -136,10 +190,12 @@ ecs_world_t *tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   // tb_register_shadow_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_time_of_day_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_rotator_sys(ecs, std_alloc, tmp_alloc);
-  return ecs;
+  return world;
 }
 
-bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds) {
+bool tb_tick_world2(TbWorld *world, float delta_seconds) {
+  ecs_world_t *ecs = world->ecs;
+
   // Tick with flecs
   if (!ecs_progress(ecs, delta_seconds)) {
     return false;
@@ -157,16 +213,32 @@ bool tb_tick_world2(ecs_world_t *ecs, float delta_seconds) {
   return true;
 }
 
-void tb_destroy_world2(ecs_world_t *ecs) {
+void tb_clear_world2(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  TB_DYN_ARR_FOREACH(world->scenes, i) {
+    TbScene *s = &TB_DYN_ARR_AT(world->scenes, i);
+    tb_unload_scene2(world, s);
+  }
+  TB_DYN_ARR_CLEAR(world->scenes);
+  // Progress ecs to process deletions
+  ecs_progress(ecs, .1);
+}
+
+void tb_destroy_world2(TbWorld *world) {
+  // Clean up singletons
+  ecs_world_t *ecs = world->ecs;
+
+  // Unregister systems so that they will be cleaned up by observers in ecs_fini
   tb_unregister_core_ui_sys(ecs);
   tb_unregister_imgui_sys(ecs);
+  tb_unregister_mesh_sys(ecs);
   tb_unregister_material_sys(ecs);
   tb_unregister_render_pipeline_sys(ecs);
   tb_unregister_render_object_sys(ecs);
   tb_unregister_view_sys(ecs);
   tb_unregister_texture_sys(ecs);
   tb_unregister_render_target_system(ecs);
-  tb_unregister_render_system(ecs);
+  tb_unregister_render_sys(ecs);
 
   ecs_fini(ecs);
 }
@@ -680,6 +752,63 @@ EntityId load_entity(World *world, json_tokener *tok, const cgltf_data *data,
   return id;
 }
 
+ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc, json_tokener *tok,
+                          const cgltf_data *data, const char *root_scene_path,
+                          ecs_entity_t parent, const cgltf_node *node) {
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, AssetSystem);
+  // Get extras
+  cgltf_size extra_size = 0;
+  char *extra_json = NULL;
+  if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
+    extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
+    extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
+    if (cgltf_copy_extras_json(data, &node->extras, extra_json, &extra_size) !=
+        cgltf_result_success) {
+      extra_size = 0;
+      extra_json = NULL;
+    }
+  }
+
+  // Create an entity
+  ecs_entity_t e = ecs_new(ecs, 0);
+
+  // Attempt to add a component for each asset system provided
+  ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
+                                                    {ecs_id(AssetSystem)},
+                                                }});
+  ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
+  while (ecs_filter_next(&asset_it)) {
+    AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+    if (!asset_sys->add_fn(ecs, e, root_scene_path, node, extra_json)) {
+      TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
+    }
+  }
+
+  if (node->children_count > 0) {
+    TransformComponent *trans_comp = ecs_get_mut(ecs, e, TransformComponent);
+    // Make sure this entity actually has a transform
+    if (trans_comp) {
+      trans_comp->child_count = node->children_count;
+      trans_comp->children =
+          tb_alloc_nm_tp(std_alloc, node->children_count, EntityId);
+      EntityId *children = trans_comp->children;
+
+      // Load all children
+      for (uint32_t i = 0; i < node->children_count; ++i) {
+        const cgltf_node *child = node->children[i];
+        EntityId child_id = load_entity2(ecs, std_alloc, tmp_alloc, tok, data,
+                                         root_scene_path, e, child);
+        children[i] = child_id;
+      }
+      ecs_modified(ecs, e, TransformComponent);
+    }
+  }
+
+  return e;
+}
+
 bool tb_world_load_scene(World *world, const char *scene_path) {
   Allocator std_alloc = world->std_alloc;
   Allocator tmp_alloc = world->tmp_alloc;
@@ -777,6 +906,59 @@ void tb_world_unload_scene(World *world) {
     world->entities[i] = 0;
   }
   world->entity_count = 0;
+}
+
+bool tb_load_scene2(TbWorld *world, const char *scene_path) {
+  // Get qualified path to scene asset
+  char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
+
+  // Load glb off disk
+  cgltf_data *data = tb_read_glb(world->std_alloc, asset_path);
+  TB_CHECK_RETURN(data, "Failed to load glb", false);
+
+  json_tokener *tok = json_tokener_new();
+
+  TbScene scene = {0};
+  TB_DYN_ARR_RESET(scene.entities, world->std_alloc, data->scene->nodes_count);
+
+  // Create an entity for each node
+  for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
+    const cgltf_node *node = data->scene->nodes[i];
+    ecs_entity_t e =
+        load_entity2(world->ecs, world->std_alloc, world->tmp_alloc, tok, data,
+                     scene_path, 0, node);
+    TB_DYN_ARR_APPEND(scene.entities, e);
+  }
+
+  TB_DYN_ARR_APPEND(world->scenes, scene);
+
+  json_tokener_free(tok);
+
+  // Clean up gltf file now that it's parsed
+  cgltf_free(data);
+
+  return true;
+}
+
+void tb_unload_scene2(TbWorld *world, TbScene *scene) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, AssetSystem);
+
+  // Remove all components managed by the asset system from the scene
+  // TODO: This doesn't handle the case of multiple scenes
+  ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
+                                                    {ecs_id(AssetSystem)},
+                                                }});
+  ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
+  while (ecs_filter_next(&asset_it)) {
+    AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+    asset_sys->rem_fn(ecs);
+  }
+
+  // Remove all entities in the scene from the world
+  TB_DYN_ARR_FOREACH(scene->entities, i) {
+    ecs_delete(world->ecs, TB_DYN_ARR_AT(scene->entities, i));
+  }
 }
 
 EntityId tb_world_add_entity(World *world, const EntityDescriptor *desc) {

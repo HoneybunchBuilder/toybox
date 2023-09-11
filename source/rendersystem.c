@@ -739,6 +739,11 @@ void render_frame_end(ecs_iter_t *it) {
   tick_frame_end(sys, NULL, NULL, it->delta_time);
 }
 
+void destroy_render_sys(ecs_iter_t *it) {
+  RenderSystem *sys = ecs_field(it, RenderSystem, 1);
+  destroy_render_system(sys);
+}
+
 void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
                             Allocator tmp_alloc, RenderThread *render_thread) {
   ECS_COMPONENT(ecs, RenderSystem);
@@ -755,10 +760,12 @@ void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   ECS_SYSTEM(ecs, render_frame_begin, EcsPreFrame, RenderSystem(RenderSystem));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, RenderSystem(RenderSystem));
+
+  ECS_OBSERVER(ecs, destroy_render_sys, EcsOnDelete,
+               RenderSystem(RenderSystem));
 }
 
-void tb_unregister_render_system(ecs_world_t *ecs) {
+void tb_unregister_render_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RenderSystem);
-  RenderSystem *sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  destroy_render_system(sys);
+  ecs_singleton_remove(ecs, RenderSystem);
 }

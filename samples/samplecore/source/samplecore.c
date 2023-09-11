@@ -317,8 +317,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 #else
   // Register Gen 2 Systems and Components
-  ecs_world_t *ecs_world =
-      tb_create_world2(std_alloc, tmp_alloc, render_thread, window);
+  TbWorld world = tb_create_world2(std_alloc, tmp_alloc, render_thread, window);
+
+  tb_sample_on_start2(&world);
 #endif
 
   // Main loop
@@ -351,7 +352,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       break;
     }
 #else
-    if (!tb_tick_world2(ecs_world, delta_time_seconds)) {
+    if (!tb_tick_world2(&world, delta_time_seconds)) {
       running = false;
       TracyCZoneEnd(trcy_ctx);
       TracyCFrameMarkEnd("Simulation Frame");
@@ -366,13 +367,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCFrameMarkEnd("Simulation Frame");
   }
 
+#ifdef NEW_TICK
+  tb_clear_world2(&world);
+#endif
+
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(render_thread);
 
 #ifndef NEW_TICK
   tb_destroy_world(&world);
 #else
-  tb_destroy_world2(ecs_world);
+  tb_destroy_world2(&world);
 #endif
 
   // Destroying the render thread will also close the window

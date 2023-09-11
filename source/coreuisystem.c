@@ -143,6 +143,11 @@ void flecs_core_ui_tick(ecs_iter_t *it) {
   tick_coreui_system_internal(sys);
 }
 
+void destroy_core_ui_sys(ecs_iter_t *it) {
+  CoreUISystem *sys = ecs_field(it, CoreUISystem, 1);
+  destroy_coreui_system(sys);
+}
+
 void tb_register_core_ui_sys(ecs_world_t *ecs, Allocator std_alloc,
                              Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, ImGuiSystem);
@@ -156,10 +161,12 @@ void tb_register_core_ui_sys(ecs_world_t *ecs, Allocator std_alloc,
   ecs_set_ptr(ecs, ecs_id(CoreUISystem), CoreUISystem, &sys);
 
   ECS_SYSTEM(ecs, flecs_core_ui_tick, EcsOnUpdate, CoreUISystem(CoreUISystem));
+
+  ECS_OBSERVER(ecs, destroy_core_ui_sys, EcsOnDelete,
+               CoreUISystem(CoreUISystem));
 }
 
 void tb_unregister_core_ui_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, CoreUISystem);
-  CoreUISystem *sys = ecs_singleton_get_mut(ecs, CoreUISystem);
-  destroy_coreui_system(sys);
+  ecs_singleton_remove(ecs, CoreUISystem);
 }

@@ -710,6 +710,11 @@ void tb_mat_system_release_material_ref(MaterialSystem *self,
   }
 }
 
+void destroy_material_sys(ecs_iter_t *it) {
+  MaterialSystem *sys = ecs_field(it, MaterialSystem, 1);
+  destroy_material_system(sys);
+}
+
 void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
                               Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
@@ -724,9 +729,12 @@ void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(MaterialSystem), MaterialSystem, &sys);
+
+  ECS_OBSERVER(ecs, destroy_material_sys, EcsOnRemove,
+               MaterialSystem(MaterialSystem));
 }
+
 void tb_unregister_material_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, MaterialSystem);
-  MaterialSystem *sys = ecs_singleton_get_mut(ecs, MaterialSystem);
-  destroy_material_system(sys);
+  ecs_singleton_remove(ecs, MaterialSystem);
 }
