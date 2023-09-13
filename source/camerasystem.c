@@ -187,3 +187,10 @@ void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_SYSTEM(ecs, flecs_tick_camera, EcsOnUpdate, CameraSystem(CameraSystem),
              CameraComponent, TransformComponent);
 }
+
+void tb_unregister_camera_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, CameraSystem);
+  CameraSystem *sys = ecs_singleton_get_mut(ecs, CameraSystem);
+  destroy_camera_system(sys);
+  ecs_singleton_remove(ecs, CameraSystem);
+}

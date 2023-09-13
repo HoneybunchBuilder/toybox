@@ -799,4 +799,5 @@ void tb_unregister_render_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RenderSystem);
   RenderSystem *sys = ecs_singleton_get_mut(ecs, RenderSystem);
   destroy_render_system(sys);
+  ecs_singleton_remove(ecs, RenderSystem);
 }

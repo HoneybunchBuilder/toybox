@@ -68,3 +68,8 @@ void tb_vlog_line(VisualLoggingSystem *vlog, float3 start, float3 end,
                   float3 color);
 void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
                       float3 color);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                    Allocator tmp_alloc);
+void tb_unregister_visual_logging_sys(ecs_world_t *ecs);

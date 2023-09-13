@@ -22,3 +22,7 @@ typedef struct TimeOfDaySystem {
 
 void tb_time_of_day_system_descriptor(
     SystemDescriptor *desc, const TimeOfDaySystemDescriptor *tod_desc);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_time_of_day_sys(ecs_world_t *ecs);
+void tb_unregister_time_of_day_sys(ecs_world_t *ecs);

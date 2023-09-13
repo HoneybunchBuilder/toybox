@@ -11,6 +11,8 @@
 
 #include <math.h>
 
+#include <flecs.h>
+
 /*
   HACK:
   This time of day system makes a few assumptions:
@@ -248,4 +250,57 @@ void tb_time_of_day_system_descriptor(
               .function = tick_time_of_day_system,
           },
   };
+}
+
+void flecs_time_of_day_tick(ecs_iter_t *it) {
+  TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
+  sys->time += it->delta_time;
+
+  SkyComponent *skys = ecs_field(it, SkyComponent, 2);
+  DirectionalLightComponent *lights =
+      ecs_field(it, DirectionalLightComponent, 3);
+  TransformComponent *transforms = ecs_field(it, TransformComponent, 4);
+
+  for (int32_t i = 0; i < it->count; ++i) {
+    SkyComponent *sky = &skys[i];
+    DirectionalLightComponent *light = &lights[i];
+    TransformComponent *trans = &transforms[i];
+
+    const float time_norm =
+        (sys->time > TAU ? sys->time - TAU : sys->time) / TAU;
+    trans->transform.rotation =
+        angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, sys->time});
+    light->color = lookup_sun_color(time_norm);
+
+    float3 sun_dir = -transform_get_forward(&trans->transform);
+
+    // Update sky component's time and sun direction
+    sky->time = sys->time;
+    sky->sun_dir = sun_dir;
+  }
+}
+
+void tb_register_time_of_day_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, SkyComponent);
+  ECS_COMPONENT(ecs, DirectionalLightComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, TimeOfDaySystem);
+
+  TimeOfDaySystem sys = {
+      .time = 0.0f,
+  };
+
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(TimeOfDaySystem), TimeOfDaySystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_time_of_day_tick, EcsOnUpdate,
+             TimeOfDaySystem(TimeOfDaySystem), [inout] SkyComponent,
+             [inout] DirectionalLightComponent, [inout] TransformComponent);
+}
+
+void tb_unregister_time_of_day_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, TimeOfDaySystem);
+  TimeOfDaySystem *sys = ecs_singleton_get_mut(ecs, TimeOfDaySystem);
+  destroy_time_of_day_system(sys);
 }

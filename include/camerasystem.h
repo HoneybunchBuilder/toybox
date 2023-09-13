@@ -24,3 +24,4 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
 typedef struct ecs_world_t ecs_world_t;
 void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
                             Allocator tmp_alloc);
+void tb_unregister_camera_sys(ecs_world_t *ecs);

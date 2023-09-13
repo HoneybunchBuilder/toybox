@@ -184,11 +184,11 @@ TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
   tb_register_noclip_sys(ecs, tmp_alloc);
   tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
-  // tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
   tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
   // tb_register_shadow_sys(ecs, std_alloc, tmp_alloc);
-  // tb_register_time_of_day_sys(ecs, std_alloc, tmp_alloc);
+  tb_register_time_of_day_sys(ecs);
   tb_register_rotator_sys(ecs, tmp_alloc);
   return world;
 }
@@ -231,6 +231,9 @@ void tb_destroy_world2(TbWorld *world) {
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
   tb_unregister_rotator_sys(ecs);
 
+  tb_unregister_time_of_day_sys(ecs);
+  tb_unregister_visual_logging_sys(ecs);
+  tb_unregister_camera_sys(ecs);
   tb_unregister_sky_sys(ecs);
   tb_unregister_core_ui_sys(ecs);
   tb_unregister_imgui_sys(ecs);

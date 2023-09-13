@@ -15,6 +15,8 @@
 #include "viewsystem.h"
 #include "world.h"
 
+#include <flecs.h>
+
 // Ignore some warnings for the generated headers
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -325,6 +327,133 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
   return err;
 }
 
+VisualLoggingSystem create_visual_logging_system_internal(
+    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    ViewSystem *view_system, RenderPipelineSystem *render_pipe_system,
+    MeshSystem *mesh_system, CoreUISystem *coreui) {
+  VisualLoggingSystem sys = {
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
+      .render_system = render_system,
+      .view_system = view_system,
+      .render_pipe_system = render_pipe_system,
+      .mesh_system = mesh_system,
+      .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
+  };
+
+  TB_DYN_ARR_RESET(sys.frames, std_alloc, 128);
+
+  // Load some default meshes, load some simple shader pipelines
+  VkResult err = VK_SUCCESS;
+
+  {
+    // Load the known glb that has the sphere mesh
+    // Get qualified path to scene asset
+    char *asset_path = tb_resolve_asset_path(tmp_alloc, "scenes/Sphere.glb");
+
+    // Load glb off disk
+    cgltf_data *data = tb_read_glb(std_alloc, asset_path);
+    TB_CHECK(data, "Failed to load glb");
+
+    // Parse expected mesh from glbs
+    {
+      cgltf_mesh *sphere_mesh = &data->meshes[0];
+      // Must put mesh name on std_alloc for proper cleanup
+      {
+        const char *static_name = "Sphere";
+        char *name = tb_alloc_nm_tp(std_alloc, sizeof(static_name) + 1, char);
+        SDL_snprintf(name, sizeof(static_name), "%s", static_name);
+        sphere_mesh->name = name;
+      }
+      sys.sphere_index_type = sphere_mesh->primitives->indices->stride == 2
+                                  ? VK_INDEX_TYPE_UINT16
+                                  : VK_INDEX_TYPE_UINT32;
+      sys.sphere_index_count = sphere_mesh->primitives->indices->count;
+
+      uint64_t index_size =
+          sys.sphere_index_count *
+          (sys.sphere_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
+      uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
+      sys.sphere_pos_offset = index_size + idx_padding;
+
+      const cgltf_node *node = &data->nodes[0];
+      sys.sphere_mesh = tb_mesh_system_load_mesh(mesh_system, asset_path, node);
+      sys.sphere_scale =
+          (float3){node->scale[0], node->scale[1], node->scale[2]};
+    }
+
+    sys.sphere_geom_buffer =
+        tb_mesh_system_get_gpu_mesh(mesh_system, sys.sphere_mesh);
+    TB_CHECK(sys.sphere_geom_buffer, "Failed to get gpu buffer for mesh");
+
+    cgltf_free(data);
+  }
+
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            (VkPushConstantRange[1]){
+                {
+                    .size = sizeof(PrimitivePushConstants),
+                    .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                },
+            },
+        .setLayoutCount = 1,
+        .pSetLayouts =
+            (VkDescriptorSetLayout[1]){
+                view_system->set_layout,
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Primitive Pipeline Layout",
+                                        &sys.pipe_layout);
+    TB_VK_CHECK(err, "Failed to create primitive pipeline layout");
+  }
+
+  {
+    uint32_t attach_count = 0;
+    VkFormat color_format = VK_FORMAT_UNDEFINED;
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
+    tb_render_pipeline_get_attachments(
+        render_pipe_system, render_pipe_system->transparent_color_pass,
+        &attach_count, NULL);
+    TB_CHECK(attach_count == 2, "Unexpected");
+    PassAttachment attach_info[2] = {0};
+    tb_render_pipeline_get_attachments(
+        render_pipe_system, render_pipe_system->transparent_color_pass,
+        &attach_count, attach_info);
+
+    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
+      VkFormat format =
+          tb_render_target_get_format(render_pipe_system->render_target_system,
+                                      attach_info[attach_idx].attachment);
+      if (format == VK_FORMAT_D32_SFLOAT) {
+        depth_format = format;
+      } else {
+        color_format = format;
+      }
+    }
+
+    err = create_primitive_pipeline(render_system, color_format, depth_format,
+                                    sys.pipe_layout, &sys.pipeline);
+    TB_VK_CHECK(err, "Failed to create primitive pipeline");
+  }
+
+  {
+    DrawContextDescriptor desc = {
+        .batch_size = sizeof(VLogDrawBatch),
+        .draw_fn = vlog_draw_record,
+        .pass_id = render_pipe_system->transparent_color_pass,
+    };
+    sys.draw_ctx =
+        tb_render_pipeline_register_draw_context(render_pipe_system, &desc);
+  }
+
+  return sys;
+}
+
 bool create_visual_logging_system(VisualLoggingSystem *self,
                                   const VisualLoggingSystemDescriptor *desc,
                                   uint32_t system_dep_count,
@@ -360,131 +489,9 @@ bool create_visual_logging_system(VisualLoggingSystem *self,
       coreui, "Failed to find core ui system which visual logger depends on",
       false);
 
-  *self = (VisualLoggingSystem){
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
-      .render_system = render_system,
-      .view_system = view_system,
-      .render_pipe_system = render_pipe_system,
-      .mesh_system = mesh_system,
-      .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
-  };
-
-  TB_DYN_ARR_RESET(self->frames, self->std_alloc, 128);
-
-  // Load some default meshes, load some simple shader pipelines
-  VkResult err = VK_SUCCESS;
-
-  {
-    // Load the known glb that has the sphere mesh
-    // Get qualified path to scene asset
-    char *asset_path =
-        tb_resolve_asset_path(self->tmp_alloc, "scenes/Sphere.glb");
-
-    // Load glb off disk
-    cgltf_data *data = tb_read_glb(self->std_alloc, asset_path);
-    TB_CHECK_RETURN(data, "Failed to load glb", false);
-
-    // Parse expected mesh from glbs
-    {
-      cgltf_mesh *sphere_mesh = &data->meshes[0];
-      // Must put mesh name on std_alloc for proper cleanup
-      {
-        const char *static_name = "Sphere";
-        char *name =
-            tb_alloc_nm_tp(self->std_alloc, sizeof(static_name) + 1, char);
-        SDL_snprintf(name, sizeof(static_name), "%s", static_name);
-        sphere_mesh->name = name;
-      }
-      self->sphere_index_type = sphere_mesh->primitives->indices->stride == 2
-                                    ? VK_INDEX_TYPE_UINT16
-                                    : VK_INDEX_TYPE_UINT32;
-      self->sphere_index_count = sphere_mesh->primitives->indices->count;
-
-      uint64_t index_size =
-          self->sphere_index_count *
-          (self->sphere_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
-      uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
-      self->sphere_pos_offset = index_size + idx_padding;
-
-      const cgltf_node *node = &data->nodes[0];
-      self->sphere_mesh =
-          tb_mesh_system_load_mesh(mesh_system, asset_path, node);
-      self->sphere_scale =
-          (float3){node->scale[0], node->scale[1], node->scale[2]};
-    }
-
-    self->sphere_geom_buffer =
-        tb_mesh_system_get_gpu_mesh(mesh_system, self->sphere_mesh);
-    TB_CHECK_RETURN(self->sphere_geom_buffer,
-                    "Failed to get gpu buffer for mesh", false);
-
-    cgltf_free(data);
-  }
-
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges =
-            (VkPushConstantRange[1]){
-                {
-                    .size = sizeof(PrimitivePushConstants),
-                    .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
-                },
-            },
-        .setLayoutCount = 1,
-        .pSetLayouts =
-            (VkDescriptorSetLayout[1]){
-                view_system->set_layout,
-            },
-    };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                        "Primitive Pipeline Layout",
-                                        &self->pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create primitive pipeline layout", false);
-  }
-
-  {
-    uint32_t attach_count = 0;
-    VkFormat color_format = VK_FORMAT_UNDEFINED;
-    VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_color_pass, &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-    PassAttachment attach_info[2] = {0};
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_color_pass, &attach_count,
-        attach_info);
-
-    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-      VkFormat format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
-          attach_info[attach_idx].attachment);
-      if (format == VK_FORMAT_D32_SFLOAT) {
-        depth_format = format;
-      } else {
-        color_format = format;
-      }
-    }
-
-    err = create_primitive_pipeline(render_system, color_format, depth_format,
-                                    self->pipe_layout, &self->pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", false);
-  }
-
-  {
-    DrawContextDescriptor desc = {
-        .batch_size = sizeof(VLogDrawBatch),
-        .draw_fn = vlog_draw_record,
-        .pass_id = render_pipe_system->transparent_color_pass,
-    };
-    self->draw_ctx =
-        tb_render_pipeline_register_draw_context(render_pipe_system, &desc);
-  }
-
+  *self = create_visual_logging_system_internal(
+      desc->std_alloc, desc->tmp_alloc, render_system, view_system,
+      render_pipe_system, mesh_system, coreui);
 #endif
   return true;
 }
@@ -505,8 +512,6 @@ void tick_visual_logging_system_internal(VisualLoggingSystem *self,
                                          const SystemInput *input,
                                          SystemOutput *output,
                                          float delta_seconds) {
-  (void)self;
-  (void)input;
   (void)output;
   (void)delta_seconds;
 
@@ -704,4 +709,175 @@ void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
           },
   };
 #endif
+}
+
+void flecs_vlog_draw_tick(ecs_iter_t *it) {
+  (void)it;
+#ifndef FINAL
+  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
+  const CameraComponent *cameras = ecs_field(it, CameraComponent, 2);
+
+  TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
+
+  uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
+  uint32_t frame_cap = sys->frames.capacity;
+
+  // Render primitives from selected frame
+  if (sys->logging && frame_cap > 0) {
+    const VLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
+
+    // TODO: Make this less hacky
+    const uint32_t width = sys->render_system->render_thread->swapchain.width;
+    const uint32_t height = sys->render_system->render_thread->swapchain.height;
+
+    // Get the vp matrix for the primary view
+    for (int32_t i = 0; i < it->count; ++i) {
+      const CameraComponent *camera = &cameras[i];
+
+      for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
+        const VLogLine *line = &frame->line_draws[i];
+        (void)line;
+        // TODO: Encode line draws into the line batch
+      }
+
+      VLogDrawBatch *loc_batch = tb_alloc_tp(sys->tmp_alloc, VLogDrawBatch);
+      *loc_batch = (VLogDrawBatch){
+          .index_count = sys->sphere_index_count,
+          .pos_offset = sys->sphere_pos_offset,
+          .shape_geom_buffer = sys->sphere_geom_buffer,
+          .shape_scale = sys->sphere_scale,
+          .type = TB_VLOG_SHAPE_LOCATION,
+          .view_set =
+              tb_view_system_get_descriptor(sys->view_system, camera->view_id),
+      };
+
+      DrawBatch *batch = tb_alloc_tp(sys->tmp_alloc, DrawBatch);
+      *batch = (DrawBatch){
+          .layout = sys->pipe_layout,
+          .pipeline = sys->pipeline,
+          .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
+          .scissor = (VkRect2D){{0, 0}, {width, height}},
+          .user_batch = loc_batch,
+          .draw_count = frame->loc_draw_count,
+          .draw_size = sizeof(VLogShape),
+          .draws =
+              tb_alloc_nm_tp(sys->tmp_alloc, frame->loc_draw_count, VLogShape),
+      };
+      for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
+        ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
+      }
+
+      tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+                                          sys->draw_ctx, 1, batch);
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+#endif
+}
+
+void flecs_vlog_ui_tick(ecs_iter_t *it) {
+  (void)it;
+#ifndef FINAL
+  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
+
+  TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
+
+  uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
+  uint32_t frame_cap = sys->frames.capacity;
+
+  // UI for recording visual logs
+  if (sys->ui && *sys->ui) {
+    if (igBegin("Visual Logger", sys->ui, 0)) {
+      igText("Recording: %s", sys->recording ? "true" : "false");
+
+      if (sys->recording) {
+        if (igButton("Stop", (ImVec2){0})) {
+          sys->recording = false;
+        }
+      } else {
+        if (igButton("Start", (ImVec2){0})) {
+          sys->recording = true;
+        }
+      }
+
+      if (sys->recording) {
+        igText("Recording Frame %d", frame_count);
+      } else {
+        igText("Recorded %d Frames", frame_count);
+      }
+      igText("%d frames allocated", frame_cap);
+
+      igSeparator();
+
+      if (igButton(sys->logging ? "Stop Rendering" : "Start Rendering",
+                   (ImVec2){0})) {
+        sys->logging = !sys->logging;
+      }
+
+      static bool render_latest = true;
+      igCheckbox("Render Latest Frame", &render_latest);
+      if (render_latest) {
+        sys->log_frame_idx = frame_count;
+      } else {
+
+        igText("Selected Frame:");
+        igSliderInt("##frame", &sys->log_frame_idx, 0, frame_cap, "%d", 0);
+      }
+
+      igEnd();
+    }
+  }
+
+  if (sys->recording) {
+    // If we're recording make sure that we're properly keeping the frame
+    // collection large enough so that the next frame can issue draws
+    if (frame_count + 1 >= frame_cap) {
+      // TODO: Resizing a collection like this can cause serious stutter when
+      // the collection gets large enough. We should probably instead allocate
+      // from a free-list of buckets so that we're never re-sizing a large
+      // collection
+      TB_DYN_ARR_RESERVE(sys->frames, frame_cap + 1024);
+    }
+    // If recording, insert a new frame
+    TB_DYN_ARR_APPEND(sys->frames, (VLogFrame){0});
+  }
+
+  TracyCZoneEnd(ctx);
+#endif
+}
+
+void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                    Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, CoreUISystem);
+  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, VisualLoggingSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  CoreUISystem *coreui = ecs_singleton_get_mut(ecs, CoreUISystem);
+
+  VisualLoggingSystem sys = create_visual_logging_system_internal(
+      std_alloc, tmp_alloc, rnd_sys, view_sys, rp_sys, mesh_sys, coreui);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(VisualLoggingSystem), VisualLoggingSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_vlog_draw_tick, EcsOnUpdate,
+             VisualLoggingSystem(VisualLoggingSystem), CameraComponent);
+  ECS_SYSTEM(ecs, flecs_vlog_ui_tick, EcsOnUpdate,
+             VisualLoggingSystem(VisualLoggingSystem));
+}
+
+void tb_unregister_visual_logging_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, VisualLoggingSystem);
+  RenderSystem *sys = ecs_singleton_get_mut(ecs, VisualLoggingSystem);
+  destroy_visual_logging_system(sys);
+  ecs_singleton_remove(ecs, VisualLoggingSystem);
 }
