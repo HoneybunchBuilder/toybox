@@ -122,11 +122,11 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
-  TracyCVkZoneEnd(frame_scope);
+  // TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 

@@ -97,6 +97,7 @@ bool create_render_system(RenderSystem *self,
     for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
       RenderSystemFrameState *state = &self->frame_states[state_idx];
 
+      TB_DYN_ARR_RESET(state->set_write_queue, self->std_alloc, 1);
       TB_DYN_ARR_RESET(state->buf_copy_queue, self->std_alloc, 1);
       TB_DYN_ARR_RESET(state->buf_img_copy_queue, self->std_alloc, 1);
 
@@ -269,6 +270,7 @@ void destroy_render_system(RenderSystem *self) {
                      state->tmp_host_buffer.alloc);
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
 
+    TB_DYN_ARR_DESTROY(state->set_write_queue);
     TB_DYN_ARR_DESTROY(state->buf_copy_queue);
     TB_DYN_ARR_DESTROY(state->buf_img_copy_queue);
   }
@@ -334,8 +336,10 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
     // Send and Reset buffer upload pool
     {
       // Assign to the thread
+      thread_state->set_write_queue = state->set_write_queue;
       thread_state->buf_copy_queue = state->buf_copy_queue;
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
+      TB_DYN_ARR_CLEAR(state->set_write_queue);
       TB_DYN_ARR_CLEAR(state->buf_copy_queue);
       TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
     }
@@ -681,6 +685,40 @@ void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline) {
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool) {
   vkDestroyDescriptorPool(self->render_thread->device, pool,
                           &self->vk_host_alloc_cb);
+}
+
+void tb_rnd_update_descriptors(RenderSystem *self, uint32_t write_count,
+                               const VkWriteDescriptorSet *writes) {
+  // Queue these writes to be processed by the render thread
+  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+  uint32_t head = TB_DYN_ARR_SIZE(state->set_write_queue);
+  TB_DYN_ARR_RESIZE(state->set_write_queue, head + write_count);
+
+  // We know the frame state isn't in use so it's safe to grab its temp
+  // allocator and make sure that descriptor info is properly copied
+  Allocator rt_state_tmp_alloc =
+      self->render_thread->frame_states[self->frame_idx].tmp_alloc.alloc;
+
+  // Append uploads to queue
+  for (uint32_t i = 0; i < write_count; ++i) {
+    VkWriteDescriptorSet *write =
+        &TB_DYN_ARR_AT(state->set_write_queue, head + i);
+    *write = writes[i];
+
+    if (write->pBufferInfo != NULL) {
+      VkDescriptorBufferInfo *info =
+          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorBufferInfo);
+      *info = *write->pBufferInfo;
+      write->pBufferInfo = info;
+    }
+
+    if (write->pImageInfo != NULL) {
+      VkDescriptorImageInfo *info =
+          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorImageInfo);
+      *info = *write->pImageInfo;
+      write->pImageInfo = info;
+    }
+  }
 }
 
 VkResult

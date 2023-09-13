@@ -902,8 +902,7 @@ void tick_ocean_system_internal(OceanSystem *self, const SystemInput *input,
           .pImageInfo = &color_info[oc_idx],
       };
     }
-    vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
-                           writes, 0, NULL);
+    tb_rnd_update_descriptors(render_system, write_count, writes);
   }
 
   // TODO: Make this less hacky

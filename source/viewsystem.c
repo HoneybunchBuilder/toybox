@@ -412,8 +412,7 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
         .pImageInfo = &image_info[image_idx + 4],
     };
   }
-  vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         view_count * write_count, writes, 0, NULL);
+  tb_rnd_update_descriptors(render_system, view_count * write_count, writes);
 
   TracyCZoneEnd(ctx);
 }

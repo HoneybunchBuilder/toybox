@@ -22,6 +22,7 @@ typedef struct RenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
   VmaPool tmp_host_pool;
 
+  SetWriteQueue set_write_queue;
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
 } RenderSystemFrameState;
@@ -120,6 +121,9 @@ void tb_rnd_destroy_pipe_layout(RenderSystem *self,
 void tb_rnd_destroy_shader(RenderSystem *self, VkShaderModule shader);
 void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);
+
+void tb_rnd_update_descriptors(RenderSystem *self, uint32_t write_count,
+                               const VkWriteDescriptorSet *writes);
 
 VkResult
 tb_rnd_frame_desc_pool_tick(RenderSystem *self,

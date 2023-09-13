@@ -1245,6 +1245,14 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     TracyCZoneEnd(pool_ctx);
   }
 
+  // Write descriptor set updates at the top of the frame here
+
+  {
+    uint32_t write_count = TB_DYN_ARR_SIZE(state->set_write_queue);
+    VkWriteDescriptorSet *writes = state->set_write_queue.data;
+    vkUpdateDescriptorSets(device, write_count, writes, 0, NULL);
+  }
+
   // Draw
   {
     TracyCZoneN(draw_ctx, "Draw", true);
@@ -1416,8 +1424,6 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
             if (cmd_scope != NULL) {
               TracyCVkZoneEnd(cmd_scope);
             }
-            TracyCVkCollect(gpu_ctx,
-                            state->pass_command_buffers[last_pass_buffer_idx]);
             vkEndCommandBuffer(
                 state->pass_command_buffers[last_pass_buffer_idx]);
 

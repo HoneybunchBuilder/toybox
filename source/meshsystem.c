@@ -717,7 +717,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -728,7 +728,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
@@ -741,7 +741,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           continue;
         }
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         VkBuffer geom_buffer = draw->geom_buffer;
 
@@ -758,8 +758,8 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const ShadowSubDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
+            //                  true);
             VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
             if (submesh->mat_perm & GLTF_PERM_DOUBLE_SIDED) {
               cull_flags = VK_CULL_MODE_NONE;
@@ -771,21 +771,21 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                                    &submesh->vertex_binding_offset);
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
@@ -797,7 +797,7 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                     uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Prepass Record", TracyCategoryColorRendering,
                true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 1,
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Prepass Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
@@ -809,7 +809,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
+    // "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -821,7 +822,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       }
 
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
+      // "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
 
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
@@ -836,7 +838,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         }
 
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
+        // "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
 
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
@@ -849,8 +852,9 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
+            // buffer, "Submesh", 7,
+            // true);
             VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
             if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
               cull_flags = VK_CULL_MODE_NONE;
@@ -866,23 +870,23 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
             }
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
 
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
 
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
@@ -901,7 +905,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
+    // "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -913,7 +918,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       }
 
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
+      // "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
 
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
@@ -928,7 +934,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         }
 
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
+        // "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
 
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
@@ -941,8 +948,9 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
+            // buffer, "Submesh", 7,
+            //                 true);
             vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     layout, 0, 1, &submesh->mat_set, 0, NULL);
             vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -961,23 +969,23 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
             }
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
 
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
 
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 }
@@ -985,7 +993,7 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
   mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
@@ -997,7 +1005,7 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                              uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Transparent Record", TracyCategoryColorRendering,
                true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 1,
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Transparent Meshes",
                   (float4){0.0f, 0.0f, 1.0f, 1.0f});
@@ -1219,13 +1227,15 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
   RenderObjectSystem *render_object_system =
       tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
   TB_CHECK_RETURN(render_object_system,
-                  "Failed to find render object system which meshes depend on",
+                  "Failed to find render object system which "
+                  "meshes depend on",
                   false);
   RenderPipelineSystem *render_pipe_system =
       tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
-  TB_CHECK_RETURN(
-      render_pipe_system,
-      "Failed to find render pipeline system which meshes depend on", false);
+  TB_CHECK_RETURN(render_pipe_system,
+                  "Failed to find render pipeline system "
+                  "which meshes depend on",
+                  false);
 
   *self = create_mesh_system_internal(
       desc->std_alloc, desc->std_alloc, render_system, material_system,
@@ -1261,9 +1271,9 @@ void destroy_mesh_system(MeshSystem *self) {
 
 uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
   TracyCZone(ctx, true);
-  // We know the layout of the distribution of pipelines so we can
-  // decode the vertex input and the material permutation from the
-  // index
+  // We know the layout of the distribution of pipelines so we
+  // can decode the vertex input and the material permutation
+  // from the index
   for (uint32_t pipe_idx = 0; pipe_idx < self->pipe_count; ++pipe_idx) {
     const TbVertexInput vi = pipe_idx;
 
@@ -1304,14 +1314,15 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
   TB_PROF_MESSAGE("Camera Count: %d", camera_count);
   TB_PROF_MESSAGE("Directional Light Count: %d", dir_light_count);
 
-  // Since we want to update the world matrix dirty flag on the transform
-  // component, we need to write the components back out
+  // Since we want to update the world matrix dirty flag on
+  // the transform component, we need to write the components
+  // back out
   EntityId *out_entity_ids = tb_get_column_entity_ids(input, 2);
   tb_make_out_copy(out_trans, self->tmp_alloc, mesh_transform_store, mesh_count,
                    TransformComponent);
 
-  // Update each mesh's render object data while also collecting world space
-  // AABBs for culling later
+  // Update each mesh's render object data while also
+  // collecting world space AABBs for culling later
   AABB *world_space_aabbs = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, AABB);
   {
     TracyCZoneN(ctx, "Calc World Space AABBs", true);
@@ -1345,7 +1356,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
   }
 
   // Figure out which meshes are visible
-  // Worst case *everything* is visible so alloc for that off the tmp allocator
+  // Worst case *everything* is visible so alloc for that off
+  // the tmp allocator
   VisibleSet *visible_sets =
       tb_alloc_nm_tp(self->tmp_alloc, camera_count, VisibleSet);
   {
@@ -1368,7 +1380,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
       const Frustum *frustum = &view->frustum;
 
       for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
+        // If the mesh's AABB isn't viewed by the frustum,
+        // don't issue this draw
         const AABB *world_aabb = &world_space_aabbs[mesh_idx];
         if (!frustum_test_aabb(frustum, world_aabb)) {
           continue;
@@ -1410,7 +1423,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
       const Frustum *frustum = &view->frustum;
 
       for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
+        // If the mesh's AABB isn't viewed by the frustum,
+        // don't issue this draw
         const AABB *world_aabb = &world_space_aabbs[mesh_idx];
         if (!frustum_test_aabb(frustum, world_aabb)) {
           continue;
@@ -1432,7 +1446,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
                             ->frame_states[self->render_system->frame_idx]
                             .tmp_alloc.alloc;
 
-  // Figure out # of unique pipelines so we know how many batches we have
+  // Figure out # of unique pipelines so we know how many
+  // batches we have
   uint32_t pipe_count = 0;
   uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
   SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
@@ -1460,12 +1475,14 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
     TracyCZoneEnd(ctx);
   }
 
-  // Just collect an opaque and transparent batch for every known used pipeline
+  // Just collect an opaque and transparent batch for every
+  // known used pipeline
   const uint32_t batch_count = pipe_count;
 
   TB_PROF_MESSAGE("Batch Count: %d", batch_count);
 
-  // Allocate and initialize prepass batch per vertex input layout
+  // Allocate and initialize prepass batch per vertex input
+  // layout
   DrawBatch *prepass_batch = NULL;
   MeshDrawBatch *prepass_user_batch = NULL;
   {
@@ -1516,8 +1533,9 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
 
       for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
         MeshDrawView *view = &batch->views[cam_idx];
-        // Each view already knows how many meshes it should see
-        // Each mesh could have TB_SUBMESH_MAX # of submeshes
+        // Each view already knows how many meshes it should
+        // see Each mesh could have TB_SUBMESH_MAX # of
+        // submeshes
         *view = (MeshDrawView){0};
         view->draws = tb_alloc_nm_tp(
             tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
@@ -1548,8 +1566,9 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
 
       for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
         MeshDrawView *view = &batch->views[cam_idx];
-        // Each view already knows how many meshes it should see
-        // Each mesh could have TB_SUBMESH_MAX # of submeshes
+        // Each view already knows how many meshes it should
+        // see Each mesh could have TB_SUBMESH_MAX # of
+        // submeshes
         *view = (MeshDrawView){0};
         view->draws = tb_alloc_nm_tp(
             tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
@@ -1650,8 +1669,9 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
               SubMeshDraw *sub_draw =
                   &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
               *sub_draw = (SubMeshDraw){
-                  .consts = {.perm = mat_perm}, // Need this for some last
-                                                // minute material options
+                  .consts = {.perm = mat_perm}, // Need this for
+                                                // some last minute
+                                                // material options
                   .index_type = submesh->index_type,
                   .index_count = submesh->index_count,
                   .index_offset = submesh->index_offset,
@@ -1662,7 +1682,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
 
               static const uint64_t pos_stride = sizeof(uint16_t) * 4;
 
-              // We only ever need position and normal vertex attributes
+              // We only ever need position and normal vertex
+              // attributes
               sub_draw->vertex_binding_count = 2;
               sub_draw->vertex_binding_offsets[0] = base_vert_offset;
               sub_draw->vertex_binding_offsets[1] =
@@ -1835,8 +1856,8 @@ void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
            ++sub_idx) {
         const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
 
-        // Still need the material perm to check for things like
-        // double-sidedness
+        // Still need the material perm to check for things
+        // like double-sidedness
         TbMaterialPerm mat_perm =
             tb_mat_system_get_perm(self->material_system, submesh->material);
 
@@ -2011,8 +2032,9 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node) {
-  // Hash the mesh's path and the cgltf_mesh structure to get an id
-  // We'd prefer to use a name but gltfpack is currently stripping mesh names
+  // Hash the mesh's path and the cgltf_mesh structure to get
+  // an id We'd prefer to use a name but gltfpack is currently
+  // stripping mesh names
   const cgltf_mesh *mesh = node->mesh;
   TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
 
@@ -2060,11 +2082,11 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         }
       }
 
-      // Calculate the necessary padding between the index and vertex contents
-      // of the buffer.
-      // Otherwise we'll get a validation error.
-      // The vertex content needs to start that the correct attribAddress
-      // which must be a multiple of the size of the first attribute
+      // Calculate the necessary padding between the index and
+      // vertex contents of the buffer. Otherwise we'll get a
+      // validation error. The vertex content needs to start
+      // that the correct attribAddress which must be a
+      // multiple of the size of the first attribute
       uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
       vertex_offset = index_size + idx_padding;
 
@@ -2073,7 +2095,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     VkResult err = VK_SUCCESS;
 
-    // Allocate space on the host that we can read the mesh into
+    // Allocate space on the host that we can read the mesh
+    // into
     {
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -2223,7 +2246,8 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
   TbMesh *mesh = &TB_DYN_ARR_AT(self->meshes, index);
 
   if (mesh->ref_count == 0) {
-    TB_CHECK(false, "Tried to release reference to mesh with 0 ref count");
+    TB_CHECK(false, "Tried to release reference to mesh with "
+                    "0 ref count");
     return;
   }
 
@@ -2321,8 +2345,8 @@ void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   ECS_SYSTEM(ecs, flecs_mesh_tick, EcsOnUpdate, MeshSystem(MeshSystem));
 
-  // Mark the mesh system entity as also having an asset system that can
-  // parse and load mesh components
+  // Mark the mesh system entity as also having an asset
+  // system that can parse and load mesh components
   AssetSystem asset = {
       .id = 0xBEEFBABE,
       .id_str = "0xBEEFBABE",

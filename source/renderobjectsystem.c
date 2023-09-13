@@ -193,9 +193,9 @@ void tick_render_object_system_internal(RenderObjectSystem *self) {
         .pBufferInfo = &buffer_info[obj_idx],
     };
   }
-  vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         TB_DYN_ARR_SIZE(self->render_object_data), writes, 0,
-                         NULL);
+
+  tb_rnd_update_descriptors(self->render_system,
+                            TB_DYN_ARR_SIZE(self->render_object_data), writes);
 
   TracyCZoneEnd(ctx);
 }

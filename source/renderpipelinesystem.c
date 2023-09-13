@@ -3970,8 +3970,7 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
                 },
         },
     };
-    vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                           WRITE_COUNT, writes, 0, NULL);
+    tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
 #undef WRITE_COUNT
   }
 

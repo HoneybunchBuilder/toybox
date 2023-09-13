@@ -238,7 +238,7 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
 void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 3, true);
   cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -627,8 +627,7 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
           .pImageInfo = &image_info[imgui_idx],
       };
     }
-    vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                           self->context_count, writes, 0, NULL);
+    tb_rnd_update_descriptors(self->render_system, self->context_count, writes);
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;

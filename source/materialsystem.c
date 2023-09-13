@@ -164,7 +164,7 @@ void destroy_material_system(MaterialSystem *self) {
   tb_rnd_destroy_sampler(render_system, self->sampler);
   tb_rnd_destroy_sampler(render_system, self->shadow_sampler);
 
-  vkDestroyDescriptorPool(device, self->mat_set_pool, vk_alloc);
+  tb_rnd_destroy_descriptor_pool(render_system, self->mat_set_pool);
 
   TB_DYN_ARR_FOREACH(self->materials, i) {
     if (TB_DYN_ARR_AT(self->materials, i).ref_count != 0) {

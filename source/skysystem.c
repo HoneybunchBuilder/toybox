@@ -1230,8 +1230,7 @@ void tick_sky_system_internal(SkySystem *self, const SystemInput *input,
                 .imageView = env_map_view,
             },
     };
-    vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
-                           writes, 0, NULL);
+    tb_rnd_update_descriptors(render_system, write_count, writes);
 
     uint32_t batch_count = 0;
     const size_t num_batches = sky_count * camera_count;
