@@ -2277,18 +2277,22 @@ void flecs_mesh_tick(ecs_iter_t *it) {
   while (ecs_filter_next(&cam_it)) {
     // This should be done in the view system
 
-    // For each mesh
+    // For each mesh table
     ecs_iter_t mesh_it = ecs_filter_iter(ecs, mesh_filter);
     while (ecs_filter_next(&mesh_it)) {
-      MeshComponent *mesh = ecs_field(&mesh_it, MeshComponent, 1);
-      TransformComponent *trans = ecs_field(&mesh_it, TransformComponent, 2);
+      MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+      TransformComponent *transforms =
+          ecs_field(&mesh_it, TransformComponent, 2);
+      // For each mesh
+      for (int32_t i = 0; i < mesh_it.count; ++i) {
+        MeshComponent *mesh = &meshes[i];
+        TransformComponent *trans = &transforms[i];
+      }
     }
   }
-}
 
-void destroy_mesh_sys(ecs_iter_t *it) {
-  MeshSystem *sys = ecs_field(it, MeshSystem, 1);
-  destroy_mesh_system(sys);
+  ecs_filter_fini(camera_filter);
+  ecs_filter_fini(mesh_filter);
 }
 
 void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -2326,11 +2330,10 @@ void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
       .rem_fn = tb_destroy_mesh_component2,
   };
   ecs_set_ptr(ecs, ecs_id(AssetSystem), AssetSystem, &asset);
-
-  ECS_OBSERVER(ecs, destroy_mesh_sys, EcsOnRemove, MeshSystem(MeshSystem));
 }
 
 void tb_unregister_mesh_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, MeshSystem);
-  ecs_singleton_remove(ecs, MeshSystem);
+  MeshSystem *sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  destroy_mesh_system(sys);
 }

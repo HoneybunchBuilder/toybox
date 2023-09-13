@@ -840,7 +840,7 @@ void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
   ecs_set_ptr(ecs, ecs_id(RenderTargetSystem), RenderTargetSystem, &sys);
 }
 
-void tb_unregister_render_target_system(ecs_world_t *ecs) {
+void tb_unregister_render_target_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RenderTargetSystem);
   RenderTargetSystem *sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
   destroy_render_target_system(sys);

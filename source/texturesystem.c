@@ -749,11 +749,6 @@ void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
 
 // flecs system
 
-void destroy_texture_sys(ecs_iter_t *it) {
-  TextureSystem *sys = ecs_field(it, TextureSystem, 1);
-  destroy_texture_system(sys);
-}
-
 void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
                              Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
@@ -763,17 +758,9 @@ void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
   TextureSystem sys = create_texture_system2(std_alloc, tmp_alloc, rnd_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TextureSystem), TextureSystem, &sys);
-
-  ECS_OBSERVER(ecs, destroy_texture_sys, EcsOnRemove,
-               TextureSystem(TextureSystem));
 }
 
 void tb_unregister_texture_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TextureSystem);
-  ecs_singleton_remove(ecs, TextureSystem);
-}
-
-void tb_destroy_texture_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, TextureSystem);
   TextureSystem *sys = ecs_singleton_get_mut(ecs, TextureSystem);
   destroy_texture_system(sys);

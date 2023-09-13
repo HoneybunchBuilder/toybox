@@ -87,4 +87,4 @@ void tb_render_target_system_descriptor(
 typedef struct ecs_world_t ecs_world_t;
 void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
                                    Allocator tmp_alloc);
-void tb_unregister_render_target_system(ecs_world_t *ecs);
+void tb_unregister_render_target_sys(ecs_world_t *ecs);

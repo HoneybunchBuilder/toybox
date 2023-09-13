@@ -237,7 +237,7 @@ void tb_destroy_world2(TbWorld *world) {
   tb_unregister_render_object_sys(ecs);
   tb_unregister_view_sys(ecs);
   tb_unregister_texture_sys(ecs);
-  tb_unregister_render_target_system(ecs);
+  tb_unregister_render_target_sys(ecs);
   tb_unregister_render_sys(ecs);
 
   ecs_fini(ecs);
@@ -781,10 +781,13 @@ ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {
     AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
-    if (!asset_sys->add_fn(ecs, e, root_scene_path, node, extra_json)) {
-      TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
+    for (int32_t i = 0; i < asset_it.count; ++i) {
+      if (!asset_sys[i].add_fn(ecs, e, root_scene_path, node, extra_json)) {
+        TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
+      }
     }
   }
+  ecs_filter_fini(asset_filter);
 
   if (node->children_count > 0) {
     TransformComponent *trans_comp = ecs_get_mut(ecs, e, TransformComponent);
@@ -952,8 +955,11 @@ void tb_unload_scene2(TbWorld *world, TbScene *scene) {
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {
     AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
-    asset_sys->rem_fn(ecs);
+    for (int32_t i = 0; i < asset_it.count; ++i) {
+      asset_sys[i].rem_fn(ecs);
+    }
   }
+  ecs_filter_fini(asset_filter);
 
   // Remove all entities in the scene from the world
   TB_DYN_ARR_FOREACH(scene->entities, i) {

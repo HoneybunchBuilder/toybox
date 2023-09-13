@@ -283,8 +283,13 @@ void tb_destroy_mesh_component2(ecs_world_t *ecs) {
     MeshSystem *mesh_sys = ecs_singleton_get_mut(mesh_it.world, MeshSystem);
     MaterialSystem *mat_sys =
         ecs_singleton_get_mut(mesh_it.world, MaterialSystem);
-    destroy_mesh_component_internal(mesh, mesh_sys, mat_sys);
+
+    for (int32_t i = 0; i < mesh_it.count; ++i) {
+      destroy_mesh_component_internal(&mesh[i], mesh_sys, mat_sys);
+    }
+
     ecs_singleton_modified(mesh_it.world, MeshSystem);
     ecs_singleton_modified(mesh_it.world, MaterialSystem);
   }
+  ecs_filter_fini(filter);
 }
