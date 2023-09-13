@@ -6,6 +6,8 @@
 #include <SDL2/SDL_log.h>
 #include <SDL2/SDL_stdinc.h>
 
+#include <flecs.h>
+
 bool create_rotator_system(RotatorSystem *self,
                            const RotatorSystemDescriptor *desc,
                            uint32_t system_dep_count,
@@ -98,4 +100,42 @@ void tb_rotator_system_descriptor(SystemDescriptor *desc,
               .function = tick_rotator_system,
           },
   };
+}
+
+void flecs_rotator_tick(ecs_iter_t *it) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Rotator System");
+  RotatorComponent *rotators = ecs_field(it, RotatorComponent, 1);
+  TransformComponent *transforms = ecs_field(it, TransformComponent, 2);
+
+  for (int32_t i = 0; i < it->count; ++i) {
+    RotatorComponent *rotator = &rotators[i];
+    TransformComponent *trans = &transforms[i];
+
+    Quaternion rot = angle_axis_to_quat(
+        f3tof4(rotator->axis, rotator->speed * it->delta_time));
+
+    trans->transform.rotation = mulq(trans->transform.rotation, rot);
+  }
+}
+
+void tb_register_rotator_sys(ecs_world_t *ecs, Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RotatorSystem);
+  ECS_COMPONENT(ecs, RotatorComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+
+  RotatorSystem sys = {
+      .tmp_alloc = tmp_alloc,
+  };
+
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(RotatorSystem), RotatorSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_rotator_tick,
+             EcsOnUpdate, [in] RotatorComponent, [out] TransformComponent);
+}
+
+void tb_unregister_rotator_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RotatorSystem);
+  RotatorSystem *sys = ecs_singleton_get_mut(ecs, RotatorSystem);
+  destroy_rotator_system(sys);
 }

@@ -32,6 +32,8 @@
 #include "viewsystem.h"
 #include "world.h"
 
+#include <flecs.h>
+
 #define FILTERED_ENV_DIM 512
 #define FILTERED_ENV_MIPS ((uint32_t)(SDL_floorf(log2f(FILTERED_ENV_DIM))) + 1u)
 
@@ -723,6 +725,290 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
+SkySystem create_sky_system_internal(Allocator std_alloc, Allocator tmp_alloc,
+                                     RenderSystem *render_system,
+                                     RenderPipelineSystem *render_pipe_system,
+                                     RenderTargetSystem *render_target_system,
+                                     ViewSystem *view_system) {
+  SkySystem sys = (SkySystem){
+      .render_system = render_system,
+      .render_pipe_system = render_pipe_system,
+      .render_target_system = render_target_system,
+      .view_system = view_system,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
+  };
+
+  VkResult err = VK_SUCCESS;
+
+  // Get passes
+  TbRenderPassId sky_pass_id = render_pipe_system->sky_pass;
+  TbRenderPassId irr_pass_id = render_pipe_system->irradiance_pass;
+
+  // Create irradiance sampler
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_FALSE,
+        .maxLod = FILTERED_ENV_MIPS,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    err = tb_rnd_create_sampler(render_system, &create_info,
+                                "Irradiance Sampler", &sys.irradiance_sampler);
+    TB_VK_CHECK(err, "Failed to create irradiance sampler");
+  }
+
+  // Create Descriptor Set Layouts
+  {
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .bindingCount = 1,
+        .pBindings =
+            &(VkDescriptorSetLayoutBinding){
+                0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+                VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
+    };
+    err = tb_rnd_create_set_layout(render_system, &create_info,
+                                   "Sky Set Layout", &sys.sky_set_layout);
+    TB_VK_CHECK(err, "Failed to create sky descriptor set layout");
+  }
+  {
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .bindingCount = 2,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[2]){
+                {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
+                 VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
+                {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                 &sys.irradiance_sampler},
+            },
+    };
+    err =
+        tb_rnd_create_set_layout(render_system, &create_info,
+                                 "Irradiance Set Layout", &sys.irr_set_layout);
+    TB_VK_CHECK(err, "Failed to irradiance sky descriptor set layout");
+  }
+
+  // Create Pipeline Layouts
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &sys.sky_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                VK_SHADER_STAGE_ALL_GRAPHICS,
+                0,
+                sizeof(SkyPushConstants),
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Sky Pipeline Layout",
+                                        &sys.sky_pipe_layout);
+    TB_VK_CHECK(err, "Failed to create sky pipeline layout");
+  }
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &sys.irr_set_layout,
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Irradiance Pipeline Layout",
+                                        &sys.irr_pipe_layout);
+    TB_VK_CHECK(err, "Failed to create irradiance pipeline layout");
+  }
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &sys.irr_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                .size = sizeof(EnvFilterConstants),
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+    };
+    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                        "Prefilter Pipeline Layout",
+                                        &sys.prefilter_pipe_layout);
+    TB_VK_CHECK(err, "Failed to create prefilter pipeline layout");
+  }
+
+  // Look up target color and depth formats for pipeline creation
+  {
+    VkFormat color_format = VK_FORMAT_UNDEFINED;
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
+
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(render_pipe_system, sky_pass_id,
+                                       &attach_count, NULL);
+    TB_CHECK(attach_count == 2, "Unexpected");
+    PassAttachment attach_info[2] = {0};
+    tb_render_pipeline_get_attachments(render_pipe_system, sky_pass_id,
+                                       &attach_count, attach_info);
+
+    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
+      VkFormat format = tb_render_target_get_format(
+          render_target_system, attach_info[attach_idx].attachment);
+      if (format == VK_FORMAT_D32_SFLOAT) {
+        depth_format = format;
+      } else {
+        color_format = format;
+      }
+    }
+
+    // Create sky pipeline
+    err = create_sky_pipeline(render_system, color_format, depth_format,
+                              sys.sky_pipe_layout, &sys.sky_pipeline);
+    TB_VK_CHECK(err, "Failed to create sky pipeline");
+  }
+
+  // Create env capture pipeline
+
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->env_cap_passes[0],
+                                       &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexepcted");
+    PassAttachment attach_info = {0};
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->env_cap_passes[0],
+                                       &attach_count, &attach_info);
+
+    VkFormat color_format = tb_render_target_get_format(render_target_system,
+                                                        attach_info.attachment);
+    err = create_env_capture_pipeline(render_system, color_format,
+                                      sys.sky_pipe_layout, &sys.env_pipeline);
+    TB_VK_CHECK(err, "Failed to create env capture pipeline");
+  }
+
+  // Create irradiance pipeline
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->irradiance_pass,
+                                       &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexepcted");
+    PassAttachment attach_info = {0};
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->irradiance_pass,
+                                       &attach_count, &attach_info);
+
+    VkFormat color_format = tb_render_target_get_format(render_target_system,
+                                                        attach_info.attachment);
+    err = create_irradiance_pipeline(render_system, color_format,
+                                     sys.irr_pipe_layout,
+                                     &sys.irradiance_pipeline);
+    TB_VK_CHECK(err, "Failed to create irradiance pipeline");
+  }
+
+  // Create prefilter pipeline
+  {
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->prefilter_passes[0],
+                                       &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexepcted");
+    PassAttachment attach_info = {0};
+    tb_render_pipeline_get_attachments(render_pipe_system,
+                                       render_pipe_system->prefilter_passes[0],
+                                       &attach_count, &attach_info);
+
+    VkFormat color_format = tb_render_target_get_format(render_target_system,
+                                                        attach_info.attachment);
+    err = create_prefilter_pipeline(render_system, color_format,
+                                    sys.prefilter_pipe_layout,
+                                    &sys.prefilter_pipeline);
+    TB_VK_CHECK(err, "Failed to create prefilter pipeline");
+  }
+
+  // Register passes with the render system
+  sys.sky_draw_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(SkyDrawBatch),
+                              .draw_fn = record_sky,
+                              .pass_id = sky_pass_id,
+                          });
+  sys.irradiance_ctx = tb_render_pipeline_register_draw_context(
+      render_pipe_system, &(DrawContextDescriptor){
+                              .batch_size = sizeof(IrradianceBatch),
+                              .draw_fn = record_irradiance,
+                              .pass_id = irr_pass_id,
+                          });
+  for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+    sys.env_capture_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system,
+        &(DrawContextDescriptor){
+            .batch_size = sizeof(SkyDrawBatch),
+            .draw_fn = record_env_capture,
+            .pass_id = render_pipe_system->env_cap_passes[i],
+        });
+    sys.prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
+        render_pipe_system,
+        &(DrawContextDescriptor){
+            .batch_size = sizeof(PrefilterBatch),
+            .draw_fn = record_env_filter,
+            .pass_id = render_pipe_system->prefilter_passes[i],
+        });
+  }
+
+  // Create skydome geometry
+  {
+    const uint64_t skydome_size = get_skydome_size();
+    // Make space for the sky geometry on the GPU
+    {
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+          .size = skydome_size,
+      };
+      err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
+                                        "SkyDome Geom Buffer",
+                                        &sys.sky_geom_gpu_buffer);
+      TB_VK_CHECK(err, "Failed to alloc skydome geom buffer");
+    }
+
+    // Use the gpu tmp buffer to copy the geom buffer
+    {
+      TbHostBuffer host_buf = {0};
+      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size, 16,
+                                             &host_buf);
+      TB_VK_CHECK(err, "Failed to alloc tmp space for the skydome geometry");
+      copy_skydome(host_buf.ptr); // Copy to the newly alloced host buffer
+
+      {
+        BufferCopy skydome_copy = {
+            .src = host_buf.buffer,
+            .dst = sys.sky_geom_gpu_buffer.buffer,
+            .region =
+                {
+                    .srcOffset = host_buf.offset,
+                    .size = skydome_size,
+                },
+        };
+        tb_rnd_upload_buffers(render_system, &skydome_copy, 1);
+      }
+    }
+  }
+
+  return sys;
+}
+
 bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
                        uint32_t system_dep_count, System *const *system_deps) {
   // Find necessary systems
@@ -746,286 +1032,9 @@ bool create_sky_system(SkySystem *self, const SkySystemDescriptor *desc,
   TB_CHECK_RETURN(view_system,
                   "Failed to find view system which sky depends on", false);
 
-  *self = (SkySystem){
-      .render_system = render_system,
-      .render_pipe_system = render_pipe_system,
-      .render_target_system = render_target_system,
-      .view_system = view_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
-  };
-
-  VkResult err = VK_SUCCESS;
-
-  // Get passes
-  TbRenderPassId sky_pass_id = self->render_pipe_system->sky_pass;
-  TbRenderPassId irr_pass_id = self->render_pipe_system->irradiance_pass;
-
-  // Create irradiance sampler
-  {
-    VkSamplerCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .anisotropyEnable = VK_FALSE,
-        .maxLod = FILTERED_ENV_MIPS,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-    };
-    err =
-        tb_rnd_create_sampler(render_system, &create_info, "Irradiance Sampler",
-                              &self->irradiance_sampler);
-    TB_VK_CHECK_RET(err, "Failed to create irradiance sampler", false);
-  }
-
-  // Create Descriptor Set Layouts
-  {
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-        .bindingCount = 1,
-        .pBindings =
-            &(VkDescriptorSetLayoutBinding){
-                0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-                VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
-    };
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "Sky Set Layout", &self->sky_set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create sky descriptor set layout", false);
-  }
-  {
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-        .bindingCount = 2,
-        .pBindings =
-            (VkDescriptorSetLayoutBinding[2]){
-                {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1,
-                 VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
-                {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                 &self->irradiance_sampler},
-            },
-    };
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "Irradiance Set Layout",
-                                   &self->irr_set_layout);
-    TB_VK_CHECK_RET(err, "Failed to irradiance sky descriptor set layout",
-                    false);
-  }
-
-  // Create Pipeline Layouts
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &self->sky_set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges =
-            &(VkPushConstantRange){
-                VK_SHADER_STAGE_ALL_GRAPHICS,
-                0,
-                sizeof(SkyPushConstants),
-            },
-    };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                        "Sky Pipeline Layout",
-                                        &self->sky_pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create sky pipeline layout", false);
-  }
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &self->irr_set_layout,
-    };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                        "Irradiance Pipeline Layout",
-                                        &self->irr_pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline layout", false);
-  }
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &self->irr_set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges =
-            &(VkPushConstantRange){
-                .size = sizeof(EnvFilterConstants),
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },
-    };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                        "Prefilter Pipeline Layout",
-                                        &self->prefilter_pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline layout", false);
-  }
-
-  // Look up target color and depth formats for pipeline creation
-  {
-    VkFormat color_format = VK_FORMAT_UNDEFINED;
-    VkFormat depth_format = VK_FORMAT_UNDEFINED;
-
-    uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
-                                       &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
-    PassAttachment attach_info[2] = {0};
-    tb_render_pipeline_get_attachments(self->render_pipe_system, sky_pass_id,
-                                       &attach_count, attach_info);
-
-    for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-      VkFormat format = tb_render_target_get_format(
-          self->render_target_system, attach_info[attach_idx].attachment);
-      if (format == VK_FORMAT_D32_SFLOAT) {
-        depth_format = format;
-      } else {
-        color_format = format;
-      }
-    }
-
-    // Create sky pipeline
-    err = create_sky_pipeline(render_system, color_format, depth_format,
-                              self->sky_pipe_layout, &self->sky_pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create sky pipeline", false);
-  }
-
-  // Create env capture pipeline
-
-  {
-    uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->env_cap_passes[0],
-        &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    PassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->env_cap_passes[0],
-        &attach_count, &attach_info);
-
-    VkFormat color_format = tb_render_target_get_format(
-        self->render_target_system, attach_info.attachment);
-    err =
-        create_env_capture_pipeline(render_system, color_format,
-                                    self->sky_pipe_layout, &self->env_pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create env capture pipeline", false);
-  }
-
-  // Create irradiance pipeline
-  {
-    uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->irradiance_pass,
-        &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    PassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->irradiance_pass,
-        &attach_count, &attach_info);
-
-    VkFormat color_format = tb_render_target_get_format(
-        self->render_target_system, attach_info.attachment);
-    err = create_irradiance_pipeline(render_system, color_format,
-                                     self->irr_pipe_layout,
-                                     &self->irradiance_pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create irradiance pipeline", false);
-  }
-
-  // Create prefilter pipeline
-  {
-    uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
-        &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 1, "Unexepcted", false);
-    PassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(
-        self->render_pipe_system, self->render_pipe_system->prefilter_passes[0],
-        &attach_count, &attach_info);
-
-    VkFormat color_format = tb_render_target_get_format(
-        self->render_target_system, attach_info.attachment);
-    err = create_prefilter_pipeline(render_system, color_format,
-                                    self->prefilter_pipe_layout,
-                                    &self->prefilter_pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create prefilter pipeline", false);
-  }
-
-  // Register passes with the render system
-  self->sky_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(SkyDrawBatch),
-                              .draw_fn = record_sky,
-                              .pass_id = sky_pass_id,
-                          });
-  self->irradiance_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(IrradianceBatch),
-                              .draw_fn = record_irradiance,
-                              .pass_id = irr_pass_id,
-                          });
-  for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
-    self->env_capture_ctxs[i] = tb_render_pipeline_register_draw_context(
-        render_pipe_system,
-        &(DrawContextDescriptor){
-            .batch_size = sizeof(SkyDrawBatch),
-            .draw_fn = record_env_capture,
-            .pass_id = self->render_pipe_system->env_cap_passes[i],
-        });
-    self->prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
-        render_pipe_system,
-        &(DrawContextDescriptor){
-            .batch_size = sizeof(PrefilterBatch),
-            .draw_fn = record_env_filter,
-            .pass_id = self->render_pipe_system->prefilter_passes[i],
-        });
-  }
-
-  // Create skydome geometry
-  {
-    const uint64_t skydome_size = get_skydome_size();
-    // Make space for the sky geometry on the GPU
-    {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-          .size = skydome_size,
-      };
-      err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
-                                        "SkyDome Geom Buffer",
-                                        &self->sky_geom_gpu_buffer);
-      TB_VK_CHECK_RET(err, "Failed to alloc skydome geom buffer", false);
-    }
-
-    // Use the gpu tmp buffer to copy the geom buffer
-    {
-      TbHostBuffer host_buf = {0};
-      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size, 16,
-                                             &host_buf);
-      TB_VK_CHECK_RET(err, "Failed to alloc tmp space for the skydome geometry",
-                      false);
-      copy_skydome(host_buf.ptr); // Copy to the newly alloced host buffer
-
-      {
-        BufferCopy skydome_copy = {
-            .src = host_buf.buffer,
-            .dst = self->sky_geom_gpu_buffer.buffer,
-            .region =
-                {
-                    .srcOffset = host_buf.offset,
-                    .size = skydome_size,
-                },
-        };
-        tb_rnd_upload_buffers(render_system, &skydome_copy, 1);
-      }
-    }
-  }
-
+  *self = create_sky_system_internal(desc->std_alloc, desc->tmp_alloc,
+                                     render_system, render_pipe_system,
+                                     render_target_system, view_system);
   return true;
 }
 
@@ -1405,4 +1414,38 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
               .function = tick_sky_system,
           },
   };
+}
+
+void flecs_sky_tick(ecs_iter_t *it) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Sky System");
+  (void)it;
+}
+
+void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
+                         Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, SkySystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+
+  SkySystem sys = create_sky_system_internal(std_alloc, tmp_alloc, rnd_sys,
+                                             rp_sys, rt_sys, view_sys);
+
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(SkySystem), SkySystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_sky_tick, EcsOnUpdate, SkySystem(SkySystem));
+}
+
+void tb_unregister_sky_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, SkySystem);
+  SkySystem *sys = ecs_singleton_get_mut(ecs, SkySystem);
+  destroy_sky_system(sys);
 }
