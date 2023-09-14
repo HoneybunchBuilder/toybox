@@ -719,11 +719,8 @@ void flecs_vlog_draw_tick(ecs_iter_t *it) {
 
   TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
 
-  uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
-  uint32_t frame_cap = sys->frames.capacity;
-
   // Render primitives from selected frame
-  if (sys->logging && frame_cap > 0) {
+  if (sys->logging && sys->frames.capacity > 0) {
     const VLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
 
     // TODO: Make this less hacky

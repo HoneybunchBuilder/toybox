@@ -30,6 +30,8 @@ typedef struct OceanSystemDescriptor {
 
 #define TB_OCEAN_SFX_COUNT 4
 
+typedef struct ecs_query_t ecs_query_t;
+
 typedef struct OceanSystem {
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
@@ -71,3 +73,8 @@ typedef struct OceanSystem {
 
 void tb_ocean_system_descriptor(SystemDescriptor *desc,
                                 const OceanSystemDescriptor *ocean_desc);
+
+typedef struct ecs_world_t ecs_world_t;
+void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc);
+void tb_unregister_ocean_sys(ecs_world_t *ecs);
