@@ -138,4 +138,5 @@ void tb_unregister_rotator_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RotatorSystem);
   RotatorSystem *sys = ecs_singleton_get_mut(ecs, RotatorSystem);
   destroy_rotator_system(sys);
+  ecs_singleton_remove(ecs, RotatorSystem);
 }

@@ -551,4 +551,5 @@ void tb_unregister_view_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, ViewSystem);
   ViewSystem *sys = ecs_singleton_get_mut(ecs, ViewSystem);
   destroy_view_system(sys);
+  ecs_singleton_remove(ecs, ViewSystem);
 }

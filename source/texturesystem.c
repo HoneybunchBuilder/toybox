@@ -764,4 +764,5 @@ void tb_unregister_texture_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, TextureSystem);
   TextureSystem *sys = ecs_singleton_get_mut(ecs, TextureSystem);
   destroy_texture_system(sys);
+  ecs_singleton_remove(ecs, TextureSystem);
 }

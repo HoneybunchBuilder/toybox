@@ -1448,4 +1448,5 @@ void tb_unregister_sky_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, SkySystem);
   SkySystem *sys = ecs_singleton_get_mut(ecs, SkySystem);
   destroy_sky_system(sys);
+  ecs_singleton_remove(ecs, SkySystem);
 }

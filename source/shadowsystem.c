@@ -10,6 +10,8 @@
 #include "visualloggingsystem.h"
 #include "world.h"
 
+#include <flecs.h>
+
 bool create_shadow_system(ShadowSystem *self,
                           const ShadowSystemDescriptor *desc,
                           uint32_t system_dep_count,
@@ -245,4 +247,33 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
               .function = tick_shadow_system,
           },
   };
+}
+
+void flecs_shadow_tick(ecs_iter_t *it) {
+  (void)it;
+  // TODO
+}
+
+void tb_register_shadow_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, VisualLoggingSystem);
+  ECS_COMPONENT(ecs, ShadowSystem);
+
+  ShadowSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
+  };
+
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(ShadowSystem), ShadowSystem, &sys);
+
+  ECS_SYSTEM(ecs, flecs_shadow_tick, EcsOnUpdate, ShadowSystem(ShadowSystem));
+}
+
+void tb_unregister_shadow_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ShadowSystem);
+  ShadowSystem *sys = ecs_singleton_get_mut(ecs, ShadowSystem);
+  destroy_shadow_system(sys);
+  ecs_singleton_remove(ecs, ShadowSystem);
 }
