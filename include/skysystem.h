@@ -34,6 +34,7 @@ typedef struct SkySystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
+  float time;
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   TbDrawContextId sky_draw_ctx;

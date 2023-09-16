@@ -197,6 +197,7 @@ void tb_noclip_controller_system_descriptor(
 }
 
 void flecs_tick_noclip(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
   // This is a singleton
   NoClipControllerSystem *self = ecs_field(it, NoClipControllerSystem, 1);
 
@@ -268,6 +269,7 @@ void flecs_tick_noclip(ecs_iter_t *it) {
 
   translate(&transform->transform, velocity);
   rotate(&transform->transform, angular_velocity);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_noclip_sys(ecs_world_t *ecs, Allocator tmp_alloc) {

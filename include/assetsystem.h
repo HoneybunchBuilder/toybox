@@ -13,8 +13,6 @@ typedef void (*ComponentRemoveFn)(ecs_world_t *ecs);
 
 // A type of system that the world cares about
 typedef struct AssetSystem {
-  uint32_t id;
-  const char *id_str;
   ComponentAddFn add_fn;
   ComponentRemoveFn rem_fn;
 } AssetSystem;

@@ -897,6 +897,7 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
+  (void)gpu_ctx;
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
     const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
@@ -2272,6 +2273,7 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
 
 // Flecs version
 void flecs_mesh_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Mesh System", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
   // MeshSystem *sys = ecs_field(it, MeshSystem, 1);
 
@@ -2283,16 +2285,16 @@ void flecs_mesh_tick(ecs_iter_t *it) {
       ecs_filter(ecs, {
                           .terms =
                               {
-                                  {ecs_id(CameraComponent)},
-                                  {ecs_id(TransformComponent)},
+                                  {.id = ecs_id(CameraComponent)},
+                                  {.id = ecs_id(TransformComponent)},
                               },
                       });
   ecs_filter_t *mesh_filter =
       ecs_filter(ecs, {
                           .terms =
                               {
-                                  {ecs_id(MeshComponent)},
-                                  {ecs_id(TransformComponent)},
+                                  {.id = ecs_id(MeshComponent)},
+                                  {.id = ecs_id(TransformComponent)},
                               },
                       });
 
@@ -2304,19 +2306,20 @@ void flecs_mesh_tick(ecs_iter_t *it) {
     // For each mesh table
     ecs_iter_t mesh_it = ecs_filter_iter(ecs, mesh_filter);
     while (ecs_filter_next(&mesh_it)) {
-      MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
-      TransformComponent *transforms =
-          ecs_field(&mesh_it, TransformComponent, 2);
-      // For each mesh
+      // MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+      // TransformComponent *transforms =
+      //     ecs_field(&mesh_it, TransformComponent, 2);
+      //  For each mesh
       for (int32_t i = 0; i < mesh_it.count; ++i) {
-        MeshComponent *mesh = &meshes[i];
-        TransformComponent *trans = &transforms[i];
+        // MeshComponent *mesh = &meshes[i];
+        // TransformComponent *trans = &transforms[i];
       }
     }
   }
 
   ecs_filter_fini(camera_filter);
   ecs_filter_fini(mesh_filter);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -2348,8 +2351,6 @@ void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
   // Mark the mesh system entity as also having an asset
   // system that can parse and load mesh components
   AssetSystem asset = {
-      .id = 0xBEEFBABE,
-      .id_str = "0xBEEFBABE",
       .add_fn = tb_create_mesh_component2,
       .rem_fn = tb_destroy_mesh_component2,
   };

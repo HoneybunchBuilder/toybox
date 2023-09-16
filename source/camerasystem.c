@@ -132,6 +132,7 @@ void tb_camera_system_descriptor(SystemDescriptor *desc,
 }
 
 void flecs_tick_camera(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Camera Update System", TracyCategoryColorCore, true);
   CameraSystem *sys = ecs_field(it, CameraSystem, 1);
   CameraComponent *camera = ecs_field(it, CameraComponent, 2);
   TransformComponent *transform = ecs_field(it, TransformComponent, 3);
@@ -170,6 +171,7 @@ void flecs_tick_camera(ecs_iter_t *it) {
       sys->view_system->render_target_system->swapchain);
   tb_view_system_set_view_data(sys->view_system, camera->view_id, &view_data);
   tb_view_system_set_view_frustum(sys->view_system, camera->view_id, &frustum);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -191,8 +193,6 @@ void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   // Add an asset system to handle loading cameras
   AssetSystem asset = {
-      .id = 0xDEADC0DE,
-      .id_str = "0xDEADC0DE",
       .add_fn = tb_create_camera_component2,
       .rem_fn = tb_destroy_camera_component2,
   };

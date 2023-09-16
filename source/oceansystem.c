@@ -1046,15 +1046,18 @@ void tb_ocean_system_descriptor(SystemDescriptor *desc,
 }
 
 void flecs_ocean_update_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Update System", TracyCategoryColorCore, true);
   OceanComponent *oceans = ecs_field(it, OceanComponent, 1);
   // Update time on all ocean components
   for (int32_t i = 0; i < it->count; ++i) {
     OceanComponent *ocean = &oceans[i];
     ocean->time += it->delta_time;
   }
+  TracyCZoneEnd(ctx);
 }
 
 void flecs_ocean_audio_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Audio System", TracyCategoryColorAudio, true);
   OceanSystem *sys = ecs_field(it, OceanSystem, 1);
   sys->wave_sound_timer -= it->delta_time;
   if (sys->wave_sound_timer <= 0.0f) {
@@ -1063,9 +1066,12 @@ void flecs_ocean_audio_tick(ecs_iter_t *it) {
     uint32_t idx = rand() % TB_OCEAN_SFX_COUNT;
     tb_audio_play_effect(sys->audio_system, sys->wave_sounds[idx]);
   }
+  TracyCZoneEnd(ctx);
 }
 
 void flecs_ocean_draw_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
+
   ECS_COMPONENT(it->world, OceanSystem);
   ECS_COMPONENT(it->world, OceanComponent);
   OceanSystem *sys = ecs_singleton_get_mut(it->world, OceanSystem);
@@ -1380,6 +1386,8 @@ void flecs_ocean_draw_tick(ecs_iter_t *it) {
 
     ecs_filter_fini(ocean_filter);
   }
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -1418,8 +1426,6 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   // Register asset system for parsing ocean components
   AssetSystem asset = {
-      .id = OceanComponentId,
-      .id_str = OceanComponentIdStr,
       .add_fn = tb_create_ocean_component2,
       .rem_fn = tb_destroy_ocean_components,
   };
