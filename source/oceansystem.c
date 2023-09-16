@@ -1185,6 +1185,9 @@ void flecs_ocean_draw_tick(ecs_iter_t *it) {
     // Query the ecs for ocean components that this view will iterate over
     ecs_iter_t ocean_it = ecs_filter_iter(it->world, ocean_filter);
     const uint32_t ocean_count = ocean_it.count;
+    if (ocean_count == 0) {
+      continue;
+    }
     const OceanComponent *oceans = ecs_field(&ocean_it, OceanComponent, 1);
 
     // Allocate and write all ocean descriptor sets

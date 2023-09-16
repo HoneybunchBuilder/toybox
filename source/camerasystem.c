@@ -1,5 +1,6 @@
 #include "camerasystem.h"
 
+#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
@@ -176,6 +177,7 @@ void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, CameraComponent);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, CameraSystem);
+  ECS_COMPONENT(ecs, AssetSystem);
   ECS_COMPONENT(ecs, ViewSystem);
 
   ecs_singleton_set(ecs, CameraSystem,
@@ -186,6 +188,15 @@ void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
                     });
   ECS_SYSTEM(ecs, flecs_tick_camera, EcsOnUpdate, CameraSystem(CameraSystem),
              CameraComponent, TransformComponent);
+
+  // Add an asset system to handle loading cameras
+  AssetSystem asset = {
+      .id = 0xDEADC0DE,
+      .id_str = "0xDEADC0DE",
+      .add_fn = tb_create_camera_component2,
+      .rem_fn = tb_destroy_camera_component2,
+  };
+  ecs_set_ptr(ecs, ecs_id(AssetSystem), AssetSystem, &asset);
 }
 
 void tb_unregister_camera_sys(ecs_world_t *ecs) {

@@ -268,7 +268,7 @@ void tb_destroy_mesh_component2(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, MaterialSystem);
   ECS_COMPONENT(ecs, MeshComponent);
 
-  // Remove mesh component from entity
+  // Remove mesh component from entities
   ecs_filter_t *filter =
       ecs_filter(ecs, {
                           .terms =

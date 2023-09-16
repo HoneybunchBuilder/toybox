@@ -8,25 +8,59 @@
 
 #include <flecs.h>
 
-CameraComponent tb_create_camera_component2(ecs_world_t *ecs,
-                                            cgltf_camera *desc) {
-  ECS_COMPONENT(ecs, ViewSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-  if (desc->type == cgltf_camera_type_perspective) {
-    ecs_singleton_modified(ecs, ViewSystem);
-    cgltf_camera_perspective *persp = &desc->data.perspective;
-    return (CameraComponent){
-        .view_id = tb_view_system_create_view(view_sys),
-        .aspect_ratio = persp->aspect_ratio,
-        .fov = persp->yfov,
-        .near = persp->znear,
-        .far = persp->zfar,
-    };
-  } else {
-    // TODO: Handle ortho camera / invalid camera
-    TB_CHECK(false, "Orthographic camera unsupported");
-    return (CameraComponent){0};
+bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
+                                 const char *source_path, cgltf_node *node,
+                                 json_object *extra) {
+  (void)extra;
+  bool ret = true;
+  if (node->camera) {
+    ECS_COMPONENT(ecs, ViewSystem);
+    ECS_COMPONENT(ecs, CameraComponent);
+
+    ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+
+    if (node->camera->type == cgltf_camera_type_perspective) {
+      ecs_singleton_modified(ecs, ViewSystem);
+      cgltf_camera_perspective *persp = &node->camera->data.perspective;
+      CameraComponent comp = {
+          .view_id = tb_view_system_create_view(view_sys),
+          .aspect_ratio = persp->aspect_ratio,
+          .fov = persp->yfov,
+          .near = persp->znear,
+          .far = persp->zfar,
+      };
+      ecs_set_ptr(ecs, e, CameraComponent, &comp);
+    } else {
+      // TODO: Handle ortho camera / invalid camera
+      TB_CHECK(false, "Orthographic camera unsupported");
+      ret = false;
+    }
   }
+  return ret;
+}
+
+void tb_destroy_camera_component2(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, CameraComponent);
+
+  // Remove camera component from entities
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(CameraComponent)},
+                              },
+                      });
+
+  ecs_iter_t cam_it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&cam_it)) {
+    CameraComponent *cam = ecs_field(&cam_it, CameraComponent, 1);
+
+    for (int32_t i = 0; i < cam_it.count; ++i) {
+      *cam = (CameraComponent){0};
+    }
+  }
+  ecs_filter_fini(filter);
 }
 
 bool create_camera_component(CameraComponent *comp,
