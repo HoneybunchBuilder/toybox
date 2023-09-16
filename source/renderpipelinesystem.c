@@ -3479,7 +3479,6 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
                                           float delta_seconds) {
   (void)input;
   (void)output;
-  (void)delta_seconds;
   TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
                true);
 
@@ -4480,7 +4479,7 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
 
 void tick_render_pipeline_sys(ecs_iter_t *it) {
   RenderPipelineSystem *sys = ecs_field(it, RenderPipelineSystem, 1);
-  tick_render_pipeline_system_internal(sys, NULL, NULL, 0.0f);
+  tick_render_pipeline_system_internal(sys, NULL, NULL, it->delta_time);
 }
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
