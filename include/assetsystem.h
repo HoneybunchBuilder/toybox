@@ -6,7 +6,7 @@ typedef struct cgltf_node cgltf_node;
 typedef struct json_object json_object;
 
 typedef bool (*ComponentAddFn)(ecs_world_t *ecs, ecs_entity_t e,
-                               const char *source_path, cgltf_node *node,
+                               const char *source_path, const cgltf_node *node,
                                json_object *extra);
 
 typedef void (*ComponentRemoveFn)(ecs_world_t *ecs);

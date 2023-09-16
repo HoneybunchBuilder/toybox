@@ -6,6 +6,8 @@
 #include "transformcomponent.h"
 #include "world.h"
 
+#include <flecs.h>
+
 float4 make_wave(float2 dir, float steepness, float wavelength) {
   return f4(dir[0], dir[1], steepness, wavelength);
 }
@@ -14,11 +16,10 @@ bool create_ocean_component(OceanComponent *comp,
                             const OceanComponentDescriptor *desc,
                             uint32_t system_dep_count,
                             System *const *system_deps) {
+  (void)desc;
   (void)system_dep_count;
   (void)system_deps;
-  *comp = (OceanComponent){
-      .wave_count = desc->wave_count,
-  };
+  *comp = (OceanComponent){0};
 
   // Creating some randomly generated but artistically driven waves
   comp->wave_count = TB_WAVE_MAX;
@@ -134,4 +135,46 @@ OceanSample tb_sample_ocean(const OceanComponent *ocean,
   sample.binormal = normf3(sample.binormal);
 
   return sample;
+}
+
+bool tb_create_ocean_component2(ecs_world_t *ecs, ecs_entity_t e,
+                                const char *source_path, const cgltf_node *node,
+                                json_object *extra) {
+  (void)source_path;
+  (void)node;
+  if (extra) {
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, OceanComponentIdStr) == 0) {
+          ECS_COMPONENT(ecs, OceanComponent);
+          OceanComponent comp = {0};
+          create_ocean_component(&comp, NULL, 0, NULL);
+          ecs_set_ptr(ecs, e, OceanComponent, &comp);
+        }
+      }
+    }
+  }
+  return true;
+}
+
+void tb_destroy_ocean_components(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, OceanComponent);
+
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(OceanComponent)},
+                              },
+                      });
+
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    OceanComponent *comp = ecs_field(&it, OceanComponent, 1);
+    for (int32_t i = 0; i < it.count; ++i) {
+      *comp = (OceanComponent){0};
+    }
+  }
+  ecs_filter_fini(filter);
 }

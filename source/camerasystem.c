@@ -196,7 +196,7 @@ void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
       .add_fn = tb_create_camera_component2,
       .rem_fn = tb_destroy_camera_component2,
   };
-  ecs_set_ptr(ecs, ecs_id(AssetSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(CameraSystem), AssetSystem, &asset);
 }
 
 void tb_unregister_camera_sys(ecs_world_t *ecs) {

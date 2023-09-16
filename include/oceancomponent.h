@@ -32,3 +32,12 @@ void tb_ocean_component_descriptor(ComponentDescriptor *desc);
 
 OceanSample tb_sample_ocean(const OceanComponent *ocean,
                             TransformComponent *transform, float2 pos);
+
+typedef struct ecs_world_t ecs_world_t;
+typedef uint64_t ecs_entity_t;
+typedef struct cgltf_node cgltf_node;
+typedef struct json_object json_object;
+bool tb_create_ocean_component2(ecs_world_t *ecs, ecs_entity_t e,
+                                const char *source_path, const cgltf_node *node,
+                                json_object *extra);
+void tb_destroy_ocean_components(ecs_world_t *ecs);

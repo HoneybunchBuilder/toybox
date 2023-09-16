@@ -27,6 +27,6 @@ typedef uint64_t ecs_entity_t;
 typedef struct cgltf_node cgltf_node;
 typedef struct json_object json_object;
 bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
-                                 const char *source_path, cgltf_node *node,
-                                 json_object *extra);
+                                 const char *source_path,
+                                 const cgltf_node *node, json_object *extra);
 void tb_destroy_camera_component2(ecs_world_t *ecs);

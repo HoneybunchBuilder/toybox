@@ -9,8 +9,8 @@
 #include <flecs.h>
 
 bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
-                                 const char *source_path, cgltf_node *node,
-                                 json_object *extra) {
+                                 const char *source_path,
+                                 const cgltf_node *node, json_object *extra) {
   (void)extra;
   bool ret = true;
   if (node->camera) {

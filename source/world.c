@@ -766,15 +766,22 @@ ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, AssetSystem);
   // Get extras
-  cgltf_size extra_size = 0;
-  char *extra_json = NULL;
-  if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
-    extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
-    extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
-    if (cgltf_copy_extras_json(data, &node->extras, extra_json, &extra_size) !=
-        cgltf_result_success) {
-      extra_size = 0;
-      extra_json = NULL;
+  json_object *json = NULL;
+  {
+    cgltf_size extra_size = 0;
+    char *extra_json = NULL;
+    if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
+      extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
+      extra_json = tb_alloc_nm_tp(tmp_alloc, extra_size, char);
+      if (cgltf_copy_extras_json(data, &node->extras, extra_json,
+                                 &extra_size) != cgltf_result_success) {
+        extra_size = 0;
+        extra_json = NULL;
+      }
+    }
+
+    if (extra_json) {
+      json = json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
     }
   }
 
@@ -789,7 +796,7 @@ ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
   while (ecs_filter_next(&asset_it)) {
     AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
     for (int32_t i = 0; i < asset_it.count; ++i) {
-      if (!asset_sys[i].add_fn(ecs, e, root_scene_path, node, extra_json)) {
+      if (!asset_sys[i].add_fn(ecs, e, root_scene_path, node, json)) {
         TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
       }
     }

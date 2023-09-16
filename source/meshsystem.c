@@ -2292,7 +2292,7 @@ void flecs_mesh_tick(ecs_iter_t *it) {
                           .terms =
                               {
                                   {ecs_id(MeshComponent)},
-                                  //{ecs_id(TransformComponent)},
+                                  {ecs_id(TransformComponent)},
                               },
                       });
 
@@ -2353,7 +2353,7 @@ void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
       .add_fn = tb_create_mesh_component2,
       .rem_fn = tb_destroy_mesh_component2,
   };
-  ecs_set_ptr(ecs, ecs_id(AssetSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(MeshSystem), AssetSystem, &asset);
 }
 
 void tb_unregister_mesh_sys(ecs_world_t *ecs) {
