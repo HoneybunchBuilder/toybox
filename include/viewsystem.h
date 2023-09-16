@@ -71,5 +71,5 @@ const View *tb_get_view(ViewSystem *self, TbViewId view);
 
 typedef struct ecs_world_t ecs_world_t;
 void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
-                      Allocator tmp_alloc);
+                          Allocator tmp_alloc);
 void tb_unregister_view_sys(ecs_world_t *ecs);

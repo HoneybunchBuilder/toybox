@@ -26,6 +26,7 @@
 #include "coreuisystem.h"
 #include "imguisystem.h"
 #include "inputsystem.h"
+#include "lightsystem.h"
 #include "materialsystem.h"
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
@@ -170,6 +171,7 @@ TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   TB_DYN_ARR_RESET(world.scenes, std_alloc, 1);
 
   ecs_world_t *ecs = world.ecs;
+  tb_register_light_sys(ecs);
   tb_register_audio_sys(&world);
   tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
   tb_register_input_sys(ecs, tmp_alloc, window);
@@ -190,6 +192,13 @@ TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_shadow_sys(ecs, std_alloc, tmp_alloc);
   tb_register_time_of_day_sys(ecs);
   tb_register_rotator_sys(ecs, tmp_alloc);
+
+// By setting this singleton we allow the application to connect to the
+// flecs explorer
+#ifndef FINAL
+  ecs_singleton_set(ecs, EcsRest, {0});
+#endif
+
   return world;
 }
 
@@ -246,6 +255,7 @@ void tb_destroy_world2(TbWorld *world) {
   tb_unregister_texture_sys(ecs);
   tb_unregister_render_target_sys(ecs);
   tb_unregister_render_sys(ecs);
+  tb_unregister_light_sys(ecs);
 
   ecs_fini(ecs);
 }
@@ -790,7 +800,7 @@ ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
 
   // Attempt to add a component for each asset system provided
   ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
-                                                    {ecs_id(AssetSystem)},
+                                                    {.id = ecs_id(AssetSystem)},
                                                 }});
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {
@@ -803,11 +813,21 @@ ecs_entity_t load_entity2(ecs_world_t *ecs, Allocator std_alloc,
   }
   ecs_filter_fini(asset_filter);
 
+  // Add a transform component to the entity by default
+  TransformComponent trans = {
+      .parent = (EntityId)parent, // HACK
+      .child_count = node->children_count,
+      .transform = tb_transform_from_node(node),
+  };
+  ecs_set_ptr(ecs, e, TransformComponent, &trans);
+  if (node->name) {
+    ecs_set_name(ecs, e, node->name);
+  }
+
   if (node->children_count > 0) {
     TransformComponent *trans_comp = ecs_get_mut(ecs, e, TransformComponent);
     // Make sure this entity actually has a transform
     if (trans_comp) {
-      trans_comp->child_count = node->children_count;
       trans_comp->children =
           tb_alloc_nm_tp(std_alloc, node->children_count, EntityId);
       EntityId *children = trans_comp->children;
@@ -964,7 +984,7 @@ void tb_unload_scene2(TbWorld *world, TbScene *scene) {
   // Remove all components managed by the asset system from the scene
   // TODO: This doesn't handle the case of multiple scenes
   ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
-                                                    {ecs_id(AssetSystem)},
+                                                    {.id = ecs_id(AssetSystem)},
                                                 }});
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {

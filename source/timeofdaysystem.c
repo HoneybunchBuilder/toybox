@@ -281,7 +281,6 @@ void flecs_time_of_day_tick(ecs_iter_t *it) {
 }
 
 void tb_register_time_of_day_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, ViewSystem);
   ECS_COMPONENT(ecs, SkyComponent);
   ECS_COMPONENT(ecs, DirectionalLightComponent);
   ECS_COMPONENT(ecs, TransformComponent);

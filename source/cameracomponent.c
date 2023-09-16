@@ -11,12 +11,14 @@
 bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
                                  const char *source_path,
                                  const cgltf_node *node, json_object *extra) {
+  (void)source_path;
   (void)extra;
+
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, CameraComponent);
+
   bool ret = true;
   if (node->camera) {
-    ECS_COMPONENT(ecs, ViewSystem);
-    ECS_COMPONENT(ecs, CameraComponent);
-
     ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
 
     if (node->camera->type == cgltf_camera_type_perspective) {

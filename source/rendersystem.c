@@ -791,7 +791,7 @@ void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(RenderSystem), RenderSystem, &sys);
 
-  ECS_SYSTEM(ecs, render_frame_begin, EcsPreFrame, RenderSystem(RenderSystem));
+  ECS_SYSTEM(ecs, render_frame_begin, EcsPreUpdate, RenderSystem(RenderSystem));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, RenderSystem(RenderSystem));
 }
 

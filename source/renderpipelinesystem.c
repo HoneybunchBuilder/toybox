@@ -4282,6 +4282,11 @@ void check_swapchain_resize(void *self, const SystemInput *input,
           rnd_sys->render_thread->frame_states[frame_idx].wait_sem);
       rnd_sys->render_thread->frame_states[frame_idx].wait_sem =
           SDL_CreateSemaphore(1);
+
+      // Clear out any in flight descriptor updates since this resize will
+      // invalidate them
+      TB_DYN_ARR_CLEAR(
+          rnd_sys->render_thread->frame_states[frame_idx].set_write_queue);
     }
 
     // Let the render thread know we're done handling the resize on the
@@ -4478,6 +4483,39 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
   tick_render_pipeline_system_internal(sys, NULL, NULL, 0.0f);
 }
 
+void rp_check_swapchain_resize(ecs_iter_t *it) {
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline Check Resize");
+  RenderPipelineSystem *rp_sys = ecs_field(it, RenderPipelineSystem, 1);
+  RenderSystem *rnd_sys = rp_sys->render_system;
+  if (rnd_sys->render_thread->swapchain_resize_signal) {
+    TracyCZoneN(resize_ctx, "Resize", true);
+    tb_rnd_on_swapchain_resize(rp_sys);
+
+    rnd_sys->frame_idx = 0;
+
+    // Re-create all render thread semaphores
+    for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+      SDL_DestroySemaphore(
+          rnd_sys->render_thread->frame_states[frame_idx].wait_sem);
+      rnd_sys->render_thread->frame_states[frame_idx].wait_sem =
+          SDL_CreateSemaphore(1);
+
+      // Clear out any in flight descriptor updates since this resize will
+      // invalidate them
+      TB_DYN_ARR_CLEAR(
+          rnd_sys->render_thread->frame_states[frame_idx].set_write_queue);
+    }
+
+    // Let the render thread know we're done handling the resize on the
+    // main thread
+    SDL_SemPost(rnd_sys->render_thread->resized);
+
+    // Let the render thread process frame index 0
+    tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
+    TracyCZoneEnd(resize_ctx);
+  }
+}
+
 void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
                                      Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
@@ -4494,6 +4532,9 @@ void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
                                          rt_sys, view_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(RenderPipelineSystem), RenderPipelineSystem, &sys);
+
+  ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
+             RenderPipelineSystem(RenderPipelineSystem))
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
              RenderPipelineSystem(RenderPipelineSystem))

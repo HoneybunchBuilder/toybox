@@ -20,6 +20,7 @@
 #include "assetsystem.h"
 #include "cameracomponent.h"
 #include "common.hlsli"
+#include "json.h"
 #include "lightcomponent.h"
 #include "profiling.h"
 #include "renderpipelinesystem.h"
@@ -1420,34 +1421,44 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
 void flecs_sky_draw_tick(ecs_iter_t *it) {
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, SkySystem);
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
   ECS_COMPONENT(ecs, SkyComponent);
   ECS_COMPONENT(ecs, CameraComponent);
   ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
 
-  SkySystem *sys = ecs_singleton_get_mut(ecs, SkySystem);
-  sys->time += it->delta_time;
+  SkySystem *sky_sys = ecs_singleton_get_mut(ecs, SkySystem);
+  sky_sys->time += it->delta_time;
+  ecs_singleton_modified(ecs, SkySystem);
 
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  ecs_singleton_modified(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  ecs_singleton_modified(ecs, RenderPipelineSystem);
+
+  // TODO: Make this less hacky
+  const uint32_t width = rnd_sys->render_thread->swapchain.width;
+  const uint32_t height = rnd_sys->render_thread->swapchain.height;
+
+  SkySystemFrameState *state = &sky_sys->frame_states[rnd_sys->frame_idx];
+
+  // Write descriptor sets for each sky
   SkyComponent *skys = ecs_field(it, SkyComponent, 1);
-  DirectionalLightComponent *lights =
-      ecs_field(it, DirectionalLightComponent, 1);
   for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
     SkyComponent *sky = &skys[sky_idx];
-    DirectionalLightComponent *dir_light = &lights[sky_idx];
 
     VkResult err = VK_SUCCESS;
-    RenderSystem *render_system = sys->render_system;
-    VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+    VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
     const uint32_t write_count = 2; // +1 for irradiance pass
 
-    SkySystemFrameState *state = &sys->frame_states[render_system->frame_idx];
     // Allocate all the descriptor sets for this frame
     {
       // Resize the pool
       if (state->set_count < write_count) {
         if (state->set_pool) {
-          tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
+          tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
         }
 
         VkDescriptorPoolCreateInfo create_info = {
@@ -1468,24 +1479,24 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         };
         err = tb_rnd_create_descriptor_pool(
-            render_system, &create_info,
-            "Sky System Frame State Descriptor Pool", &state->set_pool);
+            rnd_sys, &create_info, "Sky System Frame State Descriptor Pool",
+            &state->set_pool);
         TB_VK_CHECK(err,
                     "Failed to create sky system frame state descriptor pool");
 
         state->set_count = write_count;
-        state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
+        state->sets = tb_realloc_nm_tp(sky_sys->std_alloc, state->sets,
                                        state->set_count, VkDescriptorSet);
       } else {
-        vkResetDescriptorPool(render_system->render_thread->device,
-                              state->set_pool, 0);
+        vkResetDescriptorPool(rnd_sys->render_thread->device, state->set_pool,
+                              0);
         state->set_count = write_count;
       }
 
-      VkDescriptorSetLayout *layouts =
-          tb_alloc_nm_tp(sys->tmp_alloc, write_count, VkDescriptorSetLayout);
-      layouts[0] = sys->sky_set_layout;
-      layouts[1] = sys->irr_set_layout;
+      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+          sky_sys->tmp_alloc, write_count, VkDescriptorSetLayout);
+      layouts[0] = sky_sys->sky_set_layout;
+      layouts[1] = sky_sys->irr_set_layout;
 
       VkDescriptorSetAllocateInfo alloc_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1493,74 +1504,57 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
           .descriptorPool = state->set_pool,
           .pSetLayouts = layouts,
       };
-      err = vkAllocateDescriptorSets(render_system->render_thread->device,
+      err = vkAllocateDescriptorSets(rnd_sys->render_thread->device,
                                      &alloc_info, state->sets);
       TB_VK_CHECK(err, "Failed to re-allocate sky descriptor sets");
     }
 
     // Just upload and write all views for now, they tend to be important anyway
     VkWriteDescriptorSet *writes =
-        tb_alloc_nm_tp(sys->tmp_alloc, write_count, VkWriteDescriptorSet);
+        tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count, VkWriteDescriptorSet);
     VkDescriptorBufferInfo *buffer_info =
-        tb_alloc_tp(sys->tmp_alloc, VkDescriptorBufferInfo);
-    TbHostBuffer *buffers = tb_alloc_tp(sys->tmp_alloc, TbHostBuffer);
+        tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
+    TbHostBuffer *buffer = tb_alloc_tp(sky_sys->tmp_alloc, TbHostBuffer);
 
     SkyData data = {
-        .time = sys->time,
+        .time = sky_sys->time,
         .cirrus = sky->cirrus,
         .cumulus = sky->cumulus,
         .sun_dir = sky->sun_dir,
     };
 
-    // HACK: Also send this lighting data to the view
-    CommonLightData light_data = {.color = dir_light->color,
-                                  .light_dir = data.sun_dir,
-                                  .cascade_splits = dir_light->cascade_splits};
-    for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-      const View *cascade_view =
-          tb_get_view(sys->view_system, dir_light->cascade_views[i]);
-      light_data.cascade_vps[i] = cascade_view->view_data.vp;
-    }
-    // HACK: known camera view id of 0
-    tb_view_system_set_light_data(sys->view_system, 0, &light_data);
-
-    TbHostBuffer *buffer = &buffers[sky_idx];
-
     // Write view data into the tmp buffer we know will wind up on the GPU
-    err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, sizeof(SkyData), 0x40,
+    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(SkyData), 0x40,
                                            buffer);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
     // Copy view data to the allocated buffer
     SDL_memcpy(buffer->ptr, &data, sizeof(SkyData));
 
-    // Get the descriptor we want to write to
-    VkDescriptorSet view_set = state->sets[sky_idx];
-
-    buffer_info[sky_idx] = (VkDescriptorBufferInfo){
+    *buffer_info = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = buffer->offset,
         .range = sizeof(SkyData),
     };
 
     // Construct a write descriptor
-    writes[sky_idx] = (VkWriteDescriptorSet){
+    writes[0] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
+        .dstSet = state->sets[0],
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &buffer_info[sky_idx],
+        .pBufferInfo = buffer_info,
     };
 
     // Last write is for the irradiance pass
     VkImageView env_map_view = tb_render_target_get_view(
-        sys->render_target_system, render_system->frame_idx,
-        sys->render_target_system->env_cube);
-    writes[0] = (VkWriteDescriptorSet){
+        sky_sys->render_target_system, rnd_sys->frame_idx,
+        sky_sys->render_target_system->env_cube);
+    writes[1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = state->sets[0],
+        .dstSet = state->sets[1],
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
@@ -1571,10 +1565,9 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
                 .imageView = env_map_view,
             },
     };
-    tb_rnd_update_descriptors(render_system, write_count, writes);
+    tb_rnd_update_descriptors(rnd_sys, write_count, writes);
   }
 
-  /*
   ecs_filter_t *camera_filter =
       ecs_filter(ecs, {.terms = {
                            {.id = ecs_id(CameraComponent)},
@@ -1584,14 +1577,192 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
   ecs_iter_t cam_it = ecs_filter_iter(ecs, camera_filter);
   while (ecs_filter_next(&cam_it)) {
     CameraComponent *cameras = ecs_field(&cam_it, CameraComponent, 1);
-    TransformComponent *camera_transforms =
-        ecs_field(&cam_it, TransformComponent, 2);
+    TransformComponent *transforms = ecs_field(&cam_it, TransformComponent, 2);
     for (int32_t cam_idx = 0; cam_idx < cam_it.count; ++cam_idx) {
+      CameraComponent *camera = &cameras[cam_idx];
+      TransformComponent *transform = &transforms[cam_idx];
+
+      // Need to manually calculate this here
+      float4x4 vp = {.col0 = {0}};
+      {
+        float4x4 proj = perspective(camera->fov, camera->aspect_ratio,
+                                    camera->near, camera->far);
+        float3 forward = transform_get_forward(&transform->transform);
+        float4x4 view = look_forward(TB_ORIGIN, forward, TB_UP);
+        vp = mulmf44(proj, view);
+      }
+
+      for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
+        SkyDrawBatch *sky_batch = tb_alloc_tp(sky_sys->tmp_alloc, SkyDrawBatch);
+        *sky_batch = (SkyDrawBatch){
+            .const_range =
+                (VkPushConstantRange){
+                    .size = sizeof(SkyPushConstants),
+                    .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
+                },
+            .consts =
+                {
+                    .vp = vp,
+                },
+            .sky_set = state->sets[0],
+            .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
+            .index_count = get_skydome_index_count(),
+            .vertex_offset = get_skydome_vert_offset(),
+        };
+        DrawBatch *sky_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, DrawBatch);
+        *sky_draw_batch = (DrawBatch){
+            .layout = sky_sys->sky_pipe_layout,
+            .pipeline = sky_sys->sky_pipeline,
+            .viewport = {0, height, width, -(float)height, 0, 1},
+            .scissor = {{0, 0}, {width, height}},
+            .user_batch = sky_batch,
+        };
+
+        DrawBatch *env_draw_batches =
+            tb_alloc_nm_tp(sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
+
+        // We need to capture the environment once per
+        // pre-filtered reflection mip in order to
+        // avoid sun intensity artifacts
+        for (uint32_t env_idx = 0; env_idx < PREFILTER_PASS_COUNT; ++env_idx) {
+          const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, env_idx);
+          env_draw_batches[env_idx] = (DrawBatch){
+              .layout = sky_sys->sky_pipe_layout,
+              .pipeline = sky_sys->env_pipeline,
+              .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
+              .scissor = {{0, 0}, {mip_dim, mip_dim}},
+              .user_batch = sky_batch,
+          };
+        }
+
+        // Generate the batch for the irradiance pass
+        DrawBatch *irr_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, DrawBatch);
+        IrradianceBatch *irradiance_batch =
+            tb_alloc_tp(sky_sys->tmp_alloc, IrradianceBatch);
+        {
+          *irr_draw_batch = (DrawBatch){
+              .layout = sky_sys->irr_pipe_layout,
+              .pipeline = sky_sys->irradiance_pipeline,
+              .viewport = {0, 64, 64, -64, 0, 1},
+              .scissor = {{0, 0}, {64, 64}},
+              .user_batch = irradiance_batch,
+          };
+          *irradiance_batch = (IrradianceBatch){
+              .set = state->sets[state->set_count - 1],
+              .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
+              .index_count = get_skydome_index_count(),
+              .vertex_offset = get_skydome_vert_offset(),
+          };
+        }
+
+        // Generate batch for prefiltering the environment map
+        DrawBatch *pre_draw_batches =
+            tb_alloc_nm_tp(sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
+        PrefilterBatch *prefilter_batches = tb_alloc_nm_tp(
+            sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
+        {
+          for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+            const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, i);
+
+            pre_draw_batches[i] = (DrawBatch){
+                .layout = sky_sys->prefilter_pipe_layout,
+                .pipeline = sky_sys->prefilter_pipeline,
+                .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
+                .scissor = {{0, 0}, {mip_dim, mip_dim}},
+                .user_batch = &prefilter_batches[i],
+            };
+
+            prefilter_batches[i] = (PrefilterBatch){
+                .set = state->sets[state->set_count - 1],
+                .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
+                .index_count = get_skydome_index_count(),
+                .vertex_offset = get_skydome_vert_offset(),
+                .consts =
+                    {
+                        .roughness = (float)i / (float)(FILTERED_ENV_MIPS - 1),
+                        .sample_count = 16,
+                    },
+            };
+          }
+        }
+
+        tb_render_pipeline_issue_draw_batch(rp_sys, sky_sys->sky_draw_ctx, 1,
+                                            sky_draw_batch);
+
+        tb_render_pipeline_issue_draw_batch(rp_sys, sky_sys->irradiance_ctx, 1,
+                                            irr_draw_batch);
+        for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
+          tb_render_pipeline_issue_draw_batch(
+              rp_sys, sky_sys->env_capture_ctxs[i], 1, &env_draw_batches[i]);
+          tb_render_pipeline_issue_draw_batch(
+              rp_sys, sky_sys->prefilter_ctxs[i], 1, &pre_draw_batches[i]);
+        }
+      }
     }
   }
 
   ecs_filter_fini(camera_filter);
-  */
+}
+
+bool create_sky_component2(ecs_world_t *ecs, ecs_entity_t e,
+                           const char *source_path, const cgltf_node *node,
+                           json_object *extra) {
+  (void)source_path;
+  (void)node;
+
+  ECS_COMPONENT(ecs, SkyComponent);
+
+  bool ret = true;
+  if (extra) {
+    bool sky = false;
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, SkyComponentIdStr) == 0) {
+          sky = true;
+          break;
+        }
+      }
+    }
+
+    if (sky) {
+      SkyComponent sky = {0};
+      json_object_object_foreach(extra, key, value) {
+        if (SDL_strcmp(key, "cirrus") == 0) {
+          sky.cirrus = (float)json_object_get_double(value);
+        } else if (SDL_strcmp(key, "cumulus") == 0) {
+          sky.cumulus = (float)json_object_get_double(value);
+        }
+      }
+      ecs_set_ptr(ecs, e, SkyComponent, &sky);
+    }
+  }
+  return ret;
+}
+
+void remove_sky_components(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, SkyComponent);
+
+  // Remove light component from entities
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(SkyComponent)},
+                              },
+                      });
+
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    SkyComponent *skies = ecs_field(&it, SkyComponent, 1);
+
+    for (int32_t i = 0; i < it.count; ++i) {
+      SkyComponent *sky = &skies[i];
+      *sky = (SkyComponent){0};
+    }
+  }
+
+  ecs_filter_fini(filter);
 }
 
 void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -1601,6 +1772,7 @@ void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, ViewSystem);
   ECS_COMPONENT(ecs, SkySystem);
+  ECS_COMPONENT(ecs, AssetSystem);
   ECS_COMPONENT(ecs, SkyComponent);
   ECS_COMPONENT(ecs, DirectionalLightComponent);
 
@@ -1616,17 +1788,14 @@ void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(SkySystem), SkySystem, &sys);
 
-  ECS_SYSTEM(ecs, flecs_sky_draw_tick, EcsOnUpdate, SkyComponent,
-             DirectionalLightComponent);
+  ECS_SYSTEM(ecs, flecs_sky_draw_tick, EcsOnUpdate, SkyComponent);
 
   // Register a system for loading skies
-  /*
   AssetSystem asset = {
-      .add_fn = tb_create_sky_component2,
-      .rem_fn = tb_destroy_sky_components,
+      .add_fn = create_sky_component2,
+      .rem_fn = remove_sky_components,
   };
   ecs_set_ptr(ecs, ecs_id(SkySystem), AssetSystem, &asset);
-  */
 }
 
 void tb_unregister_sky_sys(ecs_world_t *ecs) {
