@@ -14,9 +14,13 @@ typedef struct ShadowSystemDescriptor {
   Allocator tmp_alloc;
 } ShadowSystemDescriptor;
 
+typedef struct ecs_query_t ecs_query_t;
+
 typedef struct ShadowSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
+
+  ecs_query_t* dir_light_query;
 
   ViewSystem *view_system;
   VisualLoggingSystem *vlog;
