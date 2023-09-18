@@ -254,7 +254,7 @@ void tb_time_of_day_system_descriptor(
 
 void flecs_time_of_day_tick(ecs_iter_t *it) {
   TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
-  sys->time += it->delta_time;
+  sys->time += it->delta_time * 0.2f; // go a litte slower than everything else
 
   SkyComponent *skys = ecs_field(it, SkyComponent, 2);
   DirectionalLightComponent *lights =

@@ -1,6 +1,8 @@
 #include "noclipcontrollersystem.h"
 
+#include "assetsystem.h"
 #include "inputsystem.h"
+#include "json.h"
 #include "noclipcomponent.h"
 #include "profiling.h"
 #include "tbcommon.h"
@@ -198,91 +200,157 @@ void tb_noclip_controller_system_descriptor(
 
 void flecs_tick_noclip(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
-  // This is a singleton
-  NoClipControllerSystem *self = ecs_field(it, NoClipControllerSystem, 1);
+  ecs_world_t *ecs = it->world;
+  ECS_COMPONENT(ecs, InputSystem);
 
-  TransformComponent *transform = ecs_field(it, TransformComponent, 2);
-  NoClipComponent *noclip = ecs_field(it, NoClipComponent, 3);
+  InputSystem *input = ecs_singleton_get_mut(ecs, InputSystem);
 
-  float2 look_axis = {0};
-  float2 move_axis = {0};
+  TransformComponent *transforms = ecs_field(it, TransformComponent, 1);
+  NoClipComponent *noclips = ecs_field(it, NoClipComponent, 2);
 
-  // Based on the input, modify all the transform components for each
-  // entity
-  // Keyboard and mouse input
-  {
-    const TBKeyboard *keyboard = &self->input->keyboard;
-    if (keyboard->key_W) {
-      move_axis[1] += 1.0f;
+  for (int32_t i = 0; i < it->count; ++i) {
+    TransformComponent *transform = &transforms[i];
+    NoClipComponent *noclip = &noclips[i];
+
+    float2 look_axis = {0};
+    float2 move_axis = {0};
+
+    // Based on the input, modify all the transform components for each
+    // entity
+    // Keyboard and mouse input
+    {
+      const TBKeyboard *keyboard = &input->keyboard;
+      if (keyboard->key_W) {
+        move_axis[1] += 1.0f;
+      }
+      if (keyboard->key_A) {
+        move_axis[0] -= 1.0f;
+      }
+      if (keyboard->key_S) {
+        move_axis[1] -= 1.0f;
+      }
+      if (keyboard->key_D) {
+        move_axis[0] += 1.0f;
+      }
+      const TBMouse *mouse = &input->mouse;
+      if (mouse->left || mouse->right || mouse->middle) {
+        look_axis = -mouse->axis;
+      }
     }
-    if (keyboard->key_A) {
-      move_axis[0] -= 1.0f;
+
+    // Go through game controller input
+    // Just controller 0 for now but only if keyboard input wasn't
+    // specified
+    {
+      const TBGameControllerState *ctl_state = &input->controller_states[0];
+      if (look_axis[0] == 0 && look_axis[1] == 0) {
+        look_axis = ctl_state->right_stick;
+      }
+      if (move_axis[0] == 0 && move_axis[1] == 0) {
+        move_axis = ctl_state->left_stick;
+      }
     }
-    if (keyboard->key_S) {
-      move_axis[1] -= 1.0f;
+
+    float3 forward = transform_get_forward(&transform->transform);
+    float3 right = crossf3(forward, TB_UP);
+    float3 up = crossf3(right, forward);
+
+    float3 velocity = {0};
+    {
+      float delta_move_speed = noclip->move_speed * it->delta_time;
+
+      velocity += forward * delta_move_speed * move_axis[1];
+      velocity += right * delta_move_speed * move_axis[0];
     }
-    if (keyboard->key_D) {
-      move_axis[0] += 1.0f;
+
+    Quaternion angular_velocity = {0};
+    {
+      float delta_look_speed = noclip->look_speed * it->delta_time;
+
+      Quaternion av0 =
+          angle_axis_to_quat(f3tof4(up, look_axis[0] * delta_look_speed));
+      Quaternion av1 =
+          angle_axis_to_quat(f3tof4(right, look_axis[1] * delta_look_speed));
+
+      angular_velocity = mulq(av0, av1);
     }
-    const TBMouse *mouse = &self->input->mouse;
-    if (mouse->left || mouse->right || mouse->middle) {
-      look_axis = -mouse->axis;
-    }
+
+    translate(&transform->transform, velocity);
+    rotate(&transform->transform, angular_velocity);
   }
-
-  // Go through game controller input
-  // Just controller 0 for now but only if keyboard input wasn't
-  // specified
-  {
-    const TBGameControllerState *ctl_state = &self->input->controller_states[0];
-    if (look_axis[0] == 0 && look_axis[1] == 0) {
-      look_axis = ctl_state->right_stick;
-    }
-    if (move_axis[0] == 0 && move_axis[1] == 0) {
-      move_axis = ctl_state->left_stick;
-    }
-  }
-
-  float3 forward = transform_get_forward(&transform->transform);
-  float3 right = crossf3(forward, TB_UP);
-  float3 up = crossf3(right, forward);
-
-  float3 velocity = {0};
-  {
-    float delta_move_speed = noclip->move_speed * it->delta_time;
-
-    velocity += forward * delta_move_speed * move_axis[1];
-    velocity += right * delta_move_speed * move_axis[0];
-  }
-
-  Quaternion angular_velocity = {0};
-  {
-    float delta_look_speed = noclip->look_speed * it->delta_time;
-
-    Quaternion av0 =
-        angle_axis_to_quat(f3tof4(up, look_axis[0] * delta_look_speed));
-    Quaternion av1 =
-        angle_axis_to_quat(f3tof4(right, look_axis[1] * delta_look_speed));
-
-    angular_velocity = mulq(av0, av1);
-  }
-
-  translate(&transform->transform, velocity);
-  rotate(&transform->transform, angular_velocity);
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_noclip_sys(ecs_world_t *ecs, Allocator tmp_alloc) {
-  ECS_COMPONENT(ecs, TransformComponent);
+bool create_noclip_comp(ecs_world_t *ecs, ecs_entity_t e,
+                        const char *source_path, const cgltf_node *node,
+                        json_object *extra) {
+  (void)source_path;
+  (void)node;
+  if (extra) {
+    bool noclip = false;
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, NoClipComponentIdStr) == 0) {
+          noclip = true;
+          break;
+        }
+      }
+    }
+    if (noclip) {
+      ECS_COMPONENT(ecs, NoClipComponent);
+      NoClipComponent comp = {0};
+      json_object_object_foreach(extra, key, value) {
+        if (SDL_strcmp(key, "move_speed") == 0) {
+          comp.move_speed = (float)json_object_get_double(value);
+        } else if (SDL_strcmp(key, "look_speed") == 0) {
+          comp.look_speed = (float)json_object_get_double(value);
+        }
+      }
+      ecs_set_ptr(ecs, e, NoClipComponent, &comp);
+    }
+  }
+  return true;
+}
+void remove_noclip_comps(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, NoClipComponent);
 
-  ECS_COMPONENT(ecs, NoClipControllerSystem);
-  ecs_singleton_set(ecs, NoClipControllerSystem,
-                    {
-                        .tmp_alloc = tmp_alloc,
-                    });
+  // Remove noclip component from entities
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(NoClipComponent)},
+                              },
+                      });
 
-  ECS_SYSTEM(ecs, flecs_tick_noclip, EcsOnUpdate,
-             NoClipControllerSystem(NoClipControllerSystem),
-             [out] TransformComponent, [out] NoClipComponent)
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    NoClipComponent *noclip = ecs_field(&it, NoClipComponent, 1);
+    for (int32_t i = 0; i < it.count; ++i) {
+      *noclip = (NoClipComponent){0};
+      ecs_remove(ecs, it.entities[i], NoClipComponent);
+    }
+  }
+  ecs_filter_fini(filter);
+}
+
+void tb_register_noclip_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, NoClipComponent);
+  ECS_COMPONENT(ecs, NoClipControllerSystem);
+  ECS_COMPONENT(ecs, AssetSystem);
+
+  ecs_singleton_set(ecs, NoClipControllerSystem, {0});
+
+  ECS_SYSTEM(ecs, flecs_tick_noclip,
+             EcsOnUpdate, [out] TransformComponent, [out] NoClipComponent)
+
+  // Add an AssetSystem to the no clip singleton in order
+  // to allow for component parsing
+  AssetSystem asset = {
+      .add_fn = create_noclip_comp,
+      .rem_fn = remove_noclip_comps,
+  };
+  ecs_set_ptr(ecs, ecs_id(NoClipControllerSystem), AssetSystem, &asset);
 }

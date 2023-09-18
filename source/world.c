@@ -184,7 +184,7 @@ TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
   tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
   tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_noclip_sys(ecs, tmp_alloc);
+  tb_register_noclip_sys(ecs);
   tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
   tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
   tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
