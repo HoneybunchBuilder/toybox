@@ -2,6 +2,7 @@
 
 #include "assetsystem.h"
 #include "cameracomponent.h"
+#include "profiling.h"
 #include "tbgltf.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -9,6 +10,8 @@
 #include <flecs.h>
 
 void light_update_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Light System", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Light System Update");
   ecs_world_t *ecs = it->world;
 
   ECS_COMPONENT(ecs, LightSysContext);
@@ -49,6 +52,7 @@ void light_update_tick(ecs_iter_t *it) {
       }
     }
   }
+  TracyCZoneEnd(ctx);
 }
 
 bool create_dir_light_component(ecs_world_t *ecs, ecs_entity_t e,

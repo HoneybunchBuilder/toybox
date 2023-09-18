@@ -253,6 +253,8 @@ void tb_time_of_day_system_descriptor(
 }
 
 void flecs_time_of_day_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "TimeOfDay System");
   TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
   sys->time += it->delta_time * 0.2f; // go a litte slower than everything else
 
@@ -278,6 +280,7 @@ void flecs_time_of_day_tick(ecs_iter_t *it) {
     sky->time = sys->time;
     sky->sun_dir = sun_dir;
   }
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_time_of_day_sys(ecs_world_t *ecs) {

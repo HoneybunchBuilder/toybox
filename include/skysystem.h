@@ -26,6 +26,8 @@ typedef struct SkySystemFrameState {
 
 #define PREFILTER_PASS_COUNT 10
 
+typedef struct ecs_query_t ecs_query_t;
+
 typedef struct SkySystem {
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
@@ -33,6 +35,8 @@ typedef struct SkySystem {
   ViewSystem *view_system;
   Allocator std_alloc;
   Allocator tmp_alloc;
+
+  ecs_query_t *camera_query;
 
   float time;
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];

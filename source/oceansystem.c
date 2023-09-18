@@ -1071,11 +1071,12 @@ void flecs_ocean_audio_tick(ecs_iter_t *it) {
 
 void flecs_ocean_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
+  ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(it->world, OceanSystem);
-  ECS_COMPONENT(it->world, OceanComponent);
-  OceanSystem *sys = ecs_singleton_get_mut(it->world, OceanSystem);
-  ecs_singleton_modified(it->world, OceanSystem);
+  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, OceanComponent);
+  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  ecs_singleton_modified(ecs, OceanSystem);
 
   // TODO: Make this less hacky
   const uint32_t width = sys->render_system->render_thread->swapchain.width;
@@ -1184,12 +1185,8 @@ void flecs_ocean_draw_tick(ecs_iter_t *it) {
     }
 
     // Query the ecs for ocean components that this view will iterate over
-    ecs_filter_t *ocean_filter =
-        ecs_filter(it->world, {.terms = {
-                                   {.id = ecs_id(OceanComponent)},
-                               }});
-    ecs_iter_t ocean_it = ecs_filter_iter(it->world, ocean_filter);
-    while (ecs_filter_next(&ocean_it)) {
+    ecs_iter_t ocean_it = ecs_query_iter(ecs, sys->ocean_query);
+    while (ecs_query_next(&ocean_it)) {
       const uint32_t ocean_count = ocean_it.count;
       if (ocean_count == 0) {
         continue;
@@ -1383,8 +1380,6 @@ void flecs_ocean_draw_tick(ecs_iter_t *it) {
                                             batch_count, ocean_draw_batches);
       }
     }
-
-    ecs_filter_fini(ocean_filter);
   }
 
   TracyCZoneEnd(ctx);
@@ -1416,6 +1411,12 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
   OceanSystem sys =
       create_ocean_system_internal(std_alloc, tmp_alloc, rnd_sys, rp_sys,
                                    mesh_sys, view_sys, rt_sys, vlog, aud_sys);
+
+  // Create ocean query for the draw
+  sys.ocean_query = ecs_query(ecs, {.filter.terms = {
+                                        {.id = ecs_id(OceanComponent)},
+                                    }});
+
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(OceanSystem), OceanSystem, &sys);
 
@@ -1435,6 +1436,7 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
 void tb_unregister_ocean_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, OceanSystem);
   OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  ecs_query_fini(sys->ocean_query);
   destroy_ocean_system(sys);
   ecs_singleton_remove(ecs, OceanSystem);
 }

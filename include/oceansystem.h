@@ -43,6 +43,8 @@ typedef struct OceanSystem {
   Allocator tmp_alloc;
   Allocator std_alloc;
 
+  ecs_query_t *ocean_query;
+
   TbMusicId music;
   TbSoundEffectId wave_sounds[TB_OCEAN_SFX_COUNT];
   float wave_sound_timer;

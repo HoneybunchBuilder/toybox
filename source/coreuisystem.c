@@ -67,8 +67,7 @@ void coreui_show_about(bool *open) {
 }
 
 void tick_coreui_system_internal(CoreUISystem *self) {
-  TracyCZoneN(ctx, "Core UI System Tick", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
+  TracyCZoneNC(ctx, "Core UI System Tick", TracyCategoryColorUI, true);
 
   if (self->imgui->context_count > 0) {
     const UIContext *ui_ctx = &self->imgui->contexts[0];

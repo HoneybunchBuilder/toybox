@@ -714,10 +714,11 @@ void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
 void flecs_vlog_draw_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef FINAL
+  TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Visual Logging System Draw");
+
   VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
   const CameraComponent *cameras = ecs_field(it, CameraComponent, 2);
-
-  TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
 
   // Render primitives from selected frame
   if (sys->logging && sys->frames.capacity > 0) {
@@ -776,9 +777,10 @@ void flecs_vlog_draw_tick(ecs_iter_t *it) {
 void flecs_vlog_ui_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef FINAL
-  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
-
   TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Visual Logging System UI");
+
+  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
 
   uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
   uint32_t frame_cap = sys->frames.capacity;

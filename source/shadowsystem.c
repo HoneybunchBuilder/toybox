@@ -250,6 +250,8 @@ void tb_shadow_system_descriptor(SystemDescriptor *desc,
 }
 
 void flecs_shadow_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Shadow System", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Shadow System Update");
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, ShadowSystem);
   ECS_COMPONENT(ecs, ViewSystem);
@@ -392,6 +394,7 @@ void flecs_shadow_tick(ecs_iter_t *it) {
       }
     }
   }
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_shadow_sys(ecs_world_t *ecs, Allocator std_alloc,

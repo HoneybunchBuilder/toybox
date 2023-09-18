@@ -1419,6 +1419,8 @@ void tb_sky_system_descriptor(SystemDescriptor *desc,
 }
 
 void flecs_sky_draw_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Sky System Draw");
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, SkySystem);
   ECS_COMPONENT(ecs, RenderSystem);
@@ -1568,14 +1570,8 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
     tb_rnd_update_descriptors(rnd_sys, write_count, writes);
   }
 
-  ecs_filter_t *camera_filter =
-      ecs_filter(ecs, {.terms = {
-                           {.id = ecs_id(CameraComponent)},
-                           {.id = ecs_id(TransformComponent)},
-                       }});
-
-  ecs_iter_t cam_it = ecs_filter_iter(ecs, camera_filter);
-  while (ecs_filter_next(&cam_it)) {
+  ecs_iter_t cam_it = ecs_query_iter(ecs, sky_sys->camera_query);
+  while (ecs_query_next(&cam_it)) {
     CameraComponent *cameras = ecs_field(&cam_it, CameraComponent, 1);
     TransformComponent *transforms = ecs_field(&cam_it, TransformComponent, 2);
     for (int32_t cam_idx = 0; cam_idx < cam_it.count; ++cam_idx) {
@@ -1700,8 +1696,7 @@ void flecs_sky_draw_tick(ecs_iter_t *it) {
       }
     }
   }
-
-  ecs_filter_fini(camera_filter);
+  TracyCZoneEnd(ctx);
 }
 
 bool create_sky_component2(ecs_world_t *ecs, ecs_entity_t e,
@@ -1775,6 +1770,8 @@ void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, AssetSystem);
   ECS_COMPONENT(ecs, SkyComponent);
   ECS_COMPONENT(ecs, DirectionalLightComponent);
+  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
 
   RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
   RenderPipelineSystem *rp_sys =
@@ -1784,6 +1781,10 @@ void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   SkySystem sys = create_sky_system_internal(std_alloc, tmp_alloc, rnd_sys,
                                              rp_sys, rt_sys, view_sys);
+  sys.camera_query = ecs_query(ecs, {.filter.terms = {
+                                         {.id = ecs_id(CameraComponent)},
+                                         {.id = ecs_id(TransformComponent)},
+                                     }});
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(SkySystem), SkySystem, &sys);
@@ -1801,6 +1802,7 @@ void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
 void tb_unregister_sky_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, SkySystem);
   SkySystem *sys = ecs_singleton_get_mut(ecs, SkySystem);
+  ecs_query_fini(sys->camera_query);
   destroy_sky_system(sys);
   ecs_singleton_remove(ecs, SkySystem);
 }

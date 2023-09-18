@@ -1,5 +1,6 @@
 #include "rotatorsystem.h"
 
+#include "profiling.h"
 #include "transformcomponent.h"
 #include "transformercomponents.h"
 
@@ -103,6 +104,7 @@ void tb_rotator_system_descriptor(SystemDescriptor *desc,
 }
 
 void flecs_rotator_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Rotator System", TracyCategoryColorCore, true);
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Rotator System");
   RotatorComponent *rotators = ecs_field(it, RotatorComponent, 1);
   TransformComponent *transforms = ecs_field(it, TransformComponent, 2);
@@ -116,6 +118,7 @@ void flecs_rotator_tick(ecs_iter_t *it) {
 
     trans->transform.rotation = mulq(trans->transform.rotation, rot);
   }
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_rotator_sys(ecs_world_t *ecs, Allocator tmp_alloc) {

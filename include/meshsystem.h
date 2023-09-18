@@ -73,6 +73,8 @@ static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
     GLTF_PERM_DOUBLE_SIDED,
 };
 
+typedef struct ecs_query_t ecs_query_t;
+
 typedef struct MeshSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -82,6 +84,9 @@ typedef struct MeshSystem {
   ViewSystem *view_system;
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
+
+  ecs_query_t *mesh_query;
+  ecs_query_t *dir_light_query;
 
   TbDrawContextId prepass_draw_ctx;
   TbDrawContextId opaque_draw_ctx;

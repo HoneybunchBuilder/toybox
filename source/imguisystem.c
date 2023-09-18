@@ -539,8 +539,7 @@ void destroy_imgui_system(ImGuiSystem *self) {
 }
 
 void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
-  TracyCZoneN(ctx, "ImGui System", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
+  TracyCZoneNC(ctx, "ImGui System", TracyCategoryColorUI, true);
 
   VkResult err = VK_SUCCESS;
 

@@ -4,6 +4,8 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 bool create_transform_component(TransformComponent *comp,
                                 const TransformComponentDescriptor *desc,
                                 uint32_t system_dep_count,
@@ -77,6 +79,29 @@ float4x4 tb_transform_get_world_matrix(TransformComponent *self) {
     TransformComponent *parent_comp = tb_transform_get_parent(self);
     if (parent_comp) {
       parent_mat = tb_transform_get_world_matrix(parent_comp);
+      self->world_matrix = mulmf44(parent_mat, self->world_matrix);
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+  return self->world_matrix;
+}
+
+float4x4 tb_transform_get_world_matrix2(ecs_world_t *ecs,
+                                        TransformComponent *self) {
+  TracyCZoneNC(ctx, "TransformComponent GetWorldMatrix", TracyCategoryColorCore,
+               true);
+  ECS_COMPONENT(ecs, TransformComponent);
+
+  self->world_matrix = transform_to_matrix(&self->transform);
+  // If we have a parent, look up its world transform and combine it with this
+  if (self->parent != InvalidEntityId) {
+    float4x4 parent_mat = mf44_identity();
+    TransformComponent *parent_comp =
+        ecs_get_mut(ecs, self->parent, TransformComponent);
+    if (parent_comp) {
+      parent_mat = tb_transform_get_world_matrix2(ecs, parent_comp);
+      ecs_modified(ecs, self->parent, TransformComponent);
       self->world_matrix = mulmf44(parent_mat, self->world_matrix);
     }
   }

@@ -963,7 +963,7 @@ bool tb_load_scene2(TbWorld *world, const char *scene_path) {
     const cgltf_node *node = data->scene->nodes[i];
     ecs_entity_t e =
         load_entity2(world->ecs, world->std_alloc, world->tmp_alloc, tok, data,
-                     scene_path, 0, node);
+                     scene_path, InvalidEntityId, node);
     TB_DYN_ARR_APPEND(scene.entities, e);
   }
 
