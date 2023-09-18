@@ -2304,7 +2304,8 @@ void flecs_mesh_tick(ecs_iter_t *it) {
   Allocator tmp_alloc = mesh_sys->tmp_alloc;
 
   CameraComponent *cameras = ecs_field(it, CameraComponent, 1);
-  TransformComponent *camera_transforms = ecs_field(it, TransformComponent, 2);
+  // TransformComponent *camera_transforms = ecs_field(it, TransformComponent,
+  // 2);
 
   TB_DYN_ARR_OF(VisibleSet2) vis_sets = {0};
   TB_DYN_ARR_RESET(vis_sets, tmp_alloc, it->count);
@@ -2314,7 +2315,6 @@ void flecs_mesh_tick(ecs_iter_t *it) {
   const int32_t mesh_count = ecs_iter_count(&mesh_it);
 
   ecs_iter_t dir_light_it = ecs_query_iter(ecs, mesh_sys->dir_light_query);
-  const int32_t dir_light_count = ecs_iter_count(&dir_light_it);
 
   // Update each mesh's render object data while also
   // collecting world space AABBs for culling later
@@ -2352,13 +2352,12 @@ void flecs_mesh_tick(ecs_iter_t *it) {
 
       tb_render_object_system_set_object_data(ro_sys, mesh->object_id, &data);
     }
-    TracyCZoneEnd(ctx);
   }
 
   // For each camera
   for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
     CameraComponent *camera = &cameras[cam_idx];
-    TransformComponent *cam_trans = &camera_transforms[cam_idx];
+    // TransformComponent *cam_trans = &camera_transforms[cam_idx];
 
     VisibleSet2 vis_set = {.view = camera->view_id};
     TB_DYN_ARR_RESET(vis_set.meshes, tmp_alloc, mesh_count);
@@ -2366,14 +2365,14 @@ void flecs_mesh_tick(ecs_iter_t *it) {
     mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
     while (ecs_query_next(&mesh_it)) {
       MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
-      TransformComponent *transforms =
-          ecs_field(&mesh_it, TransformComponent, 2);
+      // TransformComponent *transforms =
+      //     ecs_field(&mesh_it, TransformComponent, 2);
 
       // Query each mesh against the view to determine if it should be drawn
       // and add it to the visible list
       for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
         MeshComponent *mesh = &meshes[mesh_idx];
-        TransformComponent *trans = &transforms[mesh_idx];
+        // TransformComponent *trans = &transforms[mesh_idx];
 
         // For now be evil and just add everything
         TB_DYN_ARR_APPEND(vis_set.meshes, mesh);
@@ -2385,7 +2384,7 @@ void flecs_mesh_tick(ecs_iter_t *it) {
   TB_DYN_ARR_OF(VisibleSet2) lit_sets = {0};
   TB_DYN_ARR_RESET(lit_sets, tmp_alloc, TB_CASCADE_COUNT);
   {
-    TracyCZoneN(ctx, "Light Visibility", true);
+    TracyCZoneN(light_ctx, "Light Visibility", true);
 
     dir_light_it = ecs_query_iter(ecs, mesh_sys->dir_light_query);
     while (ecs_query_next(&dir_light_it)) {
@@ -2410,22 +2409,22 @@ void flecs_mesh_tick(ecs_iter_t *it) {
         mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
         while (ecs_query_next(&mesh_it)) {
           MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
-          TransformComponent *transforms =
-              ecs_field(&mesh_it, TransformComponent, 2);
+          // TransformComponent *transforms =
+          //     ecs_field(&mesh_it, TransformComponent, 2);
 
           // Query each mesh against the view to determine if it should be drawn
           // and add it to the visible list
           for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
             MeshComponent *mesh = &meshes[mesh_idx];
-            TransformComponent *trans = &transforms[mesh_idx];
+            // TransformComponent *trans = &transforms[mesh_idx];
 
             // For now be evil and just add everything
             TB_DYN_ARR_APPEND(lit_set->meshes, mesh);
           }
         }
       }
-      TracyCZoneEnd(ctx);
     }
+    TracyCZoneEnd(light_ctx);
   }
 
   Allocator rnd_tmp_alloc =
@@ -2437,7 +2436,7 @@ void flecs_mesh_tick(ecs_iter_t *it) {
   uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
   SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
   {
-    TracyCZoneN(ctx, "Batch Culling", true);
+    TracyCZoneN(cull_ctx, "Batch Culling", true);
     for (int32_t view_idx = 0; view_idx < it->count; ++view_idx) {
       const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, view_idx);
       TB_DYN_ARR_FOREACH(vis_set->meshes, mesh_idx) {
@@ -2457,7 +2456,7 @@ void flecs_mesh_tick(ecs_iter_t *it) {
         }
       }
     }
-    TracyCZoneEnd(ctx);
+    TracyCZoneEnd(cull_ctx);
   }
 
   // Just collect an opaque and transparent batch for every
