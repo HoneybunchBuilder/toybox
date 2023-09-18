@@ -203,6 +203,7 @@ TbWorld tb_create_world2(Allocator std_alloc, Allocator tmp_alloc,
 }
 
 bool tb_tick_world2(TbWorld *world, float delta_seconds) {
+  TracyCZoneNC(ctx, "World Tick", TracyCategoryColorCore, true);
   ecs_world_t *ecs = world->ecs;
 
   // Tick with flecs
@@ -215,10 +216,12 @@ bool tb_tick_world2(TbWorld *world, float delta_seconds) {
   if (in_sys) {
     for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {
       if (in_sys->events[event_idx].type == SDL_QUIT) {
+        TracyCZoneEnd(ctx);
         return false;
       }
     }
   }
+  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -362,15 +365,11 @@ bool tb_create_world(const WorldDescriptor *desc, World *world) {
 }
 
 bool tb_tick_world(World *world, float delta_seconds) {
-  TracyCZoneN(world_tick_ctx, "World Tick", true);
-  TracyCZoneColor(world_tick_ctx, TracyCategoryColorCore);
+  TracyCZoneNC(world_tick_ctx, "World Tick", TracyCategoryColorCore, true);
 
   Allocator tmp_alloc = world->tmp_alloc;
-
   {
-    TracyCZoneN(system_tick_ctx, "Tick Systems", true);
-    TracyCZoneColor(system_tick_ctx, TracyCategoryColorCore);
-
+    TracyCZoneNC(system_tick_ctx, "Tick Systems", TracyCategoryColorCore, true);
     {
       // Tick functions should already be in the correct order
       for (uint32_t tick_idx = 0; tick_idx < world->tick_fn_count; ++tick_idx) {
