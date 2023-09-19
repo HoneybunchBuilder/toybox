@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 typedef struct ecs_world_t ecs_world_t;
 typedef uint64_t ecs_entity_t;
 typedef struct cgltf_node cgltf_node;

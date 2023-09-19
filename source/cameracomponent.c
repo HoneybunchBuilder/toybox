@@ -1,5 +1,7 @@
 #include "cameracomponent.h"
 
+#include "assetsystem.h"
+#include "camerasystem.h"
 #include "common.hlsli"
 #include "tbcommon.h"
 #include "tbgltf.h"
@@ -8,9 +10,9 @@
 
 #include <flecs.h>
 
-bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
-                                 const char *source_path,
-                                 const cgltf_node *node, json_object *extra) {
+bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
+                             const char *source_path, const cgltf_node *node,
+                             json_object *extra) {
   (void)source_path;
   (void)extra;
 
@@ -41,7 +43,7 @@ bool tb_create_camera_component2(ecs_world_t *ecs, ecs_entity_t e,
   return ret;
 }
 
-void tb_destroy_camera_component2(ecs_world_t *ecs) {
+void destroy_camera_components(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, ViewSystem);
   ECS_COMPONENT(ecs, CameraComponent);
 
@@ -65,41 +67,14 @@ void tb_destroy_camera_component2(ecs_world_t *ecs) {
   ecs_filter_fini(filter);
 }
 
-bool create_camera_component(CameraComponent *comp,
-                             const cgltf_camera_perspective *desc,
-                             uint32_t system_dep_count,
-                             System *const *system_deps) {
-  ViewSystem *view_system =
-      tb_get_system(system_deps, system_dep_count, ViewSystem);
+void tb_register_camera_component(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, CameraSystem);
 
-  *comp = (CameraComponent){
-      .view_id = tb_view_system_create_view(view_system),
-      .aspect_ratio = desc->aspect_ratio,
-      .fov = desc->yfov,
-      .near = desc->znear,
-      .far = desc->zfar,
+  // Add an asset system to handle loading cameras
+  AssetSystem asset = {
+      .add_fn = create_camera_component,
+      .rem_fn = destroy_camera_components,
   };
-  return true;
-}
-
-void destroy_camera_component(CameraComponent *comp, uint32_t system_dep_count,
-                              System *const *system_deps) {
-  ViewSystem *view_system =
-      tb_get_system(system_deps, system_dep_count, ViewSystem);
-  (void)view_system;
-  *comp = (CameraComponent){0};
-}
-
-TB_DEFINE_COMPONENT(camera, CameraComponent, cgltf_camera_perspective)
-
-void tb_camera_component_descriptor(ComponentDescriptor *desc) {
-  *desc = (ComponentDescriptor){
-      .name = "Camera",
-      .size = sizeof(CameraComponent),
-      .id = CameraComponentId,
-      .create = tb_create_camera_component,
-      .destroy = tb_destroy_camera_component,
-      .system_dep_count = 1,
-      .system_deps[0] = ViewSystemId,
-  };
+  ecs_set_ptr(ecs, ecs_id(CameraSystem), AssetSystem, &asset);
 }

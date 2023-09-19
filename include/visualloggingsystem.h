@@ -6,13 +6,6 @@
 
 #define VisualLoggingSystemId 0x1337F001
 
-typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct VisualLoggingSystemDescriptor {
-  Allocator tmp_alloc;
-  Allocator std_alloc;
-} VisualLoggingSystemDescriptor;
-
 typedef struct VLogFrame VLogFrame;
 
 typedef struct RenderSystem RenderSystem;
@@ -26,6 +19,8 @@ typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkBuffer_T *VkBuffer;
 typedef uint32_t TbDrawContextId;
 typedef uint64_t TbMeshId;
+
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct VisualLoggingSystem {
   Allocator tmp_alloc;
@@ -57,8 +52,9 @@ typedef struct VisualLoggingSystem {
 
 } VisualLoggingSystem;
 
-void tb_visual_logging_system_descriptor(
-    SystemDescriptor *desc, const VisualLoggingSystemDescriptor *vlog_desc);
+void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                    Allocator tmp_alloc);
+void tb_unregister_visual_logging_sys(ecs_world_t *ecs);
 
 void tb_vlog_begin_recording(VisualLoggingSystem *vlog);
 void tb_vlog_end_recording(VisualLoggingSystem *vlog);
@@ -68,8 +64,3 @@ void tb_vlog_line(VisualLoggingSystem *vlog, float3 start, float3 end,
                   float3 color);
 void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
                       float3 color);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                    Allocator tmp_alloc);
-void tb_unregister_visual_logging_sys(ecs_world_t *ecs);

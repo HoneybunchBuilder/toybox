@@ -409,27 +409,29 @@ void ui_context_destroy(RenderSystem *render_system, UIContext *context) {
   *context = (UIContext){0};
 }
 
-ImGuiSystem create_imgui_system_internal(
-    const ImGuiSystemDescriptor *desc, RenderSystem *render_system,
-    RenderPipelineSystem *render_pipe_system,
-    RenderTargetSystem *render_target_system, InputSystem *input_system) {
+ImGuiSystem create_imgui_system(Allocator std_alloc, Allocator tmp_alloc,
+                                uint32_t context_count,
+                                ImFontAtlas **context_atlases,
+                                RenderSystem *render_system,
+                                RenderPipelineSystem *render_pipe_system,
+                                RenderTargetSystem *render_target_system,
+                                InputSystem *input_system) {
 
   ImGuiSystem sys = {
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .render_target_system = render_target_system,
       .input = input_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
-      .context_count = desc->context_count,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
+      .context_count = context_count,
   };
 
   VkResult err = VK_SUCCESS;
 
   // Initialize each context
   for (uint32_t i = 0; i < sys.context_count; ++i) {
-    err = ui_context_init(render_system, desc->context_atlases[i],
-                          &sys.contexts[i]);
+    err = ui_context_init(render_system, context_atlases[i], &sys.contexts[i]);
     TB_VK_CHECK(err, "Failed to initialize UI context");
   }
 
@@ -484,40 +486,6 @@ ImGuiSystem create_imgui_system_internal(
   return sys;
 }
 
-bool create_imgui_system(ImGuiSystem *self, const ImGuiSystemDescriptor *desc,
-                         uint32_t system_dep_count,
-                         System *const *system_deps) {
-  TB_CHECK_RETURN(system_dep_count == 4,
-                  "Different than expected number of system dependencies",
-                  false);
-  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
-
-  // Find necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which imgui depends on", false);
-  RenderPipelineSystem *render_pipe_system =
-      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
-  TB_CHECK_RETURN(
-      render_pipe_system,
-      "Failed to find render pipeline system which imgui depends on", false);
-  RenderTargetSystem *render_target_system =
-      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find render target system which imgui depends on",
-                  false);
-  InputSystem *input_system =
-      tb_get_system(system_deps, system_dep_count, InputSystem);
-  TB_CHECK_RETURN(input_system,
-                  "Failed to find input system which imgui depends on", false);
-
-  *self = create_imgui_system_internal(desc, render_system, render_pipe_system,
-                                       render_target_system, input_system);
-
-  return true;
-}
-
 void destroy_imgui_system(ImGuiSystem *self) {
   RenderSystem *render_system = self->render_system;
 
@@ -538,53 +506,55 @@ void destroy_imgui_system(ImGuiSystem *self) {
   *self = (ImGuiSystem){0};
 }
 
-void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
+void imgui_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "ImGui System", TracyCategoryColorUI, true);
+
+  ImGuiSystem *sys = ecs_field(it, ImGuiSystem, 1);
 
   VkResult err = VK_SUCCESS;
 
-  if (self->context_count > 0 && delta_seconds > 0) {
-    RenderSystem *render_system = self->render_system;
+  if (sys->context_count > 0 && it->delta_time > 0) {
+    RenderSystem *rnd_sys = sys->render_system;
 
-    ImGuiFrameState *state = &self->frame_states[render_system->frame_idx];
+    ImGuiFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
     // Allocate all the descriptor sets for this frame
     {
       // Resize the pool
-      if (state->set_count < self->context_count) {
+      if (state->set_count < sys->context_count) {
         if (state->set_pool) {
-          tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
+          tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
         }
 
         VkDescriptorPoolCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = self->context_count * 8,
+            .maxSets = sys->context_count * 8,
             .poolSizeCount = 1,
             .pPoolSizes =
                 &(VkDescriptorPoolSize){
-                    .descriptorCount = self->context_count * 8,
+                    .descriptorCount = sys->context_count * 8,
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 },
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         };
         err = tb_rnd_create_descriptor_pool(
-            render_system, &create_info,
-            "ImGui System Frame State Descriptor Pool", &state->set_pool);
+            rnd_sys, &create_info, "ImGui System Frame State Descriptor Pool",
+            &state->set_pool);
         TB_VK_CHECK(
             err, "Failed to create imgui system frame state descriptor pool");
 
-        state->set_count = self->context_count;
-        state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+        state->set_count = sys->context_count;
+        state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
                                        state->set_count, VkDescriptorSet);
       } else {
-        vkResetDescriptorPool(self->render_system->render_thread->device,
+        vkResetDescriptorPool(sys->render_system->render_thread->device,
                               state->set_pool, 0);
-        state->set_count = self->context_count;
+        state->set_count = sys->context_count;
       }
 
       VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
+          sys->tmp_alloc, state->set_count, VkDescriptorSetLayout);
       for (uint32_t i = 0; i < state->set_count; ++i) {
-        layouts[i] = self->set_layout;
+        layouts[i] = sys->set_layout;
       }
 
       VkDescriptorSetAllocateInfo alloc_info = {
@@ -593,7 +563,7 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
           .descriptorPool = state->set_pool,
           .pSetLayouts = layouts,
       };
-      err = vkAllocateDescriptorSets(render_system->render_thread->device,
+      err = vkAllocateDescriptorSets(rnd_sys->render_thread->device,
                                      &alloc_info, state->sets);
       TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
     }
@@ -601,11 +571,11 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
     // Just upload and write all atlases for now, they tend to be important
     // anyway
     VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-        self->tmp_alloc, self->context_count, VkWriteDescriptorSet);
+        sys->tmp_alloc, sys->context_count, VkWriteDescriptorSet);
     VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-        self->tmp_alloc, self->context_count, VkDescriptorImageInfo);
-    for (uint32_t imgui_idx = 0; imgui_idx < self->context_count; ++imgui_idx) {
-      const UIContext *ui_ctx = &self->contexts[imgui_idx];
+        sys->tmp_alloc, sys->context_count, VkDescriptorImageInfo);
+    for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
+      const UIContext *ui_ctx = &sys->contexts[imgui_idx];
 
       // Get the descriptor we want to write to
       VkDescriptorSet atlas_set = state->sets[imgui_idx];
@@ -626,32 +596,32 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
           .pImageInfo = &image_info[imgui_idx],
       };
     }
-    tb_rnd_update_descriptors(self->render_system, self->context_count, writes);
+    tb_rnd_update_descriptors(sys->render_system, sys->context_count, writes);
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
     ImGuiDrawBatch *imgui_batches =
-        tb_alloc_nm_tp(self->render_system->render_thread
-                           ->frame_states[self->render_system->frame_idx]
+        tb_alloc_nm_tp(sys->render_system->render_thread
+                           ->frame_states[sys->render_system->frame_idx]
                            .tmp_alloc.alloc,
-                       self->context_count, ImGuiDrawBatch);
+                       sys->context_count, ImGuiDrawBatch);
     DrawBatch *batches =
-        tb_alloc_nm_tp(self->render_system->render_thread
-                           ->frame_states[self->render_system->frame_idx]
+        tb_alloc_nm_tp(sys->render_system->render_thread
+                           ->frame_states[sys->render_system->frame_idx]
                            .tmp_alloc.alloc,
-                       self->context_count, DrawBatch);
+                       sys->context_count, DrawBatch);
 
-    for (uint32_t imgui_idx = 0; imgui_idx < self->context_count; ++imgui_idx) {
-      const UIContext *ui_ctx = &self->contexts[imgui_idx];
+    for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
+      const UIContext *ui_ctx = &sys->contexts[imgui_idx];
 
       igSetCurrentContext(ui_ctx->context);
 
       ImGuiIO *io = igGetIO();
 
       // Apply this frame's input
-      for (uint32_t event_idx = 0; event_idx < self->input->event_count;
+      for (uint32_t event_idx = 0; event_idx < sys->input->event_count;
            ++event_idx) {
-        const SDL_Event *event = &self->input->events[event_idx];
+        const SDL_Event *event = &sys->input->events[event_idx];
 
         // Feed event to imgui
         if (event->type == SDL_MOUSEMOTION) {
@@ -672,10 +642,10 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
       }
 
       // Apply basic IO
-      io->DeltaTime = delta_seconds; // Note that ImGui expects seconds
+      io->DeltaTime = it->delta_time; // Note that ImGui expects seconds
       io->DisplaySize = (ImVec2){
-          self->render_system->render_thread->swapchain.width,
-          self->render_system->render_thread->swapchain.height,
+          sys->render_system->render_thread->swapchain.width,
+          sys->render_system->render_thread->swapchain.height,
       };
 
       igRender();
@@ -705,7 +675,7 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
           // Note that we can rely on the tmp host buffer to be uploaded
           // to the gpu every frame
           TbHostBuffer tmp_host_buffer = {0};
-          if (tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, imgui_size,
+          if (tb_rnd_sys_alloc_tmp_host_buffer(sys->render_system, imgui_size,
                                                0x40, &tmp_host_buffer) !=
               VK_SUCCESS) {
             TracyCZoneEnd(ctx);
@@ -756,7 +726,7 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
           // Send the render system a batch to draw
           {
             VkBuffer gpu_tmp_buffer =
-                tb_rnd_get_gpu_tmp_buffer(self->render_system);
+                tb_rnd_get_gpu_tmp_buffer(sys->render_system);
 
             const float width = draw_data->DisplaySize.x;
             const float height = draw_data->DisplaySize.y;
@@ -764,11 +734,11 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
             const float scale_x = 2.0f / width;
             const float scale_y = 2.0f / height;
 
-            ImGuiDraw *draws = tb_alloc_nm_tp(
-                self->render_system->render_thread
-                    ->frame_states[self->render_system->frame_idx]
-                    .tmp_alloc.alloc,
-                imgui_draw_count, ImGuiDraw);
+            ImGuiDraw *draws =
+                tb_alloc_nm_tp(sys->render_system->render_thread
+                                   ->frame_states[sys->render_system->frame_idx]
+                                   .tmp_alloc.alloc,
+                               imgui_draw_count, ImGuiDraw);
             {
               uint64_t cmd_index_offset = tmp_host_buffer.offset;
               uint64_t cmd_vertex_offset = tmp_host_buffer.offset;
@@ -792,8 +762,8 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
             }
 
             batches[batch_count] = (DrawBatch){
-                .layout = self->pipe_layout,
-                .pipeline = self->pipeline,
+                .layout = sys->pipe_layout,
+                .pipeline = sys->pipeline,
                 .viewport = {0, 0, width, height, 0, 1},
                 .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
                 .user_batch = &imgui_batches[batch_count],
@@ -821,50 +791,13 @@ void tick_imgui_system_internal(ImGuiSystem *self, float delta_seconds) {
 
       // Issue draw batches
       tb_render_pipeline_issue_draw_batch(
-          self->render_pipe_system, self->imgui_draw_ctx, batch_count, batches);
+          sys->render_pipe_system, sys->imgui_draw_ctx, batch_count, batches);
 
       igNewFrame();
     }
   }
 
   TracyCZoneEnd(ctx);
-}
-
-TB_DEFINE_SYSTEM(imgui, ImGuiSystem, ImGuiSystemDescriptor)
-
-void tick_imgui_system(void *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
-  (void)input;
-  (void)output;
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick ImGUI System");
-  tick_imgui_system_internal((ImGuiSystem *)self, delta_seconds);
-}
-
-void tb_imgui_system_descriptor(SystemDescriptor *desc,
-                                const ImGuiSystemDescriptor *imgui_desc) {
-  *desc = (SystemDescriptor){
-      .name = "ImGui",
-      .size = sizeof(ImGuiSystem),
-      .id = ImGuiSystemId,
-      .desc = (InternalDescriptor)imgui_desc,
-      .system_dep_count = 4,
-      .system_deps = {RenderSystemId, RenderPipelineSystemId,
-                      RenderTargetSystemId, InputSystemId},
-      .create = tb_create_imgui_system,
-      .destroy = tb_destroy_imgui_system,
-      .tick_fn_count = 1,
-      .tick_fns[0] =
-          {
-              .system_id = ImGuiSystemId,
-              .order = E_TICK_UI,
-              .function = tick_imgui_system,
-          },
-  };
-}
-
-void flecs_imgui_tick(ecs_iter_t *it) {
-  ImGuiSystem *sys = ecs_field(it, ImGuiSystem, 1);
-  tick_imgui_system_internal(sys, it->delta_time);
 }
 
 void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
@@ -882,18 +815,13 @@ void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
   InputSystem *in_sys = ecs_singleton_get_mut(ecs, InputSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
-  ImGuiSystem sys = create_imgui_system_internal(
-      &(ImGuiSystemDescriptor){
-          .std_alloc = std_alloc,
-          .tmp_alloc = tmp_alloc,
-          .context_count = 1,
-          .context_atlases[0] = NULL,
-      },
-      rnd_sys, rp_sys, rt_sys, in_sys);
+  ImGuiSystem sys =
+      create_imgui_system(std_alloc, tmp_alloc, 1, (ImFontAtlas *[1]){NULL},
+                          rnd_sys, rp_sys, rt_sys, in_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(ImGuiSystem), ImGuiSystem, &sys);
 
-  ECS_SYSTEM(ecs, flecs_imgui_tick, EcsOnUpdate, ImGuiSystem(ImGuiSystem));
+  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnUpdate, ImGuiSystem(ImGuiSystem));
 }
 
 void tb_unregister_imgui_sys(ecs_world_t *ecs) {

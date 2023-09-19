@@ -20,6 +20,9 @@ typedef struct VkBuffer_T *VkBuffer;
 typedef struct CameraComponent CameraComponent;
 typedef struct MeshComponent MeshComponent;
 
+typedef struct ecs_world_t ecs_world_t;
+typedef struct ecs_query_t ecs_query_t;
+
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
@@ -28,11 +31,6 @@ static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
 typedef struct MeshCommandPool MeshCommandPool;
-
-typedef struct MeshSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} MeshSystemDescriptor;
 
 typedef enum GLTF_PERMUTATIONS {
   GLTF_PERM_NONE = 0x00000000,
@@ -73,8 +71,6 @@ static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
     GLTF_PERM_DOUBLE_SIDED,
 };
 
-typedef struct ecs_query_t ecs_query_t;
-
 typedef struct MeshSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -110,16 +106,12 @@ typedef struct MeshSystem {
   TB_DYN_ARR_OF(TbMesh) meshes;
 } MeshSystem;
 
-void tb_mesh_system_descriptor(SystemDescriptor *desc,
-                               const MeshSystemDescriptor *mesh_desc);
+void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc);
+void tb_unregister_mesh_sys(ecs_world_t *ecs);
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node);
 bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id);
 VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id);
 void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
-                          Allocator tmp_alloc);
-void tb_unregister_mesh_sys(ecs_world_t *ecs);

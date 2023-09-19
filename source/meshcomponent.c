@@ -2,13 +2,14 @@
 
 #include "simd.h"
 
+#include "assetsystem.h"
 #include "common.hlsli"
+#include "json.h"
 #include "materialsystem.h"
 #include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
 #include "tbgltf.h"
-#include "world.h"
 
 #include <flecs.h>
 
@@ -175,31 +176,6 @@ bool create_mesh_component_internal(MeshComponent *self,
   return true;
 }
 
-bool create_mesh_component(MeshComponent *self,
-                           const MeshComponentDescriptor *desc,
-                           uint32_t system_dep_count,
-                           System *const *system_deps) {
-  TracyCZoneN(ctx, "Create Mesh Component", true);
-  // Ensure we have a reference to the necessary systems
-  MeshSystem *mesh_system =
-      tb_get_system(system_deps, system_dep_count, MeshSystem);
-  TB_CHECK_RETURN(mesh_system, "Failed to get mesh system reference", false);
-  MaterialSystem *mat_system =
-      tb_get_system(system_deps, system_dep_count, MaterialSystem);
-  TB_CHECK_RETURN(mat_system, "Failed to get material system reference", false);
-  RenderObjectSystem *render_object_system =
-      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
-  TB_CHECK_RETURN(render_object_system,
-                  "Failed to get render object system reference", false);
-
-  bool ret = create_mesh_component_internal(self, desc->source_path, desc->node,
-                                            mesh_system, mat_system,
-                                            render_object_system);
-
-  TracyCZoneEnd(ctx);
-  return ret;
-}
-
 void destroy_mesh_component_internal(MeshComponent *self,
                                      MeshSystem *mesh_system,
                                      MaterialSystem *mat_system) {
@@ -211,38 +187,9 @@ void destroy_mesh_component_internal(MeshComponent *self,
   *self = (MeshComponent){0};
 }
 
-void destroy_mesh_component(MeshComponent *self, uint32_t system_dep_count,
-                            System *const *system_deps) {
-  // Ensure we have a reference to the required systems
-  MeshSystem *mesh_system = (MeshSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MeshSystemId);
-  TB_CHECK(mesh_system, "Failed to get mesh system reference");
-  MaterialSystem *mat_system = (MaterialSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, MaterialSystemId);
-  TB_CHECK(mat_system, "Failed to get material system reference");
-
-  destroy_mesh_component_internal(self, mesh_system, mat_system);
-}
-
-TB_DEFINE_COMPONENT(mesh, MeshComponent, MeshComponentDescriptor)
-
-void tb_mesh_component_descriptor(ComponentDescriptor *desc) {
-  *desc = (ComponentDescriptor){
-      .name = "Mesh",
-      .size = sizeof(MeshComponent),
-      .id = MeshComponentId,
-      .system_dep_count = 3,
-      .system_deps[0] = MeshSystemId,
-      .system_deps[1] = MaterialSystemId,
-      .system_deps[2] = RenderObjectSystemId,
-      .create = tb_create_mesh_component,
-      .destroy = tb_destroy_mesh_component,
-  };
-}
-
-bool tb_create_mesh_component2(ecs_world_t *ecs, ecs_entity_t e,
-                               const char *source_path, const cgltf_node *node,
-                               json_object *extra) {
+bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
+                           const char *source_path, const cgltf_node *node,
+                           json_object *extra) {
   (void)extra;
   bool ret = true;
   if (node->mesh) {
@@ -263,7 +210,7 @@ bool tb_create_mesh_component2(ecs_world_t *ecs, ecs_entity_t e,
   return ret;
 }
 
-void tb_destroy_mesh_component2(ecs_world_t *ecs) {
+void destroy_mesh_component(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, MeshSystem);
   ECS_COMPONENT(ecs, MaterialSystem);
   ECS_COMPONENT(ecs, MeshComponent);
@@ -280,16 +227,27 @@ void tb_destroy_mesh_component2(ecs_world_t *ecs) {
   ecs_iter_t mesh_it = ecs_filter_iter(ecs, filter);
   while (ecs_filter_next(&mesh_it)) {
     MeshComponent *mesh = ecs_field(&mesh_it, MeshComponent, 1);
-    MeshSystem *mesh_sys = ecs_singleton_get_mut(mesh_it.world, MeshSystem);
-    MaterialSystem *mat_sys =
-        ecs_singleton_get_mut(mesh_it.world, MaterialSystem);
+    MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+    MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
 
     for (int32_t i = 0; i < mesh_it.count; ++i) {
       destroy_mesh_component_internal(&mesh[i], mesh_sys, mat_sys);
     }
 
-    ecs_singleton_modified(mesh_it.world, MeshSystem);
-    ecs_singleton_modified(mesh_it.world, MaterialSystem);
+    ecs_singleton_modified(ecs, MeshSystem);
+    ecs_singleton_modified(ecs, MaterialSystem);
   }
   ecs_filter_fini(filter);
+}
+
+void tb_register_mesh_component(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, MeshSystem);
+  // Mark the mesh system entity as also having an asset
+  // system that can parse and load mesh components
+  AssetSystem asset = {
+      .add_fn = create_mesh_component,
+      .rem_fn = destroy_mesh_component,
+  };
+  ecs_set_ptr(ecs, ecs_id(MeshSystem), AssetSystem, &asset);
 }

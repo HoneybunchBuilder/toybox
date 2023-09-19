@@ -4,25 +4,13 @@
 
 #define TimeOfDaySystemId 0x1337BEEF
 
-typedef struct SystemDescriptor SystemDescriptor;
-typedef struct ViewSystem ViewSystem;
-
-typedef struct TimeOfDaySystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} TimeOfDaySystemDescriptor;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct TimeOfDaySystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
-
-  ViewSystem *view_system;
   float time;
 } TimeOfDaySystem;
 
-void tb_time_of_day_system_descriptor(
-    SystemDescriptor *desc, const TimeOfDaySystemDescriptor *tod_desc);
-
-typedef struct ecs_world_t ecs_world_t;
 void tb_register_time_of_day_sys(ecs_world_t *ecs);
 void tb_unregister_time_of_day_sys(ecs_world_t *ecs);

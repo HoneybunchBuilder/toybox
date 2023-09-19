@@ -4,22 +4,9 @@
 
 #define NoClipControllerSystemId 0xFEFEFEFE
 
-typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct InputSystem InputSystem;
-
-typedef struct NoClipControllerSystemDescriptor {
-  Allocator tmp_alloc;
-} NoClipControllerSystemDescriptor;
-
-typedef struct NoClipControllerSystem {
-  Allocator tmp_alloc;
-  InputSystem *input;
-} NoClipControllerSystem;
-
-void tb_noclip_controller_system_descriptor(
-    SystemDescriptor *desc,
-    const NoClipControllerSystemDescriptor *noclip_desc);
-
 typedef struct ecs_world_t ecs_world_t;
+
+// Don't actually need any storage here
+typedef uint64_t NoClipControllerSystem;
+
 void tb_register_noclip_sys(ecs_world_t *ecs);

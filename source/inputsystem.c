@@ -6,22 +6,6 @@
 
 #include <flecs.h>
 
-bool create_input_system(InputSystem *self, const InputSystemDescriptor *desc,
-                         uint32_t system_dep_count,
-                         System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  TB_CHECK_RETURN(desc, "Invalid descriptor", false);
-
-  *self = (InputSystem){
-      .tmp_alloc = desc->tmp_alloc,
-      .window = desc->window,
-  };
-  return true;
-}
-
-void destroy_input_system(InputSystem *self) { *self = (InputSystem){0}; }
-
 // Get axis from an SDL controller in a 0 to 1 range
 float get_axis_float(SDL_GameController *controller,
                      SDL_GameControllerAxis axis) {
@@ -29,14 +13,10 @@ float get_axis_float(SDL_GameController *controller,
   return raw_axis / (float)SDL_MAX_SINT16;
 }
 
-void tick_input_system_internal(InputSystem *self, const SystemInput *input,
-                                SystemOutput *output, float delta_seconds) {
-  (void)input;  // We have no input
-  (void)output; // Results of this system output to the system itself rather
-                // than an output column
-  (void)delta_seconds;
-  TracyCZoneN(tick_ctx, "Input System Tick", true);
-  TracyCZoneColor(tick_ctx, TracyCategoryColorInput);
+void input_update_tick(ecs_iter_t *it) {
+  InputSystem *self = ecs_field(it, InputSystem, 1);
+  TracyCZoneN(ctx, "Input System Tick", true);
+  TracyCZoneColor(ctx, TracyCategoryColorInput);
 
   self->mouse.axis = (float2){0}; // Must always clear axes
   self->mouse.wheel = (float2){0};
@@ -165,41 +145,7 @@ void tick_input_system_internal(InputSystem *self, const SystemInput *input,
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
   }
 
-  TracyCZoneEnd(tick_ctx);
-}
-
-TB_DEFINE_SYSTEM(input, InputSystem, InputSystemDescriptor)
-
-void tick_input_system(void *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Input System");
-  tick_input_system_internal((InputSystem *)self, input, output, delta_seconds);
-}
-
-void tb_input_system_descriptor(SystemDescriptor *desc,
-                                const InputSystemDescriptor *input_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Input",
-      .size = sizeof(InputSystem),
-      .id = InputSystemId,
-      .desc = (InternalDescriptor)input_desc,
-      .create = tb_create_input_system,
-      .destroy = tb_destroy_input_system,
-      .tick_fn_count = 1,
-      .tick_fns =
-          {
-              {
-                  .system_id = InputSystemId,
-                  .order = E_TICK_INPUT,
-                  .function = tick_input_system,
-              },
-          },
-  };
-}
-
-void flecs_tick_input(ecs_iter_t *it) {
-  InputSystem *self = ecs_field(it, InputSystem, 1);
-  tick_input_system_internal(self, NULL, NULL, 0);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
@@ -210,5 +156,5 @@ void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
                         .tmp_alloc = tmp_alloc,
                         .window = window,
                     });
-  ECS_SYSTEM(ecs, flecs_tick_input, EcsPreUpdate, InputSystem(InputSystem));
+  ECS_SYSTEM(ecs, input_update_tick, EcsPreUpdate, InputSystem(InputSystem));
 }

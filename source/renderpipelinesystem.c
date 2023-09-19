@@ -1237,11 +1237,10 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
   return id;
 }
 
-bool create_render_pipeline_system_internal(
-    RenderPipelineSystem *self, Allocator std_alloc, Allocator tmp_alloc,
-    RenderSystem *render_system, RenderTargetSystem *render_target_system,
-    ViewSystem *view_system) {
-  *self = (RenderPipelineSystem){
+RenderPipelineSystem create_render_pipeline_system(
+    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    RenderTargetSystem *render_target_system, ViewSystem *view_system) {
+  RenderPipelineSystem sys = {
       .render_system = render_system,
       .render_target_system = render_target_system,
       .view_system = view_system,
@@ -1250,7 +1249,7 @@ bool create_render_pipeline_system_internal(
   };
 
   // Initialize the render pass array
-  TB_DYN_ARR_RESET(self->render_passes, self->std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.render_passes, sys.std_alloc, 8);
 
   // Create some default passes
   {
@@ -1279,7 +1278,7 @@ bool create_render_pipeline_system_internal(
           .transitions =
               (PassTransition[2]){
                   {
-                      .render_target = self->render_target_system->depth_buffer,
+                      .render_target = sys.render_target_system->depth_buffer,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1307,8 +1306,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target =
-                          self->render_target_system->normal_buffer,
+                      .render_target = sys.render_target_system->normal_buffer,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1360,21 +1358,21 @@ bool create_render_pipeline_system_internal(
           .name = "Opaque Depth Normal Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create opaque depth normal pass", false);
-      self->opaque_depth_normal_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create opaque depth normal pass");
+      sys.opaque_depth_normal_pass = id;
     }
     // Create SSAO pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->opaque_depth_normal_pass},
+          .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
           .transition_count = 3,
           .transitions =
               (PassTransition[3]){
                   {
-                      .render_target = self->render_target_system->ssao_buffer,
+                      .render_target = sys.render_target_system->ssao_buffer,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1401,7 +1399,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target = self->render_target_system->depth_buffer,
+                      .render_target = sys.render_target_system->depth_buffer,
                       .barrier =
                           {
                               .src_flags =
@@ -1431,8 +1429,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target =
-                          self->render_target_system->normal_buffer,
+                      .render_target = sys.render_target_system->normal_buffer,
                       .barrier =
                           {
                               .src_flags =
@@ -1475,21 +1472,20 @@ bool create_render_pipeline_system_internal(
           .name = "SSAO Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ssao pass",
-                      false);
-      self->ssao_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create ssao pass");
+      sys.ssao_pass = id;
     }
     // Create SSAO blur compute pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->ssao_pass},
+          .dependencies = (TbRenderPassId[1]){sys.ssao_pass},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
                   {
-                      .render_target = self->render_target_system->ssao_buffer,
+                      .render_target = sys.render_target_system->ssao_buffer,
                       .barrier =
                           {
                               .src_flags =
@@ -1518,7 +1514,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target = self->render_target_system->ssao_scratch,
+                      .render_target = sys.render_target_system->ssao_scratch,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1546,10 +1542,9 @@ bool create_render_pipeline_system_internal(
               },
           .name = "SSAO Blur Pass",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create ssao blur pass", false);
-      self->ssao_blur_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create ssao blur pass");
+      sys.ssao_blur_pass = id;
     }
     // Create env capture pass
     {
@@ -1590,7 +1585,7 @@ bool create_render_pipeline_system_internal(
         TbRenderPassCreateInfo create_info = {
             .view_mask = 0x0000003F, // 0b00111111
             .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
+            .dependencies = (TbRenderPassId[1]){sys.ssao_blur_pass},
             .transition_count = trans_count,
             .transitions = transitions,
             .attachment_count = 1,
@@ -1606,10 +1601,10 @@ bool create_render_pipeline_system_internal(
             .name = "Env Capture Pass",
         };
 
-        TbRenderPassId id = create_render_pass(self, &create_info);
-        TB_CHECK_RETURN(id != InvalidRenderPassId,
-                        "Failed to create env capture pass", false);
-        self->env_cap_passes[i] = id;
+        TbRenderPassId id = create_render_pass(&sys, &create_info);
+        TB_CHECK(id != InvalidRenderPassId,
+                 "Failed to create env capture pass");
+        sys.env_cap_passes[i] = id;
       }
     }
     // Create irradiance convolution pass
@@ -1618,8 +1613,7 @@ bool create_render_pipeline_system_internal(
           .view_mask = 0x0000003F, // 0b00111111
           .dependency_count = 1,
           .dependencies =
-              (TbRenderPassId[1]){
-                  self->env_cap_passes[PREFILTER_PASS_COUNT - 1]},
+              (TbRenderPassId[1]){sys.env_cap_passes[PREFILTER_PASS_COUNT - 1]},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
@@ -1655,8 +1649,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target =
-                          self->render_target_system->irradiance_map,
+                      .render_target = sys.render_target_system->irradiance_map,
                       .barrier =
                           {
                               .src_flags =
@@ -1696,10 +1689,9 @@ bool create_render_pipeline_system_internal(
           .name = "Irradiance Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create irradiance pass", false);
-      self->irradiance_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create irradiance pass");
+      sys.irradiance_pass = id;
     }
     // Create environment prefiltering passes
     {
@@ -1711,7 +1703,7 @@ bool create_render_pipeline_system_internal(
         if (i == 0) {
           trans_count = 1;
           transitions[0] = (PassTransition){
-              .render_target = self->render_target_system->prefiltered_cube,
+              .render_target = sys.render_target_system->prefiltered_cube,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1740,7 +1732,7 @@ bool create_render_pipeline_system_internal(
         TbRenderPassCreateInfo create_info = {
             .view_mask = 0x0000003F, // 0b00111111
             .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){self->irradiance_pass},
+            .dependencies = (TbRenderPassId[1]){sys.irradiance_pass},
             .transition_count = trans_count,
             .transitions = transitions,
             .attachment_count = 1,
@@ -1756,10 +1748,9 @@ bool create_render_pipeline_system_internal(
             .name = "Prefilter Pass",
         };
 
-        TbRenderPassId id = create_render_pass(self, &create_info);
-        TB_CHECK_RETURN(id != InvalidRenderPassId,
-                        "Failed to create prefilter pass", false);
-        self->prefilter_passes[i] = id;
+        TbRenderPassId id = create_render_pass(&sys, &create_info);
+        TB_CHECK(id != InvalidRenderPassId, "Failed to create prefilter pass");
+        sys.prefilter_passes[i] = id;
       }
     }
     // Create shadow passes
@@ -1771,7 +1762,7 @@ bool create_render_pipeline_system_internal(
       const uint32_t trans_count = 1;
       PassTransition transitions[1] = {
           {
-              .render_target = self->render_target_system->shadow_map,
+              .render_target = sys.render_target_system->shadow_map,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1798,7 +1789,7 @@ bool create_render_pipeline_system_internal(
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->ssao_blur_pass},
+          .dependencies = (TbRenderPassId[1]){sys.ssao_blur_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -1815,16 +1806,15 @@ bool create_render_pipeline_system_internal(
           .name = "Shadow Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create shadow pass",
-                      false);
-      self->shadow_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create shadow pass");
+      sys.shadow_pass = id;
     }
     // Create opaque color pass
     {
       // Transition irradiance map, prefiltered env map and shadow map
       PassTransition irr_trans = {
-          .render_target = self->render_target_system->irradiance_map,
+          .render_target = sys.render_target_system->irradiance_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1844,7 +1834,7 @@ bool create_render_pipeline_system_internal(
                   },
           }};
       PassTransition filter_trans = {
-          .render_target = self->render_target_system->prefiltered_cube,
+          .render_target = sys.render_target_system->prefiltered_cube,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1864,7 +1854,7 @@ bool create_render_pipeline_system_internal(
                   },
           }};
       PassTransition color_trans = {
-          .render_target = self->render_target_system->hdr_color,
+          .render_target = sys.render_target_system->hdr_color,
           .barrier =
               {
                   .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1886,7 +1876,7 @@ bool create_render_pipeline_system_internal(
               },
       };
       PassTransition normal_trans = {
-          .render_target = self->render_target_system->normal_buffer,
+          .render_target = sys.render_target_system->normal_buffer,
           .barrier =
               {
                   .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1910,7 +1900,7 @@ bool create_render_pipeline_system_internal(
               },
       };
       PassTransition ssao_trans = {
-          .render_target = self->render_target_system->ssao_buffer,
+          .render_target = sys.render_target_system->ssao_buffer,
           .barrier =
               {
                   .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1934,7 +1924,7 @@ bool create_render_pipeline_system_internal(
               },
       };
       PassTransition shadow_trans = {
-          .render_target = self->render_target_system->shadow_map,
+          .render_target = sys.render_target_system->shadow_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1966,7 +1956,7 @@ bool create_render_pipeline_system_internal(
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
           .dependencies =
-              (TbRenderPassId[2]){self->ssao_blur_pass, self->shadow_pass},
+              (TbRenderPassId[2]){sys.ssao_blur_pass, sys.shadow_pass},
           .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,
@@ -1986,17 +1976,16 @@ bool create_render_pipeline_system_internal(
           .name = "Opaque Color Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create opaque color pass", false);
-      self->opaque_color_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create opaque color pass");
+      sys.opaque_color_pass = id;
     }
     // Create sky pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
-          .dependencies = (TbRenderPassId[2]){self->opaque_depth_normal_pass,
-                                              self->opaque_color_pass},
+          .dependencies = (TbRenderPassId[2]){sys.opaque_depth_normal_pass,
+                                              sys.opaque_color_pass},
           .attachment_count = 2,
           .attachments =
               (TbAttachmentInfo[2]){
@@ -2014,22 +2003,21 @@ bool create_render_pipeline_system_internal(
           .name = "Sky Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create sky pass",
-                      false);
-      self->sky_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create sky pass");
+      sys.sky_pass = id;
     }
     // Create opaque depth copy pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->sky_pass},
+          .dependencies = (TbRenderPassId[1]){sys.sky_pass},
           .transition_count = 1,
           .transitions =
               (PassTransition[1]){
                   {
                       .render_target =
-                          self->render_target_system->depth_buffer_copy,
+                          sys.render_target_system->depth_buffer_copy,
                       .barrier =
                           {
                               .src_flags =
@@ -2070,21 +2058,20 @@ bool create_render_pipeline_system_internal(
           .name = "Depth Copy Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create depth copy pass", false);
-      self->depth_copy_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create depth copy pass");
+      sys.depth_copy_pass = id;
     }
     // Create opaque color copy pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->depth_copy_pass},
+          .dependencies = (TbRenderPassId[1]){sys.depth_copy_pass},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
                   {
-                      .render_target = self->render_target_system->hdr_color,
+                      .render_target = sys.render_target_system->hdr_color,
                       .barrier =
                           {
                               .src_flags =
@@ -2114,7 +2101,7 @@ bool create_render_pipeline_system_internal(
                           },
                   },
                   {
-                      .render_target = self->render_target_system->color_copy,
+                      .render_target = sys.render_target_system->color_copy,
                       .barrier =
                           {
                               .src_flags =
@@ -2155,22 +2142,21 @@ bool create_render_pipeline_system_internal(
           .name = "Color Copy Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create color copy pass", false);
-      self->color_copy_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create color copy pass");
+      sys.color_copy_pass = id;
     }
     // Create transparent depth pass
     {
       // Must transition back to depth so that we can load the contents
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->color_copy_pass},
+          .dependencies = (TbRenderPassId[1]){sys.color_copy_pass},
           .transition_count = 1,
           .transitions =
               (PassTransition[1]){
                   {
-                      .render_target = self->render_target_system->depth_buffer,
+                      .render_target = sys.render_target_system->depth_buffer,
                       .barrier =
                           {
                               .src_flags =
@@ -2210,16 +2196,16 @@ bool create_render_pipeline_system_internal(
           .name = "Transparent Depth Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create transparent depth pass", false);
-      self->transparent_depth_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create transparent depth pass");
+      sys.transparent_depth_pass = id;
     }
     // Create transparent color pass
     {
       PassTransition transitions[3] = {
           {
-              .render_target = self->render_target_system->hdr_color,
+              .render_target = sys.render_target_system->hdr_color,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -2245,7 +2231,7 @@ bool create_render_pipeline_system_internal(
                   },
           },
           {
-              .render_target = self->render_target_system->color_copy,
+              .render_target = sys.render_target_system->color_copy,
               .barrier =
                   {
                       .src_flags =
@@ -2271,7 +2257,7 @@ bool create_render_pipeline_system_internal(
                   },
           },
           {
-              .render_target = self->render_target_system->depth_buffer_copy,
+              .render_target = sys.render_target_system->depth_buffer_copy,
               .barrier =
                   {
                       .src_flags =
@@ -2300,7 +2286,7 @@ bool create_render_pipeline_system_internal(
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->transparent_depth_pass},
+          .dependencies = (TbRenderPassId[1]){sys.transparent_depth_pass},
           .transition_count = 3,
           .transitions = transitions,
           .attachment_count = 2,
@@ -2320,17 +2306,17 @@ bool create_render_pipeline_system_internal(
           .name = "Transparent Color Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create transparent color pass", false);
-      self->transparent_color_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create transparent color pass");
+      sys.transparent_color_pass = id;
     }
     // Create brightness pass
     {
       static const size_t trans_count = 2;
       PassTransition transitions[2] = {
           {
-              .render_target = self->render_target_system->hdr_color,
+              .render_target = sys.render_target_system->hdr_color,
               .barrier =
                   {
                       // We know that the hdr color buffer will need to be r/w
@@ -2360,7 +2346,7 @@ bool create_render_pipeline_system_internal(
                   },
           },
           {
-              .render_target = self->render_target_system->brightness,
+              .render_target = sys.render_target_system->brightness,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2387,7 +2373,7 @@ bool create_render_pipeline_system_internal(
       };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->transparent_color_pass},
+          .dependencies = (TbRenderPassId[1]){sys.transparent_color_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -2402,34 +2388,33 @@ bool create_render_pipeline_system_internal(
           .name = "Brightness Pass",
       };
 
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create brightness downsample pass", false);
-      self->brightness_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create brightness downsample pass");
+      sys.brightness_pass = id;
     }
     // Create luminance compute pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->brightness_pass},
+          .dependencies = (TbRenderPassId[1]){sys.brightness_pass},
           .name = "Luminance Pass",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create luminance pass", false);
-      self->luminance_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create luminance pass");
+      sys.luminance_pass = id;
     }
     // Create one pass for downsampling
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->luminance_pass},
+          .dependencies = (TbRenderPassId[1]){sys.luminance_pass},
           .transition_count = 2,
           .transitions =
               (PassTransition[2]){
                   // Need to read brightness
                   {
-                      .render_target = self->render_target_system->brightness,
+                      .render_target = sys.render_target_system->brightness,
                       .barrier =
                           {
                               .src_flags =
@@ -2459,7 +2444,7 @@ bool create_render_pipeline_system_internal(
                   // We need the bloom chain to be readable and writable
                   {
                       .render_target =
-                          self->render_target_system->bloom_mip_chain,
+                          sys.render_target_system->bloom_mip_chain,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2487,22 +2472,22 @@ bool create_render_pipeline_system_internal(
               },
           .name = "Bloom Downsample",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom downsample pass", false);
-      self->bloom_downsample_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create bloom downsample pass");
+      sys.bloom_downsample_pass = id;
     }
     // And one for upsampling
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_downsample_pass},
+          .dependencies = (TbRenderPassId[1]){sys.bloom_downsample_pass},
           .name = "Bloom Upsample",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create bloom upsample pass", false);
-      self->bloom_upsample_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId,
+               "Failed to create bloom upsample pass");
+      sys.bloom_upsample_pass = id;
     }
 
     // Create tonemapping pass
@@ -2511,7 +2496,7 @@ bool create_render_pipeline_system_internal(
       // Need to read bloom mip chain (mip 0 only)
       PassTransition transitions[1] = {
           {
-              .render_target = self->render_target_system->bloom_mip_chain,
+              .render_target = sys.render_target_system->bloom_mip_chain,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2537,7 +2522,7 @@ bool create_render_pipeline_system_internal(
       };
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->bloom_upsample_pass},
+          .dependencies = (TbRenderPassId[1]){sys.bloom_upsample_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -2551,21 +2536,20 @@ bool create_render_pipeline_system_internal(
               },
           .name = "Tonemap Pass",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId,
-                      "Failed to create tonemap pass", false);
-      self->tonemap_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create tonemap pass");
+      sys.tonemap_pass = id;
     }
     // Create UI Pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){self->tonemap_pass},
+          .dependencies = (TbRenderPassId[1]){sys.tonemap_pass},
           .transition_count = 1,
           .transitions =
               (PassTransition[1]){
                   {
-                      .render_target = self->render_target_system->hdr_color,
+                      .render_target = sys.render_target_system->hdr_color,
                       .barrier =
                           {
                               .src_flags =
@@ -2606,18 +2590,17 @@ bool create_render_pipeline_system_internal(
               },
           .name = "UI Pass",
       };
-      TbRenderPassId id = create_render_pass(self, &create_info);
-      TB_CHECK_RETURN(id != InvalidRenderPassId, "Failed to create ui pass",
-                      false);
-      self->ui_pass = id;
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create ui pass");
+      sys.ui_pass = id;
     }
   }
 
   // Calculate pass order
-  const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
-  self->pass_order = tb_alloc_nm_tp(self->std_alloc, pass_count, uint32_t);
+  const uint32_t pass_count = TB_DYN_ARR_SIZE(sys.render_passes);
+  sys.pass_order = tb_alloc_nm_tp(sys.std_alloc, pass_count, uint32_t);
 
-  sort_pass_graph(self);
+  sort_pass_graph(&sys);
 
   // Once we've sorted passes, go through the passes
   // in execution order and determine where full pipelines are used.
@@ -2627,7 +2610,7 @@ bool create_render_pipeline_system_internal(
     uint32_t command_buffer_count = 0; // Treated as an index while builiding
     // Worst case each pass needs its own command buffer
     uint32_t *command_buffer_indices =
-        tb_alloc_nm_tp(self->tmp_alloc, pass_count, uint32_t);
+        tb_alloc_nm_tp(sys.tmp_alloc, pass_count, uint32_t);
 
     {
       // Actually it's just faster if each pass gets their own command list for
@@ -2644,8 +2627,8 @@ bool create_render_pipeline_system_internal(
 
       // Register passes in execution order
       for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
-        const uint32_t idx = self->pass_order[pass_idx];
-        register_pass(self, self->render_system->render_thread, idx,
+        const uint32_t idx = sys.pass_order[pass_idx];
+        register_pass(&sys, sys.render_system->render_thread, idx,
                       command_buffer_indices, command_buffer_count);
       }
     }
@@ -2674,8 +2657,8 @@ bool create_render_pipeline_system_internal(
             .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
         };
         err = tb_rnd_create_sampler(render_system, &create_info, "Copy Sampler",
-                                    &self->sampler);
-        TB_VK_CHECK_RET(err, "Failed to create copy sampler", err);
+                                    &sys.sampler);
+        TB_VK_CHECK(err, "Failed to create copy sampler");
       }
 #endif
 
@@ -2695,14 +2678,13 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
                                        "Copy Descriptor Set Layout",
-                                       &self->copy_set_layout);
-        TB_VK_CHECK_RET(err, "Failed to create copy descriptor set layout",
-                        false);
+                                       &sys.copy_set_layout);
+        TB_VK_CHECK(err, "Failed to create copy descriptor set layout");
       }
 
       {
@@ -2727,14 +2709,13 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
                                        "Compute Copy Descriptor Set Layout",
-                                       &self->comp_copy_set_layout);
-        TB_VK_CHECK_RET(
-            err, "Failed to create compute copy descriptor set layout", false);
+                                       &sys.comp_copy_set_layout);
+        TB_VK_CHECK(err, "Failed to create compute copy descriptor set layout");
       }
 
       {
@@ -2765,13 +2746,13 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
                                        "Tonemap Descriptor Set Layout",
-                                       &self->tonemap_set_layout);
-        TB_VK_CHECK_RET(err, "Failed to create tonemap set layout", false);
+                                       &sys.tonemap_set_layout);
+        TB_VK_CHECK(err, "Failed to create tonemap set layout");
       }
 
       {
@@ -2780,13 +2761,13 @@ bool create_render_pipeline_system_internal(
             .setLayoutCount = 1,
             .pSetLayouts =
                 (VkDescriptorSetLayout[1]){
-                    self->copy_set_layout,
+                    sys.copy_set_layout,
                 },
         };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
                                             "Copy Pipeline Layout",
-                                            &self->copy_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create copy pipeline layout", false);
+                                            &sys.copy_pipe_layout);
+        TB_VK_CHECK(err, "Failed to create copy pipeline layout");
       }
 
       {
@@ -2795,13 +2776,13 @@ bool create_render_pipeline_system_internal(
             .setLayoutCount = 1,
             .pSetLayouts =
                 (VkDescriptorSetLayout[1]){
-                    self->tonemap_set_layout,
+                    sys.tonemap_set_layout,
                 },
         };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
                                             "Tonemap Pipeline Layout",
-                                            &self->tonemap_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create tonemap pipeline layout", false);
+                                            &sys.tonemap_pipe_layout);
+        TB_VK_CHECK(err, "Failed to create tonemap pipeline layout");
       }
 
       {
@@ -2826,7 +2807,7 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
                 {
                     .binding = 3,
@@ -2845,13 +2826,13 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
                                        "SSAO Descriptor Set Layout",
-                                       &self->ssao_set_layout);
-        TB_VK_CHECK_RET(err, "Failed to create ssao set layout", false);
+                                       &sys.ssao_set_layout);
+        TB_VK_CHECK(err, "Failed to create ssao set layout");
       }
 
       {
@@ -2860,8 +2841,8 @@ bool create_render_pipeline_system_internal(
             .setLayoutCount = 2,
             .pSetLayouts =
                 (VkDescriptorSetLayout[2]){
-                    self->ssao_set_layout,
-                    self->view_system->set_layout,
+                    sys.ssao_set_layout,
+                    sys.view_system->set_layout,
                 },
             .pushConstantRangeCount = 1,
             .pPushConstantRanges =
@@ -2873,85 +2854,82 @@ bool create_render_pipeline_system_internal(
                     },
                 },
         };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
                                             "SSAO Pipeline Layout",
-                                            &self->ssao_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create ssao pipeline layout", false);
+                                            &sys.ssao_pipe_layout);
+        TB_VK_CHECK(err, "Failed to create ssao pipeline layout");
       }
 
       {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
-            .pSetLayouts =
-                (VkDescriptorSetLayout[1]){self->comp_copy_set_layout},
+            .pSetLayouts = (VkDescriptorSetLayout[1]){sys.comp_copy_set_layout},
         };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
                                             "Comp Copy Pipeline Layout",
-                                            &self->comp_copy_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create compute copy pipeline layout",
-                        false);
+                                            &sys.comp_copy_pipe_layout);
+        TB_VK_CHECK(err, "Failed to create compute copy pipeline layout");
       }
 
       {
         uint32_t attach_count = 0;
-        tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+        tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, NULL);
-        TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+        TB_CHECK(attach_count == 1, "Unexpected");
         PassAttachment depth_info = {0};
-        tb_render_pipeline_get_attachments(self, self->depth_copy_pass,
+        tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, &depth_info);
 
         VkFormat depth_format = tb_render_target_get_format(
-            self->render_target_system, depth_info.attachment);
+            sys.render_target_system, depth_info.attachment);
 
-        err = create_depth_pipeline(self->render_system, depth_format,
-                                    self->copy_pipe_layout,
-                                    &self->depth_copy_pipe);
-        TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", false);
+        err = create_depth_pipeline(sys.render_system, depth_format,
+                                    sys.copy_pipe_layout, &sys.depth_copy_pipe);
+        TB_VK_CHECK(err, "Failed to create depth copy pipeline");
       }
 
       {
         DrawContextDescriptor desc = {
             .batch_size = sizeof(FullscreenBatch),
             .draw_fn = record_depth_copy,
-            .pass_id = self->depth_copy_pass,
+            .pass_id = sys.depth_copy_pass,
         };
-        self->depth_copy_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->depth_copy_ctx != InvalidDrawContextId,
-                        "Failed to create depth copy draw context", false);
+        sys.depth_copy_ctx =
+            tb_render_pipeline_register_draw_context(&sys, &desc);
+        TB_CHECK(sys.depth_copy_ctx != InvalidDrawContextId,
+                 "Failed to create depth copy draw context");
       }
     }
 
     // Color Copy
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+      tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+      TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(self, self->color_copy_pass,
+      tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, &attach_info);
 
       VkFormat color_format = tb_render_target_get_format(
-          self->render_target_system, attach_info.attachment);
+          sys.render_target_system, attach_info.attachment);
 
-      err = create_color_copy_pipeline(self->render_system, color_format,
-                                       self->copy_pipe_layout,
-                                       &self->color_copy_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", false);
+      err = create_color_copy_pipeline(sys.render_system, color_format,
+                                       sys.copy_pipe_layout,
+                                       &sys.color_copy_pipe);
+      TB_VK_CHECK(err, "Failed to create color copy pipeline");
 
       {
         DrawContextDescriptor desc = {
             .batch_size = sizeof(FullscreenBatch),
             .draw_fn = record_color_copy,
-            .pass_id = self->color_copy_pass,
+            .pass_id = sys.color_copy_pass,
         };
-        self->color_copy_ctx =
-            tb_render_pipeline_register_draw_context(self, &desc);
-        TB_CHECK_RETURN(self->color_copy_ctx != InvalidDrawContextId,
-                        "Failed to create color copy draw context", false);
+        sys.color_copy_ctx =
+            tb_render_pipeline_register_draw_context(&sys, &desc);
+        TB_CHECK(sys.color_copy_ctx != InvalidDrawContextId,
+                 "Failed to create color copy draw context");
       }
     }
 
@@ -2962,7 +2940,7 @@ bool create_render_pipeline_system_internal(
         // Kernel Buffer
         TbHostBuffer tmp_ssao_params = {0};
         VkResult err = tb_rnd_sys_alloc_tmp_host_buffer(
-            self->render_system, sizeof(SSAOParams), 16, &tmp_ssao_params);
+            sys.render_system, sizeof(SSAOParams), 16, &tmp_ssao_params);
         TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao params");
 
         // Fill out buffer on the CPU side
@@ -2995,16 +2973,16 @@ bool create_render_pipeline_system_internal(
                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .size = sizeof(SSAOParams),
         };
-        err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
-                                          "SSAO Params", &self->ssao_params);
+        err = tb_rnd_sys_alloc_gpu_buffer(sys.render_system, &create_info,
+                                          "SSAO Params", &sys.ssao_params);
         TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
         // Schedule upload
         BufferCopy upload = {
-            .dst = self->ssao_params.buffer,
+            .dst = sys.ssao_params.buffer,
             .src = tmp_ssao_params.buffer,
             .region = {.size = sizeof(SSAOParams)},
         };
-        tb_rnd_upload_buffers(self->render_system, &upload, 1);
+        tb_rnd_upload_buffers(sys.render_system, &upload, 1);
 
         // Noise Texture
         const uint32_t noise_tex_dim = 4;
@@ -3012,7 +2990,7 @@ bool create_render_pipeline_system_internal(
             noise_tex_dim * noise_tex_dim * sizeof(float2);
         TbHostBuffer tmp_ssao_noise = {0};
         err = tb_rnd_sys_alloc_tmp_host_buffer(
-            self->render_system, noise_tex_size, 16, &tmp_ssao_noise);
+            sys.render_system, noise_tex_size, 16, &tmp_ssao_noise);
         TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao noise");
 
         // Fill out buffer on the CPU side
@@ -3047,15 +3025,15 @@ bool create_render_pipeline_system_internal(
               .usage =
                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
           };
-          err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info,
-                                           "SSAO Noise", &self->ssao_noise);
+          err = tb_rnd_sys_alloc_gpu_image(sys.render_system, &create_info,
+                                           "SSAO Noise", &sys.ssao_noise);
           TB_VK_CHECK(err, "Failed to create gpu image for ssao params");
         }
 
         {
           VkImageViewCreateInfo create_info = {
               .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-              .image = self->ssao_noise.image,
+              .image = sys.ssao_noise.image,
               .viewType = VK_IMAGE_VIEW_TYPE_2D,
               .format = VK_FORMAT_R8G8_SNORM,
               .subresourceRange =
@@ -3065,14 +3043,14 @@ bool create_render_pipeline_system_internal(
                       .levelCount = 1,
                   },
           };
-          err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                         "SSAO Noise View",
-                                         &self->ssao_noise_view);
+          err =
+              tb_rnd_create_image_view(sys.render_system, &create_info,
+                                       "SSAO Noise View", &sys.ssao_noise_view);
         }
 
         BufferImageCopy image_copy = {
             .src = tmp_ssao_noise.buffer,
-            .dst = self->ssao_noise.image,
+            .dst = sys.ssao_noise.image,
             .region =
                 {
                     .bufferOffset = tmp_ssao_noise.offset,
@@ -3095,51 +3073,50 @@ bool create_render_pipeline_system_internal(
                     .levelCount = 1,
                 },
         };
-        tb_rnd_upload_buffer_to_image(self->render_system, &image_copy, 1);
+        tb_rnd_upload_buffer_to_image(sys.render_system, &image_copy, 1);
       }
 
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->ssao_pass, &attach_count,
+      tb_render_pipeline_get_attachments(&sys, sys.ssao_pass, &attach_count,
                                          NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(self, self->ssao_pass, &attach_count,
+      tb_render_pipeline_get_attachments(&sys, sys.ssao_pass, &attach_count,
                                          &attach_info);
 
       VkFormat color_format = tb_render_target_get_format(
-          self->render_target_system, attach_info.attachment);
+          sys.render_target_system, attach_info.attachment);
 
-      err = create_ssao_pipeline(self->render_system, color_format,
-                                 self->ssao_pipe_layout, &self->ssao_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create ssao pipeline", false);
+      err = create_ssao_pipeline(sys.render_system, color_format,
+                                 sys.ssao_pipe_layout, &sys.ssao_pipe);
+      TB_VK_CHECK(err, "Failed to create ssao pipeline");
 
       DrawContextDescriptor desc = {
           .batch_size = sizeof(SSAOBatch),
           .draw_fn = record_ssao,
-          .pass_id = self->ssao_pass,
+          .pass_id = sys.ssao_pass,
       };
-      self->ssao_ctx = tb_render_pipeline_register_draw_context(self, &desc);
-      TB_CHECK_RETURN(self->ssao_ctx != InvalidDrawContextId,
-                      "Failed to create ssao draw context", false);
+      sys.ssao_ctx = tb_render_pipeline_register_draw_context(&sys, &desc);
+      TB_CHECK(sys.ssao_ctx != InvalidDrawContextId,
+               "Failed to create ssao draw context");
     }
 
     // Compute Copy
     {
-      err = create_comp_copy_pipeline(self->render_system,
-                                      self->comp_copy_pipe_layout,
-                                      &self->comp_copy_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create compute copy pipeline", false);
+      err = create_comp_copy_pipeline(
+          sys.render_system, sys.comp_copy_pipe_layout, &sys.comp_copy_pipe);
+      TB_VK_CHECK(err, "Failed to create compute copy pipeline");
 
       // Contexts for specific copy operations
       DispatchContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .dispatch_fn = record_comp_copy,
-          .pass_id = self->bloom_blur_pass,
+          .pass_id = sys.bloom_blur_pass,
       };
-      self->bloom_copy_ctx =
-          tb_render_pipeline_register_dispatch_context(self, &desc);
-      TB_CHECK_RETURN(self->bloom_copy_ctx != InvalidDispatchContextId,
-                      "Failed to create compute copy dispatch context", false);
+      sys.bloom_copy_ctx =
+          tb_render_pipeline_register_dispatch_context(&sys, &desc);
+      TB_CHECK(sys.bloom_copy_ctx != InvalidDispatchContextId,
+               "Failed to create compute copy dispatch context");
     }
 
     // Compute Blur
@@ -3166,14 +3143,12 @@ bool create_render_pipeline_system_internal(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                    .pImmutableSamplers = &self->sampler,
+                    .pImmutableSamplers = &sys.sampler,
                 },
             }};
-        err =
-            tb_rnd_create_set_layout(render_system, &create_info,
-                                     "Blur Set Layout", &self->blur_set_layout);
-        TB_VK_CHECK_RET(err, "Failed to create blur descriptor set layout",
-                        false);
+        err = tb_rnd_create_set_layout(render_system, &create_info,
+                                       "Blur Set Layout", &sys.blur_set_layout);
+        TB_VK_CHECK(err, "Failed to create blur descriptor set layout");
       }
 
       {
@@ -3182,70 +3157,70 @@ bool create_render_pipeline_system_internal(
             .setLayoutCount = 1,
             .pSetLayouts =
                 (VkDescriptorSetLayout[1]){
-                    self->blur_set_layout,
+                    sys.blur_set_layout,
                 },
         };
-        err = tb_rnd_create_pipeline_layout(self->render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
                                             "Blur Pipeline Layout",
-                                            &self->blur_pipe_layout);
-        TB_VK_CHECK_RET(err, "Failed to create blur pipeline layout", false);
+                                            &sys.blur_pipe_layout);
+        TB_VK_CHECK(err, "Failed to create blur pipeline layout");
       }
 
-      err = create_blur_pipelines(self->render_system, self->blur_pipe_layout,
-                                  &self->blur_h_pipe, &self->blur_v_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create blur pipeline", false);
+      err = create_blur_pipelines(sys.render_system, sys.blur_pipe_layout,
+                                  &sys.blur_h_pipe, &sys.blur_v_pipe);
+      TB_VK_CHECK(err, "Failed to create blur pipeline");
 
       DispatchContextDescriptor desc = {
           .batch_size = sizeof(BlurBatch),
           .dispatch_fn = record_ssao_blur,
-          .pass_id = self->ssao_blur_pass,
+          .pass_id = sys.ssao_blur_pass,
       };
-      self->ssao_blur_ctx =
-          tb_render_pipeline_register_dispatch_context(self, &desc);
-      TB_CHECK_RETURN(self->ssao_blur_ctx != InvalidDispatchContextId,
-                      "Failed to create ssao blur dispatch context", false);
+      sys.ssao_blur_ctx =
+          tb_render_pipeline_register_dispatch_context(&sys, &desc);
+      TB_CHECK(sys.ssao_blur_ctx != InvalidDispatchContextId,
+               "Failed to create ssao blur dispatch context");
     }
 
     // Create bloom work
-    err = create_downsample_work(self->render_system, self, self->sampler,
-                                 self->bloom_downsample_pass,
-                                 &self->downsample_work);
-    err = create_upsample_work(self->render_system, self, self->sampler,
-                               self->bloom_upsample_pass, &self->upsample_work);
+    err =
+        create_downsample_work(sys.render_system, &sys, sys.sampler,
+                               sys.bloom_downsample_pass, &sys.downsample_work);
+    err = create_upsample_work(sys.render_system, &sys, sys.sampler,
+                               sys.bloom_upsample_pass, &sys.upsample_work);
 
     // Compute Luminance Histogram and Average work
-    err = create_lum_hist_work(self->render_system, self, self->sampler,
-                               self->luminance_pass, &self->lum_hist_work);
-    err = create_lum_avg_work(self->render_system, self, self->luminance_pass,
-                              &self->lum_avg_work);
+    err = create_lum_hist_work(sys.render_system, &sys, sys.sampler,
+                               sys.luminance_pass, &sys.lum_hist_work);
+    err = create_lum_avg_work(sys.render_system, &sys, sys.luminance_pass,
+                              &sys.lum_avg_work);
 
     // Brightness
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->brightness_pass,
+      tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(self, self->brightness_pass,
+      tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, &attach_info);
 
       VkFormat color_format = tb_render_target_get_format(
-          self->render_target_system, attach_info.attachment);
+          sys.render_target_system, attach_info.attachment);
 
-      err = create_brightness_pipeline(self->render_system, color_format,
-                                       self->copy_pipe_layout,
-                                       &self->brightness_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", false);
+      err = create_brightness_pipeline(sys.render_system, color_format,
+                                       sys.copy_pipe_layout,
+                                       &sys.brightness_pipe);
+      TB_VK_CHECK(err, "Failed to create brightness pipeline");
 
       DrawContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .draw_fn = record_brightness,
-          .pass_id = self->brightness_pass,
+          .pass_id = sys.brightness_pass,
       };
-      self->brightness_ctx =
-          tb_render_pipeline_register_draw_context(self, &desc);
-      TB_CHECK_RETURN(self->brightness_ctx != InvalidDrawContextId,
-                      "Failed to create brightness draw context", false);
+      sys.brightness_ctx =
+          tb_render_pipeline_register_draw_context(&sys, &desc);
+      TB_CHECK(sys.brightness_ctx != InvalidDrawContextId,
+               "Failed to create brightness draw context");
     }
 
     // Blur
@@ -3253,72 +3228,44 @@ bool create_render_pipeline_system_internal(
       DispatchContextDescriptor desc = {
           .batch_size = sizeof(BlurBatch),
           .dispatch_fn = record_bloom_blur,
-          .pass_id = self->bloom_blur_pass,
+          .pass_id = sys.bloom_blur_pass,
       };
-      self->bloom_blur_ctx =
-          tb_render_pipeline_register_dispatch_context(self, &desc);
-      TB_CHECK_RETURN(self->bloom_blur_ctx != InvalidDispatchContextId,
-                      "Failed to create bloom blur dispatch context", false);
+      sys.bloom_blur_ctx =
+          tb_render_pipeline_register_dispatch_context(&sys, &desc);
+      TB_CHECK(sys.bloom_blur_ctx != InvalidDispatchContextId,
+               "Failed to create bloom blur dispatch context");
     }
 
     // Tonemapping
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
-                                         &attach_count, NULL);
+      tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
+                                         NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(self, self->tonemap_pass,
-                                         &attach_count, &attach_info);
+      tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
+                                         &attach_info);
 
       VkFormat swap_target_format = tb_render_target_get_format(
-          self->render_target_system, attach_info.attachment);
+          sys.render_target_system, attach_info.attachment);
 
-      err = create_tonemapping_pipeline(self->render_system, swap_target_format,
-                                        self->tonemap_pipe_layout,
-                                        &self->tonemap_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", false);
+      err = create_tonemapping_pipeline(sys.render_system, swap_target_format,
+                                        sys.tonemap_pipe_layout,
+                                        &sys.tonemap_pipe);
+      TB_VK_CHECK(err, "Failed to create tonemapping pipeline");
 
       DrawContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .draw_fn = record_tonemapping,
-          .pass_id = self->tonemap_pass,
+          .pass_id = sys.tonemap_pass,
       };
-      self->tonemap_ctx = tb_render_pipeline_register_draw_context(self, &desc);
-      TB_CHECK_RETURN(self->tonemap_ctx != InvalidDrawContextId,
-                      "Failed to create tonemapping draw context", false);
+      sys.tonemap_ctx = tb_render_pipeline_register_draw_context(&sys, &desc);
+      TB_CHECK(sys.tonemap_ctx != InvalidDrawContextId,
+               "Failed to create tonemapping draw context");
     }
   }
 
-  return true;
-}
-
-bool create_render_pipeline_system(RenderPipelineSystem *self,
-                                   const RenderPipelineSystemDescriptor *desc,
-                                   uint32_t system_dep_count,
-                                   System *const *system_deps) {
-  // Find necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(
-      render_system,
-      "Failed to find render system which the render pipeline depends on",
-      false);
-  RenderTargetSystem *render_target_system =
-      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find render target system which the render "
-                  "pipeline depends on",
-                  false);
-  ViewSystem *view_system =
-      tb_get_system(system_deps, system_dep_count, ViewSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find view system which the render "
-                  "pipeline depends on",
-                  false);
-  return create_render_pipeline_system_internal(
-      self, desc->std_alloc, desc->tmp_alloc, render_system,
-      render_target_system, view_system);
+  return sys;
 }
 
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
@@ -3363,124 +3310,11 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   *self = (RenderPipelineSystem){0};
 }
 
-void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
-  RenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
-
-  {
-    RenderTargetSystem *rt_sys = self->render_target_system;
-    // HACK: Assume all attachments have the same extents
-    const VkExtent3D extent = tb_render_target_get_mip_extent(
-        rt_sys, rp->attachments[0].mip, rp->attachments[0].attachment);
-
-    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      // Update the pass context on each frame index
-      {
-        FrameState *state =
-            &self->render_system->render_thread->frame_states[i];
-        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
-        context->width = extent.width;
-        context->height = extent.height;
-
-        context->render_info->renderArea.extent =
-            (VkExtent2D){extent.width, extent.height};
-
-        uint32_t col_count = 0;
-        for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
-             ++attach_idx) {
-          TbRenderTargetId rt = rp->attachments[attach_idx].attachment;
-          VkFormat format = tb_render_target_get_format(rt_sys, rt);
-          VkImageView view = tb_render_target_get_mip_view(
-              rt_sys, rp->attachments[attach_idx].mip, i, rt);
-
-          // Forgive the const casting :(
-          if (format == VK_FORMAT_D32_SFLOAT) {
-            ((VkRenderingAttachmentInfo *)
-                 context->render_info->pDepthAttachment)
-                ->imageView = view;
-          } else {
-            ((VkRenderingAttachmentInfo *)
-                 context->render_info->pColorAttachments)[col_count++]
-                .imageView = view;
-          }
-        }
-      }
-    }
-  }
-}
-
-void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
-  // Called by the core system as a hack when the swapchain resizes
-  // This is where, on the main thread, we have to adjust to any render passes
-  // and render targets to stay up to date with the latest swapchain
-
-  // Reimport the swapchain target and resize all default targets
-  // The render thread should have created the necessary resources before
-  // signaling the main thread
-  tb_reimport_swapchain(self->render_target_system);
-
-  // Render target system is up to date, now we just have to re-create all
-  // render passes
-  {
-    reimport_render_pass(self, self->opaque_depth_normal_pass);
-    reimport_render_pass(self, self->ssao_pass);
-    reimport_render_pass(self, self->opaque_color_pass);
-    reimport_render_pass(self, self->depth_copy_pass);
-    reimport_render_pass(self, self->color_copy_pass);
-    reimport_render_pass(self, self->sky_pass);
-    reimport_render_pass(self, self->transparent_depth_pass);
-    reimport_render_pass(self, self->transparent_color_pass);
-    reimport_render_pass(self, self->brightness_pass);
-    reimport_render_pass(self, self->bloom_blur_pass);
-    reimport_render_pass(self, self->tonemap_pass);
-    reimport_render_pass(self, self->ui_pass);
-  }
-
-  // We now need to patch every pass's transitions so that their targets point
-  // at the right VkImages
-  TB_DYN_ARR_FOREACH(self->render_passes, pass_idx) {
-    RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
-    for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
-         ++trans_idx) {
-      for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
-           ++frame_idx) {
-        FrameState *state =
-            &self->render_system->render_thread->frame_states[frame_idx];
-        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
-        const PassTransition *transition = &pass->transitions[trans_idx];
-        ImageTransition *barrier = &context->barriers[trans_idx];
-        *barrier = transition->barrier;
-        barrier->barrier.image = tb_render_target_get_image(
-            self->render_target_system, frame_idx, transition->render_target);
-      }
-    }
-  }
-
-  // Also clear out any draws that were in flight on the render thread
-  // Any draws that had descriptors that point to these re-created resources
-  // are invalid
-  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    FrameState *state =
-        &self->render_system->render_thread->frame_states[frame_idx];
-    TB_DYN_ARR_FOREACH(state->draw_contexts, ctx_idx) {
-      DrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
-      draw_ctx->batch_count = 0;
-    }
-    TB_DYN_ARR_FOREACH(state->dispatch_contexts, ctx_idx) {
-      DispatchContext *dispatch_ctx =
-          &TB_DYN_ARR_AT(state->dispatch_contexts, ctx_idx);
-      dispatch_ctx->batch_count = 0;
-    }
-  }
-}
-
-void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
-                                          const SystemInput *input,
-                                          SystemOutput *output,
-                                          float delta_seconds) {
-  (void)input;
-  (void)output;
+void tick_render_pipeline_sys(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
                true);
+
+  RenderPipelineSystem *self = ecs_field(it, RenderPipelineSystem, 1);
 
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
@@ -4133,7 +3967,7 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
       }
       // Luminance average pass
       {
-        float time = clampf(1.f - SDL_expf(-delta_seconds * 1.1f), 0, 1);
+        float time = clampf(1.f - SDL_expf(-it->delta_time * 1.1f), 0, 1);
         LuminanceBatch lum_batch = {
             .set = lum_avg_set,
             .consts = {.params = {min_log_lum, (max_log_lum - min_log_lum),
@@ -4251,27 +4085,13 @@ void tick_render_pipeline_system_internal(RenderPipelineSystem *self,
   TracyCZoneEnd(ctx);
 }
 
-TB_DEFINE_SYSTEM(render_pipeline, RenderPipelineSystem,
-                 RenderPipelineSystemDescriptor)
-
-void tick_render_pipeline_system(void *self, const SystemInput *input,
-                                 SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline System");
-  tick_render_pipeline_system_internal((RenderPipelineSystem *)self, input,
-                                       output, delta_seconds);
-}
-
-void check_swapchain_resize(void *self, const SystemInput *input,
-                            SystemOutput *output, float delta_seconds) {
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
+void rp_check_swapchain_resize(ecs_iter_t *it) {
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline Check Resize");
-  RenderPipelineSystem *rnd_pipe_sys = (RenderPipelineSystem *)self;
-  RenderSystem *rnd_sys = rnd_pipe_sys->render_system;
+  RenderPipelineSystem *rp_sys = ecs_field(it, RenderPipelineSystem, 1);
+  RenderSystem *rnd_sys = rp_sys->render_system;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
     TracyCZoneN(resize_ctx, "Resize", true);
-    tb_rnd_on_swapchain_resize(rnd_pipe_sys);
+    tb_rnd_on_swapchain_resize(rp_sys);
 
     rnd_sys->frame_idx = 0;
 
@@ -4298,35 +4118,144 @@ void check_swapchain_resize(void *self, const SystemInput *input,
   }
 }
 
-void tb_render_pipeline_system_descriptor(
-    SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Render Pipeline",
-      .size = sizeof(RenderPipelineSystem),
-      .id = RenderPipelineSystemId,
-      .desc = (InternalDescriptor)pipe_desc,
-      .system_dep_count = 3,
-      .system_deps[0] = RenderSystemId,
-      .system_deps[1] = RenderTargetSystemId,
-      .system_deps[2] = ViewSystemId,
-      .create = tb_create_render_pipeline_system,
-      .destroy = tb_destroy_render_pipeline_system,
-      .tick_fn_count = 2,
-      .tick_fns[0] =
-          {
-              .system_id = RenderPipelineSystemId,
-              .order =
-                  E_TICK_TOP_OF_FRAME + 1, // We need this tick to happen right
-                                           // after the render system ticks
-              .function = check_swapchain_resize,
-          },
-      .tick_fns[1] =
-          {
-              .system_id = RenderPipelineSystemId,
-              .order = E_TICK_RENDER - 1, // Tick before the render system
-              .function = tick_render_pipeline_system,
-          },
-  };
+void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                     Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+
+  RenderPipelineSystem sys = create_render_pipeline_system(
+      std_alloc, tmp_alloc, rnd_sys, rt_sys, view_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderPipelineSystem), RenderPipelineSystem, &sys);
+
+  ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
+             RenderPipelineSystem(RenderPipelineSystem))
+
+  ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
+             RenderPipelineSystem(RenderPipelineSystem))
+}
+
+void tb_unregister_render_pipeline_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  RenderPipelineSystem *sys = ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  destroy_render_pipeline_system(sys);
+  ecs_singleton_remove(ecs, RenderPipelineSystem);
+}
+
+void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
+  RenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
+
+  {
+    RenderTargetSystem *rt_sys = self->render_target_system;
+    // HACK: Assume all attachments have the same extents
+    const VkExtent3D extent = tb_render_target_get_mip_extent(
+        rt_sys, rp->attachments[0].mip, rp->attachments[0].attachment);
+
+    for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+      // Update the pass context on each frame index
+      {
+        FrameState *state =
+            &self->render_system->render_thread->frame_states[i];
+        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
+        context->width = extent.width;
+        context->height = extent.height;
+
+        context->render_info->renderArea.extent =
+            (VkExtent2D){extent.width, extent.height};
+
+        uint32_t col_count = 0;
+        for (uint32_t attach_idx = 0; attach_idx < rp->attach_count;
+             ++attach_idx) {
+          TbRenderTargetId rt = rp->attachments[attach_idx].attachment;
+          VkFormat format = tb_render_target_get_format(rt_sys, rt);
+          VkImageView view = tb_render_target_get_mip_view(
+              rt_sys, rp->attachments[attach_idx].mip, i, rt);
+
+          // Forgive the const casting :(
+          if (format == VK_FORMAT_D32_SFLOAT) {
+            ((VkRenderingAttachmentInfo *)
+                 context->render_info->pDepthAttachment)
+                ->imageView = view;
+          } else {
+            ((VkRenderingAttachmentInfo *)
+                 context->render_info->pColorAttachments)[col_count++]
+                .imageView = view;
+          }
+        }
+      }
+    }
+  }
+}
+
+void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
+  // Called by the core system as a hack when the swapchain resizes
+  // This is where, on the main thread, we have to adjust to any render passes
+  // and render targets to stay up to date with the latest swapchain
+
+  // Reimport the swapchain target and resize all default targets
+  // The render thread should have created the necessary resources before
+  // signaling the main thread
+  tb_reimport_swapchain(self->render_target_system);
+
+  // Render target system is up to date, now we just have to re-create all
+  // render passes
+  {
+    reimport_render_pass(self, self->opaque_depth_normal_pass);
+    reimport_render_pass(self, self->ssao_pass);
+    reimport_render_pass(self, self->opaque_color_pass);
+    reimport_render_pass(self, self->depth_copy_pass);
+    reimport_render_pass(self, self->color_copy_pass);
+    reimport_render_pass(self, self->sky_pass);
+    reimport_render_pass(self, self->transparent_depth_pass);
+    reimport_render_pass(self, self->transparent_color_pass);
+    reimport_render_pass(self, self->brightness_pass);
+    reimport_render_pass(self, self->bloom_blur_pass);
+    reimport_render_pass(self, self->tonemap_pass);
+    reimport_render_pass(self, self->ui_pass);
+  }
+
+  // We now need to patch every pass's transitions so that their targets point
+  // at the right VkImages
+  TB_DYN_ARR_FOREACH(self->render_passes, pass_idx) {
+    RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
+    for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
+         ++trans_idx) {
+      for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
+           ++frame_idx) {
+        FrameState *state =
+            &self->render_system->render_thread->frame_states[frame_idx];
+        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
+        const PassTransition *transition = &pass->transitions[trans_idx];
+        ImageTransition *barrier = &context->barriers[trans_idx];
+        *barrier = transition->barrier;
+        barrier->barrier.image = tb_render_target_get_image(
+            self->render_target_system, frame_idx, transition->render_target);
+      }
+    }
+  }
+
+  // Also clear out any draws that were in flight on the render thread
+  // Any draws that had descriptors that point to these re-created resources
+  // are invalid
+  for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
+    FrameState *state =
+        &self->render_system->render_thread->frame_states[frame_idx];
+    TB_DYN_ARR_FOREACH(state->draw_contexts, ctx_idx) {
+      DrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
+      draw_ctx->batch_count = 0;
+    }
+    TB_DYN_ARR_FOREACH(state->dispatch_contexts, ctx_idx) {
+      DispatchContext *dispatch_ctx =
+          &TB_DYN_ARR_AT(state->dispatch_contexts, ctx_idx);
+      dispatch_ctx->batch_count = 0;
+    }
+  }
 }
 
 TbDrawContextId
@@ -4475,73 +4404,4 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
   }
 
   ctx->batch_count = new_count;
-}
-
-void tick_render_pipeline_sys(ecs_iter_t *it) {
-  RenderPipelineSystem *sys = ecs_field(it, RenderPipelineSystem, 1);
-  tick_render_pipeline_system_internal(sys, NULL, NULL, it->delta_time);
-}
-
-void rp_check_swapchain_resize(ecs_iter_t *it) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline Check Resize");
-  RenderPipelineSystem *rp_sys = ecs_field(it, RenderPipelineSystem, 1);
-  RenderSystem *rnd_sys = rp_sys->render_system;
-  if (rnd_sys->render_thread->swapchain_resize_signal) {
-    TracyCZoneN(resize_ctx, "Resize", true);
-    tb_rnd_on_swapchain_resize(rp_sys);
-
-    rnd_sys->frame_idx = 0;
-
-    // Re-create all render thread semaphores
-    for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-      SDL_DestroySemaphore(
-          rnd_sys->render_thread->frame_states[frame_idx].wait_sem);
-      rnd_sys->render_thread->frame_states[frame_idx].wait_sem =
-          SDL_CreateSemaphore(1);
-
-      // Clear out any in flight descriptor updates since this resize will
-      // invalidate them
-      TB_DYN_ARR_CLEAR(
-          rnd_sys->render_thread->frame_states[frame_idx].set_write_queue);
-    }
-
-    // Let the render thread know we're done handling the resize on the
-    // main thread
-    SDL_SemPost(rnd_sys->render_thread->resized);
-
-    // Let the render thread process frame index 0
-    tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
-    TracyCZoneEnd(resize_ctx);
-  }
-}
-
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                     Allocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-
-  RenderPipelineSystem sys = {0};
-  create_render_pipeline_system_internal(&sys, std_alloc, tmp_alloc, rnd_sys,
-                                         rt_sys, view_sys);
-  // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(RenderPipelineSystem), RenderPipelineSystem, &sys);
-
-  ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
-             RenderPipelineSystem(RenderPipelineSystem))
-
-  ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
-             RenderPipelineSystem(RenderPipelineSystem))
-}
-
-void tb_unregister_render_pipeline_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  RenderPipelineSystem *sys = ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  destroy_render_pipeline_system(sys);
-  ecs_singleton_remove(ecs, RenderPipelineSystem);
 }

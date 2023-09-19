@@ -2,18 +2,10 @@
 
 #include "simd.h"
 
-typedef struct RenderSystem RenderSystem;
-
 #define SkyComponentId 0xCAFEB0BA
 #define SkyComponentIdStr "0xCAFEB0BA"
 
-typedef struct ComponentDescriptor ComponentDescriptor;
-
-typedef struct SkyComponentDescriptor {
-  float cirrus;
-  float cumulus;
-  float3 sun_dir;
-} SkyComponentDescriptor;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct SkyComponent {
   float time;
@@ -22,4 +14,4 @@ typedef struct SkyComponent {
   float3 sun_dir;
 } SkyComponent;
 
-void tb_sky_component_descriptor(ComponentDescriptor *desc);
+void tb_register_sky_component(ecs_world_t *ecs);

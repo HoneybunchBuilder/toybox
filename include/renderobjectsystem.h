@@ -13,13 +13,10 @@ typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 typedef struct CommonObjectData CommonObjectData;
 
+typedef struct ecs_world_t ecs_world_t;
+
 typedef uint64_t TbRenderObjectId;
 static const uint64_t InvalidRenderObjectId = SDL_MAX_UINT64;
-
-typedef struct RenderObjectSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} RenderObjectSystemDescriptor;
 
 typedef struct RenderObjectSystemFrameState {
   VkDescriptorPool pool;
@@ -37,8 +34,9 @@ typedef struct RenderObjectSystem {
   TB_DYN_ARR_OF(CommonObjectData) render_object_data;
 } RenderObjectSystem;
 
-void tb_render_object_system_descriptor(
-    SystemDescriptor *desc, const RenderObjectSystemDescriptor *object_desc);
+void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc);
+void tb_unregister_render_object_sys(ecs_world_t *ecs);
 
 TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self);
 
@@ -50,8 +48,3 @@ VkDescriptorSet tb_render_object_system_get_descriptor(RenderObjectSystem *self,
 const CommonObjectData *
 tb_render_object_system_get_data(RenderObjectSystem *self,
                                  TbRenderObjectId object);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc);
-void tb_unregister_render_object_sys(ecs_world_t *ecs);

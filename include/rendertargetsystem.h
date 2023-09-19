@@ -11,14 +11,11 @@
 
 typedef uint32_t TbRenderTargetId;
 static const TbRenderTargetId InvalidRenderTargetId = SDL_MAX_UINT32;
-typedef struct SystemDescriptor SystemDescriptor;
+
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTarget RenderTarget;
 
-typedef struct RenderTargetSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} RenderTargetSystemDescriptor;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct RenderTargetDescriptor {
   const char *name;
@@ -54,6 +51,10 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId bloom_mip_chain;
 } RenderTargetSystem;
 
+void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc);
+void tb_unregister_render_target_sys(ecs_world_t *ecs);
+
 void tb_reimport_swapchain(RenderTargetSystem *self);
 
 TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
@@ -80,11 +81,3 @@ VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
                                           TbRenderTargetId rt);
 VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
                                    TbRenderTargetId rt);
-
-void tb_render_target_system_descriptor(
-    SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc);
-void tb_unregister_render_target_sys(ecs_world_t *ecs);

@@ -10,13 +10,7 @@
 #define TB_VMA_TMP_HOST_MB 256
 #define TB_MAX_MIPS 16
 
-typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct RenderSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-  RenderThread *render_thread;
-} RenderSystemDescriptor;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct RenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
@@ -51,6 +45,10 @@ typedef struct RenderSystem {
   uint32_t frame_idx;
   RenderSystemFrameState frame_states[3];
 } RenderSystem;
+
+void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc, RenderThread *render_thread);
+void tb_unregister_render_sys(ecs_world_t *ecs);
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                           uint32_t alignment,
@@ -133,12 +131,3 @@ tb_rnd_frame_desc_pool_tick(RenderSystem *self,
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(RenderSystem *self,
                                                FrameDescriptorPool *pools,
                                                uint32_t set_idx);
-
-void tb_render_system_descriptor(SystemDescriptor *desc,
-                                 const RenderSystemDescriptor *render_desc);
-
-// Flecs
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
-                            Allocator tmp_alloc, RenderThread *render_thread);
-void tb_unregister_render_sys(ecs_world_t *ecs);

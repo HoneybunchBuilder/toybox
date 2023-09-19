@@ -20,11 +20,13 @@ typedef uint32_t TbDrawContextId;
 static const TbDrawContextId InvalidDrawContextId = SDL_MAX_UINT32;
 typedef uint32_t TbDispatchContextId;
 static const TbDispatchContextId InvalidDispatchContextId = SDL_MAX_UINT32;
-typedef struct SystemDescriptor SystemDescriptor;
+
 typedef struct RenderSystem RenderSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct RenderPass RenderPass;
 typedef struct ViewSystem ViewSystem;
+
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct PassAttachment {
   VkClearValue clear_value;
@@ -70,11 +72,6 @@ typedef struct DispatchContextDescriptor {
   tb_record_dispatch_batch *dispatch_fn;
 } DispatchContextDescriptor;
 typedef struct DispatchContext DispatchContext;
-
-typedef struct RenderPipelineSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} RenderPipelineSystemDescriptor;
 
 typedef struct RenderPipelineSystem {
   Allocator std_alloc;
@@ -152,8 +149,9 @@ typedef struct RenderPipelineSystem {
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
 } RenderPipelineSystem;
 
-void tb_render_pipeline_system_descriptor(
-    SystemDescriptor *desc, const RenderPipelineSystemDescriptor *pipe_desc);
+void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                     Allocator tmp_alloc);
+void tb_unregister_render_pipeline_sys(ecs_world_t *ecs);
 
 void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self);
 
@@ -178,8 +176,3 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
                                              TbDispatchContextId dispatch_ctx,
                                              uint32_t batch_count,
                                              const DispatchBatch *batches);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                     Allocator tmp_alloc);
-void tb_unregister_render_pipeline_sys(ecs_world_t *ecs);

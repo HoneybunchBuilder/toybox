@@ -21,10 +21,19 @@ typedef struct TbMaterial {
   TbTextureId metal_rough_map;
 } TbMaterial;
 
-MaterialSystem create_material_system_internal(Allocator std_alloc,
-                                               Allocator tmp_alloc,
-                                               RenderSystem *rnd_sys,
-                                               TextureSystem *tex_sys) {
+uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
+  TB_DYN_ARR_FOREACH(self->materials, i) {
+    if (TB_DYN_ARR_AT(self->materials, i).id == id) {
+      return i;
+      break;
+    }
+  }
+  return SDL_MAX_UINT32;
+}
+
+MaterialSystem create_material_system(Allocator std_alloc, Allocator tmp_alloc,
+                                      RenderSystem *rnd_sys,
+                                      TextureSystem *tex_sys) {
   MaterialSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
@@ -130,33 +139,8 @@ MaterialSystem create_material_system_internal(Allocator std_alloc,
   return sys;
 }
 
-bool create_material_system(MaterialSystem *self,
-                            const MaterialSystemDescriptor *desc,
-                            uint32_t system_dep_count,
-                            System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which materials depend on",
-                  false);
-  TextureSystem *texture_system =
-      (TextureSystem *)tb_find_system_dep_self_by_id(
-          system_deps, system_dep_count, TextureSystemId);
-  TB_CHECK_RETURN(texture_system,
-                  "Failed to find texture system which materials depend on",
-                  false);
-
-  *self = create_material_system_internal(desc->std_alloc, desc->tmp_alloc,
-                                          render_system, texture_system);
-
-  return true;
-}
-
 void destroy_material_system(MaterialSystem *self) {
   RenderSystem *render_system = self->render_system;
-  VkDevice device = render_system->render_thread->device;
-  const VkAllocationCallbacks *vk_alloc = &render_system->vk_host_alloc_cb;
 
   tb_free(self->std_alloc, (void *)self->default_material);
 
@@ -177,31 +161,27 @@ void destroy_material_system(MaterialSystem *self) {
   *self = (MaterialSystem){0};
 }
 
-TB_DEFINE_SYSTEM(material, MaterialSystem, MaterialSystemDescriptor)
+void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
+                              Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, TextureSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
 
-void tb_material_system_descriptor(SystemDescriptor *desc,
-                                   const MaterialSystemDescriptor *mat_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Material",
-      .size = sizeof(MaterialSystem),
-      .desc = (InternalDescriptor)mat_desc,
-      .id = MaterialSystemId,
-      .system_dep_count = 2,
-      .system_deps[0] = RenderSystemId,
-      .system_deps[1] = TextureSystemId,
-      .create = tb_create_material_system,
-      .destroy = tb_destroy_material_system,
-  };
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+
+  MaterialSystem sys =
+      create_material_system(std_alloc, tmp_alloc, rnd_sys, tex_sys);
+
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(MaterialSystem), MaterialSystem, &sys);
 }
 
-uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
-  TB_DYN_ARR_FOREACH(self->materials, i) {
-    if (TB_DYN_ARR_AT(self->materials, i).id == id) {
-      return i;
-      break;
-    }
-  }
-  return SDL_MAX_UINT32;
+void tb_unregister_material_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, MaterialSystem);
+  MaterialSystem *sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  destroy_material_system(sys);
+  ecs_singleton_remove(ecs, MaterialSystem);
 }
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self) {
@@ -708,33 +688,4 @@ void tb_mat_system_release_material_ref(MaterialSystem *self,
     vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);
     *gpu_buf = (TbBuffer){0};
   }
-}
-
-void destroy_material_sys(ecs_iter_t *it) {
-  MaterialSystem *sys = ecs_field(it, MaterialSystem, 1);
-  destroy_material_system(sys);
-}
-
-void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
-                              Allocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, TextureSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
-
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
-
-  MaterialSystem sys =
-      create_material_system_internal(std_alloc, tmp_alloc, rnd_sys, tex_sys);
-
-  // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(MaterialSystem), MaterialSystem, &sys);
-
-  ECS_OBSERVER(ecs, destroy_material_sys, EcsOnRemove,
-               MaterialSystem(MaterialSystem));
-}
-
-void tb_unregister_material_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, MaterialSystem);
-  ecs_singleton_remove(ecs, MaterialSystem);
 }

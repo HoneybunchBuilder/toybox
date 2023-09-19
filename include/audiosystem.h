@@ -7,18 +7,13 @@
 
 #define TB_AUDIO_CHUNK_SIZE 2048
 
-typedef struct SystemDescriptor SystemDescriptor;
+typedef struct TbWorld TbWorld;
 
 typedef uint32_t TbMusicId;
 typedef uint32_t TbSoundEffectId;
 
 typedef struct TbMusic TbMusic;
 typedef struct TbSoundEffect TbSoundEffect;
-
-typedef struct AudioSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} AudioSystemDescriptor;
 
 typedef struct AudioSystem {
   Allocator std_alloc;
@@ -32,8 +27,8 @@ typedef struct AudioSystem {
   TB_DYN_ARR_OF(TbSoundEffect) sfx;
 } AudioSystem;
 
-void tb_audio_system_descriptor(SystemDescriptor *desc,
-                                const AudioSystemDescriptor *audio_desc);
+void tb_register_audio_sys(TbWorld *world);
+void tb_unregister_audio_sys(TbWorld *world);
 
 TbMusicId tb_audio_system_load_music(AudioSystem *self, const char *path);
 TbSoundEffectId tb_audio_system_load_effect(AudioSystem *self,
@@ -43,7 +38,3 @@ void tb_audio_system_release_effect_ref(AudioSystem *self, TbSoundEffectId id);
 
 void tb_audio_play_music(AudioSystem *self, TbMusicId id);
 void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id);
-
-typedef struct TbWorld TbWorld;
-void tb_register_audio_sys(TbWorld *world);
-void tb_unregister_audio_sys(TbWorld *world);

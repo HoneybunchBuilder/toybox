@@ -8,12 +8,15 @@
 
 #define MaterialSystemId 0x1BADB002
 
-typedef struct SystemDescriptor SystemDescriptor;
-typedef struct RenderSystem RenderSystem;
-typedef struct TextureSystem TextureSystem;
 typedef struct cgltf_material cgltf_material;
+
+typedef struct ecs_world_t ecs_world_t;
+
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+
+typedef struct RenderSystem RenderSystem;
+typedef struct TextureSystem TextureSystem;
 
 typedef uint64_t TbMaterialId;
 typedef uint64_t TbTextureId;
@@ -21,12 +24,6 @@ typedef uint64_t TbMaterialPerm;
 
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
 typedef struct TbMaterial TbMaterial;
-
-typedef struct MaterialSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} MaterialSystemDescriptor;
-
 typedef struct MaterialSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
@@ -46,8 +43,9 @@ typedef struct MaterialSystem {
   VkDescriptorSet *mat_sets;
 } MaterialSystem;
 
-void tb_material_system_descriptor(SystemDescriptor *desc,
-                                   const MaterialSystemDescriptor *mat_desc);
+void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
+                              Allocator tmp_alloc);
+void tb_unregister_material_sys(ecs_world_t *ecs);
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self);
 
@@ -58,8 +56,3 @@ TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat);
 VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat);
 
 void tb_mat_system_release_material_ref(MaterialSystem *self, TbMaterialId mat);
-
-typedef struct ecs_world_t ecs_world_t;
-void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
-                              Allocator tmp_alloc);
-void tb_unregister_material_sys(ecs_world_t *ecs);
