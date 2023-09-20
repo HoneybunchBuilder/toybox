@@ -1,6 +1,7 @@
 #include "oceansystem.h"
 
 #include "assets.h"
+#include "assetsystem.h"
 #include "audiosystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
@@ -17,6 +18,8 @@
 #include "viewsystem.h"
 #include "visualloggingsystem.h"
 #include "world.h"
+
+#include <flecs.h>
 
 // Ignore some warnings for the generated headers
 #ifdef __clang__
@@ -311,43 +314,14 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
   return err;
 }
 
-bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
-                         uint32_t system_dep_count,
-                         System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which ocean depends on", false);
-  MeshSystem *mesh_system =
-      tb_get_system(system_deps, system_dep_count, MeshSystem);
-  TB_CHECK_RETURN(mesh_system,
-                  "Failed to find mesh system which ocean depends on", false);
-  ViewSystem *view_system =
-      tb_get_system(system_deps, system_dep_count, ViewSystem);
-  TB_CHECK_RETURN(mesh_system,
-                  "Failed to find view system which ocean depends on", false);
-  RenderPipelineSystem *render_pipe_system =
-      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
-  TB_CHECK_RETURN(
-      render_pipe_system,
-      "Failed to find render pipeline system which ocean depends on", false);
-  RenderTargetSystem *render_target_system =
-      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find render target system which ocean depends on",
-                  false);
-  VisualLoggingSystem *vlog =
-      tb_get_system(system_deps, system_dep_count, VisualLoggingSystem);
-  TB_CHECK_RETURN(vlog,
-                  "Failed to find visual logging system which ocean depends on",
-                  false);
-  AudioSystem *audio_system =
-      tb_get_system(system_deps, system_dep_count, AudioSystem);
-  TB_CHECK_RETURN(audio_system,
-                  "Failed to find audio system which ocean depends on", false);
-
-  *self = (OceanSystem){
+OceanSystem create_ocean_system(
+    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    RenderPipelineSystem *render_pipe_system, MeshSystem *mesh_system,
+    ViewSystem *view_system, RenderTargetSystem *render_target_system,
+    VisualLoggingSystem *vlog, AudioSystem *audio_system) {
+  OceanSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .mesh_system = mesh_system,
@@ -355,8 +329,7 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       .render_target_system = render_target_system,
       .vlog = vlog,
       .audio_system = audio_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+
   };
 
   // Load sound effects
@@ -364,25 +337,25 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     char file_name[100] = {0};
     for (uint32_t i = 0; i < 4; ++i) {
       SDL_snprintf(file_name, 100, "audio/wave0%d.wav", i + 1);
-      char *wave_path = tb_resolve_asset_path(self->tmp_alloc, file_name);
-      self->wave_sounds[i] =
-          tb_audio_system_load_effect(self->audio_system, wave_path);
+      char *wave_path = tb_resolve_asset_path(sys.tmp_alloc, file_name);
+      sys.wave_sounds[i] =
+          tb_audio_system_load_effect(sys.audio_system, wave_path);
     }
     // And music
     /*
-    char *mus_path = tb_resolve_asset_path(self->tmp_alloc, "audio/test.ogg");
-    self->music = tb_audio_system_load_music(self->audio_system, mus_path);
-    tb_audio_play_music(self->audio_system, self->music);
+    char *mus_path = tb_resolve_asset_path(sys.tmp_alloc, "audio/test.ogg");
+    sys.music = tb_audio_system_load_music(sys.audio_system, mus_path);
+    tb_audio_play_music(sys.audio_system, sys.music);
     */
   }
 
   // Load the known glb that has the ocean mesh
   // Get qualified path to scene asset
-  char *asset_path = tb_resolve_asset_path(self->tmp_alloc, "scenes/Ocean.glb");
+  char *asset_path = tb_resolve_asset_path(sys.tmp_alloc, "scenes/Ocean.glb");
 
   // Load glb off disk
-  cgltf_data *data = tb_read_glb(self->std_alloc, asset_path);
-  TB_CHECK_RETURN(data, "Failed to load glb", false);
+  cgltf_data *data = tb_read_glb(sys.std_alloc, asset_path);
+  TB_CHECK(data, "Failed to load glb");
 
   // Parse expected mesh from glb
   {
@@ -390,13 +363,12 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     // Must put mesh name on std_alloc for proper cleanup
     {
       const char *static_name = "Ocean";
-      char *name =
-          tb_alloc_nm_tp(self->std_alloc, sizeof(static_name) + 1, char);
+      char *name = tb_alloc_nm_tp(sys.std_alloc, sizeof(static_name) + 1, char);
       SDL_snprintf(name, sizeof(static_name), "%s", static_name);
       ocean_mesh->name = name;
     }
 
-    self->ocean_transform = tb_transform_from_node(&data->nodes[0]);
+    sys.ocean_transform = tb_transform_from_node(&data->nodes[0]);
 
     // Determine mesh's width and height
 
@@ -424,25 +396,25 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
       aabb_add_point(&local_aabb, f3(min[0], min[1], min[2]));
       aabb_add_point(&local_aabb, f3(max[0], max[1], max[2]));
 
-      float4x4 m = transform_to_matrix(&self->ocean_transform);
+      float4x4 m = transform_to_matrix(&sys.ocean_transform);
       local_aabb = aabb_transform(m, local_aabb);
 
-      self->tile_width = aabb_get_width(local_aabb);
-      self->tile_depth = aabb_get_depth(local_aabb);
+      sys.tile_width = aabb_get_width(local_aabb);
+      sys.tile_depth = aabb_get_depth(local_aabb);
     }
 
-    self->ocean_index_type = ocean_mesh->primitives->indices->stride == 2
-                                 ? VK_INDEX_TYPE_UINT16
-                                 : VK_INDEX_TYPE_UINT32;
-    self->ocean_index_count = ocean_mesh->primitives->indices->count;
+    sys.ocean_index_type = ocean_mesh->primitives->indices->stride == 2
+                               ? VK_INDEX_TYPE_UINT16
+                               : VK_INDEX_TYPE_UINT32;
+    sys.ocean_index_count = ocean_mesh->primitives->indices->count;
 
     uint64_t index_size =
-        self->ocean_index_count *
-        (self->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
+        sys.ocean_index_count *
+        (sys.ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
     uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
-    self->ocean_pos_offset = index_size + idx_padding;
+    sys.ocean_pos_offset = index_size + idx_padding;
 
-    self->ocean_patch_mesh =
+    sys.ocean_patch_mesh =
         tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
   }
 
@@ -466,8 +438,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
     err = tb_rnd_create_sampler(render_system, &create_info, "Ocean Sampler",
-                                &self->sampler);
-    TB_VK_CHECK_RET(err, "Failed to create ocean sampler", err);
+                                &sys.sampler);
+    TB_VK_CHECK(err, "Failed to create ocean sampler");
   }
   // Create immutable sampler for shadows
   {
@@ -485,8 +457,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
     err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Ocean Shadow Sampler", &self->shadow_sampler);
-    TB_VK_CHECK_RET(err, "Failed to create ocean shadow sampler", err);
+                                "Ocean Shadow Sampler", &sys.shadow_sampler);
+    TB_VK_CHECK(err, "Failed to create ocean shadow sampler");
   }
 
   // Create ocean descriptor set layout
@@ -518,20 +490,20 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &self->sampler,
+                .pImmutableSamplers = &sys.sampler,
             },
             {
                 .binding = 4,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &self->shadow_sampler,
+                .pImmutableSamplers = &sys.shadow_sampler,
             },
         }};
     err = tb_rnd_create_set_layout(render_system, &create_info,
                                    "Ocean Descriptor Set Layout",
-                                   &self->set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create ocean descriptor set layout", false);
+                                   &sys.set_layout);
+    TB_VK_CHECK(err, "Failed to create ocean descriptor set layout");
   }
 
   // Create ocean pipeline layout
@@ -541,8 +513,8 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
         .setLayoutCount = 2,
         .pSetLayouts =
             (VkDescriptorSetLayout[2]){
-                self->set_layout,
-                self->view_system->set_layout,
+                sys.set_layout,
+                sys.view_system->set_layout,
             },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =
@@ -553,45 +525,42 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
                 },
             },
     };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                        "Ocean Pipeline Layout",
-                                        &self->pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline layout", false);
+    err = tb_rnd_create_pipeline_layout(
+        render_system, &create_info, "Ocean Pipeline Layout", &sys.pipe_layout);
+    TB_VK_CHECK(err, "Failed to create ocean pipeline layout");
   }
 
   // Retrieve passes
-  TbRenderPassId depth_id = self->render_pipe_system->transparent_depth_pass;
-  TbRenderPassId color_id = self->render_pipe_system->transparent_color_pass;
+  TbRenderPassId depth_id = sys.render_pipe_system->transparent_depth_pass;
+  TbRenderPassId color_id = sys.render_pipe_system->transparent_color_pass;
 
   {
     uint32_t attach_count = 0;
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_depth_pass, &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+        sys.render_pipe_system, sys.render_pipe_system->transparent_depth_pass,
+        &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexpected");
     PassAttachment depth_info = {0};
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_depth_pass, &attach_count,
-        &depth_info);
+        sys.render_pipe_system, sys.render_pipe_system->transparent_depth_pass,
+        &attach_count, &depth_info);
 
     VkFormat depth_format = tb_render_target_get_format(
-        self->render_pipe_system->render_target_system, depth_info.attachment);
+        sys.render_pipe_system->render_target_system, depth_info.attachment);
 
     VkFormat color_format = VK_FORMAT_UNDEFINED;
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_color_pass, &attach_count, NULL);
-    TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+        sys.render_pipe_system, sys.render_pipe_system->transparent_color_pass,
+        &attach_count, NULL);
+    TB_CHECK(attach_count == 2, "Unexpected");
     PassAttachment attach_info[2] = {0};
     tb_render_pipeline_get_attachments(
-        self->render_pipe_system,
-        self->render_pipe_system->transparent_color_pass, &attach_count,
-        attach_info);
+        sys.render_pipe_system, sys.render_pipe_system->transparent_color_pass,
+        &attach_count, attach_info);
 
     for (uint32_t i = 0; i < attach_count; i++) {
       VkFormat format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
+          sys.render_pipe_system->render_target_system,
           attach_info[i].attachment);
       if (format != VK_FORMAT_D32_SFLOAT) {
         color_format = format;
@@ -600,30 +569,28 @@ bool create_ocean_system(OceanSystem *self, const OceanSystemDescriptor *desc,
     }
 
     err = create_ocean_pipelines(render_system, color_format, depth_format,
-                                 self->pipe_layout, &self->prepass_pipeline,
-                                 &self->pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", false);
+                                 sys.pipe_layout, &sys.prepass_pipeline,
+                                 &sys.pipeline);
+    TB_VK_CHECK(err, "Failed to create ocean pipeline");
   }
 
-  self->trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
                               .draw_fn = ocean_prepass_record,
                               .pass_id = depth_id,
                           });
-  self->trans_color_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.trans_color_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(OceanDrawBatch),
                               .draw_fn = ocean_pass_record,
                               .pass_id = color_id,
                           });
 
-  self->ocean_geom_buffer =
-      tb_mesh_system_get_gpu_mesh(mesh_system, self->ocean_patch_mesh);
-  TB_CHECK_RETURN(self->ocean_geom_buffer, "Failed to get gpu buffer for mesh",
-                  false);
-
-  return true;
+  sys.ocean_geom_buffer =
+      tb_mesh_system_get_gpu_mesh(mesh_system, sys.ocean_patch_mesh);
+  TB_CHECK(sys.ocean_geom_buffer, "Failed to get gpu buffer for mesh");
+  return sys;
 }
 
 void destroy_ocean_system(OceanSystem *self) {
@@ -651,387 +618,401 @@ void destroy_ocean_system(OceanSystem *self) {
   *self = (OceanSystem){0};
 }
 
-void tick_ocean_system_internal(OceanSystem *self, const SystemInput *input,
-                                SystemOutput *output, float delta_seconds) {
-  TracyCZoneNC(ctx, "Ocean System Tick", TracyCategoryColorRendering, true);
-
-  EntityId *ocean_entities = tb_get_column_entity_ids(input, 0);
-
-  const uint32_t ocean_count = tb_get_column_component_count(input, 0);
-  const PackedComponentStore *oceans =
-      tb_get_column_check_id(input, 0, 0, OceanComponentId);
-
-  const uint32_t camera_count = tb_get_column_component_count(input, 1);
-  const PackedComponentStore *cameras =
-      tb_get_column_check_id(input, 1, 0, CameraComponentId);
-
-  if (ocean_count == 0 || camera_count == 0) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
-
-  // Copy the ocean component for output
-  OceanComponent *out_oceans =
-      tb_alloc_nm_tp(self->tmp_alloc, ocean_count, OceanComponent);
-  SDL_memcpy(out_oceans, oceans->components,
-             ocean_count * sizeof(OceanComponent));
+void ocean_update_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Update System", TracyCategoryColorCore, true);
+  OceanComponent *oceans = ecs_field(it, OceanComponent, 1);
   // Update time on all ocean components
-  for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
-    OceanComponent *ocean = &out_oceans[ocean_idx];
-    ocean->time += delta_seconds;
+  for (int32_t i = 0; i < it->count; ++i) {
+    OceanComponent *ocean = &oceans[i];
+    ocean->time += it->delta_time;
   }
+  TracyCZoneEnd(ctx);
+}
 
-  VkResult err = VK_SUCCESS;
-  RenderSystem *render_system = self->render_system;
+void ocean_audio_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Audio System", TracyCategoryColorAudio, true);
 
-  // We want to draw a number of ocean tiles to cover the entire ocean plane
-  // Since only visible ocean tiles need to be drawn we can calculate the
-  // tiles relative to the view
+  ecs_world_t *ecs = it->world;
+  ECS_COMPONENT(ecs, OceanSystem);
 
-  // only handle one camera for now
-  TB_CHECK(camera_count == 1,
-           "Too many cameras for the ocean system to handle");
+  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
 
-  const CameraComponent *camera = tb_get_component(cameras, 0, CameraComponent);
-
-  // Get the camera's view so we can examine its frustum and decide where to
-  // place ocean tiles
-  const View *view = tb_get_view(self->view_system, camera->view_id);
-  float4x4 inv_v = inv_mf44(view->view_data.v);
-
-  // Get frustum AABB in view space by taking a unit frustum and
-  // transforming it by the view's projection
-  AABB frust_aabb = aabb_init();
-  {
-    float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {{0}};
-    for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
-      float3 corner = tb_frustum_corners[i];
-      // Transform from screen space to world space
-      float4 inv_corner = mulf44(view->view_data.inv_vp,
-                                 f4(corner[0], corner[1], corner[2], 1.0f));
-      frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
-      frustum_corners[i][TB_HEIGHT_IDX] = 0.0f; // Flatten the AABB
-      aabb_add_point(&frust_aabb, frustum_corners[i]);
-    }
-  }
-
-  // Determine how many tiles we'll need
-  uint32_t tile_count = 0;
-  uint32_t horiz_tile_count = 0;
-  uint32_t deep_tile_count = 0;
-  {
-    float frust_width = aabb_get_width(frust_aabb);
-    float frust_depth = aabb_get_depth(frust_aabb);
-
-    horiz_tile_count = (uint32_t)SDL_ceilf(frust_width / self->tile_width);
-    deep_tile_count = (uint32_t)SDL_ceilf(frust_depth / self->tile_depth);
-    tile_count = horiz_tile_count * deep_tile_count;
-  }
-
-  // See which of these tiles pass the visibility check against the camera
-  uint32_t visible_tile_count = 0;
-  // Worst case the projection is orthographic and all tiles are visible
-  // That allocation is quick to make up front on the temp allocator
-  float4 *visible_tile_offsets =
-      tb_alloc_nm_tp(self->tmp_alloc, tile_count, float4);
-  {
-    float half_width = self->tile_width * 0.5f;
-    float half_depth = self->tile_depth * 0.5f;
-    float4 pos = {
-        frust_aabb.min[TB_WIDTH_IDX] + half_width,
-        0,
-        frust_aabb.min[TB_DEPTH_IDX] + half_depth,
-        0,
-    };
-
-    float3 view_to_world_offset = f4tof3(inv_v.col3);
-    view_to_world_offset[TB_HEIGHT_IDX] = 0.0f;
-
-    for (uint32_t d = 0; d < deep_tile_count; ++d) {
-      for (uint32_t h = 0; h < horiz_tile_count; ++h) {
-        AABB world_aabb = aabb_init();
-        float3 min = f3(-half_width, 0, -half_depth) + pos;
-        float3 max = f3(half_width, 0, half_depth) + pos;
-
-        aabb_add_point(&world_aabb, min + view_to_world_offset);
-        aabb_add_point(&world_aabb, max + view_to_world_offset);
-
-        // TODO: Make frustum test more reliable
-        // if (frustum_test_aabb(&view->frustum, &world_aabb))
-        {
-          float3 offset = pos;
-          offset[TB_HEIGHT_IDX] = 0.0f;
-          // tb_vlog_location(self->vlog, offset, 20.0f, f3(0, 1, 0));
-          visible_tile_offsets[visible_tile_count++] = f3tof4(offset, 0.0f);
-        }
-        // else {
-        //   tb_vlog_location(self->vlog, pos, 20.0f, f3(1, 0, 0));
-        // }
-        pos[TB_WIDTH_IDX] += self->tile_width;
-      }
-      pos[TB_WIDTH_IDX] = frust_aabb.min[TB_WIDTH_IDX] + half_width,
-      pos[TB_DEPTH_IDX] += self->tile_depth;
-    }
-  }
-  // Now that all the tile offsets are calculated, move them on to the tmp
-  // gpu which we know will get uploaded and record the offset
-  TbHostBuffer inst_buffer = {0};
-  {
-    uint64_t size = sizeof(float4) * visible_tile_count;
-    err = tb_rnd_sys_alloc_tmp_host_buffer(self->render_system, size, 0x40,
-                                           &inst_buffer);
-    TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
-
-    SDL_memcpy(inst_buffer.ptr, visible_tile_offsets, size);
-  }
-
-  // Allocate and write all ocean descriptor sets
-  {
-    // Allocate all the descriptor sets
-    {
-      VkDescriptorPoolCreateInfo pool_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = ocean_count * 8,
-          .poolSizeCount = 1,
-          .pPoolSizes =
-              &(VkDescriptorPoolSize){
-                  .descriptorCount = ocean_count * 8,
-                  .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-              },
-      };
-      VkDescriptorSetLayout *layouts =
-          tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < ocean_count; ++i) {
-        layouts[i] = self->set_layout;
-      }
-      err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
-                                        self->ocean_pools, ocean_count);
-      TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
-    }
-
-    // Just upload and write all views for now, they tend to be important anyway
-    const uint32_t write_count = ocean_count * 3;
-    VkWriteDescriptorSet *writes =
-        tb_alloc_nm_tp(self->tmp_alloc, write_count, VkWriteDescriptorSet);
-    VkDescriptorBufferInfo *buffer_info =
-        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorBufferInfo);
-    VkDescriptorImageInfo *depth_info =
-        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorImageInfo);
-    VkDescriptorImageInfo *color_info =
-        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, VkDescriptorImageInfo);
-    TbHostBuffer *buffers =
-        tb_alloc_nm_tp(self->tmp_alloc, ocean_count, TbHostBuffer);
-    for (uint32_t oc_idx = 0; oc_idx < ocean_count; ++oc_idx) {
-      const OceanComponent *ocean_comp =
-          tb_get_component(oceans, oc_idx, OceanComponent);
-      TbHostBuffer *buffer = &buffers[oc_idx];
-
-      const uint32_t write_idx = oc_idx * 3;
-
-      const uint32_t wave_count = SDL_max(ocean_comp->wave_count, TB_WAVE_MAX);
-
-      OceanData data = {
-          .time_waves = f4(ocean_comp->time, wave_count, 0, 0),
-      };
-      SDL_memcpy(data.wave, ocean_comp->waves, wave_count * sizeof(OceanWave));
-
-      // Write ocean data into the tmp buffer we know will wind up on the GPU
-      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, sizeof(OceanData),
-                                             0x40, buffer);
-      TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for ocean");
-
-      // Copy view data to the allocated buffer
-      SDL_memcpy(buffer->ptr, &data, sizeof(OceanData));
-
-      VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
-
-      // Get the descriptor we want to write to
-      VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
-          render_system, self->ocean_pools, oc_idx);
-
-      buffer_info[oc_idx] = (VkDescriptorBufferInfo){
-          .buffer = tmp_gpu_buffer,
-          .offset = buffer->offset,
-          .range = sizeof(OceanData),
-      };
-
-      VkImageView depth_view = tb_render_target_get_view(
-          self->render_target_system, self->render_system->frame_idx,
-          self->render_target_system->depth_buffer_copy);
-
-      VkImageView color_view = tb_render_target_get_view(
-          self->render_target_system, self->render_system->frame_idx,
-          self->render_target_system->color_copy);
-
-      depth_info[oc_idx] = (VkDescriptorImageInfo){
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = depth_view,
-      };
-
-      color_info[oc_idx] = (VkDescriptorImageInfo){
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = color_view,
-      };
-
-      // Construct write descriptors
-      writes[write_idx + 0] = (VkWriteDescriptorSet){
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .dstSet = ocean_set,
-          .dstBinding = 0,
-          .dstArrayElement = 0,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-          .pBufferInfo = &buffer_info[oc_idx],
-      };
-      writes[write_idx + 1] = (VkWriteDescriptorSet){
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .dstSet = ocean_set,
-          .dstBinding = 1,
-          .dstArrayElement = 0,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .pImageInfo = &depth_info[oc_idx],
-      };
-      writes[write_idx + 2] = (VkWriteDescriptorSet){
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .dstSet = ocean_set,
-          .dstBinding = 2,
-          .dstArrayElement = 0,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .pImageInfo = &color_info[oc_idx],
-      };
-    }
-    vkUpdateDescriptorSets(render_system->render_thread->device, write_count,
-                           writes, 0, NULL);
-  }
-
-  // TODO: Make this less hacky
-  const uint32_t width = render_system->render_thread->swapchain.width;
-  const uint32_t height = render_system->render_thread->swapchain.height;
-
-  // Draw the ocean
-  {
-
-    OceanPushConstants ocean_consts = {
-        .m = transform_to_matrix(&self->ocean_transform)};
-
-    // Max camera * ocean * tile draw batches are required
-    uint32_t batch_count = 0;
-    const uint32_t batch_max = ocean_count * camera_count * tile_count;
-
-    OceanDrawBatch *ocean_batches =
-        tb_alloc_nm_tp(self->tmp_alloc, batch_max, OceanDrawBatch);
-
-    DrawBatch *ocean_draw_batches =
-        tb_alloc_nm_tp(self->tmp_alloc, batch_max, DrawBatch);
-    DrawBatch *prepass_draw_batches =
-        tb_alloc_nm_tp(self->tmp_alloc, batch_max, DrawBatch);
-
-    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-      const CameraComponent *camera =
-          tb_get_component(cameras, cam_idx, CameraComponent);
-
-      VkDescriptorSet view_set =
-          tb_view_system_get_descriptor(self->view_system, camera->view_id);
-
-      for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
-        VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
-            self->render_system, self->ocean_pools, ocean_idx);
-
-        ocean_draw_batches[batch_count] = (DrawBatch){
-            .pipeline = self->pipeline,
-            .layout = self->pipe_layout,
-            .viewport = {0, height, width, -(float)height, 0, 1},
-            .scissor = {{0, 0}, {width, height}},
-            .user_batch = &ocean_batches[batch_count],
-        };
-        prepass_draw_batches[batch_count] = (DrawBatch){
-            .pipeline = self->prepass_pipeline,
-            .layout = self->pipe_layout,
-            .viewport = {0, height, width, -(float)height, 0, 1},
-            .scissor = {{0, 0}, {width, height}},
-            .user_batch = &ocean_batches[batch_count],
-        };
-        ocean_batches[batch_count] = (OceanDrawBatch){
-            .view_set = view_set,
-            .ocean_set = ocean_set,
-            .consts = ocean_consts,
-            .inst_buffer = tb_rnd_get_gpu_tmp_buffer(self->render_system),
-            .inst_offset = inst_buffer.offset,
-            .inst_count = visible_tile_count,
-            .geom_buffer = self->ocean_geom_buffer,
-            .index_type = (VkIndexType)self->ocean_index_type,
-            .index_count = self->ocean_index_count,
-            .pos_offset = self->ocean_pos_offset,
-        };
-        batch_count++;
-      }
-    }
-
-    // Draw to the prepass and the ocean pass
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->trans_depth_draw_ctx, batch_count,
-                                        prepass_draw_batches);
-    tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                        self->trans_color_draw_ctx, batch_count,
-                                        ocean_draw_batches);
-
-    // Report output (we've updated the time on the ocean component and the
-    // world transform state)
-    output->set_count = 1;
-    output->write_sets[0] = (SystemWriteSet){
-        .id = OceanComponentId,
-        .count = ocean_count,
-        .components = (uint8_t *)out_oceans,
-        .entities = ocean_entities,
-    };
-  }
-
-  // Run sound effect timer
-  {
-    self->wave_sound_timer -= delta_seconds;
-    if (self->wave_sound_timer <= 0.0f) {
-      self->wave_sound_timer = tb_randf(1.3f, 2.0f);
+  OceanComponent *components = ecs_field(it, OceanComponent, 1);
+  if (it->count > 0) {
+    (void)components;
+    sys->wave_sound_timer -= it->delta_time;
+    if (sys->wave_sound_timer <= 0.0f) {
+      sys->wave_sound_timer = tb_randf(1.3f, 2.0f);
 
       uint32_t idx = rand() % TB_OCEAN_SFX_COUNT;
-      tb_audio_play_effect(self->audio_system, self->wave_sounds[idx]);
+      tb_audio_play_effect(sys->audio_system, sys->wave_sounds[idx]);
+    }
+  }
+  TracyCZoneEnd(ctx);
+}
+
+void ocean_draw_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
+  ecs_world_t *ecs = it->world;
+
+  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, OceanComponent);
+  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  ecs_singleton_modified(ecs, OceanSystem);
+
+  // TODO: Make this less hacky
+  const uint32_t width = sys->render_system->render_thread->swapchain.width;
+  const uint32_t height = sys->render_system->render_thread->swapchain.height;
+
+  CameraComponent *cameras = ecs_field(it, CameraComponent, 1);
+  for (int32_t i = 0; i < it->count; ++i) {
+    CameraComponent *camera = &cameras[i];
+
+    VkResult err = VK_SUCCESS;
+    RenderSystem *render_system = sys->render_system;
+
+    // We want to draw a number of ocean tiles to cover the entire ocean plane
+    // Since only visible ocean tiles need to be drawn we can calculate the
+    // tiles relative to the view
+
+    // Get the camera's view so we can examine its frustum and decide where to
+    // place ocean tiles
+    const View *view = tb_get_view(sys->view_system, camera->view_id);
+    float4x4 inv_v = inv_mf44(view->view_data.v);
+
+    // Get frustum AABB in view space by taking a unit frustum and
+    // transforming it by the view's projection
+    AABB frust_aabb = aabb_init();
+    {
+      float3 frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {{0}};
+      for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
+        float3 corner = tb_frustum_corners[i];
+        // Transform from screen space to world space
+        float4 inv_corner = mulf44(view->view_data.inv_vp,
+                                   f4(corner[0], corner[1], corner[2], 1.0f));
+        frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
+        frustum_corners[i][TB_HEIGHT_IDX] = 0.0f; // Flatten the AABB
+        aabb_add_point(&frust_aabb, frustum_corners[i]);
+      }
+    }
+
+    // Determine how many tiles we'll need
+    uint32_t tile_count = 0;
+    uint32_t horiz_tile_count = 0;
+    uint32_t deep_tile_count = 0;
+    {
+      float frust_width = aabb_get_width(frust_aabb);
+      float frust_depth = aabb_get_depth(frust_aabb);
+
+      horiz_tile_count = (uint32_t)SDL_ceilf(frust_width / sys->tile_width);
+      deep_tile_count = (uint32_t)SDL_ceilf(frust_depth / sys->tile_depth);
+      tile_count = horiz_tile_count * deep_tile_count;
+    }
+
+    // See which of these tiles pass the visibility check against the camera
+    uint32_t visible_tile_count = 0;
+    // Worst case the projection is orthographic and all tiles are visible
+    // That allocation is quick to make up front on the temp allocator
+    float4 *visible_tile_offsets =
+        tb_alloc_nm_tp(sys->tmp_alloc, tile_count, float4);
+    {
+      float half_width = sys->tile_width * 0.5f;
+      float half_depth = sys->tile_depth * 0.5f;
+      float4 pos = {
+          frust_aabb.min[TB_WIDTH_IDX] + half_width,
+          0,
+          frust_aabb.min[TB_DEPTH_IDX] + half_depth,
+          0,
+      };
+
+      float3 view_to_world_offset = f4tof3(inv_v.col3);
+      view_to_world_offset[TB_HEIGHT_IDX] = 0.0f;
+
+      for (uint32_t d = 0; d < deep_tile_count; ++d) {
+        for (uint32_t h = 0; h < horiz_tile_count; ++h) {
+          AABB world_aabb = aabb_init();
+          float3 min = f3(-half_width, 0, -half_depth) + pos;
+          float3 max = f3(half_width, 0, half_depth) + pos;
+
+          aabb_add_point(&world_aabb, min + view_to_world_offset);
+          aabb_add_point(&world_aabb, max + view_to_world_offset);
+
+          // TODO: Make frustum test more reliable
+          // if (frustum_test_aabb(&view->frustum, &world_aabb))
+          {
+            float3 offset = pos;
+            offset[TB_HEIGHT_IDX] = 0.0f;
+            // tb_vlog_location(self->vlog, offset, 20.0f, f3(0, 1, 0));
+            visible_tile_offsets[visible_tile_count++] = f3tof4(offset, 0.0f);
+          }
+          // else {
+          //   tb_vlog_location(self->vlog, pos, 20.0f, f3(1, 0, 0));
+          // }
+          pos[TB_WIDTH_IDX] += sys->tile_width;
+        }
+        pos[TB_WIDTH_IDX] = frust_aabb.min[TB_WIDTH_IDX] + half_width,
+        pos[TB_DEPTH_IDX] += sys->tile_depth;
+      }
+    }
+    // Now that all the tile offsets are calculated, move them on to the tmp
+    // gpu which we know will get uploaded and record the offset
+    TbHostBuffer inst_buffer = {0};
+    {
+      uint64_t size = sizeof(float4) * visible_tile_count;
+      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, size, 0x40,
+                                             &inst_buffer);
+      TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
+
+      SDL_memcpy(inst_buffer.ptr, visible_tile_offsets, size);
+    }
+
+    // Query the ecs for ocean components that this view will iterate over
+    ecs_iter_t ocean_it = ecs_query_iter(ecs, sys->ocean_query);
+    while (ecs_query_next(&ocean_it)) {
+      const uint32_t ocean_count = ocean_it.count;
+      if (ocean_count == 0) {
+        continue;
+      }
+      const OceanComponent *oceans = ecs_field(&ocean_it, OceanComponent, 1);
+
+      // Allocate and write all ocean descriptor sets
+      {
+        // Allocate all the descriptor sets
+        {
+          VkDescriptorPoolCreateInfo pool_info = {
+              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+              .maxSets = ocean_count * 8,
+              .poolSizeCount = 1,
+              .pPoolSizes =
+                  &(VkDescriptorPoolSize){
+                      .descriptorCount = ocean_count * 8,
+                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                  },
+          };
+          VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
+              sys->tmp_alloc, ocean_count, VkDescriptorSetLayout);
+          for (uint32_t i = 0; i < ocean_count; ++i) {
+            layouts[i] = sys->set_layout;
+          }
+          err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
+                                            sys->ocean_pools, ocean_count);
+          TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
+        }
+
+        // Just upload and write all views for now, they tend to be important
+        // anyway
+        const uint32_t write_count = ocean_count * 3;
+        VkWriteDescriptorSet *writes =
+            tb_alloc_nm_tp(sys->tmp_alloc, write_count, VkWriteDescriptorSet);
+        VkDescriptorBufferInfo *buffer_info =
+            tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, VkDescriptorBufferInfo);
+        VkDescriptorImageInfo *depth_info =
+            tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, VkDescriptorImageInfo);
+        VkDescriptorImageInfo *color_info =
+            tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, VkDescriptorImageInfo);
+        TbHostBuffer *buffers =
+            tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, TbHostBuffer);
+
+        for (uint32_t oc_idx = 0; oc_idx < ocean_count; ++oc_idx) {
+          const OceanComponent *ocean_comp = &oceans[oc_idx];
+          TbHostBuffer *buffer = &buffers[oc_idx];
+
+          const uint32_t write_idx = oc_idx * 3;
+
+          const uint32_t wave_count =
+              SDL_max(ocean_comp->wave_count, TB_WAVE_MAX);
+
+          OceanData data = {
+              .time_waves = f4(ocean_comp->time, wave_count, 0, 0),
+          };
+          SDL_memcpy(data.wave, ocean_comp->waves,
+                     wave_count * sizeof(OceanWave));
+
+          // Write ocean data into the tmp buffer we know will wind up on the
+          // GPU
+          err = tb_rnd_sys_alloc_tmp_host_buffer(
+              render_system, sizeof(OceanData), 0x40, buffer);
+          TB_VK_CHECK(err,
+                      "Failed to make tmp host buffer allocation for ocean");
+
+          // Copy view data to the allocated buffer
+          SDL_memcpy(buffer->ptr, &data, sizeof(OceanData));
+
+          VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+
+          // Get the descriptor we want to write to
+          VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
+              render_system, sys->ocean_pools, oc_idx);
+
+          buffer_info[oc_idx] = (VkDescriptorBufferInfo){
+              .buffer = tmp_gpu_buffer,
+              .offset = buffer->offset,
+              .range = sizeof(OceanData),
+          };
+
+          VkImageView depth_view = tb_render_target_get_view(
+              sys->render_target_system, render_system->frame_idx,
+              sys->render_target_system->depth_buffer_copy);
+
+          VkImageView color_view = tb_render_target_get_view(
+              sys->render_target_system, render_system->frame_idx,
+              sys->render_target_system->color_copy);
+
+          depth_info[oc_idx] = (VkDescriptorImageInfo){
+              .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .imageView = depth_view,
+          };
+
+          color_info[oc_idx] = (VkDescriptorImageInfo){
+              .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .imageView = color_view,
+          };
+
+          // Construct write descriptors
+          writes[write_idx + 0] = (VkWriteDescriptorSet){
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+              .dstSet = ocean_set,
+              .dstBinding = 0,
+              .dstArrayElement = 0,
+              .descriptorCount = 1,
+              .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              .pBufferInfo = &buffer_info[oc_idx],
+          };
+          writes[write_idx + 1] = (VkWriteDescriptorSet){
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+              .dstSet = ocean_set,
+              .dstBinding = 1,
+              .dstArrayElement = 0,
+              .descriptorCount = 1,
+              .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .pImageInfo = &depth_info[oc_idx],
+          };
+          writes[write_idx + 2] = (VkWriteDescriptorSet){
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+              .dstSet = ocean_set,
+              .dstBinding = 2,
+              .dstArrayElement = 0,
+              .descriptorCount = 1,
+              .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .pImageInfo = &color_info[oc_idx],
+          };
+        }
+        tb_rnd_update_descriptors(render_system, write_count, writes);
+      }
+
+      // Draw the ocean
+      {
+        OceanPushConstants ocean_consts = {
+            .m = transform_to_matrix(&sys->ocean_transform)};
+
+        // Max camera * ocean * tile draw batches are required
+        uint32_t batch_count = 0;
+        const uint32_t batch_max = ocean_count * tile_count;
+
+        OceanDrawBatch *ocean_batches =
+            tb_alloc_nm_tp(sys->tmp_alloc, batch_max, OceanDrawBatch);
+
+        DrawBatch *ocean_draw_batches =
+            tb_alloc_nm_tp(sys->tmp_alloc, batch_max, DrawBatch);
+        DrawBatch *prepass_draw_batches =
+            tb_alloc_nm_tp(sys->tmp_alloc, batch_max, DrawBatch);
+
+        VkDescriptorSet view_set =
+            tb_view_system_get_descriptor(sys->view_system, camera->view_id);
+
+        for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
+          VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
+              sys->render_system, sys->ocean_pools, ocean_idx);
+
+          ocean_draw_batches[batch_count] = (DrawBatch){
+              .pipeline = sys->pipeline,
+              .layout = sys->pipe_layout,
+              .viewport = {0, height, width, -(float)height, 0, 1},
+              .scissor = {{0, 0}, {width, height}},
+              .user_batch = &ocean_batches[batch_count],
+          };
+          prepass_draw_batches[batch_count] = (DrawBatch){
+              .pipeline = sys->prepass_pipeline,
+              .layout = sys->pipe_layout,
+              .viewport = {0, height, width, -(float)height, 0, 1},
+              .scissor = {{0, 0}, {width, height}},
+              .user_batch = &ocean_batches[batch_count],
+          };
+          ocean_batches[batch_count] = (OceanDrawBatch){
+              .view_set = view_set,
+              .ocean_set = ocean_set,
+              .consts = ocean_consts,
+              .inst_buffer = tb_rnd_get_gpu_tmp_buffer(sys->render_system),
+              .inst_offset = inst_buffer.offset,
+              .inst_count = visible_tile_count,
+              .geom_buffer = sys->ocean_geom_buffer,
+              .index_type = (VkIndexType)sys->ocean_index_type,
+              .index_count = sys->ocean_index_count,
+              .pos_offset = sys->ocean_pos_offset,
+          };
+          batch_count++;
+        }
+
+        // Draw to the prepass and the ocean pass
+        tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+                                            sys->trans_depth_draw_ctx,
+                                            batch_count, prepass_draw_batches);
+        tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+                                            sys->trans_color_draw_ctx,
+                                            batch_count, ocean_draw_batches);
+      }
     }
   }
 
   TracyCZoneEnd(ctx);
 }
 
-TB_DEFINE_SYSTEM(ocean, OceanSystem, OceanSystemDescriptor)
+void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, VisualLoggingSystem);
+  ECS_COMPONENT(ecs, AudioSystem);
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, OceanComponent);
+  ECS_COMPONENT(ecs, CameraComponent);
 
-void tick_ocean_system(void *self, const SystemInput *input,
-                       SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Ocean System");
-  tick_ocean_system_internal((OceanSystem *)self, input, output, delta_seconds);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  VisualLoggingSystem *vlog = ecs_singleton_get_mut(ecs, VisualLoggingSystem);
+  AudioSystem *aud_sys = ecs_singleton_get_mut(ecs, AudioSystem);
+
+  OceanSystem sys =
+      create_ocean_system(std_alloc, tmp_alloc, rnd_sys, rp_sys, mesh_sys,
+                          view_sys, rt_sys, vlog, aud_sys);
+
+  // Create ocean query for the draw
+  sys.ocean_query = ecs_query(ecs, {.filter.terms = {
+                                        {.id = ecs_id(OceanComponent)},
+                                    }});
+
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(OceanSystem), OceanSystem, &sys);
+
+  ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, OceanComponent);
+  ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, OceanComponent);
+  ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnUpdate, CameraComponent);
+
+  tb_register_ocean_component(ecs);
 }
 
-void tb_ocean_system_descriptor(SystemDescriptor *desc,
-                                const OceanSystemDescriptor *ocean_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Ocean",
-      .size = sizeof(OceanSystem),
-      .id = OceanSystemId,
-      .desc = (InternalDescriptor)ocean_desc,
-      .system_dep_count = 7,
-      .system_deps = {RenderSystemId, MeshSystemId, ViewSystemId,
-                      RenderPipelineSystemId, RenderTargetSystemId,
-                      VisualLoggingSystemId, AudioSystemId},
-      .create = tb_create_ocean_system,
-      .destroy = tb_destroy_ocean_system,
-      .tick_fn_count = 1,
-      .tick_fns[0] =
-          {
-              .dep_count = 2,
-              .deps[0] = {1, {OceanComponentId}},
-              .deps[1] = {2, {CameraComponentId, TransformComponentId}},
-              .system_id = OceanSystemId,
-              .order = E_TICK_PRE_RENDER,
-              .function = tick_ocean_system,
-          },
-  };
+void tb_unregister_ocean_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, OceanSystem);
+  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  ecs_query_fini(sys->ocean_query);
+  destroy_ocean_system(sys);
+  ecs_singleton_remove(ecs, OceanSystem);
 }

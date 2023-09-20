@@ -49,6 +49,8 @@
 
 #include "renderthread.h"
 
+#include <flecs.h>
+
 int32_t SDL_main(int32_t argc, char *argv[]) {
   (void)argc;
   (void)argv;
@@ -69,11 +71,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     create_arena_allocator("Main Arena", &arena, arena_alloc_size);
   }
 
-  StandardAllocator std_alloc = {0};
+  StandardAllocator gp_alloc = {0};
   {
     SDL_Log("%s", "Creating Standard Allocator");
-    create_standard_allocator(&std_alloc, "std_alloc");
+    create_standard_allocator(&gp_alloc, "std_alloc");
   }
+
+  Allocator std_alloc = gp_alloc.alloc;
+  Allocator tmp_alloc = arena.alloc;
 
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
@@ -100,215 +105,20 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Must create render thread on the heap like this
-  RenderThread *render_thread = tb_alloc_tp(std_alloc.alloc, RenderThread);
+  RenderThread *render_thread = tb_alloc_tp(std_alloc, RenderThread);
   RenderThreadDescriptor render_thread_desc = {
       .window = window,
   };
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
            "Failed to start render thread");
 
-// Order does not matter
-#define COMP_COUNT 8
-  ComponentDescriptor component_descs[COMP_COUNT] = {0};
-  {
-    int32_t i = 0;
-    tb_transform_component_descriptor(&component_descs[i++]);
-    tb_camera_component_descriptor(&component_descs[i++]);
-    tb_directional_light_component_descriptor(&component_descs[i++]);
-    tb_noclip_component_descriptor(&component_descs[i++]);
-    tb_sky_component_descriptor(&component_descs[i++]);
-    tb_mesh_component_descriptor(&component_descs[i++]);
-    tb_ocean_component_descriptor(&component_descs[i++]);
-    tb_rotator_component_descriptor(&component_descs[i++]);
-
-    TB_CHECK(i == COMP_COUNT, "Unexpected # of component descriptors");
-  }
-
-  InputSystemDescriptor input_system_desc = {
-      .tmp_alloc = arena.alloc,
-      .window = window,
-  };
-
-  NoClipControllerSystemDescriptor noclip_system_desc = {
-      .tmp_alloc = arena.alloc,
-  };
-
-  CoreUISystemDescriptor coreui_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  ImGuiSystemDescriptor imgui_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-      .context_count = 1,
-      .context_atlases[0] = NULL,
-  };
-
-  SkySystemDescriptor sky_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  MeshSystemDescriptor mesh_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  OceanSystemDescriptor ocean_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  MaterialSystemDescriptor material_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  TextureSystemDescriptor texture_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  ViewSystemDescriptor view_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  RenderObjectSystemDescriptor render_object_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  RenderSystemDescriptor render_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-      .render_thread = render_thread,
-  };
-
-  CameraSystemDescriptor camera_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  RenderTargetSystemDescriptor render_target_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  RenderPipelineSystemDescriptor render_pipeline_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  ShadowSystemDescriptor shadow_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  TimeOfDaySystemDescriptor tod_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  VisualLoggingSystemDescriptor vlog_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  RotatorSystemDescriptor rotator_system_desc = {
-      .tmp_alloc = arena.alloc,
-  };
-
-  AudioSystemDescriptor audio_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-  ViewerSystemDescriptor viewer_system_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-  };
-
-// Order doesn't matter here
-#define SYSTEM_COUNT 21
-  SystemDescriptor system_descs[SYSTEM_COUNT] = {0};
-  {
-    uint32_t i = 0;
-    tb_input_system_descriptor(&system_descs[i++], &input_system_desc);
-    tb_noclip_controller_system_descriptor(&system_descs[i++],
-                                           &noclip_system_desc);
-    tb_coreui_system_descriptor(&system_descs[i++], &coreui_system_desc);
-    tb_viewer_system_descriptor(&system_descs[i++], &viewer_system_desc);
-    tb_imgui_system_descriptor(&system_descs[i++], &imgui_system_desc);
-    tb_sky_system_descriptor(&system_descs[i++], &sky_system_desc);
-    tb_ocean_system_descriptor(&system_descs[i++], &ocean_system_desc);
-    tb_mesh_system_descriptor(&system_descs[i++], &mesh_system_desc);
-    tb_material_system_descriptor(&system_descs[i++], &material_system_desc);
-    tb_texture_system_descriptor(&system_descs[i++], &texture_system_desc);
-    tb_render_object_system_descriptor(&system_descs[i++],
-                                       &render_object_system_desc);
-    tb_view_system_descriptor(&system_descs[i++], &view_system_desc);
-    tb_render_system_descriptor(&system_descs[i++], &render_system_desc);
-    tb_camera_system_descriptor(&system_descs[i++], &camera_system_desc);
-    tb_render_target_system_descriptor(&system_descs[i++],
-                                       &render_target_system_desc);
-    tb_render_pipeline_system_descriptor(&system_descs[i++],
-                                         &render_pipeline_system_desc);
-    tb_shadow_system_descriptor(&system_descs[i++], &shadow_system_desc);
-    tb_time_of_day_system_descriptor(&system_descs[i++], &tod_system_desc);
-    tb_visual_logging_system_descriptor(&system_descs[i++], &vlog_system_desc);
-    tb_rotator_system_descriptor(&system_descs[i++], &rotator_system_desc);
-    tb_audio_system_descriptor(&system_descs[i++], &audio_system_desc);
-    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
-  }
-
-  // But it does matter here
-  SystemId init_order[SYSTEM_COUNT];
-  {
-    uint32_t i = 0;
-    init_order[i++] = AudioSystemId;
-    init_order[i++] = RenderSystemId;
-    init_order[i++] = InputSystemId;
-    init_order[i++] = RenderTargetSystemId;
-    init_order[i++] = TextureSystemId;
-    init_order[i++] = ViewSystemId;
-    init_order[i++] = RenderObjectSystemId;
-    init_order[i++] = RenderPipelineSystemId;
-    init_order[i++] = MaterialSystemId;
-    init_order[i++] = MeshSystemId;
-    init_order[i++] = SkySystemId;
-    init_order[i++] = ImGuiSystemId;
-    init_order[i++] = NoClipControllerSystemId;
-    init_order[i++] = CoreUISystemId;
-    init_order[i++] = ViewerSystemId;
-    init_order[i++] = VisualLoggingSystemId;
-    init_order[i++] = OceanSystemId;
-    init_order[i++] = CameraSystemId;
-    init_order[i++] = ShadowSystemId;
-    init_order[i++] = TimeOfDaySystemId;
-    init_order[i++] = RotatorSystemId;
-    TB_CHECK(i == SYSTEM_COUNT, "Incorrect number of systems");
-  }
-
-  WorldDescriptor world_desc = {
-      .std_alloc = std_alloc.alloc,
-      .tmp_alloc = arena.alloc,
-      .component_count = COMP_COUNT,
-      .component_descs = component_descs,
-      .system_count = SYSTEM_COUNT,
-      .system_descs = system_descs,
-      .init_order = init_order,
-  };
-#undef COMP_COUNT
-#undef SYSTEM_COUNT
-
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
-  World world = {0};
-  bool success = tb_create_world(&world_desc, &world);
-  TB_CHECK_RETURN(success, "Failed to create world.", -1);
+  TbWorld world = tb_create_world(std_alloc, tmp_alloc, render_thread, window);
+
+  // Register specific systems
+  tb_register_viewer_sys(&world);
 
   // Main loop
   bool running = true;
@@ -324,23 +134,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCZoneN(trcy_ctx, "Simulation Frame", true);
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
+    ECS_COMPONENT(world.ecs, ViewerSystem);
+
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before
     // ticking
-    ViewerSystem *viewer =
-        (ViewerSystem *)tb_find_system_by_id(world.systems, world.system_count,
-                                             ViewerSystemId)
-            ->self;
+    ViewerSystem *viewer = ecs_singleton_get_mut(world.ecs, ViewerSystem);
     if (viewer) {
       // Order matters; we can get both signals at once
       if (viewer->unload_scene_signal) {
         // TODO: Properly wait for the render thread to be finished otherwise
         // we'll destroy resource in flight
-        tb_world_unload_scene(&world);
+        tb_unload_scene(&world, &world.scenes.data[0]);
         viewer->unload_scene_signal = false;
       }
       if (viewer->load_scene_signal) {
-        tb_world_load_scene(&world, viewer->selected_scene);
+        tb_load_scene(&world, viewer->selected_scene);
         viewer->load_scene_signal = false;
       }
     }
@@ -367,21 +176,26 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCFrameMarkEnd("Simulation Frame");
   }
 
+  tb_clear_world(&world);
+
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(render_thread);
+
+  // Unregister app specific systems
+  tb_unregister_viewer_sys(&world);
 
   tb_destroy_world(&world);
 
   // Destroying the render thread will also close the window
   tb_destroy_render_thread(render_thread);
-  tb_free(std_alloc.alloc, render_thread);
+  tb_free(std_alloc, render_thread);
   render_thread = NULL;
   window = NULL;
 
   SDL_Quit();
 
   destroy_arena_allocator(arena);
-  destroy_standard_allocator(std_alloc);
+  destroy_standard_allocator(gp_alloc);
 
   return 0;
 }

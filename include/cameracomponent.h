@@ -6,9 +6,9 @@
 
 #define CameraComponentId 0xDEADC0DE
 
-typedef uint32_t TbViewId;
+typedef struct ecs_world_t ecs_world_t;
 
-typedef struct ComponentDescriptor ComponentDescriptor;
+typedef uint32_t TbViewId;
 
 typedef struct CameraComponent {
   TbViewId view_id;
@@ -18,6 +18,4 @@ typedef struct CameraComponent {
   float far;
 } CameraComponent;
 
-void tb_camera_component_descriptor(ComponentDescriptor *desc);
-
-void tb_camera_view_projection(const CameraComponent *self, float4x4 *vp);
+void tb_register_camera_component(ecs_world_t *ecs);

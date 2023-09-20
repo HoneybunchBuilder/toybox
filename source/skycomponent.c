@@ -1,58 +1,80 @@
 #include "skycomponent.h"
 
-#include "SDL2/SDL_stdinc.h"
-#include "json-c/json_object.h"
-#include "json-c/linkhash.h"
-#include "rendersystem.h"
-#include "tbcommon.h"
-#include "world.h"
+#include "assetsystem.h"
+#include "skysystem.h"
 
-bool create_sky_component(SkyComponent *self,
-                          const SkyComponentDescriptor *desc,
-                          uint32_t system_dep_count,
-                          System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *self = (SkyComponent){
-      .cirrus = desc->cirrus,
-      .cumulus = desc->cumulus,
-      .sun_dir = desc->sun_dir,
-  };
-  return true;
+#include <json.h>
+
+#include <flecs.h>
+
+bool create_sky_component(ecs_world_t *ecs, ecs_entity_t e,
+                          const char *source_path, const cgltf_node *node,
+                          json_object *extra) {
+  (void)source_path;
+  (void)node;
+
+  ECS_COMPONENT(ecs, SkyComponent);
+
+  bool ret = true;
+  if (extra) {
+    bool sky = false;
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, SkyComponentIdStr) == 0) {
+          sky = true;
+          break;
+        }
+      }
+    }
+
+    if (sky) {
+      SkyComponent sky = {0};
+      json_object_object_foreach(extra, key, value) {
+        if (SDL_strcmp(key, "cirrus") == 0) {
+          sky.cirrus = (float)json_object_get_double(value);
+        } else if (SDL_strcmp(key, "cumulus") == 0) {
+          sky.cumulus = (float)json_object_get_double(value);
+        }
+      }
+      ecs_set_ptr(ecs, e, SkyComponent, &sky);
+    }
+  }
+  return ret;
 }
 
-bool deserialize_sky_component(json_object *json, void *out_desc) {
-  SkyComponentDescriptor *desc = (SkyComponentDescriptor *)out_desc;
+void remove_sky_components(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, SkyComponent);
 
-  json_object_object_foreach(json, key, value) {
-    if (SDL_strcmp(key, "cirrus") == 0) {
-      desc->cirrus = (float)json_object_get_double(value);
-    } else if (SDL_strcmp(key, "cumulus") == 0) {
-      desc->cumulus = (float)json_object_get_double(value);
+  // Remove light component from entities
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(SkyComponent)},
+                              },
+                      });
+
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    SkyComponent *skies = ecs_field(&it, SkyComponent, 1);
+
+    for (int32_t i = 0; i < it.count; ++i) {
+      SkyComponent *sky = &skies[i];
+      *sky = (SkyComponent){0};
     }
   }
 
-  return true;
+  ecs_filter_fini(filter);
 }
 
-void destroy_sky_component(SkyComponent *self, uint32_t system_dep_count,
-                           System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *self = (SkyComponent){0};
-}
-
-TB_DEFINE_COMPONENT(sky, SkyComponent, SkyComponentDescriptor)
-
-void tb_sky_component_descriptor(ComponentDescriptor *desc) {
-  *desc = (ComponentDescriptor){
-      .name = "Sky",
-      .size = sizeof(SkyComponent),
-      .desc_size = sizeof(SkyComponentDescriptor),
-      .id = SkyComponentId,
-      .id_str = SkyComponentIdStr,
-      .create = tb_create_sky_component,
-      .deserialize = deserialize_sky_component,
-      .destroy = tb_destroy_sky_component,
+void tb_register_sky_component(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, SkySystem);
+  // Register a system for loading skies
+  AssetSystem asset = {
+      .add_fn = create_sky_component,
+      .rem_fn = remove_sky_components,
   };
+  ecs_set_ptr(ecs, ecs_id(SkySystem), AssetSystem, &asset);
 }

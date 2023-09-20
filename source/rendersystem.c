@@ -6,18 +6,15 @@
 #include "tbcommon.h"
 #include "world.h"
 
-bool create_render_system(RenderSystem *self,
-                          const RenderSystemDescriptor *desc,
-                          uint32_t system_dep_count,
-                          System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  TB_CHECK_RETURN(desc, "Invalid RenderSystemDescriptor", false);
-  RenderThread *thread = desc->render_thread;
-  TB_CHECK_RETURN(thread, "Invalid RenderThread", false);
-  *self = (RenderSystem){
-      .std_alloc = desc->std_alloc,
-      .tmp_alloc = desc->tmp_alloc,
+#include <flecs.h>
+
+RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
+                                  RenderThread *thread) {
+  TB_CHECK(thread, "Invalid RenderThread");
+
+  RenderSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
       .render_thread = thread,
   };
 
@@ -26,10 +23,10 @@ bool create_render_system(RenderSystem *self,
   // TODO: Think of a better way to do this; the ownership practice here is
   // sloppy
   for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
-    FrameState *state = &self->render_thread->frame_states[state_idx];
-    TB_DYN_ARR_RESET(state->pass_contexts, self->std_alloc, 1);
-    TB_DYN_ARR_RESET(state->draw_contexts, self->std_alloc, 1);
-    TB_DYN_ARR_RESET(state->dispatch_contexts, self->std_alloc, 1);
+    FrameState *state = &sys.render_thread->frame_states[state_idx];
+    TB_DYN_ARR_RESET(state->pass_contexts, sys.std_alloc, 1);
+    TB_DYN_ARR_RESET(state->draw_contexts, sys.std_alloc, 1);
+    TB_DYN_ARR_RESET(state->dispatch_contexts, sys.std_alloc, 1);
   }
 
   // Should be safe to assume that the render thread is initialized by now
@@ -37,7 +34,7 @@ bool create_render_system(RenderSystem *self,
     VkResult err = VK_SUCCESS;
 
     // Create vulkan allocator for main thread
-    self->vk_host_alloc_cb = (VkAllocationCallbacks){
+    sys.vk_host_alloc_cb = (VkAllocationCallbacks){
         .pfnAllocation = tb_vk_alloc_fn,
         .pfnReallocation = tb_vk_realloc_fn,
         .pfnFree = tb_vk_free_fn,
@@ -83,20 +80,20 @@ bool create_render_system(RenderSystem *self,
           .pVulkanFunctions = &volk_functions,
           .instance = thread->instance,
           .vulkanApiVersion = VK_API_VERSION_1_0,
-          .pAllocationCallbacks = &self->vk_host_alloc_cb,
+          .pAllocationCallbacks = &sys.vk_host_alloc_cb,
           .pDeviceMemoryCallbacks = &vma_callbacks,
       };
-      err = vmaCreateAllocator(&create_info, &self->vma_alloc);
-      TB_VK_CHECK_RET(err, "Failed to create vma allocator for render system",
-                      false);
+      err = vmaCreateAllocator(&create_info, &sys.vma_alloc);
+      TB_VK_CHECK(err, "Failed to create vma allocator for render system");
     }
 
     // Initialize all game thread render frame state
     for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
-      RenderSystemFrameState *state = &self->frame_states[state_idx];
+      RenderSystemFrameState *state = &sys.frame_states[state_idx];
 
-      TB_DYN_ARR_RESET(state->buf_copy_queue, self->std_alloc, 1);
-      TB_DYN_ARR_RESET(state->buf_img_copy_queue, self->std_alloc, 1);
+      TB_DYN_ARR_RESET(state->set_write_queue, sys.std_alloc, 1);
+      TB_DYN_ARR_RESET(state->buf_copy_queue, sys.std_alloc, 1);
+      TB_DYN_ARR_RESET(state->buf_img_copy_queue, sys.std_alloc, 1);
 
       const uint64_t size_bytes = TB_VMA_TMP_HOST_MB * 1024 * 1024;
 
@@ -111,8 +108,8 @@ bool create_render_system(RenderSystem *self,
             break;
           }
         }
-        TB_CHECK_RETURN(host_mem_type_idx != 0xFFFFFFFF,
-                        "Failed to find host visible memory", false);
+        TB_CHECK(host_mem_type_idx != 0xFFFFFFFF,
+                 "Failed to find host visible memory");
 
         VmaPoolCreateInfo create_info = {
             .memoryTypeIndex = host_mem_type_idx,
@@ -120,9 +117,8 @@ bool create_render_system(RenderSystem *self,
             .maxBlockCount = 1,
             .blockSize = size_bytes,
         };
-        err =
-            vmaCreatePool(self->vma_alloc, &create_info, &state->tmp_host_pool);
-        TB_VK_CHECK_RET(err, "Failed to create vma temp host pool", false);
+        err = vmaCreatePool(sys.vma_alloc, &create_info, &state->tmp_host_pool);
+        TB_VK_CHECK(err, "Failed to create vma temp host pool");
       }
 
       // Allocate tmp host buffer
@@ -137,16 +133,16 @@ bool create_render_system(RenderSystem *self,
             .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         };
         VmaAllocationInfo alloc_info = {0};
-        err = vmaCreateBuffer(self->vma_alloc, &create_info, &alloc_create_info,
+        err = vmaCreateBuffer(sys.vma_alloc, &create_info, &alloc_create_info,
                               &state->tmp_host_buffer.buffer,
                               &state->tmp_host_buffer.alloc, &alloc_info);
-        TB_VK_CHECK_RET(err, "Failed to allocate temporary buffer", false);
-        SET_VK_NAME(self->render_thread->device, state->tmp_host_buffer.buffer,
+        TB_VK_CHECK(err, "Failed to allocate temporary buffer");
+        SET_VK_NAME(sys.render_thread->device, state->tmp_host_buffer.buffer,
                     VK_OBJECT_TYPE_BUFFER, "Vulkan Tmp Host Buffer");
 
-        err = vmaMapMemory(self->vma_alloc, state->tmp_host_buffer.alloc,
+        err = vmaMapMemory(sys.vma_alloc, state->tmp_host_buffer.alloc,
                            (void **)&state->tmp_host_buffer.ptr);
-        TB_VK_CHECK_RET(err, "Failed to map temporary buffer", false);
+        TB_VK_CHECK(err, "Failed to map temporary buffer");
       }
     }
 
@@ -161,15 +157,14 @@ bool create_render_system(RenderSystem *self,
           break;
         }
       }
-      TB_CHECK_RETURN(host_mem_type_idx != SDL_MAX_UINT32,
-                      "Failed to find host visible memory", false);
+      TB_CHECK(host_mem_type_idx != SDL_MAX_UINT32,
+               "Failed to find host visible memory");
 
       VmaPoolCreateInfo create_info = {
           .memoryTypeIndex = host_mem_type_idx,
       };
-      err =
-          vmaCreatePool(self->vma_alloc, &create_info, &self->host_buffer_pool);
-      TB_VK_CHECK_RET(err, "Failed to create vma host buffer pool", false);
+      err = vmaCreatePool(sys.vma_alloc, &create_info, &sys.host_buffer_pool);
+      TB_VK_CHECK(err, "Failed to create vma host buffer pool");
     }
 
     // Create gpu pools
@@ -183,18 +178,17 @@ bool create_render_system(RenderSystem *self,
           break;
         }
       }
-      TB_CHECK_RETURN(gpu_mem_type_idx != SDL_MAX_UINT32,
-                      "Failed to find gpu visible memory", false);
+      TB_CHECK(gpu_mem_type_idx != SDL_MAX_UINT32,
+               "Failed to find gpu visible memory");
 
       VmaPoolCreateInfo create_info = {
           .memoryTypeIndex = gpu_mem_type_idx,
       };
-      err = vmaCreatePool(self->vma_alloc, &create_info, &self->gpu_image_pool);
-      TB_VK_CHECK_RET(err, "Failed to create vma gpu image pool", false);
+      err = vmaCreatePool(sys.vma_alloc, &create_info, &sys.gpu_image_pool);
+      TB_VK_CHECK(err, "Failed to create vma gpu image pool");
 
-      err =
-          vmaCreatePool(self->vma_alloc, &create_info, &self->gpu_buffer_pool);
-      TB_VK_CHECK_RET(err, "Failed to create vma gpu buffer pool", false);
+      err = vmaCreatePool(sys.vma_alloc, &create_info, &sys.gpu_buffer_pool);
+      TB_VK_CHECK(err, "Failed to create vma gpu buffer pool");
     }
 
     // Load the pipeline cache
@@ -207,7 +201,7 @@ bool create_render_system(RenderSystem *self,
       if (cache_file != NULL) {
         data_size = (size_t)SDL_RWsize(cache_file);
 
-        data = tb_alloc(self->tmp_alloc, data_size);
+        data = tb_alloc(sys.tmp_alloc, data_size);
 
         SDL_RWread(cache_file, data, data_size, 1);
         SDL_RWclose(cache_file);
@@ -217,16 +211,15 @@ bool create_render_system(RenderSystem *self,
           .initialDataSize = data_size,
           .pInitialData = data,
       };
-      err =
-          vkCreatePipelineCache(thread->device, &create_info,
-                                &self->vk_host_alloc_cb, &self->pipeline_cache);
-      TB_VK_CHECK_RET(err, "Failed to create pipeline cache", false);
-      SET_VK_NAME(thread->device, self->pipeline_cache,
+      err = vkCreatePipelineCache(thread->device, &create_info,
+                                  &sys.vk_host_alloc_cb, &sys.pipeline_cache);
+      TB_VK_CHECK(err, "Failed to create pipeline cache");
+      SET_VK_NAME(thread->device, sys.pipeline_cache,
                   VK_OBJECT_TYPE_PIPELINE_CACHE, "Toybox Pipeline Cache");
     }
   }
 
-  return true;
+  return sys;
 }
 
 void destroy_render_system(RenderSystem *self) {
@@ -267,6 +260,7 @@ void destroy_render_system(RenderSystem *self) {
                      state->tmp_host_buffer.alloc);
     vmaDestroyPool(vma_alloc, state->tmp_host_pool);
 
+    TB_DYN_ARR_DESTROY(state->set_write_queue);
     TB_DYN_ARR_DESTROY(state->buf_copy_queue);
     TB_DYN_ARR_DESTROY(state->buf_img_copy_queue);
   }
@@ -295,14 +289,32 @@ void destroy_render_system(RenderSystem *self) {
   *self = (RenderSystem){0};
 }
 
-void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
-                                  SystemOutput *output, float delta_seconds) {
-  (void)self;
-  (void)input;
-  (void)output; // Won't actually have output to the world but will write to
-                // the screen we hope
-  (void)delta_seconds;
+void render_frame_begin(ecs_iter_t *it) {
+  RenderSystem *sys = ecs_field(it, RenderSystem, 1);
+  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Frame Start Tick");
 
+  TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
+               true);
+  TracyCZoneValue(wait_ctx, sys->frame_idx);
+  tb_wait_render(sys->render_thread, sys->frame_idx);
+  TracyCZoneEnd(wait_ctx);
+
+  // Also
+  // Manually zero out the previous frame's draw batches here
+  // It's cleaner to do it here than dedicate a whole system to this
+  // operation on tick
+  FrameState *state = &sys->render_thread->frame_states[sys->frame_idx];
+
+  TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
+    TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
+  }
+  TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
+    TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
+  }
+}
+
+void render_frame_end(ecs_iter_t *it) {
+  RenderSystem *sys = ecs_field(it, RenderSystem, 1);
   TracyCZoneN(tick_ctx, "Render System Tick", true);
   TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
 
@@ -310,12 +322,12 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
     TracyCZoneN(ctx, "Render System Tick", true);
     TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
-    RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+    RenderSystemFrameState *state = &sys->frame_states[sys->frame_idx];
     FrameState *thread_state =
-        &self->render_thread->frame_states[self->frame_idx];
+        &sys->render_thread->frame_states[sys->frame_idx];
 
     // Copy this frame state's temp buffer to the gpu
-    {
+    if (state->tmp_host_buffer.info.size > 0) {
       BufferCopy up = {
           .dst = thread_state->tmp_gpu_buffer,
           .src = state->tmp_host_buffer.buffer,
@@ -326,14 +338,16 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
                   .size = state->tmp_host_buffer.info.size,
               },
       };
-      tb_rnd_upload_buffers(self, &up, 1);
+      tb_rnd_upload_buffers(sys, &up, 1);
     }
 
     // Send and Reset buffer upload pool
     {
       // Assign to the thread
+      thread_state->set_write_queue = state->set_write_queue;
       thread_state->buf_copy_queue = state->buf_copy_queue;
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
+      TB_DYN_ARR_CLEAR(state->set_write_queue);
       TB_DYN_ARR_CLEAR(state->buf_copy_queue);
       TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
     }
@@ -341,7 +355,7 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
     // Reset temp pool, the contents will still be intact for the render thread
     // but it will be reset for the next time this frame is processed
     {
-      RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+      RenderSystemFrameState *state = &sys->frame_states[sys->frame_idx];
       state->tmp_host_buffer.info.size = 0;
     }
 
@@ -349,74 +363,28 @@ void tick_render_system_end_frame(RenderSystem *self, const SystemInput *input,
   }
 
   // Signal the render thread to start rendering this frame
-  tb_signal_render(self->render_thread, self->frame_idx);
-  self->frame_idx = (self->frame_idx + 1) % TB_MAX_FRAME_STATES;
+  tb_signal_render(sys->render_thread, sys->frame_idx);
+  sys->frame_idx = (sys->frame_idx + 1) % TB_MAX_FRAME_STATES;
 
   TracyCZoneEnd(tick_ctx);
 }
 
-TB_DEFINE_SYSTEM(render, RenderSystem, RenderSystemDescriptor)
+void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc, RenderThread *render_thread) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  RenderSystem sys = create_render_system(std_alloc, tmp_alloc, render_thread);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderSystem), RenderSystem, &sys);
 
-void tick_frame_begin(void *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Frame Start Tick");
-
-  RenderSystem *rnd_sys = (RenderSystem *)self;
-
-  TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
-               true);
-  TracyCZoneValue(wait_ctx, rnd_sys->frame_idx);
-  tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
-  TracyCZoneEnd(wait_ctx);
-
-  // Also
-  // Manually zero out the previous frame's draw batches here
-  // It's cleaner to do it here than dedicate a whole system to this
-  // operation on tick
-  FrameState *state = &rnd_sys->render_thread->frame_states[rnd_sys->frame_idx];
-
-  TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
-    TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
-  }
-  TB_DYN_ARR_FOREACH(state->dispatch_contexts, i) {
-    TB_DYN_ARR_AT(state->dispatch_contexts, i).batch_count = 0;
-  }
+  ECS_SYSTEM(ecs, render_frame_begin, EcsPreUpdate, RenderSystem(RenderSystem));
+  ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, RenderSystem(RenderSystem));
 }
 
-void tick_frame_end(void *self, const SystemInput *input, SystemOutput *output,
-                    float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Frame End Tick");
-  tick_render_system_end_frame((RenderSystem *)self, input, output,
-                               delta_seconds);
-}
-
-void tb_render_system_descriptor(SystemDescriptor *desc,
-                                 const RenderSystemDescriptor *render_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Render",
-      .size = sizeof(RenderSystem),
-      .id = RenderSystemId,
-      .desc = (InternalDescriptor)render_desc,
-      .create = tb_create_render_system,
-      .destroy = tb_destroy_render_system,
-      .tick_fn_count = 2,
-      .tick_fns =
-          {
-              {
-                  .system_id = RenderSystemId,
-                  .order = E_TICK_BOTTOM_OF_FRAME,
-                  .function = tick_frame_end,
-              },
-              {
-                  .system_id = RenderSystemId,
-                  .order = E_TICK_TOP_OF_FRAME,
-                  .function = tick_frame_begin,
-              },
-          },
-  };
+void tb_unregister_render_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  RenderSystem *sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  destroy_render_system(sys);
+  ecs_singleton_remove(ecs, RenderSystem);
 }
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
@@ -679,6 +647,40 @@ void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline) {
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool) {
   vkDestroyDescriptorPool(self->render_thread->device, pool,
                           &self->vk_host_alloc_cb);
+}
+
+void tb_rnd_update_descriptors(RenderSystem *self, uint32_t write_count,
+                               const VkWriteDescriptorSet *writes) {
+  // Queue these writes to be processed by the render thread
+  RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+  uint32_t head = TB_DYN_ARR_SIZE(state->set_write_queue);
+  TB_DYN_ARR_RESIZE(state->set_write_queue, head + write_count);
+
+  // We know the frame state isn't in use so it's safe to grab its temp
+  // allocator and make sure that descriptor info is properly copied
+  Allocator rt_state_tmp_alloc =
+      self->render_thread->frame_states[self->frame_idx].tmp_alloc.alloc;
+
+  // Append uploads to queue
+  for (uint32_t i = 0; i < write_count; ++i) {
+    VkWriteDescriptorSet *write =
+        &TB_DYN_ARR_AT(state->set_write_queue, head + i);
+    *write = writes[i];
+
+    if (write->pBufferInfo != NULL) {
+      VkDescriptorBufferInfo *info =
+          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorBufferInfo);
+      *info = *write->pBufferInfo;
+      write->pBufferInfo = info;
+    }
+
+    if (write->pImageInfo != NULL) {
+      VkDescriptorImageInfo *info =
+          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorImageInfo);
+      *info = *write->pImageInfo;
+      write->pImageInfo = info;
+    }
+  }
 }
 
 VkResult

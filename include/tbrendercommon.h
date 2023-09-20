@@ -28,8 +28,8 @@ typedef struct BufferImageCopy {
   VkImageSubresourceRange range;
 } BufferImageCopy;
 
+typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) SetWriteQueue;
 typedef TB_DYN_ARR_OF(BufferCopy) BufferCopyQueue;
-
 typedef TB_DYN_ARR_OF(BufferImageCopy) BufferImageCopyQueue;
 
 typedef struct TbHostBuffer {

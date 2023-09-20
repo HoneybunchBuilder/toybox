@@ -10,18 +10,13 @@
 #define TB_VMA_TMP_HOST_MB 256
 #define TB_MAX_MIPS 16
 
-typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct RenderSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-  RenderThread *render_thread;
-} RenderSystemDescriptor;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct RenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
   VmaPool tmp_host_pool;
 
+  SetWriteQueue set_write_queue;
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
 } RenderSystemFrameState;
@@ -51,8 +46,9 @@ typedef struct RenderSystem {
   RenderSystemFrameState frame_states[3];
 } RenderSystem;
 
-void tb_render_system_descriptor(SystemDescriptor *desc,
-                                 const RenderSystemDescriptor *render_desc);
+void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
+                            Allocator tmp_alloc, RenderThread *render_thread);
+void tb_unregister_render_sys(ecs_world_t *ecs);
 
 VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                           uint32_t alignment,
@@ -123,6 +119,9 @@ void tb_rnd_destroy_pipe_layout(RenderSystem *self,
 void tb_rnd_destroy_shader(RenderSystem *self, VkShaderModule shader);
 void tb_rnd_destroy_pipeline(RenderSystem *self, VkPipeline pipeline);
 void tb_rnd_destroy_descriptor_pool(RenderSystem *self, VkDescriptorPool pool);
+
+void tb_rnd_update_descriptors(RenderSystem *self, uint32_t write_count,
+                               const VkWriteDescriptorSet *writes);
 
 VkResult
 tb_rnd_frame_desc_pool_tick(RenderSystem *self,

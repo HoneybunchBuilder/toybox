@@ -23,12 +23,10 @@ typedef uint32_t TbDrawContextId;
 typedef uint32_t TbMusicId;
 typedef uint32_t TbSoundEffectId;
 
-typedef struct OceanSystemDescriptor {
-  Allocator tmp_alloc;
-  Allocator std_alloc;
-} OceanSystemDescriptor;
-
 #define TB_OCEAN_SFX_COUNT 4
+
+typedef struct ecs_query_t ecs_query_t;
+typedef struct ecs_world_t ecs_world_t;
 
 typedef struct OceanSystem {
   RenderSystem *render_system;
@@ -40,6 +38,8 @@ typedef struct OceanSystem {
   AudioSystem *audio_system;
   Allocator tmp_alloc;
   Allocator std_alloc;
+
+  ecs_query_t *ocean_query;
 
   TbMusicId music;
   TbSoundEffectId wave_sounds[TB_OCEAN_SFX_COUNT];
@@ -69,5 +69,6 @@ typedef struct OceanSystem {
   VkPipeline pipeline;
 } OceanSystem;
 
-void tb_ocean_system_descriptor(SystemDescriptor *desc,
-                                const OceanSystemDescriptor *ocean_desc);
+void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc);
+void tb_unregister_ocean_sys(ecs_world_t *ecs);

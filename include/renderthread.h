@@ -101,6 +101,7 @@ typedef struct FrameState {
 
   // Memory expected to be actually allocated by the main thread
   // The main thread will write to this and the render thread will read it
+  SetWriteQueue set_write_queue;
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
 

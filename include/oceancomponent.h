@@ -8,13 +8,9 @@
 #define OceanComponentId 0xBAD22222
 #define OceanComponentIdStr "0xBAD22222"
 
-typedef struct ComponentDescriptor ComponentDescriptor;
-typedef struct TransformComponent TransformComponent;
+typedef struct ecs_world_t ecs_world_t;
 
-typedef struct OceanComponentDescriptor {
-  uint32_t wave_count;
-  OceanWave waves[TB_WAVE_MAX];
-} OceanComponentDescriptor;
+typedef struct TransformComponent TransformComponent;
 
 typedef struct OceanComponent {
   float time;
@@ -28,7 +24,7 @@ typedef struct OceanSample {
   float3 binormal;
 } OceanSample;
 
-void tb_ocean_component_descriptor(ComponentDescriptor *desc);
+void tb_register_ocean_component(ecs_world_t *ecs);
 
-OceanSample tb_sample_ocean(const OceanComponent *ocean,
+OceanSample tb_sample_ocean(const OceanComponent *ocean, ecs_world_t *ecs,
                             TransformComponent *transform, float2 pos);

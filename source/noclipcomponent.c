@@ -1,56 +1,77 @@
 #include "noclipcomponent.h"
 
-#include "SDL2/SDL_stdinc.h"
-#include "json-c/json_object.h"
-#include "json-c/linkhash.h"
-#include "world.h"
+#include "assetsystem.h"
+#include "json.h"
+#include "noclipcontrollersystem.h"
+#include "tbgltf.h"
 
-bool create_noclip_component(NoClipComponent *comp,
-                             const NoClipComponentDescriptor *desc,
-                             uint32_t system_dep_count,
-                             System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *comp = (NoClipComponent){
-      .move_speed = desc->move_speed,
-      .look_speed = desc->look_speed,
-  };
-  return true;
-}
+#include <SDL2/SDL_stdinc.h>
 
-bool deserialize_noclip_component(json_object *json, void *out_desc) {
-  NoClipComponentDescriptor *desc = (NoClipComponentDescriptor *)out_desc;
+#include <flecs.h>
 
-  // Find move_speed and look_speed
-  json_object_object_foreach(json, key, value) {
-    if (SDL_strcmp(key, "move_speed") == 0) {
-      desc->move_speed = (float)json_object_get_double(value);
-    } else if (SDL_strcmp(key, "look_speed") == 0) {
-      desc->look_speed = (float)json_object_get_double(value);
+bool create_noclip_comp(ecs_world_t *ecs, ecs_entity_t e,
+                        const char *source_path, const cgltf_node *node,
+                        json_object *extra) {
+  (void)source_path;
+  (void)node;
+  if (extra) {
+    bool noclip = false;
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, NoClipComponentIdStr) == 0) {
+          noclip = true;
+          break;
+        }
+      }
+    }
+    if (noclip) {
+      ECS_COMPONENT(ecs, NoClipComponent);
+      NoClipComponent comp = {0};
+      json_object_object_foreach(extra, key, value) {
+        if (SDL_strcmp(key, "move_speed") == 0) {
+          comp.move_speed = (float)json_object_get_double(value);
+        } else if (SDL_strcmp(key, "look_speed") == 0) {
+          comp.look_speed = (float)json_object_get_double(value);
+        }
+      }
+      ecs_set_ptr(ecs, e, NoClipComponent, &comp);
     }
   }
-
   return true;
 }
 
-void destroy_noclip_component(NoClipComponent *comp, uint32_t system_dep_count,
-                              System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *comp = (NoClipComponent){0};
+void remove_noclip_comps(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, NoClipComponent);
+
+  // Remove noclip component from entities
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(NoClipComponent)},
+                              },
+                      });
+
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    NoClipComponent *noclip = ecs_field(&it, NoClipComponent, 1);
+    for (int32_t i = 0; i < it.count; ++i) {
+      *noclip = (NoClipComponent){0};
+      ecs_remove(ecs, it.entities[i], NoClipComponent);
+    }
+  }
+  ecs_filter_fini(filter);
 }
 
-TB_DEFINE_COMPONENT(noclip, NoClipComponent, NoClipComponentDescriptor)
-
-void tb_noclip_component_descriptor(ComponentDescriptor *desc) {
-  *desc = (ComponentDescriptor){
-      .name = "NoClip",
-      .size = sizeof(NoClipComponent),
-      .desc_size = sizeof(NoClipComponentDescriptor),
-      .id = NoClipComponentId,
-      .id_str = NoClipComponentIdStr,
-      .create = tb_create_noclip_component,
-      .deserialize = deserialize_noclip_component,
-      .destroy = tb_destroy_noclip_component,
+void tb_register_noclip_component(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, NoClipControllerSystem);
+  // Add an AssetSystem to the no clip singleton in order
+  // to allow for component parsing
+  AssetSystem asset = {
+      .add_fn = create_noclip_comp,
+      .rem_fn = remove_noclip_comps,
   };
+  ecs_set_ptr(ecs, ecs_id(NoClipControllerSystem), AssetSystem, &asset);
 }

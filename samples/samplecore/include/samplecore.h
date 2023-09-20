@@ -1,5 +1,8 @@
 #pragma once
 
-typedef struct World World;
+#include "allocator.h"
 
-void tb_sample_on_start(World *world);
+typedef struct World World;
+typedef struct TbWorld TbWorld;
+
+void tb_sample_on_start(TbWorld *world);

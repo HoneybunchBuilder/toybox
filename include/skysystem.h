@@ -9,14 +9,12 @@ typedef struct RenderSystem RenderSystem;
 typedef struct RenderPipelineSystem RenderPipelineSystem;
 typedef struct RenderTargetSystem RenderTargetSystem;
 typedef struct ViewSystem ViewSystem;
-typedef struct SystemDescriptor SystemDescriptor;
+
 typedef uint32_t TbDrawContextId;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 
-typedef struct SkySystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} SkySystemDescriptor;
+typedef struct ecs_world_t ecs_world_t;
+typedef struct ecs_query_t ecs_query_t;
 
 typedef struct SkySystemFrameState {
   uint32_t set_count;
@@ -34,6 +32,9 @@ typedef struct SkySystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
+  ecs_query_t *camera_query;
+
+  float time;
   SkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
   TbDrawContextId sky_draw_ctx;
@@ -55,5 +56,6 @@ typedef struct SkySystem {
   TbBuffer sky_geom_gpu_buffer;
 } SkySystem;
 
-void tb_sky_system_descriptor(SystemDescriptor *desc,
-                              const SkySystemDescriptor *sky_desc);
+void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
+                         Allocator tmp_alloc);
+void tb_unregister_sky_sys(ecs_world_t *ecs);

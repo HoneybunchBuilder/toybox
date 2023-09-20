@@ -1,27 +1,26 @@
 #include "oceancomponent.h"
 
-#include "SDL2/SDL_stdinc.h"
-#include "json-c/json_object.h"
-#include "json-c/linkhash.h"
+#include "assetsystem.h"
+#include "oceansystem.h"
 #include "transformcomponent.h"
 #include "world.h"
+
+#include <flecs.h>
+
+#include <json.h>
+
+#include <SDL2/SDL_stdinc.h>
 
 float4 make_wave(float2 dir, float steepness, float wavelength) {
   return f4(dir[0], dir[1], steepness, wavelength);
 }
 
-bool create_ocean_component(OceanComponent *comp,
-                            const OceanComponentDescriptor *desc,
-                            uint32_t system_dep_count,
-                            System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *comp = (OceanComponent){
-      .wave_count = desc->wave_count,
+OceanComponent create_ocean_component_internal(void) {
+  OceanComponent comp = {
+      .wave_count = TB_WAVE_MAX,
   };
 
   // Creating some randomly generated but artistically driven waves
-  comp->wave_count = TB_WAVE_MAX;
   OceanWave waves[TB_WAVE_MAX] = {{0}};
   float iter = 0;
   float wavelength = 128.0f;
@@ -36,53 +35,62 @@ bool create_ocean_component(OceanComponent *comp,
     steep = clampf(steep, 0, 1);
     iter += 1323.963;
   }
-  SDL_memcpy(comp->waves, waves, sizeof(OceanWave) * TB_WAVE_MAX);
+  SDL_memcpy(comp.waves, waves, sizeof(OceanWave) * TB_WAVE_MAX);
 
-  return true;
+  return comp;
 }
 
-bool deserialize_ocean_component(json_object *json, void *out_desc) {
-  (void)json;
-  (void)out_desc;
-  /* Come back to this when we have a better solution for component markup
-  OceanComponentDescriptor *desc = (OceanComponentDescriptor *)out_desc;
-  desc->wave_count = 1;
-  OceanWave *wave = &desc->waves[0];
-  json_object_object_foreach(json, key, value) {
-    if (SDL_strcmp(key, "steepness") == 0) {
-      (*wave)[2] = (float)json_object_get_double(value);
-    } else if (SDL_strcmp(key, "wavelength") == 0) {
-      (*wave)[3] = (float)json_object_get_double(value);
-    } else if (SDL_strcmp(key, "direction_x") == 0) {
-      (*wave)[0] = (float)json_object_get_double(value);
-    } else if (SDL_strcmp(key, "direction_y") == 0) {
-      (*wave)[1] = (float)json_object_get_double(value);
+bool create_ocean_component(ecs_world_t *ecs, ecs_entity_t e,
+                            const char *source_path, const cgltf_node *node,
+                            json_object *extra) {
+  (void)source_path;
+  (void)node;
+  if (extra) {
+    json_object_object_foreach(extra, key, value) {
+      if (SDL_strcmp(key, "id") == 0) {
+        const char *id_str = json_object_get_string(value);
+        if (SDL_strcmp(id_str, OceanComponentIdStr) == 0) {
+          ECS_COMPONENT(ecs, OceanComponent);
+          OceanComponent comp = create_ocean_component_internal();
+          ecs_set_ptr(ecs, e, OceanComponent, &comp);
+        }
+      }
     }
   }
-  */
   return true;
 }
 
-void destroy_ocean_component(OceanComponent *comp, uint32_t system_dep_count,
-                             System *const *system_deps) {
-  (void)system_dep_count;
-  (void)system_deps;
-  *comp = (OceanComponent){0};
+void destroy_ocean_components(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, OceanComponent);
+
+  ecs_filter_t *filter =
+      ecs_filter(ecs, {
+                          .terms =
+                              {
+                                  {.id = ecs_id(OceanComponent)},
+                              },
+                      });
+
+  ecs_iter_t it = ecs_filter_iter(ecs, filter);
+  while (ecs_filter_next(&it)) {
+    OceanComponent *comp = ecs_field(&it, OceanComponent, 1);
+    for (int32_t i = 0; i < it.count; ++i) {
+      *comp = (OceanComponent){0};
+    }
+  }
+  ecs_filter_fini(filter);
 }
 
-TB_DEFINE_COMPONENT(ocean, OceanComponent, OceanComponentDescriptor)
+void tb_register_ocean_component(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, OceanSystem);
 
-void tb_ocean_component_descriptor(ComponentDescriptor *desc) {
-  *desc = (ComponentDescriptor){
-      .name = "Ocean",
-      .size = sizeof(OceanComponent),
-      .desc_size = sizeof(OceanComponentDescriptor),
-      .id = OceanComponentId,
-      .id_str = OceanComponentIdStr,
-      .create = tb_create_ocean_component,
-      .deserialize = deserialize_ocean_component,
-      .destroy = tb_destroy_ocean_component,
+  // Register asset system for parsing ocean components
+  AssetSystem asset = {
+      .add_fn = create_ocean_component,
+      .rem_fn = destroy_ocean_components,
   };
+  ecs_set_ptr(ecs, ecs_id(OceanSystem), AssetSystem, &asset);
 }
 
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and
@@ -113,9 +121,9 @@ OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
   };
 }
 
-OceanSample tb_sample_ocean(const OceanComponent *ocean,
+OceanSample tb_sample_ocean(const OceanComponent *ocean, ecs_world_t *ecs,
                             TransformComponent *transform, float2 pos) {
-  float4x4 mat = tb_transform_get_world_matrix(transform);
+  float4x4 mat = tb_transform_get_world_matrix(ecs, transform);
 
   uint32_t wave_count = ocean->wave_count;
   if (wave_count > TB_WAVE_MAX) {

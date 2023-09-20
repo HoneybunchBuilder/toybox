@@ -22,6 +22,8 @@ typedef struct ImFontAtlas ImFontAtlas;
 typedef struct ImGuiContext ImGuiContext;
 typedef struct ImGuiIO ImGuiIO;
 
+typedef struct ecs_world_t ecs_world_t;
+
 #define TB_MAX_UI_CONTEXTS 4
 
 typedef struct UIContext {
@@ -29,13 +31,6 @@ typedef struct UIContext {
   TbImage atlas;
   VkImageView atlas_view;
 } UIContext;
-
-typedef struct ImGuiSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-  uint32_t context_count;
-  ImFontAtlas *context_atlases[TB_MAX_UI_CONTEXTS];
-} ImGuiSystemDescriptor;
 
 typedef struct ImGuiFrameState {
   uint32_t set_count;
@@ -65,5 +60,6 @@ typedef struct ImGuiSystem {
   UIContext contexts[TB_MAX_UI_CONTEXTS];
 } ImGuiSystem;
 
-void tb_imgui_system_descriptor(SystemDescriptor *desc,
-                                const ImGuiSystemDescriptor *imgui_desc);
+void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
+                           Allocator tmp_alloc);
+void tb_unregister_imgui_sys(ecs_world_t *ecs);

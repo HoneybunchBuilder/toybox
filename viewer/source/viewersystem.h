@@ -4,12 +4,7 @@
 
 #define ViewerSystemId 0xB001DEAD
 
-typedef struct SystemDescriptor SystemDescriptor;
-
-typedef struct ViewerSystemDescriptor {
-  Allocator tmp_alloc;
-  Allocator std_alloc;
-} ViewerSystemDescriptor;
+typedef struct TbWorld TbWorld;
 
 typedef struct ViewerSystem {
   Allocator tmp_alloc;
@@ -22,5 +17,5 @@ typedef struct ViewerSystem {
   const char *selected_scene;
 } ViewerSystem;
 
-void tb_viewer_system_descriptor(SystemDescriptor *desc,
-                                 const ViewerSystemDescriptor *ocean_desc);
+void tb_register_viewer_sys(TbWorld *world);
+void tb_unregister_viewer_sys(TbWorld *world);

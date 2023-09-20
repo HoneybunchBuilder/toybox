@@ -8,10 +8,13 @@
 
 #define TextureSystemId 0xBADDCAFE
 
-typedef struct SystemDescriptor SystemDescriptor;
-typedef struct RenderSystem RenderSystem;
+typedef struct ecs_world_t ecs_world_t;
+
 typedef struct cgltf_texture cgltf_texture;
+
 typedef struct VkImageView_T *VkImageView;
+
+typedef struct RenderSystem RenderSystem;
 
 typedef uint64_t TbTextureId;
 static const TbTextureId InvalidTextureId = SDL_MAX_UINT64;
@@ -24,18 +27,13 @@ typedef enum TbTextureUsage {
   TB_TEX_USAGE_BRDF,
 } TbTextureUsage;
 
-typedef struct TextureSystemDescriptor {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
-} TextureSystemDescriptor;
-
 typedef struct TbTexture TbTexture;
 
 typedef struct TextureSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
-  RenderSystem *render_system;
+  RenderSystem *rnd_sys;
 
   TB_DYN_ARR_OF(TbTexture) textures;
 
@@ -45,11 +43,11 @@ typedef struct TextureSystem {
   TbTextureId brdf_tex;
 } TextureSystem;
 
-void tb_texture_system_descriptor(SystemDescriptor *desc,
-                                  const TextureSystemDescriptor *tex_desc);
+void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
+                             Allocator tmp_alloc);
+void tb_unregister_texture_sys(ecs_world_t *ecs);
 
 VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex);
-
 TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
                                          const char *name, TbTextureUsage usage,
                                          uint32_t width, uint32_t height,

@@ -1,5 +1,6 @@
 #include "meshsystem.h"
 
+#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
 #include "common.hlsli"
@@ -19,7 +20,8 @@
 #include "vkdbg.h"
 #include "world.h"
 
-#include "meshoptimizer.h"
+#include <flecs.h>
+#include <meshoptimizer.h>
 
 // Ignore some warnings for the generated headers
 #ifdef __clang__
@@ -108,6 +110,11 @@ typedef struct VisibleSet {
   uint32_t mesh_count;
   MeshComponent const **meshes;
 } VisibleSet;
+
+typedef struct VisibleSet2 {
+  TbViewId view;
+  TB_DYN_ARR_OF(MeshComponent *) meshes;
+} VisibleSet2;
 
 typedef struct TbMesh {
   TbMeshId id;
@@ -715,7 +722,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -726,7 +733,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
       vkCmdSetScissor(buffer, 0, 1, &view->scissor);
@@ -739,7 +746,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           continue;
         }
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
         VkBuffer geom_buffer = draw->geom_buffer;
 
@@ -756,8 +763,8 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const ShadowSubDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
+            //                  true);
             VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
             if (submesh->mat_perm & GLTF_PERM_DOUBLE_SIDED) {
               cull_flags = VK_CULL_MODE_NONE;
@@ -769,21 +776,21 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                                    &submesh->vertex_binding_offset);
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
@@ -795,7 +802,7 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                     uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Prepass Record", TracyCategoryColorRendering,
                true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 1,
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Prepass Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
@@ -807,7 +814,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
+    // "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -819,7 +827,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       }
 
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
+      // "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
 
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
@@ -834,7 +843,8 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         }
 
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
+        // "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
 
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
@@ -847,8 +857,9 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
+            // buffer, "Submesh", 7,
+            // true);
             VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
             if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
               cull_flags = VK_CULL_MODE_NONE;
@@ -864,23 +875,23 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
             }
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
 
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
 
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 
@@ -891,6 +902,7 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
+  (void)gpu_ctx;
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
     const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
@@ -899,7 +911,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 2, true);
+    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
+    // "Batch", 4, true);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -911,7 +924,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       }
 
       TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 3, true);
+      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
+      // "View", 5, true);
       cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
 
       vkCmdSetViewport(buffer, 0, 1, &view->viewport);
@@ -926,7 +940,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         }
 
         TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 4, true);
+        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
+        // "Mesh", 6, true);
         cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
 
         vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
@@ -939,8 +954,9 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        true);
           const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
           if (submesh->index_count > 0) {
-            TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 5,
-                              true);
+            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
+            // buffer, "Submesh", 7,
+            //                 true);
             vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     layout, 0, 1, &submesh->mat_set, 0, NULL);
             vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -959,23 +975,23 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
             }
 
             vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            TracyCVkZoneEnd(submesh_scope);
+            // TracyCVkZoneEnd(submesh_scope);
           }
           TracyCZoneEnd(submesh_ctx);
         }
 
         cmd_end_label(buffer);
-        TracyCVkZoneEnd(mesh_scope);
+        // TracyCVkZoneEnd(mesh_scope);
         TracyCZoneEnd(draw_ctx);
       }
 
       cmd_end_label(buffer);
-      TracyCVkZoneEnd(view_scope);
+      // TracyCVkZoneEnd(view_scope);
       TracyCZoneEnd(view_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCVkZoneEnd(batch_scope);
+    // TracyCVkZoneEnd(batch_scope);
     TracyCZoneEnd(batch_ctx);
   }
 }
@@ -983,7 +999,7 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 1, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
   mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
@@ -995,7 +1011,7 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                              uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Transparent Record", TracyCategoryColorRendering,
                true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 1,
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Transparent Meshes",
                   (float4){0.0f, 0.0f, 1.0f, 1.0f});
@@ -1005,49 +1021,25 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
-                        uint32_t system_dep_count, System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which meshes depend on", false);
-  MaterialSystem *material_system =
-      tb_get_system(system_deps, system_dep_count, MaterialSystem);
-  TB_CHECK_RETURN(material_system,
-                  "Failed to find material system which meshes depend on",
-                  false);
-  ViewSystem *view_system =
-      tb_get_system(system_deps, system_dep_count, ViewSystem);
-  TB_CHECK_RETURN(view_system,
-                  "Failed to find view system which meshes depend on", false);
-  RenderObjectSystem *render_object_system =
-      tb_get_system(system_deps, system_dep_count, RenderObjectSystem);
-  TB_CHECK_RETURN(render_object_system,
-                  "Failed to find render object system which meshes depend on",
-                  false);
-  RenderPipelineSystem *render_pipe_system =
-      tb_get_system(system_deps, system_dep_count, RenderPipelineSystem);
-  TB_CHECK_RETURN(
-      render_pipe_system,
-      "Failed to find render pipeline system which meshes depend on", false);
-
-  *self = (MeshSystem){
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+MeshSystem create_mesh_system_internal(
+    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    MaterialSystem *material_system, ViewSystem *view_system,
+    RenderObjectSystem *render_object_system,
+    RenderPipelineSystem *render_pipe_system) {
+  MeshSystem sys = {
+      .std_alloc = std_alloc,
+      .tmp_alloc = tmp_alloc,
       .render_system = render_system,
       .material_system = material_system,
       .view_system = view_system,
       .render_object_system = render_object_system,
       .render_pipe_system = render_pipe_system,
   };
-
-  TB_DYN_ARR_RESET(self->meshes, self->std_alloc, 8);
-  TbRenderPassId prepass_id =
-      self->render_pipe_system->opaque_depth_normal_pass;
-  TbRenderPassId opaque_pass_id = self->render_pipe_system->opaque_color_pass;
+  TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
+  TbRenderPassId prepass_id = render_pipe_system->opaque_depth_normal_pass;
+  TbRenderPassId opaque_pass_id = render_pipe_system->opaque_color_pass;
   TbRenderPassId transparent_pass_id =
-      self->render_pipe_system->transparent_color_pass;
+      render_pipe_system->transparent_color_pass;
 
   // Setup mesh system for rendering
   {
@@ -1055,8 +1047,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 
     // Get descriptor set layouts from related systems
     {
-      self->obj_set_layout = render_object_system->set_layout;
-      self->view_set_layout = view_system->set_layout;
+      sys.obj_set_layout = render_object_system->set_layout;
+      sys.view_set_layout = view_system->set_layout;
     }
 
     // Create prepass pipeline layout
@@ -1066,21 +1058,21 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
           .setLayoutCount = 2,
           .pSetLayouts =
               (VkDescriptorSetLayout[2]){
-                  self->obj_set_layout,
-                  self->view_set_layout,
+                  sys.obj_set_layout,
+                  sys.view_set_layout,
               },
       };
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                           "Opaque Depth Normal Prepass Layout",
-                                          &self->prepass_layout);
+                                          &sys.prepass_layout);
     }
 
     // Create prepass pipeline
     {
       VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-      err = create_prepass_pipeline(self->render_system, depth_format,
-                                    self->prepass_layout, &self->prepass_pipe);
-      TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", false);
+      err = create_prepass_pipeline(sys.render_system, depth_format,
+                                    sys.prepass_layout, &sys.prepass_pipe);
+      TB_VK_CHECK(err, "Failed to create opaque prepass pipeline");
     }
 
     // Create pipeline layouts
@@ -1088,8 +1080,8 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 #define LAYOUT_COUNT 3
       VkDescriptorSetLayout layouts[LAYOUT_COUNT] = {
           material_system->set_layout,
-          self->obj_set_layout,
-          self->view_set_layout,
+          sys.obj_set_layout,
+          sys.view_set_layout,
       };
 
       VkPipelineLayoutCreateInfo create_info = {
@@ -1109,51 +1101,50 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
 #undef LAYOUT_COUNT
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                           "GLTF Pipeline Layout",
-                                          &self->pipe_layout);
+                                          &sys.pipe_layout);
     }
 
     // Create opaque and transparent pipelines
     {
       uint32_t attach_count = 0;
       tb_render_pipeline_get_attachments(
-          self->render_pipe_system,
-          self->render_pipe_system->opaque_depth_normal_pass, &attach_count,
+          sys.render_pipe_system,
+          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
           NULL);
-      TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+      TB_CHECK(attach_count == 2, "Unexpected");
       PassAttachment depth_info = {0};
       tb_render_pipeline_get_attachments(
-          self->render_pipe_system,
-          self->render_pipe_system->opaque_depth_normal_pass, &attach_count,
+          sys.render_pipe_system,
+          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
           &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
-          depth_info.attachment);
+          sys.render_pipe_system->render_target_system, depth_info.attachment);
 
       VkFormat color_format = VK_FORMAT_UNDEFINED;
       tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->opaque_color_pass,
+          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
           &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 2, "Unexpected", false);
+      TB_CHECK(attach_count == 2, "Unexpected");
       PassAttachment attach_info[2] = {0};
       tb_render_pipeline_get_attachments(
-          self->render_pipe_system, self->render_pipe_system->opaque_color_pass,
+          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
           &attach_count, attach_info);
 
       for (uint32_t i = 0; i < attach_count; i++) {
         VkFormat format = tb_render_target_get_format(
-            self->render_pipe_system->render_target_system,
+            sys.render_pipe_system->render_target_system,
             attach_info[i].attachment);
         if (format != VK_FORMAT_D32_SFLOAT) {
           color_format = format;
           break;
         }
       }
-      err = create_mesh_pipelines(self->render_system, self->std_alloc,
-                                  color_format, depth_format, self->pipe_layout,
-                                  &self->pipe_count, &self->opaque_pipelines,
-                                  &self->transparent_pipelines);
-      TB_VK_CHECK_RET(err, "Failed to create mesh pipelines", false);
+      err = create_mesh_pipelines(sys.render_system, sys.std_alloc,
+                                  color_format, depth_format, sys.pipe_layout,
+                                  &sys.pipe_count, &sys.opaque_pipelines,
+                                  &sys.transparent_pipelines);
+      TB_VK_CHECK(err, "Failed to create mesh pipelines");
     }
 
     {
@@ -1171,58 +1162,56 @@ bool create_mesh_system(MeshSystem *self, const MeshSystemDescriptor *desc,
       };
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
                                           "Shadow Pipeline Layout",
-                                          &self->shadow_pipe_layout);
-      TB_VK_CHECK_RET(err, "Failed to create shadow pipeline layout", false);
+                                          &sys.shadow_pipe_layout);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline layout");
     }
 
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(self->render_pipe_system,
-                                         self->render_pipe_system->shadow_pass,
+      tb_render_pipeline_get_attachments(sys.render_pipe_system,
+                                         sys.render_pipe_system->shadow_pass,
                                          &attach_count, NULL);
-      TB_CHECK_RETURN(attach_count == 1, "Unexpected", false);
+      TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(self->render_pipe_system,
-                                         self->render_pipe_system->shadow_pass,
+      tb_render_pipeline_get_attachments(sys.render_pipe_system,
+                                         sys.render_pipe_system->shadow_pass,
                                          &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          self->render_pipe_system->render_target_system,
-          depth_info.attachment);
-      err = create_shadow_pipeline(self->render_system, depth_format,
-                                   self->shadow_pipe_layout,
-                                   &self->shadow_pipeline);
-      TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", false);
+          sys.render_pipe_system->render_target_system, depth_info.attachment);
+      err =
+          create_shadow_pipeline(sys.render_system, depth_format,
+                                 sys.shadow_pipe_layout, &sys.shadow_pipeline);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline");
     }
   }
-
   // Register drawing with the pipelines
-  self->prepass_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.prepass_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
                               .draw_fn = prepass_record,
                               .pass_id = prepass_id,
                           });
 
-  self->opaque_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.opaque_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
                               .draw_fn = opaque_pass_record,
                               .pass_id = opaque_pass_id,
                           });
-  self->transparent_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.transparent_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
                               .draw_fn = transparent_pass_record,
                               .pass_id = transparent_pass_id,
                           });
-  self->shadow_draw_ctx = tb_render_pipeline_register_draw_context(
+  sys.shadow_draw_ctx = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(MeshDrawBatch),
                               .draw_fn = shadow_pass_record,
                               .pass_id = render_pipe_system->shadow_pass,
                           });
-  return true;
+  return sys;
 }
 
 void destroy_mesh_system(MeshSystem *self) {
@@ -1252,9 +1241,9 @@ void destroy_mesh_system(MeshSystem *self) {
 
 uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
   TracyCZone(ctx, true);
-  // We know the layout of the distribution of pipelines so we can
-  // decode the vertex input and the material permutation from the
-  // index
+  // We know the layout of the distribution of pipelines so we
+  // can decode the vertex input and the material permutation
+  // from the index
   for (uint32_t pipe_idx = 0; pipe_idx < self->pipe_count; ++pipe_idx) {
     const TbVertexInput vi = pipe_idx;
 
@@ -1266,652 +1255,6 @@ uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
   TracyCZoneEnd(ctx);
   TB_CHECK_RETURN(false, "Failed to find pipeline for given mesh permutations",
                   SDL_MAX_UINT32);
-}
-
-void tick_mesh_system_internal(MeshSystem *self, const SystemInput *input,
-                               SystemOutput *output, float delta_seconds) {
-  (void)delta_seconds;
-  TracyCZoneNC(ctx, "Mesh System", TracyCategoryColorRendering, true);
-
-  const uint32_t camera_count = tb_get_column_component_count(input, 0);
-  const PackedComponentStore *camera_store =
-      tb_get_column_check_id(input, 0, 0, CameraComponentId);
-
-  const uint32_t dir_light_count = tb_get_column_component_count(input, 1);
-  const PackedComponentStore *dir_light_store =
-      tb_get_column_check_id(input, 1, 0, DirectionalLightComponentId);
-
-  const uint32_t mesh_count = tb_get_column_component_count(input, 2);
-  const PackedComponentStore *mesh_store =
-      tb_get_column_check_id(input, 2, 0, MeshComponentId);
-  const PackedComponentStore *mesh_transform_store =
-      tb_get_column_check_id(input, 2, 1, TransformComponentId);
-
-  if (mesh_count == 0 || camera_count == 0) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
-
-  TB_PROF_MESSAGE("Camera Count: %d", camera_count);
-  TB_PROF_MESSAGE("Directional Light Count: %d", dir_light_count);
-
-  // Since we want to update the world matrix dirty flag on the transform
-  // component, we need to write the components back out
-  EntityId *out_entity_ids = tb_get_column_entity_ids(input, 2);
-  tb_make_out_copy(out_trans, self->tmp_alloc, mesh_transform_store, mesh_count,
-                   TransformComponent);
-
-  // Update each mesh's render object data while also collecting world space
-  // AABBs for culling later
-  AABB *world_space_aabbs = tb_alloc_nm_tp(self->tmp_alloc, mesh_count, AABB);
-  {
-    TracyCZoneN(ctx, "Calc World Space AABBs", true);
-    for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-      const MeshComponent *mesh_comp =
-          tb_get_component(mesh_store, mesh_idx, MeshComponent);
-
-      // Convert the transform to a matrix for rendering
-      CommonObjectData data = {
-          .m = tb_transform_get_world_matrix(&out_trans[mesh_idx]),
-      };
-
-      // Transform local aabb into world space
-      AABB aabb = aabb_init();
-      {
-        float4 min = f3tof4(mesh_comp->local_aabb.min, 1.0f);
-        float4 max = f3tof4(mesh_comp->local_aabb.max, 1.0f);
-
-        min = mulf44(data.m, min);
-        max = mulf44(data.m, max);
-
-        aabb_add_point(&aabb, f4tof3(min));
-        aabb_add_point(&aabb, f4tof3(max));
-      }
-      world_space_aabbs[mesh_idx] = aabb;
-
-      tb_render_object_system_set_object_data(self->render_object_system,
-                                              mesh_comp->object_id, &data);
-    }
-    TracyCZoneEnd(ctx);
-  }
-
-  // Figure out which meshes are visible
-  // Worst case *everything* is visible so alloc for that off the tmp allocator
-  VisibleSet *visible_sets =
-      tb_alloc_nm_tp(self->tmp_alloc, camera_count, VisibleSet);
-  {
-    TracyCZoneN(ctx, "View Culling", true);
-    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-      const CameraComponent *camera =
-          tb_get_component(camera_store, cam_idx, CameraComponent);
-
-      visible_sets[cam_idx] = (VisibleSet){
-          .view = camera->view_id,
-          .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
-                                   const MeshComponent *),
-      };
-    }
-
-    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-      VisibleSet *visible_set = &visible_sets[cam_idx];
-
-      const View *view = tb_get_view(self->view_system, visible_set->view);
-      const Frustum *frustum = &view->frustum;
-
-      for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
-        const AABB *world_aabb = &world_space_aabbs[mesh_idx];
-        if (!frustum_test_aabb(frustum, world_aabb)) {
-          continue;
-        }
-        const MeshComponent *mesh_comp =
-            tb_get_component(mesh_store, mesh_idx, MeshComponent);
-
-        const uint32_t idx = visible_set->mesh_count;
-        visible_set->meshes[idx] = mesh_comp;
-        visible_set->mesh_count++;
-      }
-
-      TB_PROF_MESSAGE("Visible Mesh Count: %d", visible_set->mesh_count);
-    }
-    TracyCZoneEnd(ctx);
-  }
-
-  VisibleSet *lit_sets =
-      tb_alloc_nm_tp(self->tmp_alloc, TB_CASCADE_COUNT, VisibleSet);
-  {
-    TracyCZoneN(ctx, "View Culling", true);
-    const DirectionalLightComponent *light =
-        tb_get_component(dir_light_store, 0, DirectionalLightComponent);
-    for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
-         ++cascade_idx) {
-
-      lit_sets[cascade_idx] = (VisibleSet){
-          .view = light->cascade_views[cascade_idx],
-          .meshes = tb_alloc_nm_tp(self->tmp_alloc, mesh_count,
-                                   const MeshComponent *),
-      };
-    }
-
-    for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
-         ++cascade_idx) {
-      VisibleSet *lit_set = &lit_sets[cascade_idx];
-
-      const View *view = tb_get_view(self->view_system, lit_set->view);
-      const Frustum *frustum = &view->frustum;
-
-      for (uint32_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-        // If the mesh's AABB isn't viewed by the frustum, don't issue this draw
-        const AABB *world_aabb = &world_space_aabbs[mesh_idx];
-        if (!frustum_test_aabb(frustum, world_aabb)) {
-          continue;
-        }
-        const MeshComponent *mesh_comp =
-            tb_get_component(mesh_store, mesh_idx, MeshComponent);
-
-        const uint32_t idx = lit_set->mesh_count;
-        lit_set->meshes[idx] = mesh_comp;
-        lit_set->mesh_count++;
-      }
-
-      TB_PROF_MESSAGE("Lit Mesh Count: %d", lit_set->mesh_count);
-    }
-    TracyCZoneEnd(ctx);
-  }
-
-  Allocator tmp_alloc = self->render_system->render_thread
-                            ->frame_states[self->render_system->frame_idx]
-                            .tmp_alloc.alloc;
-
-  // Figure out # of unique pipelines so we know how many batches we have
-  uint32_t pipe_count = 0;
-  uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
-  SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
-  {
-    TracyCZoneN(ctx, "Batch Culling", true);
-    for (uint32_t view_idx = 0; view_idx < camera_count; ++view_idx) {
-      const VisibleSet *visible_set = &visible_sets[view_idx];
-      for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
-           ++mesh_idx) {
-        const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
-        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
-             ++sub_idx) {
-          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-          uint32_t pipe_idx =
-              get_pipeline_for_input(self, submesh->vertex_input);
-
-          if (pipe_idxs[pipe_idx] == 0) {
-            pipe_idxs[pipe_idx] = pipe_count;
-            pipe_count++;
-            TB_CHECK(pipe_count <= max_pipe_count, "Unexpected # of pipelines");
-          }
-        }
-      }
-    }
-    TracyCZoneEnd(ctx);
-  }
-
-  // Just collect an opaque and transparent batch for every known used pipeline
-  const uint32_t batch_count = pipe_count;
-
-  TB_PROF_MESSAGE("Batch Count: %d", batch_count);
-
-  // Allocate and initialize prepass batch per vertex input layout
-  DrawBatch *prepass_batch = NULL;
-  MeshDrawBatch *prepass_user_batch = NULL;
-  {
-    TracyCZoneN(batch_ctx, "Allocate Prepass Batch", true);
-    prepass_batch = tb_alloc_nm_tp(tmp_alloc, 1, DrawBatch);
-    prepass_user_batch = tb_alloc_nm_tp(tmp_alloc, 1, MeshDrawBatch);
-
-    // Batch could use each view
-    *prepass_user_batch = (MeshDrawBatch){0};
-    prepass_user_batch->views =
-        tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
-    prepass_user_batch->view_count = 0;
-    prepass_batch->user_batch = prepass_user_batch;
-
-    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-      MeshDrawView *view = &prepass_user_batch->views[cam_idx];
-      // Each view already knows how many meshes it should see
-      // Each mesh could have TB_SUBMESH_MAX # of submeshes
-      *view = (MeshDrawView){0};
-      view->draws =
-          tb_alloc_nm_tp(tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
-      view->draw_count = 0;
-
-      SDL_memset(view->draws, 0,
-                 sizeof(MeshDraw) * visible_sets[cam_idx].mesh_count);
-
-      prepass_batch->pipeline = self->prepass_pipe;
-      prepass_batch->layout = self->prepass_layout;
-    }
-
-    TracyCZoneEnd(batch_ctx);
-  }
-
-  // Allocate and initialize each opaque batch
-  DrawBatch *opaque_batches = NULL;
-  MeshDrawBatch *opaque_user_batches = NULL;
-  {
-    TracyCZoneN(batch_ctx, "Allocate Opaque Batches", true);
-    opaque_batches = tb_alloc_nm_tp(tmp_alloc, batch_count, DrawBatch);
-    opaque_user_batches = tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
-    for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-      // Each batch could use each view
-      MeshDrawBatch *batch = &opaque_user_batches[batch_idx];
-      *batch = (MeshDrawBatch){0};
-      batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
-      batch->view_count = 0;
-      opaque_batches[batch_idx].user_batch = batch;
-
-      for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-        MeshDrawView *view = &batch->views[cam_idx];
-        // Each view already knows how many meshes it should see
-        // Each mesh could have TB_SUBMESH_MAX # of submeshes
-        *view = (MeshDrawView){0};
-        view->draws = tb_alloc_nm_tp(
-            tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
-        view->draw_count = 0;
-
-        SDL_memset(view->draws, 0,
-                   sizeof(MeshDraw) * visible_sets[cam_idx].mesh_count);
-      }
-    }
-    TracyCZoneEnd(batch_ctx);
-  }
-
-  // Allocate and initialize each transparent batch
-  DrawBatch *transparent_batches = NULL;
-  MeshDrawBatch *transparent_user_batches = NULL;
-  {
-    TracyCZoneN(batch_ctx, "Allocate Transparent Batches", true);
-    transparent_batches = tb_alloc_nm_tp(tmp_alloc, batch_count, DrawBatch);
-    transparent_user_batches =
-        tb_alloc_nm_tp(tmp_alloc, batch_count, MeshDrawBatch);
-    for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-      // Each batch could use each view
-      MeshDrawBatch *batch = &transparent_user_batches[batch_idx];
-      *batch = (MeshDrawBatch){0};
-      batch->views = tb_alloc_nm_tp(tmp_alloc, camera_count, MeshDrawView);
-      batch->view_count = 0;
-      transparent_batches[batch_idx].user_batch = batch;
-
-      for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-        MeshDrawView *view = &batch->views[cam_idx];
-        // Each view already knows how many meshes it should see
-        // Each mesh could have TB_SUBMESH_MAX # of submeshes
-        *view = (MeshDrawView){0};
-        view->draws = tb_alloc_nm_tp(
-            tmp_alloc, visible_sets[cam_idx].mesh_count, MeshDraw);
-        view->draw_count = 0;
-
-        SDL_memset(view->draws, 0,
-                   sizeof(MeshDraw) * visible_sets[cam_idx].mesh_count);
-      }
-    }
-    TracyCZoneEnd(batch_ctx);
-  }
-
-  // Create one batch for each shadow cascade
-  DrawBatch shadow_batches[TB_CASCADE_COUNT] = {0};
-  ShadowDrawBatch shadow_user_batches[TB_CASCADE_COUNT] = {0};
-  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
-    // Batch could use each light
-    shadow_user_batches[i].views =
-        tb_alloc_nm_tp(tmp_alloc, dir_light_count, ShadowDrawView);
-    shadow_user_batches[i].view_count = 0;
-    shadow_batches[i].user_batch = &shadow_user_batches[i];
-
-    ShadowDrawView *view = &shadow_user_batches[i].views[0];
-    // Each view already knows how many meshes it should see
-    // Each mesh could have TB_SUBMESH_MAX # of submeshes
-    *view = (ShadowDrawView){0};
-    view->draws = tb_alloc_nm_tp(tmp_alloc, lit_sets[i].mesh_count, ShadowDraw);
-    view->draw_count = 0;
-
-    SDL_memset(view->draws, 0, sizeof(ShadowDraw) * lit_sets[i].mesh_count);
-  }
-
-  // TODO: Make this less hacky
-  const uint32_t width = self->render_system->render_thread->swapchain.width;
-  const uint32_t height = self->render_system->render_thread->swapchain.height;
-
-  // Gather prepass, opaque and transparent batches
-  for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
-    const VisibleSet *visible_set = &visible_sets[cam_idx];
-
-    // Get camera descriptor set
-    VkDescriptorSet view_set =
-        tb_view_system_get_descriptor(self->view_system, visible_set->view);
-
-    for (uint32_t mesh_idx = 0; mesh_idx < visible_set->mesh_count;
-         ++mesh_idx) {
-      const MeshComponent *mesh_comp = visible_set->meshes[mesh_idx];
-
-      // Get mesh descriptor set
-      VkDescriptorSet obj_set = tb_render_object_system_get_descriptor(
-          self->render_object_system, mesh_comp->object_id);
-
-      // Organize draws into batches
-      {
-        // Determine which pipeline is in use
-        VkBuffer geom_buffer =
-            tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
-
-        uint32_t opaque_draw_idx = 0;
-        uint32_t trans_draw_idx = 0;
-
-        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
-             ++sub_idx) {
-          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-
-          TbMaterialPerm mat_perm =
-              tb_mat_system_get_perm(self->material_system, submesh->material);
-          VkDescriptorSet material_set =
-              tb_mat_system_get_set(self->material_system, submesh->material);
-          const uint32_t pipe_idx =
-              get_pipeline_for_input(self, submesh->vertex_input);
-          const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
-
-          static const uint64_t pos_stride = sizeof(uint16_t) * 4;
-          static const uint64_t attr_stride = sizeof(uint16_t) * 2;
-
-          bool opaque = true;
-          if (mat_perm & GLTF_PERM_ALPHA_CLIP ||
-              mat_perm & GLTF_PERM_ALPHA_BLEND) {
-            opaque = false;
-          }
-
-          // Handle opaque draw
-          if (opaque) {
-            // Handle prepass draw
-            {
-              prepass_user_batch->view_count = camera_count;
-              MeshDrawView *view = &prepass_user_batch->views[cam_idx];
-              view->view_set = view_set;
-              view->viewport =
-                  (VkViewport){0, height, width, -(float)height, 0, 1};
-              view->scissor = (VkRect2D){{0, 0}, {width, height}};
-              view->draw_count = visible_set->mesh_count;
-              MeshDraw *draw = &view->draws[mesh_idx];
-              draw->geom_buffer = geom_buffer;
-              draw->obj_set = obj_set;
-              draw->submesh_draw_count = opaque_draw_idx + 1;
-              SubMeshDraw *sub_draw =
-                  &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
-              *sub_draw = (SubMeshDraw){
-                  .consts = {.perm = mat_perm}, // Need this for some last
-                                                // minute material options
-                  .index_type = submesh->index_type,
-                  .index_count = submesh->index_count,
-                  .index_offset = submesh->index_offset,
-              };
-
-              const uint64_t base_vert_offset = submesh->vertex_offset;
-              const uint32_t vertex_count = submesh->vertex_count;
-
-              static const uint64_t pos_stride = sizeof(uint16_t) * 4;
-
-              // We only ever need position and normal vertex attributes
-              sub_draw->vertex_binding_count = 2;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-            }
-
-            DrawBatch *opaque_batch = &opaque_batches[local_pipe_idx];
-            opaque_batch->pipeline = self->opaque_pipelines[pipe_idx];
-            opaque_batch->layout = self->pipe_layout;
-
-            MeshDrawBatch *mesh_batch = &opaque_user_batches[local_pipe_idx];
-            mesh_batch->view_count = camera_count;
-            MeshDrawView *view = &mesh_batch->views[cam_idx];
-            view->view_set = view_set;
-            view->viewport =
-                (VkViewport){0, height, width, -(float)height, 0, 1};
-            view->scissor = (VkRect2D){{0, 0}, {width, height}};
-            view->draw_count = visible_set->mesh_count;
-            MeshDraw *draw = &view->draws[mesh_idx];
-            draw->geom_buffer = geom_buffer;
-            draw->obj_set = obj_set;
-            draw->submesh_draw_count = opaque_draw_idx + 1;
-            SubMeshDraw *sub_draw =
-                &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
-            *sub_draw = (SubMeshDraw){
-                .mat_set = material_set,
-                .consts = {.perm = mat_perm},
-                .index_type = submesh->index_type,
-                .index_count = submesh->index_count,
-                .index_offset = submesh->index_offset,
-            };
-
-            const uint64_t base_vert_offset = submesh->vertex_offset;
-            const uint32_t vertex_count = submesh->vertex_count;
-
-            switch (submesh->vertex_input) {
-            case VI_P3N3:
-              sub_draw->vertex_binding_count = 2;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              break;
-            case VI_P3N3U2:
-              sub_draw->vertex_binding_count = 3;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              sub_draw->vertex_binding_offsets[2] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + attr_stride));
-              break;
-            case VI_P3N3T4U2:
-              sub_draw->vertex_binding_count = 4;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              sub_draw->vertex_binding_offsets[2] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + attr_stride));
-              sub_draw->vertex_binding_offsets[3] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + (attr_stride * 2)));
-              break;
-            default:
-              TB_CHECK(false, "Unexepcted vertex input");
-              break;
-            }
-
-            opaque_draw_idx++;
-          } else {
-            DrawBatch *trans_batch = &transparent_batches[local_pipe_idx];
-            trans_batch->pipeline = self->transparent_pipelines[pipe_idx];
-            trans_batch->layout = self->pipe_layout;
-
-            MeshDrawBatch *mesh_batch =
-                &transparent_user_batches[local_pipe_idx];
-            mesh_batch->view_count = camera_count;
-            MeshDrawView *view = &mesh_batch->views[cam_idx];
-            view->view_set = view_set;
-            view->viewport =
-                (VkViewport){0, height, width, -(float)height, 0, 1};
-            view->scissor = (VkRect2D){{0, 0}, {width, height}};
-            view->draw_count = visible_set->mesh_count;
-            MeshDraw *draw = &view->draws[mesh_idx];
-            draw->geom_buffer = geom_buffer;
-            draw->obj_set = obj_set;
-            draw->submesh_draw_count = trans_draw_idx + 1;
-            SubMeshDraw *sub_draw =
-                &view->draws[mesh_idx].submesh_draws[trans_draw_idx];
-            *sub_draw = (SubMeshDraw){
-                .mat_set = material_set,
-                .consts = {.perm = mat_perm},
-                .index_type = submesh->index_type,
-                .index_count = submesh->index_count,
-                .index_offset = submesh->index_offset,
-            };
-
-            const uint64_t base_vert_offset = submesh->vertex_offset;
-            const uint32_t vertex_count = submesh->vertex_count;
-
-            switch (submesh->vertex_input) {
-            case VI_P3N3:
-              sub_draw->vertex_binding_count = 2;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              break;
-            case VI_P3N3U2:
-              sub_draw->vertex_binding_count = 3;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              sub_draw->vertex_binding_offsets[2] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + attr_stride));
-              break;
-            case VI_P3N3T4U2:
-              sub_draw->vertex_binding_count = 4;
-              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
-              sub_draw->vertex_binding_offsets[1] =
-                  base_vert_offset + (vertex_count * pos_stride);
-              sub_draw->vertex_binding_offsets[2] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + attr_stride));
-              sub_draw->vertex_binding_offsets[3] =
-                  base_vert_offset +
-                  (vertex_count * (pos_stride + (attr_stride * 2)));
-              break;
-            default:
-              TB_CHECK(false, "Unexepcted vertex input");
-              break;
-            }
-            trans_draw_idx++;
-          }
-        }
-      }
-    }
-  }
-
-  // Submit prepass batch
-  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                      self->prepass_draw_ctx, 1, prepass_batch);
-  // Submit opaque batches
-  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                      self->opaque_draw_ctx, batch_count,
-                                      opaque_batches);
-  // Submit transparent batches
-  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                      self->transparent_draw_ctx, batch_count,
-                                      transparent_batches);
-
-  // Similar process for shadow batch
-  for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
-       ++cascade_idx) {
-    const VisibleSet *lit_set = &lit_sets[cascade_idx];
-
-    const View *view = tb_get_view(self->view_system, lit_set->view);
-
-    for (uint32_t mesh_idx = 0; mesh_idx < lit_set->mesh_count; ++mesh_idx) {
-      const MeshComponent *mesh_comp = lit_set->meshes[mesh_idx];
-
-      VkBuffer geom_buffer =
-          tb_mesh_system_get_gpu_mesh(self, mesh_comp->mesh_id);
-      const CommonObjectData *mesh_data = tb_render_object_system_get_data(
-          self->render_object_system, mesh_comp->object_id);
-
-      uint32_t submesh_draw_idx = 0;
-
-      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
-           ++sub_idx) {
-        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
-
-        // Still need the material perm to check for things like
-        // double-sidedness
-        TbMaterialPerm mat_perm =
-            tb_mat_system_get_perm(self->material_system, submesh->material);
-
-        shadow_batches[cascade_idx].pipeline = self->shadow_pipeline;
-        shadow_batches[cascade_idx].layout = self->shadow_pipe_layout;
-        shadow_user_batches[cascade_idx].view_count = dir_light_count;
-        ShadowDrawView *draw_view = &shadow_user_batches[cascade_idx].views[0];
-        draw_view->viewport = (VkViewport){0,
-                                           TB_SHADOW_MAP_DIM * cascade_idx,
-                                           TB_SHADOW_MAP_DIM,
-                                           TB_SHADOW_MAP_DIM,
-                                           0,
-                                           1};
-        draw_view->scissor = (VkRect2D){{0, TB_SHADOW_MAP_DIM * cascade_idx},
-                                        {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
-        draw_view->draw_count = lit_set->mesh_count;
-        draw_view->consts = (ShadowViewConstants){view->view_data.vp};
-        ShadowDraw *draw = &draw_view->draws[mesh_idx];
-        draw->consts.m = mesh_data->m;
-        draw->geom_buffer = geom_buffer;
-        draw->submesh_draw_count = submesh_draw_idx + 1;
-        ShadowSubDraw *sub_draw =
-            &draw_view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
-        *sub_draw = (ShadowSubDraw){
-            .mat_perm = mat_perm,
-            .index_type = submesh->index_type,
-            .index_count = submesh->index_count,
-            .index_offset = submesh->index_offset,
-            .vertex_binding_offset = submesh->vertex_offset,
-        };
-
-        submesh_draw_idx++;
-      }
-    }
-  }
-
-  tb_render_pipeline_issue_draw_batch(self->render_pipe_system,
-                                      self->shadow_draw_ctx, TB_CASCADE_COUNT,
-                                      shadow_batches);
-
-  // Output potential transform updates
-  {
-    output->set_count = 1;
-    output->write_sets[0] = (SystemWriteSet){
-        .id = TransformComponentId,
-        .count = mesh_count,
-        .components = (uint8_t *)out_trans,
-        .entities = out_entity_ids,
-    };
-  }
-
-  TracyCZoneEnd(ctx);
-}
-
-TB_DEFINE_SYSTEM(mesh, MeshSystem, MeshSystemDescriptor)
-
-void tick_mesh_system(void *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Mesh System");
-  tick_mesh_system_internal((MeshSystem *)self, input, output, delta_seconds);
-}
-
-void tb_mesh_system_descriptor(SystemDescriptor *desc,
-                               const MeshSystemDescriptor *mesh_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Mesh",
-      .size = sizeof(MeshSystem),
-      .id = MeshSystemId,
-      .desc = (InternalDescriptor)mesh_desc,
-      .system_dep_count = 5,
-      .system_deps = {RenderSystemId, MaterialSystemId, ViewSystemId,
-                      RenderObjectSystemId, RenderPipelineSystemId},
-      .create = tb_create_mesh_system,
-      .destroy = tb_destroy_mesh_system,
-      .tick_fn_count = 1,
-      .tick_fns[0] = {
-          .dep_count = 3,
-          .deps[0] = {2, {CameraComponentId, TransformComponentId}},
-          .deps[1] = {1, {DirectionalLightComponentId}},
-          .deps[2] = {2, {MeshComponentId, TransformComponentId}},
-          .system_id = MeshSystemId,
-          .order = E_TICK_PRE_RENDER,
-          .function = tick_mesh_system,
-      }};
 }
 
 uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
@@ -2002,8 +1345,9 @@ static cgltf_result decompress_buffer_view(Allocator alloc,
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
                                   const cgltf_node *node) {
-  // Hash the mesh's path and the cgltf_mesh structure to get an id
-  // We'd prefer to use a name but gltfpack is currently stripping mesh names
+  // Hash the mesh's path and the cgltf_mesh structure to get
+  // an id We'd prefer to use a name but gltfpack is currently
+  // stripping mesh names
   const cgltf_mesh *mesh = node->mesh;
   TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
 
@@ -2051,11 +1395,11 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         }
       }
 
-      // Calculate the necessary padding between the index and vertex contents
-      // of the buffer.
-      // Otherwise we'll get a validation error.
-      // The vertex content needs to start that the correct attribAddress
-      // which must be a multiple of the size of the first attribute
+      // Calculate the necessary padding between the index and
+      // vertex contents of the buffer. Otherwise we'll get a
+      // validation error. The vertex content needs to start
+      // that the correct attribAddress which must be a
+      // multiple of the size of the first attribute
       uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
       vertex_offset = index_size + idx_padding;
 
@@ -2064,7 +1408,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     VkResult err = VK_SUCCESS;
 
-    // Allocate space on the host that we can read the mesh into
+    // Allocate space on the host that we can read the mesh
+    // into
     {
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -2214,7 +1559,8 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
   TbMesh *mesh = &TB_DYN_ARR_AT(self->meshes, index);
 
   if (mesh->ref_count == 0) {
-    TB_CHECK(false, "Tried to release reference to mesh with 0 ref count");
+    TB_CHECK(false, "Tried to release reference to mesh with "
+                    "0 ref count");
     return;
   }
 
@@ -2235,4 +1581,666 @@ void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
     *host_buf = (TbHostBuffer){0};
     *gpu_buf = (TbBuffer){0};
   }
+}
+
+void mesh_draw_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Mesh System", TracyCategoryColorRendering, true);
+  ecs_world_t *ecs = it->world;
+
+  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, MeshComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, DirectionalLightComponent);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+
+  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+
+  const uint32_t camera_count = it->count;
+  Allocator tmp_alloc = mesh_sys->tmp_alloc;
+
+  CameraComponent *cameras = ecs_field(it, CameraComponent, 1);
+  // TransformComponent *camera_transforms = ecs_field(it, TransformComponent,
+  // 2);
+
+  TB_DYN_ARR_OF(VisibleSet2) vis_sets = {0};
+  TB_DYN_ARR_RESET(vis_sets, tmp_alloc, it->count);
+
+  // Run some queries that we will iterate
+  ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+  const int32_t mesh_count = ecs_iter_count(&mesh_it);
+
+  ecs_iter_t dir_light_it = ecs_query_iter(ecs, mesh_sys->dir_light_query);
+
+  // Update each mesh's render object data while also
+  // collecting world space AABBs for culling later
+  AABB *world_space_aabbs = tb_alloc_nm_tp(tmp_alloc, mesh_count, AABB);
+
+  mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+    TransformComponent *transforms = ecs_field(&mesh_it, TransformComponent, 2);
+
+    // Query each mesh against the view to determine if it should be drawn
+    // and add it to the visible list
+    for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+      MeshComponent *mesh = &meshes[mesh_idx];
+      TransformComponent *trans = &transforms[mesh_idx];
+
+      // Convert the transform to a matrix for rendering
+      CommonObjectData data = {
+          .m = tb_transform_get_world_matrix(ecs, trans),
+      };
+
+      // Transform local aabb into world space
+      AABB aabb = aabb_init();
+      {
+        float4 min = f3tof4(mesh->local_aabb.min, 1.0f);
+        float4 max = f3tof4(mesh->local_aabb.max, 1.0f);
+
+        min = mulf44(data.m, min);
+        max = mulf44(data.m, max);
+
+        aabb_add_point(&aabb, f4tof3(min));
+        aabb_add_point(&aabb, f4tof3(max));
+      }
+      world_space_aabbs[mesh_idx] = aabb;
+
+      tb_render_object_system_set_object_data(ro_sys, mesh->object_id, &data);
+    }
+  }
+
+  // For each camera
+  for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
+    CameraComponent *camera = &cameras[cam_idx];
+    // TransformComponent *cam_trans = &camera_transforms[cam_idx];
+
+    VisibleSet2 vis_set = {.view = camera->view_id};
+    TB_DYN_ARR_RESET(vis_set.meshes, tmp_alloc, mesh_count);
+
+    mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+    while (ecs_query_next(&mesh_it)) {
+      MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+      // TransformComponent *transforms =
+      //     ecs_field(&mesh_it, TransformComponent, 2);
+
+      // Query each mesh against the view to determine if it should be drawn
+      // and add it to the visible list
+      for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+        MeshComponent *mesh = &meshes[mesh_idx];
+        // TransformComponent *trans = &transforms[mesh_idx];
+
+        // For now be evil and just add everything
+        TB_DYN_ARR_APPEND(vis_set.meshes, mesh);
+      }
+    }
+    TB_DYN_ARR_APPEND(vis_sets, vis_set);
+  }
+
+  TB_DYN_ARR_OF(VisibleSet2) lit_sets = {0};
+  TB_DYN_ARR_RESET(lit_sets, tmp_alloc, TB_CASCADE_COUNT);
+  {
+    TracyCZoneN(light_ctx, "Light Visibility", true);
+
+    dir_light_it = ecs_query_iter(ecs, mesh_sys->dir_light_query);
+    while (ecs_query_next(&dir_light_it)) {
+      const DirectionalLightComponent *light =
+          ecs_field(&dir_light_it, DirectionalLightComponent, 1);
+
+      for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+           ++cascade_idx) {
+
+        VisibleSet2 *lit_set = &TB_DYN_ARR_AT(lit_sets, cascade_idx);
+
+        *lit_set = (VisibleSet2){
+            .view = light->cascade_views[cascade_idx],
+        };
+        TB_DYN_ARR_RESET(lit_set->meshes, tmp_alloc, mesh_it.count);
+      }
+
+      for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+           ++cascade_idx) {
+        VisibleSet2 *lit_set = &TB_DYN_ARR_AT(lit_sets, cascade_idx);
+
+        mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+        while (ecs_query_next(&mesh_it)) {
+          MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+          // TransformComponent *transforms =
+          //     ecs_field(&mesh_it, TransformComponent, 2);
+
+          // Query each mesh against the view to determine if it should be drawn
+          // and add it to the visible list
+          for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+            MeshComponent *mesh = &meshes[mesh_idx];
+            // TransformComponent *trans = &transforms[mesh_idx];
+
+            // For now be evil and just add everything
+            TB_DYN_ARR_APPEND(lit_set->meshes, mesh);
+          }
+        }
+      }
+    }
+    TracyCZoneEnd(light_ctx);
+  }
+
+  Allocator rnd_tmp_alloc =
+      rnd_sys->render_thread->frame_states[rnd_sys->frame_idx].tmp_alloc.alloc;
+
+  // Figure out # of unique pipelines so we know how many
+  // batches we have
+  uint32_t pipe_count = 0;
+  uint32_t *pipe_idxs = tb_alloc_nm_tp(tmp_alloc, max_pipe_count, uint32_t);
+  SDL_memset(pipe_idxs, 0, sizeof(uint32_t) * max_pipe_count);
+  {
+    TracyCZoneN(cull_ctx, "Batch Culling", true);
+    for (int32_t view_idx = 0; view_idx < it->count; ++view_idx) {
+      const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, view_idx);
+      TB_DYN_ARR_FOREACH(vis_set->meshes, mesh_idx) {
+        const MeshComponent *mesh_comp =
+            TB_DYN_ARR_AT(vis_set->meshes, mesh_idx);
+        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+             ++sub_idx) {
+          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+          uint32_t pipe_idx =
+              get_pipeline_for_input(mesh_sys, submesh->vertex_input);
+
+          if (pipe_idxs[pipe_idx] == 0) {
+            pipe_idxs[pipe_idx] = pipe_count;
+            pipe_count++;
+            TB_CHECK(pipe_count <= max_pipe_count, "Unexpected # of pipelines");
+          }
+        }
+      }
+    }
+    TracyCZoneEnd(cull_ctx);
+  }
+
+  // Just collect an opaque and transparent batch for every
+  // known used pipeline
+  const uint32_t batch_count = pipe_count;
+
+  TB_PROF_MESSAGE("Batch Count: %d", batch_count);
+
+  // Allocate and initialize prepass batch per vertex input
+  // layout
+  DrawBatch *prepass_batch = NULL;
+  MeshDrawBatch *prepass_user_batch = NULL;
+  {
+    TracyCZoneN(batch_ctx, "Allocate Prepass Batch", true);
+    prepass_batch = tb_alloc_nm_tp(rnd_tmp_alloc, 1, DrawBatch);
+    prepass_user_batch = tb_alloc_nm_tp(rnd_tmp_alloc, 1, MeshDrawBatch);
+
+    // Batch could use each view
+    *prepass_user_batch = (MeshDrawBatch){0};
+    prepass_user_batch->views =
+        tb_alloc_nm_tp(rnd_tmp_alloc, camera_count, MeshDrawView);
+    prepass_user_batch->view_count = 0;
+    prepass_batch->user_batch = prepass_user_batch;
+
+    for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+      MeshDrawView *view = &prepass_user_batch->views[cam_idx];
+      // Each view already knows how many meshes it should see
+      // Each mesh could have TB_SUBMESH_MAX # of submeshes
+      *view = (MeshDrawView){0};
+      const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, cam_idx);
+      const uint32_t mesh_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+      view->draws = tb_alloc_nm_tp(rnd_tmp_alloc, mesh_count, MeshDraw);
+      view->draw_count = 0;
+
+      SDL_memset(view->draws, 0, sizeof(MeshDraw) * mesh_count);
+
+      prepass_batch->pipeline = mesh_sys->prepass_pipe;
+      prepass_batch->layout = mesh_sys->prepass_layout;
+    }
+
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  // Allocate and initialize each opaque batch
+  DrawBatch *opaque_batches = NULL;
+  MeshDrawBatch *opaque_user_batches = NULL;
+  {
+    TracyCZoneN(batch_ctx, "Allocate Opaque Batches", true);
+    opaque_batches = tb_alloc_nm_tp(rnd_tmp_alloc, batch_count, DrawBatch);
+    opaque_user_batches =
+        tb_alloc_nm_tp(rnd_tmp_alloc, batch_count, MeshDrawBatch);
+    for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+      // Each batch could use each view
+      MeshDrawBatch *batch = &opaque_user_batches[batch_idx];
+      *batch = (MeshDrawBatch){0};
+      batch->views = tb_alloc_nm_tp(rnd_tmp_alloc, camera_count, MeshDrawView);
+      batch->view_count = 0;
+      opaque_batches[batch_idx].user_batch = batch;
+
+      for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+        MeshDrawView *view = &batch->views[cam_idx];
+        // Each view already knows how many meshes it should
+        // see Each mesh could have TB_SUBMESH_MAX # of
+        // submeshes
+        const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, cam_idx);
+        const uint32_t mesh_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+
+        *view = (MeshDrawView){0};
+        view->draws = tb_alloc_nm_tp(rnd_tmp_alloc, mesh_count, MeshDraw);
+        view->draw_count = 0;
+
+        SDL_memset(view->draws, 0, sizeof(MeshDraw) * mesh_count);
+      }
+    }
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  // Allocate and initialize each transparent batch
+  DrawBatch *transparent_batches = NULL;
+  MeshDrawBatch *transparent_user_batches = NULL;
+  {
+    TracyCZoneN(batch_ctx, "Allocate Transparent Batches", true);
+    transparent_batches = tb_alloc_nm_tp(rnd_tmp_alloc, batch_count, DrawBatch);
+    transparent_user_batches =
+        tb_alloc_nm_tp(rnd_tmp_alloc, batch_count, MeshDrawBatch);
+    for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+      // Each batch could use each view
+      MeshDrawBatch *batch = &transparent_user_batches[batch_idx];
+      *batch = (MeshDrawBatch){0};
+      batch->views = tb_alloc_nm_tp(rnd_tmp_alloc, camera_count, MeshDrawView);
+      batch->view_count = 0;
+      transparent_batches[batch_idx].user_batch = batch;
+
+      for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+        MeshDrawView *view = &batch->views[cam_idx];
+        // Each view already knows how many meshes it should
+        // see Each mesh could have TB_SUBMESH_MAX # of
+        // submeshes
+        const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, cam_idx);
+        const uint32_t mesh_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+
+        *view = (MeshDrawView){0};
+        view->draws = tb_alloc_nm_tp(rnd_tmp_alloc, mesh_count, MeshDraw);
+        view->draw_count = 0;
+
+        SDL_memset(view->draws, 0, sizeof(MeshDraw) * mesh_count);
+      }
+    }
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  // Create one batch for each shadow cascade
+  DrawBatch shadow_batches[TB_CASCADE_COUNT] = {0};
+  ShadowDrawBatch shadow_user_batches[TB_CASCADE_COUNT] = {0};
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    const VisibleSet2 *lit_set = &TB_DYN_ARR_AT(lit_sets, i);
+    uint32_t mesh_count = TB_DYN_ARR_SIZE(lit_set->meshes);
+    // Batch could use each light
+    shadow_user_batches[i].views =
+        tb_alloc_nm_tp(rnd_tmp_alloc, dir_light_it.count, ShadowDrawView);
+    shadow_user_batches[i].view_count = 0;
+    shadow_batches[i].user_batch = &shadow_user_batches[i];
+
+    ShadowDrawView *view = &shadow_user_batches[i].views[0];
+    // Each view already knows how many meshes it should see
+    // Each mesh could have TB_SUBMESH_MAX # of submeshes
+    *view = (ShadowDrawView){0};
+    view->draws = tb_alloc_nm_tp(rnd_tmp_alloc, mesh_count, ShadowDraw);
+    view->draw_count = 0;
+
+    SDL_memset(view->draws, 0, sizeof(ShadowDraw) * mesh_count);
+  }
+
+  // TODO: Make this less hacky
+  const uint32_t width = rnd_sys->render_thread->swapchain.width;
+  const uint32_t height = rnd_sys->render_thread->swapchain.height;
+
+  // Gather prepass, opaque and transparent batches
+  for (uint32_t cam_idx = 0; cam_idx < camera_count; ++cam_idx) {
+    const VisibleSet2 *vis_set = &TB_DYN_ARR_AT(vis_sets, cam_idx);
+
+    // Get camera descriptor set
+    VkDescriptorSet view_set =
+        tb_view_system_get_descriptor(view_sys, vis_set->view);
+
+    TB_DYN_ARR_FOREACH(vis_set->meshes, mesh_idx) {
+      const MeshComponent *mesh_comp = TB_DYN_ARR_AT(vis_set->meshes, mesh_idx);
+
+      // Get mesh descriptor set
+      VkDescriptorSet obj_set =
+          tb_render_object_system_get_descriptor(ro_sys, mesh_comp->object_id);
+
+      // Organize draws into batches
+      {
+        // Determine which pipeline is in use
+        VkBuffer geom_buffer =
+            tb_mesh_system_get_gpu_mesh(mesh_sys, mesh_comp->mesh_id);
+
+        uint32_t opaque_draw_idx = 0;
+        uint32_t trans_draw_idx = 0;
+
+        for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+             ++sub_idx) {
+          const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+
+          TbMaterialPerm mat_perm =
+              tb_mat_system_get_perm(mat_sys, submesh->material);
+          VkDescriptorSet material_set =
+              tb_mat_system_get_set(mat_sys, submesh->material);
+          const uint32_t pipe_idx =
+              get_pipeline_for_input(mesh_sys, submesh->vertex_input);
+          const uint32_t local_pipe_idx = pipe_idxs[pipe_idx];
+
+          static const uint64_t pos_stride = sizeof(uint16_t) * 4;
+          static const uint64_t attr_stride = sizeof(uint16_t) * 2;
+
+          bool opaque = true;
+          if (mat_perm & GLTF_PERM_ALPHA_CLIP ||
+              mat_perm & GLTF_PERM_ALPHA_BLEND) {
+            opaque = false;
+          }
+
+          // Handle opaque draw
+          if (opaque) {
+            // Handle prepass draw
+            {
+              prepass_user_batch->view_count = camera_count;
+              MeshDrawView *view = &prepass_user_batch->views[cam_idx];
+              view->view_set = view_set;
+              view->viewport =
+                  (VkViewport){0, height, width, -(float)height, 0, 1};
+              view->scissor = (VkRect2D){{0, 0}, {width, height}};
+              view->draw_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+              MeshDraw *draw = &view->draws[mesh_idx];
+              draw->geom_buffer = geom_buffer;
+              draw->obj_set = obj_set;
+              draw->submesh_draw_count = opaque_draw_idx + 1;
+              SubMeshDraw *sub_draw =
+                  &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
+              *sub_draw = (SubMeshDraw){
+                  .consts = {.perm = mat_perm}, // Need this for
+                                                // some last minute
+                                                // material options
+                  .index_type = submesh->index_type,
+                  .index_count = submesh->index_count,
+                  .index_offset = submesh->index_offset,
+              };
+
+              const uint64_t base_vert_offset = submesh->vertex_offset;
+              const uint32_t vertex_count = submesh->vertex_count;
+
+              static const uint64_t pos_stride = sizeof(uint16_t) * 4;
+
+              // We only ever need position and normal vertex
+              // attributes
+              sub_draw->vertex_binding_count = 2;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+            }
+
+            DrawBatch *opaque_batch = &opaque_batches[local_pipe_idx];
+            opaque_batch->pipeline = mesh_sys->opaque_pipelines[pipe_idx];
+            opaque_batch->layout = mesh_sys->pipe_layout;
+
+            MeshDrawBatch *mesh_batch = &opaque_user_batches[local_pipe_idx];
+            mesh_batch->view_count = camera_count;
+            MeshDrawView *view = &mesh_batch->views[cam_idx];
+            view->view_set = view_set;
+            view->viewport =
+                (VkViewport){0, height, width, -(float)height, 0, 1};
+            view->scissor = (VkRect2D){{0, 0}, {width, height}};
+            view->draw_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+            MeshDraw *draw = &view->draws[mesh_idx];
+            draw->geom_buffer = geom_buffer;
+            draw->obj_set = obj_set;
+            draw->submesh_draw_count = opaque_draw_idx + 1;
+            SubMeshDraw *sub_draw =
+                &view->draws[mesh_idx].submesh_draws[opaque_draw_idx];
+            *sub_draw = (SubMeshDraw){
+                .mat_set = material_set,
+                .consts = {.perm = mat_perm},
+                .index_type = submesh->index_type,
+                .index_count = submesh->index_count,
+                .index_offset = submesh->index_offset,
+            };
+
+            const uint64_t base_vert_offset = submesh->vertex_offset;
+            const uint32_t vertex_count = submesh->vertex_count;
+
+            switch (submesh->vertex_input) {
+            case VI_P3N3:
+              sub_draw->vertex_binding_count = 2;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              break;
+            case VI_P3N3U2:
+              sub_draw->vertex_binding_count = 3;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              break;
+            case VI_P3N3T4U2:
+              sub_draw->vertex_binding_count = 4;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              sub_draw->vertex_binding_offsets[3] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + (attr_stride * 2)));
+              break;
+            default:
+              TB_CHECK(false, "Unexepcted vertex input");
+              break;
+            }
+
+            opaque_draw_idx++;
+          } else {
+            DrawBatch *trans_batch = &transparent_batches[local_pipe_idx];
+            trans_batch->pipeline = mesh_sys->transparent_pipelines[pipe_idx];
+            trans_batch->layout = mesh_sys->pipe_layout;
+
+            MeshDrawBatch *mesh_batch =
+                &transparent_user_batches[local_pipe_idx];
+            mesh_batch->view_count = camera_count;
+            MeshDrawView *view = &mesh_batch->views[cam_idx];
+            view->view_set = view_set;
+            view->viewport =
+                (VkViewport){0, height, width, -(float)height, 0, 1};
+            view->scissor = (VkRect2D){{0, 0}, {width, height}};
+            view->draw_count = TB_DYN_ARR_SIZE(vis_set->meshes);
+            MeshDraw *draw = &view->draws[mesh_idx];
+            draw->geom_buffer = geom_buffer;
+            draw->obj_set = obj_set;
+            draw->submesh_draw_count = trans_draw_idx + 1;
+            SubMeshDraw *sub_draw =
+                &view->draws[mesh_idx].submesh_draws[trans_draw_idx];
+            *sub_draw = (SubMeshDraw){
+                .mat_set = material_set,
+                .consts = {.perm = mat_perm},
+                .index_type = submesh->index_type,
+                .index_count = submesh->index_count,
+                .index_offset = submesh->index_offset,
+            };
+
+            const uint64_t base_vert_offset = submesh->vertex_offset;
+            const uint32_t vertex_count = submesh->vertex_count;
+
+            switch (submesh->vertex_input) {
+            case VI_P3N3:
+              sub_draw->vertex_binding_count = 2;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              break;
+            case VI_P3N3U2:
+              sub_draw->vertex_binding_count = 3;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              break;
+            case VI_P3N3T4U2:
+              sub_draw->vertex_binding_count = 4;
+              sub_draw->vertex_binding_offsets[0] = base_vert_offset;
+              sub_draw->vertex_binding_offsets[1] =
+                  base_vert_offset + (vertex_count * pos_stride);
+              sub_draw->vertex_binding_offsets[2] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + attr_stride));
+              sub_draw->vertex_binding_offsets[3] =
+                  base_vert_offset +
+                  (vertex_count * (pos_stride + (attr_stride * 2)));
+              break;
+            default:
+              TB_CHECK(false, "Unexepcted vertex input");
+              break;
+            }
+            trans_draw_idx++;
+          }
+        }
+      }
+    }
+  }
+
+  // Submit prepass batch
+  tb_render_pipeline_issue_draw_batch(rp_sys, mesh_sys->prepass_draw_ctx, 1,
+                                      prepass_batch);
+  // Submit opaque batches
+  tb_render_pipeline_issue_draw_batch(rp_sys, mesh_sys->opaque_draw_ctx,
+                                      batch_count, opaque_batches);
+  // Submit transparent batches
+  tb_render_pipeline_issue_draw_batch(rp_sys, mesh_sys->transparent_draw_ctx,
+                                      batch_count, transparent_batches);
+
+  // Similar process for shadow batch
+  for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+       ++cascade_idx) {
+    const VisibleSet2 *lit_set = &TB_DYN_ARR_AT(lit_sets, cascade_idx);
+    uint32_t mesh_count = TB_DYN_ARR_SIZE(lit_set->meshes);
+    const View *view = tb_get_view(view_sys, lit_set->view);
+
+    TB_DYN_ARR_FOREACH(lit_set->meshes, mesh_idx) {
+      const MeshComponent *mesh_comp = TB_DYN_ARR_AT(lit_set->meshes, mesh_idx);
+
+      VkBuffer geom_buffer =
+          tb_mesh_system_get_gpu_mesh(mesh_sys, mesh_comp->mesh_id);
+      const CommonObjectData *mesh_data =
+          tb_render_object_system_get_data(ro_sys, mesh_comp->object_id);
+
+      uint32_t submesh_draw_idx = 0;
+
+      for (uint32_t sub_idx = 0; sub_idx < mesh_comp->submesh_count;
+           ++sub_idx) {
+        const SubMesh *submesh = &mesh_comp->submeshes[sub_idx];
+
+        // Still need the material perm to check for things
+        // like double-sidedness
+        TbMaterialPerm mat_perm =
+            tb_mat_system_get_perm(mat_sys, submesh->material);
+
+        shadow_batches[cascade_idx].pipeline = mesh_sys->shadow_pipeline;
+        shadow_batches[cascade_idx].layout = mesh_sys->shadow_pipe_layout;
+        shadow_user_batches[cascade_idx].view_count = dir_light_it.count;
+        ShadowDrawView *draw_view = &shadow_user_batches[cascade_idx].views[0];
+        draw_view->viewport = (VkViewport){0,
+                                           TB_SHADOW_MAP_DIM * cascade_idx,
+                                           TB_SHADOW_MAP_DIM,
+                                           TB_SHADOW_MAP_DIM,
+                                           0,
+                                           1};
+        draw_view->scissor = (VkRect2D){{0, TB_SHADOW_MAP_DIM * cascade_idx},
+                                        {TB_SHADOW_MAP_DIM, TB_SHADOW_MAP_DIM}};
+        draw_view->draw_count = mesh_count;
+        draw_view->consts = (ShadowViewConstants){view->view_data.vp};
+        ShadowDraw *draw = &draw_view->draws[mesh_idx];
+        draw->consts.m = mesh_data->m;
+        draw->geom_buffer = geom_buffer;
+        draw->submesh_draw_count = submesh_draw_idx + 1;
+        ShadowSubDraw *sub_draw =
+            &draw_view->draws[mesh_idx].submesh_draws[submesh_draw_idx];
+        *sub_draw = (ShadowSubDraw){
+            .mat_perm = mat_perm,
+            .index_type = submesh->index_type,
+            .index_count = submesh->index_count,
+            .index_offset = submesh->index_offset,
+            .vertex_binding_offset = submesh->vertex_offset,
+        };
+
+        submesh_draw_idx++;
+      }
+    }
+  }
+
+  tb_render_pipeline_issue_draw_batch(rp_sys, mesh_sys->shadow_draw_ctx,
+                                      TB_CASCADE_COUNT, shadow_batches);
+
+  TracyCZoneEnd(ctx);
+}
+
+void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, MeshComponent);
+  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, DirectionalLightComponent);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, AssetSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+
+  MeshSystem sys = create_mesh_system_internal(
+      std_alloc, tmp_alloc, rnd_sys, mat_sys, view_sys, ro_sys, rp_sys);
+  sys.mesh_query =
+      ecs_query(ecs, {
+                         .filter.terms =
+                             {
+                                 {.id = ecs_id(MeshComponent)},
+                                 {.id = ecs_id(TransformComponent)},
+                             },
+                     });
+  sys.dir_light_query =
+      ecs_query(ecs, {.filter.terms = {
+                          {.id = ecs_id(DirectionalLightComponent)},
+                      }});
+
+  // Sets a singleton by ptr
+  ecs_set_ptr(ecs, ecs_id(MeshSystem), MeshSystem, &sys);
+
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnUpdate, CameraComponent,
+             TransformComponent);
+
+  tb_register_mesh_component(ecs);
+}
+
+void tb_unregister_mesh_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, MeshSystem);
+  MeshSystem *sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  ecs_query_fini(sys->dir_light_query);
+  ecs_query_fini(sys->mesh_query);
+  destroy_mesh_system(sys);
+  ecs_singleton_remove(ecs, MeshSystem);
 }

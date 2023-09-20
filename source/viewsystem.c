@@ -10,32 +10,20 @@
 #include "transformcomponent.h"
 #include "world.h"
 
-bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
-                        uint32_t system_dep_count, System *const *system_deps) {
-  // Find the necessary systems
-  RenderSystem *render_system =
-      tb_get_system(system_deps, system_dep_count, RenderSystem);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which view depends on", false);
-  RenderTargetSystem *render_target_system =
-      tb_get_system(system_deps, system_dep_count, RenderTargetSystem);
-  TB_CHECK_RETURN(render_target_system,
-                  "Failed to find render target system which view depends on",
-                  false);
-  TextureSystem *texture_system =
-      tb_get_system(system_deps, system_dep_count, TextureSystem);
-  TB_CHECK_RETURN(texture_system,
-                  "Failed to find texture system which view depends on", false);
+#include <flecs.h>
 
-  *self = (ViewSystem){
-      .render_system = render_system,
-      .render_target_system = render_target_system,
-      .texture_system = texture_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+ViewSystem create_view_system(Allocator std_alloc, Allocator tmp_alloc,
+                              RenderSystem *rnd_sys, RenderTargetSystem *rt_sys,
+                              TextureSystem *tex_sys) {
+  ViewSystem sys = {
+      .render_system = rnd_sys,
+      .render_target_system = rt_sys,
+      .texture_system = tex_sys,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
   };
 
-  TB_DYN_ARR_RESET(self->views, self->std_alloc, 1);
+  TB_DYN_ARR_RESET(sys.views, sys.std_alloc, 1);
 
   VkResult err = VK_SUCCESS;
 
@@ -52,10 +40,9 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
         .maxLod = 9.0f, // TODO: Fix hack
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Filtered Env Sampler",
-                                &self->filtered_env_sampler);
-    TB_VK_CHECK_RET(err, "Failed to create filtered env sampler", false);
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Filtered Env Sampler",
+                                &sys.filtered_env_sampler);
+    TB_VK_CHECK(err, "Failed to create filtered env sampler");
   }
 
   // Create a BRDF sampler
@@ -71,9 +58,9 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info, "BRDF Sampler",
-                                &self->brdf_sampler);
-    TB_VK_CHECK_RET(err, "Failed to create brdf sampler", false);
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "BRDF Sampler",
+                                &sys.brdf_sampler);
+    TB_VK_CHECK(err, "Failed to create brdf sampler");
   }
 
   // Create view descriptor set layout
@@ -132,24 +119,22 @@ bool create_view_system(ViewSystem *self, const ViewSystemDescriptor *desc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->filtered_env_sampler,
+                    .pImmutableSamplers = &sys.filtered_env_sampler,
                 },
                 {
                     .binding = 8,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &self->brdf_sampler,
+                    .pImmutableSamplers = &sys.brdf_sampler,
                 },
             },
     };
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "View Descriptor Set Layout",
-                                   &self->set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create view descriptor set", false);
+    err = tb_rnd_create_set_layout(
+        rnd_sys, &create_info, "View Descriptor Set Layout", &sys.set_layout);
+    TB_VK_CHECK(err, "Failed to create view descriptor set");
   }
-
-  return true;
+  return sys;
 }
 
 void destroy_view_system(ViewSystem *self) {
@@ -167,17 +152,12 @@ void destroy_view_system(ViewSystem *self) {
   *self = (ViewSystem){0};
 }
 
-void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
-                               SystemOutput *output, float delta_seconds) {
-  // This system doesn't interact with the ECS so these
-  // parameters can be
-  // ignored
-  (void)input;
-  (void)output;
-  (void)delta_seconds;
+void view_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "View System Tick", TracyCategoryColorRendering, true);
 
-  const uint32_t view_count = TB_DYN_ARR_SIZE(self->views);
+  ViewSystem *sys = ecs_field(it, ViewSystem, 1);
+
+  const uint32_t view_count = TB_DYN_ARR_SIZE(sys->views);
 
   if (view_count == 0) {
     TracyCZoneEnd(ctx);
@@ -186,17 +166,18 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
 
   VkResult err = VK_SUCCESS;
 
-  RenderSystem *render_system = self->render_system;
+  RenderSystem *rnd_sys = sys->render_system;
+  RenderTargetSystem *rt_sys = sys->render_target_system;
 
-  VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+  VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
-  ViewSystemFrameState *state = &self->frame_states[render_system->frame_idx];
+  ViewSystemFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
   // Allocate all the descriptor sets for this frame
   {
     // Resize the pool
     if (state->set_count < view_count) {
       if (state->set_pool) {
-        tb_rnd_destroy_descriptor_pool(render_system, state->set_pool);
+        tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
       }
 
       VkDescriptorPoolCreateInfo create_info = {
@@ -217,23 +198,22 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
           .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
       };
       err = tb_rnd_create_descriptor_pool(
-          render_system, &create_info,
-          "View System Frame State Descriptor Pool", &state->set_pool);
+          rnd_sys, &create_info, "View System Frame State Descriptor Pool",
+          &state->set_pool);
       TB_VK_CHECK(err,
                   "Failed to create view system frame state descriptor pool");
       state->set_count = view_count;
-      state->sets = tb_realloc_nm_tp(self->std_alloc, state->sets,
+      state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
                                      state->set_count, VkDescriptorSet);
     } else {
-      vkResetDescriptorPool(self->render_system->render_thread->device,
-                            state->set_pool, 0);
+      vkResetDescriptorPool(rnd_sys->render_thread->device, state->set_pool, 0);
       state->set_count = view_count;
     }
 
-    VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-        self->tmp_alloc, state->set_count, VkDescriptorSetLayout);
+    VkDescriptorSetLayout *layouts =
+        tb_alloc_nm_tp(sys->tmp_alloc, state->set_count, VkDescriptorSetLayout);
     for (uint32_t i = 0; i < state->set_count; ++i) {
-      layouts[i] = self->set_layout;
+      layouts[i] = sys->set_layout;
     }
 
     VkDescriptorSetAllocateInfo alloc_info = {
@@ -242,8 +222,8 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
         .descriptorPool = state->set_pool,
         .pSetLayouts = layouts,
     };
-    err = vkAllocateDescriptorSets(render_system->render_thread->device,
-                                   &alloc_info, state->sets);
+    err = vkAllocateDescriptorSets(rnd_sys->render_thread->device, &alloc_info,
+                                   state->sets);
     TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
   }
 
@@ -253,26 +233,26 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
   const uint32_t write_count = buf_count + img_count;
 
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      self->tmp_alloc, view_count * write_count, VkWriteDescriptorSet);
+      sys->tmp_alloc, view_count * write_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
-      self->tmp_alloc, view_count * buf_count, VkDescriptorBufferInfo);
+      sys->tmp_alloc, view_count * buf_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      self->tmp_alloc, view_count * img_count, VkDescriptorImageInfo);
+      sys->tmp_alloc, view_count * img_count, VkDescriptorImageInfo);
   TbHostBuffer *buffers =
-      tb_alloc_nm_tp(self->tmp_alloc, view_count * buf_count, TbHostBuffer);
-  TB_DYN_ARR_FOREACH(self->views, view_idx) {
-    const View *view = &TB_DYN_ARR_AT(self->views, view_idx);
+      tb_alloc_nm_tp(sys->tmp_alloc, view_count * buf_count, TbHostBuffer);
+  TB_DYN_ARR_FOREACH(sys->views, view_idx) {
+    const View *view = &TB_DYN_ARR_AT(sys->views, view_idx);
     const CommonViewData *view_data = &view->view_data;
     const CommonLightData *light_data = &view->light_data;
     TbHostBuffer *view_buffer = &buffers[view_idx + 0];
     TbHostBuffer *light_buffer = &buffers[view_idx + 1];
 
     // Write view data into the tmp buffer we know will wind up on the GPU
-    err = tb_rnd_sys_alloc_tmp_host_buffer(
-        render_system, sizeof(CommonViewData), 0x40, view_buffer);
+    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(CommonViewData),
+                                           0x40, view_buffer);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
-    err = tb_rnd_sys_alloc_tmp_host_buffer(
-        render_system, sizeof(CommonLightData), 0x40, light_buffer);
+    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(CommonLightData),
+                                           0x40, light_buffer);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
 
     // Copy view data to the allocated buffers
@@ -299,33 +279,29 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
 
     image_info[image_idx + 0] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->irradiance_map),
+        .imageView = tb_render_target_get_view(rt_sys, rnd_sys->frame_idx,
+                                               rt_sys->irradiance_map),
     };
     image_info[image_idx + 1] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->prefiltered_cube),
+        .imageView = tb_render_target_get_view(rt_sys, rnd_sys->frame_idx,
+                                               rt_sys->prefiltered_cube),
     };
     image_info[image_idx + 2] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView = tb_tex_system_get_image_view(
-            self->texture_system, self->texture_system->brdf_tex)};
+            sys->texture_system, sys->texture_system->brdf_tex)};
 
     image_info[image_idx + 3] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->shadow_map),
+        .imageView = tb_render_target_get_view(rt_sys, rnd_sys->frame_idx,
+                                               rt_sys->shadow_map),
     };
 
     image_info[image_idx + 4] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(
-            self->render_target_system, self->render_system->frame_idx,
-            self->render_target_system->ssao_buffer)};
+        .imageView = tb_render_target_get_view(rt_sys, rnd_sys->frame_idx,
+                                               rt_sys->ssao_buffer)};
 
     // Construct a write descriptor
 
@@ -393,44 +369,35 @@ void tick_view_system_internal(ViewSystem *self, const SystemInput *input,
         .pImageInfo = &image_info[image_idx + 4],
     };
   }
-  vkUpdateDescriptorSets(self->render_system->render_thread->device,
-                         view_count * write_count, writes, 0, NULL);
+  tb_rnd_update_descriptors(rnd_sys, view_count * write_count, writes);
 
   TracyCZoneEnd(ctx);
 }
 
-TB_DEFINE_SYSTEM(view, ViewSystem, ViewSystemDescriptor)
+void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
+                          Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, TextureSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
 
-void tick_view_system(void *self, const SystemInput *input,
-                      SystemOutput *output, float delta_seconds) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick View System");
-  ViewSystem *view_sys = (ViewSystem *)self;
-  tick_view_system_internal(view_sys, input, output, delta_seconds);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+
+  ViewSystem sys =
+      create_view_system(std_alloc, tmp_alloc, rnd_sys, rt_sys, tex_sys);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(ViewSystem), ViewSystem, &sys);
+
+  ECS_SYSTEM(ecs, view_update_tick, EcsOnUpdate, ViewSystem(ViewSystem));
 }
 
-void tb_view_system_descriptor(SystemDescriptor *desc,
-                               const ViewSystemDescriptor *view_desc) {
-  *desc = (SystemDescriptor){
-      .name = "View",
-      .size = sizeof(ViewSystem),
-      .id = ViewSystemId,
-      .desc = (InternalDescriptor)view_desc,
-      .system_dep_count = 3,
-      .system_deps[0] = RenderSystemId,
-      .system_deps[1] = RenderTargetSystemId,
-      .system_deps[2] = TextureSystemId,
-      .create = tb_create_view_system,
-      .destroy = tb_destroy_view_system,
-      .tick_fn_count = 1,
-      .tick_fns[0] =
-          {
-              .dep_count = 1,
-              .deps[0] = {2, {CameraComponentId, TransformComponentId}},
-              .system_id = ViewSystemId,
-              .order = E_TICK_PRE_RENDER - 1,
-              .function = tick_view_system,
-          },
-  };
+void tb_unregister_view_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, ViewSystem);
+  ViewSystem *sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  destroy_view_system(sys);
+  ecs_singleton_remove(ecs, ViewSystem);
 }
 
 TbViewId tb_view_system_create_view(ViewSystem *self) {

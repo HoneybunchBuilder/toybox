@@ -5,26 +5,23 @@
 
 #define TransformComponentId 0xDEADBEEF
 
-typedef struct World World;
-
-typedef struct TransformComponentDescriptor {
-  World *world;
-  EntityId parent;
-  Transform transform;
-} TransformComponentDescriptor;
+typedef struct ecs_world_t ecs_world_t;
+typedef uint64_t ecs_entity_t;
 
 typedef struct TransformComponent {
   bool dirty;
   float4x4 world_matrix;
-  ComponentStore *transform_store;
   Transform transform;
-  EntityId parent;
+  ecs_entity_t parent;
   uint32_t child_count;
-  EntityId *children;
+  ecs_entity_t *children;
 } TransformComponent;
 
-void tb_transform_component_descriptor(ComponentDescriptor *desc);
+const TransformComponent *
+tb_transform_get_parent(ecs_world_t *ecs, const TransformComponent *self);
 
-TransformComponent *tb_transform_get_parent(TransformComponent *self);
+TransformComponent *tb_transform_get_parent_mut(ecs_world_t *ecs,
+                                                const TransformComponent *self);
 
-float4x4 tb_transform_get_world_matrix(TransformComponent *self);
+float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
+                                       TransformComponent *self);

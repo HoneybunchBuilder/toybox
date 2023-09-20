@@ -6,6 +6,8 @@
 #include "tbcommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 typedef struct RenderTargetMipView {
   VkExtent3D extent;
   VkImageView views[TB_MAX_FRAME_STATES];
@@ -176,24 +178,16 @@ void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
   }
 }
 
-bool create_render_target_system(RenderTargetSystem *self,
-                                 const RenderTargetSystemDescriptor *desc,
-                                 uint32_t system_dep_count,
-                                 System *const *system_deps) {
-  // Find necessary systems
-  RenderSystem *render_system = (RenderSystem *)tb_find_system_dep_self_by_id(
-      system_deps, system_dep_count, RenderSystemId);
-  TB_CHECK_RETURN(render_system,
-                  "Failed to find render system which render targets depend on",
-                  false);
-
-  *self = (RenderTargetSystem){
+RenderTargetSystem create_render_target_system(RenderSystem *render_system,
+                                               Allocator std_alloc,
+                                               Allocator tmp_alloc) {
+  RenderTargetSystem sys = {
       .render_system = render_system,
-      .tmp_alloc = desc->tmp_alloc,
-      .std_alloc = desc->std_alloc,
+      .tmp_alloc = tmp_alloc,
+      .std_alloc = std_alloc,
   };
 
-  TB_DYN_ARR_RESET(self->render_targets, self->std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.render_targets, sys.std_alloc, 8);
 
   // Create some default render targets
   {
@@ -217,7 +211,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->depth_buffer = tb_create_render_target(self, &rt_desc);
+      sys.depth_buffer = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create normal prepass target
@@ -235,7 +229,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->normal_buffer = tb_create_render_target(self, &rt_desc);
+      sys.normal_buffer = tb_create_render_target(&sys, &rt_desc);
     }
     // Create ssao target
     {
@@ -252,7 +246,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->ssao_buffer = tb_create_render_target(self, &rt_desc);
+      sys.ssao_buffer = tb_create_render_target(&sys, &rt_desc);
     }
     // Create ssao scratch target
     {
@@ -269,7 +263,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->ssao_scratch = tb_create_render_target(self, &rt_desc);
+      sys.ssao_scratch = tb_create_render_target(&sys, &rt_desc);
     }
     // Create hdr color target
     {
@@ -286,7 +280,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->hdr_color = tb_create_render_target(self, &rt_desc);
+      sys.hdr_color = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create depth copy target which has a different format
@@ -304,7 +298,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->depth_buffer_copy = tb_create_render_target(self, &rt_desc);
+      sys.depth_buffer_copy = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create color copy target
@@ -322,7 +316,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->color_copy = tb_create_render_target(self, &rt_desc);
+      sys.color_copy = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create sky capture cube
@@ -341,7 +335,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
-      self->env_cube = tb_create_render_target(self, &rt_desc);
+      sys.env_cube = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create irradiance map
@@ -359,7 +353,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
-      self->irradiance_map = tb_create_render_target(self, &rt_desc);
+      sys.irradiance_map = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create prefiltered env cubemap
@@ -378,7 +372,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 6,
           .view_type = VK_IMAGE_VIEW_TYPE_CUBE,
       };
-      self->prefiltered_cube = tb_create_render_target(self, &rt_desc);
+      sys.prefiltered_cube = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Create shadow map
@@ -396,7 +390,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->shadow_map = tb_create_render_target(self, &rt_desc);
+      sys.shadow_map = tb_create_render_target(&sys, &rt_desc);
     }
     // Create brightness target
     {
@@ -412,7 +406,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->brightness = tb_create_render_target(self, &rt_desc);
+      sys.brightness = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Creating a bloom mip chain target for downscale / upscale blur
@@ -433,7 +427,7 @@ bool create_render_target_system(RenderTargetSystem *self,
           .layer_count = 1,
           .view_type = VK_IMAGE_VIEW_TYPE_2D,
       };
-      self->bloom_mip_chain = tb_create_render_target(self, &rt_desc);
+      sys.bloom_mip_chain = tb_create_render_target(&sys, &rt_desc);
     }
 
     // Import swapchain target
@@ -456,11 +450,11 @@ bool create_render_target_system(RenderTargetSystem *self,
         images[i] =
             render_system->render_thread->frame_states[i].swapchain_image;
       }
-      self->swapchain = tb_import_render_target(self, &rt_desc, images);
+      sys.swapchain = tb_import_render_target(&sys, &rt_desc, images);
     }
   }
 
-  return true;
+  return sys;
 }
 
 void destroy_render_target_system(RenderTargetSystem *self) {
@@ -488,21 +482,24 @@ void destroy_render_target_system(RenderTargetSystem *self) {
   *self = (RenderTargetSystem){0};
 }
 
-TB_DEFINE_SYSTEM(render_target, RenderTargetSystem,
-                 RenderTargetSystemDescriptor)
+void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
+                                   Allocator tmp_alloc) {
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  ECS_COMPONENT(ecs, RenderSystem);
 
-void tb_render_target_system_descriptor(
-    SystemDescriptor *desc, const RenderTargetSystemDescriptor *rt_desc) {
-  *desc = (SystemDescriptor){
-      .name = "Render Target",
-      .size = sizeof(RenderTargetSystem),
-      .id = RenderTargetSystemId,
-      .desc = (InternalDescriptor)rt_desc,
-      .system_dep_count = 1,
-      .system_deps[0] = RenderSystemId,
-      .create = tb_create_render_target_system,
-      .destroy = tb_destroy_render_target_system,
-  };
+  RenderSystem *render_system = ecs_singleton_get_mut(ecs, RenderSystem);
+
+  RenderTargetSystem sys =
+      create_render_target_system(render_system, std_alloc, tmp_alloc);
+  // Sets a singleton based on the value at a pointer
+  ecs_set_ptr(ecs, ecs_id(RenderTargetSystem), RenderTargetSystem, &sys);
+}
+
+void tb_unregister_render_target_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderTargetSystem);
+  RenderTargetSystem *sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+  destroy_render_target_system(sys);
+  ecs_singleton_remove(ecs, RenderTargetSystem);
 }
 
 void tb_reimport_swapchain(RenderTargetSystem *self) {
