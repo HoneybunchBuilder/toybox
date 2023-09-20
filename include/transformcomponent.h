@@ -17,5 +17,11 @@ typedef struct TransformComponent {
   ecs_entity_t *children;
 } TransformComponent;
 
+const TransformComponent *
+tb_transform_get_parent(ecs_world_t *ecs, const TransformComponent *self);
+
+TransformComponent *tb_transform_get_parent_mut(ecs_world_t *ecs,
+                                                const TransformComponent *self);
+
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
                                        TransformComponent *self);

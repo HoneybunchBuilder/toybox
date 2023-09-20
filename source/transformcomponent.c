@@ -6,6 +6,26 @@
 
 #include <flecs.h>
 
+const TransformComponent *
+tb_transform_get_parent(ecs_world_t *ecs, const TransformComponent *self) {
+  ECS_COMPONENT(ecs, TransformComponent);
+  const TransformComponent *parent_comp = NULL;
+  if (self->parent) {
+    parent_comp = ecs_get(ecs, self->parent, TransformComponent);
+  }
+  return parent_comp;
+}
+
+TransformComponent *
+tb_transform_get_parent_mut(ecs_world_t *ecs, const TransformComponent *self) {
+  ECS_COMPONENT(ecs, TransformComponent);
+  TransformComponent *parent_comp = NULL;
+  if (self->parent) {
+    parent_comp = ecs_get_mut(ecs, self->parent, TransformComponent);
+  }
+  return parent_comp;
+}
+
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
                                        TransformComponent *self) {
   TracyCZoneNC(ctx, "Transform Get World Matrix", TracyCategoryColorCore, true);

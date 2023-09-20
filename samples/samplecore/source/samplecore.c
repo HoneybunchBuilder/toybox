@@ -115,7 +115,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
-  // Register Gen 2 Systems and Components
   TbWorld world = tb_create_world(std_alloc, tmp_alloc, render_thread, window);
   tb_sample_on_start(&world);
 
