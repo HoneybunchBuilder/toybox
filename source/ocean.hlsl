@@ -137,5 +137,22 @@ float4 frag(Interpolators i) : SV_TARGET {
     color *= shadow;
   }
 
+  // Subsurface Scattering
+  if (L.y > 0) {
+    float distortion = 0.4f;
+    float power = 2.0f;
+    float scale = 8.0f;
+    float3 attenuation = 0.5f;
+    float3 ambient = 0.1f;
+    float3 sss_color = float3(0.13f, 0.69f, 0.67f);
+    // Without handling thickness
+
+    float3 H = normalize(L + N * distortion);
+    float VdotH = pow(saturate(dot(V, -H)), power) * scale;
+    float3 I = attenuation * (VdotH * ambient);
+
+    color += (sss_color * light_data.color * I);
+  }
+
   return float4(color, 1);
 }

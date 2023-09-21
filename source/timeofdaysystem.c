@@ -113,7 +113,8 @@ void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
   SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "TimeOfDay System");
   TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
-  sys->time += it->delta_time * 0.2f; // go a litte slower than everything else
+  sys->time +=
+      it->delta_time * 0.002f; // go a litte slower than everything else
 
   SkyComponent *skys = ecs_field(it, SkyComponent, 2);
   DirectionalLightComponent *lights =
@@ -147,7 +148,7 @@ void tb_register_time_of_day_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, TimeOfDaySystem);
 
   TimeOfDaySystem sys = {
-      .time = 0.0f,
+      .time = 0.3f, // Start with some time so it's not pitch black
   };
 
   // Sets a singleton by ptr

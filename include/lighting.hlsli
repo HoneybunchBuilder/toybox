@@ -59,6 +59,16 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
                     float roughness, float2 brdf, float3 reflection,
                     float3 irradiance, float3 light_color, float3 L, float3 V,
                     float3 N) {
+  // HACK
+  // We're only working with one directional light right now so this is fine
+  // we don't want light to come from an object that is behind the horizon
+  // However this shouldn't be handled here but rather
+  // as a property of directional lights
+  // Later
+  if (L.y < 0) {
+    return 0;
+  }
+
   float3 F0 = lerp(0.04, albedo, metallic);
   float NdotV = max(dot(N, V), 0);
 
