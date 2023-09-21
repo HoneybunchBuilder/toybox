@@ -75,31 +75,10 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
                                metallic, roughness) *
                    ao;
-  float3 direct = 0;
-  if (shadow >= 0.3f) {
-    direct = pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic,
-                        roughness);
-  }
+  float3 direct =
+      pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
 
-  ambient *= shadow;
-
-  return direct + ambient;
-}
-
-float3 phong_light(float3 albedo, float3 light_color, float gloss, float3 N,
-                   float3 L, float3 V, float3 H) {
-  // Calc diffuse Light
-  float lambert = saturate(dot(N, L));
-  float3 diffuse = light_color * lambert * albedo;
-
-  // Calc specular light
-  float3 specular_exponent = exp2(gloss * 11) + 2;
-  float3 specular = saturate(dot(H, N)) * (lambert > 0); // Blinn-Phong
-  specular = pow(specular, specular_exponent) * gloss;
-  specular *= light_color;
-
-  float3 color = diffuse + specular;
-  return color;
+  return (direct + ambient) * shadow;
 }
 
 // Shadowing

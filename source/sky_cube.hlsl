@@ -31,7 +31,7 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 view_pos = i.view_pos;
 
   if (view_pos.y < 0) {
-    return float4(0, 0, 0, 1.0);
+    return 0.2f;
   }
 
   float3 color = sky(time, cirrus, cumulus, sun_dir, view_pos);
