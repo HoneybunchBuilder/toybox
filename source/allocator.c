@@ -35,6 +35,14 @@ static void *arena_alloc(void *user_data, size_t size) {
   return ptr;
 }
 
+static void *arena_alloc_aligned(void *user_data, size_t size,
+                                 size_t alignment) {
+  // In the arena allocator we're not going to bother to really implement
+  // realloc for now...
+  (void)alignment;
+  return arena_alloc(user_data, size);
+}
+
 static void *arena_realloc(void *user_data, void *original, size_t size) {
   // In the arena allocator we're not going to bother to really implement
   // realloc for now...
@@ -73,6 +81,7 @@ void create_arena_allocator(const char *name, ArenaAllocator *a,
       .alloc =
           (Allocator){
               .alloc = arena_alloc,
+              .alloc_aligned = arena_alloc_aligned,
               .realloc = arena_realloc,
               .realloc_aligned = arena_realloc_aligned,
               .free = arena_free,
@@ -112,6 +121,17 @@ static void *standard_alloc(void *user_data, size_t size) {
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   StandardAllocator *alloc = (StandardAllocator *)user_data;
   void *ptr = mi_heap_recalloc(alloc->heap, NULL, 1, size);
+  TracyCAllocN(ptr, size, alloc->name);
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+static void *standard_alloc_aligned(void *user_data, size_t size,
+                                    size_t alignment) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  void *ptr = mi_heap_calloc_aligned(alloc->heap, 1, size, alignment);
   TracyCAllocN(ptr, size, alloc->name);
   TracyCZoneEnd(ctx);
   return ptr;
@@ -157,6 +177,7 @@ void create_standard_allocator(StandardAllocator *a, const char *name) {
       .alloc =
           {
               .alloc = standard_alloc,
+              .alloc_aligned = standard_alloc_aligned,
               .realloc = standard_realloc,
               .realloc_aligned = standard_realloc_aligned,
               .free = standard_free,

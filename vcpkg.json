@@ -3,6 +3,7 @@
   "name": "toybox",
   "version": "0.1.0",
   "dependencies": [
+    "joltphysics",
     "flecs",
     "cgltf",
     "imgui",
@@ -83,6 +84,11 @@
       "name": "json-c",
       "version": "2022-06-26",
       "port-version": 3
+    },
+    {
+      "name": "joltphysics",
+      "version": "3.0.1",
+      "port-version": 1
     }
   ]
 }

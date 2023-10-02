@@ -8,6 +8,12 @@
   they are not
 */
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#endif
+
 #ifndef TB_USE_INVERSE_DEPTH
 // #define TB_USE_INVERSE_DEPTH 1
 #endif
@@ -243,4 +249,8 @@ float3 clampf3(float3 v, float3 min, float3 max);
 
 float tb_randf(float min, float max);
 
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif

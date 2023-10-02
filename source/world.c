@@ -8,10 +8,6 @@
 #include "tbcommon.h"
 #include "tbgltf.h"
 
-#include "json-c/json_object.h"
-#include "json-c/json_tokener.h"
-#include "json-c/linkhash.h"
-
 #include "cameracomponent.h"
 #include "lightcomponent.h"
 #include "meshcomponent.h"
@@ -31,6 +27,7 @@
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
 #include "oceansystem.h"
+#include "physicssystem.h"
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
@@ -44,6 +41,7 @@
 #include "visualloggingsystem.h"
 
 #include <flecs.h>
+#include <json.h>
 #include <mimalloc.h>
 
 void *ecs_malloc(ecs_size_t size) {
@@ -101,6 +99,7 @@ TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
   TB_DYN_ARR_RESET(world.scenes, std_alloc, 1);
 
   ecs_world_t *ecs = world.ecs;
+  tb_register_physics_sys(&world);
   tb_register_light_sys(ecs);
   tb_register_audio_sys(&world);
   tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
@@ -171,6 +170,7 @@ void tb_destroy_world(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
+  tb_unregister_physics_sys(world);
   tb_unregister_rotator_sys(ecs);
   tb_unregister_time_of_day_sys(ecs);
   tb_unregister_camera_sys(ecs);

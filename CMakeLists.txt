@@ -104,6 +104,7 @@ find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(flecs CONFIG REQUIRED)
+find_package(unofficial-joltphysics CONFIG REQUIRED)
 if(PROFILE_TRACY)
   find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -133,7 +134,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer")
+set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer;unofficial::joltphysics::Jolt")
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
@@ -339,7 +340,7 @@ add_library(toybox STATIC ${lib_source})
 if(WIN32)
   # This really only matters for clang-cl
   # ${CMAKE_C_COMPILER_ID} being MSVC would fail the above check
-  # So thing of this more as if(MSVC-style-compiler)
+  # So think of this more as `if(MSVC-style-compiler)`
   if(MSVC)
     target_compile_options(toybox PUBLIC -Wno-reserved-id-macro)
     target_compile_options(toybox PUBLIC -Wno-documentation)
@@ -347,6 +348,9 @@ if(WIN32)
 
   # Folding VLAs to constant arrays is desired
   target_compile_options(toybox PUBLIC -Wno-gnu-folding-constant)
+  # We use anonymous structs 
+  target_compile_options(toybox PUBLIC -Wno-gnu-anonymous-struct)
+  target_compile_options(toybox PUBLIC -Wno-nested-anon-types)
 
 elseif(ANDROID)
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
@@ -403,6 +407,7 @@ endif()
 target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
 
 target_compile_features(toybox PUBLIC c_std_11)
+target_compile_features(toybox PUBLIC cxx_std_20)
 
 # Turn on warnings
 target_compile_options(toybox PUBLIC

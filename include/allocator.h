@@ -7,6 +7,7 @@
 typedef struct mi_heap_s mi_heap_t;
 
 typedef void *alloc_fn(void *user_data, size_t size);
+typedef void *alloc_aligned_fn(void *user_data, size_t size, size_t alignment);
 typedef void *realloc_fn(void *user_data, void *original, size_t size);
 typedef void *realloc_aligned_fn(void *user_data, void *original, size_t size,
                                  size_t alignment);
@@ -15,6 +16,8 @@ typedef void free_fn(void *user_data, void *ptr);
 #define tb_alloc(a, size) (a).alloc((a).user_data, (size))
 #define tb_alloc_tp(a, T) (T *)(a).alloc((a).user_data, sizeof(T))
 #define tb_alloc_nm_tp(a, n, T) (T *)(a).alloc((a).user_data, n * sizeof(T))
+#define tb_alloc_aligned(a, size, align)                                       \
+  (a).alloc_aligned((a).user_data, (size), (align));
 #define tb_realloc(a, orig, size) (a).realloc((a).user_data, (orig), (size))
 #define tb_realloc_tp(a, orig, T)                                              \
   (T *)(a).realloc((a).user_data, (orig), sizeof(T))
@@ -27,6 +30,7 @@ typedef void free_fn(void *user_data, void *ptr);
 typedef struct Allocator {
   void *user_data;
   alloc_fn *alloc;
+  alloc_aligned_fn *alloc_aligned;
   realloc_fn *realloc;
   realloc_aligned_fn *realloc_aligned;
   free_fn *free;

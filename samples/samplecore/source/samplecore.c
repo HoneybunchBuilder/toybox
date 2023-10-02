@@ -128,7 +128,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   while (running) {
-    TracyCFrameMarkStart("Simulation Frame");
     TracyCZoneN(trcy_ctx, "Simulation Frame", true);
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
@@ -142,7 +141,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false;
       TracyCZoneEnd(trcy_ctx);
-      TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
 
@@ -150,7 +148,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     arena = reset_arena(arena, true); // Just allow it to grow for now
 
     TracyCZoneEnd(trcy_ctx);
-    TracyCFrameMarkEnd("Simulation Frame");
   }
 
   // This doesn't quite work yet

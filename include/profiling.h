@@ -13,6 +13,9 @@
 #define TRACY_CALLSTACK 32
 #endif
 #include <tracy/TracyC.h>
+#ifdef __cplusplus
+#include <tracy/Tracy.hpp>
+#endif
 
 #define TracyCategoryColorCore 0xe066ff
 #define TracyCategoryColorRendering 0x7fff00

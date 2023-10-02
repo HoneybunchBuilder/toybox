@@ -1,7 +1,6 @@
 #include "oceansystem.h"
 
 #include "assets.h"
-#include "assetsystem.h"
 #include "audiosystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
@@ -81,7 +80,7 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
 void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                           uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 3, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 2, true);
   cmd_begin_label(buffer, "Ocean Prepass", f4(0.0f, 0.4f, 0.4f, 1.0f));
 
   ocean_record(buffer, batch_count, batches);
@@ -94,7 +93,7 @@ void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const DrawBatch *batches) {
   TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 3, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 2, true);
   cmd_begin_label(buffer, "Ocean", f4(0.0f, 0.8f, 0.8f, 1.0f));
 
   ocean_record(buffer, batch_count, batches);
@@ -976,7 +975,6 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, VisualLoggingSystem);
   ECS_COMPONENT(ecs, AudioSystem);
-  ECS_COMPONENT(ecs, AssetSystem);
   ECS_COMPONENT(ecs, OceanSystem);
   ECS_COMPONENT(ecs, OceanComponent);
   ECS_COMPONENT(ecs, CameraComponent);

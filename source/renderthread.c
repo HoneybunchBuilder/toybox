@@ -1150,8 +1150,8 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
   void *ret = NULL;
 #ifdef TRACY_ENABLE
   cmd_begin_label(buffer, pass->label, (float4){1.0f, 1.0f, 0.5f, 1.0f});
-  TracyCVkNamedZone(ctx, frame_scope, buffer, pass->label, 2, true);
-  ret = frame_scope;
+  // TracyCVkNamedZone(ctx, frame_scope, buffer, pass->label, 2, true);
+  // ret = frame_scope;
 #endif
 
   // Perform any necessary image transitions
@@ -1171,8 +1171,8 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
 void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope,
                      PassContext *pass) {
   (void)scope;
-  TracyCVkZoneEnd(scope);
-  // Assume a pass with no attachments has done no rendering
+  // TracyCVkZoneEnd(scope);
+  //  Assume a pass with no attachments has done no rendering
   if (pass->attachment_count > 0) {
     vkCmdEndRendering(buffer);
   }
@@ -1466,11 +1466,10 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
           };
           vkBeginCommandBuffer(pass_buffer, &begin_info);
-          TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
-                            true);
-          TracyCVkCollect(gpu_ctx, pass_buffer);
+          // TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
+          //                   true);
 #ifdef TRACY_VK_C_ENABLE
-          cmd_scope = scope;
+          // cmd_scope = scope;
 #endif
         }
 
@@ -1502,7 +1501,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         last_pass_buffer_idx = pass->command_buffer_index;
       }
       if (cmd_scope != NULL) {
-        TracyCVkZoneEnd(cmd_scope);
+        //  TracyCVkZoneEnd(cmd_scope);
       }
       TracyCVkCollect(gpu_ctx,
                       state->pass_command_buffers[last_pass_buffer_idx]);
@@ -1661,8 +1660,9 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
     } else {
       SDL_assert(err == VK_SUCCESS);
     }
-
     TracyCZoneEnd(present_ctx);
+
+    TracyCFrameMark;
   }
 
   // It's now safe to reset the arenas
