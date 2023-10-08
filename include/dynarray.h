@@ -32,63 +32,63 @@
 #define TB_DYN_ARR_RESIZE(a, s)                                                \
   {                                                                            \
     uint32_t size = (s);                                                       \
-    if (a.capacity < size) {                                                   \
-      a.data = (decltype(a.data))tb_realloc(a.alloc, a.data,                   \
-                                            sizeof(a.data[0]) * size);         \
-      a.capacity = size;                                                       \
+    if ((a).capacity < size) {                                                 \
+      (a).data = (decltype((a).data))tb_realloc((a).alloc, (a).data,           \
+                                                sizeof((a).data[0]) * size);   \
+      (a).capacity = size;                                                     \
     }                                                                          \
-    a.endptr = a.data + size;                                                  \
+    (a).endptr = (a).data + size;                                              \
   }
 
 #define TB_DYN_ARR_RESERVE(a, c)                                               \
   {                                                                            \
     uint32_t cap = (c);                                                        \
-    if (a.capacity < cap) {                                                    \
-      ptrdiff_t cur_size = a.endptr - a.data;                                  \
-      a.data = (decltype(a.data))tb_realloc(a.alloc, a.data,                   \
-                                            sizeof(a.data[0]) * cap);          \
-      a.capacity = cap;                                                        \
-      a.endptr = a.data + cur_size;                                            \
+    if ((a).capacity < cap) {                                                  \
+      ptrdiff_t cur_size = (a).endptr - (a).data;                              \
+      (a).data = (decltype((a).data))tb_realloc((a).alloc, (a).data,           \
+                                                sizeof((a).data[0]) * cap);    \
+      (a).capacity = cap;                                                      \
+      (a).endptr = (a).data + cur_size;                                        \
     }                                                                          \
   }
 
 #define TB_DYN_ARR_DESTROY(a)                                                  \
-  if (a.data != NULL) {                                                        \
-    tb_free(a.alloc, a.data);                                                  \
-    a.data = a.endptr = NULL;                                                  \
+  if ((a).data != NULL) {                                                      \
+    tb_free((a).alloc, (a).data);                                              \
+    (a).data = (a).endptr = NULL;                                              \
   }
 
 #define TB_DYN_ARR_APPEND(a, v)                                                \
   {                                                                            \
-    ptrdiff_t cur_size = a.endptr - a.data;                                    \
+    ptrdiff_t cur_size = (a).endptr - (a).data;                                \
     assert(cur_size >= 0);                                                     \
-    if ((size_t)cur_size >= a.capacity) {                                      \
-      a.capacity <<= 1u;                                                       \
-      decltype(a.data) tmp = (decltype(a.data))tb_realloc(                     \
-          a.alloc, a.data, sizeof(a.data[0]) * a.capacity);                    \
+    if ((size_t)cur_size >= (a).capacity) {                                    \
+      (a).capacity <<= 1u;                                                     \
+      decltype((a).data) tmp = (decltype((a).data))tb_realloc(                 \
+          (a).alloc, (a).data, sizeof((a).data[0]) * (a).capacity);            \
       assert(tmp != NULL);                                                     \
-      a.data = tmp;                                                            \
-      a.endptr = &a.data[cur_size];                                            \
+      (a).data = tmp;                                                          \
+      (a).endptr = &(a).data[cur_size];                                        \
     }                                                                          \
-    *(a.endptr++) = (v);                                                       \
+    *((a).endptr++) = (v);                                                     \
   }
 
-#define TB_DYN_ARR_CLEAR(a) (a.endptr = a.data)
-#define TB_DYN_ARR_SIZE(a) ((uint32_t)(a.endptr - a.data))
-#define TB_DYN_ARR_AT(a, i) (a.data[i])
+#define TB_DYN_ARR_CLEAR(a) ((a).endptr = (a).data)
+#define TB_DYN_ARR_SIZE(a) ((uint32_t)((a).endptr - (a).data))
+#define TB_DYN_ARR_AT(a, i) ((a).data[i])
 
 #define TB_DYN_ARR_POP(a)                                                      \
   {                                                                            \
-    assert(a.data != a.endptr);                                                \
-    --(a.endptr);                                                              \
+    assert((a).data != (a).endptr);                                            \
+    --((a).endptr);                                                            \
   }
 
-#define TB_DYN_ARR_EMPTY(a) (a.endptr == a.data)
+#define TB_DYN_ARR_EMPTY(a) ((a).endptr == (a).data)
 
-#define TB_DYN_ARR_BACKPTR(a) (a.endptr - 1)
+#define TB_DYN_ARR_BACKPTR(a) ((a).endptr - 1)
 
 #define TB_DYN_ARR_FOREACH(a, countername)                                     \
-  for (size_t countername = 0; (countername) < TB_DYN_ARR_SIZE(a);             \
+  for (size_t countername = 0; (countername) < TB_DYN_ARR_SIZE((a));           \
        ++(countername))
 
 /*

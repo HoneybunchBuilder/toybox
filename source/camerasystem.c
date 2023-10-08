@@ -4,6 +4,7 @@
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
+#include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
@@ -40,6 +41,10 @@ void camera_update_tick(ecs_iter_t *it) {
   view_data.inv_proj = inv_mf44(proj);
   view_data.proj_params =
       (float4){camera->near, camera->far, camera->aspect_ratio, camera->fov};
+
+  // TODO: Find a cleaner expression for updating this
+  camera->width = view_sys->render_system->render_thread->swapchain.width;
+  camera->height = view_sys->render_system->render_thread->swapchain.height;
 
   // Calculate view projection matrix
   view_data.vp = mulmf44(proj, view);

@@ -8,6 +8,7 @@ GLTF_VIEW_SET(space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
+  int inst : SV_InstanceID;
   half3 normal : NORMAL0;
   int2 uv : TEXCOORD0;
 };
@@ -22,10 +23,11 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float3 world_pos = mul(object_data.m, float4(i.local_pos, 1)).xyz;
+  float4x4 m = object_data[i.inst].m;
+  float3 world_pos = mul(m, float4(i.local_pos, 1)).xyz;
   float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
-  float3x3 orientation = (float3x3)object_data.m;
+  float3x3 orientation = (float3x3)m;
 
   Interpolators o;
   o.clip_pos = clip_pos;

@@ -3,6 +3,7 @@
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
 #include "dynarray.h"
+#include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
@@ -81,6 +82,7 @@ typedef struct MeshSystem {
   RenderObjectSystem *render_object_system;
   RenderPipelineSystem *render_pipe_system;
 
+  ecs_query_t *camera_query;
   ecs_query_t *mesh_query;
   ecs_query_t *dir_light_query;
 
@@ -88,6 +90,10 @@ typedef struct MeshSystem {
   TbDrawContextId opaque_draw_ctx;
   TbDrawContextId transparent_draw_ctx;
   TbDrawContextId shadow_draw_ctx;
+
+  TbDrawContextId prepass_draw_ctx2;
+  TbDrawContextId opaque_draw_ctx2;
+  TbDrawContextId transparent_draw_ctx2;
 
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
@@ -104,6 +110,7 @@ typedef struct MeshSystem {
   VkPipeline shadow_pipeline;
 
   TB_DYN_ARR_OF(TbMesh) meshes;
+  FrameDescriptorPoolList desc_pool_list;
 } MeshSystem;
 
 void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,

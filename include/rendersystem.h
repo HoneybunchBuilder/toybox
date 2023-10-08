@@ -27,6 +27,10 @@ typedef struct FrameDescriptorPool {
   VkDescriptorSet *sets;
 } FrameDescriptorPool;
 
+typedef struct FrameDescriptorPoolList {
+  FrameDescriptorPool pools[TB_MAX_FRAME_STATES];
+} FrameDescriptorPoolList;
+
 typedef struct RenderSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;

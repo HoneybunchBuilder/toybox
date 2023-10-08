@@ -8,7 +8,7 @@
 
 typedef struct ecs_world_t ecs_world_t;
 
-#define TB_SUBMESH_MAX 32
+#define TB_SUBMESH_MAX 8
 #define TB_VERTEX_BINDING_MAX 4
 
 typedef uint64_t TbMeshId;

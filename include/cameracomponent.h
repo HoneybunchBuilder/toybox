@@ -16,6 +16,8 @@ typedef struct CameraComponent {
   float fov;
   float near;
   float far;
+  float width;
+  float height;
 } CameraComponent;
 
 void tb_register_camera_component(ecs_world_t *ecs);

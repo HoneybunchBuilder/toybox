@@ -3,6 +3,8 @@
 #include "assetsystem.h"
 #include "camerasystem.h"
 #include "common.hlsli"
+#include "rendersystem.h"
+#include "renderthread.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
 #include "viewsystem.h"
@@ -32,6 +34,8 @@ bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
           .fov = persp->yfov,
           .near = persp->znear,
           .far = persp->zfar,
+          .width = view_sys->render_system->render_thread->swapchain.width,
+          .height = view_sys->render_system->render_thread->swapchain.height,
       };
       ecs_set_ptr(ecs, e, CameraComponent, &comp);
     } else {

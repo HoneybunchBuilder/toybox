@@ -81,7 +81,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_OBJECT_SET(space)                                                 \
-  ConstantBuffer<CommonObjectData> object_data : register(b0, space);
+  StructuredBuffer<CommonObjectData> object_data : register(t0, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_VIEW_SET(space)                                                   \

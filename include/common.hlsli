@@ -46,9 +46,6 @@ typedef struct CommonLightData {
 // Constant per-object Object Data for common objects
 typedef struct CommonObjectData {
   float4x4 m;
-  // Optional parameters for mesh shaders
-  unsigned int index_bytes;
-  unsigned int meshlet_offset;
 } CommonObjectData;
 
 // Common input layout info and permutation settings

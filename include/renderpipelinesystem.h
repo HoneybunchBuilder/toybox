@@ -37,12 +37,9 @@ typedef struct PassAttachment {
 typedef struct DrawBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
-
   VkViewport viewport;
   VkRect2D scissor;
-
   void *user_batch;
-
   uint32_t draw_count;
   uint64_t draw_size;
   void *draws;
@@ -52,12 +49,13 @@ typedef struct DrawBatch {
 typedef struct DispatchBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
-
   void *user_batch;
-
   uint32_t group_count;
   uint3 groups[MAX_GROUPS];
 } DispatchBatch;
+
+typedef TB_DYN_ARR_OF(DrawBatch) DrawBatchList;
+typedef TB_DYN_ARR_OF(DispatchBatch) DispatchBatchList;
 
 typedef struct DrawContextDescriptor {
   TbRenderPassId pass_id;
