@@ -430,6 +430,18 @@ float3 qrotf3(Quaternion q, float3 v) {
   return v + ((uv * q[3]) + uuv) * 2.0f;
 }
 
+bool tb_f4eq(float4 x, float4 y) {
+  return x[0] == y[0] && x[1] == y[1] && x[2] == y[2] && x[3] == y[3];
+}
+bool tb_f3eq(float3 x, float3 y) {
+  return x[0] == y[0] && x[1] == y[1] && x[2] == y[2];
+}
+
+bool tb_transeq(const Transform *x, const Transform *y) {
+  return tb_f4eq(x->position, y->position) &&
+         tb_f4eq(x->rotation, y->rotation) && tb_f3eq(x->scale, y->scale);
+}
+
 AABB aabb_init(void) {
   return (AABB){
       .min = {FLT_MAX, FLT_MAX, FLT_MAX},

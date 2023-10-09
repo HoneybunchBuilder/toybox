@@ -171,6 +171,11 @@ float4x4 quat_to_trans(Quaternion quat);
 Quaternion mulq(Quaternion p, Quaternion q);
 float3 qrotf3(Quaternion q, float3 v);
 
+bool tb_f4eq(float4 x, float4 y);
+bool tb_f3eq(float3 x, float3 y);
+
+bool tb_transeq(const Transform *x, const Transform *y);
+
 AABB aabb_init(void);
 void aabb_add_point(AABB *aabb, float3 point);
 float aabb_get_width(AABB aabb);

@@ -6,6 +6,10 @@
 
 #define TransformComponentId 0xDEADBEEF
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef TB_DYN_ARR_OF(float4x4) TransformList;
 
 typedef struct ecs_world_t ecs_world_t;
@@ -22,9 +26,14 @@ typedef struct TransformComponent {
 
 const TransformComponent *
 tb_transform_get_parent(ecs_world_t *ecs, const TransformComponent *self);
-
 TransformComponent *tb_transform_get_parent_mut(ecs_world_t *ecs,
                                                 const TransformComponent *self);
-
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
                                        TransformComponent *self);
+void tb_transform_mark_dirty(ecs_world_t *ecs, TransformComponent *self);
+void tb_transform_update(ecs_world_t *ecs, TransformComponent *self,
+                         const Transform *trans);
+
+#ifdef __cplusplus
+}
+#endif

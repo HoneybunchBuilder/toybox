@@ -2466,6 +2466,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       PrimitiveTransformLists trans_prim_trans = {0};
       TB_DYN_ARR_RESET(opaque_prim_trans, tmp_alloc, mesh_count);
       TB_DYN_ARR_RESET(trans_prim_trans, tmp_alloc, mesh_count);
+      TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
         MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
         TransformComponent *transforms =
@@ -2644,6 +2645,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           }
         }
       }
+      TracyCZoneEnd(ctx2);
 
       // Establish prepass batches by making a batch for each opaque
       // batch but with a different pipeline and the same primitive batch
@@ -2651,6 +2653,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       TB_DYN_ARR_RESET(prepass_batches, tmp_alloc,
                        TB_DYN_ARR_SIZE(opaque_batches));
       {
+        TracyCZoneN(ctx2, "Handle Prepass", true);
         VkPipelineLayout layout = mesh_sys->prepass_layout;
         VkPipeline pipeline = mesh_sys->prepass_pipe;
 
@@ -2663,12 +2666,14 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
           TB_DYN_ARR_APPEND(prepass_batches, pre_batch);
         }
+        TracyCZoneEnd(ctx2);
       }
 
       // Write transform lists to the GPU temp buffer
       TB_DYN_ARR_OF(TbHostBuffer) opaque_inst_buffers = {0};
       TB_DYN_ARR_OF(TbHostBuffer) trans_inst_buffers = {0};
       {
+        TracyCZoneN(ctx2, "Gather Transforms", true);
         const uint32_t op_count = TB_DYN_ARR_SIZE(opaque_prim_trans);
         if (op_count) {
           TB_DYN_ARR_RESET(opaque_inst_buffers, tmp_alloc, op_count);
@@ -2706,10 +2711,12 @@ void mesh_draw_tick2(ecs_iter_t *it) {
             TB_DYN_ARR_APPEND(trans_inst_buffers, host_buffer);
           }
         }
+        TracyCZoneEnd(ctx2);
       }
 
-      // Alloc transform descriptor sets
+      // Alloc and write transform descriptor sets
       {
+        TracyCZoneN(ctx2, "Write Descriptors", true);
         const uint32_t set_count = TB_DYN_ARR_SIZE(opaque_inst_buffers) +
                                    TB_DYN_ARR_SIZE(trans_inst_buffers);
         VkDescriptorPoolCreateInfo pool_info = {
@@ -2799,10 +2806,12 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         }
 
         tb_rnd_update_descriptors(rnd_sys, set_count, writes);
+        TracyCZoneEnd(ctx2);
       }
 
       // Submit batches
       {
+        TracyCZoneN(ctx2, "Submit Batches", true);
         TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx2;
         TbDrawContextId opaque_ctx2 = mesh_sys->opaque_draw_ctx2;
         TbDrawContextId trans_ctx2 = mesh_sys->transparent_draw_ctx2;
@@ -2819,6 +2828,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2,
                                             TB_DYN_ARR_SIZE(trans_batches),
                                             opaque_batches.data);
+        TracyCZoneEnd(ctx2);
       }
     }
   }

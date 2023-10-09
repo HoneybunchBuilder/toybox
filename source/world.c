@@ -239,6 +239,7 @@ ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
 
   // Add a transform component to the entity by default
   TransformComponent trans = {
+      .dirty = true,
       .parent = parent,
       .child_count = node->children_count,
       .transform = tb_transform_from_node(node),
