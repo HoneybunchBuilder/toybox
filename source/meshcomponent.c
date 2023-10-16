@@ -202,6 +202,24 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
     MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
     RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
 
+    /*
+        We want everything to be as instanced as possible but we can't guarantee
+      that gltfpack will be able to construct perfect instanced batches for us.
+
+      Instead we check the node before we decide how to create a component.
+        If we already have a component that uses this mesh id, we instead
+      append it and its material to an existing component.
+        If there is no existing component that uses this mesh, create one.
+      There may be components with only 1 instance; that is okay.
+
+      Thoughts on Node Mobility
+        If the user can mark up in Blender which nodes are stationary that info
+      can be used to organize meshes into different components based on whether
+      or not we expect the transform to ever update. That way we only have to
+      shuffle transforms to the GPU for the set of transforms that actually
+      could possibly be updated.
+    */
+
     MeshComponent comp = {0};
     ret = create_mesh_component_internal(&comp, source_path, node, mesh_sys,
                                          mat_sys, ro_sys);

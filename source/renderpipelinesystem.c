@@ -4339,22 +4339,30 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
         tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
     // Pointer Fixup
     for (uint32_t i = 0; i < batch_count; ++i) {
-      ctx->batches[i].user_batch =
+      DrawBatch *batch = &ctx->batches[i];
+      batch->user_batch =
           (uint8_t *)ctx->user_batches + (ctx->user_batch_size * i);
     }
 
     ctx->batch_max = new_max;
   }
 
-  // Copy batches into frame state's batch list
-  DrawBatch *dst = &ctx->batches[write_head];
-  SDL_memcpy(dst, batches, batch_count * sizeof(DrawBatch));
-
   for (uint32_t i = 0; i < 0 + batch_count; ++i) {
+    const DrawBatch *batch = &batches[i];
     void *user_dst = ((uint8_t *)ctx->user_batches) +
                      ((i + write_head) * ctx->user_batch_size);
-    SDL_memcpy(user_dst, batches[i].user_batch, ctx->user_batch_size);
-    ctx->batches[i + write_head].user_batch = user_dst;
+    SDL_memcpy(user_dst, batch->user_batch, ctx->user_batch_size);
+    DrawBatch *write_batch = &ctx->batches[i + write_head];
+    void *tmp_draws = write_batch->draws;
+    *write_batch = *batch;
+    write_batch->user_batch = user_dst;
+    write_batch->draws = tmp_draws;
+
+    // Must always realloc and copy draw data
+    write_batch->draws = tb_realloc(self->std_alloc, write_batch->draws,
+                                    batch->draw_count * batch->draw_size);
+    SDL_memcpy(write_batch->draws, batch->draws,
+               batch->draw_count * batch->draw_size);
   }
 
   ctx->batch_count = new_count;
