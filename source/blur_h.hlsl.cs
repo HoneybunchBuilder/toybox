@@ -6,7 +6,7 @@ RWTexture2D<float4> output : register(u1, space0);
 #define GROUP_SIZE 64
 
 static const int radius = 2;
-static const int weight_count = (radius * 2) + 1;
+static const int sample_count = radius * 2;
 static const int cache_size = GROUP_SIZE + 2 * radius;
 static const int load = (cache_size + (GROUP_SIZE - 1)) / GROUP_SIZE;
 
@@ -15,9 +15,6 @@ groupshared float4 cache[cache_size];
 [numthreads(GROUP_SIZE, 1, 1)]
 void comp(int3 group_id: SV_GroupID, int3 group_thread_id: SV_GroupThreadID,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
-  const float weight[weight_count] = {
-    0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216,
-  };
 
   int2 size;
   input.GetDimensions(size.x, size.y);
@@ -40,8 +37,8 @@ void comp(int3 group_id: SV_GroupID, int3 group_thread_id: SV_GroupThreadID,
   if (pixel_coord.x < size.x && pixel_coord.y < size.y) {
     float4 result = 0;
 
-    for (int i = 0; i < weight_count; ++i) {
-      int2 pc = pixel_coord + int2(i - radius, 0);
+    for (int i = -radius; i < radius; ++i) {
+      int2 pc = pixel_coord + int2(i, 0);
       if (pc.x < 0) {
         pc.x = 0;
       }
@@ -50,9 +47,9 @@ void comp(int3 group_id: SV_GroupID, int3 group_thread_id: SV_GroupThreadID,
       }
 
       int local = pc.x - origin;
-      result += weight[i] * cache[local];
+      result += cache[local];
     }
 
-    output[dispatch_thread_id.xy] = result;
+    output[dispatch_thread_id.xy] = result / sample_count;
   }
 }

@@ -123,8 +123,8 @@ typedef struct RenderPipelineSystem {
   LumHistRenderWork lum_hist_work;
   LumAvgRenderWork lum_avg_work;
 
-  // Copy resources
   VkSampler sampler;
+  VkSampler noise_sampler;
   VkDescriptorSetLayout ssao_set_layout;
   VkDescriptorSetLayout blur_set_layout;
   VkDescriptorSetLayout copy_set_layout;

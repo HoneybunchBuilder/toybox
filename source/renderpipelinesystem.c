@@ -2660,6 +2660,24 @@ RenderPipelineSystem create_render_pipeline_system(
                                     &sys.sampler);
         TB_VK_CHECK(err, "Failed to create copy sampler");
       }
+      {
+        VkSamplerCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .anisotropyEnable = VK_FALSE,
+            .maxAnisotropy = 1.0f,
+            .maxLod = 1.0f,
+            .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+        };
+        err = tb_rnd_create_sampler(render_system, &create_info,
+                                    "Noise Sampler", &sys.noise_sampler);
+        TB_VK_CHECK(err, "Failed to create noise sampler");
+      }
 #endif
 
       {
@@ -2826,7 +2844,7 @@ RenderPipelineSystem create_render_pipeline_system(
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &sys.sampler,
+                    .pImmutableSamplers = &sys.noise_sampler,
                 },
             }};
         err = tb_rnd_create_set_layout(render_system, &create_info,
@@ -3270,6 +3288,7 @@ RenderPipelineSystem create_render_pipeline_system(
 
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
+  tb_rnd_destroy_sampler(self->render_system, self->noise_sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->blur_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
