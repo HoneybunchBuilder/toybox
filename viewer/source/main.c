@@ -175,6 +175,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Simulation Frame");
   }
+  return 0;
 
   tb_clear_world(&world);
 

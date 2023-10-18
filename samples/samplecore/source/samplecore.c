@@ -149,6 +149,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     TracyCZoneEnd(trcy_ctx);
   }
+  return 0;
 
   // This doesn't quite work yet
   tb_clear_world(&world);

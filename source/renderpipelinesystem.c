@@ -2978,6 +2978,7 @@ RenderPipelineSystem create_render_pipeline_system(
           VkBufferCreateInfo create_info = {
               .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
               .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
               .size = sizeof(SSAOParams),
           };

@@ -977,7 +977,8 @@ SkySystem create_sky_system(Allocator std_alloc, Allocator tmp_alloc,
       {
         VkBufferCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                     VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             .size = skydome_size,

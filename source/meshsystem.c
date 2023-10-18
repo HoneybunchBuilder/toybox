@@ -1625,7 +1625,10 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
           .size = geom_size,
-          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       };
       err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
                                          mesh->name, &tb_mesh->gpu_buffer,

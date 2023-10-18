@@ -430,7 +430,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
               .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
               .size = sizeof(GLTFMaterialData),
               .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-                       VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                       VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
           };
           // HACK: Known alignment for uniform buffers
           err = tb_rnd_sys_create_gpu_buffer2_tmp(
