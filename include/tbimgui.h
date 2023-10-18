@@ -4,6 +4,7 @@
 #pragma clang diagnostic push
 #if __has_warning("-Wreserved-identifier")
 #pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wlanguage-extension-token"
 #endif
 #endif
 

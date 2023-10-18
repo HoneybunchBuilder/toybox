@@ -704,7 +704,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
             // Organize all mesh data into a single cpu-side buffer
             for (uint32_t i = 0; i < imgui_draw_count; ++i) {
-              const ImDrawList *cmd_list = draw_data->CmdLists[i];
+              const ImDrawList *cmd_list = draw_data->CmdLists.Data[i];
 
               size_t idx_byte_count =
                   (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
@@ -745,7 +745,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
               for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
                    ++draw_idx) {
-                const ImDrawList *cmd_list = draw_data->CmdLists[draw_idx];
+                const ImDrawList *cmd_list = draw_data->CmdLists.Data[draw_idx];
                 const uint32_t index_count = cmd_list->IdxBuffer.Size;
 
                 draws[draw_idx] = (ImGuiDraw){
