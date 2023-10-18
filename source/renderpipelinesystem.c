@@ -2955,52 +2955,37 @@ RenderPipelineSystem create_render_pipeline_system(
     {
       // Create SSAO kernel buffer and noise texture
       {
-        // Kernel Buffer
-        TbHostBuffer tmp_ssao_params = {0};
-        VkResult err = tb_rnd_sys_alloc_tmp_host_buffer(
-            sys.render_system, sizeof(SSAOParams), 16, &tmp_ssao_params);
-        TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao params");
+        SSAOParams params = {
+            .kernel_size = SSAO_KERNEL_SIZE,
+        };
+        for (uint32_t i = 0; i < SSAO_KERNEL_SIZE; ++i) {
+          params.kernel[i] = normf3((float3){
+              tb_randf(-1.0f, 1.0f),
+              tb_randf(-1.0f, 1.0f),
+              tb_randf(0.0f, 1.0f),
+          });
 
-        // Fill out buffer on the CPU side
-        {
-          SSAOParams params = {
-              .kernel_size = SSAO_KERNEL_SIZE,
-          };
-          for (uint32_t i = 0; i < SSAO_KERNEL_SIZE; ++i) {
-            params.kernel[i] = normf3((float3){
-                tb_randf(-1.0f, 1.0f),
-                tb_randf(-1.0f, 1.0f),
-                tb_randf(0.0f, 1.0f),
-            });
+          // Distribute samples in the hemisphere
+          params.kernel[i] *= tb_randf(0.0f, 1.0f);
 
-            // Distribute samples in the hemisphere
-            params.kernel[i] *= tb_randf(0.0f, 1.0f);
-
-            float scale = (float)i / SSAO_KERNEL_SIZE;
-            scale = lerpf(0.1f, 1.0f, scale * scale);
-            params.kernel[i] *= scale;
-          }
-
-          SDL_memcpy(tmp_ssao_params.ptr, &params, sizeof(SSAOParams));
+          float scale = (float)i / SSAO_KERNEL_SIZE;
+          scale = lerpf(0.1f, 1.0f, scale * scale);
+          params.kernel[i] *= scale;
         }
 
-        // Create GPU version
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .size = sizeof(SSAOParams),
-        };
-        err = tb_rnd_sys_alloc_gpu_buffer(sys.render_system, &create_info,
-                                          "SSAO Params", &sys.ssao_params);
-        TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
-        // Schedule upload
-        BufferCopy upload = {
-            .dst = sys.ssao_params.buffer,
-            .src = tmp_ssao_params.buffer,
-            .region = {.size = sizeof(SSAOParams)},
-        };
-        tb_rnd_upload_buffers(sys.render_system, &upload, 1);
+        {
+          // Create SSAO Param buffer
+          VkBufferCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+              .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+              .size = sizeof(SSAOParams),
+          };
+          err = tb_rnd_sys_create_gpu_buffer2_tmp(
+              sys.render_system, &create_info, &params, "SSAO Params",
+              &sys.ssao_params, 16);
+          TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
+        }
 
         // Noise Texture
         const uint32_t noise_tex_dim = 4;
