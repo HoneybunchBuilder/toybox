@@ -970,41 +970,24 @@ SkySystem create_sky_system(Allocator std_alloc, Allocator tmp_alloc,
   // Create skydome geometry
   {
     const uint64_t skydome_size = get_skydome_size();
-    // Make space for the sky geometry on the GPU
-    {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-          .size = skydome_size,
-      };
-      err = tb_rnd_sys_alloc_gpu_buffer(render_system, &create_info,
-                                        "SkyDome Geom Buffer",
-                                        &sys.sky_geom_gpu_buffer);
-      TB_VK_CHECK(err, "Failed to alloc skydome geom buffer");
-    }
-
     // Use the gpu tmp buffer to copy the geom buffer
     {
-      TbHostBuffer host_buf = {0};
-      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, skydome_size, 16,
-                                             &host_buf);
-      TB_VK_CHECK(err, "Failed to alloc tmp space for the skydome geometry");
-      copy_skydome(host_buf.ptr); // Copy to the newly alloced host buffer
-
+      void *ptr = NULL;
+      // Make space for the sky geometry on the GPU
       {
-        BufferCopy skydome_copy = {
-            .src = host_buf.buffer,
-            .dst = sys.sky_geom_gpu_buffer.buffer,
-            .region =
-                {
-                    .srcOffset = host_buf.offset,
-                    .size = skydome_size,
-                },
+        VkBufferCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            .size = skydome_size,
         };
-        tb_rnd_upload_buffers(render_system, &skydome_copy, 1);
+        err = tb_rnd_sys_create_gpu_buffer_tmp(
+            render_system, &create_info, "SkyDome Geom Buffer",
+            &sys.sky_geom_gpu_buffer, 16, &ptr);
+        TB_VK_CHECK(err, "Failed to create skydome geom buffer");
       }
+      copy_skydome(ptr);
     }
   }
 

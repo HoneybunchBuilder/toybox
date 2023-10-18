@@ -479,6 +479,98 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   return err;
 }
 
+VkResult tb_rnd_sys_create_gpu_buffer(RenderSystem *self,
+                                      const VkBufferCreateInfo *create_info,
+                                      const char *name, TbBuffer *buffer,
+                                      TbHostBuffer *host, void **ptr) {
+  // Create the GPU side buffer
+  VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
+
+  // If this is a UMA platform we can just map the buffer and write to it
+  if (self->is_uma) {
+    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
+    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  }
+  // Otherwise we have to create a host buffer and schedule an upload
+  else {
+    // It's the caller's responsibility to handle the host buffer too
+    // even if it's not going to be used on non-uma systems
+    err = tb_rnd_sys_alloc_host_buffer(self, create_info, name, host);
+    TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
+
+    BufferCopy upload = {
+        .src = host->buffer,
+        .dst = buffer->buffer,
+        .region =
+            {
+                .size = create_info->size,
+            },
+    };
+    tb_rnd_upload_buffers(self, &upload, 1);
+
+    *ptr = host->ptr;
+  }
+  return err;
+}
+
+VkResult tb_rnd_sys_create_gpu_buffer_tmp(RenderSystem *self,
+                                          const VkBufferCreateInfo *create_info,
+                                          const char *name, TbBuffer *buffer,
+                                          uint32_t alignment, void **ptr) {
+  // Create the GPU side buffer
+  VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
+
+  // If this is a UMA platform we can just map the buffer and write to it
+  if (self->is_uma) {
+    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
+    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  }
+  // Otherwise we have to create a host buffer and schedule an upload
+  else {
+    TbHostBuffer host = {0};
+    err = tb_rnd_sys_alloc_tmp_host_buffer(self, create_info->size, alignment,
+                                           &host);
+    TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
+
+    BufferCopy upload = {
+        .src = host.buffer,
+        .dst = buffer->buffer,
+        .region =
+            {
+                .srcOffset = host.offset,
+                .size = create_info->size,
+            },
+    };
+    tb_rnd_upload_buffers(self, &upload, 1);
+
+    *ptr = host.ptr;
+  }
+  return err;
+}
+
+VkResult tb_rnd_sys_create_gpu_buffer2(RenderSystem *self,
+                                       const VkBufferCreateInfo *create_info,
+                                       const void *data, const char *name,
+                                       TbBuffer *buffer, TbHostBuffer *host) {
+  void *ptr = NULL;
+  VkResult err =
+      tb_rnd_sys_create_gpu_buffer(self, create_info, name, buffer, host, &ptr);
+  TB_VK_CHECK_RET(err, "Failed to create GPU buffer", err);
+  SDL_memcpy(ptr, data, create_info->size);
+  return err;
+}
+
+VkResult tb_rnd_sys_create_gpu_buffer2_tmp(
+    RenderSystem *self, const VkBufferCreateInfo *create_info, const void *data,
+    const char *name, TbBuffer *buffer, uint32_t alignment) {
+  void *ptr = NULL;
+  VkResult err = tb_rnd_sys_create_gpu_buffer_tmp(self, create_info, name,
+                                                  buffer, alignment, &ptr);
+  TB_VK_CHECK_RET(err, "Failed to create GPU buffer", err);
+  SDL_memcpy(ptr, data, create_info->size);
+  return err;
+}
+
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self) {
   return self->render_thread->frame_states[self->frame_idx].tmp_gpu_buffer;
 }

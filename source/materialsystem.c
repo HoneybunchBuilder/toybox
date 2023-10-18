@@ -369,23 +369,6 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
 
     // Load material
     {
-      // Create gpu uniform buffer
-      {
-        VkBufferCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(GLTFMaterialData),
-            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        };
-        char name[100] = {0};
-        SDL_snprintf(name, 100, "%s Uniform Buffer", mat->name);
-        err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info,
-                                          name, &material->gpu_buffer);
-        TB_VK_CHECK_RET(err,
-                        "Failed to allocate space for material uniform buffer",
-                        InvalidMaterialId);
-      }
-
       // Find a suitable texture transform from the material
       cgltf_texture_transform tex_trans = {
           .scale = {1, 1},
@@ -402,8 +385,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
         }
       }
 
-      // Gather uniform buffer data and copy to the tmp host buffer
-      TbHostBuffer host_buf = {0};
+      // Gather uniform buffer data and copy to the GPU
       {
         GLTFMaterialData data = {
             .tex_transform =
@@ -442,29 +424,23 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
           data.sheen_alpha[3] = mat->alpha_cutoff;
         }
 
-        // HACK: Known alignment for uniform buffers
-        err = tb_rnd_sys_alloc_tmp_host_buffer(
-            self->render_system, sizeof(GLTFMaterialData), 0x40, &host_buf);
-        TB_VK_CHECK_RET(
-            err, "Failed to allocate material uniform data in tmp host buffer",
-            InvalidMaterialId);
-
-        SDL_memcpy(host_buf.ptr, &data, sizeof(GLTFMaterialData));
-      }
-
-      // Issue copy of uniform buffer
-      {
-        const TbBuffer *gpu_buf = &material->gpu_buffer;
-        BufferCopy upload = {
-            .src = host_buf.buffer,
-            .dst = gpu_buf->buffer,
-            .region =
-                {
-                    .srcOffset = host_buf.offset,
-                    .size = sizeof(GLTFMaterialData),
-                },
-        };
-        tb_rnd_upload_buffers(self->render_system, &upload, 1);
+        // Send data to GPU
+        {
+          VkBufferCreateInfo create_info = {
+              .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+              .size = sizeof(GLTFMaterialData),
+              .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                       VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+          };
+          // HACK: Known alignment for uniform buffers
+          err = tb_rnd_sys_create_gpu_buffer2_tmp(
+              self->render_system, &create_info, &data, mat->name,
+              &material->gpu_buffer, 0x40);
+          TB_VK_CHECK_RET(
+              err,
+              "Failed to allocate material uniform data in tmp host buffer",
+              InvalidMaterialId);
+        }
       }
 
       // Determine feature permutations and load textures

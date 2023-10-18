@@ -36,6 +36,8 @@ typedef struct RenderSystem {
   Allocator tmp_alloc;
   RenderThread *render_thread;
 
+  bool is_uma;
+
   VmaPool host_buffer_pool;
 
   VmaPool gpu_buffer_pool;
@@ -67,6 +69,31 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image);
+
+// Create a GPU buffer and just get a pointer to some mapped memory that
+// the caller just needs to fill out.
+// An upload will automatically be scheduled if necessary.
+// Caller must provide space for a host buffer though it will not be necessary
+// on a UMA platform.
+VkResult tb_rnd_sys_create_gpu_buffer(RenderSystem *self,
+                                      const VkBufferCreateInfo *create_info,
+                                      const char *name, TbBuffer *buffer,
+                                      TbHostBuffer *host, void **ptr);
+VkResult tb_rnd_sys_create_gpu_buffer_tmp(RenderSystem *self,
+                                          const VkBufferCreateInfo *create_info,
+                                          const char *name, TbBuffer *buffer,
+                                          uint32_t alignment, void **ptr);
+// Create a GPU buffer and immediately copy the given data to it.
+// An upload will automatically be scheduled if necessary.
+// Caller must provide space for a host buffer though it will not be necessary
+// on a UMA platform.
+VkResult tb_rnd_sys_create_gpu_buffer2(RenderSystem *self,
+                                       const VkBufferCreateInfo *create_info,
+                                       const void *data, const char *name,
+                                       TbBuffer *buffer, TbHostBuffer *host);
+VkResult tb_rnd_sys_create_gpu_buffer2_tmp(
+    RenderSystem *self, const VkBufferCreateInfo *create_info, const void *data,
+    const char *name, TbBuffer *buffer, uint32_t alignment);
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self);
 

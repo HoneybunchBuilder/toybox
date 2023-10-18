@@ -1619,44 +1619,22 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
     VkResult err = VK_SUCCESS;
 
-    // Allocate space on the host that we can read the mesh
-    // into
+    // Create space for the mesh on the GPU
+    void *ptr = NULL;
     {
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
           .size = geom_size,
           .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       };
-
-      char name[100] = {0};
-      SDL_snprintf(name, 100, "%s Host Geom Buffer", mesh->name);
-
-      err = tb_rnd_sys_alloc_host_buffer(self->render_system, &create_info,
-                                         name, &tb_mesh->host_buffer);
-      TB_VK_CHECK_RET(err, "Failed to create host mesh buffer", false);
-    }
-
-    // Create space on the gpu for the mesh
-    {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = geom_size,
-          .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      };
-
-      char name[100] = {0};
-      SDL_snprintf(name, 100, "%s GPU Geom Buffer", mesh->name);
-
-      err = tb_rnd_sys_alloc_gpu_buffer(self->render_system, &create_info, name,
-                                        &tb_mesh->gpu_buffer);
-      TB_VK_CHECK_RET(err, "Failed to create gpu mesh buffer", false);
+      err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
+                                         mesh->name, &tb_mesh->gpu_buffer,
+                                         &tb_mesh->host_buffer, &ptr);
+      TB_VK_CHECK_RET(err, "Failed to create mesh buffer", false);
     }
 
     // Read the cgltf mesh into the driver owned memory
     {
-      TbHostBuffer *host_buf = &tb_mesh->host_buffer;
       uint64_t idx_offset = 0;
       uint64_t vtx_offset = vertex_offset;
       for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
@@ -1673,7 +1651,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
           void *src = ((uint8_t *)view->data) + indices->offset;
-          void *dst = ((uint8_t *)(host_buf->ptr)) + idx_offset;
+          void *dst = ((uint8_t *)(ptr)) + idx_offset;
           SDL_memcpy(dst, src, index_size);
           idx_offset += index_size;
         }
@@ -1719,21 +1697,11 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
           TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
           void *src = ((uint8_t *)view->data) + attr_offset;
-          void *dst = ((uint8_t *)(host_buf->ptr)) + vtx_offset;
+          void *dst = ((uint8_t *)(ptr)) + vtx_offset;
           SDL_memcpy(dst, src, attr_size);
           vtx_offset += attr_size;
         }
       }
-    }
-
-    // Instruct the render system to upload this
-    {
-      BufferCopy copy = {
-          .src = tb_mesh->host_buffer.buffer,
-          .dst = tb_mesh->gpu_buffer.buffer,
-          .region = {.size = geom_size},
-      };
-      tb_rnd_upload_buffers(self->render_system, &copy, 1);
     }
   }
 

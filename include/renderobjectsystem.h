@@ -4,6 +4,19 @@
 #include "dynarray.h"
 #include "tbrendercommon.h"
 
+/*
+  Next step:
+    Every frame, collect the changed render object transforms and sphere bounds
+  into arrays that are uploaded to the GPU. Only deltas in the collection need
+  uploading. Meshes and other render objects will look up the render object
+  index from this system and provide them to the various draws in a per-instance
+  buffer. This prevents the need for moving any transform related data to the
+  GPU.
+    A frustum culling compute shader should be able to generate a list of only
+  the visible render objects by looking up the transform and the sphere bounds
+  of every drawable object. Thus enabling GPU driven indirect drawing.
+*/
+
 #define RenderObjectSystemId 0xFEEDC0DE
 
 typedef struct RenderSystem RenderSystem;
