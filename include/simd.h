@@ -14,6 +14,11 @@
 #pragma clang diagnostic ignored "-Wnested-anon-types"
 #endif
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+
 #ifndef TB_USE_INVERSE_DEPTH
 // #define TB_USE_INVERSE_DEPTH 1
 #endif
@@ -258,4 +263,8 @@ float tb_randf(float min, float max);
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
 #endif

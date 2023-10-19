@@ -2468,7 +2468,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
             const uint32_t index_count = sm->index_count;
             const uint64_t index_offset = sm->index_offset;
-            const int32_t index_type = sm->index_type;
+            const uint32_t index_type = sm->index_type;
 
             // Handle Opaque and Transparent draws
             {

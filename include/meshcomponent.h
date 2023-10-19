@@ -23,7 +23,7 @@ typedef enum TbVertexInput {
 } TbVertexInput;
 
 typedef struct SubMesh {
-  int32_t index_type;
+  uint32_t index_type;
   uint32_t index_count;
   uint64_t index_offset;
   uint64_t vertex_offset;

@@ -35,7 +35,8 @@ void jolt_free(void *ptr) {
   free(ptr);
 }
 void *jolt_alloc_aligned(size_t size, size_t align) {
-#ifdef _MSC_VER
+  // Mingw uses the microsoft aligned malloc/free impl
+#if defined(_MSC_VER) || defined(__MINGW32__)
   void *ptr = _aligned_malloc(size, align);
 #else
   void *ptr = std::aligned_alloc(align, size);
@@ -46,7 +47,7 @@ void *jolt_alloc_aligned(size_t size, size_t align) {
 
 void jolt_free_aligned(void *ptr) {
   TracyFreeN(ptr, "Physics");
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
   _aligned_free(ptr);
 #else
   free(ptr);
