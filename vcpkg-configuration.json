@@ -4,5 +4,16 @@
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
     "baseline": "db0473513e5dc73ec6b6f431ff05d2f398eea042"
-  }
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "baseline": "d61db1ec98715e77dd26736e95231ca615911215",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "packages": [
+        "joltphysics"
+      ],
+      "reference": "jolt"
+    }
+  ]
 }

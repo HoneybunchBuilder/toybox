@@ -129,7 +129,7 @@ void physics_update_tick(flecs::iter it) {
   auto *jolt_tmp_alloc = phys_sys->jolt_tmp_alloc;
   auto *jolt_job_sys = phys_sys->jolt_job_sys;
 
-  jolt.Update(it.delta_time(), 1, 1, jolt_tmp_alloc, jolt_job_sys);
+  jolt.Update(it.delta_time(), 1, jolt_tmp_alloc, jolt_job_sys);
 
   // Iterate through query of every rigidbody and update the Toybox transform
   flecs::query<TbRigidbodyComponent, TransformComponent> query(
