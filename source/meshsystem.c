@@ -2419,7 +2419,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       // Run query to determine how many meshes so we can pre-allocate space for
       // batches
       ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
-      const int32_t mesh_count = ecs_iter_count(&mesh_it);
+      const uint32_t max_mesh_count = ecs_iter_count(&mesh_it) * TB_SUBMESH_MAX;
       mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
 
       // Init arrays on an allocator with a fast allocation
@@ -2429,14 +2429,14 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       DrawBatchList trans_batches = {0};
       PrimitiveBatchList opaque_prim_batches = {0};
       PrimitiveBatchList trans_prim_batches = {0};
-      TB_DYN_ARR_RESET(opaque_batches, tmp_alloc, mesh_count);
-      TB_DYN_ARR_RESET(trans_batches, tmp_alloc, mesh_count);
-      TB_DYN_ARR_RESET(opaque_prim_batches, tmp_alloc, mesh_count);
-      TB_DYN_ARR_RESET(trans_prim_batches, tmp_alloc, mesh_count);
+      TB_DYN_ARR_RESET(opaque_batches, tmp_alloc, max_mesh_count);
+      TB_DYN_ARR_RESET(trans_batches, tmp_alloc, max_mesh_count);
+      TB_DYN_ARR_RESET(opaque_prim_batches, tmp_alloc, max_mesh_count);
+      TB_DYN_ARR_RESET(trans_prim_batches, tmp_alloc, max_mesh_count);
       PrimitiveTransformLists opaque_prim_trans = {0};
       PrimitiveTransformLists trans_prim_trans = {0};
-      TB_DYN_ARR_RESET(opaque_prim_trans, tmp_alloc, mesh_count);
-      TB_DYN_ARR_RESET(trans_prim_trans, tmp_alloc, mesh_count);
+      TB_DYN_ARR_RESET(opaque_prim_trans, tmp_alloc, max_mesh_count);
+      TB_DYN_ARR_RESET(trans_prim_trans, tmp_alloc, max_mesh_count);
       TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
         MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
@@ -2515,7 +2515,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                 if (batch == NULL) {
                   // Worst case batch count is one batch having to carry every
                   // mesh with the maximum number of possible submeshes
-                  const uint32_t max_draw_count = mesh_count * TB_SUBMESH_MAX;
+                  const uint32_t max_draw_count = max_mesh_count;
                   DrawBatch db = {
                       .pipeline = pipeline,
                       .layout = layout,

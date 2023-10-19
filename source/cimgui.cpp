@@ -15,7 +15,20 @@
 #include "./imgui/misc/freetype/imgui_freetype.h"
 #endif
 #include "./imgui_internal.h"
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wreserved-identifier")
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#endif
+#endif
+
 #include "cimgui.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 CIMGUI_API ImVec2 *ImVec2_ImVec2_Nil(void) { return IM_NEW(ImVec2)(); }
 CIMGUI_API void ImVec2_destroy(ImVec2 *self) { IM_DELETE(self); }
