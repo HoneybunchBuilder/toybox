@@ -158,22 +158,6 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
     TB_CHECK_RETURN(ktx->generateMipmaps == false,
                     "Not expecting to have to generate mips", InvalidTextureId);
 
-    // Get host buffer
-    {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = host_buffer_size,
-          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      };
-      err = tb_rnd_sys_alloc_host_buffer(rnd_sys, &create_info, name,
-                                         &texture->host_buffer);
-      TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture",
-                      InvalidTextureId);
-
-      // Copy data to the host buffer
-      SDL_memcpy(texture->host_buffer.ptr, ktx->pData, host_buffer_size);
-    }
-
     // Allocate gpu image
     {
       VkImageCreateInfo create_info = {
@@ -191,8 +175,9 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
           .samples = VK_SAMPLE_COUNT_1_BIT,
           .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       };
-      err = tb_rnd_sys_alloc_gpu_image(rnd_sys, &create_info, name,
-                                       &texture->gpu_image);
+      err = tb_rnd_sys_create_gpu_image(rnd_sys, ktx->pData, host_buffer_size,
+                                        &create_info, name, &texture->gpu_image,
+                                        &texture->host_buffer);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
                       InvalidTextureId);
     }
@@ -406,22 +391,6 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
 
   // Load texture
   {
-    // Get host buffer
-    {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = size,
-          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      };
-      err = tb_rnd_sys_alloc_host_buffer(rnd_sys, &create_info, name,
-                                         &texture->host_buffer);
-      TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture",
-                      InvalidTextureId);
-
-      // Copy data to the host buffer
-      SDL_memcpy(texture->host_buffer.ptr, pixels, size);
-    }
-
     // Determine format based on usage
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
     if (usage == TB_TEX_USAGE_COLOR) {
@@ -448,8 +417,9 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
           .samples = VK_SAMPLE_COUNT_1_BIT,
           .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       };
-      err = tb_rnd_sys_alloc_gpu_image(rnd_sys, &create_info, name,
-                                       &texture->gpu_image);
+      err = tb_rnd_sys_create_gpu_image(rnd_sys, pixels, size, &create_info,
+                                        name, &texture->gpu_image,
+                                        &texture->host_buffer);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
                       InvalidTextureId);
     }

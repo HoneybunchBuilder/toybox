@@ -60,9 +60,6 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
                                           uint32_t alignment,
                                           TbHostBuffer *buffer);
 
-VkResult tb_rnd_sys_alloc_host_buffer(RenderSystem *self,
-                                      const VkBufferCreateInfo *create_info,
-                                      const char *name, TbHostBuffer *buffer);
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
                                      const VkBufferCreateInfo *create_info,
                                      const char *name, TbBuffer *buffer);
@@ -94,6 +91,12 @@ VkResult tb_rnd_sys_create_gpu_buffer2(RenderSystem *self,
 VkResult tb_rnd_sys_create_gpu_buffer2_tmp(
     RenderSystem *self, const VkBufferCreateInfo *create_info, const void *data,
     const char *name, TbBuffer *buffer, uint32_t alignment);
+
+VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
+                                     uint64_t data_size,
+                                     const VkImageCreateInfo *create_info,
+                                     const char *name, TbImage *image,
+                                     TbHostBuffer *host);
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self);
 

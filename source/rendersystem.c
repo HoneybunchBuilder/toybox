@@ -415,9 +415,9 @@ VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
   return VK_SUCCESS;
 }
 
-VkResult tb_rnd_sys_alloc_host_buffer(RenderSystem *self,
-                                      const VkBufferCreateInfo *create_info,
-                                      const char *name, TbHostBuffer *buffer) {
+VkResult alloc_host_buffer(RenderSystem *self,
+                           const VkBufferCreateInfo *create_info,
+                           const char *name, TbHostBuffer *buffer) {
   VmaAllocator vma_alloc = self->vma_alloc;
 
   VmaAllocationCreateInfo alloc_create_info = {
@@ -495,7 +495,7 @@ VkResult tb_rnd_sys_create_gpu_buffer(RenderSystem *self,
   else {
     // It's the caller's responsibility to handle the host buffer too
     // even if it's not going to be used on non-uma systems
-    err = tb_rnd_sys_alloc_host_buffer(self, create_info, name, host);
+    err = alloc_host_buffer(self, create_info, name, host);
     TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
     BufferCopy upload = {
@@ -568,6 +568,42 @@ VkResult tb_rnd_sys_create_gpu_buffer2_tmp(
                                                   buffer, alignment, &ptr);
   TB_VK_CHECK_RET(err, "Failed to create GPU buffer", err);
   SDL_memcpy(ptr, data, create_info->size);
+  return err;
+}
+
+// This needs to be seriously re-thought from the perspective of
+// texture streaming
+// For now scheduling uploads will be the responsibility of the caller
+VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
+                                     uint64_t data_size,
+                                     const VkImageCreateInfo *create_info,
+                                     const char *name, TbImage *image,
+                                     TbHostBuffer *host) {
+  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, name, image);
+  TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture", err);
+
+  void *ptr = NULL;
+
+  if (self->is_uma) {
+    // Just create the image and then map the memory
+    err = vmaMapMemory(self->vma_alloc, image->alloc, &ptr);
+    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  } else {
+    // Allocate memory on the host and copy data to it
+    VkBufferCreateInfo buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = data_size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    };
+    err = alloc_host_buffer(self, &buffer_info, name, host);
+    TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture", err);
+
+    ptr = host->ptr;
+  }
+
+  // Copy data to the host buffer
+  SDL_memcpy(ptr, data, data_size);
+
   return err;
 }
 
