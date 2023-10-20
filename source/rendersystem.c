@@ -33,6 +33,15 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
   {
     VkResult err = VK_SUCCESS;
 
+    // Query some info about the kind of device we're working with
+    {
+      const VkPhysicalDeviceProperties *props =
+          &sys.render_thread->gpu_props.properties;
+      sys.is_uma =
+          props->deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
+          props->deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+    }
+
     // Create vulkan allocator for main thread
     sys.vk_host_alloc_cb = (VkAllocationCallbacks){
         .pfnAllocation = tb_vk_alloc_fn,
