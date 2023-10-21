@@ -1118,7 +1118,6 @@ void sky_draw_tick(ecs_iter_t *it) {
         tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count, VkWriteDescriptorSet);
     VkDescriptorBufferInfo *buffer_info =
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
-    TbHostBuffer *buffer = tb_alloc_tp(sky_sys->tmp_alloc, TbHostBuffer);
 
     SkyData data = {
         .time = sky_sys->time,
@@ -1128,16 +1127,14 @@ void sky_draw_tick(ecs_iter_t *it) {
     };
 
     // Write view data into the tmp buffer we know will wind up on the GPU
-    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(SkyData), 0x40,
-                                           buffer);
+    uint64_t offset = 0;
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(SkyData), 0x40, &data,
+                                     &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
-
-    // Copy view data to the allocated buffer
-    SDL_memcpy(buffer->ptr, &data, sizeof(SkyData));
 
     *buffer_info = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
-        .offset = buffer->offset,
+        .offset = offset,
         .range = sizeof(SkyData),
     };
 

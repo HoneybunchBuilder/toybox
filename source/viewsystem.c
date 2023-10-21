@@ -238,26 +238,20 @@ void view_update_tick(ecs_iter_t *it) {
       sys->tmp_alloc, view_count * buf_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
       sys->tmp_alloc, view_count * img_count, VkDescriptorImageInfo);
-  TbHostBuffer *buffers =
-      tb_alloc_nm_tp(sys->tmp_alloc, view_count * buf_count, TbHostBuffer);
   TB_DYN_ARR_FOREACH(sys->views, view_idx) {
     const View *view = &TB_DYN_ARR_AT(sys->views, view_idx);
     const CommonViewData *view_data = &view->view_data;
     const CommonLightData *light_data = &view->light_data;
-    TbHostBuffer *view_buffer = &buffers[view_idx + 0];
-    TbHostBuffer *light_buffer = &buffers[view_idx + 1];
 
     // Write view data into the tmp buffer we know will wind up on the GPU
-    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(CommonViewData),
-                                           0x40, view_buffer);
+    uint64_t view_offset = 0;
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(CommonViewData), 0x40,
+                                     view_data, &view_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
-    err = tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, sizeof(CommonLightData),
-                                           0x40, light_buffer);
+    uint64_t light_offset = 0;
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(CommonLightData), 0x40,
+                                     light_data, &light_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
-
-    // Copy view data to the allocated buffers
-    SDL_memcpy(view_buffer->ptr, view_data, sizeof(CommonViewData));
-    SDL_memcpy(light_buffer->ptr, light_data, sizeof(CommonLightData));
 
     uint32_t buffer_idx = view_idx * buf_count;
     uint32_t image_idx = view_idx * img_count;
@@ -268,12 +262,12 @@ void view_update_tick(ecs_iter_t *it) {
 
     buffer_info[buffer_idx + 0] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
-        .offset = view_buffer->offset,
+        .offset = view_offset,
         .range = sizeof(CommonViewData),
     };
     buffer_info[buffer_idx + 1] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
-        .offset = light_buffer->offset,
+        .offset = light_offset,
         .range = sizeof(CommonLightData),
     };
 

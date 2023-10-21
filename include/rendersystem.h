@@ -56,16 +56,19 @@ void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
                             Allocator tmp_alloc, RenderThread *render_thread);
 void tb_unregister_render_sys(ecs_world_t *ecs);
 
-VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                          uint32_t alignment,
-                                          TbHostBuffer *buffer);
-
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
                                      const VkBufferCreateInfo *create_info,
                                      const char *name, TbBuffer *buffer);
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image);
+
+VkResult tb_rnd_sys_tmp_buffer_copy(RenderSystem *self, uint64_t size,
+                                    uint32_t alignment, const void *data,
+                                    uint64_t *offset);
+VkResult tb_rnd_sys_tmp_buffer_get_ptr(RenderSystem *self, uint64_t size,
+                                       uint32_t alignment, uint64_t *offset,
+                                       void **ptr);
 
 // Create a GPU buffer and just get a pointer to some mapped memory that
 // the caller just needs to fill out.
@@ -97,6 +100,11 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
                                      const VkImageCreateInfo *create_info,
                                      const char *name, TbImage *image,
                                      TbHostBuffer *host);
+
+VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
+                                         uint64_t data_size, uint32_t alignment,
+                                         const VkImageCreateInfo *create_info,
+                                         const char *name, TbImage *image);
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self);
 

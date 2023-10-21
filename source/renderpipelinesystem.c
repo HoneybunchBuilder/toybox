@@ -2988,17 +2988,11 @@ RenderPipelineSystem create_render_pipeline_system(
           TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
         }
 
-        // Noise Texture
-        const uint32_t noise_tex_dim = 4;
-        const uint32_t noise_tex_size =
-            noise_tex_dim * noise_tex_dim * sizeof(float2);
-        TbHostBuffer tmp_ssao_noise = {0};
-        err = tb_rnd_sys_alloc_tmp_host_buffer(
-            sys.render_system, noise_tex_size, 16, &tmp_ssao_noise);
-        TB_VK_CHECK(err, "Failed to create tmp host buffer for ssao noise");
-
-        // Fill out buffer on the CPU side
+        // Create Noise Texture
         {
+          const uint32_t noise_tex_dim = 4;
+          const uint32_t noise_tex_size =
+              noise_tex_dim * noise_tex_dim * sizeof(float2);
           float2 noise[16] = {{0}};
           for (uint32_t i = 0; i < 16; ++i) {
             noise[i] = normf2((float2){
@@ -3006,12 +3000,6 @@ RenderPipelineSystem create_render_pipeline_system(
                 tb_randf(-1.0f, 1.0f),
             });
           }
-
-          SDL_memcpy(tmp_ssao_noise.ptr, noise, noise_tex_size);
-        }
-
-        // Create GPU Image
-        {
           VkImageCreateInfo create_info = {
               .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
               .imageType = VK_IMAGE_TYPE_2D,
@@ -3029,8 +3017,9 @@ RenderPipelineSystem create_render_pipeline_system(
               .usage =
                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
           };
-          err = tb_rnd_sys_alloc_gpu_image(sys.render_system, &create_info,
-                                           "SSAO Noise", &sys.ssao_noise);
+          err = tb_rnd_sys_create_gpu_image_tmp(
+              sys.render_system, noise, noise_tex_size, 16, &create_info,
+              "SSAO Noise", &sys.ssao_noise);
           TB_VK_CHECK(err, "Failed to create gpu image for ssao params");
         }
 
@@ -3051,33 +3040,6 @@ RenderPipelineSystem create_render_pipeline_system(
               tb_rnd_create_image_view(sys.render_system, &create_info,
                                        "SSAO Noise View", &sys.ssao_noise_view);
         }
-
-        BufferImageCopy image_copy = {
-            .src = tmp_ssao_noise.buffer,
-            .dst = sys.ssao_noise.image,
-            .region =
-                {
-                    .bufferOffset = tmp_ssao_noise.offset,
-                    .imageSubresource =
-                        {
-                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                            .layerCount = 1,
-                        },
-                    .imageExtent =
-                        {
-                            .width = noise_tex_dim,
-                            .height = noise_tex_dim,
-                            .depth = 1,
-                        },
-                },
-            .range =
-                {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .layerCount = 1,
-                    .levelCount = 1,
-                },
-        };
-        tb_rnd_upload_buffer_to_image(sys.render_system, &image_copy, 1);
       }
 
       uint32_t attach_count = 0;

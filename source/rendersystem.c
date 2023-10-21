@@ -396,9 +396,8 @@ void tb_unregister_render_sys(ecs_world_t *ecs) {
   ecs_singleton_remove(ecs, RenderSystem);
 }
 
-VkResult tb_rnd_sys_alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                                          uint32_t alignment,
-                                          TbHostBuffer *buffer) {
+VkResult alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
+                               uint32_t alignment, TbHostBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
 
   void *ptr = &(
@@ -488,6 +487,38 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   return err;
 }
 
+VkResult tb_rnd_sys_tmp_buffer_copy(RenderSystem *self, uint64_t size,
+                                    uint32_t alignment, const void *data,
+                                    uint64_t *offset) {
+  void *ptr = NULL;
+  VkResult err =
+      tb_rnd_sys_tmp_buffer_get_ptr(self, size, alignment, offset, &ptr);
+  TB_VK_CHECK_RET(err, "Failed to copy data to tmp buffer", err);
+  SDL_memcpy(ptr, data, size);
+  return err;
+}
+
+VkResult tb_rnd_sys_tmp_buffer_get_ptr(RenderSystem *self, uint64_t size,
+                                       uint32_t alignment, uint64_t *offset,
+                                       void **ptr) {
+  VkResult err = VK_SUCCESS;
+  if (self->is_uma) {
+    // Just map the gpu buffer
+    err = vmaMapMemory(
+        self->vma_alloc,
+        self->render_thread->frame_states[self->frame_idx].tmp_gpu_alloc, ptr);
+  } else {
+    // Make an allocation on the tmp host buffer
+    // This buffer will *always* be uploaded
+    TbHostBuffer host_buffer = {0};
+    err = alloc_tmp_host_buffer(self, size, alignment, &host_buffer);
+    *offset = host_buffer.offset;
+    *ptr = host_buffer.ptr;
+  }
+
+  return err;
+}
+
 VkResult tb_rnd_sys_create_gpu_buffer(RenderSystem *self,
                                       const VkBufferCreateInfo *create_info,
                                       const char *name, TbBuffer *buffer,
@@ -537,8 +568,7 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(RenderSystem *self,
   // Otherwise we have to create a host buffer and schedule an upload
   else {
     TbHostBuffer host = {0};
-    err = tb_rnd_sys_alloc_tmp_host_buffer(self, create_info->size, alignment,
-                                           &host);
+    err = alloc_tmp_host_buffer(self, create_info->size, alignment, &host);
     TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
     BufferCopy upload = {
@@ -610,7 +640,67 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
     ptr = host->ptr;
   }
 
-  // Copy data to the host buffer
+  // Copy data to the buffer
+  SDL_memcpy(ptr, data, data_size);
+
+  return err;
+}
+
+// Copy the given data to the temp buffer and schedule an upload to the
+// dedicated gpu image
+// Or if this is a UMA platform just directly create the image
+VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
+                                         uint64_t data_size, uint32_t alignment,
+                                         const VkImageCreateInfo *create_info,
+                                         const char *name, TbImage *image) {
+  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, name, image);
+  TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture", err);
+
+  void *ptr = NULL;
+
+  if (self->is_uma) {
+    // Just create the image and then map the memory
+    err = vmaMapMemory(self->vma_alloc, image->alloc, &ptr);
+    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  } else {
+    // Allocate space for the buffer on the temp buffer
+    TbHostBuffer host = {0};
+    err = alloc_tmp_host_buffer(self, data_size, alignment, &host);
+    TB_VK_CHECK_RET(err, "Failed to alloc space on the temp buffer", err);
+    ptr = host.ptr;
+
+    // We know that the data on the tmp buffer will be automatically uploaded
+    // so instead of issuing another upload, we copy from the uploaded page
+    // to the final memory location of the image
+    BufferImageCopy copy = {
+        .src = host.buffer,
+        .dst = image->image,
+        .region =
+            {
+                .bufferOffset = host.offset,
+                .imageSubresource =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .layerCount = 1,
+                    },
+                .imageExtent =
+                    {
+                        .width = create_info->extent.width,
+                        .height = create_info->extent.height,
+                        .depth = 1,
+                    },
+            },
+        .range =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .layerCount = 1,
+                .levelCount = 1,
+            },
+    };
+    tb_rnd_upload_buffer_to_image(self, &copy, 1);
+  }
+
+  // Copy data to the buffer
   SDL_memcpy(ptr, data, data_size);
 
   return err;

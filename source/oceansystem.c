@@ -755,14 +755,12 @@ void ocean_draw_tick(ecs_iter_t *it) {
     }
     // Now that all the tile offsets are calculated, move them on to the tmp
     // gpu which we know will get uploaded and record the offset
-    TbHostBuffer inst_buffer = {0};
+    uint64_t tile_offset = 0;
     {
       uint64_t size = sizeof(float4) * visible_tile_count;
-      err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, size, 0x40,
-                                             &inst_buffer);
+      err = tb_rnd_sys_tmp_buffer_copy(render_system, size, 0x40,
+                                       visible_tile_offsets, &tile_offset);
       TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
-
-      SDL_memcpy(inst_buffer.ptr, visible_tile_offsets, size);
     }
 
     // Query the ecs for ocean components that this view will iterate over
@@ -809,12 +807,9 @@ void ocean_draw_tick(ecs_iter_t *it) {
             tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, VkDescriptorImageInfo);
         VkDescriptorImageInfo *color_info =
             tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, VkDescriptorImageInfo);
-        TbHostBuffer *buffers =
-            tb_alloc_nm_tp(sys->tmp_alloc, ocean_count, TbHostBuffer);
 
         for (uint32_t oc_idx = 0; oc_idx < ocean_count; ++oc_idx) {
           const OceanComponent *ocean_comp = &oceans[oc_idx];
-          TbHostBuffer *buffer = &buffers[oc_idx];
 
           const uint32_t write_idx = oc_idx * 3;
 
@@ -829,13 +824,11 @@ void ocean_draw_tick(ecs_iter_t *it) {
 
           // Write ocean data into the tmp buffer we know will wind up on the
           // GPU
-          err = tb_rnd_sys_alloc_tmp_host_buffer(
-              render_system, sizeof(OceanData), 0x40, buffer);
+          uint64_t offset = 0;
+          err = tb_rnd_sys_tmp_buffer_copy(render_system, sizeof(OceanData),
+                                           0x40, &data, &offset);
           TB_VK_CHECK(err,
                       "Failed to make tmp host buffer allocation for ocean");
-
-          // Copy view data to the allocated buffer
-          SDL_memcpy(buffer->ptr, &data, sizeof(OceanData));
 
           VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
 
@@ -845,7 +838,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
 
           buffer_info[oc_idx] = (VkDescriptorBufferInfo){
               .buffer = tmp_gpu_buffer,
-              .offset = buffer->offset,
+              .offset = offset,
               .range = sizeof(OceanData),
           };
 
@@ -942,7 +935,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
               .ocean_set = ocean_set,
               .consts = ocean_consts,
               .inst_buffer = tb_rnd_get_gpu_tmp_buffer(sys->render_system),
-              .inst_offset = inst_buffer.offset,
+              .inst_offset = tile_offset,
               .inst_count = visible_tile_count,
               .geom_buffer = sys->ocean_geom_buffer,
               .index_type = (VkIndexType)sys->ocean_index_type,

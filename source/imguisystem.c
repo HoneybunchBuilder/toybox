@@ -292,7 +292,7 @@ VkResult ui_context_init(RenderSystem *render_system, ImFontAtlas *atlas,
   int32_t bytes_pp = 0;
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
-  // Create the atlas image on the GPU
+  // Place the atlas on the GPU via the tmp buffer
   {
     VkImageCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -310,54 +310,11 @@ VkResult ui_context_init(RenderSystem *render_system, ImFontAtlas *atlas,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     };
 
-    err = tb_rnd_sys_alloc_gpu_image(render_system, &create_info, "ImGui Atlas",
-                                     &context->atlas);
-    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas", err);
-  }
-
-  // Get space for the image on the tmp buffer
-  TbHostBuffer host_buf = {0};
-  {
     const uint64_t atlas_size = tex_w * tex_h * bytes_pp;
-    err = tb_rnd_sys_alloc_tmp_host_buffer(render_system, atlas_size, 16,
-                                           &host_buf);
-    TB_VK_CHECK_RET(err, "Failed to alloc imgui atlas in tmp host buffer", err);
-
-    SDL_memcpy(host_buf.ptr, pixels, atlas_size);
-  }
-
-  // Copy the image from the tmp gpu buffer to the gpu image
-  {
-    // A bit jank, but upload the image directly from the gpu buffer that we
-    // know will be copied to from the tmp host buffer before this copy
-    // is completed.
-    BufferImageCopy upload = {
-        .src = host_buf.buffer,
-        .dst = context->atlas.image,
-        .region =
-            {
-                .bufferOffset = host_buf.offset,
-                .imageSubresource =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .layerCount = 1,
-                    },
-                .imageExtent =
-                    {
-                        .width = tex_w,
-                        .height = tex_h,
-                        .depth = 1,
-                    },
-            },
-        .range =
-            {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .layerCount = 1,
-                .levelCount = 1,
-            },
-
-    };
-    tb_rnd_upload_buffer_to_image(render_system, &upload, 1);
+    err = tb_rnd_sys_create_gpu_image_tmp(render_system, pixels, atlas_size, 16,
+                                          &create_info, "ImGui Atlas",
+                                          &context->atlas);
+    TB_VK_CHECK_RET(err, "Failed to create imgui atlas", err);
   }
 
   // Create Image View for atlas
@@ -674,10 +631,11 @@ void imgui_draw_tick(ecs_iter_t *it) {
           // Make space for this on the next frame. For the host and the device
           // Note that we can rely on the tmp host buffer to be uploaded
           // to the gpu every frame
-          TbHostBuffer tmp_host_buffer = {0};
-          if (tb_rnd_sys_alloc_tmp_host_buffer(sys->render_system, imgui_size,
-                                               0x40, &tmp_host_buffer) !=
-              VK_SUCCESS) {
+          uint64_t tmp_offset = 0;
+          void *tmp_ptr = NULL;
+          if (tb_rnd_sys_tmp_buffer_get_ptr(sys->render_system, imgui_size,
+                                            0x40, &tmp_offset,
+                                            &tmp_ptr) != VK_SUCCESS) {
             TracyCZoneEnd(ctx);
             return;
           }
@@ -699,7 +657,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
             vtx_offset = idx_size + align_padding;
 
-            uint8_t *idx_dst = (uint8_t *)tmp_host_buffer.ptr;
+            uint8_t *idx_dst = (uint8_t *)tmp_ptr;
             uint8_t *vtx_dst = idx_dst + vtx_offset;
 
             // Organize all mesh data into a single cpu-side buffer
@@ -740,8 +698,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
                                    .tmp_alloc.alloc,
                                imgui_draw_count, ImGuiDraw);
             {
-              uint64_t cmd_index_offset = tmp_host_buffer.offset;
-              uint64_t cmd_vertex_offset = tmp_host_buffer.offset;
+              uint64_t cmd_index_offset = tmp_offset;
+              uint64_t cmd_vertex_offset = tmp_offset;
 
               for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
                    ++draw_idx) {

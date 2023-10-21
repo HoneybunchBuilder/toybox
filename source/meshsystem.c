@@ -2641,8 +2641,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       }
 
       // Write transform lists to the GPU temp buffer
-      TB_DYN_ARR_OF(TbHostBuffer) opaque_inst_buffers = {0};
-      TB_DYN_ARR_OF(TbHostBuffer) trans_inst_buffers = {0};
+      TB_DYN_ARR_OF(uint64_t) opaque_inst_buffers = {0};
+      TB_DYN_ARR_OF(uint64_t) trans_inst_buffers = {0};
       {
         TracyCZoneN(ctx2, "Gather Transforms", true);
         const uint32_t op_count = TB_DYN_ARR_SIZE(opaque_prim_trans);
@@ -2655,12 +2655,10 @@ void mesh_draw_tick2(ecs_iter_t *it) {
             const size_t trans_size =
                 sizeof(float4x4) * TB_DYN_ARR_SIZE(*transforms);
 
-            TbHostBuffer host_buffer = {0};
-            tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, trans_size, 0x40,
-                                             &host_buffer);
-            SDL_memcpy(host_buffer.ptr, transforms->data, trans_size);
-
-            TB_DYN_ARR_APPEND(opaque_inst_buffers, host_buffer);
+            uint64_t offset = 0;
+            tb_rnd_sys_tmp_buffer_copy(rnd_sys, trans_size, 0x40,
+                                       transforms->data, &offset);
+            TB_DYN_ARR_APPEND(opaque_inst_buffers, offset);
           }
         }
 
@@ -2674,12 +2672,10 @@ void mesh_draw_tick2(ecs_iter_t *it) {
             const size_t trans_size =
                 sizeof(float4x4) * TB_DYN_ARR_SIZE(*transforms);
 
-            TbHostBuffer host_buffer = {0};
-            tb_rnd_sys_alloc_tmp_host_buffer(rnd_sys, trans_size, 0x40,
-                                             &host_buffer);
-            SDL_memcpy(host_buffer.ptr, transforms->data, trans_size);
-
-            TB_DYN_ARR_APPEND(trans_inst_buffers, host_buffer);
+            uint64_t offset = 0;
+            tb_rnd_sys_tmp_buffer_copy(rnd_sys, trans_size, 0x40,
+                                       transforms->data, &offset);
+            TB_DYN_ARR_APPEND(trans_inst_buffers, offset);
           }
         }
         TracyCZoneEnd(ctx2);
@@ -2722,7 +2718,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         TB_DYN_ARR_FOREACH(opaque_inst_buffers, i) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
               rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
-          const uint64_t offset = TB_DYN_ARR_AT(opaque_inst_buffers, i).offset;
+          const uint64_t offset = TB_DYN_ARR_AT(opaque_inst_buffers, i);
           TransformList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
@@ -2750,7 +2746,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         TB_DYN_ARR_FOREACH(trans_inst_buffers, i) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
               rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
-          const uint64_t offset = TB_DYN_ARR_AT(trans_inst_buffers, i).offset;
+          const uint64_t offset = TB_DYN_ARR_AT(trans_inst_buffers, i);
           TransformList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
