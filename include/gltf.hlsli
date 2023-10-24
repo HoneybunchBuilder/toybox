@@ -84,6 +84,10 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   StructuredBuffer<CommonObjectData> object_data : register(t0, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
+#define GLTF_INDIRECT_SET(space)                                               \
+  StructuredBuffer<int32_t> trans_indices : register(t0, space);
+
+// TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_VIEW_SET(space)                                                   \
   ConstantBuffer<CommonViewData> camera_data : register(b0, space);            \
   TextureCube irradiance_map : register(t1, space);                            \

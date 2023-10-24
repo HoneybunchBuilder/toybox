@@ -19,8 +19,6 @@ RenderObjectSystem create_render_object_system(Allocator std_alloc,
       .std_alloc = std_alloc,
   };
 
-  TB_DYN_ARR_RESET(sys.render_object_data, sys.std_alloc, 8);
-
   VkResult err = VK_SUCCESS;
 
   // Create render object descriptor set layout
@@ -45,66 +43,140 @@ RenderObjectSystem create_render_object_system(Allocator std_alloc,
 }
 
 void destroy_render_object_system(RenderObjectSystem *self) {
-  TB_DYN_ARR_DESTROY(self->render_object_data);
-
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    RenderObjectSystemFrameState *state = &self->frame_states[i];
-    tb_rnd_destroy_descriptor_pool(self->render_system, state->pool);
-    TB_DYN_ARR_DESTROY(state->sets);
+  *self = (RenderObjectSystem){0};
+}
+
+void tick_render_object_system(ecs_iter_t *it) {
+  ecs_world_t *ecs = it->world;
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, RenderObject);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+
+  int32_t prev_count = ro_sys->obj_count;
+  int32_t obj_count = 0;
+  // Find object count by running query
+  ecs_iter_t obj_it = ecs_query_iter(ecs, ro_sys->obj_query);
+  while (ecs_query_next(&obj_it)) {
+    obj_count += obj_it.count;
+  }
+  ro_sys->obj_count = obj_count;
+
+  if (obj_count == 0) {
+    return;
   }
 
-  *self = (RenderObjectSystem){0};
+  obj_it = ecs_query_iter(ecs, ro_sys->obj_query); // reset query
+
+  float4x4 *trans_ptr = NULL;
+  if (obj_count > prev_count) {
+    // We need to resize the GPU buffer
+    tb_rnd_free_gpu_buffer(ro_sys->render_system, &ro_sys->trans_buffer);
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(float4x4) * obj_count,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "Transform Buffer",
+                                 &ro_sys->trans_buffer, &ro_sys->trans_host,
+                                 (void **)&trans_ptr);
+  } else {
+    tb_rnd_sys_update_gpu_buffer(rnd_sys, &ro_sys->trans_buffer,
+                                 &ro_sys->trans_host, (void **)&trans_ptr);
+  }
+
+  {
+    uint32_t obj_idx = 0;
+    while (ecs_query_next(&obj_it)) {
+      TransformComponent *trans_comps =
+          ecs_field(&obj_it, TransformComponent, 1);
+      RenderObject *rnd_objs = ecs_field(&obj_it, RenderObject, 2);
+      for (int32_t i = 0; i < obj_it.count; ++i) {
+        trans_ptr[obj_idx] =
+            tb_transform_get_world_matrix(ecs, &trans_comps[i]);
+        rnd_objs[i].index = obj_idx;
+        obj_idx++;
+      }
+    }
+  }
+
+  // We can optimize this later but for now just always update this descriptor
+  // set every frame
+  {
+    VkDescriptorPoolCreateInfo pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .poolSizeCount = 1,
+        .pPoolSizes = (VkDescriptorPoolSize[1]){{
+            .descriptorCount = 4,
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        }},
+        .maxSets = 4,
+    };
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, &ro_sys->set_layout,
+                                ro_sys->pools, 1);
+
+    if (ro_sys->obj_count > 0) {
+      VkWriteDescriptorSet write = {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .dstSet = tb_render_object_sys_get_set(ro_sys),
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = ro_sys->trans_buffer.buffer,
+                  .offset = 0,
+                  .range = ro_sys->trans_buffer.info.size,
+              },
+      };
+      tb_rnd_update_descriptors(rnd_sys, 1, &write);
+    }
+  }
+}
+
+VkDescriptorSet tb_render_object_sys_get_set(RenderObjectSystem *sys) {
+  return tb_rnd_frame_desc_pool_get_set(sys->render_system, sys->pools, 0);
 }
 
 void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
                                    Allocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, RenderObject);
+  ECS_COMPONENT(ecs, TransformComponent);
   RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
   RenderObjectSystem sys =
       create_render_object_system(std_alloc, tmp_alloc, rnd_sys);
+  sys.obj_query =
+      ecs_query(ecs, {
+                         .filter.terms =
+                             {
+                                 {
+                                     .id = ecs_id(TransformComponent),
+                                 },
+                                 {
+                                     .id = ecs_id(RenderObject),
+                                 },
+                             },
+                     });
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(RenderObjectSystem), RenderObjectSystem, &sys);
+
+  // Register a tick function
+  ECS_SYSTEM(ecs, tick_render_object_system, EcsOnUpdate,
+             RenderObjectSystem(RenderObjectSystem));
 }
 
 void tb_unregister_render_object_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RenderObjectSystem);
   RenderObjectSystem *sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  ecs_query_fini(sys->obj_query);
   destroy_render_object_system(sys);
   ecs_singleton_remove(ecs, RenderObjectSystem);
-}
-
-TbRenderObjectId tb_render_object_system_create(RenderObjectSystem *self) {
-  TbRenderObjectId object = TB_DYN_ARR_SIZE(self->render_object_data);
-  TB_DYN_ARR_APPEND(self->render_object_data,
-                    (CommonObjectData){.m = mf44_identity()});
-  return object;
-}
-
-void tb_render_object_system_set_object_data(RenderObjectSystem *self,
-                                             TbRenderObjectId object,
-                                             const CommonObjectData *data) {
-  TB_CHECK(object < TB_DYN_ARR_SIZE(self->render_object_data),
-           "Render Object Id out of range");
-  TB_DYN_ARR_AT(self->render_object_data, object) = *data;
-}
-
-VkDescriptorSet
-tb_render_object_system_get_descriptor(RenderObjectSystem *self,
-                                       TbRenderObjectId object) {
-  TB_CHECK(object < TB_DYN_ARR_SIZE(self->render_object_data),
-           "Render Object Id out of range");
-  RenderObjectSystemFrameState *state =
-      &self->frame_states[self->render_system->frame_idx];
-  return TB_DYN_ARR_AT(state->sets, object);
-}
-
-const CommonObjectData *
-tb_render_object_system_get_data(RenderObjectSystem *self,
-                                 TbRenderObjectId object) {
-  TB_CHECK(object < TB_DYN_ARR_SIZE(self->render_object_data),
-           "Render Object Id out of range");
-  return &TB_DYN_ARR_AT(self->render_object_data, object);
 }

@@ -13,24 +13,16 @@
 
 #include <flecs.h>
 
-bool create_mesh_component_internal(MeshComponent *self,
+bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
                                     const char *source_path,
                                     const cgltf_node *node,
                                     MeshSystem *mesh_system,
-                                    MaterialSystem *mat_system,
-                                    RenderObjectSystem *render_object_system) {
-  TbMeshId id = tb_mesh_system_load_mesh(mesh_system, source_path, node);
-  TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
-
-  TbRenderObjectId obj_id =
-      tb_render_object_system_create(render_object_system);
-
+                                    MaterialSystem *mat_system) {
   const uint32_t submesh_count = node->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
   *self = (MeshComponent){
       .mesh_id = id,
-      .object_id = obj_id,
       .submesh_count = submesh_count,
   };
 
@@ -196,11 +188,12 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
     ECS_COMPONENT(ecs, MeshSystem);
     ECS_COMPONENT(ecs, MaterialSystem);
     ECS_COMPONENT(ecs, RenderObjectSystem);
+    ECS_COMPONENT(ecs, RenderObject);
     ECS_COMPONENT(ecs, MeshComponent);
+    ECS_TAG(ecs, MeshRenderObject);
 
     MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
     MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
-    RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
 
     /*
         We want everything to be as instanced as possible but we can't guarantee
@@ -220,10 +213,43 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
       could possibly be updated.
     */
 
-    MeshComponent comp = {0};
-    ret = create_mesh_component_internal(&comp, source_path, node, mesh_sys,
-                                         mat_sys, ro_sys);
-    ecs_set_ptr(ecs, e, MeshComponent, &comp);
+    // Load mesh
+    TbMeshId id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
+    TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
+
+    // Find Mesh Component
+    ecs_entity_t mesh_ent = 0;
+    MeshComponent *mesh_comp = NULL;
+    ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+    while (ecs_query_next(&mesh_it)) {
+      MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+      for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+        MeshComponent *mesh = &meshes[mesh_idx];
+        if (mesh->mesh_id == id) {
+          mesh_ent = mesh_it.entities[mesh_idx];
+          mesh_comp = mesh;
+          break;
+        }
+      }
+    }
+    if (mesh_comp == NULL) {
+      MeshComponent comp = {0};
+      ret = create_mesh_component_internal(&comp, id, source_path, node,
+                                           mesh_sys, mat_sys);
+      TB_DYN_ARR_RESET(comp.entities, mesh_sys->std_alloc, 16);
+      ecs_set_ptr(ecs, e, MeshComponent, &comp);
+
+      mesh_comp = ecs_get_mut(ecs, e, MeshComponent);
+      mesh_ent = e;
+    }
+
+    // Add a RenderObject to this entity
+    ecs_set(ecs, e, RenderObject, {0});
+    ecs_add_id(ecs, e, MeshRenderObject);
+
+    // And let the mesh component know about this entity
+    TB_DYN_ARR_APPEND(mesh_comp->entities, e);
+    ecs_set_ptr(ecs, mesh_ent, MeshComponent, mesh_comp);
   }
   return ret;
 }

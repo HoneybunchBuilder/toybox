@@ -3,8 +3,9 @@
 #include "lighting.hlsli"
 
 GLTF_MATERIAL_SET(space0)
-GLTF_OBJECT_SET(space1);
+GLTF_INDIRECT_SET(space1);
 GLTF_VIEW_SET(space2);
+GLTF_OBJECT_SET(space3);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -26,7 +27,8 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float4x4 m = object_data[i.inst].m;
+  int32_t trans_idx = trans_indices[i.inst];
+  float4x4 m = object_data[trans_idx].m;
   float3 world_pos = mul(m, float4(i.local_pos, 1)).xyz;
   float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 

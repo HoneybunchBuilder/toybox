@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dynarray.h"
 #include "simd.h"
 #include <stdint.h>
 
@@ -13,7 +14,7 @@ typedef struct ecs_world_t ecs_world_t;
 
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialId;
-typedef uint64_t TbRenderObjectId;
+typedef uint64_t ecs_entity_t;
 
 typedef enum TbVertexInput {
   VI_P3N3 = 0,
@@ -34,7 +35,7 @@ typedef struct SubMesh {
 
 typedef struct MeshComponent {
   TbMeshId mesh_id;
-  TbRenderObjectId object_id;
+  TB_DYN_ARR_OF(ecs_entity_t) entities;
   uint32_t submesh_count;
   SubMesh submeshes[TB_SUBMESH_MAX];
   AABB local_aabb;

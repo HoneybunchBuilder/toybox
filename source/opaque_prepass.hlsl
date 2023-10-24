@@ -1,11 +1,14 @@
 #include "common.hlsli"
 #include "shadow.hlsli"
 
-// Per-object data - Vertex Stage Only
-StructuredBuffer<CommonObjectData> object_data : register(t0, space0);
+// Indirection data
+StructuredBuffer<int32_t> trans_indices : register(t0, space0);
 
 // Per-view data
 ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+
+// Object data
+StructuredBuffer<CommonObjectData> object_data : register(t0, space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;
@@ -19,7 +22,8 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  float4x4 m = object_data[i.inst].m;
+  int32_t trans_idx = trans_indices[i.inst];
+  float4x4 m = object_data[trans_idx].m;
   float3 world_pos = mul(m, float4(i.local_pos, 1)).xyz;
   float3x3 orientation = (float3x3)m;
 

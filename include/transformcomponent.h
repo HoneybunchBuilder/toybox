@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-typedef TB_DYN_ARR_OF(float4x4) TransformList;
-
 typedef struct ecs_world_t ecs_world_t;
 typedef uint64_t ecs_entity_t;
 

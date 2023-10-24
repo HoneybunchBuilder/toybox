@@ -108,6 +108,11 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self);
 
+// API for updating the contents of a buffer without resizing it
+VkResult tb_rnd_sys_update_gpu_buffer(RenderSystem *self,
+                                      const TbBuffer *buffer,
+                                      const TbHostBuffer *host, void **ptr);
+
 VkResult tb_rnd_create_sampler(RenderSystem *self,
                                const VkSamplerCreateInfo *create_info,
                                const char *name, VkSampler *sampler);

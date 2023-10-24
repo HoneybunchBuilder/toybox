@@ -710,6 +710,36 @@ VkBuffer tb_rnd_get_gpu_tmp_buffer(RenderSystem *self) {
   return self->render_thread->frame_states[self->frame_idx].tmp_gpu_buffer;
 }
 
+VkResult tb_rnd_sys_update_gpu_buffer(RenderSystem *self,
+                                      const TbBuffer *buffer,
+                                      const TbHostBuffer *host, void **ptr) {
+  VkResult err = VK_SUCCESS;
+
+  if (buffer->info.size == 0) {
+    return err;
+  }
+
+  if (self->is_uma) {
+    // We can safely just map the memory here
+    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
+    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  } else {
+    *ptr = host->ptr;
+    // Schedule another upload
+    BufferCopy upload = {
+        .src = host->buffer,
+        .dst = buffer->buffer,
+        .region =
+            {
+                .srcOffset = host->offset,
+                .size = buffer->info.size,
+            },
+    };
+    tb_rnd_upload_buffers(self, &upload, 1);
+  }
+  return err;
+}
+
 VkResult tb_rnd_create_sampler(RenderSystem *self,
                                const VkSamplerCreateInfo *create_info,
                                const char *name, VkSampler *sampler) {
