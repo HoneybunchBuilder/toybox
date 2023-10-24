@@ -14,7 +14,6 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
-#include "shadow.hlsli"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "vkdbg.h"
@@ -28,8 +27,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #endif
-#include "depth_frag.h"
-#include "depth_vert.h"
 #include "gltf_P3N3T4U2_frag.h"
 #include "gltf_P3N3T4U2_vert.h"
 #include "gltf_P3N3U2_frag.h"
@@ -45,233 +42,12 @@
 static const uint64_t pos_stride = sizeof(uint16_t) * 4;
 static const uint64_t attr_stride = sizeof(uint16_t) * 2;
 
-typedef struct PrimitiveDraw {
-  VkIndexType index_type;
-  uint32_t index_count;
-  uint64_t index_offset;
-  uint32_t vertex_binding_count;
-  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
-  uint32_t instance_count;
-} PrimitiveDraw;
-
-typedef struct PrimitiveBatch {
-  uint64_t perm;
-  VkDescriptorSet view_set;
-  VkDescriptorSet inst_set;
-  VkDescriptorSet trans_set;
-  VkDescriptorSet mat_set;
-  VkBuffer geom_buffer;
-} PrimitiveBatch;
-
-typedef TB_DYN_ARR_OF(int32_t) IndirectionList;
-
-typedef TB_DYN_ARR_OF(PrimitiveBatch) PrimitiveBatchList;
-typedef TB_DYN_ARR_OF(IndirectionList) PrimIndirectList;
-
-typedef struct SubMeshDraw {
-  VkDescriptorSet mat_set;
-  MaterialPushConstants consts;
-  VkIndexType index_type;
-  uint32_t index_count;
-  uint64_t index_offset;
-  uint32_t vertex_binding_count;
-  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
-} SubMeshDraw;
-
-typedef struct MeshDraw {
-  VkDescriptorSet obj_set;
-  VkBuffer geom_buffer;
-  uint32_t submesh_draw_count;
-  SubMeshDraw submesh_draws[TB_SUBMESH_MAX];
-} MeshDraw;
-
-typedef struct MeshDrawView {
-  VkViewport viewport;
-  VkRect2D scissor;
-  VkDescriptorSet view_set;
-  uint32_t draw_count;
-  MeshDraw *draws;
-} MeshDrawView;
-
-typedef struct MeshDrawBatch {
-  VkPipeline pipeline;
-  VkPipelineLayout layout;
-  uint32_t view_count;
-  MeshDrawView *views;
-} MeshDrawBatch;
-
-typedef struct ShadowSubDraw {
-  TbMaterialPerm mat_perm;
-  VkIndexType index_type;
-  uint32_t index_count;
-  uint64_t index_offset;
-  uint64_t vertex_binding_offset;
-  uint32_t instance_count;
-} ShadowSubDraw;
-
-typedef struct ShadowDraw {
-  ShadowDrawConstants consts;
-  VkBuffer geom_buffer;
-  uint32_t submesh_draw_count;
-  ShadowSubDraw submesh_draws[TB_SUBMESH_MAX];
-} ShadowDraw;
-
-typedef struct ShadowDrawView {
-  VkViewport viewport;
-  VkRect2D scissor;
-  ShadowViewConstants consts;
-  uint32_t draw_count;
-  ShadowDraw *draws;
-} ShadowDrawView;
-
-typedef struct ShadowDrawBatch {
-  uint32_t view_count;
-  ShadowDrawView *views;
-} ShadowDrawBatch;
-
-typedef struct VisibleSet {
-  TbViewId view;
-  uint32_t mesh_count;
-  MeshComponent const **meshes;
-} VisibleSet;
-
-typedef struct VisibleSet2 {
-  TbViewId view;
-  TB_DYN_ARR_OF(MeshComponent *) meshes;
-} VisibleSet2;
-
 typedef struct TbMesh {
   TbMeshId id;
   uint32_t ref_count;
   TbHostBuffer host_buffer;
   TbBuffer gpu_buffer;
 } TbMesh;
-
-VkResult create_shadow_pipeline(RenderSystem *render_system,
-                                VkFormat depth_format,
-                                VkPipelineLayout pipe_layout,
-                                VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-
-  VkShaderModule vert_mod = VK_NULL_HANDLE;
-  VkShaderModule frag_mod = VK_NULL_HANDLE;
-
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(depth_vert);
-    create_info.pCode = (const uint32_t *)depth_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Vert",
-                               &vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load shadow vert shader module", err);
-
-    create_info.codeSize = sizeof(depth_frag);
-    create_info.pCode = (const uint32_t *)depth_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Frag",
-                               &frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load shadow frag shader module", err);
-  }
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .pNext =
-          &(VkPipelineRenderingCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-              .depthAttachmentFormat = depth_format,
-          },
-      .stageCount = 2,
-      .pStages =
-          (VkPipelineShaderStageCreateInfo[2]){
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = vert_mod,
-                  .pName = "vert",
-              },
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = frag_mod,
-                  .pName = "frag",
-              },
-          },
-      .pVertexInputState =
-          &(VkPipelineVertexInputStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 1,
-              .pVertexBindingDescriptions =
-                  (VkVertexInputBindingDescription[1]){
-                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX}},
-              .vertexAttributeDescriptionCount = 1,
-              .pVertexAttributeDescriptions =
-                  (VkVertexInputAttributeDescription[1]){
-                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0}},
-          },
-      .pInputAssemblyState =
-          &(VkPipelineInputAssemblyStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-          },
-      .pViewportState =
-          &(VkPipelineViewportStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-              .viewportCount = 1,
-              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
-              .scissorCount = 1,
-              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
-          },
-      .pRasterizationState =
-          &(VkPipelineRasterizationStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-              .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
-              .depthBiasEnable = VK_TRUE,
-              .lineWidth = 1.0f,
-          },
-      .pMultisampleState =
-          &(VkPipelineMultisampleStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-          },
-      .pColorBlendState =
-          &(VkPipelineColorBlendStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-          },
-      .pDepthStencilState =
-          &(VkPipelineDepthStencilStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-              .depthTestEnable = VK_TRUE,
-              .depthWriteEnable = VK_TRUE,
-              .depthCompareOp = VK_COMPARE_OP_LESS,
-          },
-      .pDynamicState =
-          &(VkPipelineDynamicStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 4,
-              .pDynamicStates =
-                  (VkDynamicState[4]){
-                      VK_DYNAMIC_STATE_VIEWPORT,
-                      VK_DYNAMIC_STATE_SCISSOR,
-                      VK_DYNAMIC_STATE_DEPTH_BIAS,
-                      VK_DYNAMIC_STATE_CULL_MODE,
-                  },
-          },
-      .layout = pipe_layout,
-  };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
-                                         "Shadow Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", err);
-
-  tb_rnd_destroy_shader(render_system, vert_mod);
-  tb_rnd_destroy_shader(render_system, frag_mod);
-
-  return err;
-}
 
 VkResult create_prepass_pipeline(RenderSystem *render_system,
                                  VkFormat depth_format,
@@ -732,326 +508,11 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator std_alloc,
   return err;
 }
 
-void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Shadow Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Shadows", 3, true);
-
-  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const ShadowDrawBatch *shadow_batch =
-        (const ShadowDrawBatch *)batch->user_batch;
-    if (shadow_batch->view_count == 0) {
-      continue;
-    }
-
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "Batch", 4, true);
-    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
-
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-    for (uint32_t view_idx = 0; view_idx < shadow_batch->view_count;
-         ++view_idx) {
-      const ShadowDrawView *view = &shadow_batch->views[view_idx];
-      if (view->draw_count == 0) {
-        continue;
-      }
-      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer, "View", 5, true);
-      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
-      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
-      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
-
-      vkCmdSetDepthBias(buffer, 1.25f, 0.0f, 1.75f);
-
-      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
-        const ShadowDraw *draw = &view->draws[draw_idx];
-        if (draw->submesh_draw_count == 0) {
-          continue;
-        }
-        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer, "Mesh", 6, true);
-        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-        VkBuffer geom_buffer = draw->geom_buffer;
-
-        ShadowConstants consts = {
-            .vp = view->consts.vp,
-            .m = draw->consts.m,
-        };
-        vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                           sizeof(ShadowConstants), &consts);
-
-        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
-             ++sub_idx) {
-          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
-                       true);
-          const ShadowSubDraw *submesh = &draw->submesh_draws[sub_idx];
-          if (submesh->index_count > 0) {
-            // TracyCVkNamedZone(gpu_ctx, submesh_scope, buffer, "Submesh", 7,
-            //                  true);
-            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-            if (submesh->mat_perm & GLTF_PERM_DOUBLE_SIDED) {
-              cull_flags = VK_CULL_MODE_NONE;
-            }
-            vkCmdSetCullMode(buffer, cull_flags);
-            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
-                                 submesh->index_type);
-            vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
-                                   &submesh->vertex_binding_offset);
-
-            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            // TracyCVkZoneEnd(submesh_scope);
-          }
-          TracyCZoneEnd(submesh_ctx);
-        }
-        cmd_end_label(buffer);
-        // TracyCVkZoneEnd(mesh_scope);
-        TracyCZoneEnd(draw_ctx);
-      }
-      cmd_end_label(buffer);
-      // TracyCVkZoneEnd(view_scope);
-      TracyCZoneEnd(view_ctx);
-    }
-
-    cmd_end_label(buffer);
-    // TracyCVkZoneEnd(batch_scope);
-    TracyCZoneEnd(batch_ctx);
-  }
-
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
-void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                    uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Prepass Record", TracyCategoryColorRendering,
-               true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 3,
-                    true);
-  cmd_begin_label(buffer, "Prepass Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
-
-  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
-    if (mesh_batch->view_count == 0) {
-      continue;
-    }
-
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
-    // "Batch", 4, true);
-    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
-
-    VkPipelineLayout layout = batch->layout;
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-    for (uint32_t view_idx = 0; view_idx < mesh_batch->view_count; ++view_idx) {
-      const MeshDrawView *view = &mesh_batch->views[view_idx];
-      if (view->draw_count == 0) {
-        continue;
-      }
-
-      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
-      // "View", 5, true);
-      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
-
-      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
-      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
-
-      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                              1, 1, &view->view_set, 0, NULL);
-      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
-        const MeshDraw *draw = &view->draws[draw_idx];
-        if (draw->submesh_draw_count == 0) {
-          continue;
-        }
-
-        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
-        // "Mesh", 6, true);
-        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-
-        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                                0, 1, &draw->obj_set, 0, NULL);
-        VkBuffer geom_buffer = draw->geom_buffer;
-
-        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
-             ++sub_idx) {
-          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
-                       true);
-          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
-          if (submesh->index_count > 0) {
-            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
-            // buffer, "Submesh", 7,
-            // true);
-            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-            if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
-              cull_flags = VK_CULL_MODE_NONE;
-            }
-            vkCmdSetCullMode(buffer, cull_flags);
-            // Don't need to bind material data
-            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
-                                 submesh->index_type);
-            for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
-                 ++vb_idx) {
-              vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
-                                     &submesh->vertex_binding_offsets[vb_idx]);
-            }
-
-            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            // TracyCVkZoneEnd(submesh_scope);
-          }
-          TracyCZoneEnd(submesh_ctx);
-        }
-
-        cmd_end_label(buffer);
-        // TracyCVkZoneEnd(mesh_scope);
-        TracyCZoneEnd(draw_ctx);
-      }
-
-      cmd_end_label(buffer);
-      // TracyCVkZoneEnd(view_scope);
-      TracyCZoneEnd(view_ctx);
-    }
-
-    cmd_end_label(buffer);
-    // TracyCVkZoneEnd(batch_scope);
-    TracyCZoneEnd(batch_ctx);
-  }
-
-  cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
-void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
-  (void)gpu_ctx;
-  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const MeshDrawBatch *mesh_batch = (const MeshDrawBatch *)batch->user_batch;
-    if (mesh_batch->view_count == 0) {
-      continue;
-    }
-
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer,
-    // "Batch", 4, true);
-    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
-
-    VkPipelineLayout layout = batch->layout;
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-    for (uint32_t view_idx = 0; view_idx < mesh_batch->view_count; ++view_idx) {
-      const MeshDrawView *view = &mesh_batch->views[view_idx];
-      if (view->draw_count == 0) {
-        continue;
-      }
-
-      TracyCZoneNC(view_ctx, "View", TracyCategoryColorRendering, true);
-      // TracyCVkNamedZone(gpu_ctx, view_scope, buffer,
-      // "View", 5, true);
-      cmd_begin_label(buffer, "View", (float4){0.0f, 0.0f, 0.6f, 1.0f});
-
-      vkCmdSetViewport(buffer, 0, 1, &view->viewport);
-      vkCmdSetScissor(buffer, 0, 1, &view->scissor);
-
-      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                              2, 1, &view->view_set, 0, NULL);
-      for (uint32_t draw_idx = 0; draw_idx < view->draw_count; ++draw_idx) {
-        const MeshDraw *draw = &view->draws[draw_idx];
-        if (draw->submesh_draw_count == 0) {
-          continue;
-        }
-
-        TracyCZoneNC(draw_ctx, "Draw", TracyCategoryColorRendering, true);
-        // TracyCVkNamedZone(gpu_ctx, mesh_scope, buffer,
-        // "Mesh", 6, true);
-        cmd_begin_label(buffer, "Mesh", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-
-        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                                1, 1, &draw->obj_set, 0, NULL);
-        VkBuffer geom_buffer = draw->geom_buffer;
-
-        for (uint32_t sub_idx = 0; sub_idx < draw->submesh_draw_count;
-             ++sub_idx) {
-          TracyCZoneNC(submesh_ctx, "Submesh", TracyCategoryColorRendering,
-                       true);
-          const SubMeshDraw *submesh = &draw->submesh_draws[sub_idx];
-          if (submesh->index_count > 0) {
-            // TracyCVkNamedZone(gpu_ctx, submesh_scope,
-            // buffer, "Submesh", 7,
-            //                 true);
-            vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    layout, 0, 1, &submesh->mat_set, 0, NULL);
-            vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                               sizeof(MaterialPushConstants), &submesh->consts);
-            VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-            if (submesh->consts.perm & GLTF_PERM_DOUBLE_SIDED) {
-              cull_flags = VK_CULL_MODE_NONE;
-            }
-            vkCmdSetCullMode(buffer, cull_flags);
-            vkCmdBindIndexBuffer(buffer, geom_buffer, submesh->index_offset,
-                                 submesh->index_type);
-            for (uint32_t vb_idx = 0; vb_idx < submesh->vertex_binding_count;
-                 ++vb_idx) {
-              vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
-                                     &submesh->vertex_binding_offsets[vb_idx]);
-            }
-
-            vkCmdDrawIndexed(buffer, submesh->index_count, 1, 0, 0, 0);
-            // TracyCVkZoneEnd(submesh_scope);
-          }
-          TracyCZoneEnd(submesh_ctx);
-        }
-
-        cmd_end_label(buffer);
-        // TracyCVkZoneEnd(mesh_scope);
-        TracyCZoneEnd(draw_ctx);
-      }
-
-      cmd_end_label(buffer);
-      // TracyCVkZoneEnd(view_scope);
-      TracyCZoneEnd(view_ctx);
-    }
-
-    cmd_end_label(buffer);
-    // TracyCVkZoneEnd(batch_scope);
-    TracyCZoneEnd(batch_ctx);
-  }
-}
-
-void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
-  cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
-  mesh_record_common(gpu_ctx, buffer, batch_count, batches);
-  cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
-void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                             uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Transparent Record", TracyCategoryColorRendering,
-               true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
-                    true);
-  cmd_begin_label(buffer, "Transparent Meshes",
-                  (float4){0.0f, 0.0f, 1.0f, 1.0f});
-  mesh_record_common(gpu_ctx, buffer, batch_count, batches);
-  cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
 void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                      uint32_t batch_count, const DrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Prepass Record", TracyCategoryColorRendering,
-               true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass Meshes", 3,
-                    true);
-  cmd_begin_label(buffer, "Prepass Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
+  TracyCZoneNC(ctx, "Opaque Prepass", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass", 3, true);
+  cmd_begin_label(buffer, "Opaque Prepass", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const DrawBatch *batch = &batches[batch_idx];
@@ -1061,8 +522,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
 
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
+    TracyCZoneNC(batch_ctx, "Mesh Batch", TracyCategoryColorRendering, true);
+    cmd_begin_label(buffer, "Mesh Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkBuffer geom_buffer = prim_batch->geom_buffer;
 
@@ -1085,8 +546,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
 
-      TracyCZoneNC(draw_ctx, "Batch", TracyCategoryColorRendering, true);
-      cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.4f, 1.0f});
+      TracyCZoneNC(draw_ctx, "Submesh Draw", TracyCategoryColorRendering, true);
+      cmd_begin_label(buffer, "Submesh Draw", (float4){0.0f, 0.0f, 0.4f, 1.0f});
 
       if (draw->index_count > 0) {
         VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
@@ -1360,71 +821,8 @@ MeshSystem create_mesh_system_internal(
                                   &sys.transparent_pipelines);
       TB_VK_CHECK(err, "Failed to create mesh pipelines");
     }
-
-    {
-      VkPipelineLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .pushConstantRangeCount = 1,
-          .pPushConstantRanges =
-              (VkPushConstantRange[1]){
-                  {
-                      .size = sizeof(ShadowConstants),
-                      .offset = 0,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-              },
-      };
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                          "Shadow Pipeline Layout",
-                                          &sys.shadow_pipe_layout);
-      TB_VK_CHECK(err, "Failed to create shadow pipeline layout");
-    }
-
-    {
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(sys.render_pipe_system,
-                                         sys.render_pipe_system->shadow_pass,
-                                         &attach_count, NULL);
-      TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(sys.render_pipe_system,
-                                         sys.render_pipe_system->shadow_pass,
-                                         &attach_count, &depth_info);
-
-      VkFormat depth_format = tb_render_target_get_format(
-          sys.render_pipe_system->render_target_system, depth_info.attachment);
-      err =
-          create_shadow_pipeline(sys.render_system, depth_format,
-                                 sys.shadow_pipe_layout, &sys.shadow_pipeline);
-      TB_VK_CHECK(err, "Failed to create shadow pipeline");
-    }
   }
   // Register drawing with the pipelines
-  sys.prepass_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = prepass_record,
-                              .pass_id = prepass_id,
-                          });
-  sys.opaque_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = opaque_pass_record,
-                              .pass_id = opaque_pass_id,
-                          });
-  sys.transparent_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = transparent_pass_record,
-                              .pass_id = transparent_pass_id,
-                          });
-  sys.shadow_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(MeshDrawBatch),
-                              .draw_fn = shadow_pass_record,
-                              .pass_id = render_pipe_system->shadow_pass,
-                          });
-  // Gen 2
   sys.prepass_draw_ctx2 = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(DrawContextDescriptor){
                               .batch_size = sizeof(PrimitiveBatch),
@@ -1449,14 +847,11 @@ MeshSystem create_mesh_system_internal(
 void destroy_mesh_system(MeshSystem *self) {
   RenderSystem *render_system = self->render_system;
 
-  tb_rnd_destroy_pipeline(render_system, self->shadow_pipeline);
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->opaque_pipelines[i]);
     tb_rnd_destroy_pipeline(render_system, self->transparent_pipelines[i]);
   }
   tb_rnd_destroy_pipeline(render_system, self->prepass_pipe);
-
-  tb_rnd_destroy_pipe_layout(render_system, self->shadow_pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->prepass_layout);
 
@@ -2291,9 +1686,6 @@ void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(MeshSystem), MeshSystem, &sys);
-
-  // ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnUpdate, CameraComponent,
-  //            TransformComponent);
 
   ECS_SYSTEM(ecs, mesh_draw_tick2, EcsOnUpdate, MeshSystem(MeshSystem));
 

@@ -3,6 +3,8 @@
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
 #include "dynarray.h"
+#include "gltf.hlsli"
+#include "meshcomponent.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
@@ -33,44 +35,60 @@ static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
 typedef struct MeshCommandPool MeshCommandPool;
 
-typedef enum GLTF_PERMUTATIONS {
-  GLTF_PERM_NONE = 0x00000000,
-  GLTF_PERM_BASE_COLOR_MAP = 0x00000001,
-  GLTF_PERM_NORMAL_MAP = 0x00000002,
-  GLTF_PERM_PBR_METALLIC_ROUGHNESS = 0x00000004,
-  GLTF_PERM_PBR_METAL_ROUGH_TEX = 0x00000008,
-  GLTF_PERM_PBR_SPECULAR_GLOSSINESS = 0x0000010,
-  GLTF_PERM_CLEARCOAT = 0x00000020,
-  GLTF_PERM_TRANSMISSION = 0x00000040,
-  GLTF_PERM_VOLUME = 0x00000080,
-  GLTF_PERM_IOR = 0x00000100,
-  GLTF_PERM_SPECULAR = 0x00000200,
-  GLTF_PERM_SHEEN = 0x000000400,
-  GLTF_PERM_UNLIT = 0x00000800,
-  GLTF_PERM_ALPHA_CLIP = 0x00001000,
-  GLTF_PERM_ALPHA_BLEND = 0x00002000,
-  GLTF_PERM_DOUBLE_SIDED = 0x00004000,
-  GLTF_PERM_FLAG_COUNT = 15,
-  GLTF_PERM_COUNT = 1 << GLTF_PERM_FLAG_COUNT,
-} GLTF_PERMUTATIONS;
+typedef struct PrimitiveDraw {
+  VkIndexType index_type;
+  uint32_t index_count;
+  uint64_t index_offset;
+  uint32_t vertex_binding_count;
+  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
+  uint32_t instance_count;
+} PrimitiveDraw;
 
-static const GLTF_PERMUTATIONS MaterialPermutations[GLTF_PERM_COUNT] = {
-    GLTF_PERM_BASE_COLOR_MAP,
-    GLTF_PERM_NORMAL_MAP,
-    GLTF_PERM_PBR_METALLIC_ROUGHNESS,
-    GLTF_PERM_PBR_METAL_ROUGH_TEX,
-    GLTF_PERM_PBR_SPECULAR_GLOSSINESS,
-    GLTF_PERM_CLEARCOAT,
-    GLTF_PERM_TRANSMISSION,
-    GLTF_PERM_VOLUME,
-    GLTF_PERM_IOR,
-    GLTF_PERM_SPECULAR,
-    GLTF_PERM_SHEEN,
-    GLTF_PERM_UNLIT,
-    GLTF_PERM_ALPHA_CLIP,
-    GLTF_PERM_ALPHA_BLEND,
-    GLTF_PERM_DOUBLE_SIDED,
-};
+typedef struct PrimitiveBatch {
+  uint64_t perm;
+  VkDescriptorSet view_set;
+  VkDescriptorSet inst_set;
+  VkDescriptorSet trans_set;
+  VkDescriptorSet mat_set;
+  VkBuffer geom_buffer;
+} PrimitiveBatch;
+
+typedef struct SubMeshDraw {
+  VkDescriptorSet mat_set;
+  MaterialPushConstants consts;
+  VkIndexType index_type;
+  uint32_t index_count;
+  uint64_t index_offset;
+  uint32_t vertex_binding_count;
+  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
+} SubMeshDraw;
+
+typedef struct MeshDraw {
+  VkDescriptorSet obj_set;
+  VkBuffer geom_buffer;
+  uint32_t submesh_draw_count;
+  SubMeshDraw submesh_draws[TB_SUBMESH_MAX];
+} MeshDraw;
+
+typedef struct MeshDrawView {
+  VkViewport viewport;
+  VkRect2D scissor;
+  VkDescriptorSet view_set;
+  uint32_t draw_count;
+  MeshDraw *draws;
+} MeshDrawView;
+
+typedef struct MeshDrawBatch {
+  VkPipeline pipeline;
+  VkPipelineLayout layout;
+  uint32_t view_count;
+  MeshDrawView *views;
+} MeshDrawBatch;
+
+typedef TB_DYN_ARR_OF(int32_t) IndirectionList;
+
+typedef TB_DYN_ARR_OF(PrimitiveBatch) PrimitiveBatchList;
+typedef TB_DYN_ARR_OF(IndirectionList) PrimIndirectList;
 
 typedef struct MeshSystem {
   Allocator std_alloc;
@@ -85,11 +103,6 @@ typedef struct MeshSystem {
   ecs_query_t *camera_query;
   ecs_query_t *mesh_query;
   ecs_query_t *dir_light_query;
-
-  TbDrawContextId prepass_draw_ctx;
-  TbDrawContextId opaque_draw_ctx;
-  TbDrawContextId transparent_draw_ctx;
-  TbDrawContextId shadow_draw_ctx;
 
   TbDrawContextId prepass_draw_ctx2;
   TbDrawContextId opaque_draw_ctx2;

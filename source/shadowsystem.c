@@ -2,8 +2,14 @@
 
 #include "cameracomponent.h"
 #include "lightcomponent.h"
+#include "materialsystem.h"
+#include "meshcomponent.h"
+#include "meshsystem.h"
 #include "profiling.h"
+#include "renderobjectsystem.h"
+#include "renderpipelinesystem.h"
 #include "rendertargetsystem.h"
+#include "shadow.hlsli"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
@@ -12,9 +18,215 @@
 
 #include <flecs.h>
 
+// Ignore some warnings for the generated headers
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+#include "depth_frag.h"
+#include "depth_vert.h"
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+VkResult create_shadow_pipeline(RenderSystem *render_system,
+                                VkFormat depth_format,
+                                VkPipelineLayout pipe_layout,
+                                VkPipeline *pipeline) {
+  VkResult err = VK_SUCCESS;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(depth_vert);
+    create_info.pCode = (const uint32_t *)depth_vert;
+    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Vert",
+                               &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to load shadow vert shader module", err);
+
+    create_info.codeSize = sizeof(depth_frag);
+    create_info.pCode = (const uint32_t *)depth_frag;
+    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Frag",
+                               &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to load shadow frag shader module", err);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 1,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[1]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX}},
+              .vertexAttributeDescriptionCount = 1,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[1]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0}},
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .depthBiasEnable = VK_TRUE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+              .depthCompareOp = VK_COMPARE_OP_LESS,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 4,
+              .pDynamicStates =
+                  (VkDynamicState[4]){
+                      VK_DYNAMIC_STATE_VIEWPORT,
+                      VK_DYNAMIC_STATE_SCISSOR,
+                      VK_DYNAMIC_STATE_DEPTH_BIAS,
+                      VK_DYNAMIC_STATE_CULL_MODE,
+                  },
+          },
+      .layout = pipe_layout,
+  };
+  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+                                         "Shadow Pipeline", pipeline);
+  TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", err);
+
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
+
+  return err;
+}
+
+void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const DrawBatch *batches) {
+  TracyCZoneNC(ctx, "Shadow Record", TracyCategoryColorRendering, true);
+  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Shadows", 3, true);
+
+  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
+    const DrawBatch *batch = &batches[batch_idx];
+    const PrimitiveBatch *prim_batch =
+        (const PrimitiveBatch *)batch->user_batch;
+    if (batch->draw_count == 0) {
+      continue;
+    }
+
+    TracyCZoneNC(batch_ctx, "Shadow Batch", TracyCategoryColorRendering, true);
+    cmd_begin_label(buffer, "Shadow Batch", (float4){0.8f, 0.0f, 0.4f, 1.0f});
+
+    VkBuffer geom_buffer = prim_batch->geom_buffer;
+
+    VkPipelineLayout layout = batch->layout;
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                            1, &prim_batch->inst_set, 0, NULL);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
+                            1, &prim_batch->view_set, 0, NULL);
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
+                            1, &prim_batch->trans_set, 0, NULL);
+    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+      const PrimitiveDraw *draw =
+          &((const PrimitiveDraw *)batch->draws)[draw_idx];
+      if (draw->instance_count == 0) {
+        continue;
+      }
+
+      TracyCZoneNC(draw_ctx, "Submesh Draw", TracyCategoryColorRendering, true);
+      cmd_begin_label(buffer, "Submesh Draw", (float4){0.6f, 0.0f, 0.3f, 1.0f});
+
+      if (draw->index_count > 0) {
+        VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
+        if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
+          cull_flags = VK_CULL_MODE_NONE;
+        }
+        vkCmdSetCullMode(buffer, cull_flags);
+        // Don't need to bind material data
+        vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
+                             draw->index_type);
+        // We only need the first two vertex binding for positions
+        // This should be a safe assumption
+        vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
+                               &draw->vertex_binding_offsets[0]);
+
+        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0, 0,
+                         0);
+      }
+
+      cmd_end_label(buffer);
+      TracyCZoneEnd(draw_ctx);
+    }
+
+    cmd_end_label(buffer);
+    TracyCZoneEnd(batch_ctx);
+  }
+
+  TracyCVkZoneEnd(frame_scope);
+  TracyCZoneEnd(ctx);
+}
+
 void shadow_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Shadow System", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Shadow System Update");
+  TracyCZoneNC(ctx, "Shadow System Update", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, ShadowSystem);
   ECS_COMPONENT(ecs, ViewSystem);
@@ -160,13 +372,100 @@ void shadow_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+void shadow_draw_tick(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
+  ecs_world_t *ecs = it->world;
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, ShadowSystem);
+  ECS_COMPONENT(ecs, MaterialSystem);
+  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, ViewSystem);
+
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  ShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, ShadowSystem);
+  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+
+  Allocator tmp_alloc = shadow_sys->tmp_alloc;
+
+  // Count how many meshes are in the scene
+  ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+  uint32_t mesh_count = 0;
+  while (ecs_query_next(&mesh_it)) {
+    MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+    for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+      MeshComponent *mesh = &meshes[mesh_idx];
+
+      uint32_t ent_count = TB_DYN_ARR_SIZE(mesh->entities);
+
+      for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
+           ++submesh_idx) {
+        SubMesh *sm = &mesh->submeshes[submesh_idx];
+        TbMaterialId mat = sm->material;
+        TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
+
+        bool trans =
+            perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND;
+        if (!trans) {
+          mesh_count += mesh->submesh_count * ent_count;
+        }
+      }
+    }
+  }
+  mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+
+  // For each shadow casting light we want to record shadow draws
+  ecs_iter_t light_it = ecs_query_iter(ecs, shadow_sys->dir_light_query);
+  while (ecs_query_next(&light_it)) {
+    DirectionalLightComponent *lights =
+        ecs_field(&light_it, DirectionalLightComponent, 1);
+    const TransformComponent *transforms =
+        ecs_field(&light_it, TransformComponent, 2);
+    for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
+      DirectionalLightComponent *light = &lights[light_idx];
+      const TransformComponent *trans = &transforms[light_idx];
+
+      DrawBatchList batches = {0};
+      PrimitiveBatchList prim_batches = {0};
+      if (mesh_count) {
+        TB_DYN_ARR_RESET(batches, tmp_alloc, mesh_count);
+        TB_DYN_ARR_RESET(prim_batches, tmp_alloc, mesh_count);
+      }
+      PrimIndirectList prim_trans = {0};
+      TB_DYN_ARR_RESET(prim_trans, tmp_alloc, mesh_count);
+
+      // Submit batch for this light
+      {
+        TracyCZoneN(ctx2, "Submit Batches", true);
+        tb_render_pipeline_issue_draw_batch(rp_sys, shadow_sys->draw_ctx,
+                                            TB_DYN_ARR_SIZE(batches),
+                                            batches.data);
+        TracyCZoneEnd(ctx2);
+      }
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
 void tb_register_shadow_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, VisualLoggingSystem);
   ECS_COMPONENT(ecs, ShadowSystem);
   ECS_COMPONENT(ecs, DirectionalLightComponent);
   ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, RenderSystem);
+  ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, MeshSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  RenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
 
   ShadowSystem sys = {
       .std_alloc = world->std_alloc,
@@ -177,18 +476,70 @@ void tb_register_shadow_sys(TbWorld *world) {
                                   {.id = ecs_id(DirectionalLightComponent)},
                                   {.id = ecs_id(TransformComponent)},
                               }}),
+      .draw_ctx = tb_render_pipeline_register_draw_context(
+          rp_sys,
+          &(DrawContextDescriptor){
+              .batch_size = sizeof(MeshDrawBatch),
+              .draw_fn = shadow_pass_record,
+              .pass_id = rp_sys->shadow_pass,
+          }),
   };
+
+  {
+    VkResult err = VK_SUCCESS;
+    // Create pipeline layout
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = 3,
+          .pSetLayouts =
+              (VkDescriptorSetLayout[3]){
+                  mesh_sys->obj_set_layout,
+                  view_sys->set_layout,
+                  ro_sys->set_layout,
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(
+          rnd_sys, &create_info, "Shadow Pipeline Layout", &sys.pipe_layout);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline layout");
+    }
+
+    {
+      uint32_t attach_count = 0;
+      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_pass,
+                                         &attach_count, NULL);
+      TB_CHECK(attach_count == 1, "Unexpected");
+      PassAttachment depth_info = {0};
+      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_pass,
+                                         &attach_count, &depth_info);
+
+      VkFormat depth_format = tb_render_target_get_format(
+          rp_sys->render_target_system, depth_info.attachment);
+      err = create_shadow_pipeline(rnd_sys, depth_format, sys.pipe_layout,
+                                   &sys.pipeline);
+      TB_VK_CHECK(err, "Failed to create shadow pipeline");
+    }
+  }
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(ShadowSystem), ShadowSystem, &sys);
 
   ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, CameraComponent);
+
+  ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnUpdate, ShadowSystem(ShadowSystem));
 }
 
 void tb_unregister_shadow_sys(ecs_world_t *ecs) {
+  ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, ShadowSystem);
+
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+
   ShadowSystem *sys = ecs_singleton_get_mut(ecs, ShadowSystem);
+  tb_rnd_destroy_pipeline(rnd_sys, sys->pipeline);
+  tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
   ecs_query_fini(sys->dir_light_query);
   *sys = (ShadowSystem){0};
+
   ecs_singleton_remove(ecs, ShadowSystem);
 }
