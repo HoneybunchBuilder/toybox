@@ -2,6 +2,8 @@
 
 #include "allocator.h"
 
+#include "rendersystem.h"
+
 #define ShadowSystemId 0xB105F00D
 
 typedef struct TbWorld TbWorld;
@@ -22,6 +24,7 @@ typedef struct ShadowSystem {
   VkPipeline pipeline;
 
   ecs_query_t *dir_light_query;
+  FrameDescriptorPoolList desc_pool_list;
 } ShadowSystem;
 
 void tb_register_shadow_sys(TbWorld *world);

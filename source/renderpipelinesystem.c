@@ -4304,17 +4304,17 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                                    new_max * ctx->user_batch_size);
     ctx->batches =
         tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
+    ctx->batch_max = new_max;
+
     // Pointer Fixup
-    for (uint32_t i = 0; i < batch_count; ++i) {
+    for (uint32_t i = 0; i < new_count; ++i) {
       DrawBatch *batch = &ctx->batches[i];
       batch->user_batch =
           (uint8_t *)ctx->user_batches + (ctx->user_batch_size * i);
     }
-
-    ctx->batch_max = new_max;
   }
 
-  for (uint32_t i = 0; i < 0 + batch_count; ++i) {
+  for (uint32_t i = 0; i < batch_count; ++i) {
     const DrawBatch *batch = &batches[i];
     void *user_dst = ((uint8_t *)ctx->user_batches) +
                      ((i + write_head) * ctx->user_batch_size);

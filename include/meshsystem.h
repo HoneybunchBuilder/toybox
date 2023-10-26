@@ -53,38 +53,6 @@ typedef struct PrimitiveBatch {
   VkBuffer geom_buffer;
 } PrimitiveBatch;
 
-typedef struct SubMeshDraw {
-  VkDescriptorSet mat_set;
-  MaterialPushConstants consts;
-  VkIndexType index_type;
-  uint32_t index_count;
-  uint64_t index_offset;
-  uint32_t vertex_binding_count;
-  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
-} SubMeshDraw;
-
-typedef struct MeshDraw {
-  VkDescriptorSet obj_set;
-  VkBuffer geom_buffer;
-  uint32_t submesh_draw_count;
-  SubMeshDraw submesh_draws[TB_SUBMESH_MAX];
-} MeshDraw;
-
-typedef struct MeshDrawView {
-  VkViewport viewport;
-  VkRect2D scissor;
-  VkDescriptorSet view_set;
-  uint32_t draw_count;
-  MeshDraw *draws;
-} MeshDrawView;
-
-typedef struct MeshDrawBatch {
-  VkPipeline pipeline;
-  VkPipelineLayout layout;
-  uint32_t view_count;
-  MeshDrawView *views;
-} MeshDrawBatch;
-
 typedef TB_DYN_ARR_OF(int32_t) IndirectionList;
 
 typedef TB_DYN_ARR_OF(PrimitiveBatch) PrimitiveBatchList;

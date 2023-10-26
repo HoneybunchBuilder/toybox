@@ -201,6 +201,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           cull_flags = VK_CULL_MODE_NONE;
         }
         vkCmdSetCullMode(buffer, cull_flags);
+        vkCmdSetDepthBias(buffer, 1.0f, 0.0f, 1.75f);
         // Don't need to bind material data
         vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
                              draw->index_type);
@@ -376,16 +377,22 @@ void shadow_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, RenderPipelineSystem);
+  ECS_COMPONENT(ecs, RenderObjectSystem);
+  ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, ShadowSystem);
   ECS_COMPONENT(ecs, MaterialSystem);
   ECS_COMPONENT(ecs, MeshSystem);
   ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, RenderObject);
 
   RenderPipelineSystem *rp_sys =
       ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
   ShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, ShadowSystem);
   MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
   MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
+  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
 
   Allocator tmp_alloc = shadow_sys->tmp_alloc;
 
@@ -414,35 +421,259 @@ void shadow_draw_tick(ecs_iter_t *it) {
     }
   }
   mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+  if (!mesh_count) {
+    return;
+  }
+
+  DrawBatchList batches = {0};
+  PrimitiveBatchList prim_batches = {0};
+  TB_DYN_ARR_RESET(batches, tmp_alloc, mesh_count);
+  TB_DYN_ARR_RESET(prim_batches, tmp_alloc, mesh_count);
+  PrimIndirectList prim_trans = {0};
+  TB_DYN_ARR_RESET(prim_trans, tmp_alloc, mesh_count);
+
+  TracyCZoneN(ctx2, "Iterate Meshes", true);
+  while (ecs_query_next(&mesh_it)) {
+    MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+    for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+      MeshComponent *mesh = &meshes[mesh_idx];
+
+      VkBuffer geom_buffer =
+          tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
+      VkDescriptorSet transforms_set = tb_render_object_sys_get_set(ro_sys);
+
+      for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
+           ++submesh_idx) {
+        SubMesh *sm = &mesh->submeshes[submesh_idx];
+        TbMaterialId mat = sm->material;
+
+        // Deduce some important details from the submesh
+        TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
+        if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
+          continue;
+        }
+
+        const uint32_t index_count = sm->index_count;
+        const uint64_t index_offset = sm->index_offset;
+        const VkIndexType index_type = (VkIndexType)sm->index_type;
+
+        // Handle Opaque and Transparent draws
+        {
+          VkPipelineLayout layout = shadow_sys->pipe_layout;
+          VkPipeline pipeline = shadow_sys->pipeline;
+
+          // Determine if we need to insert a new batch
+          DrawBatch *batch = NULL;
+          PrimitiveBatch *prim_batch = NULL;
+          IndirectionList *transforms = NULL;
+          {
+            // Try to find an existing suitable batch
+            TB_DYN_ARR_FOREACH(batches, i) {
+              DrawBatch *db = &TB_DYN_ARR_AT(batches, i);
+              PrimitiveBatch *pb = &TB_DYN_ARR_AT(prim_batches, i);
+              if (db->pipeline == pipeline && db->layout == layout &&
+                  pb->perm == perm && pb->geom_buffer == geom_buffer) {
+                batch = db;
+                prim_batch = pb;
+                transforms = &TB_DYN_ARR_AT(prim_trans, i);
+                break;
+              }
+            }
+            // No batch was found, create one
+            if (batch == NULL) {
+              // Worst case batch count is one batch having to carry every
+              // mesh with the maximum number of possible submeshes
+              const uint32_t max_draw_count = mesh_count;
+              DrawBatch db = {
+                  .pipeline = pipeline,
+                  .layout = layout,
+                  .draw_size = sizeof(PrimitiveDraw),
+                  .draws =
+                      tb_alloc_nm_tp(tmp_alloc, max_draw_count, PrimitiveDraw),
+              };
+              PrimitiveBatch pb = {
+                  .perm = perm,
+                  .trans_set = transforms_set,
+                  .geom_buffer = geom_buffer,
+              };
+
+              IndirectionList il = {0};
+              TB_DYN_ARR_RESET(il, tmp_alloc, max_draw_count);
+
+              // Append it to the list and make sure we get a reference
+              uint32_t idx = TB_DYN_ARR_SIZE(prim_batches);
+              TB_DYN_ARR_APPEND(prim_batches, pb);
+              prim_batch = &TB_DYN_ARR_AT(prim_batches, idx);
+              TB_DYN_ARR_APPEND(batches, db);
+              batch = &TB_DYN_ARR_AT(batches, idx);
+              TB_DYN_ARR_APPEND(prim_trans, il);
+              transforms = &TB_DYN_ARR_AT(prim_trans, idx);
+
+              batch->user_batch = prim_batch;
+            }
+          }
+
+          // Determine if we need to insert a new draw
+          {
+            PrimitiveDraw *draw = NULL;
+            for (uint32_t i = 0; i < batch->draw_count; ++i) {
+              PrimitiveDraw *d = &((PrimitiveDraw *)batch->draws)[i];
+              if (d->index_count == index_count &&
+                  d->index_offset == index_offset &&
+                  d->index_type == index_type) {
+                draw = d;
+                break;
+              }
+            }
+            // No draw was found, create one
+            if (draw == NULL) {
+              PrimitiveDraw d = {
+                  .index_count = index_count,
+                  .index_offset = index_offset,
+                  .index_type = index_type,
+                  .vertex_binding_count = 1,
+                  .vertex_binding_offsets[0] = sm->vertex_offset,
+              };
+              // Append it to the list and make sure we get a reference
+              uint32_t idx = batch->draw_count++;
+              ((PrimitiveDraw *)batch->draws)[idx] = d;
+              draw = &((PrimitiveDraw *)batch->draws)[idx];
+            }
+
+            draw->instance_count += TB_DYN_ARR_SIZE(mesh->entities);
+
+            // Append every render object's transform index to the list
+            TB_DYN_ARR_FOREACH(mesh->entities, e_idx) {
+              ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
+              const RenderObject *ro = ecs_get(ecs, entity, RenderObject);
+              TB_DYN_ARR_APPEND(*transforms, ro->index);
+            }
+          }
+        }
+      }
+    }
+  }
+  TracyCZoneEnd(ctx2);
+
+  // Write transform lists to the GPU temp buffer
+  TB_DYN_ARR_OF(uint64_t) inst_buffers = {0};
+  {
+    TracyCZoneN(ctx2, "Gather Transforms", true);
+    const uint32_t count = TB_DYN_ARR_SIZE(prim_trans);
+    if (count) {
+      TB_DYN_ARR_RESET(inst_buffers, tmp_alloc, count);
+
+      TB_DYN_ARR_FOREACH(prim_trans, i) {
+        IndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
+
+        const size_t trans_size =
+            sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
+
+        uint64_t offset = 0;
+        tb_rnd_sys_tmp_buffer_copy(rnd_sys, trans_size, 0x40, transforms->data,
+                                   &offset);
+        TB_DYN_ARR_APPEND(inst_buffers, offset);
+      }
+    }
+    TracyCZoneEnd(ctx2);
+  }
+
+  // Alloc and write transform descriptor sets
+  {
+    TracyCZoneN(ctx2, "Write Descriptors", true);
+    const uint32_t set_count = TB_DYN_ARR_SIZE(inst_buffers);
+    VkDescriptorPoolCreateInfo pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = set_count * 4,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .descriptorCount = set_count * 4,
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                },
+            },
+    };
+    VkDescriptorSetLayout *layouts =
+        tb_alloc_nm_tp(tmp_alloc, set_count, VkDescriptorSetLayout);
+    for (uint32_t i = 0; i < set_count; ++i) {
+      layouts[i] = ro_sys->set_layout;
+    }
+    VkResult err = tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, layouts,
+                                               shadow_sys->desc_pool_list.pools,
+                                               set_count);
+    TB_VK_CHECK(err, "Failed to update descriptor pool");
+
+    VkBuffer gpu_buf = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
+
+    // Get and write a buffer to each descriptor set
+    VkWriteDescriptorSet *writes =
+        tb_alloc_nm_tp(tmp_alloc, set_count, VkWriteDescriptorSet);
+
+    uint32_t set_idx = 0;
+    TB_DYN_ARR_FOREACH(inst_buffers, i) {
+      VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
+          rnd_sys, shadow_sys->desc_pool_list.pools, set_idx);
+      const uint64_t offset = TB_DYN_ARR_AT(inst_buffers, i);
+      IndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
+      const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
+
+      VkDescriptorBufferInfo *buffer_info =
+          tb_alloc_tp(tmp_alloc, VkDescriptorBufferInfo);
+      *buffer_info = (VkDescriptorBufferInfo){
+          .buffer = gpu_buf,
+          .offset = offset,
+          .range = sizeof(int32_t) * trans_count,
+      };
+
+      writes[set_idx++] = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo = buffer_info,
+      };
+
+      // Need to make sure the batch is also using the correct sets
+      TB_DYN_ARR_AT(prim_batches, i).inst_set = set;
+    }
+    tb_rnd_update_descriptors(rnd_sys, set_count, writes);
+    TracyCZoneEnd(ctx2);
+  }
 
   // For each shadow casting light we want to record shadow draws
   ecs_iter_t light_it = ecs_query_iter(ecs, shadow_sys->dir_light_query);
   while (ecs_query_next(&light_it)) {
     DirectionalLightComponent *lights =
         ecs_field(&light_it, DirectionalLightComponent, 1);
-    const TransformComponent *transforms =
-        ecs_field(&light_it, TransformComponent, 2);
     for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
-      DirectionalLightComponent *light = &lights[light_idx];
-      const TransformComponent *trans = &transforms[light_idx];
+      const DirectionalLightComponent *light = &lights[light_idx];
 
-      DrawBatchList batches = {0};
-      PrimitiveBatchList prim_batches = {0};
-      if (mesh_count) {
-        TB_DYN_ARR_RESET(batches, tmp_alloc, mesh_count);
-        TB_DYN_ARR_RESET(prim_batches, tmp_alloc, mesh_count);
-      }
-      PrimIndirectList prim_trans = {0};
-      TB_DYN_ARR_RESET(prim_trans, tmp_alloc, mesh_count);
+      // Submit batch for each shadow cascade
+      TracyCZoneN(ctx2, "Submit Batches", true);
+      for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+           ++cascade_idx) {
 
-      // Submit batch for this light
-      {
-        TracyCZoneN(ctx2, "Submit Batches", true);
+        VkDescriptorSet view_set = tb_view_system_get_descriptor(
+            view_sys, light->cascade_views[cascade_idx]);
+
+        TB_DYN_ARR_FOREACH(batches, i) {
+          DrawBatch *batch = &TB_DYN_ARR_AT(batches, i);
+          PrimitiveBatch *prim_batch = (PrimitiveBatch *)batch->user_batch;
+          prim_batch->view_set = view_set;
+
+          static const float dim = TB_SHADOW_MAP_DIM;
+          batch->viewport = (VkViewport){0, dim * cascade_idx, dim, dim, 0, 1};
+          batch->scissor = (VkRect2D){{0, dim * cascade_idx}, {dim, dim}};
+        }
+
         tb_render_pipeline_issue_draw_batch(rp_sys, shadow_sys->draw_ctx,
                                             TB_DYN_ARR_SIZE(batches),
                                             batches.data);
-        TracyCZoneEnd(ctx2);
       }
+      TracyCZoneEnd(ctx2);
     }
   }
 
@@ -479,7 +710,7 @@ void tb_register_shadow_sys(TbWorld *world) {
       .draw_ctx = tb_render_pipeline_register_draw_context(
           rp_sys,
           &(DrawContextDescriptor){
-              .batch_size = sizeof(MeshDrawBatch),
+              .batch_size = sizeof(PrimitiveBatch),
               .draw_fn = shadow_pass_record,
               .pass_id = rp_sys->shadow_pass,
           }),
