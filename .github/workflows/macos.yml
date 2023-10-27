@@ -15,7 +15,6 @@ jobs:
       matrix:
         toolsets: [
           {preset: arm64-macos-ninja-llvm},
-          {preset: arm64-macos-ninja-gcc},
         ]
 
     name: ${{matrix.toolsets.preset}} on macOS
