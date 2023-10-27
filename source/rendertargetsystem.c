@@ -231,40 +231,6 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
       };
       sys.normal_buffer = tb_create_render_target(&sys, &rt_desc);
     }
-    // Create ssao target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .name = "SSAO",
-          .format = VK_FORMAT_R32_SFLOAT,
-          .extent =
-              {
-                  .width = width,
-                  .height = height,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      sys.ssao_buffer = tb_create_render_target(&sys, &rt_desc);
-    }
-    // Create ssao scratch target
-    {
-      RenderTargetDescriptor rt_desc = {
-          .name = "SSAO scratch",
-          .format = VK_FORMAT_R32_SFLOAT,
-          .extent =
-              {
-                  .width = width,
-                  .height = height,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      sys.ssao_scratch = tb_create_render_target(&sys, &rt_desc);
-    }
     // Create hdr color target
     {
       RenderTargetDescriptor rt_desc = {
@@ -542,24 +508,6 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
     };
     resize_render_target(
         self, &TB_DYN_ARR_AT(self->render_targets, self->normal_buffer),
-        &rt_desc);
-  }
-  {
-    RenderTargetDescriptor rt_desc = {
-        .name = "SSAO",
-        .format = VK_FORMAT_R32_SFLOAT,
-        .extent =
-            {
-                .width = width,
-                .height = height,
-                .depth = 1,
-            },
-        .mip_count = 1,
-        .layer_count = 1,
-        .view_type = VK_IMAGE_VIEW_TYPE_2D,
-    };
-    resize_render_target(
-        self, &TB_DYN_ARR_AT(self->render_targets, self->ssao_buffer),
         &rt_desc);
   }
   {

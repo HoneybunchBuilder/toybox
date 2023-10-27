@@ -56,8 +56,6 @@ void camera_update_tick(ecs_iter_t *it) {
 
   // HACK - setting target here to the swapchain in a janky way that's
   // just used to facilitate other hacks
-  // The render pipeline will use whatever view targets the swapchain
-  // to do SSAO
   tb_view_system_set_view_target(view_sys, camera->view_id,
                                  view_sys->render_target_system->swapchain);
   tb_view_system_set_view_data(view_sys, camera->view_id, &view_data);

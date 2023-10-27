@@ -83,8 +83,6 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId irradiance_pass;
   TbRenderPassId prefilter_passes[PREFILTER_PASS_COUNT];
   TbRenderPassId opaque_depth_normal_pass;
-  TbRenderPassId ssao_pass;
-  TbRenderPassId ssao_blur_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;
   TbRenderPassId shadow_pass;
@@ -103,19 +101,13 @@ typedef struct RenderPipelineSystem {
   TB_DYN_ARR_OF(RenderPass) render_passes;
   uint32_t *pass_order; // Array that is kept at the same size as render_passes
 
-  TbBuffer ssao_params;
-  TbImage ssao_noise;
-  VkImageView ssao_noise_view;
-
   // Some default draw contexts
-  TbDrawContextId ssao_ctx;
   TbDrawContextId depth_copy_ctx;
   TbDrawContextId color_copy_ctx;
   TbDrawContextId brightness_ctx;
   TbDrawContextId tonemap_ctx;
   TbDispatchContextId bloom_copy_ctx;
   TbDispatchContextId bloom_blur_ctx;
-  TbDispatchContextId ssao_blur_ctx;
 
   // New idea for bundling draw work prims
   DownsampleRenderWork downsample_work;
@@ -125,17 +117,13 @@ typedef struct RenderPipelineSystem {
 
   VkSampler sampler;
   VkSampler noise_sampler;
-  VkDescriptorSetLayout ssao_set_layout;
-  VkDescriptorSetLayout blur_set_layout;
   VkDescriptorSetLayout copy_set_layout;
   VkDescriptorSetLayout comp_copy_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
-  VkPipelineLayout ssao_pipe_layout;
   VkPipelineLayout blur_pipe_layout;
   VkPipelineLayout copy_pipe_layout;
   VkPipelineLayout comp_copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
-  VkPipeline ssao_pipe;
   VkPipeline blur_h_pipe;
   VkPipeline blur_v_pipe;
   VkPipeline depth_copy_pipe;

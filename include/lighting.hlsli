@@ -135,7 +135,6 @@ struct View {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
   Texture2D brdf_lut;
-  Texture2D ssao_map;
   sampler filtered_env_sampler;
   sampler brdf_sampler;
 };
@@ -194,9 +193,8 @@ float3 pbr_lighting_common(View v, Light l, Surface s) {
         v.prefiltered_map, v.filtered_env_sampler, s.R, s.roughness);
     float3 irradiance =
         v.irradiance_map.SampleLevel(v.filtered_env_sampler, s.N, 0).rgb;
-    float ao = v.ssao_map.Sample(l.shadow_sampler, s.screen_uv).r;
     out_color =
-        pbr_lighting(shadow, ao, albedo, s.metallic, s.roughness, brdf,
+        pbr_lighting(shadow, 1, albedo, s.metallic, s.roughness, brdf,
                      reflection, irradiance, l.light.color, L, s.V, s.N);
   }
 

@@ -114,8 +114,7 @@ float4 frag(Interpolators i) : SV_TARGET {
           prefiltered_map, filtered_env_sampler, R, roughness);
       float3 irradiance =
           irradiance_map.SampleLevel(filtered_env_sampler, N, 0).rgb;
-      float ao = ssao_map.Sample(shadow_sampler, screen_uv).r;
-      color = pbr_lighting(1.0f, ao, albedo, metallic, roughness, brdf,
+      color = pbr_lighting(1.0f, 1, albedo, metallic, roughness, brdf,
                            reflection, irradiance, light_data.color, L, V, N);
     }
   }

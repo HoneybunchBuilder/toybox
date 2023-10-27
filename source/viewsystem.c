@@ -229,7 +229,7 @@ void view_update_tick(ecs_iter_t *it) {
 
   // Just upload and write all views for now, they tend to be important anyway
   const uint32_t buf_count = 2;
-  const uint32_t img_count = 5;
+  const uint32_t img_count = 4;
   const uint32_t write_count = buf_count + img_count;
 
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
@@ -292,11 +292,6 @@ void view_update_tick(ecs_iter_t *it) {
                                                rt_sys->shadow_map),
     };
 
-    image_info[image_idx + 4] = (VkDescriptorImageInfo){
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_render_target_get_view(rt_sys, rnd_sys->frame_idx,
-                                               rt_sys->ssao_buffer)};
-
     // Construct a write descriptor
 
     writes[write_idx + 0] = (VkWriteDescriptorSet){
@@ -352,15 +347,6 @@ void view_update_tick(ecs_iter_t *it) {
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
         .pImageInfo = &image_info[image_idx + 3],
-    };
-    writes[write_idx + 6] = (VkWriteDescriptorSet){
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = view_set,
-        .dstBinding = 6,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-        .pImageInfo = &image_info[image_idx + 4],
     };
   }
   tb_rnd_update_descriptors(rnd_sys, view_count * write_count, writes);

@@ -95,7 +95,6 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   Texture2D brdf_lut : register(t3, space);                                    \
   ConstantBuffer<CommonLightData> light_data : register(b4, space);            \
   Texture2D shadow_map : register(t5, space);                                  \
-  Texture2D ssao_map : register(s6, space);                                    \
   sampler filtered_env_sampler : register(s7, space);                          \
   sampler brdf_sampler : register(s8, space);
 
@@ -105,7 +104,6 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
     v.irradiance_map = irradiance_map;                                         \
     v.prefiltered_map = prefiltered_map;                                       \
     v.brdf_lut = brdf_lut;                                                     \
-    v.ssao_map = ssao_map;                                                     \
     v.filtered_env_sampler = filtered_env_sampler;                             \
     v.brdf_sampler = brdf_sampler;                                             \
                                                                                \

@@ -36,10 +36,7 @@ typedef struct RenderTargetSystem {
 
   TbRenderTargetId swapchain;
   TbRenderTargetId depth_buffer;
-  TbRenderTargetId
-      normal_buffer; // Could be transient and memory recycled after ssao
-  TbRenderTargetId ssao_buffer;
-  TbRenderTargetId ssao_scratch; // Ideally want this to be transient
+  TbRenderTargetId normal_buffer;
   TbRenderTargetId hdr_color;
   TbRenderTargetId depth_buffer_copy;
   TbRenderTargetId color_copy;

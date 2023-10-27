@@ -4,7 +4,6 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "shadercommon.h"
-#include "ssao.h"
 #include "tbcommon.h"
 #include "viewsystem.h"
 #include "world.h"
@@ -24,8 +23,6 @@
 #include "copy_comp.h"
 #include "depthcopy_frag.h"
 #include "depthcopy_vert.h"
-#include "ssao_frag.h"
-#include "ssao_vert.h"
 #include "tonemap_frag.h"
 #include "tonemap_vert.h"
 #ifdef __clang__
@@ -123,12 +120,6 @@ void sort_pass_graph(RenderPipelineSystem *self) {
 typedef struct FullscreenBatch {
   VkDescriptorSet set;
 } FullscreenBatch;
-
-typedef struct SSAOBatch {
-  VkDescriptorSet ssao_set;
-  VkDescriptorSet view_set;
-  SSAOPushConstants consts;
-} SSAOBatch;
 
 typedef struct BlurBatch {
   VkDescriptorSet set;
@@ -366,123 +357,6 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
 
   tb_rnd_destroy_shader(render_system, color_vert_mod);
   tb_rnd_destroy_shader(render_system, color_frag_mod);
-
-  return err;
-}
-
-VkResult create_ssao_pipeline(RenderSystem *render_system,
-                              VkFormat color_format,
-                              VkPipelineLayout pipe_layout,
-                              VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-  VkShaderModule ssao_vert_mod = VK_NULL_HANDLE;
-  VkShaderModule ssao_frag_mod = VK_NULL_HANDLE;
-
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(ssao_vert);
-    create_info.pCode = (const uint32_t *)ssao_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "ssao Vert",
-                               &ssao_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ssao vert shader module", err);
-
-    create_info.codeSize = sizeof(ssao_frag);
-    create_info.pCode = (const uint32_t *)ssao_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "ssao Frag",
-                               &ssao_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ssao frag shader module", err);
-  }
-
-  VkGraphicsPipelineCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .pNext =
-          &(VkPipelineRenderingCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-              .colorAttachmentCount = 1,
-              .pColorAttachmentFormats = (VkFormat[1]){color_format},
-          },
-      .stageCount = 2,
-      .pStages =
-          (VkPipelineShaderStageCreateInfo[2]){
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = ssao_vert_mod,
-                  .pName = "vert",
-              },
-              {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = ssao_frag_mod,
-                  .pName = "frag",
-              },
-          },
-      .pVertexInputState =
-          &(VkPipelineVertexInputStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-          },
-      .pInputAssemblyState =
-          &(VkPipelineInputAssemblyStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-          },
-      .pViewportState =
-          &(VkPipelineViewportStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-              .viewportCount = 1,
-              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
-              .scissorCount = 1,
-              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
-          },
-      .pRasterizationState =
-          &(VkPipelineRasterizationStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-              .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
-              .lineWidth = 1.0f,
-          },
-      .pMultisampleState =
-          &(VkPipelineMultisampleStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-          },
-      .pColorBlendState =
-          &(VkPipelineColorBlendStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-              .attachmentCount = 1,
-              .pAttachments =
-                  &(VkPipelineColorBlendAttachmentState){
-                      .blendEnable = VK_FALSE,
-                      .colorWriteMask =
-                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-                  },
-          },
-      .pDepthStencilState =
-          &(VkPipelineDepthStencilStateCreateInfo){
-              .sType =
-                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-          },
-      .pDynamicState =
-          &(VkPipelineDynamicStateCreateInfo){
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 2,
-              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                    VK_DYNAMIC_STATE_SCISSOR},
-          },
-      .layout = pipe_layout,
-  };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
-                                         "ssao Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create ssao pipeline", err);
-
-  tb_rnd_destroy_shader(render_system, ssao_vert_mod);
-  tb_rnd_destroy_shader(render_system, ssao_frag_mod);
 
   return err;
 }
@@ -882,44 +756,6 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void record_ssao(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                 uint32_t batch_count, const DrawBatch *batches) {
-  // Only expecting one draw per pass
-  if (batch_count != 1) {
-    return;
-  }
-  TracyCZoneNC(ctx, "SSAO Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "SSAO", 3, true);
-  cmd_begin_label(buffer, "SSAO", (float4){0.4f, 0.8f, 0.0f, 1.0f});
-
-  const DrawBatch *batch = &batches[0];
-  const SSAOBatch *ssao_batch = (const SSAOBatch *)batch->user_batch;
-
-  VkPipelineLayout layout = batch->layout;
-
-  // We may not have a valid view set in which case just give up
-  if (ssao_batch->view_set != VK_NULL_HANDLE) {
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
-
-    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
-    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
-
-    vkCmdBindDescriptorSets(
-        buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 2,
-        (VkDescriptorSet[2]){ssao_batch->ssao_set, ssao_batch->view_set}, 0,
-        NULL);
-    vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(SSAOPushConstants), &ssao_batch->consts);
-
-    // Just drawing a fullscreen triangle that's generated by the vertex shader
-    vkCmdDraw(buffer, 3, 1, 0, 0);
-  }
-
-  cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
 void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                       uint32_t batch_count, const DispatchBatch *batches) {
   TracyCZoneNC(ctx, "Compute Copy Record", TracyCategoryColorRendering, true);
@@ -936,33 +772,6 @@ void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &fs_batch->set, 0, NULL);
-
-    for (uint32_t i = 0; i < batch->group_count; i++) {
-      uint3 group = batch->groups[i];
-      vkCmdDispatch(buffer, group[0], group[1], group[2]);
-    }
-  }
-
-  cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
-}
-
-void record_ssao_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                      uint32_t batch_count, const DispatchBatch *batches) {
-  TracyCZoneNC(ctx, "SSAO Blur Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "SSAO Blur", 3, true);
-  cmd_begin_label(buffer, "SSAO Blur", (float4){0.4f, 0.0f, 0.0f, 1.0f});
-
-  for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
-    const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
-
-    VkPipelineLayout layout = batch->layout;
-
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, batch->pipeline);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
-                            1, &blur_batch->set, 0, NULL);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -1261,7 +1070,6 @@ RenderPipelineSystem create_render_pipeline_system(
         render_target_system->prefiltered_cube;
     const TbRenderTargetId opaque_depth = render_target_system->depth_buffer;
     const TbRenderTargetId opaque_normal = render_target_system->normal_buffer;
-    const TbRenderTargetId ssao_buffer = render_target_system->ssao_buffer;
     const TbRenderTargetId hdr_color = render_target_system->hdr_color;
     const TbRenderTargetId depth_copy = render_target_system->depth_buffer_copy;
     const TbRenderTargetId color_copy = render_target_system->color_copy;
@@ -1363,189 +1171,6 @@ RenderPipelineSystem create_render_pipeline_system(
                "Failed to create opaque depth normal pass");
       sys.opaque_depth_normal_pass = id;
     }
-    // Create SSAO pass
-    {
-      TbRenderPassCreateInfo create_info = {
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
-          .transition_count = 3,
-          .transitions =
-              (PassTransition[3]){
-                  {
-                      .render_target = sys.render_target_system->ssao_buffer,
-                      .barrier =
-                          {
-                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask = VK_ACCESS_NONE,
-                                      .dstAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
-                  {
-                      .render_target = sys.render_target_system->depth_buffer,
-                      .barrier =
-                          {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_DEPTH_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
-                  {
-                      .render_target = sys.render_target_system->normal_buffer,
-                      .barrier =
-                          {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
-              },
-          .attachment_count = 1,
-          .attachments =
-              (TbAttachmentInfo[1]){
-                  {
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = ssao_buffer,
-                  },
-              },
-          .name = "SSAO Pass",
-      };
-
-      TbRenderPassId id = create_render_pass(&sys, &create_info);
-      TB_CHECK(id != InvalidRenderPassId, "Failed to create ssao pass");
-      sys.ssao_pass = id;
-    }
-    // Create SSAO blur compute pass
-    {
-      TbRenderPassCreateInfo create_info = {
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){sys.ssao_pass},
-          .transition_count = 2,
-          .transitions =
-              (PassTransition[2]){
-                  {
-                      .render_target = sys.render_target_system->ssao_buffer,
-                      .barrier =
-                          {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT |
-                                          VK_ACCESS_SHADER_WRITE_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
-                  {
-                      .render_target = sys.render_target_system->ssao_scratch,
-                      .barrier =
-                          {
-                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                              .dst_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask = VK_ACCESS_NONE,
-                                      .dstAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT |
-                                          VK_ACCESS_SHADER_WRITE_BIT,
-                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
-                  },
-              },
-          .name = "SSAO Blur Pass",
-      };
-      TbRenderPassId id = create_render_pass(&sys, &create_info);
-      TB_CHECK(id != InvalidRenderPassId, "Failed to create ssao blur pass");
-      sys.ssao_blur_pass = id;
-    }
     // Create env capture pass
     {
       for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
@@ -1585,7 +1210,7 @@ RenderPipelineSystem create_render_pipeline_system(
         TbRenderPassCreateInfo create_info = {
             .view_mask = 0x0000003F, // 0b00111111
             .dependency_count = 1,
-            .dependencies = (TbRenderPassId[1]){sys.ssao_blur_pass},
+            .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
             .transition_count = trans_count,
             .transitions = transitions,
             .attachment_count = 1,
@@ -1789,7 +1414,7 @@ RenderPipelineSystem create_render_pipeline_system(
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){sys.ssao_blur_pass},
+          .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
           .transition_count = trans_count,
           .transitions = transitions,
           .attachment_count = 1,
@@ -1899,24 +1524,24 @@ RenderPipelineSystem create_render_pipeline_system(
                       },
               },
       };
-      PassTransition ssao_trans = {
-          .render_target = sys.render_target_system->ssao_buffer,
+      PassTransition depth_trans = {
+          .render_target = sys.render_target_system->depth_buffer,
           .barrier =
               {
-                  .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                  .src_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                   .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                   .barrier =
                       {
                           .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_SHADER_READ_BIT |
-                                           VK_ACCESS_SHADER_WRITE_BIT,
+                          .srcAccessMask =
+                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                           .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                          .oldLayout =
+                              VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                           .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-
                           .subresourceRange =
                               {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                  .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
                                   .levelCount = 1,
                                   .layerCount = 1,
                               },
@@ -1945,18 +1570,13 @@ RenderPipelineSystem create_render_pipeline_system(
                   },
           }};
       const uint32_t transition_count = 6;
-      PassTransition transitions[6] = {0};
-      transitions[0] = shadow_trans;
-      transitions[1] = irr_trans;
-      transitions[2] = filter_trans;
-      transitions[3] = color_trans;
-      transitions[4] = normal_trans;
-      transitions[5] = ssao_trans;
+      PassTransition transitions[6] = {shadow_trans, irr_trans,   filter_trans,
+                                       color_trans,  depth_trans, normal_trans};
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
-          .dependencies =
-              (TbRenderPassId[2]){sys.ssao_blur_pass, sys.shadow_pass},
+          .dependencies = (TbRenderPassId[2]){sys.opaque_depth_normal_pass,
+                                              sys.shadow_pass},
           .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,
@@ -2804,81 +2424,6 @@ RenderPipelineSystem create_render_pipeline_system(
       }
 
       {
-        VkDescriptorSetLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 6,
-            .pBindings = (VkDescriptorSetLayoutBinding[6]){
-                {
-                    .binding = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 1,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 2,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &sys.sampler,
-                },
-                {
-                    .binding = 3,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 4,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 5,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .pImmutableSamplers = &sys.noise_sampler,
-                },
-            }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
-                                       "SSAO Descriptor Set Layout",
-                                       &sys.ssao_set_layout);
-        TB_VK_CHECK(err, "Failed to create ssao set layout");
-      }
-
-      {
-        VkPipelineLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 2,
-            .pSetLayouts =
-                (VkDescriptorSetLayout[2]){
-                    sys.ssao_set_layout,
-                    sys.view_system->set_layout,
-                },
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges =
-                (VkPushConstantRange[1]){
-                    {
-                        .offset = 0,
-                        .size = sizeof(SSAOPushConstants),
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    },
-                },
-        };
-        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
-                                            "SSAO Pipeline Layout",
-                                            &sys.ssao_pipe_layout);
-        TB_VK_CHECK(err, "Failed to create ssao pipeline layout");
-      }
-
-      {
         VkPipelineLayoutCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .setLayoutCount = 1,
@@ -2951,122 +2496,6 @@ RenderPipelineSystem create_render_pipeline_system(
       }
     }
 
-    // SSAO
-    {
-      // Create SSAO kernel buffer and noise texture
-      {
-        SSAOParams params = {
-            .kernel_size = SSAO_KERNEL_SIZE,
-        };
-        for (uint32_t i = 0; i < SSAO_KERNEL_SIZE; ++i) {
-          params.kernel[i] = normf3((float3){
-              tb_randf(-1.0f, 1.0f),
-              tb_randf(-1.0f, 1.0f),
-              tb_randf(0.0f, 1.0f),
-          });
-
-          // Distribute samples in the hemisphere
-          params.kernel[i] *= tb_randf(0.0f, 1.0f);
-
-          float scale = (float)i / SSAO_KERNEL_SIZE;
-          scale = lerpf(0.1f, 1.0f, scale * scale);
-          params.kernel[i] *= scale;
-        }
-
-        {
-          // Create SSAO Param buffer
-          VkBufferCreateInfo create_info = {
-              .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-              .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-              .size = sizeof(SSAOParams),
-          };
-          err = tb_rnd_sys_create_gpu_buffer2_tmp(
-              sys.render_system, &create_info, &params, "SSAO Params",
-              &sys.ssao_params, 16);
-          TB_VK_CHECK(err, "Failed to create gpu buffer for ssao params");
-        }
-
-        // Create Noise Texture
-        {
-          const uint32_t noise_tex_dim = 4;
-          const uint32_t noise_tex_size =
-              noise_tex_dim * noise_tex_dim * sizeof(float2);
-          float2 noise[16] = {{0}};
-          for (uint32_t i = 0; i < 16; ++i) {
-            noise[i] = normf2((float2){
-                tb_randf(-1.0f, 1.0f),
-                tb_randf(-1.0f, 1.0f),
-            });
-          }
-          VkImageCreateInfo create_info = {
-              .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-              .imageType = VK_IMAGE_TYPE_2D,
-              .format = VK_FORMAT_R8G8_SNORM,
-
-              .extent =
-                  (VkExtent3D){
-                      .width = noise_tex_dim,
-                      .height = noise_tex_dim,
-                      .depth = 1,
-                  },
-              .mipLevels = 1,
-              .arrayLayers = 1,
-              .samples = VK_SAMPLE_COUNT_1_BIT,
-              .usage =
-                  VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-          };
-          err = tb_rnd_sys_create_gpu_image_tmp(
-              sys.render_system, noise, noise_tex_size, 16, &create_info,
-              "SSAO Noise", &sys.ssao_noise);
-          TB_VK_CHECK(err, "Failed to create gpu image for ssao params");
-        }
-
-        {
-          VkImageViewCreateInfo create_info = {
-              .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-              .image = sys.ssao_noise.image,
-              .viewType = VK_IMAGE_VIEW_TYPE_2D,
-              .format = VK_FORMAT_R8G8_SNORM,
-              .subresourceRange =
-                  {
-                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                      .layerCount = 1,
-                      .levelCount = 1,
-                  },
-          };
-          err =
-              tb_rnd_create_image_view(sys.render_system, &create_info,
-                                       "SSAO Noise View", &sys.ssao_noise_view);
-        }
-      }
-
-      uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(&sys, sys.ssao_pass, &attach_count,
-                                         NULL);
-      TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment attach_info = {0};
-      tb_render_pipeline_get_attachments(&sys, sys.ssao_pass, &attach_count,
-                                         &attach_info);
-
-      VkFormat color_format = tb_render_target_get_format(
-          sys.render_target_system, attach_info.attachment);
-
-      err = create_ssao_pipeline(sys.render_system, color_format,
-                                 sys.ssao_pipe_layout, &sys.ssao_pipe);
-      TB_VK_CHECK(err, "Failed to create ssao pipeline");
-
-      DrawContextDescriptor desc = {
-          .batch_size = sizeof(SSAOBatch),
-          .draw_fn = record_ssao,
-          .pass_id = sys.ssao_pass,
-      };
-      sys.ssao_ctx = tb_render_pipeline_register_draw_context(&sys, &desc);
-      TB_CHECK(sys.ssao_ctx != InvalidDrawContextId,
-               "Failed to create ssao draw context");
-    }
-
     // Compute Copy
     {
       err = create_comp_copy_pipeline(
@@ -3083,68 +2512,6 @@ RenderPipelineSystem create_render_pipeline_system(
           tb_render_pipeline_register_dispatch_context(&sys, &desc);
       TB_CHECK(sys.bloom_copy_ctx != InvalidDispatchContextId,
                "Failed to create compute copy dispatch context");
-    }
-
-    // Compute Blur
-    {
-      {
-        VkDescriptorSetLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 3,
-            .pBindings = (VkDescriptorSetLayoutBinding[3]){
-                {
-                    .binding = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                },
-                {
-                    .binding = 1,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                },
-                {
-                    .binding = 2,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                    .pImmutableSamplers = &sys.sampler,
-                },
-            }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
-                                       "Blur Set Layout", &sys.blur_set_layout);
-        TB_VK_CHECK(err, "Failed to create blur descriptor set layout");
-      }
-
-      {
-        VkPipelineLayoutCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts =
-                (VkDescriptorSetLayout[1]){
-                    sys.blur_set_layout,
-                },
-        };
-        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
-                                            "Blur Pipeline Layout",
-                                            &sys.blur_pipe_layout);
-        TB_VK_CHECK(err, "Failed to create blur pipeline layout");
-      }
-
-      err = create_blur_pipelines(sys.render_system, sys.blur_pipe_layout,
-                                  &sys.blur_h_pipe, &sys.blur_v_pipe);
-      TB_VK_CHECK(err, "Failed to create blur pipeline");
-
-      DispatchContextDescriptor desc = {
-          .batch_size = sizeof(BlurBatch),
-          .dispatch_fn = record_ssao_blur,
-          .pass_id = sys.ssao_blur_pass,
-      };
-      sys.ssao_blur_ctx =
-          tb_render_pipeline_register_dispatch_context(&sys, &desc);
-      TB_CHECK(sys.ssao_blur_ctx != InvalidDispatchContextId,
-               "Failed to create ssao blur dispatch context");
     }
 
     // Create bloom work
@@ -3237,17 +2604,13 @@ RenderPipelineSystem create_render_pipeline_system(
 void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_sampler(self->render_system, self->noise_sampler);
-  tb_rnd_destroy_set_layout(self->render_system, self->ssao_set_layout);
-  tb_rnd_destroy_set_layout(self->render_system, self->blur_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->comp_copy_set_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->ssao_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->comp_copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
-  tb_rnd_destroy_pipeline(self->render_system, self->ssao_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->blur_h_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->blur_v_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
@@ -3266,10 +2629,6 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
                                    self->descriptor_pools[i].set_pool);
   }
-
-  tb_rnd_free_gpu_buffer(self->render_system, &self->ssao_params);
-  tb_rnd_free_gpu_image(self->render_system, &self->ssao_noise);
-  tb_rnd_destroy_image_view(self->render_system, self->ssao_noise_view);
 
   TB_DYN_ARR_DESTROY(self->render_passes);
   tb_free(self->std_alloc, self->pass_order);
@@ -3291,7 +2650,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
     VkResult err = VK_SUCCESS;
     // Allocate the known descriptor sets we need for this frame
     {
-#define SET_COUNT 14
+#define SET_COUNT 11
       VkDescriptorPoolCreateInfo pool_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
           .maxSets = SET_COUNT * 4,
@@ -3313,9 +2672,6 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
               },
       };
       VkDescriptorSetLayout layouts[SET_COUNT] = {
-          self->ssao_set_layout,
-          self->blur_set_layout,
-          self->blur_set_layout,
           self->copy_set_layout,
           self->copy_set_layout,
           self->lum_hist_work.set_layout,
@@ -3335,47 +2691,32 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 #undef SET_COUNT
     }
 
-    VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet ssao_x_blur_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet ssao_y_blur_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 2);
     VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 3);
+        self->render_system, self->descriptor_pools, 0);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 4);
+        self->render_system, self->descriptor_pools, 1);
     VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 5);
+        self->render_system, self->descriptor_pools, 2);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 6);
+        self->render_system, self->descriptor_pools, 3);
     VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 7);
+        self->render_system, self->descriptor_pools, 4);
     VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 8);
+        self->render_system, self->descriptor_pools, 5);
     VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 9);
+        self->render_system, self->descriptor_pools, 6);
     VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 10);
+        self->render_system, self->descriptor_pools, 7);
     VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 11);
+        self->render_system, self->descriptor_pools, 8);
     VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 12);
+        self->render_system, self->descriptor_pools, 9);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 13);
+        self->render_system, self->descriptor_pools, 10);
 
-    VkImageView ssao_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->ssao_buffer);
-    VkImageView ssao_scratch_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->ssao_scratch);
     VkImageView depth_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->depth_buffer);
-    VkImageView normal_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->normal_buffer);
     VkImageView color_view = tb_render_target_get_view(
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->hdr_color);
@@ -3398,113 +2739,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         self->render_target_system->bloom_mip_chain);
 
 // Write the descriptor set
-#define WRITE_COUNT 29
+#define WRITE_COUNT 21
     VkWriteDescriptorSet writes[WRITE_COUNT] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = depth_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = normal_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_set,
-            .dstBinding = 3,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .offset = self->ssao_params.info.offset,
-                    .range = sizeof(SSAOParams),
-                    .buffer = self->ssao_params.buffer,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_set,
-            .dstBinding = 4,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = self->ssao_noise_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_x_blur_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = ssao_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_x_blur_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = ssao_scratch_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_y_blur_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = ssao_scratch_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = ssao_y_blur_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = ssao_view,
-                },
-        },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = depth_set,
@@ -3776,109 +3012,34 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 
   // Issue draws for full screen passes
   {
-    VkDescriptorSet ssao_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet ssao_blur_x_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet ssao_blur_y_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 2);
     VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 3);
+        self->render_system, self->descriptor_pools, 0);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 4);
+        self->render_system, self->descriptor_pools, 1);
     VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 5);
+        self->render_system, self->descriptor_pools, 2);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 6);
+        self->render_system, self->descriptor_pools, 3);
     VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 7);
+        self->render_system, self->descriptor_pools, 4);
     VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 8);
+        self->render_system, self->descriptor_pools, 5);
     VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 9);
+        self->render_system, self->descriptor_pools, 6);
     VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 10);
+        self->render_system, self->descriptor_pools, 7);
     VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 11);
+        self->render_system, self->descriptor_pools, 8);
     VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 12);
+        self->render_system, self->descriptor_pools, 9);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 13);
+        self->render_system, self->descriptor_pools, 10);
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
     const uint32_t height =
         self->render_system->render_thread->swapchain.height;
 
-    // SSAO pass
-    {
-      // HACK - find which view targets the swapchain
-      const View *view = NULL;
-      TbViewId view_id = InvalidViewId;
-      TB_DYN_ARR_FOREACH(self->view_system->views, view_idx) {
-        const View *v = &TB_DYN_ARR_AT(self->view_system->views, view_idx);
-        if (v->target == self->render_target_system->swapchain) {
-          view = v;
-          view_id = view_idx;
-          break;
-        }
-      }
-
-      // If we don't have a view, just bail and don't schedule a draw
-      if (view) {
-        VkDescriptorSet view_set =
-            tb_view_system_get_descriptor(self->view_system, view_id);
-
-        SSAOBatch ssao_batch = {
-            .ssao_set = ssao_set,
-            .view_set = view_set,
-            .consts =
-                {
-                    .noise_scale =
-                        (float2){(float)width / 4.0f, (float)height / 4.0f},
-                    .radius = 0.5,
-                },
-        };
-        DrawBatch batch = {
-            .layout = self->ssao_pipe_layout,
-            .pipeline = self->ssao_pipe,
-            .viewport = {0, 0, width, height, 0, 1},
-            .scissor = {{0, 0}, {width, height}},
-            .user_batch = &ssao_batch,
-        };
-        tb_render_pipeline_issue_draw_batch(self, self->ssao_ctx, 1, &batch);
-      }
-    }
-    // SSAO Blur Pass
-    {
-      // Do a blur on each axis
-      BlurBatch x_blur_batch = {
-          .set = ssao_blur_x_set,
-      };
-      DispatchBatch x_batch = {
-          .layout = self->blur_pipe_layout,
-          .pipeline = self->blur_h_pipe,
-          .user_batch = &x_blur_batch,
-          .group_count = 1,
-          .groups[0] = {(width + 64 - 1) / 64, height, 1},
-
-      };
-      BlurBatch y_blur_batch = {
-          .set = ssao_blur_y_set,
-      };
-      DispatchBatch y_batch = {
-          .layout = self->blur_pipe_layout,
-          .pipeline = self->blur_v_pipe,
-          .user_batch = &y_blur_batch,
-          .group_count = 1,
-          .groups[0] = {width, (height + 64 - 1) / 64, 1},
-      };
-
-      tb_render_pipeline_issue_dispatch_batch(self, self->ssao_blur_ctx, 1,
-                                              &x_batch);
-      tb_render_pipeline_issue_dispatch_batch(self, self->ssao_blur_ctx, 1,
-                                              &y_batch);
-    }
     // Depth copy pass
     {
       FullscreenBatch fs_batch = {
@@ -4174,7 +3335,6 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   // render passes
   {
     reimport_render_pass(self, self->opaque_depth_normal_pass);
-    reimport_render_pass(self, self->ssao_pass);
     reimport_render_pass(self, self->opaque_color_pass);
     reimport_render_pass(self, self->depth_copy_pass);
     reimport_render_pass(self, self->color_copy_pass);
