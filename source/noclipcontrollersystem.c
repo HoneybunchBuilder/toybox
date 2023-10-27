@@ -35,16 +35,16 @@ void noclip_update_tick(ecs_iter_t *it) {
     {
       const TBKeyboard *keyboard = &input->keyboard;
       if (keyboard->key_W) {
-        move_axis[1] += 1.0f;
+        move_axis.y += 1.0f;
       }
       if (keyboard->key_A) {
-        move_axis[0] -= 1.0f;
+        move_axis.x -= 1.0f;
       }
       if (keyboard->key_S) {
-        move_axis[1] -= 1.0f;
+        move_axis.y -= 1.0f;
       }
       if (keyboard->key_D) {
-        move_axis[0] += 1.0f;
+        move_axis.x += 1.0f;
       }
       const TBMouse *mouse = &input->mouse;
       if (mouse->left || mouse->right || mouse->middle) {
@@ -57,10 +57,10 @@ void noclip_update_tick(ecs_iter_t *it) {
     // specified
     {
       const TBGameControllerState *ctl_state = &input->controller_states[0];
-      if (look_axis[0] == 0 && look_axis[1] == 0) {
+      if (look_axis.x == 0 && look_axis.y == 0) {
         look_axis = ctl_state->right_stick;
       }
-      if (move_axis[0] == 0 && move_axis[1] == 0) {
+      if (move_axis.x == 0 && move_axis.y == 0) {
         move_axis = ctl_state->left_stick;
       }
     }
@@ -73,8 +73,8 @@ void noclip_update_tick(ecs_iter_t *it) {
     {
       float delta_move_speed = noclip->move_speed * it->delta_time;
 
-      velocity += forward * delta_move_speed * move_axis[1];
-      velocity += right * delta_move_speed * move_axis[0];
+      velocity += forward * delta_move_speed * move_axis.y;
+      velocity += right * delta_move_speed * move_axis.x;
     }
 
     Quaternion angular_velocity = {0};
@@ -82,9 +82,9 @@ void noclip_update_tick(ecs_iter_t *it) {
       float delta_look_speed = noclip->look_speed * it->delta_time;
 
       Quaternion av0 =
-          angle_axis_to_quat(f3tof4(up, look_axis[0] * delta_look_speed));
+          angle_axis_to_quat(f3tof4(up, look_axis.x * delta_look_speed));
       Quaternion av1 =
-          angle_axis_to_quat(f3tof4(right, look_axis[1] * delta_look_speed));
+          angle_axis_to_quat(f3tof4(right, look_axis.y * delta_look_speed));
 
       angular_velocity = mulq(av0, av1);
     }

@@ -9,7 +9,7 @@ void queue_begin_label(VkQueue queue, const char *label, float4 color) {
     VkDebugUtilsLabelEXT info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
         .pLabelName = label,
-        .color = {color[0], color[1], color[2], color[3]},
+        .color = {color.r, color.g, color.b, color.a},
     };
     vkQueueBeginDebugUtilsLabelEXT(queue, &info);
   }
@@ -26,7 +26,7 @@ void cmd_begin_label(VkCommandBuffer cmd, const char *label, float4 color) {
     VkDebugUtilsLabelEXT info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
         .pLabelName = label,
-        .color = {color[0], color[1], color[2], color[3]},
+        .color = {color.r, color.g, color.b, color.a},
     };
     vkCmdBeginDebugUtilsLabelEXT(cmd, &info);
   }

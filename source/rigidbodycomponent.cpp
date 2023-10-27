@@ -23,7 +23,7 @@
 
 JPH::ShapeRefC create_box_shape(float3 half_extents) {
   JPH::BoxShapeSettings settings(
-      JPH::Vec3(half_extents[0], half_extents[1], half_extents[2]));
+      JPH::Vec3(half_extents.x, half_extents.y, half_extents.z));
   return settings.Create().Get();
 }
 
@@ -77,11 +77,11 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
         float3 half_extents = {};
         json_object_object_foreach(extra, key, value) {
           if (SDL_strcmp(key, "half_ext_x") == 0) {
-            half_extents[0] = (float)json_object_get_double(value);
+            half_extents.x = (float)json_object_get_double(value);
           } else if (SDL_strcmp(key, "half_ext_y") == 0) {
-            half_extents[1] = (float)json_object_get_double(value);
+            half_extents.y = (float)json_object_get_double(value);
           } else if (SDL_strcmp(key, "half_ext_z") == 0) {
-            half_extents[2] = (float)json_object_get_double(value);
+            half_extents.z = (float)json_object_get_double(value);
           }
         }
         shape = create_box_shape(half_extents);

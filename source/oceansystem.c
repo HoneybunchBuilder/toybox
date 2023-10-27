@@ -687,9 +687,9 @@ void ocean_draw_tick(ecs_iter_t *it) {
       for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
         float3 corner = tb_frustum_corners[i];
         // Transform from screen space to world space
-        float4 inv_corner = mulf44(view->view_data.inv_vp,
-                                   f4(corner[0], corner[1], corner[2], 1.0f));
-        frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
+        float4 inv_corner =
+            mulf44(view->view_data.inv_vp, f3tof4(corner, 1.0f));
+        frustum_corners[i] = f4tof3(inv_corner) / inv_corner.w;
         frustum_corners[i][TB_HEIGHT_IDX] = 0.0f; // Flatten the AABB
         aabb_add_point(&frust_aabb, frustum_corners[i]);
       }

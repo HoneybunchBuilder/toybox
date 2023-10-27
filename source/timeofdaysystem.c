@@ -59,51 +59,51 @@ float3 lookup_sun_color(float norm) {
   // Calc Red
   {
     if (temp <= 66.0f) {
-      color[0] = 255.0f;
+      color.r = 255.0f;
     } else {
-      color[0] = temp - 60.0f;
-      color[0] = 329.698727446f * SDL_powf(color[0], -0.1332047592f);
+      color.r = temp - 60.0f;
+      color.r = 329.698727446f * SDL_powf(color.r, -0.1332047592f);
     }
-    color[0] /= 255.0f;
+    color.r /= 255.0f;
   }
 
   // Calc Green
   {
     if (temp <= 66.0f) {
-      color[1] = temp;
-      color[1] = 99.4708025861f * SDL_logf(color[1]) - 161.1195681661f;
+      color.g = temp;
+      color.g = 99.4708025861f * SDL_logf(color.g) - 161.1195681661f;
     } else {
-      color[1] = temp - 60.0f;
-      color[1] = 288.1221695283f * SDL_powf(color[1], -0.0755148492f);
+      color.g = temp - 60.0f;
+      color.g = 288.1221695283f * SDL_powf(color.g, -0.0755148492f);
     }
-    if (color[1] < 0.0f) {
-      color[1] = 0.0f;
+    if (color.g < 0.0f) {
+      color.g = 0.0f;
     }
-    if (color[1] > 255.0f) {
-      color[1] = 255.0f;
+    if (color.g > 255.0f) {
+      color.g = 255.0f;
     }
-    color[1] /= 255.0f;
+    color.g /= 255.0f;
   }
 
   // Calc Blue
   {
     if (temp >= 66.0f) {
-      color[2] = 255.0f;
+      color.b = 255.0f;
     } else {
       if (temp <= 19.0f) {
-        color[2] = 0.0f;
+        color.b = 0.0f;
       } else {
-        color[2] = temp - 10;
-        color[2] = 138.5177312231f * SDL_logf(color[2]) - 305.0447927307f;
-        if (color[2] < 0.0f) {
-          color[2] = 0.0f;
+        color.b = temp - 10;
+        color.b = 138.5177312231f * SDL_logf(color.b) - 305.0447927307f;
+        if (color.b < 0.0f) {
+          color.b = 0.0f;
         }
-        if (color[2] > 255.0f) {
-          color[2] = 255.0f;
+        if (color.b > 255.0f) {
+          color.b = 255.0f;
         }
       }
     }
-    color[2] /= 255.0f;
+    color.b /= 255.0f;
   }
 
   return color;

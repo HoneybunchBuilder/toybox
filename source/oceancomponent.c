@@ -12,7 +12,7 @@
 #include <SDL2/SDL_stdinc.h>
 
 float4 make_wave(float2 dir, float steepness, float wavelength) {
-  return f4(dir[0], dir[1], steepness, wavelength);
+  return f4(dir.x, dir.y, steepness, wavelength);
 }
 
 OceanComponent create_ocean_component_internal(void) {
@@ -98,21 +98,21 @@ void tb_register_ocean_component(ecs_world_t *ecs) {
 OceanSample gerstner_wave(OceanWave wave, OceanSample sample, float time) {
   float3 p = sample.pos;
 
-  float steepness = wave[2];
-  float k = 2.0f * PI / wave[3];
+  float steepness = wave.z;
+  float k = 2.0f * PI / wave.w;
   float c = SDL_sqrtf(9.8f / k);
-  float2 d = normf2(f2(wave[0], wave[1]));
-  float f = k * (dotf2(d, (float2){p[0], p[2]}) - c * time);
+  float2 d = normf2(wave.xy);
+  float f = k * (dotf2(d, p.xz) - c * time);
   float a = steepness / k;
 
   float sinf = SDL_sinf(f);
   float cosf = SDL_cosf(f);
 
-  p = (float3){d[0] * (a * cosf), a * sinf, d[1] * (a * cosf)};
-  float3 t = {-d[0] * d[0] * (steepness * sinf), d[0] * (steepness * cosf),
-              -d[0] * d[1] * (steepness * sinf)};
-  float3 b = {-d[0] * d[1] * (steepness * sinf), d[1] * (steepness * cosf),
-              -d[1] * d[1] * (steepness * sinf)};
+  p = (float3){d.x * (a * cosf), a * sinf, d.y * (a * cosf)};
+  float3 t = {-d.x * d.x * (steepness * sinf), d.x * (steepness * cosf),
+              -d.x * d.y * (steepness * sinf)};
+  float3 b = {-d.x * d.y * (steepness * sinf), d.y * (steepness * cosf),
+              -d.y * d.y * (steepness * sinf)};
 
   return (OceanSample){
       .pos = sample.pos + p,
@@ -131,7 +131,7 @@ OceanSample tb_sample_ocean(const OceanComponent *ocean, ecs_world_t *ecs,
   }
 
   OceanSample sample = {
-      .pos = f4tof3(mulf44(mat, (float4){pos[0], 0, pos[1], 1})),
+      .pos = f4tof3(mulf44(mat, (float4){pos.x, 0, pos.y, 1})),
       .tangent = TB_RIGHT,
       .binormal = TB_FORWARD,
   };
