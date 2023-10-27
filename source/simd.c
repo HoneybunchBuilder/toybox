@@ -128,9 +128,9 @@ float3 normf3(float3 v) {
   };
 }
 
-float4 normf4(float3 v) {
+float4 normf4(float4 v) {
   float inv_sum = 1 / magf4(v);
-  return (float3){
+  return (float4){
       v[0] * inv_sum,
       v[1] * inv_sum,
       v[2] * inv_sum,
@@ -438,7 +438,7 @@ bool tb_f3eq(float3 x, float3 y) {
 }
 
 bool tb_transeq(const Transform *x, const Transform *y) {
-  return tb_f4eq(x->position, y->position) &&
+  return tb_f3eq(x->position, y->position) &&
          tb_f4eq(x->rotation, y->rotation) && tb_f3eq(x->scale, y->scale);
 }
 

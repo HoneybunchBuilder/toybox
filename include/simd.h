@@ -30,21 +30,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef float __attribute__((vector_size(16))) float4;
-typedef float __attribute__((vector_size(16))) float3;
-typedef float __attribute__((vector_size(8))) float2;
+typedef float __attribute__((ext_vector_type(4))) float4;
+typedef float __attribute__((ext_vector_type(3))) float3;
+typedef float __attribute__((ext_vector_type(2))) float2;
 
-typedef double __attribute__((vector_size(32))) double4;
-typedef double __attribute__((vector_size(32))) double3;
-typedef double __attribute__((vector_size(16))) double2;
+typedef double __attribute__((ext_vector_type(4))) double4;
+typedef double __attribute__((ext_vector_type(3))) double3;
+typedef double __attribute__((ext_vector_type(2))) double2;
 
-typedef int32_t __attribute__((vector_size(16))) int4;
-typedef int32_t __attribute__((vector_size(16))) int3;
-typedef int32_t __attribute__((vector_size(8))) int2;
+typedef int32_t __attribute__((ext_vector_type(4))) int4;
+typedef int32_t __attribute__((ext_vector_type(3))) int3;
+typedef int32_t __attribute__((ext_vector_type(2))) int2;
 
-typedef uint32_t __attribute__((vector_size(16))) uint4;
-typedef uint32_t __attribute__((vector_size(16))) uint3;
-typedef uint32_t __attribute__((vector_size(8))) uint2;
+typedef uint32_t __attribute__((ext_vector_type(4))) uint4;
+typedef uint32_t __attribute__((ext_vector_type(3))) uint3;
+typedef uint32_t __attribute__((ext_vector_type(2))) uint2;
 typedef uint32_t uint; // For hlsl compatibility
 
 // All matrices are column major since HLSL expects that by default

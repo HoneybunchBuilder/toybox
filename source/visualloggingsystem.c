@@ -96,7 +96,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         PrimitivePushConstants consts = {
             .position = shape->location.position,
             .scale = scale,
-            .color = shape->location.color,
+            .color = shape->location.color.xyzx,
         };
         vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_ALL_GRAPHICS,
                            0, sizeof(PrimitivePushConstants), &consts);

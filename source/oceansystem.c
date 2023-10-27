@@ -730,8 +730,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
       for (uint32_t d = 0; d < deep_tile_count; ++d) {
         for (uint32_t h = 0; h < horiz_tile_count; ++h) {
           AABB world_aabb = aabb_init();
-          float3 min = f3(-half_width, 0, -half_depth) + pos;
-          float3 max = f3(half_width, 0, half_depth) + pos;
+          float3 min = f3(-half_width, 0, -half_depth) + pos.xyz;
+          float3 max = f3(half_width, 0, half_depth) + pos.xyz;
 
           aabb_add_point(&world_aabb, min + view_to_world_offset);
           aabb_add_point(&world_aabb, max + view_to_world_offset);
@@ -739,7 +739,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
           // TODO: Make frustum test more reliable
           // if (frustum_test_aabb(&view->frustum, &world_aabb))
           {
-            float3 offset = pos;
+            float3 offset = pos.xyz;
             offset[TB_HEIGHT_IDX] = 0.0f;
             // tb_vlog_location(self->vlog, offset, 20.0f, f3(0, 1, 0));
             visible_tile_offsets[visible_tile_count++] = f3tof4(offset, 0.0f);
