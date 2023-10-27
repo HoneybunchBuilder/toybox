@@ -422,6 +422,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
   }
   mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
   if (!mesh_count) {
+    TracyCZoneEnd(ctx);
     return;
   }
 

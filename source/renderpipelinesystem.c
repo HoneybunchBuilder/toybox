@@ -4320,16 +4320,15 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
                      ((i + write_head) * ctx->user_batch_size);
     SDL_memcpy(user_dst, batch->user_batch, ctx->user_batch_size);
     DrawBatch *write_batch = &ctx->batches[i + write_head];
-    void *tmp_draws = write_batch->draws;
-    *write_batch = *batch;
-    write_batch->user_batch = user_dst;
-    write_batch->draws = tmp_draws;
 
     // Must always realloc and copy draw data
-    write_batch->draws = tb_realloc(self->std_alloc, write_batch->draws,
-                                    batch->draw_count * batch->draw_size);
-    SDL_memcpy(write_batch->draws, batch->draws,
-               batch->draw_count * batch->draw_size);
+    void *draws = write_batch->draws;
+    draws = tb_realloc(self->std_alloc, draws,
+                       batch->draw_count * batch->draw_size);
+    SDL_memcpy(draws, batch->draws, batch->draw_count * batch->draw_size);
+    *write_batch = *batch;
+    write_batch->user_batch = user_dst;
+    write_batch->draws = draws;
   }
 
   ctx->batch_count = new_count;

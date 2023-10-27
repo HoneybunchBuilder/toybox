@@ -49,6 +49,7 @@ void destroy_render_object_system(RenderObjectSystem *self) {
 }
 
 void tick_render_object_system(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Render Object System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderObjectSystem);
@@ -67,6 +68,7 @@ void tick_render_object_system(ecs_iter_t *it) {
   ro_sys->obj_count = obj_count;
 
   if (obj_count == 0) {
+    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -98,8 +100,10 @@ void tick_render_object_system(ecs_iter_t *it) {
           ecs_field(&obj_it, TransformComponent, 1);
       RenderObject *rnd_objs = ecs_field(&obj_it, RenderObject, 2);
       for (int32_t i = 0; i < obj_it.count; ++i) {
-        trans_ptr[obj_idx] =
-            tb_transform_get_world_matrix(ecs, &trans_comps[i]);
+        if (trans_comps[i].dirty) {
+          trans_ptr[obj_idx] =
+              tb_transform_get_world_matrix(ecs, &trans_comps[i]);
+        }
         rnd_objs[i].index = obj_idx;
         obj_idx++;
       }
@@ -138,6 +142,7 @@ void tick_render_object_system(ecs_iter_t *it) {
       tb_rnd_update_descriptors(rnd_sys, 1, &write);
     }
   }
+  TracyCZoneEnd(ctx);
 }
 
 VkDescriptorSet tb_render_object_sys_get_set(RenderObjectSystem *sys) {
