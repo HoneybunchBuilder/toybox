@@ -331,8 +331,8 @@ void shadow_update_tick(ecs_iter_t *it) {
           const float3 min = -max;
 
           // Calculate projection
-          float4x4 proj = orthographic(max[0], min[0], max[1], min[1], 0.0f,
-                                       max[2] - min[2]);
+          float4x4 proj =
+              orthographic(min.x, max.x, min.y, max.y, min.z, max.z - min.z);
 
           // Calc view matrix
           float4x4 view = {.col0 = {0}};
