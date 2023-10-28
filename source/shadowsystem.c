@@ -196,10 +196,9 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       cmd_begin_label(buffer, "Submesh Draw", (float4){0.6f, 0.0f, 0.3f, 1.0f});
 
       if (draw->index_count > 0) {
-        VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-        if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
-          cull_flags = VK_CULL_MODE_NONE;
-        }
+        // Don't backface cull when casting shadows
+        VkCullModeFlags cull_flags = VK_CULL_MODE_NONE;
+
         vkCmdSetCullMode(buffer, cull_flags);
         vkCmdSetDepthBias(buffer, 1.0f, 0.0f, 1.75f);
         // Don't need to bind material data
