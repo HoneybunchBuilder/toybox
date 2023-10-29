@@ -84,32 +84,31 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
 // Shadowing
 #define AMBIENT 0.7
 float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
-                   Texture2D shadow_map, sampler samp) {
+                   Texture2DArray shadow_map, sampler samp) {
   float bias = 0.0005;
 
   float4 proj_coord = shadow_coord;
 
   proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
-  proj_coord.y /= (float)TB_CASCADE_COUNT;
-  proj_coord.y += ((float)cascade_idx / (float)TB_CASCADE_COUNT);
   proj_coord = proj_coord / proj_coord.w;
 
   if (proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
     return 1.0;
   }
 
+  float2 coord = proj_coord.xy + offset;
   float sampled_depth =
-      shadow_map.Sample(samp, float2(proj_coord.xy + offset)).r;
+      shadow_map.Sample(samp, float3(coord.x, coord.y, cascade_idx)).r;
 
   return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias)
              ? saturate(1 - AMBIENT)
              : 1.0f;
 }
 
-float pcf_filter(float4 shadow_coord, Texture2D shadow_map, uint cascade_idx,
-                 sampler samp) {
-  int2 tex_dim;
-  shadow_map.GetDimensions(tex_dim.x, tex_dim.y);
+float pcf_filter(float4 shadow_coord, Texture2DArray shadow_map,
+                 uint cascade_idx, sampler samp) {
+  int3 tex_dim;
+  shadow_map.GetDimensions(tex_dim.x, tex_dim.y, tex_dim.z);
 
   float scale = 0.5f;
   float dx = scale * (1.0 / float(tex_dim.x));
@@ -119,6 +118,8 @@ float pcf_filter(float4 shadow_coord, Texture2D shadow_map, uint cascade_idx,
   uint count = 0;
   int range = 1;
 
+  // This is just a 2x2 PCF filter
+  // What about 9x9? Should be doable with minimal fetches
   for (int x = -range; x <= range; ++x) {
     for (int y = -range; y <= range; ++y) {
       float2 offset = float2(dx * x, dy * y);
@@ -141,7 +142,7 @@ struct View {
 
 struct Light {
   CommonLightData light;
-  Texture2D shadow_map;
+  Texture2DArray shadow_map;
   sampler shadow_sampler;
 };
 

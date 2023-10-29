@@ -1,7 +1,7 @@
 #pragma once
 
 #include "allocator.h"
-
+#include "common.hlsli"
 #include "rendersystem.h"
 
 #define ShadowSystemId 0xB105F00D
@@ -19,7 +19,7 @@ typedef struct ShadowSystem {
   Allocator std_alloc;
   Allocator tmp_alloc;
 
-  TbDrawContextId draw_ctx;
+  TbDrawContextId draw_ctxs[TB_CASCADE_COUNT];
   VkPipelineLayout pipe_layout;
   VkPipeline pipeline;
 

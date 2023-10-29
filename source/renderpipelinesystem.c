@@ -879,7 +879,8 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
     TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
     TbRenderTargetId target_id = pass->attachments[0].attachment;
     VkExtent3D target_ext = tb_render_target_get_mip_extent(
-        self->render_target_system, pass->attachments[0].mip, target_id);
+        self->render_target_system, pass->attachments[0].layer,
+        pass->attachments[0].mip, target_id);
 
     PassContext pass_context = (PassContext){
         .id = id,
@@ -914,6 +915,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
 
 typedef struct TbAttachmentInfo {
   VkClearValue clear_value;
+  uint32_t layer;
   uint32_t mip;
   VkAttachmentLoadOp load_op;
   VkAttachmentStoreOp store_op;
@@ -969,6 +971,7 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
       const TbAttachmentInfo *attach_info = &create_info->attachments[i];
       pass->attachments[i] = (PassAttachment){
           .clear_value = attach_info->clear_value,
+          .layer = attach_info->layer,
           .mip = attach_info->mip,
           .attachment = attach_info->attachment,
       };
@@ -991,7 +994,8 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
-        rt_sys, pass->attachments[0].mip, pass->attachments[0].attachment);
+        rt_sys, pass->attachments[0].layer, pass->attachments[0].mip,
+        pass->attachments[0].attachment);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       uint32_t color_count = 0;
@@ -1005,7 +1009,7 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
         VkFormat format = tb_render_target_get_format(
             self->render_target_system, attachment->attachment);
         VkImageView view = tb_render_target_get_mip_view(
-            self->render_target_system, attachment->mip, i,
+            self->render_target_system, attachment->layer, attachment->mip, i,
             attachment->attachment);
 
         VkRenderingAttachmentInfo *info = &color_attachments[color_count];
@@ -1405,35 +1409,42 @@ RenderPipelineSystem create_render_pipeline_system(
                                   {
                                       .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
                                       .levelCount = 1,
-                                      .layerCount = 1,
+                                      .layerCount = TB_CASCADE_COUNT,
                                   },
                           },
                   },
           },
       };
 
-      TbRenderPassCreateInfo create_info = {
-          .dependency_count = 1,
-          .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
-          .transition_count = trans_count,
-          .transitions = transitions,
-          .attachment_count = 1,
-          .attachments =
-              (TbAttachmentInfo[1]){
-                  {
-                      .clear_value = {.depthStencil = {.depth = 1.0f,
-                                                       .stencil = 0u}},
-                      .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                      .attachment = shadow_map,
-                  },
-              },
-          .name = "Shadow Pass",
-      };
+      for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
+           ++cascade_idx) {
+        TbRenderPassCreateInfo create_info = {
+            .dependency_count = 1,
+            .dependencies = (TbRenderPassId[1]){sys.opaque_depth_normal_pass},
+            .attachment_count = 1,
+            .attachments =
+                (TbAttachmentInfo[1]){
+                    {
+                        .clear_value = {.depthStencil = {.depth = 1.0f,
+                                                         .stencil = 0u}},
+                        .layer = cascade_idx,
+                        .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                        .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                        .attachment = shadow_map,
+                    },
+                },
+            .name = "Shadow Pass",
+        };
+        // Only need to schedule transitions for the first pass
+        if (cascade_idx == 0) {
+          create_info.transition_count = trans_count;
+          create_info.transitions = transitions;
+        }
 
-      TbRenderPassId id = create_render_pass(&sys, &create_info);
-      TB_CHECK(id != InvalidRenderPassId, "Failed to create shadow pass");
-      sys.shadow_pass = id;
+        TbRenderPassId id = create_render_pass(&sys, &create_info);
+        TB_CHECK(id != InvalidRenderPassId, "Failed to create shadow pass");
+        sys.shadow_passes[cascade_idx] = id;
+      }
     }
     // Create opaque color pass
     {
@@ -1565,7 +1576,7 @@ RenderPipelineSystem create_render_pipeline_system(
                           {
                               .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
                               .levelCount = 1,
-                              .layerCount = 1,
+                              .layerCount = TB_CASCADE_COUNT,
                           },
                   },
           }};
@@ -1575,8 +1586,9 @@ RenderPipelineSystem create_render_pipeline_system(
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
-          .dependencies = (TbRenderPassId[2]){sys.opaque_depth_normal_pass,
-                                              sys.shadow_pass},
+          .dependencies =
+              (TbRenderPassId[2]){sys.opaque_depth_normal_pass,
+                                  sys.shadow_passes[TB_CASCADE_COUNT - 1]},
           .transition_count = transition_count,
           .transitions = transitions,
           .attachment_count = 2,
@@ -2726,16 +2738,16 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         self->render_target_system, self->render_system->frame_idx,
         self->render_target_system->brightness);
     VkImageView bloom_full_view = tb_render_target_get_mip_view(
-        self->render_target_system, 0, self->render_system->frame_idx,
+        self->render_target_system, 0, 0, self->render_system->frame_idx,
         self->render_target_system->bloom_mip_chain);
     VkImageView bloom_half_view = tb_render_target_get_mip_view(
-        self->render_target_system, 1, self->render_system->frame_idx,
+        self->render_target_system, 0, 1, self->render_system->frame_idx,
         self->render_target_system->bloom_mip_chain);
     VkImageView bloom_quarter_view = tb_render_target_get_mip_view(
-        self->render_target_system, 2, self->render_system->frame_idx,
+        self->render_target_system, 0, 2, self->render_system->frame_idx,
         self->render_target_system->bloom_mip_chain);
     VkImageView bloom_sixteenth_view = tb_render_target_get_mip_view(
-        self->render_target_system, 3, self->render_system->frame_idx,
+        self->render_target_system, 0, 3, self->render_system->frame_idx,
         self->render_target_system->bloom_mip_chain);
 
 // Write the descriptor set
@@ -3283,7 +3295,8 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
     RenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
-        rt_sys, rp->attachments[0].mip, rp->attachments[0].attachment);
+        rt_sys, rp->attachments[0].layer, rp->attachments[0].mip,
+        rp->attachments[0].attachment);
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       // Update the pass context on each frame index
@@ -3303,7 +3316,8 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
           TbRenderTargetId rt = rp->attachments[attach_idx].attachment;
           VkFormat format = tb_render_target_get_format(rt_sys, rt);
           VkImageView view = tb_render_target_get_mip_view(
-              rt_sys, rp->attachments[attach_idx].mip, i, rt);
+              rt_sys, rp->attachments[attach_idx].layer,
+              rp->attachments[attach_idx].mip, i, rt);
 
           // Forgive the const casting :(
           if (format == VK_FORMAT_D32_SFLOAT) {

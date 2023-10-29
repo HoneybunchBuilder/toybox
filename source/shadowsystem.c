@@ -134,13 +134,12 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 4,
+              .dynamicStateCount = 3,
               .pDynamicStates =
-                  (VkDynamicState[4]){
+                  (VkDynamicState[3]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
                       VK_DYNAMIC_STATE_DEPTH_BIAS,
-                      VK_DYNAMIC_STATE_CULL_MODE,
                   },
           },
       .layout = pipe_layout,
@@ -196,10 +195,6 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       cmd_begin_label(buffer, "Submesh Draw", (float4){0.6f, 0.0f, 0.3f, 1.0f});
 
       if (draw->index_count > 0) {
-        // Don't backface cull when casting shadows
-        VkCullModeFlags cull_flags = VK_CULL_MODE_NONE;
-
-        vkCmdSetCullMode(buffer, cull_flags);
         vkCmdSetDepthBias(buffer, 1.0f, 0.0f, 1.75f);
         // Don't need to bind material data
         vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
@@ -664,14 +659,14 @@ void shadow_draw_tick(ecs_iter_t *it) {
           PrimitiveBatch *prim_batch = (PrimitiveBatch *)batch->user_batch;
           prim_batch->view_set = view_set;
 
-          static const float dim = TB_SHADOW_MAP_DIM;
-          batch->viewport = (VkViewport){0, dim * cascade_idx, dim, dim, 0, 1};
-          batch->scissor = (VkRect2D){{0, dim * cascade_idx}, {dim, dim}};
+          const float dim = TB_SHADOW_MAP_DIM;
+          batch->viewport = (VkViewport){0, 0, dim, dim, 0, 1};
+          batch->scissor = (VkRect2D){{0, 0}, {dim, dim}};
         }
 
-        tb_render_pipeline_issue_draw_batch(rp_sys, shadow_sys->draw_ctx,
-                                            TB_DYN_ARR_SIZE(batches),
-                                            batches.data);
+        tb_render_pipeline_issue_draw_batch(
+            rp_sys, shadow_sys->draw_ctxs[cascade_idx],
+            TB_DYN_ARR_SIZE(batches), batches.data);
       }
       TracyCZoneEnd(ctx2);
     }
@@ -707,14 +702,16 @@ void tb_register_shadow_sys(TbWorld *world) {
                                   {.id = ecs_id(DirectionalLightComponent)},
                                   {.id = ecs_id(TransformComponent)},
                               }}),
-      .draw_ctx = tb_render_pipeline_register_draw_context(
-          rp_sys,
-          &(DrawContextDescriptor){
-              .batch_size = sizeof(PrimitiveBatch),
-              .draw_fn = shadow_pass_record,
-              .pass_id = rp_sys->shadow_pass,
-          }),
   };
+  // Need a draw context per cascade pass
+  for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
+    sys.draw_ctxs[i] = tb_render_pipeline_register_draw_context(
+        rp_sys, &(DrawContextDescriptor){
+                    .batch_size = sizeof(PrimitiveBatch),
+                    .draw_fn = shadow_pass_record,
+                    .pass_id = rp_sys->shadow_passes[i],
+                });
+  }
 
   {
     VkResult err = VK_SUCCESS;
@@ -737,11 +734,11 @@ void tb_register_shadow_sys(TbWorld *world) {
 
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_pass,
+      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_passes[0],
                                          &attach_count, NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
       PassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_pass,
+      tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_passes[0],
                                          &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(

@@ -30,6 +30,7 @@ typedef struct ecs_world_t ecs_world_t;
 
 typedef struct PassAttachment {
   VkClearValue clear_value;
+  uint32_t layer;
   uint32_t mip;
   TbRenderTargetId attachment;
 } PassAttachment;
@@ -85,7 +86,7 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId opaque_depth_normal_pass;
   TbRenderPassId opaque_color_pass;
   TbRenderPassId depth_copy_pass;
-  TbRenderPassId shadow_pass;
+  TbRenderPassId shadow_passes[TB_CASCADE_COUNT];
   TbRenderPassId color_copy_pass;
   TbRenderPassId sky_pass;
   TbRenderPassId transparent_depth_pass;
