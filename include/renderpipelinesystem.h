@@ -44,6 +44,7 @@ typedef struct DrawBatch {
   uint32_t draw_count;
   uint64_t draw_size;
   void *draws;
+  uint32_t draw_max;
 } DrawBatch;
 
 #define MAX_GROUPS 8
