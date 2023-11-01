@@ -109,9 +109,6 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
           &(VkPipelineRasterizationStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-              .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_NONE,
-              .depthBiasEnable = VK_TRUE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =
@@ -134,12 +131,11 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 3,
+              .dynamicStateCount = 2,
               .pDynamicStates =
-                  (VkDynamicState[3]){
+                  (VkDynamicState[2]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
-                      VK_DYNAMIC_STATE_DEPTH_BIAS,
                   },
           },
       .layout = pipe_layout,
@@ -195,7 +191,6 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       cmd_begin_label(buffer, "Submesh Draw", (float4){0.6f, 0.0f, 0.3f, 1.0f});
 
       if (draw->index_count > 0) {
-        vkCmdSetDepthBias(buffer, 1.0f, 0.0f, 1.75f);
         // Don't need to bind material data
         vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
                              draw->index_type);

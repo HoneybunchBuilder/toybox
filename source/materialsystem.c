@@ -70,7 +70,6 @@ MaterialSystem create_material_system(Allocator std_alloc, Allocator tmp_alloc,
   }
 
   // Create immutable sampler for sampling shadows
-  // Use nearest sampling filter because we're already doing PCF filtering
   {
     VkSamplerCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -81,9 +80,11 @@ MaterialSystem create_material_system(Allocator std_alloc, Allocator tmp_alloc,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
         .anisotropyEnable = VK_FALSE,
+        .compareEnable = VK_TRUE,
+        .compareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
         .maxAnisotropy = 1.0f,
         .maxLod = 1.0f,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
     err = vkCreateSampler(device, &create_info, vk_alloc, &sys.shadow_sampler);
     TB_VK_CHECK(err, "Failed to create material shadow sampler");

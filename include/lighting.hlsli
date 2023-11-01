@@ -132,6 +132,16 @@ float pcf_filter(float4 shadow_coord, Texture2DArray shadow_map,
   return shadow_factor / count;
 }
 
+float3 calc_shadow_pos_offset(Texture2DArray shadow_map, float NdotL,
+                              float3 normal) {
+  float2 shadow_map_size;
+  float cascade_count;
+  shadow_map.GetDimensions(shadow_map_size.x, shadow_map_size.y, cascade_count);
+  float texel_size = 2.0f / shadow_map_size.x;
+  float offset_scale = saturate(1.0f - NdotL);
+  return texel_size * offset_scale * normal;
+}
+
 struct View {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
@@ -143,7 +153,7 @@ struct View {
 struct Light {
   CommonLightData light;
   Texture2DArray shadow_map;
-  sampler shadow_sampler;
+  SamplerComparisonState shadow_sampler;
 };
 
 struct Surface {
@@ -159,10 +169,131 @@ struct Surface {
   float4 emissives;
 };
 
+float2 compute_plane_depth_bias(float3 dx, float3 dy) {
+  float2 bias_uv = float2(dy.y * dx.z - dx.y * dy.z, dx.x * dy.z - dy.x * dx.z);
+  bias_uv *= 1.0f / ((dx.x * dy.y) - (dx.y * dy.x));
+  return bias_uv;
+}
+
+float sample_shadow_map(Texture2DArray shadow_map, SamplerComparisonState samp,
+                        float2 base_uv, float u, float v,
+                        float2 shadow_map_size_inv, uint cascade_idx,
+                        float depth) {
+  float2 uv = base_uv + float2(u, v) * shadow_map_size_inv;
+  float z = depth;
+  return shadow_map.SampleCmpLevelZero(samp, float3(uv, cascade_idx), z);
+}
+
+float sample_shadow_pcf(Texture2DArray shadow_map, SamplerComparisonState samp,
+                        float3 shadow_pos, float3 shadow_pos_dx,
+                        float3 shadow_pos_dy, uint cascade_idx) {
+  float2 shadow_map_size;
+  float cascade_count;
+  shadow_map.GetDimensions(shadow_map_size.x, shadow_map_size.y, cascade_count);
+
+  float light_depth = shadow_pos.z;
+
+#if 0
+  float2 texel_size = 1.0f / shadow_map_size;
+  float2 plane_depth_bias =
+      compute_plane_depth_bias(shadow_pos_dx, shadow_pos_dy);
+
+  // Static depth biasing to make up for incorrect fractional sampling on the
+  // shadow map grid
+  float error = 2 * dot(float2(1, 1) * texel_size, abs(plane_depth_bias));
+  light_depth -= max(abs(error), 0.01f);
+#else
+  float2 plane_depth_bias = 0;
+  const float bias = 0.002f;
+  light_depth -= bias;
+#endif
+
+  float2 uv = shadow_pos.xy * shadow_map_size;
+  float2 shadow_map_size_inv = 1.0f / shadow_map_size;
+
+  float2 base_uv = float2(floor(uv.x + 0.5f), floor(uv.y + 0.5f));
+
+  float s = (uv.x + 0.5 - base_uv.x);
+  float t = (uv.y + 0.5 - base_uv.y);
+
+  base_uv -= float2(0.5, 0.5);
+  base_uv *= shadow_map_size_inv;
+
+  float sum = 0;
+#if 1
+  // Single sample
+  return shadow_map.SampleCmpLevelZero(samp, float3(shadow_pos.xy, cascade_idx),
+                                       light_depth);
+#else
+  // Use a filter size of 9x9
+#endif
+}
+
+float sample_shadow_cascade(Texture2DArray shadow_map,
+                            SamplerComparisonState samp, float3 shadow_pos,
+                            float3 shadow_pos_dx, float3 shadow_pos_dy,
+                            float4x4 shadow_mat, uint cascade_idx) {
+  // Need to transform derivatives by the shadow mat too
+  float4 proj_pos = mul(shadow_mat, float4(shadow_pos_dx, 1.0f));
+  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
+  shadow_pos_dx = proj_pos.xyz / proj_pos.w;
+  proj_pos = mul(shadow_mat, float4(shadow_pos_dy, 1.0f));
+  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
+  shadow_pos_dy = proj_pos.xyz / proj_pos.w;
+
+  // Perform specific filtering routine
+  return sample_shadow_pcf(shadow_map, samp, shadow_pos, shadow_pos_dx,
+                           shadow_pos_dy, cascade_idx);
+}
+
+float shadow_visibility(Light l, Surface s) {
+
+  uint cascade_idx = TB_CASCADE_COUNT - 1;
+  for (int i = (int)cascade_idx; i >= 0; --i) {
+    // Select cascade based on whether or not the pixel is inside the projection
+    float4x4 shadow_mat = l.light.cascade_vps[i];
+    float4 proj_pos = mul(shadow_mat, float4(s.world_pos, 1.0f));
+    proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
+    float3 cascade_pos = proj_pos.xyz / proj_pos.w;
+    cascade_pos = abs(cascade_pos - 0.5f);
+    if (all(cascade_pos < 0.5f)) {
+      cascade_idx = i;
+    }
+  }
+
+  const float3 cascade_colors[TB_CASCADE_COUNT] = {
+      float3(1.0f, 0.0, 0.0f), float3(0.0f, 1.0f, 0.0f),
+      float3(0.0f, 0.0f, 1.0f), float3(1.0f, 1.0f, 0.0f)};
+
+  // return cascade_colors[cascade_idx];
+
+  float NdotL = max(dot(s.N, l.light.light_dir), 0.0f);
+
+  float4x4 shadow_mat = l.light.cascade_vps[cascade_idx];
+  float3 offset =
+      calc_shadow_pos_offset(l.shadow_map, NdotL, s.N) / shadow_mat[2][2];
+  float3 sample_pos = s.world_pos + offset;
+  float4 proj_pos = mul(shadow_mat, float4(sample_pos, 1.0f));
+  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
+  float3 shadow_pos = proj_pos.xyz / proj_pos.w;
+  float3 shadow_pos_dx = ddx_fine(shadow_pos);
+  float3 shadow_pos_dy = ddy_fine(shadow_pos);
+
+  float visibility = sample_shadow_cascade(
+      l.shadow_map, l.shadow_sampler, shadow_pos, shadow_pos_dx, shadow_pos_dy,
+      shadow_mat, cascade_idx);
+
+  // TODO: Sample across cascades?
+
+  return visibility;
+}
+
 float3 pbr_lighting_common(View v, Light l, Surface s) {
   float3 out_color = 0;
 
   // Calculate shadow first
+  float shadow = max(shadow_visibility(l, s), (1 - AMBIENT));
+  /*
   float shadow = 1.0f; // A value of 0 means the pixel is completely lit
   {
     uint cascade_idx = 0;
@@ -178,11 +309,11 @@ float3 pbr_lighting_common(View v, Light l, Surface s) {
     shadow =
         pcf_filter(shadow_coord, l.shadow_map, cascade_idx, l.shadow_sampler);
   }
+  */
 
   // Lighting
   {
     float3 L = l.light.light_dir;
-
     float3 albedo = s.base_color.rgb;
     float3 alpha = s.base_color.a;
 

@@ -75,7 +75,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   Texture2D normal_map : register(t2, space);                                  \
   Texture2D metal_rough_map : register(t3, space);                             \
   sampler material_sampler : register(s4, space);                              \
-  sampler shadow_sampler : register(s5, space);                                \
+  SamplerComparisonState shadow_sampler : register(s5, space);                 \
   [[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts           \
       : register(b6, space);
 
