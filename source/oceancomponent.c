@@ -23,14 +23,14 @@ OceanComponent create_ocean_component_internal(void) {
   // Creating some randomly generated but artistically driven waves
   OceanWave waves[TB_WAVE_MAX] = {{0}};
   float iter = 0;
-  float wavelength = 128.0f;
-  float steep = 0.12;
+  float wavelength = 48.0f;
+  float steep = 0.03;
   for (uint32_t i = 0; i < TB_WAVE_MAX; ++i) {
     float2 dir = (float2){SDL_sinf(iter), SDL_cosf(iter)};
 
     waves[i] = make_wave(dir, steep, wavelength),
 
-    wavelength *= 0.65;
+    wavelength *= 0.68;
     steep *= 1.04;
     steep = clampf(steep, 0, 1);
     iter += 1323.963;

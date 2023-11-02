@@ -41,15 +41,7 @@ float3 rgb_to_yxy(float3 rgb) { return xyz_to_yxy(rgb_to_xyz(rgb)); }
 
 float3 yxy_to_rgb(float3 yxy) { return xyz_to_rgb(yxy_to_xyz(yxy)); }
 
-float tonemap_unreal_x(float x) {
-  // Gamma 2.2 correction is baked in, don't use with sRGB conversion!
-  return x / (x + 0.155) * 1.019;
-}
-
-float3 tonemap_unreal(float3 rgb) {
-  return float3(tonemap_unreal_x(rgb.r), tonemap_unreal_x(rgb.g),
-                tonemap_unreal_x(rgb.b));
-}
+float3 tonemap_unreal(float3 rgb) { return rgb / (rgb + 0.155) * 1.019; }
 
 Texture2D color_map : register(t0, space0);
 Texture2D bloom_map : register(t1, space0);
