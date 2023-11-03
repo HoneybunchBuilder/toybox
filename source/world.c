@@ -197,6 +197,7 @@ ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
                          Allocator tmp_alloc, json_tokener *tok,
                          const cgltf_data *data, const char *root_scene_path,
                          ecs_entity_t parent, const cgltf_node *node) {
+  ECS_TAG(ecs, NoTransform);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, AssetSystem);
   // Get extras
@@ -237,14 +238,17 @@ ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
   }
   ecs_filter_fini(asset_filter);
 
-  // Add a transform component to the entity by default
-  TransformComponent trans = {
-      .dirty = true,
-      .parent = parent,
-      .child_count = node->children_count,
-      .transform = tb_transform_from_node(node),
-  };
-  ecs_set_ptr(ecs, e, TransformComponent, &trans);
+  // Add a transform component to the entity unless directed not to
+  // by some loaded component
+  if (!ecs_has(ecs, e, NoTransform)) {
+    TransformComponent trans = {
+        .dirty = true,
+        .parent = parent,
+        .child_count = node->children_count,
+        .transform = tb_transform_from_node(node),
+    };
+    ecs_set_ptr(ecs, e, TransformComponent, &trans);
+  }
   if (node->name) {
     ecs_set_name(ecs, e, node->name);
   }

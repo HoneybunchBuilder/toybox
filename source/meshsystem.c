@@ -1258,6 +1258,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
 
       const uint32_t max_obj_count = opaque_mesh_count + trans_mesh_count;
+      if (max_obj_count == 0) {
+        continue;
+      }
 
       // Init arrays on an allocator with a fast allocation
       // so we can inexpensivley append

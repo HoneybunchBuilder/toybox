@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SDL2/SDL_stdinc.h>
 #include <stdbool.h>
 
 typedef struct ecs_world_t ecs_world_t;

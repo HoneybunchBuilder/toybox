@@ -351,6 +351,8 @@ if(WIN32)
   # We use anonymous structs 
   target_compile_options(toybox PUBLIC -Wno-gnu-anonymous-struct)
   target_compile_options(toybox PUBLIC -Wno-nested-anon-types)
+  # Flecs uses '$' in identifiers as part of a DSL so this gets in the way
+  target_compile_options(toybox PUBLIC -Wno-dollar-in-identifier-extension)
 
 elseif(ANDROID)
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
