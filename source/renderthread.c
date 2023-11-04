@@ -275,7 +275,7 @@ bool init_debug_messenger(VkInstance instance,
   return true;
 }
 
-bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
+bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
                        const Swapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
                        const VkPhysicalDeviceMemoryProperties *gpu_mem_props,
@@ -414,7 +414,13 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       // Find the desired memory type index
       for (uint32_t i = 0; i < gpu_mem_props->memoryTypeCount; ++i) {
         VkMemoryType type = gpu_mem_props->memoryTypes[i];
-        if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+        VkMemoryPropertyFlagBits mem_props =
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        if (is_uma) {
+          mem_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        }
+
+        if ((int32_t)(type.propertyFlags & mem_props) >= (int32_t)mem_props) {
           gpu_mem_type_idx = i;
           break;
         }
@@ -445,7 +451,6 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       };
       VmaAllocationCreateInfo alloc_create_info = {
           .pool = state->tmp_gpu_pool,
-          .usage = VMA_MEMORY_USAGE_GPU_ONLY,
       };
       VmaAllocationInfo alloc_info = {0};
       err = vmaCreateBuffer(vma_alloc, &create_info, &alloc_create_info,
@@ -454,6 +459,13 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       TB_VK_CHECK_RET(err, "Failed to create vma temp gpu buffer", false);
       SET_VK_NAME(device, state->tmp_gpu_buffer, VK_OBJECT_TYPE_BUFFER,
                   "Vulkan Tmp GPU Buffer");
+
+      // Map tmp buffer upfront
+      if (is_uma) {
+        err =
+            vmaMapMemory(vma_alloc, state->tmp_gpu_alloc, &state->tmp_gpu_ptr);
+        TB_VK_CHECK_RET(err, "Failed to map temp gpu buffer", false);
+      }
     }
   }
 
@@ -1106,7 +1118,14 @@ bool init_render_thread(RenderThread *thread) {
                                  &thread->swapchain),
                   "Failed to init swapchain", false);
 
-  TB_CHECK_RETURN(init_frame_states(thread->gpu, thread->device,
+  {
+    const VkPhysicalDeviceProperties *props = &thread->gpu_props.properties;
+    thread->is_uma =
+        props->deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
+        props->deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+  }
+
+  TB_CHECK_RETURN(init_frame_states(thread->is_uma, thread->gpu, thread->device,
                                     &thread->swapchain, thread->graphics_queue,
                                     thread->graphics_queue_family_index,
                                     &thread->gpu_mem_props, thread->vma_alloc,
@@ -1291,7 +1310,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
               &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
 
           // Transition target image to copy dst
-          {
+          if (!thread->is_uma) {
             VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                 .subresourceRange = up->range,
@@ -1305,21 +1324,21 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                  VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0,
                                  NULL, 1, &barrier);
-          }
 
-          // Perform the copy
-          vkCmdCopyBufferToImage(start_buffer, up->src, up->dst,
-                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                 &up->region);
+            // Perform the copy
+            vkCmdCopyBufferToImage(start_buffer, up->src, up->dst,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                   &up->region);
+          }
 
           // Transition to readable layout
           {
             VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                 .subresourceRange = up->range,
-                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .srcAccessMask = 0,
                 .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .image = up->dst,
             };

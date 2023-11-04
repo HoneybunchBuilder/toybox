@@ -213,7 +213,7 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
                       InvalidTextureId);
     }
 
-    // Issue upload
+    // Issue uploads
     {
       BufferImageCopy *uploads =
           tb_alloc_nm_tp(rnd_sys->tmp_alloc, mip_levels, BufferImageCopy);

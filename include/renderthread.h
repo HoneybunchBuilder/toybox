@@ -95,6 +95,7 @@ typedef struct FrameState {
   VkSemaphore frame_complete_sem;
   VkFence fence;
 
+  void *tmp_gpu_ptr; // Pointer to mapped memory that exists on UMA platforms
   VmaAllocation tmp_gpu_alloc;
   VkBuffer tmp_gpu_buffer;
   VmaPool tmp_gpu_pool;
@@ -129,6 +130,7 @@ typedef struct RenderExtensionSupport {
 } RenderExtensionSupport;
 
 typedef struct RenderThread {
+  bool is_uma;
   SDL_Window *window;
   SDL_Thread *thread;
   SDL_semaphore *initialized;

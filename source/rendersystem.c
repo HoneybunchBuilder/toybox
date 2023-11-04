@@ -139,7 +139,6 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
         };
         VmaAllocationCreateInfo alloc_create_info = {
             .pool = state->tmp_host_pool,
-            .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
         };
         VmaAllocationInfo alloc_info = {0};
         err = vmaCreateBuffer(sys.vma_alloc, &create_info, &alloc_create_info,
@@ -182,7 +181,13 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
       // Find the desired memory type index
       for (uint32_t i = 0; i < thread->gpu_mem_props.memoryTypeCount; ++i) {
         VkMemoryType type = thread->gpu_mem_props.memoryTypes[i];
-        if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+        VkMemoryPropertyFlagBits mem_props =
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        if (sys.is_uma) {
+          mem_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        }
+
+        if ((int32_t)(type.propertyFlags & mem_props) >= (int32_t)mem_props) {
           gpu_mem_type_idx = i;
           break;
         }
@@ -429,7 +434,6 @@ VkResult alloc_host_buffer(RenderSystem *self,
   VmaAllocator vma_alloc = self->vma_alloc;
 
   VmaAllocationCreateInfo alloc_create_info = {
-      .memoryTypeBits = VMA_MEMORY_USAGE_CPU_TO_GPU,
       .pool = self->host_buffer_pool,
   };
   VkResult err =
@@ -453,7 +457,6 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
   VmaPool pool = self->gpu_buffer_pool;
 
   VmaAllocationCreateInfo alloc_create_info = {
-      .memoryTypeBits = VMA_MEMORY_USAGE_GPU_ONLY,
       .pool = pool,
   };
   VkResult err =
@@ -474,7 +477,6 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   VmaPool pool = self->gpu_image_pool;
 
   VmaAllocationCreateInfo alloc_create_info = {
-      .memoryTypeBits = VMA_MEMORY_USAGE_GPU_ONLY,
       .pool = pool,
   };
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
@@ -503,10 +505,7 @@ VkResult tb_rnd_sys_tmp_buffer_get_ptr(RenderSystem *self, uint64_t size,
                                        void **ptr) {
   VkResult err = VK_SUCCESS;
   if (self->is_uma) {
-    // Just map the gpu buffer
-    err = vmaMapMemory(
-        self->vma_alloc,
-        self->render_thread->frame_states[self->frame_idx].tmp_gpu_alloc, ptr);
+    *ptr = self->render_thread->frame_states[self->frame_idx].tmp_gpu_ptr;
   } else {
     // Make an allocation on the tmp host buffer
     // This buffer will *always* be uploaded
@@ -658,6 +657,9 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
 
   void *ptr = NULL;
 
+  VkBuffer buffer = VK_NULL_HANDLE;
+  VkDeviceSize offset = 0;
+
   if (self->is_uma) {
     // Just create the image and then map the memory
     err = vmaMapMemory(self->vma_alloc, image->alloc, &ptr);
@@ -672,33 +674,37 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
     // We know that the data on the tmp buffer will be automatically uploaded
     // so instead of issuing another upload, we copy from the uploaded page
     // to the final memory location of the image
-    BufferImageCopy copy = {
-        .src = host.buffer,
-        .dst = image->image,
-        .region =
-            {
-                .bufferOffset = host.offset,
-                .imageSubresource =
-                    {
-                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .layerCount = 1,
-                    },
-                .imageExtent =
-                    {
-                        .width = create_info->extent.width,
-                        .height = create_info->extent.height,
-                        .depth = 1,
-                    },
-            },
-        .range =
-            {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .layerCount = 1,
-                .levelCount = 1,
-            },
-    };
-    tb_rnd_upload_buffer_to_image(self, &copy, 1);
+    buffer = host.buffer;
+    offset = host.offset;
   }
+
+  // We do this copy even on UMA platforms because we need the transition
+  BufferImageCopy copy = {
+      .src = buffer,
+      .dst = image->image,
+      .region =
+          {
+              .bufferOffset = offset,
+              .imageSubresource =
+                  {
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .layerCount = 1,
+                  },
+              .imageExtent =
+                  {
+                      .width = create_info->extent.width,
+                      .height = create_info->extent.height,
+                      .depth = 1,
+                  },
+          },
+      .range =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .layerCount = 1,
+              .levelCount = 1,
+          },
+  };
+  tb_rnd_upload_buffer_to_image(self, &copy, 1);
 
   // Copy data to the buffer
   SDL_memcpy(ptr, data, data_size);
@@ -720,9 +726,13 @@ VkResult tb_rnd_sys_update_gpu_buffer(RenderSystem *self,
   }
 
   if (self->is_uma) {
-    // We can safely just map the memory here
-    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
-    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+    // If we're on a UMA platform we can stash some info in the otherwise unused
+    // host buffer
+    if (host->ptr == NULL) {
+      err = vmaMapMemory(self->vma_alloc, buffer->alloc, (void **)&host->ptr);
+      TB_VK_CHECK_RET(err, "Failed to map memory", err);
+    }
+    *ptr = host->ptr;
   } else {
     *ptr = host->ptr;
     // Schedule another upload
