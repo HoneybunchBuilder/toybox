@@ -109,6 +109,7 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
           &(VkPipelineRasterizationStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .depthClampEnable = VK_TRUE,
               .lineWidth = 1.0f,
           },
       .pMultisampleState =

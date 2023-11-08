@@ -796,6 +796,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 
   VkPhysicalDeviceFeatures vk_features = {
       .samplerAnisotropy = VK_TRUE,
+      .depthClamp = VK_TRUE,
   };
 
   VkDeviceCreateInfo create_info = {0};

@@ -210,12 +210,84 @@ float sample_shadow_pcf(Texture2DArray shadow_map, SamplerComparisonState samp,
   base_uv *= shadow_map_size_inv;
 
   float sum = 0;
-#if 1
+#if 0
   // Single sample
   return shadow_map.SampleCmpLevelZero(samp, float3(shadow_pos.xy, cascade_idx),
                                        light_depth);
 #else
-  // Use a filter size of 9x9
+  // PCF Filter Size 7
+  float uw0 = (5 * s - 6);
+  float uw1 = (11 * s - 28);
+  float uw2 = -(11 * s + 17);
+  float uw3 = -(5 * s + 1);
+
+  float u0 = (4 * s - 5) / uw0 - 3;
+  float u1 = (4 * s - 16) / uw1 - 1;
+  float u2 = -(7 * s + 5) / uw2 + 1;
+  float u3 = -s / uw3 + 3;
+
+  float vw0 = (5 * t - 6);
+  float vw1 = (11 * t - 28);
+  float vw2 = -(11 * t + 17);
+  float vw3 = -(5 * t + 1);
+
+  float v0 = (4 * t - 5) / vw0 - 3;
+  float v1 = (4 * t - 16) / vw1 - 1;
+  float v2 = -(7 * t + 5) / vw2 + 1;
+  float v3 = -t / vw3 + 3;
+
+  sum += uw0 * vw0 *
+         sample_shadow_map(shadow_map, samp, base_uv, u0, v0,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw1 * vw0 *
+         sample_shadow_map(shadow_map, samp, base_uv, u1, v0,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw2 * vw0 *
+         sample_shadow_map(shadow_map, samp, base_uv, u2, v0,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw3 * vw0 *
+         sample_shadow_map(shadow_map, samp, base_uv, u3, v0,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+
+  sum += uw0 * vw1 *
+         sample_shadow_map(shadow_map, samp, base_uv, u0, v1,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw1 * vw1 *
+         sample_shadow_map(shadow_map, samp, base_uv, u1, v1,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw2 * vw1 *
+         sample_shadow_map(shadow_map, samp, base_uv, u2, v1,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw3 * vw1 *
+         sample_shadow_map(shadow_map, samp, base_uv, u3, v1,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+
+  sum += uw0 * vw2 *
+         sample_shadow_map(shadow_map, samp, base_uv, u0, v2,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw1 * vw2 *
+         sample_shadow_map(shadow_map, samp, base_uv, u1, v2,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw2 * vw2 *
+         sample_shadow_map(shadow_map, samp, base_uv, u2, v2,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw3 * vw2 *
+         sample_shadow_map(shadow_map, samp, base_uv, u3, v2,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+
+  sum += uw0 * vw3 *
+         sample_shadow_map(shadow_map, samp, base_uv, u0, v3,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw1 * vw3 *
+         sample_shadow_map(shadow_map, samp, base_uv, u1, v3,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw2 * vw3 *
+         sample_shadow_map(shadow_map, samp, base_uv, u2, v3,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  sum += uw3 * vw3 *
+         sample_shadow_map(shadow_map, samp, base_uv, u3, v3,
+                           shadow_map_size_inv, cascade_idx, light_depth);
+  return sum * 1.0f / 2704;
 #endif
 }
 
