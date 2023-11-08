@@ -132,16 +132,6 @@ float pcf_filter(float4 shadow_coord, Texture2DArray shadow_map,
   return shadow_factor / count;
 }
 
-float3 calc_shadow_pos_offset(Texture2DArray shadow_map, float NdotL,
-                              float3 normal) {
-  float2 shadow_map_size;
-  float cascade_count;
-  shadow_map.GetDimensions(shadow_map_size.x, shadow_map_size.y, cascade_count);
-  float texel_size = 2.0f / shadow_map_size.x;
-  float offset_scale = saturate(1.0f - NdotL);
-  return texel_size * offset_scale * normal;
-}
-
 struct View {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
@@ -267,12 +257,8 @@ float shadow_visibility(Light l, Surface s) {
 
   // return cascade_colors[cascade_idx];
 
-  float NdotL = max(dot(s.N, l.light.light_dir), 0.0f);
-
   float4x4 shadow_mat = l.light.cascade_vps[cascade_idx];
-  float3 offset =
-      calc_shadow_pos_offset(l.shadow_map, NdotL, s.N) / shadow_mat[2][2];
-  float3 sample_pos = s.world_pos + offset;
+  float3 sample_pos = s.world_pos;
   float4 proj_pos = mul(shadow_mat, float4(sample_pos, 1.0f));
   proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
   float3 shadow_pos = proj_pos.xyz / proj_pos.w;
