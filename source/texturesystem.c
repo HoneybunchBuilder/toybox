@@ -229,15 +229,8 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
-#endif
       // Iterate over texture levels to fill out upload requests
       ktxTexture_IterateLevels(ktx, iterate_ktx2_levels, &iter_data);
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

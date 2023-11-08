@@ -155,14 +155,11 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
 }
 
 void tb_clear_world(TbWorld *world) {
-  ecs_world_t *ecs = world->ecs;
   TB_DYN_ARR_FOREACH(world->scenes, i) {
     TbScene *s = &TB_DYN_ARR_AT(world->scenes, i);
     tb_unload_scene(world, s);
   }
   TB_DYN_ARR_CLEAR(world->scenes);
-  // Progress ecs to process deletions
-  ecs_progress(ecs, .1);
 }
 
 void tb_destroy_world(TbWorld *world) {

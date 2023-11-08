@@ -474,10 +474,8 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
                                     const char *name, TbImage *image) {
   VmaAllocator vma_alloc = self->vma_alloc;
-  VmaPool pool = self->gpu_image_pool;
-
   VmaAllocationCreateInfo alloc_create_info = {
-      .pool = pool,
+      .pool = self->gpu_image_pool,
   };
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
                                 &image->image, &image->alloc, &image->info);

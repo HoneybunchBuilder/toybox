@@ -47,42 +47,6 @@
       }
     },
     {
-      "name": "x64-mingw-ninja-gcc",
-      "displayName": "x64 Mingw Ninja GCC",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64/mingw",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
-      "name": "x64-mingw-static-ninja-gcc",
-      "displayName": "x64 Mingw Static Ninja GCC",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64/mingw-static",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
       "name": "x64-windows-vs2022-llvm",
       "displayName": "x64 Windows VS2022 LLVM",
       "generator": "Visual Studio 17 2022",
@@ -163,24 +127,6 @@
       }
     },
     {
-      "name": "x64-linux-ninja-gcc",
-      "displayName": "x64 Linux Ninja GCC",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64/linux-gcc",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-linux",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      }
-    },
-    {
       "name": "arm64-linux-ninja-llvm",
       "displayName": "arm64 Linux Ninja LLVM",
       "generator": "Ninja Multi-Config",
@@ -190,24 +136,6 @@
         "VCPKG_TARGET_TRIPLET": "arm64-linux",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      }
-    },
-    {
-      "name": "arm64-linux-ninja-gcc",
-      "displayName": "arm64 Linux Ninja GCC",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64/linux-gcc",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-linux",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "condition": {
@@ -246,25 +174,6 @@
         "CMAKE_OSX_ARCHITECTURES": "arm64",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
-      "name": "arm64-macos-ninja-gcc",
-      "displayName": "arm64 macOS Ninja GCC",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64/macos-gcc",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-osx",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "condition": {
@@ -352,42 +261,6 @@
       "configuration": "Release"
     },
     {
-      "name": "debug-x64-mingw-ninja-gcc",
-      "displayName": "Debug",
-      "configurePreset": "x64-mingw-ninja-gcc",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-x64-mingw-ninja-gcc",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "x64-mingw-ninja-gcc",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-x64-mingw-ninja-gcc",
-      "displayName": "Release",
-      "configurePreset": "x64-mingw-ninja-gcc",
-      "configuration": "Release"
-    },
-    {
-      "name": "debug-x64-mingw-static-ninja-gcc",
-      "displayName": "Debug",
-      "configurePreset": "x64-mingw-static-ninja-gcc",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-x64-mingw-static-ninja-gcc",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "x64-mingw-static-ninja-gcc",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-x64-mingw-static-ninja-gcc",
-      "displayName": "Release",
-      "configurePreset": "x64-mingw-static-ninja-gcc",
-      "configuration": "Release"
-    },
-    {
       "name": "debug-x64-windows-vs2022-llvm",
       "displayName": "Debug",
       "configurePreset": "x64-windows-vs2022-llvm",
@@ -460,24 +333,6 @@
       "configuration": "Release"
     },
     {
-      "name": "debug-x64-linux-ninja-gcc",
-      "displayName": "Debug",
-      "configurePreset": "x64-linux-ninja-gcc",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-x64-linux-ninja-gcc",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "x64-linux-ninja-gcc",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-x64-linux-ninja-gcc",
-      "displayName": "Release",
-      "configurePreset": "x64-linux-ninja-gcc",
-      "configuration": "Release"
-    },
-    {
       "name": "debug-arm64-linux-ninja-llvm",
       "displayName": "Debug",
       "configurePreset": "arm64-linux-ninja-llvm",
@@ -493,24 +348,6 @@
       "name": "release-arm64-linux-ninja-llvm",
       "displayName": "Release",
       "configurePreset": "arm64-linux-ninja-llvm",
-      "configuration": "Release"
-    },
-    {
-      "name": "debug-arm64-linux-ninja-gcc",
-      "displayName": "Debug",
-      "configurePreset": "arm64-linux-ninja-gcc",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-arm64-linux-ninja-gcc",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "arm64-linux-ninja-gcc",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-arm64-linux-ninja-gcc",
-      "displayName": "Release",
-      "configurePreset": "arm64-linux-ninja-gcc",
       "configuration": "Release"
     },
     {
@@ -547,24 +384,6 @@
       "name": "release-arm64-macos-xcode-llvm",
       "displayName": "Release",
       "configurePreset": "arm64-macos-xcode-llvm",
-      "configuration": "Release"
-    },
-    {
-      "name": "debug-arm64-macos-ninja-gcc",
-      "displayName": "Debug",
-      "configurePreset": "arm64-macos-ninja-gcc",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-arm64-macos-ninja-gcc",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "arm64-macos-ninja-gcc",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-arm64-macos-ninja-gcc",
-      "displayName": "Release",
-      "configurePreset": "arm64-macos-ninja-gcc",
       "configuration": "Release"
     },
     {

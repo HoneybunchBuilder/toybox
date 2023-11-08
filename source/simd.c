@@ -17,19 +17,9 @@
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #endif
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-braces"
-#endif
-
 #ifdef __clang__
 #define unroll_loop_3 _Pragma("clang loop unroll_count(3)")
 #define unroll_loop_4 _Pragma("clang loop unroll_count(4)")
-#endif
-
-#if defined(__GNUC__) && !defined(__clang__)
-#define unroll_loop_3 _Pragma("GCC unroll 3")
-#define unroll_loop_4 _Pragma("GCC unroll 4")
 #endif
 
 float3 atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
@@ -751,8 +741,4 @@ float tb_randf(float min, float max) {
 
 #ifdef __clang__
 #pragma clang diagnostic pop
-#endif
-
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
 #endif

@@ -1,6 +1,6 @@
 # Toybox
 
-A simple test application in C for Windows, Linux, macOS, iOS and Android 
+A personal game engine written in C for Windows, Linux, macOS, iOS and Android 
 
 #### Main Branch Build Status
 
@@ -23,7 +23,7 @@ All supported / tested build configurations can be found in the `CMakePresets.js
 Make sure to have the following available on your path:
 * ninja
 * cmake 3.20+
-* clang or gcc (lowest tested are llvm 10 and gcc 9)
+* clang (lowest tested is llvm 10)
 * dxc [via the Vulkan SDK](https://vulkan.lunarg.com/)
 * vcpkg - latest version from git; more details below
 
@@ -31,9 +31,7 @@ You will also need the following environment variables defined:
 * `VCPKG_ROOT` - should point to your local vcpkg install
 
 #### Windows
-For LLVM you will need the VS2022 build tools, a Windows 10/11 Kit install and LLVM for Windows installed.
-
-For Mingw you will just need a `gcc` install (tested with distributions from chocolatey and scoop)
+To use LLVM you will need the VS2022 build tools, a Windows 10/11 Kit install and LLVM for Windows installed.
 
 To build the dependency `ktx` you will need to have bash installed. The bash from git works just fine. If you have git installed from somewhere non-standard like `scoop` or `choco` you will also need it to be available from `C:\Program Files\Git` or else the `FindBash` module of `ktx` will not function properly in vcpkg's environment. I've tried passing bash through via `VCPKG_KEEP_ENV_VARS` to no avail.
 
@@ -80,7 +78,7 @@ So an example for configuring and building the `x64-windows` triplet with `ninja
 See the github actions page for build status and a quick overview of the supported and tested configurations
 
 ## Additional Notes
-This project relies on semantics provided by clang/gcc because I was lazy and didn't want to write out SSE/NEON intrinsics for some basic math. See `src/simd.h` & `src/simd.c` for more details.
+This project relies on semantics provided by clang because I was lazy and didn't want to write out SSE/NEON intrinsics for some basic math. See `src/simd.h` & `src/simd.c` for more details.
 
 For best results, use the latest version of vcpkg. I have had to contribute a variety of changes upstream (latest change is as-of Dec 3rd 2022) so using a version sourced from your package manager may not be new enough. Yet. In the near future you should be able to use any 2023+ version of vcpkg and it should work out of the box with this project across all platforms.
 
