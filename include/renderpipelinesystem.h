@@ -135,6 +135,8 @@ typedef struct RenderPipelineSystem {
   VkPipeline tonemap_pipe;
 
   FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
+  FrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];
+  FrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
 } RenderPipelineSystem;
 
 void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,

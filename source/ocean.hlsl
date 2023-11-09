@@ -10,7 +10,7 @@ ConstantBuffer<OceanData> ocean_data : register(b0, space0);
 Texture2D depth_map : register(t1, space0);
 Texture2D color_map : register(t2, space0);
 sampler material_sampler : register(s3, space0);
-sampler shadow_sampler : register(s4, space0);
+SamplerComparisonState shadow_sampler : register(s4, space0);
 [[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
     : register(b5, space0);
 
@@ -105,6 +105,29 @@ float4 frag(Interpolators i) : SV_TARGET {
     float metallic = 0.0;
     float roughness = 0.0;
 
+    // Calculate shadow first
+    float shadow = 1.0f;
+
+    {
+      Light l;
+      l.light = light_data;
+      l.shadow_map = shadow_map;
+      l.shadow_sampler = shadow_sampler;
+
+      Surface s;
+      s.base_color = float4(albedo, 1);
+      s.view_pos = i.view_pos;
+      s.world_pos = i.world_pos;
+      s.screen_uv = screen_uv;
+      s.metallic = metallic;
+      s.roughness = roughness;
+      s.N = N;
+      s.V = V;
+      s.R = R;
+      s.emissives = 0;
+      shadow = max(shadow_visibility(l, s), (1 - AMBIENT));
+    }
+
     // Lighting
     {
       float2 brdf =
@@ -114,26 +137,9 @@ float4 frag(Interpolators i) : SV_TARGET {
           prefiltered_map, filtered_env_sampler, R, roughness);
       float3 irradiance =
           irradiance_map.SampleLevel(filtered_env_sampler, N, 0).rgb;
-      color = pbr_lighting(1.0f, 1, albedo, metallic, roughness, brdf,
+      color = pbr_lighting(shadow, 1, albedo, metallic, roughness, brdf,
                            reflection, irradiance, light_data.color, L, V, N);
     }
-  }
-
-  // Shadow cascades
-  {
-    uint cascade_idx = 0;
-    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
-      if (i.view_pos.z < light_data.cascade_splits[c]) {
-        cascade_idx = c + 1;
-      }
-    }
-
-    float4 shadow_coord =
-        mul(light_data.cascade_vps[cascade_idx], float4(i.world_pos, 1.0));
-
-    float shadow =
-        pcf_filter(shadow_coord, shadow_map, cascade_idx, shadow_sampler);
-    color *= shadow;
   }
 
   // Subsurface Scattering

@@ -2,7 +2,7 @@
 
 #include "common.hlsli"
 
-#define TB_BLOOM_MIPS 4
+#define TB_BLOOM_MIPS 5
 
 #ifndef __HLSL_VERSION
 

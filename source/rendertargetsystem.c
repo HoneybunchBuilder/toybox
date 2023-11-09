@@ -429,9 +429,9 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Creating a bloom mip chain target for downscale / upscale blur
     {
-      // Minimum size for bloom target ensures we always have 4 mips
-      uint32_t bloom_width = SDL_max(width, 64);
-      uint32_t bloom_height = SDL_max(height, 64);
+      // Minimum size for bloom target ensures we always have 5 mips
+      uint32_t bloom_width = SDL_max(width, 32);
+      uint32_t bloom_height = SDL_max(height, 32);
       RenderTargetDescriptor rt_desc = {
           .name = "Bloom Mip Chain",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,

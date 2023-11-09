@@ -29,6 +29,8 @@
 #pragma clang diagnostic pop
 #endif
 
+#define BLUR_BATCH_COUNT (TB_BLOOM_MIPS - 1)
+
 typedef struct PassTransition {
   TbRenderTargetId render_target;
   ImageTransition barrier;
@@ -2640,12 +2642,376 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
                                    self->descriptor_pools[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(self->render_system,
+                                   self->down_desc_pools[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(self->render_system,
+                                   self->up_desc_pools[i].set_pool);
   }
 
   TB_DYN_ARR_DESTROY(self->render_passes);
   tb_free(self->std_alloc, self->pass_order);
 
   *self = (RenderPipelineSystem){0};
+}
+
+void tick_core_desc_pool(RenderPipelineSystem *self) {
+  VkResult err = VK_SUCCESS;
+#define SET_COUNT 5
+  VkDescriptorPoolCreateInfo pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = SET_COUNT * 4,
+      .poolSizeCount = 3,
+      .pPoolSizes =
+          (VkDescriptorPoolSize[3]){
+              {
+                  .descriptorCount = SET_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              },
+              {
+                  .descriptorCount = SET_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+              },
+              {
+                  .descriptorCount = SET_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+              },
+          },
+  };
+  VkDescriptorSetLayout layouts[SET_COUNT] = {
+      self->copy_set_layout,          self->copy_set_layout,
+      self->lum_hist_work.set_layout, self->lum_avg_work.set_layout,
+      self->tonemap_set_layout,
+  };
+  err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
+                                    self->descriptor_pools, SET_COUNT);
+  TB_VK_CHECK(err, "Failed to tick descriptor pool");
+#undef SET_COUNT
+
+  VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
+      self->render_system, self->descriptor_pools, 0);
+  VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
+      self->render_system, self->descriptor_pools, 1);
+  VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
+      self->render_system, self->descriptor_pools, 2);
+  VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
+      self->render_system, self->descriptor_pools, 3);
+  VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
+      self->render_system, self->descriptor_pools, 4);
+
+  VkImageView depth_view = tb_render_target_get_view(
+      self->render_target_system, self->render_system->frame_idx,
+      self->render_target_system->depth_buffer);
+  VkImageView color_view = tb_render_target_get_view(
+      self->render_target_system, self->render_system->frame_idx,
+      self->render_target_system->hdr_color);
+  VkBuffer lum_hist_buffer = self->lum_hist_work.lum_histogram.buffer;
+  VkBuffer lum_avg_buffer = self->lum_avg_work.lum_avg.buffer;
+  VkImageView bloom_full_view = tb_render_target_get_mip_view(
+      self->render_target_system, 0, 0, self->render_system->frame_idx,
+      self->render_target_system->bloom_mip_chain);
+
+#define WRITE_COUNT 9
+  VkWriteDescriptorSet writes[WRITE_COUNT] = {
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = depth_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo =
+              &(VkDescriptorImageInfo){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .imageView = depth_view,
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = color_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo =
+              &(VkDescriptorImageInfo){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .imageView = color_view,
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = lum_hist_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo =
+              &(VkDescriptorImageInfo){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .imageView = color_view,
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = lum_hist_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = lum_hist_buffer,
+                  .range = sizeof(uint32_t) * 256, // Hack :(
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = lum_avg_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = lum_hist_buffer,
+                  .range = sizeof(uint32_t) * 256, // Hack :(
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = lum_avg_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = lum_avg_buffer,
+                  .range = sizeof(float), // Hack :(
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = tonemap_set,
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo =
+              &(VkDescriptorImageInfo){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .imageView = color_view,
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = tonemap_set,
+          .dstBinding = 1,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .pImageInfo =
+              &(VkDescriptorImageInfo){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .imageView = bloom_full_view,
+              },
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = tonemap_set,
+          .dstBinding = 2,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo =
+              &(VkDescriptorBufferInfo){
+                  .buffer = lum_avg_buffer,
+                  .range = sizeof(float), // Hack :(
+              },
+      },
+  };
+  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+#undef WRITE_COUNT
+}
+
+void tick_downsample_desc_pool(RenderPipelineSystem *self) {
+  VkResult err = VK_SUCCESS;
+
+  VkDescriptorPoolCreateInfo pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = BLUR_BATCH_COUNT * 4,
+      .poolSizeCount = 2,
+      .pPoolSizes =
+          (VkDescriptorPoolSize[2]){
+              {
+                  .descriptorCount = BLUR_BATCH_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              },
+              {
+                  .descriptorCount = BLUR_BATCH_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+              },
+          },
+  };
+  VkDescriptorSetLayout layouts[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    layouts[i] = self->downsample_work.set_layout;
+  }
+
+  err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
+                                    self->down_desc_pools, BLUR_BATCH_COUNT);
+  TB_VK_CHECK(err, "Failed to tick descriptor pool");
+
+#define WRITE_COUNT BLUR_BATCH_COUNT * 2
+  VkDescriptorSet sets[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
+                                             self->down_desc_pools, i);
+  }
+  VkImageView input[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    if (i == 0) {
+      // First input is always the brightness target
+      input[i] = tb_render_target_get_view(
+          self->render_target_system, self->render_system->frame_idx,
+          self->render_target_system->brightness);
+    } else {
+      input[i] = tb_render_target_get_mip_view(
+          self->render_target_system, 0, i, self->render_system->frame_idx,
+          self->render_target_system->bloom_mip_chain);
+    }
+  }
+  VkImageView output[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    output[i] = tb_render_target_get_mip_view(
+        self->render_target_system, 0, i + 1, self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+  }
+
+  VkWriteDescriptorSet writes[WRITE_COUNT] = {0};
+  int32_t set_idx = 0;
+  for (int32_t i = 0; i < WRITE_COUNT; i += 2) {
+    VkDescriptorSet set = sets[set_idx];
+    VkDescriptorImageInfo *input_info =
+        tb_alloc_tp(self->tmp_alloc, VkDescriptorImageInfo);
+    *input_info = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView = input[set_idx],
+    };
+    VkDescriptorImageInfo *output_info =
+        tb_alloc_tp(self->tmp_alloc, VkDescriptorImageInfo);
+    *output_info = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView = output[set_idx],
+    };
+    writes[i] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = input_info,
+
+    };
+    writes[i + 1] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo = output_info,
+    };
+    set_idx++;
+  }
+  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+#undef WRITE_COUNT
+}
+
+void tick_upsample_desc_pool(RenderPipelineSystem *self) {
+  VkResult err = VK_SUCCESS;
+
+  VkDescriptorPoolCreateInfo pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = BLUR_BATCH_COUNT * 4,
+      .poolSizeCount = 2,
+      .pPoolSizes =
+          (VkDescriptorPoolSize[2]){
+              {
+                  .descriptorCount = BLUR_BATCH_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              },
+              {
+                  .descriptorCount = BLUR_BATCH_COUNT * 4,
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+              },
+          },
+  };
+  VkDescriptorSetLayout layouts[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    layouts[i] = self->upsample_work.set_layout;
+  }
+
+  err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
+                                    self->up_desc_pools, BLUR_BATCH_COUNT);
+  TB_VK_CHECK(err, "Failed to tick descriptor pool");
+
+#define WRITE_COUNT BLUR_BATCH_COUNT * 2
+  VkDescriptorSet sets[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
+                                             self->up_desc_pools, i);
+  }
+  VkImageView input[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    input[i] = tb_render_target_get_mip_view(
+        self->render_target_system, 0, BLUR_BATCH_COUNT - i,
+        self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+  }
+  VkImageView output[BLUR_BATCH_COUNT] = {0};
+  for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+    output[i] = tb_render_target_get_mip_view(
+        self->render_target_system, 0, BLUR_BATCH_COUNT - i - 1,
+        self->render_system->frame_idx,
+        self->render_target_system->bloom_mip_chain);
+  }
+
+  VkWriteDescriptorSet writes[WRITE_COUNT] = {0};
+  int32_t set_idx = 0;
+  for (int32_t i = 0; i < WRITE_COUNT; i += 2) {
+    VkDescriptorSet set = sets[set_idx];
+    VkDescriptorImageInfo *input_info =
+        tb_alloc_tp(self->tmp_alloc, VkDescriptorImageInfo);
+    *input_info = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView = input[set_idx],
+    };
+    VkDescriptorImageInfo *output_info =
+        tb_alloc_tp(self->tmp_alloc, VkDescriptorImageInfo);
+    *output_info = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView = output[set_idx],
+    };
+    writes[i] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = input_info,
+    };
+    writes[i + 1] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        .pImageInfo = output_info,
+    };
+    set_idx++;
+  }
+  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+#undef WRITE_COUNT
 }
 
 void tick_render_pipeline_sys(ecs_iter_t *it) {
@@ -2657,370 +3023,10 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
 
-  // Allocate and write all core descriptor sets
-  {
-    VkResult err = VK_SUCCESS;
-    // Allocate the known descriptor sets we need for this frame
-    {
-#define SET_COUNT 11
-      VkDescriptorPoolCreateInfo pool_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .maxSets = SET_COUNT * 4,
-          .poolSizeCount = 3,
-          .pPoolSizes =
-              (VkDescriptorPoolSize[3]){
-                  {
-                      .descriptorCount = SET_COUNT * 4,
-                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                  },
-                  {
-                      .descriptorCount = SET_COUNT * 4,
-                      .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                  },
-                  {
-                      .descriptorCount = SET_COUNT * 4,
-                      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                  },
-              },
-      };
-      VkDescriptorSetLayout layouts[SET_COUNT] = {
-          self->copy_set_layout,
-          self->copy_set_layout,
-          self->lum_hist_work.set_layout,
-          self->lum_avg_work.set_layout,
-          self->downsample_work.set_layout,
-          self->downsample_work.set_layout,
-          self->downsample_work.set_layout,
-          self->upsample_work.set_layout,
-          self->upsample_work.set_layout,
-          self->upsample_work.set_layout,
-          self->tonemap_set_layout,
-      };
-      err =
-          tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
-                                      self->descriptor_pools, SET_COUNT);
-      TB_VK_CHECK(err, "Failed to tick descriptor pool");
-#undef SET_COUNT
-    }
-
-    VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 0);
-    VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 1);
-    VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 2);
-    VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 8);
-    VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 9);
-    VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 10);
-
-    VkImageView depth_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->depth_buffer);
-    VkImageView color_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->hdr_color);
-    VkBuffer lum_hist_buffer = self->lum_hist_work.lum_histogram.buffer;
-    VkBuffer lum_avg_buffer = self->lum_avg_work.lum_avg.buffer;
-    VkImageView brightness_view = tb_render_target_get_view(
-        self->render_target_system, self->render_system->frame_idx,
-        self->render_target_system->brightness);
-    VkImageView bloom_full_view = tb_render_target_get_mip_view(
-        self->render_target_system, 0, 0, self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
-    VkImageView bloom_half_view = tb_render_target_get_mip_view(
-        self->render_target_system, 0, 1, self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
-    VkImageView bloom_quarter_view = tb_render_target_get_mip_view(
-        self->render_target_system, 0, 2, self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
-    VkImageView bloom_sixteenth_view = tb_render_target_get_mip_view(
-        self->render_target_system, 0, 3, self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
-
-// Write the descriptor set
-#define WRITE_COUNT 21
-    VkWriteDescriptorSet writes[WRITE_COUNT] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = depth_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = depth_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = color_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = color_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = lum_hist_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = color_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = lum_hist_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .buffer = lum_hist_buffer,
-                    .range = sizeof(uint32_t) * 256, // Hack :(
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = lum_avg_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .buffer = lum_hist_buffer,
-                    .range = sizeof(uint32_t) * 256, // Hack :(
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = lum_avg_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .buffer = lum_avg_buffer,
-                    .range = sizeof(float), // Hack :(
-                },
-        },
-        // Downsample writes
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_half_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = brightness_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_half_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_half_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_quarter_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_half_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_quarter_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_quarter_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_sixteen_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_quarter_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = down_sixteen_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_sixteenth_view,
-                },
-        },
-        // Upsample writes
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_quarter_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_sixteenth_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_quarter_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_quarter_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_half_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_quarter_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_half_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_half_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_full_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_half_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = up_full_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    .imageView = bloom_full_view,
-                },
-        },
-        // Tonemap writes
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = tonemap_set,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = color_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = tonemap_set,
-            .dstBinding = 1,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo =
-                &(VkDescriptorImageInfo){
-                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .imageView = bloom_full_view,
-                },
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = tonemap_set,
-            .dstBinding = 2,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo =
-                &(VkDescriptorBufferInfo){
-                    .buffer = lum_avg_buffer,
-                    .range = sizeof(float), // Hack :(
-                },
-        },
-    };
-    tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
-#undef WRITE_COUNT
-  }
+  // Handle descriptor set writes
+  tick_core_desc_pool(self);
+  tick_downsample_desc_pool(self);
+  tick_upsample_desc_pool(self);
 
   // Issue draws for full screen passes
   {
@@ -3032,20 +3038,17 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         self->render_system, self->descriptor_pools, 2);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
         self->render_system, self->descriptor_pools, 3);
-    VkDescriptorSet down_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 4);
-    VkDescriptorSet down_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 5);
-    VkDescriptorSet down_sixteen_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 6);
-    VkDescriptorSet up_quarter_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 7);
-    VkDescriptorSet up_half_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 8);
-    VkDescriptorSet up_full_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 9);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 10);
+        self->render_system, self->descriptor_pools, 4);
+
+    VkDescriptorSet downsample_sets[BLUR_BATCH_COUNT] = {0};
+    VkDescriptorSet upsample_sets[BLUR_BATCH_COUNT] = {0};
+    for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+      downsample_sets[i] = tb_rnd_frame_desc_pool_get_set(
+          self->render_system, self->down_desc_pools, i);
+      upsample_sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
+                                                        self->up_desc_pools, i);
+    }
 
     // TODO: Make this less hacky
     const uint32_t width = self->render_system->render_thread->swapchain.width;
@@ -3141,66 +3144,47 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
     }
     // Blur passes
     {
-#define BLUR_BATCH_COUNT TB_BLOOM_MIPS - 1
-      DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {
-          {.set = down_half_set},
-          {.set = down_quarter_set},
-          {.set = down_sixteen_set},
-      };
-      DispatchBatch down_batches[BLUR_BATCH_COUNT] = {
-          {
-              .layout = self->downsample_work.pipe_layout,
-              .pipeline = self->downsample_work.pipeline,
-              .user_batch = &downsample_batches[0],
-              .group_count = 1,
-              .groups[0] = {(width / 16) + 1, (height / 16) + 1, 1},
-          },
-          {
-              .layout = self->downsample_work.pipe_layout,
-              .pipeline = self->downsample_work.pipeline,
-              .user_batch = &downsample_batches[1],
-              .group_count = 1,
-              .groups[0] = {((width / 2) / 16) + 1, ((height / 2) / 16) + 1, 1},
-          },
-          {
-              .layout = self->downsample_work.pipe_layout,
-              .pipeline = self->downsample_work.pipeline,
-              .user_batch = &downsample_batches[2],
-              .group_count = 1,
-              .groups[0] = {((width / 4) / 16) + 1, ((height / 4) / 16) + 1, 1},
-          },
-      };
+      DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {0};
+      DispatchBatch down_batches[BLUR_BATCH_COUNT] = {0};
+      for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+
+        uint32_t group_width = (width / 16) + 1;
+        uint32_t group_height = (height / 16) + 1;
+        if (i != 0) {
+          group_width = ((width / (i * 2)) / 16) + 1;
+          group_height = ((height / (i * 2)) / 16) + 1;
+        }
+        downsample_batches[i] = (DownsampleBatch){.set = downsample_sets[i]};
+        down_batches[i] = (DispatchBatch){
+            .layout = self->downsample_work.pipe_layout,
+            .pipeline = self->downsample_work.pipeline,
+            .user_batch = &downsample_batches[i],
+            .group_count = 1,
+            .groups[0] = {group_width, group_height, 1},
+        };
+      }
       tb_render_pipeline_issue_dispatch_batch(self, self->downsample_work.ctx,
                                               BLUR_BATCH_COUNT, down_batches);
+      UpsampleBatch upsample_batches[BLUR_BATCH_COUNT] = {0};
+      DispatchBatch up_batches[BLUR_BATCH_COUNT] = {0};
+      for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
+        uint32_t g = BLUR_BATCH_COUNT - (i + 1);
 
-      UpsampleBatch upsample_batches[BLUR_BATCH_COUNT] = {
-          {.set = up_quarter_set},
-          {.set = up_half_set},
-          {.set = up_full_set},
-      };
-      DispatchBatch up_batches[BLUR_BATCH_COUNT] = {
-          {
-              .layout = self->upsample_work.pipe_layout,
-              .pipeline = self->upsample_work.pipeline,
-              .user_batch = &upsample_batches[0],
-              .group_count = 1,
-              .groups[0] = {((width / 4) / 16) + 1, ((height / 4) / 16) + 1, 1},
-          },
-          {
-              .layout = self->upsample_work.pipe_layout,
-              .pipeline = self->upsample_work.pipeline,
-              .user_batch = &upsample_batches[1],
-              .group_count = 1,
-              .groups[0] = {((width / 2) / 16) + 1, ((height / 2) / 16) + 1, 1},
-          },
-          {
-              .layout = self->upsample_work.pipe_layout,
-              .pipeline = self->upsample_work.pipeline,
-              .user_batch = &upsample_batches[2],
-              .group_count = 1,
-              .groups[0] = {(width / 16) + 1, (height / 16) + 1, 1},
-          },
-      };
+        uint32_t group_width = (width / 16) + 1;
+        uint32_t group_height = (height / 16) + 1;
+        if (g != 0) {
+          group_width = ((width / (g * 2)) / 16) + 1;
+          group_height = ((height / (g * 2)) / 16) + 1;
+        }
+        upsample_batches[i] = (UpsampleBatch){.set = upsample_sets[i]};
+        up_batches[i] = (DispatchBatch){
+            .layout = self->downsample_work.pipe_layout,
+            .pipeline = self->downsample_work.pipeline,
+            .user_batch = &upsample_batches[i],
+            .group_count = 1,
+            .groups[0] = {group_width, group_height, 1},
+        };
+      }
       tb_render_pipeline_issue_dispatch_batch(self, self->upsample_work.ctx,
                                               BLUR_BATCH_COUNT, up_batches);
 #undef BLUR_BATCH_COUNT
