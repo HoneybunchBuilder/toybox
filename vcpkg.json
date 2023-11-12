@@ -78,7 +78,8 @@
     },
     {
       "name": "vulkan-memory-allocator",
-      "version": "3.0.1"
+      "version": "3.0.1",
+      "port-version": 3
     },
     {
       "name": "json-c",

@@ -98,7 +98,6 @@ typedef struct FrameState {
   void *tmp_gpu_ptr; // Pointer to mapped memory that exists on UMA platforms
   VmaAllocation tmp_gpu_alloc;
   VkBuffer tmp_gpu_buffer;
-  VmaPool tmp_gpu_pool;
 
   // Memory expected to be actually allocated by the main thread
   // The main thread will write to this and the render thread will read it

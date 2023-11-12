@@ -37,7 +37,7 @@ To build the dependency `ktx` you will need to have bash installed. The bash fro
 
 #### Android
 NOT PRIORITY
-Android's vulkan device story is pretty lame these days and it doesn't look like it's getting any shiny new features that I care about such as mesh shaders. So while CI builds android to verify that the C++ can build properly the tools to package apks and produce a proper application have been stripped as they had rotted.
+Android's vulkan device story is pretty lame these days and it doesn't look like it's getting any shiny new features that I care about such as mesh shaders. So while CI builds android to verify that the code can build properly, the tools to package apks and produce a proper application have been stripped as they had rotted. A downstream project can get an Android build made through gradle without too much trouble just make sure to include the java from the SDL2 version you are using. You'll have to go get that manually.
 
 If you still feel like being brave:
 
@@ -47,12 +47,10 @@ You will need the following installed from the android sdkmanager:
 * `platform-tools;31.0.3` (Newer should work too)
 * `platforms;android-29` (Hard requirement)
 
-Make sure the following environment variables are set properly
+The CMake scripts rely on these env vars being set properly. Through Android Studio or your own environment.
 * `ANDROID_NDK_HOME`
 * `ANDROID_HOME`
 * `JAVA_HOME`
-
-Android Studio is not used for the build process but the Android SDK, NDK and a Java 11 installation needs to be available. If these are sourced from your Android Studio install there should be no problems.
 
 #### Linux
 For DXC to work properly you may need libncurses5 installed. You can install that on:

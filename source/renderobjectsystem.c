@@ -6,7 +6,6 @@
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
-#include "world.h"
 
 #include <flecs.h>
 

@@ -407,41 +407,10 @@ bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
       state->tracy_gpu_context = gpu_ctx;
     }
 
-    const uint64_t size_bytes = TB_VMA_TMP_GPU_MB * 1024 * 1024;
-
-    {
-      uint32_t gpu_mem_type_idx = 0xFFFFFFFF;
-      // Find the desired memory type index
-      for (uint32_t i = 0; i < gpu_mem_props->memoryTypeCount; ++i) {
-        VkMemoryType type = gpu_mem_props->memoryTypes[i];
-        VkMemoryPropertyFlagBits mem_props =
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        if (is_uma) {
-          mem_props |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        }
-
-        if ((int32_t)(type.propertyFlags & mem_props) >= (int32_t)mem_props) {
-          gpu_mem_type_idx = i;
-          break;
-        }
-      }
-      TB_CHECK_RETURN(gpu_mem_type_idx != 0xFFFFFFFF,
-                      "Failed to find gpu visible memory", false);
-
-      VmaPoolCreateInfo create_info = {
-          .memoryTypeIndex = gpu_mem_type_idx,
-          .flags = VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT,
-          .maxBlockCount = 1,
-          .blockSize = size_bytes,
-      };
-      err = vmaCreatePool(vma_alloc, &create_info, &state->tmp_gpu_pool);
-      TB_VK_CHECK_RET(err, "Failed to create vma temp host pool", false);
-    }
-
     {
       VkBufferCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = size_bytes,
+          .size = TB_VMA_TMP_GPU_MB * 1024 * 1024,
           .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
@@ -450,8 +419,12 @@ bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
       };
       VmaAllocationCreateInfo alloc_create_info = {
-          .pool = state->tmp_gpu_pool,
+          .usage = VMA_MEMORY_USAGE_AUTO,
       };
+      if (is_uma) {
+        alloc_create_info.memoryTypeBits =
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+      }
       VmaAllocationInfo alloc_info = {0};
       err = vmaCreateBuffer(vma_alloc, &create_info, &alloc_create_info,
                             &state->tmp_gpu_buffer, &state->tmp_gpu_alloc,
@@ -510,7 +483,6 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
     vkDestroyFence(device, state->fence, vk_alloc);
 
     vmaDestroyBuffer(vma_alloc, state->tmp_gpu_buffer, state->tmp_gpu_alloc);
-    vmaDestroyPool(vma_alloc, state->tmp_gpu_pool);
 
     *state = (FrameState){0};
   }

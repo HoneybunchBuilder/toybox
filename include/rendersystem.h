@@ -15,7 +15,6 @@ typedef struct ecs_world_t ecs_world_t;
 
 typedef struct RenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
-  VmaPool tmp_host_pool;
 
   SetWriteQueue set_write_queue;
   BufferCopyQueue buf_copy_queue;
@@ -38,11 +37,6 @@ typedef struct RenderSystem {
   RenderThread *render_thread;
 
   bool is_uma;
-
-  VmaPool host_buffer_pool;
-
-  VmaPool gpu_buffer_pool;
-  VmaPool gpu_image_pool;
 
   VkAllocationCallbacks vk_host_alloc_cb;
   VmaAllocator vma_alloc;
