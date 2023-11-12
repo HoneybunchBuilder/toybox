@@ -422,7 +422,8 @@ bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
           .usage = VMA_MEMORY_USAGE_AUTO,
       };
       if (is_uma) {
-        alloc_create_info.memoryTypeBits =
+        alloc_create_info.flags =
+            VMA_ALLOCATION_CREATE_MAPPED_BIT |
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
       }
       VmaAllocationInfo alloc_info = {0};
