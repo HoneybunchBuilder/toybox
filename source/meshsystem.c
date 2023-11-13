@@ -1122,6 +1122,9 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
         }
       }
     }
+
+    // Make sure to flush the gpu alloc if necessary
+    tb_flush_alloc(self->render_system, tb_mesh->gpu_buffer.alloc);
   }
 
   TB_DYN_ARR_AT(self->meshes, index).ref_count++;

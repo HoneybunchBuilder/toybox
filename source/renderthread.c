@@ -14,6 +14,9 @@
 #include "tbvma.h"
 #include "vkdbg.h"
 
+// we know that rendersystem.c defines this
+extern bool try_map(VmaAllocator vma, VmaAllocation alloc, void **ptr);
+
 int32_t render_thread(void *data);
 
 // Public API
@@ -275,10 +278,9 @@ bool init_debug_messenger(VkInstance instance,
   return true;
 }
 
-bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
+bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        const Swapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
-                       const VkPhysicalDeviceMemoryProperties *gpu_mem_props,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        FrameState *states) {
@@ -420,12 +422,10 @@ bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
       };
       VmaAllocationCreateInfo alloc_create_info = {
           .usage = VMA_MEMORY_USAGE_AUTO,
+          .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                   VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
       };
-      if (is_uma) {
-        alloc_create_info.flags =
-            VMA_ALLOCATION_CREATE_MAPPED_BIT |
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-      }
+
       VmaAllocationInfo alloc_info = {0};
       err = vmaCreateBuffer(vma_alloc, &create_info, &alloc_create_info,
                             &state->tmp_gpu_buffer, &state->tmp_gpu_alloc,
@@ -433,13 +433,6 @@ bool init_frame_states(bool is_uma, VkPhysicalDevice gpu, VkDevice device,
       TB_VK_CHECK_RET(err, "Failed to create vma temp gpu buffer", false);
       SET_VK_NAME(device, state->tmp_gpu_buffer, VK_OBJECT_TYPE_BUFFER,
                   "Vulkan Tmp GPU Buffer");
-
-      // Map tmp buffer upfront
-      if (is_uma) {
-        err =
-            vmaMapMemory(vma_alloc, state->tmp_gpu_alloc, &state->tmp_gpu_ptr);
-        TB_VK_CHECK_RET(err, "Failed to map temp gpu buffer", false);
-      }
     }
   }
 
@@ -1092,18 +1085,11 @@ bool init_render_thread(RenderThread *thread) {
                                  &thread->swapchain),
                   "Failed to init swapchain", false);
 
-  {
-    const VkPhysicalDeviceProperties *props = &thread->gpu_props.properties;
-    thread->is_uma =
-        props->deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
-        props->deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
-  }
-
-  TB_CHECK_RETURN(init_frame_states(thread->is_uma, thread->gpu, thread->device,
+  TB_CHECK_RETURN(init_frame_states(thread->gpu, thread->device,
                                     &thread->swapchain, thread->graphics_queue,
                                     thread->graphics_queue_family_index,
-                                    &thread->gpu_mem_props, thread->vma_alloc,
-                                    vk_alloc, thread->frame_states),
+                                    thread->vma_alloc, vk_alloc,
+                                    thread->frame_states),
                   "Failed to init frame states", false);
 
   return true;
@@ -1283,8 +1269,10 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           const BufferImageCopy *up =
               &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
 
-          // Transition target image to copy dst
-          if (!thread->is_uma) {
+          // Issue an upload command only if the src buffer exists
+          // If it doesn't, assume that we want to only do a transition but
+          // no copy
+          if (up->src != VK_NULL_HANDLE) {
             VkImageMemoryBarrier barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                 .subresourceRange = up->range,

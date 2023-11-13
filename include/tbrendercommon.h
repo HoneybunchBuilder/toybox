@@ -9,7 +9,7 @@
 
 #define TB_RP_LABEL_LEN 100
 
-#define TB_VMA_TMP_GPU_MB 256
+#define TB_VMA_TMP_GPU_MB 64
 #define TB_MAX_ATTACHMENTS 4
 #define TB_MAX_RENDER_PASS_DEPS 8
 #define TB_MAX_RENDER_PASS_TRANS 16
@@ -37,7 +37,6 @@ typedef struct TbHostBuffer {
   VmaAllocation alloc;
   VmaAllocationInfo info;
   uint64_t offset;
-  void *ptr;
 } TbHostBuffer;
 
 typedef struct TbBuffer {

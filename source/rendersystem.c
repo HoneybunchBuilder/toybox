@@ -8,6 +8,35 @@
 
 #include <flecs.h>
 
+bool try_map(VmaAllocator vma, VmaAllocation alloc, void **ptr) {
+  VkMemoryPropertyFlags flags = 0;
+  vmaGetAllocationMemoryProperties(vma, alloc, &flags);
+
+  // If this buffer is host visible, just get the pointer to write to
+  if (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+    VmaAllocationInfo alloc_info = {0};
+    vmaGetAllocationInfo(vma, alloc, &alloc_info);
+    // If allocation wasn't mapped, map it
+    if (!alloc_info.pMappedData) {
+      VkResult err = vmaMapMemory(vma, alloc, ptr);
+      TB_VK_CHECK_RET(err, "Failed to map memory", false);
+    } else {
+      *ptr = alloc_info.pMappedData;
+    }
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void tb_flush_alloc(RenderSystem *self, VmaAllocation alloc) {
+  VkMemoryPropertyFlags flags = 0;
+  vmaGetAllocationMemoryProperties(self->vma_alloc, alloc, &flags);
+  if ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0) {
+    vmaFlushAllocation(self->vma_alloc, alloc, 0, VK_WHOLE_SIZE);
+  }
+}
+
 RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
                                   RenderThread *thread) {
   TB_CHECK(thread, "Invalid RenderThread");
@@ -32,15 +61,6 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
   // Should be safe to assume that the render thread is initialized by now
   {
     VkResult err = VK_SUCCESS;
-
-    // Query some info about the kind of device we're working with
-    {
-      const VkPhysicalDeviceProperties *props =
-          &sys.render_thread->gpu_props.properties;
-      sys.is_uma =
-          props->deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
-          props->deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
-    }
 
     // Create vulkan allocator for main thread
     sys.vk_host_alloc_cb = (VkAllocationCallbacks){
@@ -116,17 +136,14 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
                      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             .usage = VMA_MEMORY_USAGE_AUTO,
         };
-        VmaAllocationInfo alloc_info = {0};
         err = vmaCreateBuffer(sys.vma_alloc, &create_info, &alloc_create_info,
                               &state->tmp_host_buffer.buffer,
-                              &state->tmp_host_buffer.alloc, &alloc_info);
+                              &state->tmp_host_buffer.alloc,
+                              &state->tmp_host_buffer.info);
+        state->tmp_host_buffer.info.size = 0; // we use size as a tracker
         TB_VK_CHECK(err, "Failed to allocate temporary buffer");
         SET_VK_NAME(sys.render_thread->device, state->tmp_host_buffer.buffer,
                     VK_OBJECT_TYPE_BUFFER, "Vulkan Tmp Host Buffer");
-
-        err = vmaMapMemory(sys.vma_alloc, state->tmp_host_buffer.alloc,
-                           (void **)&state->tmp_host_buffer.ptr);
-        TB_VK_CHECK(err, "Failed to map temporary buffer");
       }
     }
 
@@ -261,17 +278,27 @@ void render_frame_end(ecs_iter_t *it) {
 
     // Copy this frame state's temp buffer to the gpu
     if (state->tmp_host_buffer.info.size > 0) {
-      BufferCopy up = {
-          .dst = thread_state->tmp_gpu_buffer,
-          .src = state->tmp_host_buffer.buffer,
-          .region =
-              {
-                  .dstOffset = 0,
-                  .srcOffset = 0,
-                  .size = state->tmp_host_buffer.info.size,
-              },
-      };
-      tb_rnd_upload_buffers(sys, &up, 1);
+      // Flush the tmp buffer
+      tb_flush_alloc(sys, thread_state->tmp_gpu_alloc);
+
+      // Only copy if we know that we weren't able to just write directly
+      // to this buffer
+      VkMemoryPropertyFlags flags = 0;
+      vmaGetAllocationMemoryProperties(sys->vma_alloc,
+                                       thread_state->tmp_gpu_alloc, &flags);
+      if ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
+        BufferCopy up = {
+            .dst = thread_state->tmp_gpu_buffer,
+            .src = state->tmp_host_buffer.buffer,
+            .region =
+                {
+                    .dstOffset = 0,
+                    .srcOffset = 0,
+                    .size = state->tmp_host_buffer.info.size,
+                },
+        };
+        tb_rnd_upload_buffers(sys, &up, 1);
+      }
     }
 
     // Send and Reset buffer upload pool
@@ -320,12 +347,21 @@ void tb_unregister_render_sys(ecs_world_t *ecs) {
   ecs_singleton_remove(ecs, RenderSystem);
 }
 
-VkResult alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
-                               uint32_t alignment, TbHostBuffer *buffer) {
+VkResult alloc_tmp_buffer(RenderSystem *self, uint64_t size, uint32_t alignment,
+                          TbHostBuffer *buffer) {
   RenderSystemFrameState *state = &self->frame_states[self->frame_idx];
+  FrameState *thread_state =
+      &self->render_thread->frame_states[self->frame_idx];
 
-  void *ptr = &(
-      (uint8_t *)state->tmp_host_buffer.ptr)[state->tmp_host_buffer.info.size];
+  void *ptr = NULL;
+
+  // Try to map the tmp buffer that is device local
+  // If we can't do that we rely on the host buffer
+  if (!try_map(self->vma_alloc, thread_state->tmp_gpu_alloc, &ptr)) {
+    ptr = state->tmp_host_buffer.info.pMappedData;
+  }
+
+  ptr = &((uint8_t *)ptr)[state->tmp_host_buffer.info.size];
 
   intptr_t padding = 0;
   if (alignment > 0 && (intptr_t)ptr % alignment != 0) {
@@ -342,7 +378,7 @@ VkResult alloc_tmp_host_buffer(RenderSystem *self, uint64_t size,
 
   buffer->buffer = state->tmp_host_buffer.buffer;
   buffer->offset = offset;
-  buffer->ptr = ptr;
+  buffer->info.pMappedData = ptr;
 
   return VK_SUCCESS;
 }
@@ -364,8 +400,6 @@ VkResult alloc_host_buffer(RenderSystem *self,
   SET_VK_NAME(self->render_thread->device, buffer->buffer,
               VK_OBJECT_TYPE_BUFFER, name);
 
-  vmaMapMemory(vma_alloc, buffer->alloc, &buffer->ptr);
-
   buffer->offset = 0;
 
   return VK_SUCCESS;
@@ -378,12 +412,11 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
 
   VmaAllocationCreateInfo alloc_create_info = {
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
   };
-  if (self->is_uma) {
-    alloc_create_info.flags =
-        VMA_ALLOCATION_CREATE_MAPPED_BIT |
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-  }
+
   VkResult err =
       vmaCreateBuffer(vma_alloc, create_info, &alloc_create_info,
                       &buffer->buffer, &buffer->alloc, &buffer->info);
@@ -401,19 +434,16 @@ VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
   VmaAllocator vma_alloc = self->vma_alloc;
   VmaAllocationCreateInfo alloc_create_info = {
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
   };
-  if (self->is_uma) {
-    alloc_create_info.flags =
-        VMA_ALLOCATION_CREATE_MAPPED_BIT |
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-  }
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
                                 &image->image, &image->alloc, &image->info);
   TB_VK_CHECK_RET(err, "Failed to allocate gpu image", err);
 
   SET_VK_NAME(self->render_thread->device, image->image, VK_OBJECT_TYPE_IMAGE,
               name);
-
   return err;
 }
 
@@ -432,16 +462,12 @@ VkResult tb_rnd_sys_tmp_buffer_get_ptr(RenderSystem *self, uint64_t size,
                                        uint32_t alignment, uint64_t *offset,
                                        void **ptr) {
   VkResult err = VK_SUCCESS;
-  if (self->is_uma) {
-    *ptr = self->render_thread->frame_states[self->frame_idx].tmp_gpu_ptr;
-  } else {
-    // Make an allocation on the tmp host buffer
-    // This buffer will *always* be uploaded
-    TbHostBuffer host_buffer = {0};
-    err = alloc_tmp_host_buffer(self, size, alignment, &host_buffer);
-    *offset = host_buffer.offset;
-    *ptr = host_buffer.ptr;
-  }
+
+  // Make an allocation on the tmp buffer
+  TbHostBuffer host_buffer = {0};
+  err = alloc_tmp_buffer(self, size, alignment, &host_buffer);
+  *offset = host_buffer.offset;
+  *ptr = host_buffer.info.pMappedData;
 
   return err;
 }
@@ -453,30 +479,29 @@ VkResult tb_rnd_sys_create_gpu_buffer(RenderSystem *self,
   // Create the GPU side buffer
   VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
 
-  // If this is a UMA platform we can just map the buffer and write to it
-  if (self->is_uma) {
-    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
-    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  // If this buffer is host visible, just get the pointer to write to
+  if (try_map(self->vma_alloc, buffer->alloc, ptr)) {
+    return err;
   }
+
   // Otherwise we have to create a host buffer and schedule an upload
-  else {
-    // It's the caller's responsibility to handle the host buffer too
-    // even if it's not going to be used on non-uma systems
-    err = alloc_host_buffer(self, create_info, name, host);
-    TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-    BufferCopy upload = {
-        .src = host->buffer,
-        .dst = buffer->buffer,
-        .region =
-            {
-                .size = create_info->size,
-            },
-    };
-    tb_rnd_upload_buffers(self, &upload, 1);
+  // It's the caller's responsibility to handle the host buffer too
+  // even if it's not going to be used on non-uma systems
+  err = alloc_host_buffer(self, create_info, name, host);
+  TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-    *ptr = host->ptr;
-  }
+  BufferCopy upload = {
+      .src = host->buffer,
+      .dst = buffer->buffer,
+      .region =
+          {
+              .size = create_info->size,
+          },
+  };
+  tb_rnd_upload_buffers(self, &upload, 1);
+
+  *ptr = host->info.pMappedData;
   return err;
 }
 
@@ -487,30 +512,29 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(RenderSystem *self,
   // Create the GPU side buffer
   VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
 
-  // If this is a UMA platform we can just map the buffer and write to it
-  if (self->is_uma) {
-    err = vmaMapMemory(self->vma_alloc, buffer->alloc, ptr);
-    TB_VK_CHECK_RET(err, "Failed to map memory", err);
+  // If this buffer is host visible, just get the pointer to write to
+  if (try_map(self->vma_alloc, buffer->alloc, ptr)) {
+    return err;
   }
-  // Otherwise we have to create a host buffer and schedule an upload
-  else {
-    TbHostBuffer host = {0};
-    err = alloc_tmp_host_buffer(self, create_info->size, alignment, &host);
-    TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-    BufferCopy upload = {
-        .src = host.buffer,
-        .dst = buffer->buffer,
-        .region =
-            {
-                .srcOffset = host.offset,
-                .size = create_info->size,
-            },
-    };
-    tb_rnd_upload_buffers(self, &upload, 1);
+  // Otherwise we have to create write to the tmp buffer and schedule an
+  // upload
+  TbHostBuffer host = {0};
+  err = alloc_tmp_buffer(self, create_info->size, alignment, &host);
+  TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-    *ptr = host.ptr;
-  }
+  BufferCopy upload = {
+      .src = tb_rnd_get_gpu_tmp_buffer(self),
+      .dst = buffer->buffer,
+      .region =
+          {
+              .srcOffset = host.offset,
+              .size = create_info->size,
+          },
+  };
+  tb_rnd_upload_buffers(self, &upload, 1);
+
+  *ptr = host.info.pMappedData;
   return err;
 }
 
@@ -523,6 +547,7 @@ VkResult tb_rnd_sys_create_gpu_buffer2(RenderSystem *self,
       tb_rnd_sys_create_gpu_buffer(self, create_info, name, buffer, host, &ptr);
   TB_VK_CHECK_RET(err, "Failed to create GPU buffer", err);
   SDL_memcpy(ptr, data, create_info->size);
+  tb_flush_alloc(self, buffer->alloc);
   return err;
 }
 
@@ -534,6 +559,7 @@ VkResult tb_rnd_sys_create_gpu_buffer2_tmp(
                                                   buffer, alignment, &ptr);
   TB_VK_CHECK_RET(err, "Failed to create GPU buffer", err);
   SDL_memcpy(ptr, data, create_info->size);
+  tb_flush_alloc(self, buffer->alloc);
   return err;
 }
 
@@ -550,11 +576,8 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
 
   void *ptr = NULL;
 
-  if (self->is_uma) {
-    // Just create the image and then map the memory
-    err = vmaMapMemory(self->vma_alloc, image->alloc, &ptr);
-    TB_VK_CHECK_RET(err, "Failed to map memory", err);
-  } else {
+  // See if we can just write to the image
+  if (!try_map(self->vma_alloc, image->alloc, &ptr)) {
     // Allocate memory on the host and copy data to it
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -564,11 +587,12 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
     err = alloc_host_buffer(self, &buffer_info, name, host);
     TB_VK_CHECK_RET(err, "Failed to allocate host buffer for texture", err);
 
-    ptr = host->ptr;
+    ptr = host->info.pMappedData;
   }
 
   // Copy data to the buffer
   SDL_memcpy(ptr, data, data_size);
+  tb_flush_alloc(self, image->alloc);
 
   return err;
 }
@@ -588,25 +612,23 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
   VkBuffer buffer = VK_NULL_HANDLE;
   VkDeviceSize offset = 0;
 
-  if (self->is_uma) {
-    // Just create the image and then map the memory
-    err = vmaMapMemory(self->vma_alloc, image->alloc, &ptr);
-    TB_VK_CHECK_RET(err, "Failed to map memory", err);
-  } else {
+  if (!try_map(self->vma_alloc, image->alloc, &ptr)) {
     // Allocate space for the buffer on the temp buffer
     TbHostBuffer host = {0};
-    err = alloc_tmp_host_buffer(self, data_size, alignment, &host);
+    err = alloc_tmp_buffer(self, data_size, alignment, &host);
     TB_VK_CHECK_RET(err, "Failed to alloc space on the temp buffer", err);
-    ptr = host.ptr;
+    ptr = host.info.pMappedData;
 
     // We know that the data on the tmp buffer will be automatically uploaded
     // so instead of issuing another upload, we copy from the uploaded page
     // to the final memory location of the image
-    buffer = host.buffer;
+    buffer = tb_rnd_get_gpu_tmp_buffer(self);
     offset = host.offset;
   }
 
   // We do this copy even on UMA platforms because we need the transition
+  // If the buffer is null the copy will be skipped but the transition
+  // will still occur
   BufferImageCopy copy = {
       .src = buffer,
       .dst = image->image,
@@ -636,6 +658,7 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
 
   // Copy data to the buffer
   SDL_memcpy(ptr, data, data_size);
+  tb_flush_alloc(self, image->alloc);
 
   return err;
 }
@@ -648,21 +671,11 @@ VkResult tb_rnd_sys_update_gpu_buffer(RenderSystem *self,
                                       const TbBuffer *buffer,
                                       const TbHostBuffer *host, void **ptr) {
   VkResult err = VK_SUCCESS;
-
   if (buffer->info.size == 0) {
     return err;
   }
 
-  if (self->is_uma) {
-    // If we're on a UMA platform we can stash some info in the otherwise unused
-    // host buffer
-    if (host->ptr == NULL) {
-      err = vmaMapMemory(self->vma_alloc, buffer->alloc, (void **)&host->ptr);
-      TB_VK_CHECK_RET(err, "Failed to map memory", err);
-    }
-    *ptr = host->ptr;
-  } else {
-    *ptr = host->ptr;
+  if (!try_map(self->vma_alloc, buffer->alloc, ptr)) {
     // Schedule another upload
     BufferCopy upload = {
         .src = host->buffer,
@@ -674,6 +687,8 @@ VkResult tb_rnd_sys_update_gpu_buffer(RenderSystem *self,
             },
     };
     tb_rnd_upload_buffers(self, &upload, 1);
+
+    *ptr = host->info.pMappedData;
   }
   return err;
 }

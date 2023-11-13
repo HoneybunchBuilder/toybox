@@ -36,8 +36,6 @@ typedef struct RenderSystem {
   Allocator tmp_alloc;
   RenderThread *render_thread;
 
-  bool is_uma;
-
   VkAllocationCallbacks vk_host_alloc_cb;
   VmaAllocator vma_alloc;
 
@@ -173,3 +171,5 @@ tb_rnd_frame_desc_pool_tick(RenderSystem *self,
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(RenderSystem *self,
                                                FrameDescriptorPool *pools,
                                                uint32_t set_idx);
+
+void tb_flush_alloc(RenderSystem *self, VmaAllocation alloc);
