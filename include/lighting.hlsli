@@ -212,8 +212,8 @@ float sample_shadow_pcf(Texture2DArray shadow_map, SamplerComparisonState samp,
   float sum = 0;
 #if 0
   // Single sample
-  return shadow_map.SampleCmpLevelZero(samp, float3(shadow_pos.xy, cascade_idx),
-                                       light_depth);
+  sum = shadow_map.SampleCmpLevelZero(samp, float3(shadow_pos.xy, cascade_idx),
+                                      light_depth);
 #else
   // PCF Filter Size 7
   float uw0 = (5 * s - 6);
@@ -287,8 +287,13 @@ float sample_shadow_pcf(Texture2DArray shadow_map, SamplerComparisonState samp,
   sum += uw3 * vw3 *
          sample_shadow_map(shadow_map, samp, base_uv, u3, v3,
                            shadow_map_size_inv, cascade_idx, light_depth);
-  return sum * 1.0f / 2704;
+  sum *= 1.0f / 2704;
 #endif
+  if (sum < light_depth) {
+    return sum;
+  } else {
+    return 1;
+  }
 }
 
 float sample_shadow_cascade(Texture2DArray shadow_map,
