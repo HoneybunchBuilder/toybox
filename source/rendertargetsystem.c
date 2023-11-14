@@ -71,7 +71,9 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
           .samples = VK_SAMPLE_COUNT_1_BIT,
           .usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT,
       };
-      err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info,
+      VmaAllocationCreateFlags flags =
+          VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+      err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info, flags,
                                        desc->name, &rt->images[i]);
       TB_VK_CHECK_RET(err, "Failed to allocate image for render target", false);
 
