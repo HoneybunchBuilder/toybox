@@ -430,13 +430,12 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
 
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
+                                    VmaAllocationCreateFlags vma_flags,
                                     const char *name, TbImage *image) {
   VmaAllocator vma_alloc = self->vma_alloc;
   VmaAllocationCreateInfo alloc_create_info = {
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
-               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-               VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+      .flags = vma_flags,
   };
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
                                 &image->image, &image->alloc, &image->info);
@@ -571,7 +570,7 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
                                      const VkImageCreateInfo *create_info,
                                      const char *name, TbImage *image,
                                      TbHostBuffer *host) {
-  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, name, image);
+  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, 0, name, image);
   TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture", err);
 
   void *ptr = NULL;
@@ -597,14 +596,12 @@ VkResult tb_rnd_sys_create_gpu_image(RenderSystem *self, const void *data,
   return err;
 }
 
-// Copy the given data to the temp buffer and schedule an upload to the
-// dedicated gpu image
-// Or if this is a UMA platform just directly create the image
+// Copy the given data to the temp buffer and move it into a dedicated GPU image
 VkResult tb_rnd_sys_create_gpu_image_tmp(RenderSystem *self, const void *data,
                                          uint64_t data_size, uint32_t alignment,
                                          const VkImageCreateInfo *create_info,
                                          const char *name, TbImage *image) {
-  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, name, image);
+  VkResult err = tb_rnd_sys_alloc_gpu_image(self, create_info, 0, name, image);
   TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture", err);
 
   void *ptr = NULL;

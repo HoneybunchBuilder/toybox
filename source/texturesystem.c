@@ -505,7 +505,7 @@ TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
     const VkFormat format = create_info->format;
     // Allocate image
     {
-      err = tb_rnd_sys_alloc_gpu_image(rnd_sys, create_info, name,
+      err = tb_rnd_sys_alloc_gpu_image(rnd_sys, create_info, 0, name,
                                        &texture->gpu_image);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
                       InvalidTextureId);

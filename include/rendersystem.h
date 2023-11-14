@@ -54,6 +54,7 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,
                                      const char *name, TbBuffer *buffer);
 VkResult tb_rnd_sys_alloc_gpu_image(RenderSystem *self,
                                     const VkImageCreateInfo *create_info,
+                                    VmaAllocationCreateFlags vma_flags,
                                     const char *name, TbImage *image);
 
 VkResult tb_rnd_sys_tmp_buffer_copy(RenderSystem *self, uint64_t size,
