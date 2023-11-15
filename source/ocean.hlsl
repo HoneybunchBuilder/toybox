@@ -72,8 +72,8 @@ float4 frag(Interpolators i) : SV_TARGET {
     const float near = camera_data.proj_params.x;
     const float far = camera_data.proj_params.y;
     // TODO: Paramaterize
-    const float fog_density = 0.2f;
-    const float3 fog_color = float3(0.105, 0.163, 0.262);
+    const float fog_density = 0.078f;
+    const float3 fog_color = float3(0.095, 0.163, 0.282);
 
     // World position depth
     float scene_eye_depth =
@@ -81,7 +81,7 @@ float4 frag(Interpolators i) : SV_TARGET {
     float fragment_eye_depth = -i.view_pos.z;
     float3 world_pos = camera_data.view_pos -
                        ((view_dir_vec / fragment_eye_depth) * scene_eye_depth);
-    float depth_diff = world_pos.y;
+    float depth_diff = world_pos.y - i.world_pos.y;
 
     float fog = saturate(exp(fog_density * depth_diff));
     float3 background_color = color_map.Sample(material_sampler, uv).rgb;
@@ -146,8 +146,8 @@ float4 frag(Interpolators i) : SV_TARGET {
   if (L.y > 0) {
     float distortion = 0.4f;
     float power = 2.0f;
-    float scale = 8.0f;
-    float3 attenuation = 0.5f;
+    float scale = 4.0f;
+    float3 attenuation = 0.3f;
     float3 ambient = 0.1f;
     float3 sss_color = float3(0.13f, 0.69f, 0.67f);
     // Without handling thickness

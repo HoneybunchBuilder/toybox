@@ -98,7 +98,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   float mie_v = 4.0;
   float rayleigh_zenith_length = 8.4e3;
   float mie_zenith_length = 1.25e3;
-  float sun_intensity_factor = 1000.0;
+  float sun_intensity_factor = 375.0;
   float sun_intensity_falloff_steepness = 1.5;
   float sun_angular_diameter_degrees = 0.0093333;
 
@@ -168,5 +168,5 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
-  return color; // 0.050876;
+  return color;
 }

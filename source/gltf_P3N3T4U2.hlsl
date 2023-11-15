@@ -53,7 +53,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
   float3 N = normalize(i.normal);
   if (consts.perm & GLTF_PERM_NORMAL_MAP) {
     // Construct TBN
-    float3x3 tbn = float3x3(normalize(i.tangent), normalize(i.binormal),
+    float3x3 tbn = float3x3(normalize(i.binormal), normalize(i.tangent),
                             normalize(i.normal));
 
     // Convert from tangent space to world space

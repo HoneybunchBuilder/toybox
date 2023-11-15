@@ -85,7 +85,7 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
 #define AMBIENT 0.7
 float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
                    Texture2DArray shadow_map, sampler samp) {
-  float bias = 0.0005;
+  float bias = 0.005;
 
   float4 proj_coord = shadow_coord;
 
@@ -356,23 +356,6 @@ float3 pbr_lighting_common(View v, Light l, Surface s) {
 
   // Calculate shadow first
   float shadow = max(shadow_visibility(l, s), (1 - AMBIENT));
-  /*
-  float shadow = 1.0f; // A value of 0 means the pixel is completely lit
-  {
-    uint cascade_idx = 0;
-    for (uint c = 0; c < (TB_CASCADE_COUNT - 1); ++c) {
-      if (s.view_pos.z < l.light.cascade_splits[c]) {
-        cascade_idx = c + 1;
-      }
-    }
-
-    float4 shadow_coord =
-        mul(l.light.cascade_vps[cascade_idx], float4(s.world_pos, 1.0));
-
-    shadow =
-        pcf_filter(shadow_coord, l.shadow_map, cascade_idx, l.shadow_sampler);
-  }
-  */
 
   // Lighting
   {

@@ -33,5 +33,5 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   upsample += (a + c + g + i);
   upsample *= 1.0f / 16.0f;
 
-  output[dispatch_thread_id.xy] = upsample;
+  output[dispatch_thread_id.xy] += upsample;
 }
