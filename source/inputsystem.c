@@ -13,6 +13,14 @@ float get_axis_float(SDL_GameController *controller,
   return raw_axis / (float)SDL_MAX_SINT16;
 }
 
+float2 axis_deadzone(float2 axis, float deadzone) {
+  float mag = magf2(axis);
+  if (mag < deadzone) {
+    return f2(0, 0);
+  }
+  return axis;
+}
+
 void input_update_tick(ecs_iter_t *it) {
   InputSystem *self = ecs_field(it, InputSystem, 1);
   TracyCZoneN(ctx, "Input System Tick", true);
@@ -130,17 +138,19 @@ void input_update_tick(ecs_iter_t *it) {
       continue;
     }
 
+    float deadzone = 0.075; // TODO: Make configurable?
+
     TBGameControllerState *ctl_state = &self->controller_states[ctl_idx];
-    ctl_state->left_stick = (float2){
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY),
-    };
+    ctl_state->left_stick =
+        axis_deadzone(f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
+                         get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY)),
+                      deadzone);
     ctl_state->left_trigger =
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
-    ctl_state->right_stick = (float2){
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY),
-    };
+    ctl_state->right_stick = axis_deadzone(
+        f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
+           get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY)),
+        deadzone);
     ctl_state->right_trigger =
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
   }

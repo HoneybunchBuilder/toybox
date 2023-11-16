@@ -58,10 +58,11 @@ void noclip_update_tick(ecs_iter_t *it) {
     {
       const TBGameControllerState *ctl_state = &input->controller_states[0];
       if (look_axis.x == 0 && look_axis.y == 0) {
-        look_axis = ctl_state->right_stick;
+        look_axis = -ctl_state->right_stick;
       }
       if (move_axis.x == 0 && move_axis.y == 0) {
         move_axis = ctl_state->left_stick;
+        move_axis.y = -move_axis.y;
       }
     }
 
