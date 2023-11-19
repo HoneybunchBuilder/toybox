@@ -51,6 +51,31 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
   return self->world_matrix;
 }
 
+Transform tb_transform_get_world_trans(ecs_world_t *ecs,
+                                       TransformComponent *self) {
+  TracyCZoneNC(ctx, "Transform Get World Transform", TracyCategoryColorCore,
+               true);
+  ECS_COMPONENT(ecs, TransformComponent);
+
+  Transform world = self->transform;
+
+  ecs_entity_t parent = self->parent;
+  while (parent != InvalidEntityId) {
+    TransformComponent *parent_comp =
+        ecs_get_mut(ecs, parent, TransformComponent);
+    if (!parent_comp) {
+      break;
+    }
+
+    Transform parent_trans = tb_transform_get_world_trans(ecs, parent_comp);
+    world = transform_combine(&parent_trans, &world);
+    parent = parent_comp->parent;
+  }
+
+  TracyCZoneEnd(ctx);
+  return world;
+}
+
 void tb_transform_mark_dirty(ecs_world_t *ecs, TransformComponent *self) {
   TracyCZoneNC(ctx, "Transform Set Dirty", TracyCategoryColorCore, true);
   ECS_COMPONENT(ecs, TransformComponent);
@@ -69,4 +94,35 @@ void tb_transform_update(ecs_world_t *ecs, TransformComponent *self,
     self->transform = *trans;
     tb_transform_mark_dirty(ecs, self);
   }
+}
+
+// Like tb_transform_update except given a world transform we want to compose
+// a proper local transform that will align to the given world-space transform
+void tb_transform_set_world(ecs_world_t *ecs, TransformComponent *self,
+                            const Transform *trans) {
+  ECS_COMPONENT(ecs, TransformComponent);
+
+  // If the current, final transform and the given transform match, do nothing
+  float4x4 current = tb_transform_get_world_matrix(ecs, self);
+  float4x4 world = transform_to_matrix(trans);
+  if (tb_mf44eq(&current, &world)) {
+    return;
+  }
+
+  // Walk the lineage of transforms and collect the inverse of all of them
+  Transform inv = trans_identity();
+  {
+    ecs_entity_t p = self->parent;
+    while (p != InvalidEntityId) {
+      TransformComponent *c = ecs_get_mut(ecs, p, TransformComponent);
+      Transform local_inv = inv_trans(c->transform);
+      inv = transform_combine(&inv, &local_inv);
+      p = c->parent;
+    }
+  }
+
+  self->transform = transform_combine(&inv, trans);
+
+  // Important so that the renderer knows we've updated the transform
+  tb_transform_mark_dirty(ecs, self);
 }

@@ -132,23 +132,26 @@ void physics_update_tick(flecs::iter it) {
 
   jolt.Update(it.delta_time(), 1, jolt_tmp_alloc, jolt_job_sys);
 
-  // Iterate through query of every rigidbody and update the Toybox transform
-  flecs::query<TbRigidbodyComponent, TransformComponent> query(
-      ecs, phys_sys->rigidbody_query);
+  // Iterate through query of every rigidbody and update the entity transform
+  // based on the
+  {
+    flecs::query<TbRigidbodyComponent, TransformComponent> query(
+        ecs, phys_sys->rigidbody_query);
 
-  query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
-                 TransformComponent &trans) {
-    (void)e;
-    auto id = (JPH::BodyID)rigidbody.body;
-    JPH::Vec3 pos = body_iface.GetPosition(id);
-    JPH::Quat rot = body_iface.GetRotation(id);
-    Transform updated = {
-        .position = {pos.GetX(), pos.GetY(), pos.GetZ()},
-        .scale = trans.transform.scale,
-        .rotation = {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()},
-    };
-    tb_transform_update(ecs.c_ptr(), &trans, &updated);
-  });
+    query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
+                   TransformComponent &trans) {
+      (void)e;
+      auto id = (JPH::BodyID)rigidbody.body;
+      JPH::Vec3 pos = body_iface.GetPosition(id);
+      JPH::Quat rot = body_iface.GetRotation(id);
+      Transform updated = {
+          .position = {pos.GetX(), pos.GetY(), pos.GetZ()},
+          .scale = trans.transform.scale,
+          .rotation = {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()},
+      };
+      tb_transform_set_world(ecs.c_ptr(), &trans, &updated);
+    });
+  }
 }
 
 void tb_register_physics_sys(TbWorld *world) {

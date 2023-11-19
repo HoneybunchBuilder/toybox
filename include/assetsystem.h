@@ -12,10 +12,13 @@ typedef bool (*ComponentAddFn)(ecs_world_t *ecs, ecs_entity_t e,
                                const char *source_path, const cgltf_node *node,
                                json_object *extra);
 
+typedef void (*ComponentPostLoadFn)(ecs_world_t *ecs, ecs_entity_t e);
+
 typedef void (*ComponentRemoveFn)(ecs_world_t *ecs);
 
 // A type of system that the world cares about
 typedef struct AssetSystem {
   ComponentAddFn add_fn;
+  ComponentPostLoadFn post_load_fn;
   ComponentRemoveFn rem_fn;
 } AssetSystem;

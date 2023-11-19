@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
   Notes on mathematic standards used
   * Coordinate system is right handed. GLTF is right handed
@@ -148,6 +152,8 @@ Quaternion normq(Quaternion q);
 
 float lenf3(float3 v);
 
+Transform trans_identity(void);
+
 float3x3 mf33_identity(void);
 float3x4 mf34_identity(void);
 float4x4 mf44_identity(void);
@@ -174,6 +180,9 @@ float3 qrotf3(Quaternion q, float3 v);
 bool tb_f4eq(float4 x, float4 y);
 bool tb_f3eq(float3 x, float3 y);
 
+bool tb_mf33eq(const float3x3 *x, const float3x3 *y);
+bool tb_mf44eq(const float4x4 *x, const float4x4 *y);
+
 bool tb_transeq(const Transform *x, const Transform *y);
 
 AABB aabb_init(void);
@@ -187,6 +196,11 @@ AABB aabb_transform(float4x4 m, AABB aabb);
 void translate(Transform *t, float3 p);
 void scale(Transform *t, float3 s);
 void rotate(Transform *t, Quaternion r);
+
+float3 safe_reciprocal(float3 v);
+Quaternion inv_quat(Quaternion q);
+
+Transform inv_trans(Transform t);
 
 #define TB_FRUSTUM_CORNER_COUNT 8
 static const float3 tb_frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {
@@ -228,7 +242,9 @@ float3 transform_get_forward(const Transform *t);
 float3 transform_get_right(const Transform *t);
 float3 transform_get_up(const Transform *t);
 
+Transform transform_combine(const Transform *x, const Transform *y);
 float4x4 transform_to_matrix(const Transform *t);
+
 Transform tb_transform_from_node(const cgltf_node *node);
 
 float4x4 look_forward(float3 pos, float3 forward, float3 up);
@@ -258,4 +274,8 @@ float tb_randf(float min, float max);
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#endif
+
+#ifdef __cplusplus
+}
 #endif

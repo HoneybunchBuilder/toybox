@@ -123,6 +123,13 @@ Quaternion normq(Quaternion q) { return (Quaternion)normf4((float4)q); }
 
 float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }
 
+Transform trans_identity(void) {
+  return (Transform){
+      .rotation = f4(0, 0, 0, 1),
+      .scale = f3(1, 1, 1),
+  };
+}
+
 float3x3 mf33_identity(void) {
   return (float3x3){
       (float3){1, 0, 0},
@@ -400,7 +407,7 @@ Quaternion mulq(Quaternion q, Quaternion p) {
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
 float3 qrotf3(Quaternion q, float3 v) {
-  float3 u = f3(q.x, q.y, q.z);
+  float3 u = q.xyz;
   float3 uv = crossf3(u, v);
   float3 uuv = crossf3(u, uv);
 
@@ -412,6 +419,16 @@ bool tb_f4eq(float4 x, float4 y) {
 }
 bool tb_f3eq(float3 x, float3 y) {
   return x.x == y.x && x.y == y.y && x.z == y.z;
+}
+
+bool tb_mf33eq(const float3x3 *x, const float3x3 *y) {
+  return tb_f3eq(x->col0, y->col0) && tb_f3eq(x->col1, y->col1) &&
+         tb_f3eq(x->col2, y->col2);
+}
+
+bool tb_mf44eq(const float4x4 *x, const float4x4 *y) {
+  return tb_f4eq(x->col0, y->col0) && tb_f4eq(x->col1, y->col1) &&
+         tb_f4eq(x->col2, y->col2) && tb_f4eq(x->col3, y->col3);
 }
 
 bool tb_transeq(const Transform *x, const Transform *y) {
@@ -474,6 +491,39 @@ void rotate(Transform *t, Quaternion r) {
   t->rotation = mulq(t->rotation, r);
 }
 
+float3 safe_reciprocal(float3 v) {
+  float3 r = 0;
+  if (v.x != 0) {
+    r.x = 1.0f / v.x;
+  }
+  if (v.y != 0) {
+    r.y = 1.0f / v.y;
+  }
+  if (v.z != 0) {
+    r.z = 1.0f / v.z;
+  }
+  return r;
+}
+
+Quaternion inv_quat(Quaternion q) { return f4(-1, -1, -1, 1) * normq(q); }
+
+Transform inv_trans(Transform t) {
+  // Invert scale
+  float3 inv_scale = safe_reciprocal(t.scale);
+  // Invert rotation
+  Quaternion inv_rot = inv_quat(t.rotation);
+  // Invert position
+  float3 scaled_position = inv_scale * t.position;
+  // TODO: This may not handle rotations particularly well
+  float3 inv_pos = -scaled_position; // qrotf3(inv_rot, scaled_position);
+
+  return (Transform){
+      .position = inv_pos,
+      .rotation = inv_rot,
+      .scale = inv_scale,
+  };
+}
+
 float3 transform_get_forward(const Transform *t) {
   return normf3(qrotf3(t->rotation, TB_FORWARD));
 }
@@ -484,6 +534,14 @@ float3 transform_get_right(const Transform *t) {
 
 float3 transform_get_up(const Transform *t) {
   return normf3(qrotf3(t->rotation, TB_UP));
+}
+
+Transform transform_combine(const Transform *x, const Transform *y) {
+  return (Transform){
+      .position = x->position + y->position,
+      .rotation = mulq(x->rotation, y->rotation),
+      .scale = x->scale * y->scale,
+  };
 }
 
 float4x4 transform_to_matrix(const Transform *t) {

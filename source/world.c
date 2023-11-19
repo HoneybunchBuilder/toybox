@@ -190,7 +190,7 @@ void tb_destroy_world(TbWorld *world) {
   ecs_fini(ecs);
 }
 
-ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
+ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
                          Allocator tmp_alloc, json_tokener *tok,
                          const cgltf_data *data, const char *root_scene_path,
                          ecs_entity_t parent, const cgltf_node *node) {
@@ -247,7 +247,8 @@ ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
     ecs_set_ptr(ecs, e, TransformComponent, &trans);
   }
   if (node->name) {
-    ecs_set_name(ecs, e, node->name);
+    // Don't set node names right now since they can conflict at the moment
+    // ecs_set_name(ecs, e, node->name);
   }
 
   if (node->children_count > 0) {
@@ -261,17 +262,21 @@ ecs_entity_t load_entity(ecs_world_t *ecs, Allocator std_alloc,
       // Load all children
       for (uint32_t i = 0; i < node->children_count; ++i) {
         const cgltf_node *child = node->children[i];
-        children[i] = load_entity(ecs, std_alloc, tmp_alloc, tok, data,
+        children[i] = load_entity(ecs, scene, std_alloc, tmp_alloc, tok, data,
                                   root_scene_path, e, child);
       }
       ecs_modified(ecs, e, TransformComponent);
     }
   }
 
+  TB_DYN_ARR_APPEND(scene->entities, e);
+
   return e;
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, AssetSystem);
   // Get qualified path to scene asset
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
@@ -287,8 +292,9 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     const cgltf_node *node = data->scene->nodes[i];
-    ecs_entity_t e = load_entity(world->ecs, world->std_alloc, world->tmp_alloc,
-                                 tok, data, scene_path, InvalidEntityId, node);
+    ecs_entity_t e =
+        load_entity(ecs, &scene, world->std_alloc, world->tmp_alloc, tok, data,
+                    scene_path, InvalidEntityId, node);
     TB_DYN_ARR_APPEND(scene.entities, e);
   }
 
@@ -298,6 +304,27 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
   // Clean up gltf file now that it's parsed
   cgltf_free(data);
+
+  // Trigger post load events for asset systems that care
+  {
+    ecs_filter_t *asset_filter =
+        ecs_filter(ecs, {.terms = {
+                             {.id = ecs_id(AssetSystem)},
+                         }});
+    ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
+    while (ecs_filter_next(&asset_it)) {
+      AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+      for (int32_t i = 0; i < asset_it.count; ++i) {
+        ComponentPostLoadFn fn = asset_sys[i].post_load_fn;
+        if (fn) {
+          TB_DYN_ARR_FOREACH(scene.entities, i) {
+            fn(ecs, TB_DYN_ARR_AT(scene.entities, i));
+          }
+        }
+      }
+    }
+    ecs_filter_fini(asset_filter);
+  }
 
   return true;
 }

@@ -4,8 +4,8 @@
 
 #include "dynarray.h"
 
-typedef uint64_t entity_id_t;
+typedef uint64_t ecs_entity_t;
 
 typedef struct TbScene {
-  TB_DYN_ARR_OF(entity_id_t) entities;
+  TB_DYN_ARR_OF(ecs_entity_t) entities;
 } TbScene;
