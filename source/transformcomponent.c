@@ -34,15 +34,17 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
   if (self->dirty) {
     self->world_matrix = transform_to_matrix(&self->transform);
     // If we have a parent, look up its world transform and combine it with this
-    if (self->parent != InvalidEntityId) {
-      float4x4 parent_mat = mf44_identity();
+    ecs_entity_t parent = self->parent;
+    while (parent != InvalidEntityId) {
       TransformComponent *parent_comp =
-          ecs_get_mut(ecs, self->parent, TransformComponent);
-      if (parent_comp) {
-        parent_mat = tb_transform_get_world_matrix(ecs, parent_comp);
-        ecs_modified(ecs, self->parent, TransformComponent);
-        self->world_matrix = mulmf44(parent_mat, self->world_matrix);
+          ecs_get_mut(ecs, parent, TransformComponent);
+      if (!parent_comp) {
+        break;
       }
+
+      float4x4 parent_mat = transform_to_matrix(&parent_comp->transform);
+      self->world_matrix = mulmf44(parent_mat, self->world_matrix);
+      parent = parent_comp->parent;
     }
     self->dirty = false;
   }
@@ -67,7 +69,7 @@ Transform tb_transform_get_world_trans(ecs_world_t *ecs,
       break;
     }
 
-    Transform parent_trans = tb_transform_get_world_trans(ecs, parent_comp);
+    Transform parent_trans = parent_comp->transform;
     world = transform_combine(&parent_trans, &world);
     parent = parent_comp->parent;
   }

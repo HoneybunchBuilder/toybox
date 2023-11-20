@@ -25,13 +25,15 @@ void camera_update_tick(ecs_iter_t *it) {
   CameraComponent *camera = ecs_field(it, CameraComponent, 1);
   TransformComponent *transform = ecs_field(it, TransformComponent, 2);
 
-  // Eval transform heirarchy
-  CommonViewData view_data = {
-      .view_pos = transform->transform.position,
-  };
+  float4x4 cam_world = tb_transform_get_world_matrix(ecs, transform);
 
-  const float3 forward = transform_get_forward(&transform->transform);
-  float4x4 view = look_forward(transform->transform.position, forward, TB_UP);
+  float3 pos = cam_world.col3.xyz;
+  float3 forward = mulf33(m44tom33(cam_world), TB_FORWARD);
+
+  // Eval transform heirarchy
+  CommonViewData view_data = {.view_pos = pos};
+
+  float4x4 view = look_forward(pos, forward, TB_UP);
 
   float4x4 proj =
       perspective(camera->fov, camera->aspect_ratio, camera->near, camera->far);

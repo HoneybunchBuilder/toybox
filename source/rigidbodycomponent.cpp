@@ -180,10 +180,11 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto &rb = *ecs.entity(e).get_mut<TbRigidbodyComponent>();
   auto trans = ecs.entity(e).get_mut<TransformComponent>();
 
-  // Set the body position based on the final world transform
-  // of the entity. TODO: Rotation too
+  // Set the body position and rotation based on the final world transform
+  // of the entity.
   auto world_trans = tb_transform_get_world_trans(ecs.c_ptr(), trans);
   auto pos = world_trans.position;
+  // This only works because we're assuming that there is no offset rotation
   auto rot = world_trans.rotation;
 
   auto position = JPH::Vec3(pos.x, pos.y, pos.z);
