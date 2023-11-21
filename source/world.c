@@ -36,6 +36,7 @@
 #include "shadowsystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
+#include "thirdpersonsystems.h"
 #include "timeofdaysystem.h"
 #include "viewsystem.h"
 #include "visualloggingsystem.h"
@@ -121,6 +122,7 @@ TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
   tb_register_shadow_sys(&world);
   tb_register_time_of_day_sys(ecs);
   tb_register_rotator_sys(ecs, tmp_alloc);
+  tb_register_third_person_systems(&world);
 
 // By setting this singleton we allow the application to connect to the
 // flecs explorer

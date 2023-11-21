@@ -1,6 +1,5 @@
 #pragma once
 
-#define RigidbodyComponentId 0xBAD33333
 #define RigidbodyComponentIdStr "0xBAD33333"
 
 #ifdef __cplusplus
