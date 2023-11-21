@@ -18,12 +18,26 @@ void update_tp_movement(flecs::world &ecs, const InputSystem &input,
   float3 velocity = {};
 
   if (input.keyboard.key_W) {
-    velocity += TB_FORWARD * delta_speed;
+    velocity += TB_FORWARD;
+  }
+  if (input.keyboard.key_A) {
+    velocity += TB_LEFT;
+  }
+  if (input.keyboard.key_S) {
+    velocity += TB_BACKWARD;
+  }
+  if (input.keyboard.key_D) {
+    velocity += TB_RIGHT;
   }
 
   if (magsqf3(velocity) != 0) {
+    velocity = normf3(velocity);
+    velocity *= delta_speed;
     trans.transform.position += velocity;
     tb_transform_mark_dirty(ecs.c_ptr(), &trans);
+    // TODO:Look up relative player physics object and mark it dirty
+    // so the physics system can use it as the source of truth before
+    // stepping the physics sim.
   }
 }
 

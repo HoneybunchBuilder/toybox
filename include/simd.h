@@ -218,20 +218,13 @@ static const float3 tb_frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {
 };
 
 // Reminder: Left Handed coordinate space
-#define TB_ORIGIN                                                              \
-  (float3) { 0 }
-#define TB_FORWARD                                                             \
-  (float3) { 0, 0, -1 }
-#define TB_BACKWARD                                                            \
-  (float3) { 0, 0, 1 }
-#define TB_LEFT                                                                \
-  (float3) { -1, 0, 0 }
-#define TB_RIGHT                                                               \
-  (float3) { 1, 0, 0 }
-#define TB_UP                                                                  \
-  (float3) { 0, 1, 0 }
-#define TB_DOWN                                                                \
-  (float3) { 0, -1, 0 }
+#define TB_ORIGIN f3(0, 0, 0)
+#define TB_FORWARD f3(0, 0, -1)
+#define TB_BACKWARD f3(0, 0, 1)
+#define TB_LEFT f3(-1, 0, 0)
+#define TB_RIGHT f3(1, 0, 0)
+#define TB_UP f3(0, 1, 0)
+#define TB_DOWN f3(0, -1, 0)
 
 // X is left to right, Y is down to up and Z is front to back
 #define TB_WIDTH_IDX 0

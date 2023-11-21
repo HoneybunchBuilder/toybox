@@ -181,6 +181,7 @@ void remove_third_person_components(ecs_world_t *ecs) {
 
 // A dummy type whose singleton entity we use to house our asset system
 typedef struct ThirdPersonAssetSystem {
+  float dummy;
 } ThirdPersonAssetSystem;
 
 void tb_register_third_person_components(TbWorld *world) {
