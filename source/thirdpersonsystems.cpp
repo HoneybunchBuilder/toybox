@@ -2,52 +2,80 @@
 
 #include "cameracomponent.h"
 #include "inputsystem.h"
+#include "physicssystem.hpp"
 #include "profiling.h"
 #include "rigidbodycomponent.h"
 #include "thirdpersoncomponents.h"
 #include "transformcomponent.h"
 #include "world.h"
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+
 #include <flecs.h>
 
 void update_tp_movement(flecs::world &ecs, const InputSystem &input,
-                        float delta_time, ThirdPersonMovementComponent &move,
+                        ThirdPersonMovementComponent &move,
                         TransformComponent &trans) {
-  float delta_speed = move.speed * delta_time;
+  const auto &phys_sys = ecs.get<TbPhysicsSystem>();
+  auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
+  const auto &rb = *ecs.entity(move.body).get<TbRigidbodyComponent>();
 
-  float3 velocity = {};
+  const auto &transform = tb_transform_get_world_trans(ecs, &trans);
+
+  float3 accel = {0};
+
+  JPH::BodyID body = (JPH::BodyID)rb.body;
+  JPH::Vec3 jph_vel = body_iface.GetLinearVelocity(body);
+  float3 velocity = f3(jph_vel.GetX(), jph_vel.GetY(), jph_vel.GetZ());
 
   if (input.keyboard.key_W) {
-    velocity += TB_FORWARD;
+    accel += TB_FORWARD;
   }
   if (input.keyboard.key_A) {
-    velocity += TB_LEFT;
+    accel += TB_LEFT;
   }
   if (input.keyboard.key_S) {
-    velocity += TB_BACKWARD;
+    accel += TB_BACKWARD;
   }
   if (input.keyboard.key_D) {
-    velocity += TB_RIGHT;
+    accel += TB_RIGHT;
+  }
+
+  if (magsqf3(accel) != 0) {
+    accel = normf3(qrotf3(transform.rotation, accel));
+    velocity += accel * move.speed;
+  }
+
+  if (input.keyboard.key_space && SDL_fabsf(velocity.y) <= 0.001f) {
+    velocity += f3(0, 10, 0);
   }
 
   if (magsqf3(velocity) != 0) {
-    velocity = normf3(velocity);
-    velocity *= delta_speed;
-    trans.transform.position += velocity;
-    tb_transform_mark_dirty(ecs.c_ptr(), &trans);
-    // TODO:Look up relative player physics object and mark it dirty
-    // so the physics system can use it as the source of truth before
-    // stepping the physics sim.
+    float max_speed = 10.0f;
+    if (magf2(velocity.xz) > max_speed) {
+      float2 v = normf2(velocity.xz) * max_speed;
+      velocity = f3(v.x, velocity.y, v.y);
+    }
+
+    velocity.xz *= 0.97f; // Drag
   }
+
+  body_iface.SetLinearVelocity(body,
+                               JPH::Vec3(velocity.x, velocity.y, velocity.z));
+
+  // We don't want the body to rotate at all
+  body_iface.SetAngularVelocity(body, JPH::Vec3(0, 0, 0));
 }
 
 void tp_movement_update_tick(flecs::iter &it,
                              ThirdPersonMovementComponent *move,
                              TransformComponent *trans) {
   auto ecs = it.world();
-  const auto &input_sys = *ecs.singleton<InputSystem>().get<InputSystem>();
+  const auto &input_sys = *ecs.get<InputSystem>();
   for (auto i : it) {
-    update_tp_movement(ecs, input_sys, it.delta_time(), move[i], trans[i]);
+    update_tp_movement(ecs, input_sys, move[i], trans[i]);
   }
 }
 

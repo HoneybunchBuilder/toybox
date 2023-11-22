@@ -1,5 +1,7 @@
 #pragma once
 
+#include "simd.h"
+
 #include <SDL2/SDL_stdinc.h>
 
 #define ThirdPersonMovementComponentIdStr "0xBAD44444"
@@ -15,6 +17,7 @@ typedef struct TbWorld TbWorld;
 typedef struct ThirdPersonMovementComponent {
   float speed;
   ecs_entity_t camera;
+  ecs_entity_t body;
 } ThirdPersonMovementComponent;
 
 typedef struct ThirdPersonCameraComponent {

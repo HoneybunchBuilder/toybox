@@ -64,6 +64,8 @@ void input_update_tick(ecs_iter_t *it) {
           self->keyboard.key_S = value;
         } else if (scancode == SDL_SCANCODE_D) {
           self->keyboard.key_D = value;
+        } else if (scancode == SDL_SCANCODE_SPACE) {
+          self->keyboard.key_space = value;
         }
       }
 

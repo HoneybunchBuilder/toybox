@@ -73,6 +73,7 @@ typedef struct TBKeyboard {
   uint8_t key_X : 1;
   uint8_t key_Y : 1;
   uint8_t key_Z : 1;
+  uint8_t key_space : 1;
 } TBKeyboard;
 
 typedef struct TBMouse {

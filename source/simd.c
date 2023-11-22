@@ -508,14 +508,11 @@ float3 safe_reciprocal(float3 v) {
 Quaternion inv_quat(Quaternion q) { return f4(-1, -1, -1, 1) * normq(q); }
 
 Transform inv_trans(Transform t) {
-  // Invert scale
+  // The opposite of what we do in transform_combine
   float3 inv_scale = safe_reciprocal(t.scale);
-  // Invert rotation
   Quaternion inv_rot = inv_quat(t.rotation);
-  // Invert position
   float3 scaled_position = inv_scale * t.position;
-  // TODO: This may not handle rotations particularly well
-  float3 inv_pos = -scaled_position; // qrotf3(inv_rot, scaled_position);
+  float3 inv_pos = -qrotf3(inv_rot, scaled_position);
 
   return (Transform){
       .position = inv_pos,
@@ -537,10 +534,14 @@ float3 transform_get_up(const Transform *t) {
 }
 
 Transform transform_combine(const Transform *x, const Transform *y) {
+  // Transform the x position by the y transform
+  float3 scaled = y->scale * x->position;
+  float3 pos_prime = qrotf3(y->rotation, scaled) + y->position;
+
   return (Transform){
-      .position = x->position + y->position,
-      .rotation = mulq(x->rotation, y->rotation),
-      .scale = x->scale * y->scale,
+      .position = pos_prime,
+      .rotation = x->rotation,
+      .scale = x->scale,
   };
 }
 

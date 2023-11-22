@@ -70,7 +70,7 @@ Transform tb_transform_get_world_trans(ecs_world_t *ecs,
     }
 
     Transform parent_trans = parent_comp->transform;
-    world = transform_combine(&parent_trans, &world);
+    world = transform_combine(&world, &parent_trans);
     parent = parent_comp->parent;
   }
 
@@ -118,12 +118,12 @@ void tb_transform_set_world(ecs_world_t *ecs, TransformComponent *self,
     while (p != InvalidEntityId) {
       TransformComponent *c = ecs_get_mut(ecs, p, TransformComponent);
       Transform local_inv = inv_trans(c->transform);
-      inv = transform_combine(&inv, &local_inv);
+      inv = transform_combine(&local_inv, &inv);
       p = c->parent;
     }
   }
 
-  self->transform = transform_combine(&inv, trans);
+  self->transform = transform_combine(trans, &inv);
 
   // Important so that the renderer knows we've updated the transform
   tb_transform_mark_dirty(ecs, self);

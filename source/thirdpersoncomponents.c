@@ -2,6 +2,7 @@
 
 #include "assetsystem.h"
 #include "cameracomponent.h"
+#include "rigidbodycomponent.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "world.h"
@@ -74,7 +75,8 @@ bool try_attach_tp_cam_comp(ecs_world_t *ecs, ecs_entity_t e,
 }
 
 // Third person movement component wants to construct direction vectors to
-// the camera that is relevant to the control rig.
+// the camera that is relevant to the control rig. We also want
+// to know what body we want to exert force on
 // Need the hierarchy to be constructed first so we look it up in post-load
 // Expecting the camera to be attached to some child entity
 void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
@@ -82,24 +84,35 @@ void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
   ECS_COMPONENT(ecs, ThirdPersonCameraComponent);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, TbRigidbodyComponent);
   ThirdPersonMovementComponent *movement =
       ecs_get_mut(ecs, e, ThirdPersonMovementComponent);
   const TransformComponent *trans = ecs_get(ecs, e, TransformComponent);
 
+  TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
-  TB_CHECK(trans->child_count > 0,
-           "Expected third person movement to have children");
-  bool has_camera = false;
-  for (uint32_t i = 0; i < trans->child_count; ++i) {
-    ecs_entity_t child = trans->children[i];
-    if (ecs_has(ecs, child, ThirdPersonCameraComponent) &&
-        ecs_has(ecs, child, CameraComponent)) {
-      movement->camera = child;
-      has_camera = true;
-      break;
+  TB_CHECK(trans->parent != InvalidEntityId, "Expected a valid parent");
+  {
+    bool sibling_camera = false;
+    const TransformComponent *parent = tb_transform_get_parent(ecs, trans);
+    for (uint32_t i = 0; i < parent->child_count; ++i) {
+      ecs_entity_t sibling = parent->children[i];
+      if (ecs_has(ecs, sibling, ThirdPersonCameraComponent) &&
+          ecs_has(ecs, sibling, CameraComponent)) {
+        movement->camera = sibling;
+        sibling_camera = true;
+        break;
+      }
     }
+    TB_CHECK(sibling_camera, "Didn't find sibling that has camera");
   }
-  TB_CHECK(has_camera, "Didn't find child that has camera");
+  {
+    bool parent_body = ecs_has(ecs, trans->parent, TbRigidbodyComponent);
+    if (parent_body) {
+      movement->body = trans->parent;
+    }
+    TB_CHECK(parent_body, "Didn't find parent that has rigidbody");
+  }
 }
 
 bool create_third_person_components(ecs_world_t *ecs, ecs_entity_t e,
@@ -179,15 +192,10 @@ void remove_third_person_components(ecs_world_t *ecs) {
   }
 }
 
-// A dummy type whose singleton entity we use to house our asset system
-typedef struct ThirdPersonAssetSystem {
-  float dummy;
-} ThirdPersonAssetSystem;
-
 void tb_register_third_person_components(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, AssetSystem);
-  ECS_COMPONENT(ecs, ThirdPersonAssetSystem);
+  ECS_TAG(ecs, ThirdPersonAssetSystem);
 
   AssetSystem asset = {
       .add_fn = create_third_person_components,

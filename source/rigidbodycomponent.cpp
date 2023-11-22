@@ -155,6 +155,13 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
       JPH::BodyCreationSettings body_settings(
           shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
 
+      // HACK: Capsules can't tip over
+      if (shape_type == JPH::EShapeSubType::Capsule) {
+        body_settings.mAllowedDOFs =
+            JPH::EAllowedDOFs::TranslationX | JPH::EAllowedDOFs::TranslationY |
+            JPH::EAllowedDOFs::TranslationZ | JPH::EAllowedDOFs::RotationY;
+      }
+
       JPH::BodyID body =
           bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
 
