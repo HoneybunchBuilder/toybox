@@ -147,6 +147,38 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
         }
       }
 
+      // All degrees of freedom are allowed unless specified otherwise
+      JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::All;
+      {
+        json_object_object_foreach(extra, key, value) {
+          if (SDL_strcmp(key, "trans_x") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationX;
+            }
+          } else if (SDL_strcmp(key, "tranx_y") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationY;
+            }
+          } else if (SDL_strcmp(key, "trans_z") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationZ;
+            }
+          } else if (SDL_strcmp(key, "rot_x") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::RotationX;
+            }
+          } else if (SDL_strcmp(key, "rot_y") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::RotationY;
+            }
+          } else if (SDL_strcmp(key, "rot_z") == 0) {
+            if (!json_object_get_boolean(value)) {
+              allowed_dofs &= ~JPH::EAllowedDOFs::RotationZ;
+            }
+          }
+        }
+      }
+
       auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
       auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
       auto &bodies = jolt->GetBodyInterface();
@@ -154,13 +186,7 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
       // Position and rotation set in post load
       JPH::BodyCreationSettings body_settings(
           shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
-
-      // HACK: Capsules can't tip over
-      if (shape_type == JPH::EShapeSubType::Capsule) {
-        body_settings.mAllowedDOFs =
-            JPH::EAllowedDOFs::TranslationX | JPH::EAllowedDOFs::TranslationY |
-            JPH::EAllowedDOFs::TranslationZ | JPH::EAllowedDOFs::RotationY;
-      }
+      body_settings.mAllowedDOFs = allowed_dofs;
 
       JPH::BodyID body =
           bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
