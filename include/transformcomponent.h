@@ -29,7 +29,7 @@ TransformComponent *tb_transform_get_parent_mut(ecs_world_t *ecs,
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
                                        TransformComponent *self);
 Transform tb_transform_get_world_trans(ecs_world_t *ecs,
-                                       TransformComponent *self);
+                                       const TransformComponent *self);
 void tb_transform_mark_dirty(ecs_world_t *ecs, TransformComponent *self);
 void tb_transform_update(ecs_world_t *ecs, TransformComponent *self,
                          const Transform *trans);

@@ -54,7 +54,7 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
 }
 
 Transform tb_transform_get_world_trans(ecs_world_t *ecs,
-                                       TransformComponent *self) {
+                                       const TransformComponent *self) {
   TracyCZoneNC(ctx, "Transform Get World Transform", TracyCategoryColorCore,
                true);
   ECS_COMPONENT(ecs, TransformComponent);

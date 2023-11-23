@@ -599,6 +599,10 @@ float4x4 look_forward(float3 pos, float3 forward, float3 up) {
   float3 right = normf3(crossf3(forward, normf3(up)));
   up = crossf3(right, forward);
 
+  float3 f = forward;
+  float3 u = up;
+  float3 p = pos;
+
   return (float4x4){
       (float4){right.x, up.x, -forward.x, 0},
       (float4){right.y, up.y, -forward.y, 0},
@@ -610,6 +614,20 @@ float4x4 look_forward(float3 pos, float3 forward, float3 up) {
 float4x4 look_at(float3 pos, float3 target, float3 up) {
   float3 forward = normf3(target - pos);
   return look_forward(pos, forward, up);
+}
+
+Transform look_forward_transform(float3 pos, float3 forward, float3 up) {
+  float4x4 look_mat = look_forward(pos, forward, up);
+  return (Transform){
+      .position = look_mat.col3.xyz,
+      .rotation = mf33_to_quat(m44tom33(look_mat)),
+      .scale = (float3){1, 1, 1},
+  };
+}
+
+Transform look_at_transform(float3 pos, float3 target, float3 up) {
+  float3 forward = normf3(target - pos);
+  return look_forward_transform(pos, forward, up);
 }
 
 // Right Handed
@@ -743,12 +761,12 @@ float3 lerpf3(float3 v0, float3 v1, float a) {
 }
 
 // https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm
-Quaternion slerp(Quaternion q1, Quaternion q2, float a) {
+Quaternion slerp(Quaternion q0, Quaternion q1, float a) {
   // Calc angle between quaternions
-  float cos_half_theta = q1.w * q2.w + q1.x * q2.x + q1.y * q2.y + q1.z * q2.z;
+  float cos_half_theta = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
   // If q1=q2 or q1=-q2 then alpha = 0 and we can return q1
   if (SDL_fabsf(cos_half_theta) >= 1.0f) {
-    return q1;
+    return q0;
   }
 
   float half_theta = SDL_acosf(cos_half_theta);
@@ -757,10 +775,10 @@ Quaternion slerp(Quaternion q1, Quaternion q2, float a) {
   // we could rotate around any axis normal to qa or qb
   if (SDL_fabsf(sin_half_theta) < 0.001f) { // fabs is floating point absolute
     return (Quaternion){
-        q1.x * 0.5f + q2.x * 0.5f,
-        q1.y * 0.5f + q2.y * 0.5f,
-        q1.z * 0.5f + q2.z * 0.5f,
-        q1.w * 0.5f + q2.w * 0.5f,
+        q0.x * 0.5f + q1.x * 0.5f,
+        q0.y * 0.5f + q1.y * 0.5f,
+        q0.z * 0.5f + q1.z * 0.5f,
+        q0.w * 0.5f + q1.w * 0.5f,
     };
   }
 
@@ -768,10 +786,18 @@ Quaternion slerp(Quaternion q1, Quaternion q2, float a) {
   float ratio_b = SDL_sinf(a * half_theta) / sin_half_theta;
 
   return (Quaternion){
-      q1.x * ratio_a + q2.x * ratio_b,
-      q1.y * ratio_a + q2.y * ratio_b,
-      q1.z * ratio_a + q2.z * ratio_b,
-      q1.w * ratio_a + q2.w * ratio_b,
+      q0.x * ratio_a + q1.x * ratio_b,
+      q0.y * ratio_a + q1.y * ratio_b,
+      q0.z * ratio_a + q1.z * ratio_b,
+      q0.w * ratio_a + q1.w * ratio_b,
+  };
+}
+
+Transform trans_lerp(Transform t0, Transform t1, float a) {
+  return (Transform){
+      .position = lerpf3(t0.position, t1.position, a),
+      .rotation = slerp(t0.rotation, t1.rotation, a),
+      .scale = lerpf3(t0.scale, t1.scale, a),
   };
 }
 

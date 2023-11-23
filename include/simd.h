@@ -243,6 +243,9 @@ Transform tb_transform_from_node(const cgltf_node *node);
 float4x4 look_forward(float3 pos, float3 forward, float3 up);
 float4x4 look_at(float3 pos, float3 target, float3 up);
 
+Transform look_forward_transform(float3 pos, float3 forward, float3 up);
+Transform look_at_transform(float3 pos, float3 target, float3 up);
+
 float4x4 perspective(float fovy, float aspect, float zn, float zf);
 float4x4 orthographic(float r, float l, float t, float b, float zn, float zf);
 
@@ -256,7 +259,9 @@ float rad_to_deg(float r);
 float lerpf(float v0, float v1, float a);
 float3 lerpf3(float3 v0, float3 v1, float a);
 
-Quaternion slerp(Quaternion q1, Quaternion q2, float a);
+Quaternion slerp(Quaternion q0, Quaternion q1, float a);
+
+Transform trans_lerp(Transform t0, Transform t1, float a);
 
 float clampf(float v, float min, float max);
 float3 clampf3(float3 v, float3 min, float3 max);
