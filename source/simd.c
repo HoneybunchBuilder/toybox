@@ -599,10 +599,6 @@ float4x4 look_forward(float3 pos, float3 forward, float3 up) {
   float3 right = normf3(crossf3(forward, normf3(up)));
   up = crossf3(right, forward);
 
-  float3 f = forward;
-  float3 u = up;
-  float3 p = pos;
-
   return (float4x4){
       (float4){right.x, up.x, -forward.x, 0},
       (float4){right.y, up.y, -forward.y, 0},
@@ -616,10 +612,20 @@ float4x4 look_at(float3 pos, float3 target, float3 up) {
   return look_forward(pos, forward, up);
 }
 
+Quaternion look_forward_quat(float3 forward, float3 up) {
+  float4x4 look_mat = look_forward(TB_ORIGIN, forward, TB_UP);
+  return mf33_to_quat(m44tom33(look_mat));
+}
+
+Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
+  float3 forward = normf3(target - pos);
+  return look_forward_quat(forward, up);
+}
+
 Transform look_forward_transform(float3 pos, float3 forward, float3 up) {
   float4x4 look_mat = look_forward(pos, forward, up);
   return (Transform){
-      .position = look_mat.col3.xyz,
+      .position = pos,
       .rotation = mf33_to_quat(m44tom33(look_mat)),
       .scale = (float3){1, 1, 1},
   };
