@@ -127,13 +127,13 @@ void physics_update_tick(flecs::iter it) {
   auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
   auto &jolt = *phys_sys->jolt_phys;
   auto &body_iface = jolt.GetBodyInterface();
-  auto *jolt_tmp_alloc = phys_sys->jolt_tmp_alloc;
-  auto *jolt_job_sys = phys_sys->jolt_job_sys;
 
-  jolt.Update(it.delta_time(), 1, jolt_tmp_alloc, jolt_job_sys);
+  jolt.Update(it.delta_time(), 1, phys_sys->jolt_tmp_alloc,
+              phys_sys->jolt_job_sys);
 
   // Iterate through query of every rigidbody and update the entity transform
-  // based on the
+  // based on the result from the physics sim
+  // TODO: Only do this for rigidbodies with transforms marked movable
   {
     flecs::query<TbRigidbodyComponent, TransformComponent> query(
         ecs, phys_sys->rigidbody_query);

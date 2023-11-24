@@ -241,7 +241,6 @@ void destroy_render_system(RenderSystem *self) {
 
 void render_frame_begin(ecs_iter_t *it) {
   RenderSystem *sys = ecs_field(it, RenderSystem, 1);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Frame Start Tick");
 
   TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
                true);

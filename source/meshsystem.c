@@ -403,7 +403,7 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator std_alloc,
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
               .depthTestEnable = VK_TRUE,
-              .depthWriteEnable = VK_FALSE,
+              .depthWriteEnable = VK_TRUE,
 #ifdef TB_USE_INVERSE_DEPTH
               .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
 #else

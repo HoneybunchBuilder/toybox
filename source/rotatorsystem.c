@@ -4,14 +4,12 @@
 #include "transformcomponent.h"
 #include "transformercomponents.h"
 
-#include <SDL2/SDL_log.h>
 #include <SDL2/SDL_stdinc.h>
 
 #include <flecs.h>
 
 void rotator_system_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Rotator System", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick Rotator System");
   RotatorComponent *rotators = ecs_field(it, RotatorComponent, 1);
   TransformComponent *transforms = ecs_field(it, TransformComponent, 2);
 

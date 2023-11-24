@@ -89,8 +89,8 @@ float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
 
   float4 proj_coord = shadow_coord;
 
-  proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
   proj_coord = proj_coord / proj_coord.w;
+  proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
 
   if (proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
     return 1.0;
@@ -302,11 +302,12 @@ float sample_shadow_cascade(Texture2DArray shadow_map,
                             float4x4 shadow_mat, uint cascade_idx) {
   // Need to transform derivatives by the shadow mat too
   float4 proj_pos = mul(shadow_mat, float4(shadow_pos_dx, 1.0f));
-  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
   shadow_pos_dx = proj_pos.xyz / proj_pos.w;
+  shadow_pos_dx.xy = shadow_pos_dx.xy * 0.5 + 0.5;
+
   proj_pos = mul(shadow_mat, float4(shadow_pos_dy, 1.0f));
-  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
   shadow_pos_dy = proj_pos.xyz / proj_pos.w;
+  shadow_pos_dy.xy = shadow_pos_dy.xy * 0.5 + 0.5;
 
   // Perform specific filtering routine
   return sample_shadow_pcf(shadow_map, samp, shadow_pos, shadow_pos_dx,
@@ -320,8 +321,8 @@ float shadow_visibility(Light l, Surface s) {
     // Select cascade based on whether or not the pixel is inside the projection
     float4x4 shadow_mat = l.light.cascade_vps[i];
     float4 proj_pos = mul(shadow_mat, float4(s.world_pos, 1.0f));
-    proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
     float3 cascade_pos = proj_pos.xyz / proj_pos.w;
+    cascade_pos.xy = cascade_pos.xy * 0.5 + 0.5;
     cascade_pos = abs(cascade_pos - 0.5f);
     if (all(cascade_pos < 0.5f)) {
       cascade_idx = i;
@@ -337,8 +338,8 @@ float shadow_visibility(Light l, Surface s) {
   float4x4 shadow_mat = l.light.cascade_vps[cascade_idx];
   float3 sample_pos = s.world_pos;
   float4 proj_pos = mul(shadow_mat, float4(sample_pos, 1.0f));
-  proj_pos.xy = proj_pos.xy * 0.5 + 0.5;
   float3 shadow_pos = proj_pos.xyz / proj_pos.w;
+  shadow_pos.xy = shadow_pos.xy * 0.5 + 0.5;
   float3 shadow_pos_dx = ddx_fine(shadow_pos);
   float3 shadow_pos_dy = ddy_fine(shadow_pos);
 

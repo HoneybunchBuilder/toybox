@@ -17,8 +17,7 @@
 
 void update_tp_movement(flecs::world &ecs, float delta_time,
                         const InputSystem &input,
-                        ThirdPersonMovementComponent &move,
-                        TransformComponent &trans) {
+                        ThirdPersonMovementComponent &move) {
   auto &camera_trans_comp =
       *ecs.entity(move.camera).get_mut<TransformComponent>();
 
@@ -84,7 +83,6 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
   // Handle movement of body
   // Direciton of movement depends on camera's forward
   {
-    const auto &body_world_trans = tb_transform_get_world_trans(ecs, &trans);
     const auto &phys_sys = ecs.get<TbPhysicsSystem>();
     auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
     const auto &rb = *ecs.entity(move.body).get<TbRigidbodyComponent>();
@@ -147,10 +145,11 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 void tp_movement_update_tick(flecs::iter &it,
                              ThirdPersonMovementComponent *move,
                              TransformComponent *trans) {
+  (void)trans;
   auto ecs = it.world();
   const auto &input_sys = *ecs.get<InputSystem>();
   for (auto i : it) {
-    update_tp_movement(ecs, it.delta_time(), input_sys, move[i], trans[i]);
+    update_tp_movement(ecs, it.delta_time(), input_sys, move[i]);
   }
 }
 

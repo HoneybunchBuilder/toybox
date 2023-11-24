@@ -23,7 +23,7 @@ int32_t render_thread(void *data);
 
 bool tb_start_render_thread(RenderThreadDescriptor *desc,
                             RenderThread *thread) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Starting Render Thread");
+  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Starting Render Thread");
   TB_CHECK_RETURN(desc, "Invalid RenderThreadDescriptor", false);
   thread->window = desc->window;
   thread->initialized = SDL_CreateSemaphore(0);
@@ -34,13 +34,13 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
 }
 
 void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Signaling Render Thread");
+  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Signaling Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Waiting for render thread");
+  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Waiting for render thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
@@ -50,8 +50,8 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
 }
 
 void tb_wait_thread_initialized(RenderThread *thread) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_RENDER,
-               "Waiting for render thread to initialize");
+  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER,
+  //              "Waiting for render thread to initialize");
   SDL_SemWait(thread->initialized);
 }
 

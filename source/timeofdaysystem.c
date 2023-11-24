@@ -111,7 +111,6 @@ float3 lookup_sun_color(float norm) {
 
 void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "TimeOfDay System");
   TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
   sys->time +=
       it->delta_time * 0.002f; // go a litte slower than everything else

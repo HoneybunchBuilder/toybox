@@ -18,7 +18,6 @@ struct Interpolators {
   float3 world_pos : POSITION0;
   float3 view_pos : POSITION1;
   float3 normal : NORMAL0;
-  float4 clip : TEXCOORD0;
 };
 
 Interpolators vert(VertexIn i) {
@@ -34,7 +33,6 @@ Interpolators vert(VertexIn i) {
   o.world_pos = world_pos;
   o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
   o.normal = mul(orientation, i.normal); // convert to world-space normal
-  o.clip = clip_pos;
   return o;
 }
 
@@ -46,7 +44,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float3 R = reflect(-V, N);
-  float2 screen_uv = (i.clip.xy / i.clip.w) * 0.5 + 0.5;
+  float2 screen_uv = (i.clip_pos.xy / i.clip_pos.w) * 0.5 + 0.5;
 
   float4 out_color = 0;
   if (consts.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {

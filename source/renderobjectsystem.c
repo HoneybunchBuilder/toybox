@@ -57,14 +57,16 @@ void tick_render_object_system(ecs_iter_t *it) {
   RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
   RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
 
-  int32_t prev_count = ro_sys->obj_count;
+  TransformsBuffer *trans_buffer = &ro_sys->trans_buffers[rnd_sys->frame_idx];
+
+  int32_t prev_count = trans_buffer->obj_count;
   int32_t obj_count = 0;
   // Find object count by running query
   ecs_iter_t obj_it = ecs_query_iter(ecs, ro_sys->obj_query);
   while (ecs_query_next(&obj_it)) {
     obj_count += obj_it.count;
   }
-  ro_sys->obj_count = obj_count;
+  trans_buffer->obj_count = obj_count;
 
   if (obj_count == 0) {
     TracyCZoneEnd(ctx);
@@ -76,7 +78,7 @@ void tick_render_object_system(ecs_iter_t *it) {
   float4x4 *trans_ptr = NULL;
   if (obj_count > prev_count) {
     // We need to resize the GPU buffer
-    tb_rnd_free_gpu_buffer(ro_sys->render_system, &ro_sys->trans_buffer);
+    tb_rnd_free_gpu_buffer(ro_sys->render_system, &trans_buffer->gpu);
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(float4x4) * obj_count,
@@ -85,11 +87,11 @@ void tick_render_object_system(ecs_iter_t *it) {
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
     tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "Transform Buffer",
-                                 &ro_sys->trans_buffer, &ro_sys->trans_host,
+                                 &trans_buffer->gpu, &trans_buffer->host,
                                  (void **)&trans_ptr);
   } else {
-    tb_rnd_sys_update_gpu_buffer(rnd_sys, &ro_sys->trans_buffer,
-                                 &ro_sys->trans_host, (void **)&trans_ptr);
+    tb_rnd_sys_update_gpu_buffer(rnd_sys, &trans_buffer->gpu,
+                                 &trans_buffer->host, (void **)&trans_ptr);
   }
 
   {
@@ -99,10 +101,13 @@ void tick_render_object_system(ecs_iter_t *it) {
           ecs_field(&obj_it, TransformComponent, 1);
       RenderObject *rnd_objs = ecs_field(&obj_it, RenderObject, 2);
       for (int32_t i = 0; i < obj_it.count; ++i) {
-        if (trans_comps[i].dirty) {
-          trans_ptr[obj_idx] =
-              tb_transform_get_world_matrix(ecs, &trans_comps[i]);
-        }
+        // TODO: We want to only have to do this when transforms are dirty
+        // but we need to triple buffer the transform buffers to avoid
+        // stomping the transform and when a transform is dirty *all* transform
+        // buffers need that new data.
+        // Maybe we need some kind of queueing procedure?
+        trans_ptr[obj_idx] =
+            tb_transform_get_world_matrix(ecs, &trans_comps[i]);
         rnd_objs[i].index = obj_idx;
         obj_idx++;
       }
@@ -125,7 +130,7 @@ void tick_render_object_system(ecs_iter_t *it) {
     tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, &ro_sys->set_layout,
                                 ro_sys->pools, 1);
 
-    if (ro_sys->obj_count > 0) {
+    if (trans_buffer->obj_count > 0) {
       VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
@@ -133,9 +138,9 @@ void tick_render_object_system(ecs_iter_t *it) {
           .dstSet = tb_render_object_sys_get_set(ro_sys),
           .pBufferInfo =
               &(VkDescriptorBufferInfo){
-                  .buffer = ro_sys->trans_buffer.buffer,
+                  .buffer = trans_buffer->gpu.buffer,
                   .offset = 0,
-                  .range = ro_sys->trans_buffer.info.size,
+                  .range = trans_buffer->gpu.info.size,
               },
       };
       tb_rnd_update_descriptors(rnd_sys, 1, &write);

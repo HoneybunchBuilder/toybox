@@ -613,7 +613,7 @@ float4x4 look_at(float3 pos, float3 target, float3 up) {
 }
 
 Quaternion look_forward_quat(float3 forward, float3 up) {
-  float4x4 look_mat = look_forward(TB_ORIGIN, forward, TB_UP);
+  float4x4 look_mat = look_forward(TB_ORIGIN, forward, up);
   return mf33_to_quat(m44tom33(look_mat));
 }
 

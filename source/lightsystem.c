@@ -11,7 +11,6 @@
 
 void light_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Light System", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Light System Update");
   ecs_world_t *ecs = it->world;
 
   ECS_COMPONENT(ecs, LightSystem);

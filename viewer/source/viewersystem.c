@@ -50,9 +50,8 @@ void viewer_update_tick(ecs_iter_t *it) {
 #else
       igText("%s", "No assets were cooked");
 #endif
-
-      igEnd();
     }
+    igEnd();
   }
 
   TracyCZoneEnd(ctx);

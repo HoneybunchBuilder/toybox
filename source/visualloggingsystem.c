@@ -407,7 +407,6 @@ void vlog_draw_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Visual Logging System Draw");
 
   VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
   const CameraComponent *cameras = ecs_field(it, CameraComponent, 2);
@@ -470,7 +469,6 @@ void vlog_ui_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Visual Logging System UI");
 
   VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
 
@@ -515,9 +513,8 @@ void vlog_ui_tick(ecs_iter_t *it) {
         igText("Selected Frame:");
         igSliderInt("##frame", &sys->log_frame_idx, 0, frame_cap, "%d", 0);
       }
-
-      igEnd();
     }
+    igEnd();
   }
 
   if (sys->recording) {

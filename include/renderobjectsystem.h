@@ -34,6 +34,12 @@ typedef struct RenderObject {
 } RenderObject;
 static const uint64_t InvalidRenderObjectId = SDL_MAX_UINT64;
 
+typedef struct TransformsBuffer {
+  int32_t obj_count;
+  TbBuffer gpu;
+  TbHostBuffer host;
+} TransformsBuffer;
+
 typedef struct RenderObjectSystem {
   RenderSystem *render_system;
   Allocator std_alloc;
@@ -42,9 +48,7 @@ typedef struct RenderObjectSystem {
   VkDescriptorSetLayout set_layout;
   FrameDescriptorPool pools[TB_MAX_FRAME_STATES];
 
-  int32_t obj_count;
-  TbBuffer trans_buffer;
-  TbHostBuffer trans_host;
+  TransformsBuffer trans_buffers[TB_MAX_FRAME_STATES];
 
   ecs_query_t *obj_query;
 } RenderObjectSystem;

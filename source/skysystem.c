@@ -1022,7 +1022,6 @@ void destroy_sky_system(SkySystem *self) {
 
 void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Sky System Draw");
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, SkySystem);
   ECS_COMPONENT(ecs, RenderSystem);

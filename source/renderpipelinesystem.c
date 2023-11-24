@@ -3210,7 +3210,6 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 }
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
-  SDL_LogDebug(SDL_LOG_CATEGORY_SYSTEM, "Tick RenderPipeline Check Resize");
   RenderPipelineSystem *rp_sys = ecs_field(it, RenderPipelineSystem, 1);
   RenderSystem *rnd_sys = rp_sys->render_system;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
