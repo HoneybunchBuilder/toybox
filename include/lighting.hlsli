@@ -74,15 +74,12 @@ float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
                    float shadow) {
   float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
 
-  float3 kd = lerp(1.0f - F, 0.0f, metallic);
+  float3 kd = lerp(1.0f - F, 0.0f, metallic * shadow);
 
   float3 diffuse_ibl = kd * albedo * irradiance;
 
   // No specular component if shadowed
-  float3 specular_ibl = 0;
-  if (shadow != 0) {
-    specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
-  }
+  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection * shadow;
 
   return diffuse_ibl + specular_ibl;
 }
