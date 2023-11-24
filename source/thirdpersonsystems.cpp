@@ -64,7 +64,9 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 
     // Construct target position to move the camera to
     // TODO: Make this adjustable by the player
-    float distance = 10.0f;
+    static float distance = 10.0f;
+    distance += input.mouse.wheel.y;
+    distance = clampf(distance, 5, 15);
     float3 camera_pos = body_to_cam * distance;
 
     // TODO: The local space offset we want the camera to focus on

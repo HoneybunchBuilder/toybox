@@ -92,6 +92,7 @@ void noclip_update_tick(ecs_iter_t *it) {
 
     translate(&transform->transform, velocity);
     rotate(&transform->transform, angular_velocity);
+    transform->dirty = true;
   }
   TracyCZoneEnd(ctx);
 }

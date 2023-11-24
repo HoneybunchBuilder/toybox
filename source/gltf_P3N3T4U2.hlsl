@@ -23,7 +23,6 @@ struct Interpolators {
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   float2 uv : TEXCOORD0;
-  float4 clip : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i) {
@@ -42,7 +41,6 @@ Interpolators vert(VertexIn i) {
   o.tangent = normalize(mul(orientation, i.tangent.xyz));
   o.binormal = normalize(cross(o.tangent, o.normal) * i.tangent.w);
   o.uv = uv_transform(i.uv, material_data.tex_transform);
-  o.clip = clip_pos;
   return o;
 }
 
@@ -65,7 +63,7 @@ float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);
   float3 R = reflect(-V, N);
-  float2 screen_uv = (i.clip.xy / i.clip.w) * 0.5 + 0.5;
+  float2 screen_uv = (i.clip_pos.xy / i.clip_pos.w) * 0.5 + 0.5;
 
   float4 out_color = 0;
   if (consts.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) {
