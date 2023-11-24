@@ -84,7 +84,7 @@ MaterialSystem create_material_system(Allocator std_alloc, Allocator tmp_alloc,
         .compareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
         .maxAnisotropy = 1.0f,
         .maxLod = 1.0f,
-        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
     err = vkCreateSampler(device, &create_info, vk_alloc, &sys.shadow_sampler);
     TB_VK_CHECK(err, "Failed to create material shadow sampler");

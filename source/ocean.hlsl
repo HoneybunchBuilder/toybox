@@ -125,7 +125,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       s.V = V;
       s.R = R;
       s.emissives = 0;
-      shadow = max(shadow_visibility(l, s), (1 - AMBIENT));
+      shadow = shadow_visibility(l, s);
     }
 
     // Lighting

@@ -2,6 +2,35 @@
 
 #include "pbr.hlsli"
 
+#define AMBIENT 0.3
+
+struct View {
+  TextureCube irradiance_map;
+  TextureCube prefiltered_map;
+  Texture2D brdf_lut;
+  sampler filtered_env_sampler;
+  sampler brdf_sampler;
+};
+
+struct Light {
+  CommonLightData light;
+  Texture2DArray shadow_map;
+  SamplerComparisonState shadow_sampler;
+};
+
+struct Surface {
+  float4 base_color;
+  float3 view_pos;
+  float3 world_pos;
+  float2 screen_uv;
+  float metallic;
+  float roughness;
+  float3 N;
+  float3 V;
+  float3 R;
+  float4 emissives;
+};
+
 float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
                   float3 light_radiance, float3 albedo, float metallic,
                   float roughness) {
@@ -41,16 +70,19 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
 }
 
 float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
-                   float2 brdf, float3 albedo, float metallic,
-                   float roughness) {
+                   float2 brdf, float3 albedo, float metallic, float roughness,
+                   float shadow) {
   float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
 
   float3 kd = lerp(1.0f - F, 0.0f, metallic);
 
   float3 diffuse_ibl = kd * albedo * irradiance;
 
-  float3 specular_irradiance = reflection;
-  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
+  // No specular component if shadowed
+  float3 specular_ibl = 0;
+  if (shadow != 0) {
+    specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
+  }
 
   return diffuse_ibl + specular_ibl;
 }
@@ -73,91 +105,13 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
   float NdotV = max(dot(N, V), 0);
 
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
-                               metallic, roughness) *
+                               metallic, roughness, shadow) *
                    ao;
   float3 direct =
       pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
 
-  return (direct + ambient) * shadow;
+  return (direct * shadow) + ambient;
 }
-
-// Shadowing
-#define AMBIENT 0.7
-float texture_proj(float4 shadow_coord, float2 offset, uint cascade_idx,
-                   Texture2DArray shadow_map, sampler samp) {
-  float bias = 0.005;
-
-  float4 proj_coord = shadow_coord;
-
-  proj_coord = proj_coord / proj_coord.w;
-  proj_coord.xy = proj_coord.xy * 0.5 + 0.5;
-
-  if (proj_coord.z <= -1.0 || shadow_coord.z >= 1.0) {
-    return 1.0;
-  }
-
-  float2 coord = proj_coord.xy + offset;
-  float sampled_depth =
-      shadow_map.Sample(samp, float3(coord.x, coord.y, cascade_idx)).r;
-
-  return (proj_coord.w > 0 && sampled_depth < proj_coord.z - bias)
-             ? saturate(1 - AMBIENT)
-             : 1.0f;
-}
-
-float pcf_filter(float4 shadow_coord, Texture2DArray shadow_map,
-                 uint cascade_idx, sampler samp) {
-  int3 tex_dim;
-  shadow_map.GetDimensions(tex_dim.x, tex_dim.y, tex_dim.z);
-
-  float scale = 0.5f;
-  float dx = scale * (1.0 / float(tex_dim.x));
-  float dy = scale * (1.0 / float(tex_dim.y));
-
-  float shadow_factor = 0.0;
-  uint count = 0;
-  int range = 1;
-
-  // This is just a 2x2 PCF filter
-  // What about 9x9? Should be doable with minimal fetches
-  for (int x = -range; x <= range; ++x) {
-    for (int y = -range; y <= range; ++y) {
-      float2 offset = float2(dx * x, dy * y);
-      shadow_factor +=
-          texture_proj(shadow_coord, offset, cascade_idx, shadow_map, samp);
-      count++;
-    }
-  }
-
-  return shadow_factor / count;
-}
-
-struct View {
-  TextureCube irradiance_map;
-  TextureCube prefiltered_map;
-  Texture2D brdf_lut;
-  sampler filtered_env_sampler;
-  sampler brdf_sampler;
-};
-
-struct Light {
-  CommonLightData light;
-  Texture2DArray shadow_map;
-  SamplerComparisonState shadow_sampler;
-};
-
-struct Surface {
-  float4 base_color;
-  float3 view_pos;
-  float3 world_pos;
-  float2 screen_uv;
-  float metallic;
-  float roughness;
-  float3 N;
-  float3 V;
-  float3 R;
-  float4 emissives;
-};
 
 float2 compute_plane_depth_bias(float3 dx, float3 dy) {
   float2 bias_uv = float2(dy.y * dx.z - dx.y * dy.z, dx.x * dy.z - dy.x * dx.z);
@@ -356,7 +310,7 @@ float3 pbr_lighting_common(View v, Light l, Surface s) {
   float3 out_color = 0;
 
   // Calculate shadow first
-  float shadow = max(shadow_visibility(l, s), (1 - AMBIENT));
+  float shadow = shadow_visibility(l, s);
 
   // Lighting
   {
