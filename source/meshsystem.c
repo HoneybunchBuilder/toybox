@@ -617,8 +617,6 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       }
 
       TracyCZoneNC(draw_ctx, "Batch", TracyCategoryColorRendering, true);
-      cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-
       if (draw->index_count > 0) {
         VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
         if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
@@ -644,8 +642,6 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0, 0,
                          0);
       }
-
-      cmd_end_label(buffer);
       TracyCZoneEnd(draw_ctx);
     }
 
@@ -1641,7 +1637,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         // For transparent pass
         tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2,
                                             TB_DYN_ARR_SIZE(trans_batches),
-                                            opaque_batches.data);
+                                            trans_batches.data);
         TracyCZoneEnd(ctx2);
       }
     }

@@ -17,16 +17,18 @@
 
 void update_tp_movement(flecs::world &ecs, float delta_time,
                         const InputSystem &input,
-                        ThirdPersonMovementComponent &move) {
+                        ThirdPersonMovementComponent &move,
+                        TransformComponent &trans_comp) {
   auto &camera_trans_comp =
       *ecs.entity(move.camera).get_mut<TransformComponent>();
+  auto &camera_trans = camera_trans_comp.transform;
 
   // Update camera positioning and rotation
   // Stays in local space
   {
     // The camera is parented to the body, so the normalized position of the
     // camera is the local space vector from the body to the camera
-    float3 body_to_cam = normf3(camera_trans_comp.transform.position);
+    float3 body_to_cam = normf3(camera_trans.position);
 
     // Read mouse/controller input to rotate the vector to determine the
     // direction we want the camera to live at
@@ -76,7 +78,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     Transform look_trans =
         look_forward_transform(camera_pos, -body_to_cam, TB_UP);
 
-    camera_trans_comp.transform = look_trans;
+    camera_trans = look_trans;
     camera_trans_comp.dirty = true;
   }
 
@@ -89,7 +91,12 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 
     Quaternion move_rot = {};
     {
-      float3 dir = -normf3(camera_trans_comp.transform.position);
+      Transform camera_world_trans =
+          tb_transform_get_world_trans(ecs.c_ptr(), &camera_trans_comp);
+      Transform body_world_trans =
+          tb_transform_get_world_trans(ecs.c_ptr(), &trans_comp);
+      float3 dir =
+          normf3(body_world_trans.position - camera_world_trans.position);
       float2 planar_dir = normf2(dir.xz);
       float3 move_forward = f3(planar_dir.x, 0, planar_dir.y);
       move_rot = look_forward_quat(move_forward, TB_UP);
@@ -145,11 +152,10 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 void tp_movement_update_tick(flecs::iter &it,
                              ThirdPersonMovementComponent *move,
                              TransformComponent *trans) {
-  (void)trans;
   auto ecs = it.world();
   const auto &input_sys = *ecs.get<InputSystem>();
   for (auto i : it) {
-    update_tp_movement(ecs, it.delta_time(), input_sys, move[i]);
+    update_tp_movement(ecs, it.delta_time(), input_sys, move[i], trans[i]);
   }
 }
 
