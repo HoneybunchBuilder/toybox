@@ -2,6 +2,11 @@
 
 #include "tbsdl.h"
 
+// Leaning in to clang language extensions
+// __auto_type is really cool
+#pragma clang diagnostic ignored "-Wgnu-auto-type"
+#define tb_auto __auto_type
+
 #define TB_CHECK(expr, message)                                                \
   if (!(expr)) {                                                               \
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \

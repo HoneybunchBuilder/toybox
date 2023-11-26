@@ -12,17 +12,15 @@
 RenderObjectSystem create_render_object_system(Allocator std_alloc,
                                                Allocator tmp_alloc,
                                                RenderSystem *rnd_sys) {
-  RenderObjectSystem sys = (RenderObjectSystem){
+  tb_auto sys = (RenderObjectSystem){
       .render_system = rnd_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
   };
 
-  VkResult err = VK_SUCCESS;
-
   // Create render object descriptor set layout
   {
-    VkDescriptorSetLayoutCreateInfo create_info = {
+    tb_auto create_info = (VkDescriptorSetLayoutCreateInfo){
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .bindingCount = 1,
         .pBindings =
@@ -33,9 +31,8 @@ RenderObjectSystem create_render_object_system(Allocator std_alloc,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             },
     };
-    err = tb_rnd_create_set_layout(
-        rnd_sys, &create_info, "Object Descriptor Set Layout", &sys.set_layout);
-    TB_VK_CHECK(err, "Failed to create render object descriptor set");
+    tb_rnd_create_set_layout(rnd_sys, &create_info,
+                             "Object Descriptor Set Layout", &sys.set_layout);
   }
 
   return sys;
@@ -54,8 +51,8 @@ void tick_render_object_system(ecs_iter_t *it) {
   ECS_COMPONENT(ecs, RenderObjectSystem);
   ECS_COMPONENT(ecs, RenderObject);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  tb_auto ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
 
   TransformsBuffer *trans_buffer = &ro_sys->trans_buffers[rnd_sys->frame_idx];
 
@@ -79,7 +76,7 @@ void tick_render_object_system(ecs_iter_t *it) {
   if (obj_count > prev_count) {
     // We need to resize the GPU buffer
     tb_rnd_free_gpu_buffer(ro_sys->render_system, &trans_buffer->gpu);
-    VkBufferCreateInfo create_info = {
+    tb_auto create_info = (VkBufferCreateInfo){
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(float4x4) * obj_count,
         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
@@ -95,12 +92,11 @@ void tick_render_object_system(ecs_iter_t *it) {
   }
 
   {
-    uint32_t obj_idx = 0;
+    tb_auto obj_idx = 0ul;
     while (ecs_query_next(&obj_it)) {
-      TransformComponent *trans_comps =
-          ecs_field(&obj_it, TransformComponent, 1);
-      RenderObject *rnd_objs = ecs_field(&obj_it, RenderObject, 2);
-      for (int32_t i = 0; i < obj_it.count; ++i) {
+      tb_auto trans_comps = ecs_field(&obj_it, TransformComponent, 1);
+      tb_auto rnd_objs = ecs_field(&obj_it, RenderObject, 2);
+      for (tb_auto i = 0; i < obj_it.count; ++i) {
         // TODO: We want to only have to do this when transforms are dirty
         // but we need to triple buffer the transform buffers to avoid
         // stomping the transform and when a transform is dirty *all* transform
@@ -117,7 +113,7 @@ void tick_render_object_system(ecs_iter_t *it) {
   // We can optimize this later but for now just always update this descriptor
   // set every frame
   {
-    VkDescriptorPoolCreateInfo pool_info = {
+    tb_auto pool_info = (VkDescriptorPoolCreateInfo){
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         .poolSizeCount = 1,
@@ -131,7 +127,7 @@ void tick_render_object_system(ecs_iter_t *it) {
                                 ro_sys->pools, 1);
 
     if (trans_buffer->obj_count > 0) {
-      VkWriteDescriptorSet write = {
+      tb_auto write = (VkWriteDescriptorSet){
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
           .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -159,9 +155,8 @@ void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, RenderObjectSystem);
   ECS_COMPONENT(ecs, RenderObject);
   ECS_COMPONENT(ecs, TransformComponent);
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderObjectSystem sys =
-      create_render_object_system(std_alloc, tmp_alloc, rnd_sys);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  tb_auto sys = create_render_object_system(std_alloc, tmp_alloc, rnd_sys);
   sys.obj_query =
       ecs_query(ecs, {
                          .filter.terms =
@@ -184,7 +179,7 @@ void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
 
 void tb_unregister_render_object_sys(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, RenderObjectSystem);
-  RenderObjectSystem *sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  tb_auto *sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
   ecs_query_fini(sys->obj_query);
   destroy_render_object_system(sys);
   ecs_singleton_remove(ecs, RenderObjectSystem);
