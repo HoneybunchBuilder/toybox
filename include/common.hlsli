@@ -24,7 +24,7 @@ typedef struct PrimitivePushConstants {
 } PrimitivePushConstants;
 
 // Constant per-view Camera Data
-typedef struct CommonViewData {
+typedef struct TB_GPU_STRUCT CommonViewData {
   float4x4 v;
   float4x4 p;
   float4x4 vp;

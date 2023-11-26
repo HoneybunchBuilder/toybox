@@ -334,8 +334,11 @@ function(cook_assets target_name out_assets_path)
 endfunction()
 
 # Setup toybox library
-file(GLOB lib_source CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.c" "${CMAKE_CURRENT_LIST_DIR}/source/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/source/*.h")
+file(GLOB_RECURSE lib_source CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.c" "${CMAKE_CURRENT_LIST_DIR}/source/*.cpp" "${CMAKE_CURRENT_LIST_DIR}/source/*.h")
 add_library(toybox STATIC ${lib_source})
+
+# We provide a cross platform blocks runtime so we can use this
+target_compile_options(toybox PUBLIC -fblocks)
 
 if(WIN32)
   # This really only matters for clang-cl

@@ -4,6 +4,12 @@
 extern "C" {
 #endif
 
+#ifdef __HLSL_VERSION
+#define TB_GPU_STRUCT
+#else
+#define TB_GPU_STRUCT __attribute__((aligned(16))) __attribute__((packed))
+#endif
+
 /*
   Notes on mathematic standards used
   * Coordinate system is right handed. GLTF is right handed
