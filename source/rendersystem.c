@@ -90,13 +90,16 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
           .vkCreateImage = vkCreateImage,
           .vkDestroyImage = vkDestroyImage,
           .vkCmdCopyBuffer = vkCmdCopyBuffer,
-          .vkGetBufferMemoryRequirements2KHR =
-              vkGetBufferMemoryRequirements2KHR,
-          .vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2KHR,
-          .vkBindBufferMemory2KHR = vkBindBufferMemory2KHR,
-          .vkBindImageMemory2KHR = vkBindImageMemory2KHR,
+          .vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2,
+          .vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2,
+          .vkBindBufferMemory2KHR = vkBindBufferMemory2,
+          .vkBindImageMemory2KHR = vkBindImageMemory2,
           .vkGetPhysicalDeviceMemoryProperties2KHR =
-              vkGetPhysicalDeviceMemoryProperties2KHR,
+              vkGetPhysicalDeviceMemoryProperties2,
+          .vkGetDeviceBufferMemoryRequirements =
+              vkGetDeviceBufferMemoryRequirements,
+          .vkGetDeviceImageMemoryRequirements =
+              vkGetDeviceImageMemoryRequirements,
       };
       VmaDeviceMemoryCallbacks vma_callbacks = {
           tb_vma_alloc_fn,
@@ -108,7 +111,7 @@ RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
           .device = thread->device,
           .pVulkanFunctions = &volk_functions,
           .instance = thread->instance,
-          .vulkanApiVersion = VK_API_VERSION_1_0,
+          .vulkanApiVersion = VK_API_VERSION_1_3,
           .pAllocationCallbacks = &sys.vk_host_alloc_cb,
           .pDeviceMemoryCallbacks = &vma_callbacks,
       };

@@ -752,6 +752,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
       .dynamicRendering = true,
       .shaderDemoteToHelperInvocation = true,
+      .maintenance4 = true,
   };
 
   VkPhysicalDeviceVulkan11Features vk_11_features = {
@@ -835,6 +836,15 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
       .vkCreateImage = vkCreateImage,
       .vkDestroyImage = vkDestroyImage,
       .vkCmdCopyBuffer = vkCmdCopyBuffer,
+      .vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2,
+      .vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2,
+      .vkBindBufferMemory2KHR = vkBindBufferMemory2,
+      .vkBindImageMemory2KHR = vkBindImageMemory2,
+      .vkGetPhysicalDeviceMemoryProperties2KHR =
+          vkGetPhysicalDeviceMemoryProperties2,
+      .vkGetDeviceBufferMemoryRequirements =
+          vkGetDeviceBufferMemoryRequirements,
+      .vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements,
   };
   VmaDeviceMemoryCallbacks vma_callbacks = {
       tb_vma_alloc_fn,
@@ -846,7 +856,7 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
       .device = device,
       .pVulkanFunctions = &volk_functions,
       .instance = instance,
-      .vulkanApiVersion = VK_API_VERSION_1_0,
+      .vulkanApiVersion = VK_API_VERSION_1_3,
       .pAllocationCallbacks = vk_alloc,
       .pDeviceMemoryCallbacks = &vma_callbacks,
   };
