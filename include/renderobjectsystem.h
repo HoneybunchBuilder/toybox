@@ -42,8 +42,8 @@ typedef struct TransformsBuffer {
 
 typedef struct RenderObjectSystem {
   RenderSystem *render_system;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   VkDescriptorSetLayout set_layout;
   FrameDescriptorPool pools[TB_MAX_FRAME_STATES];
@@ -53,7 +53,7 @@ typedef struct RenderObjectSystem {
   ecs_query_t *obj_query;
 } RenderObjectSystem;
 
-void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc);
+void tb_register_render_object_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                   TbAllocator tmp_alloc);
 VkDescriptorSet tb_render_object_sys_get_set(RenderObjectSystem *sys);
 void tb_unregister_render_object_sys(ecs_world_t *ecs);

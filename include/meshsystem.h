@@ -59,8 +59,8 @@ typedef TB_DYN_ARR_OF(PrimitiveBatch) PrimitiveBatchList;
 typedef TB_DYN_ARR_OF(IndirectionList) PrimIndirectList;
 
 typedef struct MeshSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *render_system;
   MaterialSystem *material_system;
@@ -94,8 +94,8 @@ typedef struct MeshSystem {
   FrameDescriptorPoolList desc_pool_list;
 } MeshSystem;
 
-void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
-                          Allocator tmp_alloc);
+void tb_register_mesh_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                          TbAllocator tmp_alloc);
 void tb_unregister_mesh_sys(ecs_world_t *ecs);
 
 TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,

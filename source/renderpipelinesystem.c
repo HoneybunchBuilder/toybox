@@ -1053,7 +1053,7 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
 }
 
 RenderPipelineSystem create_render_pipeline_system(
-    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
     RenderTargetSystem *render_target_system, ViewSystem *view_system) {
   RenderPipelineSystem sys = {
       .render_system = render_system,
@@ -3241,8 +3241,8 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
   }
 }
 
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                     Allocator tmp_alloc) {
+void tb_register_render_pipeline_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                     TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, ViewSystem);

@@ -16,7 +16,6 @@
 #include "tbvma.h"
 
 #include "cameracomponent.h"
-#include "inputsystem.h"
 #include "lightcomponent.h"
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
@@ -64,21 +63,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Create Temporary Arena Allocator
-  ArenaAllocator arena = {0};
+  TbArenaAllocator arena = {0};
   {
     SDL_Log("%s", "Creating Arena Allocator");
-    const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-    create_arena_allocator("Main Arena", &arena, arena_alloc_size);
+    const size_t arena_alloc_size = 1024ULL * 1024ULL * 512ULL; // 512 MB
+    tb_create_arena_alloc("Main Arena", &arena, arena_alloc_size);
   }
 
-  StandardAllocator gp_alloc = {0};
+  TbGeneralAllocator gp_alloc = {0};
   {
     SDL_Log("%s", "Creating Standard Allocator");
-    create_standard_allocator(&gp_alloc, "std_alloc");
+    tb_create_gen_alloc(&gp_alloc, "std_alloc");
   }
 
-  Allocator std_alloc = gp_alloc.alloc;
-  Allocator tmp_alloc = arena.alloc;
+  TbAllocator std_alloc = gp_alloc.alloc;
+  TbAllocator tmp_alloc = arena.alloc;
 
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
@@ -117,8 +116,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Create the world with the additional viewer system
   tb_auto create_world =
-      ^(TbWorld *world, RenderThread *rt, SDL_Window *window) {
-        tb_create_default_world(world, rt, window);
+      ^(TbWorld *world, RenderThread *thread, SDL_Window *window) {
+        tb_create_default_world(world, thread, window);
         tb_register_viewer_sys(world);
       };
   TbWorld world = tb_create_world(std_alloc, tmp_alloc, create_world,
@@ -131,7 +130,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   uint64_t start_time = SDL_GetPerformanceCounter();
   uint64_t last_time = 0;
   uint64_t delta_time = 0;
-  float delta_time_seconds = 0.0f;
+  float delta_time_seconds = 0.0F;
 
   while (running) {
     TracyCFrameMarkStart("Simulation Frame");
@@ -167,14 +166,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Tick the world
     if (!tb_tick_world(&world, delta_time_seconds)) {
-      running = false;
+      running = false; // NOLINT
       TracyCZoneEnd(trcy_ctx);
       TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
 
     // Reset the arena allocator
-    arena = reset_arena(arena, true); // Just allow it to grow for now
+    arena = tb_reset_arena(arena, true); // Just allow it to grow for now
 
     TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Simulation Frame");
@@ -199,8 +198,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SDL_Quit();
 
-  destroy_arena_allocator(arena);
-  destroy_standard_allocator(gp_alloc);
+  tb_destroy_arena_alloc(arena);
+  tb_destroy_gen_alloc(gp_alloc);
 
   return 0;
 }

@@ -196,7 +196,7 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_mesh_pipelines(RenderSystem *render_system, Allocator std_alloc,
+VkResult create_mesh_pipelines(RenderSystem *render_system, TbAllocator std_alloc,
                                VkFormat color_format, VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **opaque_pipes,
@@ -676,7 +676,7 @@ void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 MeshSystem create_mesh_system_internal(
-    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
     MaterialSystem *material_system, ViewSystem *view_system,
     RenderObjectSystem *render_object_system,
     RenderPipelineSystem *render_pipe_system) {
@@ -892,7 +892,7 @@ uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
 
 // Based on an example from this cgltf commit message:
 // https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
-static cgltf_result decompress_buffer_view(Allocator alloc,
+static cgltf_result decompress_buffer_view(TbAllocator alloc,
                                            cgltf_buffer_view *view) {
   if (view->data != NULL) {
     // Already decoded
@@ -1212,7 +1212,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       ecs_singleton_get_mut(ecs, RenderPipelineSystem);
   ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
 
-  Allocator tmp_alloc = mesh_sys->tmp_alloc;
+  TbAllocator tmp_alloc = mesh_sys->tmp_alloc;
 
   // For each camera
   ecs_iter_t camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
@@ -1646,8 +1646,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_mesh_sys(ecs_world_t *ecs, Allocator std_alloc,
-                          Allocator tmp_alloc) {
+void tb_register_mesh_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                          TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, MaterialSystem);
   ECS_COMPONENT(ecs, ViewSystem);

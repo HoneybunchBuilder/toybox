@@ -25,8 +25,8 @@ typedef uint64_t TbMaterialPerm;
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
 typedef struct TbMaterial TbMaterial;
 typedef struct MaterialSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *render_system;
   TextureSystem *texture_system;
@@ -43,8 +43,8 @@ typedef struct MaterialSystem {
   VkDescriptorSet *mat_sets;
 } MaterialSystem;
 
-void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
-                              Allocator tmp_alloc);
+void tb_register_material_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                              TbAllocator tmp_alloc);
 void tb_unregister_material_sys(ecs_world_t *ecs);
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self);

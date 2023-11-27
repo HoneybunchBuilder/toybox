@@ -32,8 +32,8 @@ typedef struct FrameDescriptorPoolList {
 } FrameDescriptorPoolList;
 
 typedef struct RenderSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
   RenderThread *render_thread;
 
   VkAllocationCallbacks vk_host_alloc_cb;
@@ -45,8 +45,8 @@ typedef struct RenderSystem {
   RenderSystemFrameState frame_states[3];
 } RenderSystem;
 
-void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
-                            Allocator tmp_alloc, RenderThread *render_thread);
+void tb_register_render_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                            TbAllocator tmp_alloc, RenderThread *render_thread);
 void tb_unregister_render_sys(ecs_world_t *ecs);
 
 VkResult tb_rnd_sys_alloc_gpu_buffer(RenderSystem *self,

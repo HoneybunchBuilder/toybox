@@ -9,7 +9,7 @@
 
 #define TB_DYN_ARR_OF(type)                                                    \
   struct {                                                                     \
-    Allocator alloc;                                                           \
+    TbAllocator alloc;                                                         \
     type *data;                                                                \
     type *endptr;                                                              \
     uint32_t capacity;                                                         \

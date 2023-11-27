@@ -65,8 +65,8 @@ void camera_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_camera_sys(ecs_world_t *ecs, Allocator std_alloc,
-                            Allocator tmp_alloc) {
+void tb_register_camera_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                            TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, CameraComponent);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, CameraSystem);

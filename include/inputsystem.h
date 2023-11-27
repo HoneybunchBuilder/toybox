@@ -93,7 +93,7 @@ typedef struct TBGameControllerState {
 } TBGameControllerState;
 
 typedef struct InputSystem {
-  Allocator tmp_alloc;
+  TbAllocator tmp_alloc;
   SDL_Window *window;
 
   uint32_t event_count;
@@ -107,5 +107,5 @@ typedef struct InputSystem {
   TBGameControllerState controller_states[TB_MAX_GAME_CONTROLLERS];
 } InputSystem;
 
-void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
+void tb_register_input_sys(ecs_world_t *ecs, TbAllocator tmp_alloc,
                            SDL_Window *window);

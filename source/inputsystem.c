@@ -160,7 +160,7 @@ void input_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_input_sys(ecs_world_t *ecs, Allocator tmp_alloc,
+void tb_register_input_sys(ecs_world_t *ecs, TbAllocator tmp_alloc,
                            SDL_Window *window) {
   ECS_COMPONENT(ecs, InputSystem);
   ecs_singleton_set(ecs, InputSystem,

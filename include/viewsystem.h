@@ -39,8 +39,8 @@ typedef struct ViewSystem {
   RenderSystem *render_system;
   RenderTargetSystem *render_target_system;
   TextureSystem *texture_system;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   VkSampler brdf_sampler;
   VkSampler filtered_env_sampler;
@@ -50,8 +50,8 @@ typedef struct ViewSystem {
   TB_DYN_ARR_OF(View) views;
 } ViewSystem;
 
-void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
-                          Allocator tmp_alloc);
+void tb_register_view_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                          TbAllocator tmp_alloc);
 void tb_unregister_view_sys(ecs_world_t *ecs);
 
 TbViewId tb_view_system_create_view(ViewSystem *self);

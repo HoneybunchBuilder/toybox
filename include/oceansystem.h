@@ -28,7 +28,7 @@ typedef uint32_t TbSoundEffectId;
 typedef struct ecs_query_t ecs_query_t;
 typedef struct ecs_world_t ecs_world_t;
 
-typedef struct OceanSystem {
+typedef struct TbOceanSystem {
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
   MeshSystem *mesh_system;
@@ -36,8 +36,8 @@ typedef struct OceanSystem {
   RenderTargetSystem *render_target_system;
   VisualLoggingSystem *vlog;
   AudioSystem *audio_system;
-  Allocator tmp_alloc;
-  Allocator std_alloc;
+  TbAllocator tmp_alloc;
+  TbAllocator std_alloc;
 
   ecs_query_t *ocean_query;
 
@@ -67,8 +67,8 @@ typedef struct OceanSystem {
   VkPipelineLayout pipe_layout;
   VkPipeline prepass_pipeline;
   VkPipeline pipeline;
-} OceanSystem;
+} TbOceanSystem;
 
-void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc);
+void tb_register_ocean_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                           TbAllocator tmp_alloc);
 void tb_unregister_ocean_sys(ecs_world_t *ecs);

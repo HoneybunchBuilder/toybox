@@ -727,7 +727,7 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-SkySystem create_sky_system(Allocator std_alloc, Allocator tmp_alloc,
+SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                             RenderSystem *render_system,
                             RenderPipelineSystem *render_pipe_system,
                             RenderTargetSystem *render_target_system,
@@ -1297,8 +1297,8 @@ void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
-                         Allocator tmp_alloc) {
+void tb_register_sky_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                         TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderPipelineSystem);
   ECS_COMPONENT(ecs, RenderTargetSystem);

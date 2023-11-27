@@ -13,8 +13,8 @@
 
 #define TB_CREATE_LAYOUT(layout)
 
-RenderObjectSystem create_render_object_system(Allocator std_alloc,
-                                               Allocator tmp_alloc,
+RenderObjectSystem create_render_object_system(TbAllocator std_alloc,
+                                               TbAllocator tmp_alloc,
                                                RenderSystem *rnd_sys) {
   tb_auto sys = (RenderObjectSystem){
       .render_system = rnd_sys,
@@ -152,8 +152,8 @@ VkDescriptorSet tb_render_object_sys_get_set(RenderObjectSystem *sys) {
   return tb_rnd_frame_desc_pool_get_set(sys->render_system, sys->pools, 0);
 }
 
-void tb_register_render_object_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc) {
+void tb_register_render_object_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                   TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderObjectSystem);
   ECS_COMPONENT(ecs, RenderObject);

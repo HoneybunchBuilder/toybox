@@ -104,7 +104,7 @@ typedef struct FrameState {
   BufferCopyQueue buf_copy_queue;
   BufferImageCopyQueue buf_img_copy_queue;
 
-  ArenaAllocator tmp_alloc;
+  TbArenaAllocator tmp_alloc;
 
   TB_DYN_ARR_OF(PassContext) pass_contexts;
   TB_DYN_ARR_OF(DrawContext) draw_contexts;
@@ -133,8 +133,8 @@ typedef struct RenderThread {
   SDL_semaphore *initialized;
   SDL_semaphore *resized;
 
-  StandardAllocator std_alloc;
-  ArenaAllocator render_arena;
+  TbGeneralAllocator std_alloc;
+  TbArenaAllocator render_arena;
 
   mi_heap_t *vk_heap;
   VkAllocationCallbacks vk_alloc;

@@ -82,14 +82,14 @@ void *ecs_realloc(void *original, ecs_size_t size) {
 }
 
 TbCreateWorldSystemsFn tb_create_default_world =
-    ^(TbWorld *world, RenderThread *rt, SDL_Window *window) {
+    ^(TbWorld *world, RenderThread *thread, SDL_Window *window) {
       ecs_world_t *ecs = world->ecs;
-      Allocator std_alloc = world->std_alloc;
-      Allocator tmp_alloc = world->tmp_alloc;
+      TbAllocator std_alloc = world->std_alloc;
+      TbAllocator tmp_alloc = world->tmp_alloc;
       tb_register_physics_sys(world);
       tb_register_light_sys(ecs);
       tb_register_audio_sys(world);
-      tb_register_render_sys(ecs, std_alloc, tmp_alloc, rt);
+      tb_register_render_sys(ecs, std_alloc, tmp_alloc, thread);
       tb_register_input_sys(ecs, tmp_alloc, window);
       tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
       tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
@@ -111,7 +111,7 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_third_person_systems(world);
     };
 
-TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
+TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
                         TbCreateWorldSystemsFn create_fn,
                         RenderThread *render_thread, SDL_Window *window) {
   // Ensure the instrumented allocator is used
@@ -169,8 +169,8 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
 
 void tb_clear_world(TbWorld *world) {
   TB_DYN_ARR_FOREACH(world->scenes, i) {
-    TbScene *s = &TB_DYN_ARR_AT(world->scenes, i);
-    tb_unload_scene(world, s);
+    TbScene *scene = &TB_DYN_ARR_AT(world->scenes, i);
+    tb_unload_scene(world, scene);
   }
   TB_DYN_ARR_CLEAR(world->scenes);
 }
@@ -203,13 +203,17 @@ void tb_destroy_world(TbWorld *world) {
   ecs_fini(ecs);
 }
 
-ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
-                         Allocator tmp_alloc, json_tokener *tok,
+ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
                          const cgltf_data *data, const char *root_scene_path,
                          ecs_entity_t parent, const cgltf_node *node) {
+  ecs_world_t *ecs = world->ecs;
   ECS_TAG(ecs, NoTransform);
   ECS_COMPONENT(ecs, TransformComponent);
   ECS_COMPONENT(ecs, AssetSystem);
+
+  TbAllocator std_alloc = world->std_alloc;
+  TbAllocator tmp_alloc = world->tmp_alloc;
+
   // Get extras
   json_object *json = NULL;
   {
@@ -231,7 +235,7 @@ ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
   }
 
   // Create an entity
-  ecs_entity_t e = ecs_new(ecs, 0);
+  ecs_entity_t ent = ecs_new(ecs, 0);
 
   // Attempt to add a component for each asset system provided
   ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
@@ -241,7 +245,7 @@ ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
   while (ecs_filter_next(&asset_it)) {
     AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
     for (int32_t i = 0; i < asset_it.count; ++i) {
-      if (!asset_sys[i].add_fn(ecs, e, root_scene_path, node, json)) {
+      if (!asset_sys[i].add_fn(ecs, ent, root_scene_path, node, json)) {
         TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
       }
     }
@@ -250,14 +254,14 @@ ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
 
   // Add a transform component to the entity unless directed not to
   // by some loaded component
-  if (!ecs_has(ecs, e, NoTransform)) {
+  if (!ecs_has(ecs, ent, NoTransform)) {
     TransformComponent trans = {
         .dirty = true,
         .parent = parent,
         .child_count = node->children_count,
         .transform = tb_transform_from_node(node),
     };
-    ecs_set_ptr(ecs, e, TransformComponent, &trans);
+    ecs_set_ptr(ecs, ent, TransformComponent, &trans);
   }
   if (node->name) {
     // Don't set node names right now since they can conflict at the moment
@@ -265,7 +269,7 @@ ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
   }
 
   if (node->children_count > 0) {
-    TransformComponent *trans_comp = ecs_get_mut(ecs, e, TransformComponent);
+    TransformComponent *trans_comp = ecs_get_mut(ecs, ent, TransformComponent);
     // Make sure this entity actually has a transform
     if (trans_comp) {
       trans_comp->children =
@@ -275,16 +279,16 @@ ecs_entity_t load_entity(ecs_world_t *ecs, TbScene *scene, Allocator std_alloc,
       // Load all children
       for (uint32_t i = 0; i < node->children_count; ++i) {
         const cgltf_node *child = node->children[i];
-        children[i] = load_entity(ecs, scene, std_alloc, tmp_alloc, tok, data,
-                                  root_scene_path, e, child);
+        children[i] =
+            load_entity(world, scene, tok, data, root_scene_path, ent, child);
       }
-      ecs_modified(ecs, e, TransformComponent);
+      ecs_modified(ecs, ent, TransformComponent);
     }
   }
 
-  TB_DYN_ARR_APPEND(scene->entities, e);
+  TB_DYN_ARR_APPEND(scene->entities, ent);
 
-  return e;
+  return ent;
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
@@ -305,10 +309,9 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     const cgltf_node *node = data->scene->nodes[i];
-    ecs_entity_t e =
-        load_entity(ecs, &scene, world->std_alloc, world->tmp_alloc, tok, data,
-                    scene_path, InvalidEntityId, node);
-    TB_DYN_ARR_APPEND(scene.entities, e);
+    ecs_entity_t ent = load_entity(world, &scene, tok, data, scene_path,
+                                   InvalidEntityId, node);
+    TB_DYN_ARR_APPEND(scene.entities, ent);
   }
 
   TB_DYN_ARR_APPEND(world->scenes, scene);
@@ -328,10 +331,10 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
     while (ecs_filter_next(&asset_it)) {
       AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
       for (int32_t i = 0; i < asset_it.count; ++i) {
-        ComponentPostLoadFn fn = asset_sys[i].post_load_fn;
-        if (fn) {
+        ComponentPostLoadFn post_fn = asset_sys[i].post_load_fn;
+        if (post_fn) {
           TB_DYN_ARR_FOREACH(scene.entities, i) {
-            fn(ecs, TB_DYN_ARR_AT(scene.entities, i));
+            post_fn(ecs, TB_DYN_ARR_AT(scene.entities, i));
           }
         }
       }

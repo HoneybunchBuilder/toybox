@@ -37,7 +37,7 @@ void tb_flush_alloc(RenderSystem *self, VmaAllocation alloc) {
   }
 }
 
-RenderSystem create_render_system(Allocator std_alloc, Allocator tmp_alloc,
+RenderSystem create_render_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                   RenderThread *thread) {
   TB_CHECK(thread, "Invalid RenderThread");
 
@@ -331,8 +331,9 @@ void render_frame_end(ecs_iter_t *it) {
   TracyCZoneEnd(tick_ctx);
 }
 
-void tb_register_render_sys(ecs_world_t *ecs, Allocator std_alloc,
-                            Allocator tmp_alloc, RenderThread *render_thread) {
+void tb_register_render_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                            TbAllocator tmp_alloc,
+                            RenderThread *render_thread) {
   ECS_COMPONENT(ecs, RenderSystem);
   RenderSystem sys = create_render_system(std_alloc, tmp_alloc, render_thread);
   // Sets a singleton based on the value at a pointer
@@ -867,7 +868,7 @@ void tb_rnd_update_descriptors(RenderSystem *self, uint32_t write_count,
 
   // We know the frame state isn't in use so it's safe to grab its temp
   // allocator and make sure that descriptor info is properly copied
-  Allocator rt_state_tmp_alloc =
+  TbAllocator rt_state_tmp_alloc =
       self->render_thread->frame_states[self->frame_idx].tmp_alloc.alloc;
 
   // Append uploads to queue

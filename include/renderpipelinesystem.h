@@ -74,8 +74,8 @@ typedef struct DispatchContextDescriptor {
 typedef struct DispatchContext DispatchContext;
 
 typedef struct RenderPipelineSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *render_system;
   RenderTargetSystem *render_target_system;
@@ -139,8 +139,8 @@ typedef struct RenderPipelineSystem {
   FrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
 } RenderPipelineSystem;
 
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                     Allocator tmp_alloc);
+void tb_register_render_pipeline_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                     TbAllocator tmp_alloc);
 void tb_unregister_render_pipeline_sys(ecs_world_t *ecs);
 
 void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self);

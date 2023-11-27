@@ -83,14 +83,14 @@ void destroy_ocean_components(ecs_world_t *ecs) {
 
 void tb_register_ocean_component(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, AssetSystem);
-  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, TbOceanSystem);
 
   // Register asset system for parsing ocean components
   AssetSystem asset = {
       .add_fn = create_ocean_component,
       .rem_fn = destroy_ocean_components,
   };
-  ecs_set_ptr(ecs, ecs_id(OceanSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(TbOceanSystem), AssetSystem, &asset);
 }
 
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and

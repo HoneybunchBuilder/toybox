@@ -243,7 +243,7 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
   return id;
 }
 
-TextureSystem create_texture_system(Allocator std_alloc, Allocator tmp_alloc,
+TextureSystem create_texture_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                     RenderSystem *rnd_sys) {
   TextureSystem sys = {
       .tmp_alloc = tmp_alloc,
@@ -335,8 +335,8 @@ void destroy_texture_system(TextureSystem *self) {
   };
 }
 
-void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
-                             Allocator tmp_alloc) {
+void tb_register_texture_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                             TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, TextureSystem);
   RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);

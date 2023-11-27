@@ -25,7 +25,7 @@ void rotator_system_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_rotator_sys(ecs_world_t *ecs, Allocator tmp_alloc) {
+void tb_register_rotator_sys(ecs_world_t *ecs, TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RotatorSystem);
   ECS_COMPONENT(ecs, RotatorComponent);
   ECS_COMPONENT(ecs, TransformComponent);

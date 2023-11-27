@@ -82,7 +82,7 @@ void tb_destroy_render_thread(RenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
-  Allocator std_alloc = thread->std_alloc.alloc;
+  TbAllocator std_alloc = thread->std_alloc.alloc;
 
   vmaDestroyAllocator(thread->vma_alloc);
 
@@ -156,7 +156,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 #endif
 
-bool init_instance(SDL_Window *window, Allocator tmp_alloc,
+bool init_instance(SDL_Window *window, TbAllocator tmp_alloc,
                    const VkAllocationCallbacks *vk_alloc,
                    VkInstance *instance) {
   VkResult err = VK_SUCCESS;
@@ -305,7 +305,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
-    create_arena_allocator("Render Thread Frame State Tmp Alloc",
+    tb_create_arena_alloc("Render Thread Frame State Tmp Alloc",
                            &state->tmp_alloc, 128 * 1024 * 1024);
 
     state->wait_sem = SDL_CreateSemaphore(0);
@@ -449,7 +449,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     FrameState *state = &states[i];
 
-    destroy_arena_allocator(state->tmp_alloc);
+    tb_destroy_arena_alloc(state->tmp_alloc);
 
     SDL_DestroySemaphore(state->wait_sem);
     SDL_DestroySemaphore(state->signal_sem);
@@ -482,7 +482,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
   }
 }
 
-bool init_gpu(VkInstance instance, Allocator std_alloc, Allocator tmp_alloc,
+bool init_gpu(VkInstance instance, TbAllocator std_alloc, TbAllocator tmp_alloc,
               VkPhysicalDevice *gpu, VkPhysicalDeviceProperties2 *gpu_props,
               VkPhysicalDeviceDriverProperties *driver_props,
               uint32_t *queue_family_count,
@@ -574,7 +574,7 @@ bool init_surface(VkInstance instance, SDL_Window *window,
   return true;
 }
 
-bool find_queue_families(Allocator tmp_alloc, VkPhysicalDevice gpu,
+bool find_queue_families(TbAllocator tmp_alloc, VkPhysicalDevice gpu,
                          VkSurfaceKHR surface, uint32_t queue_family_count,
                          const VkQueueFamilyProperties *queue_props,
                          uint32_t *present_queue_family_index,
@@ -671,7 +671,7 @@ bool optional_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
 }
 
 bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
-                 uint32_t present_queue_family_index, Allocator tmp_alloc,
+                 uint32_t present_queue_family_index, TbAllocator tmp_alloc,
                  const VkAllocationCallbacks *vk_alloc,
                  RenderExtensionSupport *ext_support, VkDevice *device) {
   VkResult err = VK_SUCCESS;
@@ -867,7 +867,7 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
 }
 
 bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
-                    VkSurfaceKHR surface, Allocator tmp_alloc,
+                    VkSurfaceKHR surface, TbAllocator tmp_alloc,
                     const VkAllocationCallbacks *vk_alloc,
                     Swapchain *swapchain) {
   int32_t width = 0;
@@ -1030,10 +1030,10 @@ bool init_render_thread(RenderThread *thread) {
   // Create renderer allocators
   {
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-    create_arena_allocator("Render Arena", &thread->render_arena,
+    tb_create_arena_alloc("Render Arena", &thread->render_arena,
                            arena_alloc_size);
 
-    create_standard_allocator(&thread->std_alloc, "Render Std Alloc");
+    tb_create_gen_alloc(&thread->std_alloc, "Render Std Alloc");
   }
 
   err = volkInitialize();
@@ -1046,8 +1046,8 @@ bool init_render_thread(RenderThread *thread) {
       .pfnFree = tb_vk_free_fn,
   };
 
-  Allocator std_alloc = thread->std_alloc.alloc;
-  Allocator tmp_alloc = thread->render_arena.alloc;
+  TbAllocator std_alloc = thread->std_alloc.alloc;
+  TbAllocator tmp_alloc = thread->render_arena.alloc;
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
 
   TB_CHECK_RETURN(
@@ -1108,7 +1108,7 @@ bool init_render_thread(RenderThread *thread) {
 void resize_swapchain(RenderThread *thread) {
   VkSwapchainKHR old_swapchain = thread->swapchain.swapchain;
 
-  Allocator tmp_alloc = thread->render_arena.alloc;
+  TbAllocator tmp_alloc = thread->render_arena.alloc;
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
   TB_CHECK(init_swapchain(thread->window, thread->device, thread->gpu,
                           thread->surface, tmp_alloc, vk_alloc,
@@ -1658,8 +1658,8 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
   }
 
   // It's now safe to reset the arenas
-  state->tmp_alloc = reset_arena(state->tmp_alloc, false);
-  thread->render_arena = reset_arena(thread->render_arena, false);
+  state->tmp_alloc = tb_reset_arena(state->tmp_alloc, false);
+  thread->render_arena = tb_reset_arena(thread->render_arena, false);
 }
 
 int32_t render_thread(void *data) {

@@ -13,7 +13,7 @@ typedef struct CoreUIMenu {
   const char *name;
 } CoreUIMenu;
 
-CoreUISystem create_coreui_system(Allocator std_alloc, Allocator tmp_alloc,
+CoreUISystem create_coreui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                   ImGuiSystem *imgui_system) {
   CoreUISystem sys = {
       .std_alloc = std_alloc,
@@ -84,8 +84,8 @@ void destroy_core_ui_sys(ecs_iter_t *it) {
   destroy_coreui_system(sys);
 }
 
-void tb_register_core_ui_sys(ecs_world_t *ecs, Allocator std_alloc,
-                             Allocator tmp_alloc) {
+void tb_register_core_ui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                             TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, ImGuiSystem);
   ECS_COMPONENT(ecs, CoreUISystem);
 

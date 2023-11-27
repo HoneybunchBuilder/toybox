@@ -11,7 +11,7 @@
 static void *arena_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  ArenaAllocator *arena = (ArenaAllocator *)user_data;
+  TbArenaAllocator *arena = (TbArenaAllocator *)user_data;
   size_t cur_size = arena->size;
   if (cur_size + size >= arena->max_size) {
     arena->grow = true; // Signal that on the next reset we need to actually do
@@ -65,7 +65,7 @@ static void arena_free(void *user_data, void *ptr) {
   (void)ptr;
 }
 
-void create_arena_allocator(const char *name, ArenaAllocator *a,
+void tb_create_arena_alloc(const char *name, TbArenaAllocator *a,
                             size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
@@ -73,13 +73,13 @@ void create_arena_allocator(const char *name, ArenaAllocator *a,
   TracyCAllocN(data, max_size, name);
   assert(data);
 
-  (*a) = (ArenaAllocator){
+  (*a) = (TbArenaAllocator){
       .name = name,
       .max_size = max_size,
       .heap = heap,
       .data = data,
       .alloc =
-          (Allocator){
+          (TbAllocator){
               .alloc = arena_alloc,
               .alloc_aligned = arena_alloc_aligned,
               .realloc = arena_realloc,
@@ -91,7 +91,7 @@ void create_arena_allocator(const char *name, ArenaAllocator *a,
   };
 }
 
-ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
+TbArenaAllocator tb_reset_arena(TbArenaAllocator a, bool allow_grow) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   if (allow_grow && a.grow) {
@@ -110,7 +110,7 @@ ArenaAllocator reset_arena(ArenaAllocator a, bool allow_grow) {
   return a;
 }
 
-void destroy_arena_allocator(ArenaAllocator a) {
+void tb_destroy_arena_alloc(TbArenaAllocator a) {
   TracyCFreeN(a.data, a.name);
   mi_free(a.data);
   mi_heap_destroy(a.heap);
@@ -119,7 +119,7 @@ void destroy_arena_allocator(ArenaAllocator a) {
 static void *standard_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   void *ptr = mi_heap_recalloc(alloc->heap, NULL, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
   TracyCZoneEnd(ctx);
@@ -130,7 +130,7 @@ static void *standard_alloc_aligned(void *user_data, size_t size,
                                     size_t alignment) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   void *ptr = mi_heap_calloc_aligned(alloc->heap, 1, size, alignment);
   TracyCAllocN(ptr, size, alloc->name);
   TracyCZoneEnd(ctx);
@@ -140,7 +140,7 @@ static void *standard_alloc_aligned(void *user_data, size_t size,
 static void *standard_realloc(void *user_data, void *original, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr = mi_heap_recalloc(alloc->heap, original, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
@@ -152,7 +152,7 @@ static void *standard_realloc_aligned(void *user_data, void *original,
                                       size_t size, size_t alignment) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr =
       mi_heap_recalloc_aligned(alloc->heap, original, 1, size, alignment);
@@ -164,15 +164,15 @@ static void *standard_realloc_aligned(void *user_data, void *original,
 static void standard_free(void *user_data, void *ptr) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  StandardAllocator *alloc = (StandardAllocator *)user_data;
+  TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   (void)alloc;
   TracyCFreeN(ptr, alloc->name);
   mi_free(ptr);
   TracyCZoneEnd(ctx);
 }
 
-void create_standard_allocator(StandardAllocator *a, const char *name) {
-  (*a) = (StandardAllocator){
+void tb_create_gen_alloc(TbGeneralAllocator *a, const char *name) {
+  (*a) = (TbGeneralAllocator){
       .heap = mi_heap_new(),
       .alloc =
           {
@@ -187,4 +187,4 @@ void create_standard_allocator(StandardAllocator *a, const char *name) {
   };
 }
 
-void destroy_standard_allocator(StandardAllocator a) { mi_heap_delete(a.heap); }
+void tb_destroy_gen_alloc(TbGeneralAllocator a) { mi_heap_delete(a.heap); }

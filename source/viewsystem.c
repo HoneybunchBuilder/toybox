@@ -12,7 +12,7 @@
 
 #include <flecs.h>
 
-ViewSystem create_view_system(Allocator std_alloc, Allocator tmp_alloc,
+ViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                               RenderSystem *rnd_sys, RenderTargetSystem *rt_sys,
                               TextureSystem *tex_sys) {
   ViewSystem sys = {
@@ -354,8 +354,8 @@ void view_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_view_sys(ecs_world_t *ecs, Allocator std_alloc,
-                          Allocator tmp_alloc) {
+void tb_register_view_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                          TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, TextureSystem);

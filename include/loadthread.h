@@ -35,8 +35,8 @@ typedef struct World World;
 typedef struct LoadThread {
   SDL_Thread *thread;
 
-  StandardAllocator std_alloc;
-  ArenaAllocator loading_arena;
+  TbGeneralAllocator std_alloc;
+  TbArenaAllocator loading_arena;
 } LoadThread;
 
 // Copy the request list and tell the load thread to begin loading

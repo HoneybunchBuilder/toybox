@@ -313,12 +313,12 @@ VkResult create_ocean_pipelines(RenderSystem *render_system,
   return err;
 }
 
-OceanSystem create_ocean_system(
-    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+TbOceanSystem create_ocean_system(
+    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
     RenderPipelineSystem *render_pipe_system, MeshSystem *mesh_system,
     ViewSystem *view_system, RenderTargetSystem *render_target_system,
     VisualLoggingSystem *vlog, AudioSystem *audio_system) {
-  OceanSystem sys = {
+  TbOceanSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .render_system = render_system,
@@ -592,7 +592,7 @@ OceanSystem create_ocean_system(
   return sys;
 }
 
-void destroy_ocean_system(OceanSystem *self) {
+void destroy_ocean_system(TbOceanSystem *self) {
   for (uint32_t i = 0; i < 4; ++i) {
     tb_audio_system_release_effect_ref(self->audio_system,
                                        self->wave_sounds[i]);
@@ -614,7 +614,7 @@ void destroy_ocean_system(OceanSystem *self) {
   tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
-  *self = (OceanSystem){0};
+  *self = (TbOceanSystem){0};
 }
 
 void ocean_update_tick(ecs_iter_t *it) {
@@ -632,9 +632,9 @@ void ocean_audio_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Ocean Audio System", TracyCategoryColorAudio, true);
 
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, TbOceanSystem);
 
-  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
 
   OceanComponent *components = ecs_field(it, OceanComponent, 1);
   if (it->count > 0) {
@@ -654,10 +654,10 @@ void ocean_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, TbOceanSystem);
   ECS_COMPONENT(ecs, OceanComponent);
-  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
-  ecs_singleton_modified(ecs, OceanSystem);
+  TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
+  ecs_singleton_modified(ecs, TbOceanSystem);
 
   // TODO: Make this less hacky
   const uint32_t width = sys->render_system->render_thread->swapchain.width;
@@ -959,8 +959,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc) {
+void tb_register_ocean_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                           TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderPipelineSystem);
   ECS_COMPONENT(ecs, MeshSystem);
@@ -968,7 +968,7 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, VisualLoggingSystem);
   ECS_COMPONENT(ecs, AudioSystem);
-  ECS_COMPONENT(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, TbOceanSystem);
   ECS_COMPONENT(ecs, OceanComponent);
   ECS_COMPONENT(ecs, CameraComponent);
 
@@ -981,7 +981,7 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
   VisualLoggingSystem *vlog = ecs_singleton_get_mut(ecs, VisualLoggingSystem);
   AudioSystem *aud_sys = ecs_singleton_get_mut(ecs, AudioSystem);
 
-  OceanSystem sys =
+  TbOceanSystem sys =
       create_ocean_system(std_alloc, tmp_alloc, rnd_sys, rp_sys, mesh_sys,
                           view_sys, rt_sys, vlog, aud_sys);
 
@@ -991,7 +991,7 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
                                     }});
 
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(OceanSystem), OceanSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbOceanSystem), TbOceanSystem, &sys);
 
   ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, OceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, OceanComponent);
@@ -1001,9 +1001,9 @@ void tb_register_ocean_sys(ecs_world_t *ecs, Allocator std_alloc,
 }
 
 void tb_unregister_ocean_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, OceanSystem);
-  OceanSystem *sys = ecs_singleton_get_mut(ecs, OceanSystem);
+  ECS_COMPONENT(ecs, TbOceanSystem);
+  TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
   ecs_query_fini(sys->ocean_query);
   destroy_ocean_system(sys);
-  ecs_singleton_remove(ecs, OceanSystem);
+  ecs_singleton_remove(ecs, TbOceanSystem);
 }

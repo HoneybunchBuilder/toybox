@@ -7,8 +7,8 @@
 typedef struct ecs_world_t ecs_world_t;
 
 typedef struct TimeOfDaySystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
   float time;
 } TimeOfDaySystem;
 

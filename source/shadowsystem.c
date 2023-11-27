@@ -385,7 +385,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
   MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
   ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
 
-  Allocator tmp_alloc = shadow_sys->tmp_alloc;
+  TbAllocator tmp_alloc = shadow_sys->tmp_alloc;
 
   // Count how many meshes are in the scene
   ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);

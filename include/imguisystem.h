@@ -39,8 +39,8 @@ typedef struct ImGuiFrameState {
 } ImGuiFrameState;
 
 typedef struct ImGuiSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *render_system;
   RenderPipelineSystem *render_pipe_system;
@@ -60,6 +60,6 @@ typedef struct ImGuiSystem {
   UIContext contexts[TB_MAX_UI_CONTEXTS];
 } ImGuiSystem;
 
-void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc);
+void tb_register_imgui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                           TbAllocator tmp_alloc);
 void tb_unregister_imgui_sys(ecs_world_t *ecs);

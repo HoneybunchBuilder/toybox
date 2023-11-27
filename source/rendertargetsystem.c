@@ -233,8 +233,8 @@ void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
 }
 
 RenderTargetSystem create_render_target_system(RenderSystem *render_system,
-                                               Allocator std_alloc,
-                                               Allocator tmp_alloc) {
+                                               TbAllocator std_alloc,
+                                               TbAllocator tmp_alloc) {
   RenderTargetSystem sys = {
       .render_system = render_system,
       .tmp_alloc = tmp_alloc,
@@ -505,8 +505,8 @@ void destroy_render_target_system(RenderTargetSystem *self) {
   *self = (RenderTargetSystem){0};
 }
 
-void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc) {
+void tb_register_render_target_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                   TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderTargetSystem);
   ECS_COMPONENT(ecs, RenderSystem);
 

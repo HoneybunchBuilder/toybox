@@ -27,8 +27,8 @@ typedef struct RenderTargetDescriptor {
 } RenderTargetDescriptor;
 
 typedef struct RenderTargetSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *render_system;
 
@@ -48,8 +48,8 @@ typedef struct RenderTargetSystem {
   TbRenderTargetId bloom_mip_chain;
 } RenderTargetSystem;
 
-void tb_register_render_target_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                   Allocator tmp_alloc);
+void tb_register_render_target_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                   TbAllocator tmp_alloc);
 void tb_unregister_render_target_sys(ecs_world_t *ecs);
 
 void tb_reimport_swapchain(RenderTargetSystem *self);

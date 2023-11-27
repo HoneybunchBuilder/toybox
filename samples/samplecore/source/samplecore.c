@@ -64,21 +64,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Create Temporary Arena Allocator
-  ArenaAllocator arena = {0};
+  TbArenaAllocator arena = {0};
   {
     SDL_Log("%s", "Creating Arena Allocator");
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-    create_arena_allocator("Main Arena", &arena, arena_alloc_size);
+    tb_create_arena_alloc("Main Arena", &arena, arena_alloc_size);
   }
 
-  StandardAllocator gp_alloc = {0};
+  TbGeneralAllocator gp_alloc = {0};
   {
     SDL_Log("%s", "Creating Standard Allocator");
-    create_standard_allocator(&gp_alloc, "std_alloc");
+    tb_create_gen_alloc(&gp_alloc, "std_alloc");
   }
 
-  Allocator std_alloc = gp_alloc.alloc;
-  Allocator tmp_alloc = arena.alloc;
+  TbAllocator std_alloc = gp_alloc.alloc;
+  TbAllocator tmp_alloc = arena.alloc;
 
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
@@ -146,7 +146,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     // Reset the arena allocator
-    arena = reset_arena(arena, true); // Just allow it to grow for now
+    arena = tb_reset_arena(arena, true); // Just allow it to grow for now
 
     TracyCZoneEnd(trcy_ctx);
   }
@@ -168,8 +168,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SDL_Quit();
 
-  destroy_arena_allocator(arena);
-  destroy_standard_allocator(gp_alloc);
+  tb_destroy_arena_alloc(arena);
+  tb_destroy_gen_alloc(gp_alloc);
 
   return 0;
 }

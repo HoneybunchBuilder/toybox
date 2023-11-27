@@ -15,8 +15,8 @@ static const uint32_t InvalidComponentId = 0xFFFF;
 
 typedef struct TbWorld {
   ecs_world_t *ecs;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
   TB_DYN_ARR_OF(TbScene) scenes;
 } TbWorld;
 
@@ -27,7 +27,7 @@ typedef void (^TbCreateWorldSystemsFn)(TbWorld *, RenderThread *, SDL_Window *);
 
 extern TbCreateWorldSystemsFn tb_create_default_world;
 
-TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
+TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
                         TbCreateWorldSystemsFn create_fn,
                         RenderThread *render_thread, SDL_Window *window);
 bool tb_tick_world(TbWorld *world, float delta_seconds);

@@ -33,7 +33,7 @@ static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
   TB_CHECK(SDL_RWclose(file) == 0, "Failed to close glb file.");
 }
 
-char *tb_resolve_asset_path(Allocator tmp_alloc, const char *source_name) {
+char *tb_resolve_asset_path(TbAllocator tmp_alloc, const char *source_name) {
   const uint32_t max_asset_len = 2048;
   char *asset_path = tb_alloc(tmp_alloc, max_asset_len);
   SDL_memset(asset_path, 0, max_asset_len);
@@ -43,7 +43,7 @@ char *tb_resolve_asset_path(Allocator tmp_alloc, const char *source_name) {
   return asset_path;
 }
 
-cgltf_data *tb_read_glb(Allocator std_alloc, const char *path) {
+cgltf_data *tb_read_glb(TbAllocator std_alloc, const char *path) {
   cgltf_data *data = NULL;
 
   SDL_RWops *glb_file = SDL_RWFromFile(path, "rb");

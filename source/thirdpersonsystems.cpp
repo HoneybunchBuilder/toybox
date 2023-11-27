@@ -35,7 +35,6 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     // Arcball the camera around the boat
     {
       float look_speed = 5.0f;
-
       float look_yaw = 0.0f;
       float look_pitch = 0.0f;
       if (input.mouse.left || input.mouse.right || input.mouse.middle) {

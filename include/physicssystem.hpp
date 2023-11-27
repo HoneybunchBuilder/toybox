@@ -18,8 +18,8 @@ class BPLayerInterfaceImpl;
 class ObjectVsBroadPhaseLayerFilterImpl;
 
 struct TbPhysicsSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   JPH::PhysicsSystem *jolt_phys;
   JPH::TempAllocator *jolt_tmp_alloc;

@@ -30,8 +30,8 @@ typedef enum TbTextureUsage {
 typedef struct TbTexture TbTexture;
 
 typedef struct TextureSystem {
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   RenderSystem *rnd_sys;
 
@@ -43,8 +43,8 @@ typedef struct TextureSystem {
   TbTextureId brdf_tex;
 } TextureSystem;
 
-void tb_register_texture_sys(ecs_world_t *ecs, Allocator std_alloc,
-                             Allocator tmp_alloc);
+void tb_register_texture_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                             TbAllocator tmp_alloc);
 void tb_unregister_texture_sys(ecs_world_t *ecs);
 
 VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex);

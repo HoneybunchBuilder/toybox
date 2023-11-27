@@ -31,7 +31,7 @@ uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
   return SDL_MAX_UINT32;
 }
 
-MaterialSystem create_material_system(Allocator std_alloc, Allocator tmp_alloc,
+MaterialSystem create_material_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                       RenderSystem *rnd_sys,
                                       TextureSystem *tex_sys) {
   MaterialSystem sys = {
@@ -162,8 +162,8 @@ void destroy_material_system(MaterialSystem *self) {
   *self = (MaterialSystem){0};
 }
 
-void tb_register_material_sys(ecs_world_t *ecs, Allocator std_alloc,
-                              Allocator tmp_alloc) {
+void tb_register_material_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                              TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, TextureSystem);
   ECS_COMPONENT(ecs, MaterialSystem);
@@ -219,7 +219,7 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
     }
 
     if (resize_pool) {
-      Allocator alloc = self->std_alloc;
+      TbAllocator alloc = self->std_alloc;
       self->mat_sets = tb_realloc_nm_tp(
           alloc, self->mat_sets, self->materials.capacity, VkDescriptorSet);
 

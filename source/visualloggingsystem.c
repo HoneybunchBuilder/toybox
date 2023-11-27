@@ -265,7 +265,7 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
 }
 
 VisualLoggingSystem create_visual_logging_system(
-    Allocator std_alloc, Allocator tmp_alloc, RenderSystem *render_system,
+    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
     ViewSystem *view_system, RenderPipelineSystem *render_pipe_system,
     MeshSystem *mesh_system, CoreUISystem *coreui) {
   VisualLoggingSystem sys = {
@@ -535,8 +535,8 @@ void vlog_ui_tick(ecs_iter_t *it) {
 #endif
 }
 
-void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                    Allocator tmp_alloc) {
+void tb_register_visual_logging_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                    TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, ViewSystem);
   ECS_COMPONENT(ecs, RenderPipelineSystem);

@@ -366,7 +366,7 @@ void ui_context_destroy(RenderSystem *render_system, UIContext *context) {
   *context = (UIContext){0};
 }
 
-ImGuiSystem create_imgui_system(Allocator std_alloc, Allocator tmp_alloc,
+ImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                 uint32_t context_count,
                                 ImFontAtlas **context_atlases,
                                 RenderSystem *render_system,
@@ -758,8 +758,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_imgui_sys(ecs_world_t *ecs, Allocator std_alloc,
-                           Allocator tmp_alloc) {
+void tb_register_imgui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                           TbAllocator tmp_alloc) {
   ECS_COMPONENT(ecs, RenderSystem);
   ECS_COMPONENT(ecs, RenderPipelineSystem);
   ECS_COMPONENT(ecs, RenderTargetSystem);

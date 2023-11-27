@@ -23,8 +23,8 @@ typedef uint64_t TbMeshId;
 typedef struct ecs_world_t ecs_world_t;
 
 typedef struct VisualLoggingSystem {
-  Allocator tmp_alloc;
-  Allocator std_alloc;
+  TbAllocator tmp_alloc;
+  TbAllocator std_alloc;
 
   RenderSystem *render_system;
   ViewSystem *view_system;
@@ -52,8 +52,8 @@ typedef struct VisualLoggingSystem {
 
 } VisualLoggingSystem;
 
-void tb_register_visual_logging_sys(ecs_world_t *ecs, Allocator std_alloc,
-                                    Allocator tmp_alloc);
+void tb_register_visual_logging_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                                    TbAllocator tmp_alloc);
 void tb_unregister_visual_logging_sys(ecs_world_t *ecs);
 
 void tb_vlog_begin_recording(VisualLoggingSystem *vlog);

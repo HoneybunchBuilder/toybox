@@ -29,8 +29,8 @@ typedef struct SkySystem {
   RenderPipelineSystem *render_pipe_system;
   RenderTargetSystem *render_target_system;
   ViewSystem *view_system;
-  Allocator std_alloc;
-  Allocator tmp_alloc;
+  TbAllocator std_alloc;
+  TbAllocator tmp_alloc;
 
   ecs_query_t *camera_query;
 
@@ -56,6 +56,6 @@ typedef struct SkySystem {
   TbBuffer sky_geom_gpu_buffer;
 } SkySystem;
 
-void tb_register_sky_sys(ecs_world_t *ecs, Allocator std_alloc,
-                         Allocator tmp_alloc);
+void tb_register_sky_sys(ecs_world_t *ecs, TbAllocator std_alloc,
+                         TbAllocator tmp_alloc);
 void tb_unregister_sky_sys(ecs_world_t *ecs);

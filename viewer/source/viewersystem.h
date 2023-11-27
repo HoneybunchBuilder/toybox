@@ -7,8 +7,8 @@
 typedef struct TbWorld TbWorld;
 
 typedef struct ViewerSystem {
-  Allocator tmp_alloc;
-  Allocator std_alloc;
+  TbAllocator tmp_alloc;
+  TbAllocator std_alloc;
 
   bool *viewer_menu;
   bool load_scene_signal;
