@@ -115,10 +115,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Do not go initializing anything until we know the render thread is ready
   tb_wait_thread_initialized(render_thread);
 
-  TbWorld world = tb_create_world(std_alloc, tmp_alloc, render_thread, window);
-
-  // Register specific systems
-  tb_register_viewer_sys(&world);
+  // Create the world with the additional viewer system
+  tb_auto create_world =
+      ^(TbWorld *world, RenderThread *rt, SDL_Window *window) {
+        tb_create_default_world(world, rt, window);
+        tb_register_viewer_sys(world);
+      };
+  TbWorld world = tb_create_world(std_alloc, tmp_alloc, create_world,
+                                  render_thread, window);
 
   // Main loop
   bool running = true;

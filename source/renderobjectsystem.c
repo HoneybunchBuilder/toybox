@@ -9,6 +9,10 @@
 
 #include <flecs.h>
 
+#include "blocks/Block.h"
+
+#define TB_CREATE_LAYOUT(layout)
+
 RenderObjectSystem create_render_object_system(Allocator std_alloc,
                                                Allocator tmp_alloc,
                                                RenderSystem *rnd_sys) {
@@ -19,21 +23,20 @@ RenderObjectSystem create_render_object_system(Allocator std_alloc,
   };
 
   // Create render object descriptor set layout
-  {
-    tb_auto create_info = (VkDescriptorSetLayoutCreateInfo){
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings =
-            &(VkDescriptorSetLayoutBinding){
-                .binding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            },
-    };
-    tb_rnd_create_set_layout(rnd_sys, &create_info,
-                             "Object Descriptor Set Layout", &sys.set_layout);
-  }
+  tb_rnd_create_set_layout(
+      rnd_sys,
+      &(VkDescriptorSetLayoutCreateInfo){
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+          .bindingCount = 1,
+          .pBindings =
+              &(VkDescriptorSetLayoutBinding){
+                  .binding = 0,
+                  .descriptorCount = 1,
+                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                  .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+              },
+      },
+      "Object Descriptor Set Layout", &sys.set_layout);
 
   return sys;
 }

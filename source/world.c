@@ -81,7 +81,38 @@ void *ecs_realloc(void *original, ecs_size_t size) {
   return ptr;
 }
 
+TbCreateWorldSystemsFn tb_create_default_world =
+    ^(TbWorld *world, RenderThread *rt, SDL_Window *window) {
+      ecs_world_t *ecs = world->ecs;
+      Allocator std_alloc = world->std_alloc;
+      Allocator tmp_alloc = world->tmp_alloc;
+      tb_register_physics_sys(world);
+      tb_register_light_sys(ecs);
+      tb_register_audio_sys(world);
+      tb_register_render_sys(ecs, std_alloc, tmp_alloc, rt);
+      tb_register_input_sys(ecs, tmp_alloc, window);
+      tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_view_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_material_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_noclip_sys(ecs);
+      tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_shadow_sys(world);
+      tb_register_time_of_day_sys(ecs);
+      tb_register_rotator_sys(ecs, tmp_alloc);
+      tb_register_third_person_systems(world);
+    };
+
 TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
+                        TbCreateWorldSystemsFn create_fn,
                         RenderThread *render_thread, SDL_Window *window) {
   // Ensure the instrumented allocator is used
   ecs_os_set_api_defaults();
@@ -99,35 +130,15 @@ TbWorld tb_create_world(Allocator std_alloc, Allocator tmp_alloc,
   };
   TB_DYN_ARR_RESET(world.scenes, std_alloc, 1);
 
-  ecs_world_t *ecs = world.ecs;
-  tb_register_physics_sys(&world);
-  tb_register_light_sys(ecs);
-  tb_register_audio_sys(&world);
-  tb_register_render_sys(ecs, std_alloc, tmp_alloc, render_thread);
-  tb_register_input_sys(ecs, tmp_alloc, window);
-  tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_view_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_material_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_noclip_sys(ecs);
-  tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
-  tb_register_shadow_sys(&world);
-  tb_register_time_of_day_sys(ecs);
-  tb_register_rotator_sys(ecs, tmp_alloc);
-  tb_register_third_person_systems(&world);
+  if (!create_fn) {
+    create_fn = tb_create_default_world;
+  }
+  create_fn(&world, render_thread, window);
 
 // By setting this singleton we allow the application to connect to the
 // flecs explorer
 #ifndef FINAL
-  ecs_singleton_set(ecs, EcsRest, {0});
+  ecs_singleton_set(world.ecs, EcsRest, {0});
 #endif
 
   return world;

@@ -8,10 +8,10 @@
  * distribute, sublicense, and/or sell copies of the Software, and to permit
  * persons to whom the Software is furnished to do so, subject to the following
  * conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,41 +26,50 @@
 #define _BLOCK_H_
 
 #if !defined(BLOCK_EXPORT)
-#   if defined(__cplusplus)
-#       define BLOCK_EXPORT extern "C"
-#   else
-#       define BLOCK_EXPORT extern
-#   endif
+#if defined(__cplusplus)
+#define BLOCK_EXPORT extern "C"
+#else
+#define BLOCK_EXPORT extern
+#endif
+#endif
+
+#if !defined(BLOCK_API)
+#if defined(_WIN32)
+#define BLOCK_API __declspec(dllexport)
+#else
+#define BLOCK_API
+#endif
 #endif
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-/* Create a heap based copy of a Block or simply add a reference to an existing one.
- * This must be paired with Block_release to recover memory, even when running
- * under Objective-C Garbage Collection.
+/* Create a heap based copy of a Block or simply add a reference to an existing
+ * one. This must be paired with Block_release to recover memory, even when
+ * running under Objective-C Garbage Collection.
  */
 BLOCK_EXPORT void *_Block_copy(const void *aBlock);
 
-/* Lose the reference, and if heap based and last reference, recover the memory. */
+/* Lose the reference, and if heap based and last reference, recover the memory.
+ */
 BLOCK_EXPORT void _Block_release(const void *aBlock);
 
 #if defined(__cplusplus)
 }
 #endif
 
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteStackBlock[32];
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteMallocBlock[32];
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteAutoBlock[32];
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteFinalizingBlock[32];
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteGlobalBlock[32];
-BLOCK_EXPORT __declspec(dllexport) void * _NSConcreteWeakBlockVariable[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteStackBlock[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteMallocBlock[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteAutoBlock[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteFinalizingBlock[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteGlobalBlock[32];
+BLOCK_EXPORT BLOCK_API void *_NSConcreteWeakBlockVariable[32];
 
 /* Type correct macros. */
 
-#define Block_copy(...) ((__typeof(__VA_ARGS__))_Block_copy((const void *)(__VA_ARGS__)))
+#define Block_copy(...)                                                        \
+  ((__typeof(__VA_ARGS__))_Block_copy((const void *)(__VA_ARGS__)))
 #define Block_release(...) _Block_release((const void *)(__VA_ARGS__))
-
 
 #endif
