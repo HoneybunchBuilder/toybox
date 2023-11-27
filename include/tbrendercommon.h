@@ -28,9 +28,9 @@ typedef struct BufferImageCopy {
   VkImageSubresourceRange range;
 } BufferImageCopy;
 
-typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) SetWriteQueue;
-typedef TB_DYN_ARR_OF(BufferCopy) BufferCopyQueue;
-typedef TB_DYN_ARR_OF(BufferImageCopy) BufferImageCopyQueue;
+typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbSetWriteQueue;
+typedef TB_DYN_ARR_OF(BufferCopy) TbBufferCopyQueue;
+typedef TB_DYN_ARR_OF(BufferImageCopy) TbBufferImageCopyQueue;
 
 typedef struct TbHostBuffer {
   VkBuffer buffer;
@@ -52,14 +52,14 @@ typedef struct TbImage {
   VmaAllocationInfo info;
 } TbImage;
 
-typedef struct DrawBatch DrawBatch;
-typedef struct DispatchBatch DispatchBatch;
+typedef struct TbDrawBatch TbDrawBatch;
+typedef struct TbDispatchBatch TbDispatchBatch;
 typedef struct TracyCGPUContext TracyCGPUContext;
 
 typedef void tb_record_draw_batch(TracyCGPUContext *gpu_ctx,
                                   VkCommandBuffer buffer, uint32_t batch_count,
-                                  const DrawBatch *batches);
+                                  const TbDrawBatch *batches);
 typedef void tb_record_dispatch_batch(TracyCGPUContext *gpu_ctx,
                                       VkCommandBuffer buffer,
                                       uint32_t batch_count,
-                                      const DispatchBatch *batches);
+                                      const TbDispatchBatch *batches);

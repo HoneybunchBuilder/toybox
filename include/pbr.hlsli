@@ -55,7 +55,7 @@ float microfacet_distribution(float roughness, float NdotH) {
   float a = roughness * roughness;
   float a2 = a * a;
   float denom = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
-  return a2 / (PI * denom * denom);
+  return a2 / (TB_PI * denom * denom);
 }
 
 #endif

@@ -17,44 +17,46 @@ void camera_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Camera Update System", TracyCategoryColorCore, true);
 
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
 
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-  ecs_singleton_modified(ecs, ViewSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  ecs_singleton_modified(ecs, TbViewSystem);
 
-  CameraComponent *camera = ecs_field(it, CameraComponent, 1);
-  TransformComponent *transform = ecs_field(it, TransformComponent, 2);
+  TbCameraComponent *camera = ecs_field(it, TbCameraComponent, 1);
+  TbTransformComponent *transform = ecs_field(it, TbTransformComponent, 2);
 
   float4x4 cam_world = tb_transform_get_world_matrix(ecs, transform);
 
   float3 pos = cam_world.col3.xyz;
-  float3 forward = mulf33(m44tom33(cam_world), TB_FORWARD);
+  float3 forward = tb_mulf33f3(tb_f44tof33(cam_world), TB_FORWARD);
 
   // Eval transform heirarchy
-  CommonViewData view_data = {.view_pos = pos};
+  TbCommonViewData view_data = {.view_pos = pos};
 
-  float4x4 view = look_forward(pos, forward, TB_UP);
+  float4x4 view = tb_look_forward(pos, forward, TB_UP);
 
-  float4x4 proj =
-      perspective(camera->fov, camera->aspect_ratio, camera->near, camera->far);
+  float4x4 proj = tb_perspective(camera->fov, camera->aspect_ratio,
+                                 camera->near, camera->far);
 
   view_data.v = view;
   view_data.p = proj;
-  view_data.inv_proj = inv_mf44(proj);
+  view_data.inv_proj = tb_invf44(proj);
   view_data.proj_params =
       (float4){camera->near, camera->far, camera->aspect_ratio, camera->fov};
 
   // TODO: Find a cleaner expression for updating this
-  camera->width = view_sys->render_system->render_thread->swapchain.width;
-  camera->height = view_sys->render_system->render_thread->swapchain.height;
+  camera->width =
+      (float)view_sys->render_system->render_thread->swapchain.width;
+  camera->height =
+      (float)view_sys->render_system->render_thread->swapchain.height;
 
   // Calculate view projection matrix
-  view_data.vp = mulmf44(proj, view);
+  view_data.vp = tb_mulf44f44(proj, view);
 
   // Inverse
-  view_data.inv_vp = inv_mf44(view_data.vp);
+  view_data.inv_vp = tb_invf44(view_data.vp);
 
-  Frustum frustum = frustum_from_view_proj(&view_data.vp);
+  TbFrustum frustum = tb_frustum_from_view_proj(&view_data.vp);
 
   // HACK - setting target here to the swapchain in a janky way that's
   // just used to facilitate other hacks
@@ -65,27 +67,16 @@ void camera_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_camera_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                            TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, CameraSystem);
-  ECS_COMPONENT(ecs, AssetSystem);
+void tb_register_camera_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbAssetSystem);
 
-  ecs_singleton_set(ecs, CameraSystem,
-                    {
-                        .tmp_alloc = tmp_alloc,
-                        .std_alloc = std_alloc,
-                    });
-  ECS_SYSTEM(ecs, camera_update_tick, EcsOnUpdate, CameraComponent,
-             TransformComponent);
+  ECS_SYSTEM(ecs, camera_update_tick, EcsOnUpdate, TbCameraComponent,
+             TbTransformComponent);
 
-  tb_register_camera_component(ecs);
+  tb_register_camera_component(world);
 }
 
-void tb_unregister_camera_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, CameraSystem);
-  CameraSystem *sys = ecs_singleton_get_mut(ecs, CameraSystem);
-  *sys = (CameraSystem){0};
-  ecs_singleton_remove(ecs, CameraSystem);
-}
+void tb_unregister_camera_sys(TbWorld *world) { (void)world; }

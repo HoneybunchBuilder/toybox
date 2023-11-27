@@ -31,13 +31,13 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 right = normalize(cross(up, normal));
   up = normalize(cross(normal, right));
 
-  const float phi_delta = TAU / 32.0f;
-  const float theta_delta = PI_2 / 8.0f;
+  const float phi_delta = TB_TAU / 32.0f;
+  const float theta_delta = TB_PI_2 / 8.0f;
   uint sample_count = 0u;
 
   float3 irradiance = float3(0, 0, 0);
-  for (float phi = 0.0f; phi < TAU; phi += phi_delta) {
-    for (float theta = 0.0f; theta < PI_2; theta += theta_delta) {
+  for (float phi = 0.0f; phi < TB_TAU; phi += phi_delta) {
+    for (float theta = 0.0f; theta < TB_PI_2; theta += theta_delta) {
       float3 tmp_vec = cos(phi) * right + sin(phi) * up;
       float3 sample_vec = cos(theta) * normal + sin(theta) * tmp_vec;
 
@@ -47,7 +47,7 @@ float4 frag(Interpolators i) : SV_TARGET {
       sample_count++;
     }
   }
-  irradiance = PI * irradiance / float(sample_count);
+  irradiance = TB_PI * irradiance / float(sample_count);
 
   return float4(irradiance, 1);
 }

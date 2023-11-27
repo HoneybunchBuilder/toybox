@@ -2,31 +2,25 @@
 
 #include "dynarray.h"
 #include "tbcommon.h"
-#include "world.h"
 
-#define CoreUISystemId 0xDEADBAAD
+typedef struct TbImGuiSystem TbImGuiSystem;
+typedef struct TbRenderThread TbRenderThread;
+typedef struct TbCoreUIMenu TbCoreUIMenu;
+typedef struct TbWorld TbWorld;
 
-typedef struct ImGuiSystem ImGuiSystem;
-typedef struct RenderThread RenderThread;
-
-typedef struct ecs_world_t ecs_world_t;
-
-typedef struct CoreUIMenu CoreUIMenu;
-
-typedef struct CoreUISystem {
+typedef struct TbCoreUISystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  ImGuiSystem *imgui;
+  TbImGuiSystem *imgui;
 
-  TB_DYN_ARR_OF(CoreUIMenu) menu_registry;
+  TB_DYN_ARR_OF(TbCoreUIMenu) menu_registry;
 
   bool *metrics;
   bool *about;
-} CoreUISystem;
+} TbCoreUISystem;
 
-void tb_register_core_ui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                             TbAllocator tmp_alloc);
-void tb_unregister_core_ui_sys(ecs_world_t *ecs);
+void tb_register_core_ui_sys(TbWorld *world);
+void tb_unregister_core_ui_sys(TbWorld *world);
 
-bool *tb_coreui_register_menu(CoreUISystem *self, const char *name);
+bool *tb_coreui_register_menu(TbCoreUISystem *self, const char *name);

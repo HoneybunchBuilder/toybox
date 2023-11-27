@@ -104,8 +104,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Must create render thread on the heap like this
-  RenderThread *render_thread = tb_alloc_tp(std_alloc, RenderThread);
-  RenderThreadDescriptor render_thread_desc = {
+  TbRenderThread *render_thread = tb_alloc_tp(std_alloc, TbRenderThread);
+  TbRenderThreadDescriptor render_thread_desc = {
       .window = window,
   };
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
@@ -116,7 +116,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Create the world with the additional viewer system
   tb_auto create_world =
-      ^(TbWorld *world, RenderThread *thread, SDL_Window *window) {
+      ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
         tb_create_default_world(world, thread, window);
         tb_register_viewer_sys(world);
       };
@@ -137,12 +137,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCZoneN(trcy_ctx, "Simulation Frame", true);
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
-    ECS_COMPONENT(world.ecs, ViewerSystem);
+    ECS_COMPONENT(world.ecs, TbViewerSystem);
 
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before
     // ticking
-    ViewerSystem *viewer = ecs_singleton_get_mut(world.ecs, ViewerSystem);
+    TbViewerSystem *viewer = ecs_singleton_get_mut(world.ecs, TbViewerSystem);
     if (viewer) {
       // Order matters; we can get both signals at once
       if (viewer->unload_scene_signal) {

@@ -49,7 +49,7 @@ typedef struct TbMesh {
   TbBuffer gpu_buffer;
 } TbMesh;
 
-VkResult create_prepass_pipeline(RenderSystem *render_system,
+VkResult create_prepass_pipeline(TbRenderSystem *render_system,
                                  VkFormat depth_format,
                                  VkPipelineLayout pipe_layout,
                                  VkPipeline *pipeline) {
@@ -196,8 +196,9 @@ VkResult create_prepass_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_mesh_pipelines(RenderSystem *render_system, TbAllocator std_alloc,
-                               VkFormat color_format, VkFormat depth_format,
+VkResult create_mesh_pipelines(TbRenderSystem *render_system,
+                               TbAllocator std_alloc, VkFormat color_format,
+                               VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                uint32_t *pipe_count, VkPipeline **opaque_pipes,
                                VkPipeline **transparent_pipes) {
@@ -509,15 +510,15 @@ VkResult create_mesh_pipelines(RenderSystem *render_system, TbAllocator std_allo
 }
 
 void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                     uint32_t batch_count, const DrawBatch *batches) {
+                     uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Opaque Prepass", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass", 3, true);
   cmd_begin_label(buffer, "Opaque Prepass", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const PrimitiveBatch *prim_batch =
-        (const PrimitiveBatch *)batch->user_batch;
+    const TbDrawBatch *batch = &batches[batch_idx];
+    const TbPrimitiveBatch *prim_batch =
+        (const TbPrimitiveBatch *)batch->user_batch;
     if (batch->draw_count == 0) {
       continue;
     }
@@ -540,8 +541,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
                             1, &prim_batch->trans_set, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const PrimitiveDraw *draw =
-          &((const PrimitiveDraw *)batch->draws)[draw_idx];
+      const TbPrimitiveDraw *draw =
+          &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
       if (draw->instance_count == 0) {
         continue;
       }
@@ -582,12 +583,12 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                         uint32_t batch_count, const DrawBatch *batches) {
+                         uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const PrimitiveBatch *prim_batch =
-        (const PrimitiveBatch *)batch->user_batch;
+    const TbDrawBatch *batch = &batches[batch_idx];
+    const TbPrimitiveBatch *prim_batch =
+        (const TbPrimitiveBatch *)batch->user_batch;
     if (batch->draw_count == 0) {
       continue;
     }
@@ -610,8 +611,8 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 3,
                             1, &prim_batch->trans_set, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const PrimitiveDraw *draw =
-          &((const PrimitiveDraw *)batch->draws)[draw_idx];
+      const TbPrimitiveDraw *draw =
+          &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
       if (draw->instance_count == 0) {
         continue;
       }
@@ -651,7 +652,7 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void opaque_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                         uint32_t batch_count, const DrawBatch *batches) {
+                         uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
@@ -662,7 +663,8 @@ void opaque_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                              uint32_t batch_count, const DrawBatch *batches) {
+                              uint32_t batch_count,
+                              const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Mesh Transparent Record", TracyCategoryColorRendering,
                true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
@@ -675,12 +677,12 @@ void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-MeshSystem create_mesh_system_internal(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
-    MaterialSystem *material_system, ViewSystem *view_system,
-    RenderObjectSystem *render_object_system,
-    RenderPipelineSystem *render_pipe_system) {
-  MeshSystem sys = {
+TbMeshSystem create_mesh_system_internal(
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
+    TbMaterialSystem *material_system, TbViewSystem *view_system,
+    TbRenderObjectSystem *render_object_system,
+    TbRenderPipelineSystem *render_pipe_system) {
+  TbMeshSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .render_system = render_system,
@@ -770,9 +772,8 @@ MeshSystem create_mesh_system_internal(
                   },
               },
       };
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
-                                          "GLTF Pipeline Layout",
-                                          &sys.pipe_layout);
+      tb_rnd_create_pipeline_layout(render_system, &create_info,
+                                    "GLTF Pipeline Layout", &sys.pipe_layout);
     }
 
     // Create opaque and transparent pipelines
@@ -783,7 +784,7 @@ MeshSystem create_mesh_system_internal(
           sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
           NULL);
       TB_CHECK(attach_count == 2, "Unexpected");
-      PassAttachment depth_info = {0};
+      TbPassAttachment depth_info = {0};
       tb_render_pipeline_get_attachments(
           sys.render_pipe_system,
           sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
@@ -797,7 +798,7 @@ MeshSystem create_mesh_system_internal(
           sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
           &attach_count, NULL);
       TB_CHECK(attach_count == 2, "Unexpected");
-      PassAttachment attach_info[2] = {0};
+      TbPassAttachment attach_info[2] = {0};
       tb_render_pipeline_get_attachments(
           sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
           &attach_count, attach_info);
@@ -820,28 +821,28 @@ MeshSystem create_mesh_system_internal(
   }
   // Register drawing with the pipelines
   sys.prepass_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(PrimitiveBatch),
+      render_pipe_system, &(TbDrawContextDescriptor){
+                              .batch_size = sizeof(TbPrimitiveBatch),
                               .draw_fn = prepass_record2,
                               .pass_id = prepass_id,
                           });
   sys.opaque_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(PrimitiveBatch),
+      render_pipe_system, &(TbDrawContextDescriptor){
+                              .batch_size = sizeof(TbPrimitiveBatch),
                               .draw_fn = opaque_pass_record2,
                               .pass_id = opaque_pass_id,
                           });
   sys.transparent_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
-                              .batch_size = sizeof(PrimitiveBatch),
+      render_pipe_system, &(TbDrawContextDescriptor){
+                              .batch_size = sizeof(TbPrimitiveBatch),
                               .draw_fn = transparent_pass_record2,
                               .pass_id = transparent_pass_id,
                           });
   return sys;
 }
 
-void destroy_mesh_system(MeshSystem *self) {
-  RenderSystem *render_system = self->render_system;
+void destroy_mesh_system(TbMeshSystem *self) {
+  TbRenderSystem *render_system = self->render_system;
 
   for (uint32_t i = 0; i < self->pipe_count; ++i) {
     tb_rnd_destroy_pipeline(render_system, self->opaque_pipelines[i]);
@@ -859,10 +860,10 @@ void destroy_mesh_system(MeshSystem *self) {
 
   TB_DYN_ARR_DESTROY(self->meshes);
 
-  *self = (MeshSystem){0};
+  *self = (TbMeshSystem){0};
 }
 
-uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
+uint32_t get_pipeline_for_input(TbMeshSystem *self, TbVertexInput input) {
   TracyCZone(ctx, true);
   // We know the layout of the distribution of pipelines so we
   // can decode the vertex input and the material permutation
@@ -880,7 +881,7 @@ uint32_t get_pipeline_for_input(MeshSystem *self, TbVertexInput input) {
                   SDL_MAX_UINT32);
 }
 
-uint32_t find_mesh_by_id(MeshSystem *self, TbMeshId id) {
+uint32_t find_mesh_by_id(TbMeshSystem *self, TbMeshId id) {
   TB_DYN_ARR_FOREACH(self->meshes, i) {
     if (TB_DYN_ARR_AT(self->meshes, i).id == id) {
       return i;
@@ -905,7 +906,7 @@ static cgltf_result decompress_buffer_view(TbAllocator alloc,
     data += view->offset;
 
     uint8_t *result = tb_alloc(alloc, view->size);
-    SDL_memcpy(result, data, view->size);
+    SDL_memcpy(result, data, view->size); // NOLINT
     view->data = result;
     return cgltf_result_success;
   }
@@ -966,7 +967,7 @@ static cgltf_result decompress_buffer_view(TbAllocator alloc,
   return cgltf_result_success;
 }
 
-TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
+TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                                   const cgltf_node *node) {
   // Hash the mesh's path and the cgltf_mesh structure to get
   // an id We'd prefer to use a name but gltfpack is currently
@@ -974,8 +975,8 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
   const cgltf_mesh *mesh = node->mesh;
   TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
 
-  TbMeshId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
+  TbMeshId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_sdbm(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
 
   uint32_t index = find_mesh_by_id(self, id);
 
@@ -1067,7 +1068,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
           void *src = ((uint8_t *)view->data) + indices->offset;
           void *dst = ((uint8_t *)(ptr)) + idx_offset;
-          SDL_memcpy(dst, src, index_size);
+          SDL_memcpy(dst, src, index_size); // NOLINT
           idx_offset += index_size;
         }
 
@@ -1113,7 +1114,7 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
 
           void *src = ((uint8_t *)view->data) + attr_offset;
           void *dst = ((uint8_t *)(ptr)) + vtx_offset;
-          SDL_memcpy(dst, src, attr_size);
+          SDL_memcpy(dst, src, attr_size); // NOLINT
           vtx_offset += attr_size;
         }
       }
@@ -1127,14 +1128,14 @@ TbMeshId tb_mesh_system_load_mesh(MeshSystem *self, const char *path,
   return id;
 }
 
-bool tb_mesh_system_take_mesh_ref(MeshSystem *self, TbMeshId id) {
+bool tb_mesh_system_take_mesh_ref(TbMeshSystem *self, TbMeshId id) {
   uint32_t index = find_mesh_by_id(self, id);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh", false);
   TB_DYN_ARR_AT(self->meshes, index).ref_count++;
   return true;
 }
 
-VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id) {
+VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id) {
   uint32_t index = find_mesh_by_id(self, id);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh",
                   VK_NULL_HANDLE);
@@ -1145,7 +1146,7 @@ VkBuffer tb_mesh_system_get_gpu_mesh(MeshSystem *self, TbMeshId id) {
   return buffer;
 }
 
-void tb_mesh_system_release_mesh_ref(MeshSystem *self, TbMeshId id) {
+void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id) {
   uint32_t index = find_mesh_by_id(self, id);
 
   if (index == SDL_MAX_UINT32) {
@@ -1193,33 +1194,34 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, MeshComponent);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
-  ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, RenderObject);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbMeshComponent);
+  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbRenderObject);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
 
-  MeshSystem *mesh_sys = ecs_field(it, MeshSystem, 1);
-  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
-  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  TbMeshSystem *mesh_sys = ecs_field(it, TbMeshSystem, 1);
+  TbRenderObjectSystem *ro_sys =
+      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbAllocator tmp_alloc = mesh_sys->tmp_alloc;
 
   // For each camera
   ecs_iter_t camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
   while (ecs_query_next(&camera_it)) {
-    CameraComponent *cameras = ecs_field(&camera_it, CameraComponent, 1);
+    TbCameraComponent *cameras = ecs_field(&camera_it, TbCameraComponent, 1);
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
-      CameraComponent *camera = &cameras[cam_idx];
+      TbCameraComponent *camera = &cameras[cam_idx];
       VkDescriptorSet view_set =
           tb_view_system_get_descriptor(view_sys, camera->view_id);
 
@@ -1232,15 +1234,15 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       uint32_t opaque_mesh_count = 0;
       uint32_t trans_mesh_count = 0;
       while (ecs_query_next(&mesh_it)) {
-        MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+        TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          MeshComponent *mesh = &meshes[mesh_idx];
+          TbMeshComponent *mesh = &meshes[mesh_idx];
 
           uint32_t mesh_count = TB_DYN_ARR_SIZE(mesh->entities);
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
-            SubMesh *sm = &mesh->submeshes[submesh_idx];
+            TbSubMesh *sm = &mesh->submeshes[submesh_idx];
             TbMaterialId mat = sm->material;
             TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
 
@@ -1266,8 +1268,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
       // Note that worst case is each mesh needs a separate mesh
       DrawBatchList opaque_batches = {0};
       DrawBatchList trans_batches = {0};
-      PrimitiveBatchList opaque_prim_batches = {0};
-      PrimitiveBatchList trans_prim_batches = {0};
+      TbPrimitiveBatchList opaque_prim_batches = {0};
+      TbPrimitiveBatchList trans_prim_batches = {0};
       if (opaque_mesh_count) {
         TB_DYN_ARR_RESET(opaque_batches, tmp_alloc, opaque_mesh_count);
         TB_DYN_ARR_RESET(opaque_prim_batches, tmp_alloc, opaque_mesh_count);
@@ -1276,15 +1278,15 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         TB_DYN_ARR_RESET(trans_batches, tmp_alloc, trans_mesh_count);
         TB_DYN_ARR_RESET(trans_prim_batches, tmp_alloc, trans_mesh_count);
       }
-      PrimIndirectList opaque_prim_trans = {0};
-      PrimIndirectList trans_prim_trans = {0};
+      TbPrimIndirectList opaque_prim_trans = {0};
+      TbPrimIndirectList trans_prim_trans = {0};
       TB_DYN_ARR_RESET(opaque_prim_trans, tmp_alloc, max_obj_count);
       TB_DYN_ARR_RESET(trans_prim_trans, tmp_alloc, max_obj_count);
       TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
-        MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+        TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          MeshComponent *mesh = &meshes[mesh_idx];
+          TbMeshComponent *mesh = &meshes[mesh_idx];
 
           VkBuffer geom_buffer =
               tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
@@ -1292,7 +1294,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
-            SubMesh *sm = &mesh->submeshes[submesh_idx];
+            TbSubMesh *sm = &mesh->submeshes[submesh_idx];
             TbMaterialId mat = sm->material;
             uint32_t pipe_idx =
                 get_pipeline_for_input(mesh_sys, sm->vertex_input);
@@ -1318,13 +1320,13 @@ void mesh_draw_tick2(ecs_iter_t *it) {
               }
 
               // Determine if we need to insert a new batch
-              DrawBatch *batch = NULL;
-              PrimitiveBatch *prim_batch = NULL;
-              IndirectionList *transforms = NULL;
+              TbDrawBatch *batch = NULL;
+              TbPrimitiveBatch *prim_batch = NULL;
+              TbIndirectionList *transforms = NULL;
               {
                 DrawBatchList *batches = &opaque_batches;
-                PrimitiveBatchList *prim_batches = &opaque_prim_batches;
-                PrimIndirectList *trans_list = &opaque_prim_trans;
+                TbPrimitiveBatchList *prim_batches = &opaque_prim_batches;
+                TbPrimIndirectList *trans_list = &opaque_prim_trans;
                 if (!opaque) {
                   batches = &trans_batches;
                   prim_batches = &trans_prim_batches;
@@ -1333,14 +1335,13 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
                 // Try to find an existing suitable batch
                 TB_DYN_ARR_FOREACH(*batches, i) {
-                  DrawBatch *db = &TB_DYN_ARR_AT(*batches, i);
-                  PrimitiveBatch *pb = &TB_DYN_ARR_AT(*prim_batches, i);
+                  TbDrawBatch *db = &TB_DYN_ARR_AT(*batches, i);
+                  TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(*prim_batches, i);
                   if (db->pipeline == pipeline && db->layout == layout &&
                       pb->perm == perm && pb->view_set == view_set &&
                       pb->mat_set == mat_set &&
                       pb->geom_buffer == geom_buffer) {
                     batch = db;
-                    prim_batch = pb;
                     transforms = &TB_DYN_ARR_AT(*trans_list, i);
                     break;
                   }
@@ -1351,16 +1352,16 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   // mesh with the maximum number of possible submeshes
                   const uint32_t max_draw_count =
                       opaque_mesh_count + trans_mesh_count;
-                  DrawBatch db = {
+                  TbDrawBatch db = {
                       .pipeline = pipeline,
                       .layout = layout,
                       .viewport = {0, height, width, -(float)height, 0, 1},
                       .scissor = (VkRect2D){{0, 0}, {width, height}},
-                      .draw_size = sizeof(PrimitiveDraw),
+                      .draw_size = sizeof(TbPrimitiveDraw),
                       .draws = tb_alloc_nm_tp(tmp_alloc, max_draw_count,
-                                              PrimitiveDraw),
+                                              TbPrimitiveDraw),
                   };
-                  PrimitiveBatch pb = {
+                  TbPrimitiveBatch pb = {
                       .perm = perm,
                       .view_set = view_set,
                       .mat_set = mat_set,
@@ -1368,7 +1369,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                       .geom_buffer = geom_buffer,
                   };
 
-                  IndirectionList il = {0};
+                  TbIndirectionList il = {0};
                   TB_DYN_ARR_RESET(il, tmp_alloc, max_draw_count);
 
                   // Append it to the list and make sure we get a reference
@@ -1386,9 +1387,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
               // Determine if we need to insert a new draw
               {
-                PrimitiveDraw *draw = NULL;
+                TbPrimitiveDraw *draw = NULL;
                 for (uint32_t i = 0; i < batch->draw_count; ++i) {
-                  PrimitiveDraw *d = &((PrimitiveDraw *)batch->draws)[i];
+                  TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
                   if (d->index_count == index_count &&
                       d->index_offset == index_offset &&
                       d->index_type == index_type) {
@@ -1398,7 +1399,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                 }
                 // No draw was found, create one
                 if (draw == NULL) {
-                  PrimitiveDraw d = {
+                  TbPrimitiveDraw d = {
                       .index_count = index_count,
                       .index_offset = index_offset,
                       .index_type = index_type,
@@ -1442,8 +1443,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
                   // Append it to the list and make sure we get a reference
                   uint32_t idx = batch->draw_count++;
-                  ((PrimitiveDraw *)batch->draws)[idx] = d;
-                  draw = &((PrimitiveDraw *)batch->draws)[idx];
+                  ((TbPrimitiveDraw *)batch->draws)[idx] = d;
+                  draw = &((TbPrimitiveDraw *)batch->draws)[idx];
                 }
 
                 draw->instance_count += TB_DYN_ARR_SIZE(mesh->entities);
@@ -1451,7 +1452,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                 // Append every render object's transform index to the list
                 TB_DYN_ARR_FOREACH(mesh->entities, e_idx) {
                   ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
-                  const RenderObject *ro = ecs_get(ecs, entity, RenderObject);
+                  const TbRenderObject *ro =
+                      ecs_get(ecs, entity, TbRenderObject);
                   TB_DYN_ARR_APPEND(*transforms, ro->index);
                 }
               }
@@ -1472,9 +1474,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         VkPipeline pipeline = mesh_sys->prepass_pipe;
 
         TB_DYN_ARR_FOREACH(opaque_batches, i) {
-          const DrawBatch *op_batch = &TB_DYN_ARR_AT(opaque_batches, i);
+          const TbDrawBatch *op_batch = &TB_DYN_ARR_AT(opaque_batches, i);
 
-          DrawBatch pre_batch = *op_batch;
+          TbDrawBatch pre_batch = *op_batch;
           pre_batch.pipeline = pipeline;
           pre_batch.layout = layout;
 
@@ -1493,7 +1495,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           TB_DYN_ARR_RESET(opaque_inst_buffers, tmp_alloc, op_count);
 
           TB_DYN_ARR_FOREACH(opaque_prim_trans, i) {
-            IndirectionList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
+            TbIndirectionList *transforms =
+                &TB_DYN_ARR_AT(opaque_prim_trans, i);
 
             const size_t trans_size =
                 sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
@@ -1510,7 +1513,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           TB_DYN_ARR_RESET(trans_inst_buffers, tmp_alloc, trans_count);
 
           TB_DYN_ARR_FOREACH(trans_prim_trans, i) {
-            IndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
+            TbIndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
 
             const size_t trans_size =
                 sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
@@ -1562,7 +1565,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
               rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
           const uint64_t offset = TB_DYN_ARR_AT(opaque_inst_buffers, i);
-          IndirectionList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
+          TbIndirectionList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
           VkDescriptorBufferInfo *buffer_info =
@@ -1590,7 +1593,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
               rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
           const uint64_t offset = TB_DYN_ARR_AT(trans_inst_buffers, i);
-          IndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
+          TbIndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
           VkDescriptorBufferInfo *buffer_info =
@@ -1646,60 +1649,63 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_mesh_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                          TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, MeshComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, AssetSystem);
+void tb_register_mesh_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbMeshComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  TbRenderObjectSystem *ro_sys =
+      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
-  MeshSystem sys = create_mesh_system_internal(
-      std_alloc, tmp_alloc, rnd_sys, mat_sys, view_sys, ro_sys, rp_sys);
+  TbMeshSystem sys =
+      create_mesh_system_internal(world->std_alloc, world->tmp_alloc, rnd_sys,
+                                  mat_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
-                                         {.id = ecs_id(CameraComponent)},
+                                         {.id = ecs_id(TbCameraComponent)},
                                      }});
   sys.mesh_query = ecs_query(ecs, {
                                       .filter.terms =
                                           {
                                               {
-                                                  .id = ecs_id(MeshComponent),
+                                                  .id = ecs_id(TbMeshComponent),
                                                   .inout = EcsInOut,
                                               },
                                           },
                                   });
   sys.dir_light_query =
       ecs_query(ecs, {.filter.terms = {
-                          {.id = ecs_id(DirectionalLightComponent)},
+                          {.id = ecs_id(TbDirectionalLightComponent)},
                       }});
 
   // Sets a singleton by ptr
-  ecs_set_ptr(ecs, ecs_id(MeshSystem), MeshSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbMeshSystem, &sys);
 
-  ECS_SYSTEM(ecs, mesh_draw_tick2, EcsOnUpdate, MeshSystem(MeshSystem));
+  ECS_SYSTEM(ecs, mesh_draw_tick2, EcsOnUpdate, TbMeshSystem(TbMeshSystem));
 
   tb_register_mesh_component(ecs);
 }
 
-void tb_unregister_mesh_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, MeshSystem);
-  MeshSystem *sys = ecs_singleton_get_mut(ecs, MeshSystem);
+void tb_unregister_mesh_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  TbMeshSystem *sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_query_fini(sys->mesh_query);
   ecs_query_fini(sys->camera_query);
   destroy_mesh_system(sys);
-  ecs_singleton_remove(ecs, MeshSystem);
+  ecs_singleton_remove(ecs, TbMeshSystem);
 }

@@ -21,10 +21,10 @@ int32_t render_thread(void *data);
 
 // Public API
 
-bool tb_start_render_thread(RenderThreadDescriptor *desc,
-                            RenderThread *thread) {
+bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
+                            TbRenderThread *thread) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Starting Render Thread");
-  TB_CHECK_RETURN(desc, "Invalid RenderThreadDescriptor", false);
+  TB_CHECK_RETURN(desc, "Invalid TbRenderThreadDescriptor", false);
   thread->window = desc->window;
   thread->initialized = SDL_CreateSemaphore(0);
   thread->resized = SDL_CreateSemaphore(0);
@@ -33,13 +33,13 @@ bool tb_start_render_thread(RenderThreadDescriptor *desc,
   return true;
 }
 
-void tb_signal_render(RenderThread *thread, uint32_t frame_idx) {
+void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Signaling Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
 }
 
-void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
+void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Waiting for render thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
@@ -49,13 +49,13 @@ void tb_wait_render(RenderThread *thread, uint32_t frame_idx) {
   TracyCZoneEnd(gpu_ctx);
 }
 
-void tb_wait_thread_initialized(RenderThread *thread) {
+void tb_wait_thread_initialized(TbRenderThread *thread) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER,
   //              "Waiting for render thread to initialize");
   SDL_SemWait(thread->initialized);
 }
 
-void tb_stop_render_thread(RenderThread *thread) {
+void tb_stop_render_thread(TbRenderThread *thread) {
   uint32_t frame_idx = thread->frame_idx;
   // Set the stop signal
   thread->stop_signal = 1;
@@ -76,9 +76,9 @@ void tb_stop_render_thread(RenderThread *thread) {
 
 void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
                           const VkAllocationCallbacks *vk_alloc,
-                          FrameState *states);
+                          TbFrameState *states);
 
-void tb_destroy_render_thread(RenderThread *thread) {
+void tb_destroy_render_thread(TbRenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
@@ -105,7 +105,7 @@ void tb_destroy_render_thread(RenderThread *thread) {
 
   vkDestroyInstance(thread->instance, &thread->vk_alloc);
 
-  *thread = (RenderThread){0};
+  *thread = (TbRenderThread){0};
 }
 
 // Private internals
@@ -279,11 +279,11 @@ bool init_debug_messenger(VkInstance instance,
 }
 
 bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
-                       const Swapchain *swapchain, VkQueue graphics_queue,
+                       const TbSwapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
-                       FrameState *states) {
+                       TbFrameState *states) {
   TB_CHECK_RETURN(states, "Invalid states", false);
   VkResult err = VK_SUCCESS;
 
@@ -303,7 +303,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   TB_VK_CHECK_RET(err, "Failed to get swapchain images", false);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    FrameState *state = &states[i];
+    TbFrameState *state = &states[i];
 
     tb_create_arena_alloc("Render Thread Frame State Tmp Alloc",
                            &state->tmp_alloc, 128 * 1024 * 1024);
@@ -348,7 +348,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     {
       state->swapchain_image = swapchain_images[i];
       SET_VK_NAME(device, state->swapchain_image, VK_OBJECT_TYPE_IMAGE,
-                  "Frame State Swapchain Image");
+                  "Frame State TbSwapchain Image");
     }
 
     {
@@ -361,13 +361,13 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       TB_VK_CHECK_RET(
           err, "Failed to create swapchain image acquired semaphore", false);
       SET_VK_NAME(device, state->img_acquired_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State Swapchain Image Acquired Sem");
+                  "Frame State TbSwapchain Image Acquired Sem");
 
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &state->swapchain_image_sem);
       TB_VK_CHECK_RET(err, "Failed to create swapchain image semaphore", false);
       SET_VK_NAME(device, state->swapchain_image_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State Swapchain Image Sem");
+                  "Frame State TbSwapchain Image Sem");
 
       err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &state->upload_complete_sem);
@@ -441,13 +441,13 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
 
 void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
                           const VkAllocationCallbacks *vk_alloc,
-                          FrameState *states) {
+                          TbFrameState *states) {
   TB_CHECK(states, "Invalid states");
 
   vkDeviceWaitIdle(device);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    FrameState *state = &states[i];
+    TbFrameState *state = &states[i];
 
     tb_destroy_arena_alloc(state->tmp_alloc);
 
@@ -478,7 +478,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 
     vmaDestroyBuffer(vma_alloc, state->tmp_gpu_buffer, state->tmp_gpu_alloc);
 
-    *state = (FrameState){0};
+    *state = (TbFrameState){0};
   }
 }
 
@@ -673,13 +673,13 @@ bool optional_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
 bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
                  uint32_t present_queue_family_index, TbAllocator tmp_alloc,
                  const VkAllocationCallbacks *vk_alloc,
-                 RenderExtensionSupport *ext_support, VkDevice *device) {
+                 TbRenderExtensionSupport *ext_support, VkDevice *device) {
   VkResult err = VK_SUCCESS;
 
   uint32_t device_ext_count = 0;
   const char *device_ext_names[MAX_EXT_COUNT] = {0};
 
-  RenderExtensionSupport ext = {0};
+  TbRenderExtensionSupport ext = {0};
   {
     const uint32_t max_props = 256;
     VkExtensionProperties *props =
@@ -869,7 +869,7 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
 bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
                     VkSurfaceKHR surface, TbAllocator tmp_alloc,
                     const VkAllocationCallbacks *vk_alloc,
-                    Swapchain *swapchain) {
+                    TbSwapchain *swapchain) {
   int32_t width = 0;
   int32_t height = 0;
   SDL_Vulkan_GetDrawableSize(window, &width, &height);
@@ -1006,9 +1006,9 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
   VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
   err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, &vk_swapchain);
   TB_VK_CHECK_RET(err, "Failed to create swapchain", false);
-  SET_VK_NAME(device, vk_swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "Swapchain");
+  SET_VK_NAME(device, vk_swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "TbSwapchain");
 
-  *swapchain = (Swapchain){
+  *swapchain = (TbSwapchain){
       .valid = true,
       .format = surface_format.format,
       .color_space = surface_format.colorSpace,
@@ -1021,7 +1021,7 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
   return true;
 }
 
-bool init_render_thread(RenderThread *thread) {
+bool init_render_thread(TbRenderThread *thread) {
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
 
@@ -1105,7 +1105,7 @@ bool init_render_thread(RenderThread *thread) {
   return true;
 }
 
-void resize_swapchain(RenderThread *thread) {
+void resize_swapchain(TbRenderThread *thread) {
   VkSwapchainKHR old_swapchain = thread->swapchain.swapchain;
 
   TbAllocator tmp_alloc = thread->render_arena.alloc;
@@ -1122,10 +1122,10 @@ void resize_swapchain(RenderThread *thread) {
   TB_VK_CHECK(err, "Failed to get swapchain images");
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    FrameState *state = &thread->frame_states[i];
+    TbFrameState *state = &thread->frame_states[i];
     state->swapchain_image = swapchain_images[i];
     SET_VK_NAME(thread->device, state->swapchain_image, VK_OBJECT_TYPE_IMAGE,
-                "Frame State Swapchain Image");
+                "Frame State TbSwapchain Image");
   }
 
   // Notify the main thread that the swapchain has been resized
@@ -1135,7 +1135,7 @@ void resize_swapchain(RenderThread *thread) {
 }
 
 void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
-                        PassContext *pass) {
+                        TbPassContext *pass) {
   (void)ctx;
   void *ret = NULL;
 #ifdef TRACY_ENABLE
@@ -1146,7 +1146,7 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
 
   // Perform any necessary image transitions
   for (uint32_t i = 0; i < pass->barrier_count; ++i) {
-    const ImageTransition *barrier = &pass->barriers[i];
+    const TbImageTransition *barrier = &pass->barriers[i];
     vkCmdPipelineBarrier(buffer, barrier->src_flags, barrier->dst_flags, 0, 0,
                          NULL, 0, NULL, 1, &barrier->barrier);
   }
@@ -1159,7 +1159,7 @@ void *record_pass_begin(VkCommandBuffer buffer, TracyCGPUContext *ctx,
 }
 
 void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope,
-                     PassContext *pass) {
+                     TbPassContext *pass) {
   (void)scope;
   // TracyCVkZoneEnd(scope);
   //  Assume a pass with no attachments has done no rendering
@@ -1168,7 +1168,7 @@ void record_pass_end(VkCommandBuffer buffer, TracyCGPUScope *scope,
   }
 }
 
-void tick_render_thread(RenderThread *thread, FrameState *state) {
+void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
   VkResult err = VK_SUCCESS;
 
   VkDevice device = thread->device;
@@ -1198,7 +1198,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 
   // Acquire Image
   {
-    TracyCZoneN(acquire_ctx, "Acquired Next Swapchain Image", true);
+    TracyCZoneN(acquire_ctx, "Acquired Next TbSwapchain Image", true);
     do {
       uint32_t idx = 0xFFFFFFFF;
       err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
@@ -1406,7 +1406,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
       void *cmd_scope = NULL;
       TB_DYN_ARR_FOREACH(state->pass_contexts, pass_idx) {
-        PassContext *pass = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
+        TbPassContext *pass = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
 
         VkCommandBuffer pass_buffer =
             state->pass_command_buffers[pass->command_buffer_index];
@@ -1468,7 +1468,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
         if (pass->attachment_count > 0) {
           TB_DYN_ARR_FOREACH(state->draw_contexts, draw_idx) {
-            DrawContext *draw = &TB_DYN_ARR_AT(state->draw_contexts, draw_idx);
+            TbDrawContext *draw = &TB_DYN_ARR_AT(state->draw_contexts, draw_idx);
             if (draw->pass_id == pass->id && draw->batch_count > 0) {
               draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
                               draw->batches);
@@ -1476,7 +1476,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
           }
         } else {
           TB_DYN_ARR_FOREACH(state->dispatch_contexts, disp_idx) {
-            DispatchContext *dispatch =
+            TbDispatchContext *dispatch =
                 &TB_DYN_ARR_AT(state->dispatch_contexts, disp_idx);
             if (dispatch->pass_id == pass->id && dispatch->batch_count > 0) {
               dispatch->record_fn(gpu_ctx, pass_buffer, dispatch->batch_count,
@@ -1642,7 +1642,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
       // must be recreated:
       resize_swapchain(thread);
     } else if (err == VK_SUBOPTIMAL_KHR) {
-      // Swapchain is not as optimal as it could be, but the
+      // TbSwapchain is not as optimal as it could be, but the
       // platform's presentation engine will still present the image
       // correctly.
     } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
@@ -1663,7 +1663,7 @@ void tick_render_thread(RenderThread *thread, FrameState *state) {
 }
 
 int32_t render_thread(void *data) {
-  RenderThread *thread = (RenderThread *)data;
+  TbRenderThread *thread = (TbRenderThread *)data;
 
   // Init
   TB_CHECK_RETURN(init_render_thread(thread), "Failed to init render thread",
@@ -1703,7 +1703,7 @@ int32_t render_thread(void *data) {
 
     {
       // Wait for signal from main thread that there's a frame ready to process
-      FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+      TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
       TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
       TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
@@ -1713,7 +1713,7 @@ int32_t render_thread(void *data) {
       TracyCZoneEnd(wait_ctx);
     }
 
-    FrameState *frame_state = &thread->frame_states[thread->frame_idx];
+    TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
     tick_render_thread(thread, frame_state);
 

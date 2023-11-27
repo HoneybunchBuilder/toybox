@@ -20,16 +20,17 @@ typedef struct TbWorld {
   TB_DYN_ARR_OF(TbScene) scenes;
 } TbWorld;
 
-typedef struct RenderThread RenderThread;
+typedef struct TbRenderThread TbRenderThread;
 typedef struct SDL_Window SDL_Window;
 
-typedef void (^TbCreateWorldSystemsFn)(TbWorld *, RenderThread *, SDL_Window *);
+typedef void (^TbCreateWorldSystemsFn)(TbWorld *, TbRenderThread *,
+                                       SDL_Window *);
 
 extern TbCreateWorldSystemsFn tb_create_default_world;
 
 TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
                         TbCreateWorldSystemsFn create_fn,
-                        RenderThread *render_thread, SDL_Window *window);
+                        TbRenderThread *render_thread, SDL_Window *window);
 bool tb_tick_world(TbWorld *world, float delta_seconds);
 void tb_clear_world(TbWorld *world);
 void tb_destroy_world(TbWorld *world);

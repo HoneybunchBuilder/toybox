@@ -135,16 +135,16 @@ void physics_update_tick(flecs::iter it) {
   // based on the result from the physics sim
   // TODO: Only do this for rigidbodies with transforms marked movable
   {
-    flecs::query<TbRigidbodyComponent, TransformComponent> query(
+    flecs::query<TbRigidbodyComponent, TbTransformComponent> query(
         ecs, phys_sys->rigidbody_query);
 
     query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
-                   TransformComponent &trans) {
+                   TbTransformComponent &trans) {
       (void)e;
       auto id = (JPH::BodyID)rigidbody.body;
       JPH::Vec3 pos = body_iface.GetPosition(id);
       JPH::Quat rot = body_iface.GetRotation(id);
-      Transform updated = {
+      TbTransform updated = {
           .position = {pos.GetX(), pos.GetY(), pos.GetZ()},
           .scale = trans.transform.scale,
           .rotation = {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()},
@@ -175,7 +175,7 @@ void tb_register_physics_sys(TbWorld *world) {
       .jolt_job_sys = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs,
                                                    JPH::cMaxPhysicsBarriers, 1),
       .rigidbody_query =
-          ecs.query_builder<TbRigidbodyComponent, TransformComponent>().build(),
+          ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>().build(),
       .bpl_interface = new BPLayerInterfaceImpl(),
       .obp_filter = new ObjectVsBroadPhaseLayerFilterImpl(),
       .olp_filter = new ObjectLayerPairFilterImpl(),

@@ -2,10 +2,6 @@
 
 #include "dynarray.h"
 #include "simd.h"
-#include <stdint.h>
-
-#define MeshComponentId 0x0D15EA5E
-#define MeshComponentIdStr "0x0D15EA5E"
 
 typedef struct ecs_world_t ecs_world_t;
 
@@ -23,7 +19,7 @@ typedef enum TbVertexInput {
   VI_Count = 3,
 } TbVertexInput;
 
-typedef struct SubMesh {
+typedef struct TbSubMesh {
   uint32_t index_type;
   uint32_t index_count;
   uint64_t index_offset;
@@ -31,14 +27,14 @@ typedef struct SubMesh {
   uint32_t vertex_count;
   TbVertexInput vertex_input;
   TbMaterialId material;
-} SubMesh;
+} TbSubMesh;
 
-typedef struct MeshComponent {
+typedef struct TbMeshComponent {
   TbMeshId mesh_id;
   TB_DYN_ARR_OF(ecs_entity_t) entities;
   uint32_t submesh_count;
-  SubMesh submeshes[TB_SUBMESH_MAX];
-  AABB local_aabb;
-} MeshComponent;
+  TbSubMesh submeshes[TB_SUBMESH_MAX];
+  TbAABB local_aabb;
+} TbMeshComponent;
 
 void tb_register_mesh_component(ecs_world_t *ecs);

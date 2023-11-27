@@ -41,7 +41,7 @@
 
 typedef struct SkyDrawBatch {
   VkPushConstantRange const_range;
-  SkyPushConstants consts;
+  TbSkyPushConstants consts;
   VkDescriptorSet sky_set;
 
   VkBuffer geom_buffer;
@@ -58,7 +58,7 @@ typedef struct IrradianceBatch {
 } IrradianceBatch;
 
 typedef struct PrefilterBatch {
-  EnvFilterConstants consts;
+  TbEnvFilterConstants consts;
   VkDescriptorSet set;
 
   VkBuffer geom_buffer;
@@ -66,9 +66,9 @@ typedef struct PrefilterBatch {
   uint64_t vertex_offset;
 } PrefilterBatch;
 
-VkResult create_sky_pipeline(RenderSystem *render_system, VkFormat color_format,
-                             VkFormat depth_format, VkPipelineLayout layout,
-                             VkPipeline *pipeline) {
+VkResult create_sky_pipeline(TbRenderSystem *render_system,
+                             VkFormat color_format, VkFormat depth_format,
+                             VkPipelineLayout layout, VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Load Shaders
@@ -197,7 +197,7 @@ VkResult create_sky_pipeline(RenderSystem *render_system, VkFormat color_format,
   return err;
 }
 
-VkResult create_env_capture_pipeline(RenderSystem *render_system,
+VkResult create_env_capture_pipeline(TbRenderSystem *render_system,
                                      VkFormat color_format,
                                      VkPipelineLayout layout,
                                      VkPipeline *pipeline) {
@@ -334,7 +334,7 @@ VkResult create_env_capture_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_irradiance_pipeline(RenderSystem *render_system,
+VkResult create_irradiance_pipeline(TbRenderSystem *render_system,
                                     VkFormat color_format,
                                     VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
@@ -471,7 +471,7 @@ VkResult create_irradiance_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_prefilter_pipeline(RenderSystem *render_system,
+VkResult create_prefilter_pipeline(TbRenderSystem *render_system,
                                    VkFormat color_format,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
@@ -611,9 +611,9 @@ VkResult create_prefilter_pipeline(RenderSystem *render_system,
 }
 
 void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
-                       const DrawBatch *batches) {
+                       const TbDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
+    const TbDrawBatch *batch = &batches[batch_idx];
     const SkyDrawBatch *sky_batch = (const SkyDrawBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
@@ -621,7 +621,7 @@ void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
     VkPushConstantRange range = sky_batch->const_range;
-    const SkyPushConstants *consts = &sky_batch->consts;
+    const TbSkyPushConstants *consts = &sky_batch->consts;
     vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
                        range.size, consts);
 
@@ -637,7 +637,7 @@ void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
 }
 
 void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                uint32_t batch_count, const DrawBatch *batches) {
+                uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 3, true);
   cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
@@ -650,7 +650,7 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
+                        uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 3, true);
   cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
@@ -665,13 +665,13 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 3, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
-    const DrawBatch *batch = &batches[i];
+    const TbDrawBatch *batch = &batches[i];
     const IrradianceBatch *irr_batch =
         (const IrradianceBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -695,13 +695,13 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 3, true);
   cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
-    const DrawBatch *batch = &batches[i];
+    const TbDrawBatch *batch = &batches[i];
     const PrefilterBatch *pre_batch = (const PrefilterBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
@@ -714,7 +714,7 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                            &pre_batch->vertex_offset);
 
     vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(EnvFilterConstants), &pre_batch->consts);
+                       sizeof(TbEnvFilterConstants), &pre_batch->consts);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
@@ -727,12 +727,12 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                            RenderSystem *render_system,
-                            RenderPipelineSystem *render_pipe_system,
-                            RenderTargetSystem *render_target_system,
-                            ViewSystem *view_system) {
-  SkySystem sys = (SkySystem){
+TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+                              TbRenderSystem *render_system,
+                              TbRenderPipelineSystem *render_pipe_system,
+                              TbRenderTargetSystem *render_target_system,
+                              TbViewSystem *view_system) {
+  TbSkySystem sys = (TbSkySystem){
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .render_target_system = render_target_system,
@@ -811,7 +811,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
             &(VkPushConstantRange){
                 VK_SHADER_STAGE_ALL_GRAPHICS,
                 0,
-                sizeof(SkyPushConstants),
+                sizeof(TbSkyPushConstants),
             },
     };
     err = tb_rnd_create_pipeline_layout(render_system, &create_info,
@@ -838,7 +838,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =
             &(VkPushConstantRange){
-                .size = sizeof(EnvFilterConstants),
+                .size = sizeof(TbEnvFilterConstants),
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             },
     };
@@ -857,7 +857,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
     tb_render_pipeline_get_attachments(render_pipe_system, sky_pass_id,
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
-    PassAttachment attach_info[2] = {0};
+    TbPassAttachment attach_info[2] = {0};
     tb_render_pipeline_get_attachments(render_pipe_system, sky_pass_id,
                                        &attach_count, attach_info);
 
@@ -885,7 +885,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                        render_pipe_system->env_cap_passes[0],
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
-    PassAttachment attach_info = {0};
+    TbPassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(render_pipe_system,
                                        render_pipe_system->env_cap_passes[0],
                                        &attach_count, &attach_info);
@@ -904,7 +904,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                        render_pipe_system->irradiance_pass,
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
-    PassAttachment attach_info = {0};
+    TbPassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(render_pipe_system,
                                        render_pipe_system->irradiance_pass,
                                        &attach_count, &attach_info);
@@ -924,7 +924,7 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                        render_pipe_system->prefilter_passes[0],
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
-    PassAttachment attach_info = {0};
+    TbPassAttachment attach_info = {0};
     tb_render_pipeline_get_attachments(render_pipe_system,
                                        render_pipe_system->prefilter_passes[0],
                                        &attach_count, &attach_info);
@@ -939,13 +939,13 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
 
   // Register passes with the render system
   sys.sky_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
+      render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(SkyDrawBatch),
                               .draw_fn = record_sky,
                               .pass_id = sky_pass_id,
                           });
   sys.irradiance_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
+      render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(IrradianceBatch),
                               .draw_fn = record_irradiance,
                               .pass_id = irr_pass_id,
@@ -953,14 +953,14 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
     sys.env_capture_ctxs[i] = tb_render_pipeline_register_draw_context(
         render_pipe_system,
-        &(DrawContextDescriptor){
+        &(TbDrawContextDescriptor){
             .batch_size = sizeof(SkyDrawBatch),
             .draw_fn = record_env_capture,
             .pass_id = render_pipe_system->env_cap_passes[i],
         });
     sys.prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
         render_pipe_system,
-        &(DrawContextDescriptor){
+        &(TbDrawContextDescriptor){
             .batch_size = sizeof(PrefilterBatch),
             .draw_fn = record_env_filter,
             .pass_id = render_pipe_system->prefilter_passes[i],
@@ -995,8 +995,8 @@ SkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   return sys;
 }
 
-void destroy_sky_system(SkySystem *self) {
-  RenderSystem *render_system = self->render_system;
+void destroy_sky_system(TbSkySystem *self) {
+  TbRenderSystem *render_system = self->render_system;
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(render_system,
@@ -1017,39 +1017,39 @@ void destroy_sky_system(SkySystem *self) {
   tb_rnd_destroy_pipeline(render_system, self->irradiance_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->prefilter_pipeline);
 
-  *self = (SkySystem){0};
+  *self = (TbSkySystem){0};
 }
 
 void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, SkySystem);
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, SkyComponent);
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
+  ECS_COMPONENT(ecs, TbSkySystem);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbSkyComponent);
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
 
-  SkySystem *sky_sys = ecs_singleton_get_mut(ecs, SkySystem);
+  TbSkySystem *sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
   sky_sys->time += it->delta_time;
-  ecs_singleton_modified(ecs, SkySystem);
+  ecs_singleton_modified(ecs, TbSkySystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  ecs_singleton_modified(ecs, RenderSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  ecs_singleton_modified(ecs, RenderPipelineSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  ecs_singleton_modified(ecs, TbRenderSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  ecs_singleton_modified(ecs, TbRenderPipelineSystem);
 
   // TODO: Make this less hacky
   const uint32_t width = rnd_sys->render_thread->swapchain.width;
   const uint32_t height = rnd_sys->render_thread->swapchain.height;
 
-  SkySystemFrameState *state = &sky_sys->frame_states[rnd_sys->frame_idx];
+  TbSkySystemFrameState *state = &sky_sys->frame_states[rnd_sys->frame_idx];
 
   // Write descriptor sets for each sky
-  SkyComponent *skys = ecs_field(it, SkyComponent, 1);
+  TbSkyComponent *skys = ecs_field(it, TbSkyComponent, 1);
   for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
-    SkyComponent *sky = &skys[sky_idx];
+    TbSkyComponent *sky = &skys[sky_idx];
 
     VkResult err = VK_SUCCESS;
     VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
@@ -1118,7 +1118,7 @@ void sky_draw_tick(ecs_iter_t *it) {
     VkDescriptorBufferInfo *buffer_info =
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
 
-    SkyData data = {
+    TbSkyData data = {
         .time = sky_sys->time,
         .cirrus = sky->cirrus,
         .cumulus = sky->cumulus,
@@ -1127,14 +1127,14 @@ void sky_draw_tick(ecs_iter_t *it) {
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(SkyData), 0x40, &data,
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbSkyData), 0x40, &data,
                                      &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
     *buffer_info = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = offset,
-        .range = sizeof(SkyData),
+        .range = sizeof(TbSkyData),
     };
 
     // Construct a write descriptor
@@ -1170,20 +1170,21 @@ void sky_draw_tick(ecs_iter_t *it) {
 
   ecs_iter_t cam_it = ecs_query_iter(ecs, sky_sys->camera_query);
   while (ecs_query_next(&cam_it)) {
-    CameraComponent *cameras = ecs_field(&cam_it, CameraComponent, 1);
-    TransformComponent *transforms = ecs_field(&cam_it, TransformComponent, 2);
+    TbCameraComponent *cameras = ecs_field(&cam_it, TbCameraComponent, 1);
+    TbTransformComponent *transforms =
+        ecs_field(&cam_it, TbTransformComponent, 2);
     for (int32_t cam_idx = 0; cam_idx < cam_it.count; ++cam_idx) {
-      CameraComponent *camera = &cameras[cam_idx];
-      TransformComponent *transform = &transforms[cam_idx];
+      TbCameraComponent *camera = &cameras[cam_idx];
+      TbTransformComponent *transform = &transforms[cam_idx];
 
       // Need to manually calculate this here
       float4x4 vp = {.col0 = {0}};
       {
-        float4x4 proj = perspective(camera->fov, camera->aspect_ratio,
-                                    camera->near, camera->far);
-        float3 forward = transform_get_forward(&transform->transform);
-        float4x4 view = look_forward(TB_ORIGIN, forward, TB_UP);
-        vp = mulmf44(proj, view);
+        float4x4 proj = tb_perspective(camera->fov, camera->aspect_ratio,
+                                       camera->near, camera->far);
+        float3 forward = tb_transform_get_forward(&transform->transform);
+        float4x4 view = tb_look_forward(TB_ORIGIN, forward, TB_UP);
+        vp = tb_mulf44f44(proj, view);
       }
 
       for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
@@ -1191,7 +1192,7 @@ void sky_draw_tick(ecs_iter_t *it) {
         *sky_batch = (SkyDrawBatch){
             .const_range =
                 (VkPushConstantRange){
-                    .size = sizeof(SkyPushConstants),
+                    .size = sizeof(TbSkyPushConstants),
                     .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
                 },
             .consts =
@@ -1203,8 +1204,9 @@ void sky_draw_tick(ecs_iter_t *it) {
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
         };
-        DrawBatch *sky_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, DrawBatch);
-        *sky_draw_batch = (DrawBatch){
+        TbDrawBatch *sky_draw_batch =
+            tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
+        *sky_draw_batch = (TbDrawBatch){
             .layout = sky_sys->sky_pipe_layout,
             .pipeline = sky_sys->sky_pipeline,
             .viewport = {0, height, width, -(float)height, 0, 1},
@@ -1212,15 +1214,15 @@ void sky_draw_tick(ecs_iter_t *it) {
             .user_batch = sky_batch,
         };
 
-        DrawBatch *env_draw_batches =
-            tb_alloc_nm_tp(sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
+        TbDrawBatch *env_draw_batches = tb_alloc_nm_tp(
+            sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, TbDrawBatch);
 
         // We need to capture the environment once per
         // pre-filtered reflection mip in order to
         // avoid sun intensity artifacts
         for (uint32_t env_idx = 0; env_idx < PREFILTER_PASS_COUNT; ++env_idx) {
           const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, env_idx);
-          env_draw_batches[env_idx] = (DrawBatch){
+          env_draw_batches[env_idx] = (TbDrawBatch){
               .layout = sky_sys->sky_pipe_layout,
               .pipeline = sky_sys->env_pipeline,
               .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
@@ -1230,11 +1232,12 @@ void sky_draw_tick(ecs_iter_t *it) {
         }
 
         // Generate the batch for the irradiance pass
-        DrawBatch *irr_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, DrawBatch);
+        TbDrawBatch *irr_draw_batch =
+            tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
         IrradianceBatch *irradiance_batch =
             tb_alloc_tp(sky_sys->tmp_alloc, IrradianceBatch);
         {
-          *irr_draw_batch = (DrawBatch){
+          *irr_draw_batch = (TbDrawBatch){
               .layout = sky_sys->irr_pipe_layout,
               .pipeline = sky_sys->irradiance_pipeline,
               .viewport = {0, 64, 64, -64, 0, 1},
@@ -1250,15 +1253,15 @@ void sky_draw_tick(ecs_iter_t *it) {
         }
 
         // Generate batch for prefiltering the environment map
-        DrawBatch *pre_draw_batches =
-            tb_alloc_nm_tp(sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, DrawBatch);
+        TbDrawBatch *pre_draw_batches = tb_alloc_nm_tp(
+            sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, TbDrawBatch);
         PrefilterBatch *prefilter_batches = tb_alloc_nm_tp(
             sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
         {
           for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
             const float mip_dim = FILTERED_ENV_DIM * SDL_powf(0.5f, i);
 
-            pre_draw_batches[i] = (DrawBatch){
+            pre_draw_batches[i] = (TbDrawBatch){
                 .layout = sky_sys->prefilter_pipe_layout,
                 .pipeline = sky_sys->prefilter_pipeline,
                 .viewport = {0, mip_dim, mip_dim, -mip_dim, 0, 1},
@@ -1297,44 +1300,46 @@ void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_sky_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                         TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, SkySystem);
-  ECS_COMPONENT(ecs, AssetSystem);
-  ECS_COMPONENT(ecs, SkyComponent);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
+void tb_register_sky_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbSkySystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
+  ECS_COMPONENT(ecs, TbSkyComponent);
+  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbRenderTargetSystem *rt_sys =
+      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  SkySystem sys = create_sky_system(std_alloc, tmp_alloc, rnd_sys, rp_sys,
-                                    rt_sys, view_sys);
+  TbSkySystem sys = create_sky_system(world->std_alloc, world->tmp_alloc,
+                                      rnd_sys, rp_sys, rt_sys, view_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
-                                         {.id = ecs_id(CameraComponent)},
-                                         {.id = ecs_id(TransformComponent)},
+                                         {.id = ecs_id(TbCameraComponent)},
+                                         {.id = ecs_id(TbTransformComponent)},
                                      }});
 
   // Sets a singleton by ptr
-  ecs_set_ptr(ecs, ecs_id(SkySystem), SkySystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
-  ECS_SYSTEM(ecs, sky_draw_tick, EcsOnUpdate, SkyComponent);
+  ECS_SYSTEM(ecs, sky_draw_tick, EcsOnUpdate, TbSkyComponent);
 
-  tb_register_sky_component(ecs);
+  tb_register_sky_component(world);
 }
 
-void tb_unregister_sky_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, SkySystem);
-  SkySystem *sys = ecs_singleton_get_mut(ecs, SkySystem);
+void tb_unregister_sky_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbSkySystem);
+  TbSkySystem *sys = ecs_singleton_get_mut(ecs, TbSkySystem);
   ecs_query_fini(sys->camera_query);
   destroy_sky_system(sys);
-  ecs_singleton_remove(ecs, SkySystem);
+  ecs_singleton_remove(ecs, TbSkySystem);
 }

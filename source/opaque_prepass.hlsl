@@ -5,10 +5,10 @@
 StructuredBuffer<int32_t> trans_indices : register(t0, space0);
 
 // Per-view data
-ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+ConstantBuffer<TbCommonViewData> camera_data : register(b0, space1);
 
 // Object data
-StructuredBuffer<CommonObjectData> object_data : register(t0, space2);
+StructuredBuffer<TbCommonObjectData> object_data : register(t0, space2);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;

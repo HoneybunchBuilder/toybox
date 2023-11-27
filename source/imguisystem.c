@@ -33,7 +33,7 @@ typedef struct ImGuiDraw {
 
 typedef struct ImGuiDrawBatch {
   VkPushConstantRange const_range;
-  ImGuiPushConstants consts;
+  TbImGuiPushConstants consts;
   VkDescriptorSet atlas_set;
 } ImGuiDrawBatch;
 
@@ -78,7 +78,7 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
             &(VkPushConstantRange){
                 VK_SHADER_STAGE_VERTEX_BIT,
                 0,
-                sizeof(ImGuiPushConstants),
+                sizeof(TbImGuiPushConstants),
             },
     };
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc, pipe_layout);
@@ -236,13 +236,13 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
 }
 
 void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 3, true);
   cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
+    const TbDrawBatch *batch = &batches[batch_idx];
     const ImGuiDrawBatch *imgui_batch = (ImGuiDrawBatch *)batches->user_batch;
     if (batch->draw_count > 0) {
       vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -252,7 +252,7 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
       VkPushConstantRange range = imgui_batch->const_range;
-      const ImGuiPushConstants *consts = &imgui_batch->consts;
+      const TbImGuiPushConstants *consts = &imgui_batch->consts;
       vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
                          range.size, consts);
 
@@ -276,10 +276,10 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult ui_context_init(RenderSystem *render_system, ImFontAtlas *atlas,
-                         UIContext *context) {
+VkResult ui_context_init(TbRenderSystem *render_system, ImFontAtlas *atlas,
+                         TbUIContext *context) {
   VkResult err = VK_SUCCESS;
-  *context = (UIContext){
+  *context = (TbUIContext){
       .context = igCreateContext(atlas),
   };
 
@@ -310,14 +310,15 @@ VkResult ui_context_init(RenderSystem *render_system, ImFontAtlas *atlas,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     };
 
-    const uint64_t atlas_size = tex_w * tex_h * bytes_pp;
+    const uint64_t atlas_size =
+        (uint64_t)tex_w * (uint64_t)tex_h * (uint64_t)bytes_pp;
     err = tb_rnd_sys_create_gpu_image_tmp(render_system, pixels, atlas_size, 16,
                                           &create_info, "ImGui Atlas",
                                           &context->atlas);
     TB_VK_CHECK_RET(err, "Failed to create imgui atlas", err);
   }
 
-  // Create Image View for atlas
+  // Create Image TbView for atlas
   {
     VkImageViewCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -358,23 +359,23 @@ VkResult ui_context_init(RenderSystem *render_system, ImFontAtlas *atlas,
   return err;
 }
 
-void ui_context_destroy(RenderSystem *render_system, UIContext *context) {
+void ui_context_destroy(TbRenderSystem *render_system, TbUIContext *context) {
   tb_rnd_free_gpu_image(render_system, &context->atlas);
   vkDestroyImageView(render_system->render_thread->device, context->atlas_view,
                      &render_system->vk_host_alloc_cb);
   igDestroyContext(context->context);
-  *context = (UIContext){0};
+  *context = (TbUIContext){0};
 }
 
-ImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                                uint32_t context_count,
-                                ImFontAtlas **context_atlases,
-                                RenderSystem *render_system,
-                                RenderPipelineSystem *render_pipe_system,
-                                RenderTargetSystem *render_target_system,
-                                InputSystem *input_system) {
+TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+                                  uint32_t context_count,
+                                  ImFontAtlas **context_atlases,
+                                  TbRenderSystem *render_system,
+                                  TbRenderPipelineSystem *render_pipe_system,
+                                  TbRenderTargetSystem *render_target_system,
+                                  TbInputSystem *input_system) {
 
-  ImGuiSystem sys = {
+  TbImGuiSystem sys = {
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
       .render_target_system = render_target_system,
@@ -399,7 +400,7 @@ ImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
                                      &attach_count, NULL);
   TB_CHECK(attach_count == 1, "Unexpected");
-  PassAttachment ui_info = {0};
+  TbPassAttachment ui_info = {0};
   tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
                                      &attach_count, &ui_info);
 
@@ -434,7 +435,7 @@ ImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   TB_VK_CHECK(err, "Failed to create imgui pipeline");
 
   sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(DrawContextDescriptor){
+      render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(ImGuiDrawBatch),
                               .draw_fn = imgui_pass_record,
                               .pass_id = ui_pass_id,
@@ -443,8 +444,8 @@ ImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   return sys;
 }
 
-void destroy_imgui_system(ImGuiSystem *self) {
-  RenderSystem *render_system = self->render_system;
+void destroy_imgui_system(TbImGuiSystem *self) {
+  TbRenderSystem *render_system = self->render_system;
 
   for (uint32_t i = 0; i < self->context_count; ++i) {
     ui_context_destroy(self->render_system, &self->contexts[i]);
@@ -460,20 +461,20 @@ void destroy_imgui_system(ImGuiSystem *self) {
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, self->pipeline);
 
-  *self = (ImGuiSystem){0};
+  *self = (TbImGuiSystem){0};
 }
 
 void imgui_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "ImGui System", TracyCategoryColorUI, true);
 
-  ImGuiSystem *sys = ecs_field(it, ImGuiSystem, 1);
+  TbImGuiSystem *sys = ecs_field(it, TbImGuiSystem, 1);
 
   VkResult err = VK_SUCCESS;
 
   if (sys->context_count > 0 && it->delta_time > 0) {
-    RenderSystem *rnd_sys = sys->render_system;
+    TbRenderSystem *rnd_sys = sys->render_system;
 
-    ImGuiFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
+    TbImGuiFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
     // Allocate all the descriptor sets for this frame
     {
       // Resize the pool
@@ -532,7 +533,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
     VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
         sys->tmp_alloc, sys->context_count, VkDescriptorImageInfo);
     for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
-      const UIContext *ui_ctx = &sys->contexts[imgui_idx];
+      const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
 
       // Get the descriptor we want to write to
       VkDescriptorSet atlas_set = state->sets[imgui_idx];
@@ -562,14 +563,14 @@ void imgui_draw_tick(ecs_iter_t *it) {
                            ->frame_states[sys->render_system->frame_idx]
                            .tmp_alloc.alloc,
                        sys->context_count, ImGuiDrawBatch);
-    DrawBatch *batches =
+    TbDrawBatch *batches =
         tb_alloc_nm_tp(sys->render_system->render_thread
                            ->frame_states[sys->render_system->frame_idx]
                            .tmp_alloc.alloc,
-                       sys->context_count, DrawBatch);
+                       sys->context_count, TbDrawBatch);
 
     for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
-      const UIContext *ui_ctx = &sys->contexts[imgui_idx];
+      const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
 
       igSetCurrentContext(ui_ctx->context);
 
@@ -601,8 +602,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
       // Apply basic IO
       io->DeltaTime = it->delta_time; // Note that ImGui expects seconds
       io->DisplaySize = (ImVec2){
-          sys->render_system->render_thread->swapchain.width,
-          sys->render_system->render_thread->swapchain.height,
+          (float)sys->render_system->render_thread->swapchain.width,
+          (float)sys->render_system->render_thread->swapchain.height,
       };
 
       igRender();
@@ -719,7 +720,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
               }
             }
 
-            batches[batch_count] = (DrawBatch){
+            batches[batch_count] = (TbDrawBatch){
                 .layout = sys->pipe_layout,
                 .pipeline = sys->pipeline,
                 .viewport = {0, 0, width, height, 0, 1},
@@ -732,7 +733,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
             imgui_batches[batch_count] = (ImGuiDrawBatch){
                 .const_range =
                     (VkPushConstantRange){
-                        .size = sizeof(ImGuiPushConstants),
+                        .size = sizeof(TbImGuiPushConstants),
                         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                     },
                 .consts =
@@ -758,33 +759,35 @@ void imgui_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_imgui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                           TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, InputSystem);
-  ECS_COMPONENT(ecs, ImGuiSystem);
+void tb_register_imgui_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  ECS_COMPONENT(ecs, TbInputSystem);
+  ECS_COMPONENT(ecs, TbImGuiSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
-  InputSystem *in_sys = ecs_singleton_get_mut(ecs, InputSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbRenderTargetSystem *rt_sys =
+      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  TbInputSystem *in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
-  ImGuiSystem sys =
-      create_imgui_system(std_alloc, tmp_alloc, 1, (ImFontAtlas *[1]){NULL},
-                          rnd_sys, rp_sys, rt_sys, in_sys);
+  TbImGuiSystem sys = create_imgui_system(world->std_alloc, world->tmp_alloc, 1,
+                                          (ImFontAtlas *[1]){NULL}, rnd_sys,
+                                          rp_sys, rt_sys, in_sys);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(ImGuiSystem), ImGuiSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbImGuiSystem), TbImGuiSystem, &sys);
 
-  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnUpdate, ImGuiSystem(ImGuiSystem));
+  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnUpdate, TbImGuiSystem(TbImGuiSystem));
 }
 
-void tb_unregister_imgui_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, ImGuiSystem);
-  ImGuiSystem *sys = ecs_singleton_get_mut(ecs, ImGuiSystem);
+void tb_unregister_imgui_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbImGuiSystem);
+  TbImGuiSystem *sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
   destroy_imgui_system(sys);
-  ecs_singleton_remove(ecs, ImGuiSystem);
+  ecs_singleton_remove(ecs, TbImGuiSystem);
 }

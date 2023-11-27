@@ -14,22 +14,22 @@ float get_axis_float(SDL_GameController *controller,
 }
 
 float2 axis_deadzone(float2 axis, float deadzone) {
-  float mag = magf2(axis);
+  float mag = tb_magf2(axis);
   if (mag < deadzone) {
-    return f2(0, 0);
+    return tb_f2(0, 0);
   }
   return axis;
 }
 
 void input_update_tick(ecs_iter_t *it) {
-  InputSystem *self = ecs_field(it, InputSystem, 1);
+  TbInputSystem *self = ecs_field(it, TbInputSystem, 1);
   TracyCZoneN(ctx, "Input System Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorInput);
 
   self->mouse.axis = (float2){0}; // Must always clear axes
   self->mouse.wheel = (float2){0};
   for (uint32_t i = 0; i < TB_MAX_GAME_CONTROLLERS; ++i) {
-    self->controller_states[i] = (TBGameControllerState){0};
+    self->controller_states[i] = (TbGameControllerState){0};
   }
 
   // Read up-to InputSystemMaxEvents events from SDL and store them
@@ -140,18 +140,18 @@ void input_update_tick(ecs_iter_t *it) {
       continue;
     }
 
-    float deadzone = 0.075; // TODO: Make configurable?
+    float deadzone = 0.075f; // TODO: Make configurable?
 
-    TBGameControllerState *ctl_state = &self->controller_states[ctl_idx];
-    ctl_state->left_stick =
-        axis_deadzone(f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
-                         get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY)),
-                      deadzone);
+    TbGameControllerState *ctl_state = &self->controller_states[ctl_idx];
+    ctl_state->left_stick = axis_deadzone(
+        tb_f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
+              get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY)),
+        deadzone);
     ctl_state->left_trigger =
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
     ctl_state->right_stick = axis_deadzone(
-        f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
-           get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY)),
+        tb_f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
+              get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY)),
         deadzone);
     ctl_state->right_trigger =
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
@@ -160,13 +160,14 @@ void input_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_input_sys(ecs_world_t *ecs, TbAllocator tmp_alloc,
-                           SDL_Window *window) {
-  ECS_COMPONENT(ecs, InputSystem);
-  ecs_singleton_set(ecs, InputSystem,
+void tb_register_input_sys(TbWorld *world, SDL_Window *window) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbInputSystem);
+  ecs_singleton_set(ecs, TbInputSystem,
                     {
-                        .tmp_alloc = tmp_alloc,
+                        .tmp_alloc = world->tmp_alloc,
                         .window = window,
                     });
-  ECS_SYSTEM(ecs, input_update_tick, EcsPreUpdate, InputSystem(InputSystem));
+  ECS_SYSTEM(ecs, input_update_tick, EcsPreUpdate,
+             TbInputSystem(TbInputSystem));
 }

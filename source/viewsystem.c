@@ -12,10 +12,11 @@
 
 #include <flecs.h>
 
-ViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                              RenderSystem *rnd_sys, RenderTargetSystem *rt_sys,
-                              TextureSystem *tex_sys) {
-  ViewSystem sys = {
+TbViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+                                TbRenderSystem *rnd_sys,
+                                TbRenderTargetSystem *rt_sys,
+                                TbTextureSystem *tex_sys) {
+  TbViewSystem sys = {
       .render_system = rnd_sys,
       .render_target_system = rt_sys,
       .texture_system = tex_sys,
@@ -131,13 +132,13 @@ ViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
             },
     };
     err = tb_rnd_create_set_layout(
-        rnd_sys, &create_info, "View Descriptor Set Layout", &sys.set_layout);
+        rnd_sys, &create_info, "TbView Descriptor Set Layout", &sys.set_layout);
     TB_VK_CHECK(err, "Failed to create view descriptor set");
   }
   return sys;
 }
 
-void destroy_view_system(ViewSystem *self) {
+void destroy_view_system(TbViewSystem *self) {
   TB_DYN_ARR_DESTROY(self->views);
 
   tb_rnd_destroy_sampler(self->render_system, self->brdf_sampler);
@@ -145,17 +146,17 @@ void destroy_view_system(ViewSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    ViewSystemFrameState *state = &self->frame_states[i];
+    TbViewSystemFrameState *state = &self->frame_states[i];
     tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
   }
 
-  *self = (ViewSystem){0};
+  *self = (TbViewSystem){0};
 }
 
 void view_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "View System Tick", TracyCategoryColorRendering, true);
+  TracyCZoneNC(ctx, "TbView System Tick", TracyCategoryColorRendering, true);
 
-  ViewSystem *sys = ecs_field(it, ViewSystem, 1);
+  TbViewSystem *sys = ecs_field(it, TbViewSystem, 1);
 
   const uint32_t view_count = TB_DYN_ARR_SIZE(sys->views);
 
@@ -166,12 +167,12 @@ void view_update_tick(ecs_iter_t *it) {
 
   VkResult err = VK_SUCCESS;
 
-  RenderSystem *rnd_sys = sys->render_system;
-  RenderTargetSystem *rt_sys = sys->render_target_system;
+  TbRenderSystem *rnd_sys = sys->render_system;
+  TbRenderTargetSystem *rt_sys = sys->render_target_system;
 
   VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
-  ViewSystemFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
+  TbViewSystemFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
   // Allocate all the descriptor sets for this frame
   {
     // Resize the pool
@@ -198,7 +199,7 @@ void view_update_tick(ecs_iter_t *it) {
           .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
       };
       err = tb_rnd_create_descriptor_pool(
-          rnd_sys, &create_info, "View System Frame State Descriptor Pool",
+          rnd_sys, &create_info, "TbView System Frame State Descriptor Pool",
           &state->set_pool);
       TB_VK_CHECK(err,
                   "Failed to create view system frame state descriptor pool");
@@ -233,23 +234,23 @@ void view_update_tick(ecs_iter_t *it) {
   const uint32_t write_count = buf_count + img_count;
 
   VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-      sys->tmp_alloc, view_count * write_count, VkWriteDescriptorSet);
+      sys->tmp_alloc, (uint64_t)view_count * write_count, VkWriteDescriptorSet);
   VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
-      sys->tmp_alloc, view_count * buf_count, VkDescriptorBufferInfo);
+      sys->tmp_alloc, (uint64_t)view_count * buf_count, VkDescriptorBufferInfo);
   VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-      sys->tmp_alloc, view_count * img_count, VkDescriptorImageInfo);
+      sys->tmp_alloc, (uint64_t)view_count * img_count, VkDescriptorImageInfo);
   TB_DYN_ARR_FOREACH(sys->views, view_idx) {
-    const View *view = &TB_DYN_ARR_AT(sys->views, view_idx);
-    const CommonViewData *view_data = &view->view_data;
-    const CommonLightData *light_data = &view->light_data;
+    const TbView *view = &TB_DYN_ARR_AT(sys->views, view_idx);
+    const TbCommonViewData *view_data = &view->view_data;
+    const TbCommonLightData *light_data = &view->light_data;
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t view_offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(CommonViewData), 0x40,
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbCommonViewData), 0x40,
                                      view_data, &view_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
     uint64_t light_offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(CommonLightData), 0x40,
+    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbCommonLightData), 0x40,
                                      light_data, &light_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
 
@@ -263,12 +264,12 @@ void view_update_tick(ecs_iter_t *it) {
     buffer_info[buffer_idx + 0] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = view_offset,
-        .range = sizeof(CommonViewData),
+        .range = sizeof(TbCommonViewData),
     };
     buffer_info[buffer_idx + 1] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = light_offset,
-        .range = sizeof(CommonLightData),
+        .range = sizeof(TbCommonLightData),
     };
 
     image_info[image_idx + 0] = (VkDescriptorImageInfo){
@@ -354,100 +355,103 @@ void view_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_view_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                          TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, TextureSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
+void tb_register_view_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
-  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderTargetSystem *rt_sys =
+      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
-  ViewSystem sys =
-      create_view_system(std_alloc, tmp_alloc, rnd_sys, rt_sys, tex_sys);
+  TbViewSystem sys = create_view_system(world->std_alloc, world->tmp_alloc,
+                                        rnd_sys, rt_sys, tex_sys);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(ViewSystem), ViewSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
-  ECS_SYSTEM(ecs, view_update_tick, EcsOnUpdate, ViewSystem(ViewSystem));
+  ECS_SYSTEM(ecs, view_update_tick, EcsOnUpdate, TbViewSystem(TbViewSystem));
 }
 
-void tb_unregister_view_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, ViewSystem);
-  ViewSystem *sys = ecs_singleton_get_mut(ecs, ViewSystem);
+void tb_unregister_view_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbViewSystem);
+  TbViewSystem *sys = ecs_singleton_get_mut(ecs, TbViewSystem);
   destroy_view_system(sys);
-  ecs_singleton_remove(ecs, ViewSystem);
+  ecs_singleton_remove(ecs, TbViewSystem);
 }
 
-TbViewId tb_view_system_create_view(ViewSystem *self) {
-  TB_CHECK_RETURN(self, "Invalid self object", InvalidViewId);
+TbViewId tb_view_system_create_view(TbViewSystem *self) {
+  TB_CHECK_RETURN(self, "Invalid self object", TbInvalidViewId);
 
   TbViewId id = TB_DYN_ARR_SIZE(self->views);
   {
-    View v = {0};
+    TbView v = {0};
     TB_DYN_ARR_APPEND(self->views, v);
   }
-  View *view = &TB_DYN_ARR_AT(self->views, id);
+  TbView *view = &TB_DYN_ARR_AT(self->views, id);
 
-  view->view_data = (CommonViewData){
+  view->view_data = (TbCommonViewData){
       .view_pos = {0},
   };
-  CommonViewData *view_data = &view->view_data;
+  TbCommonViewData *view_data = &view->view_data;
 
   // Supply a really basic view projection matrix for default
-  float4x4 view_mat = look_forward(TB_ORIGIN, TB_FORWARD, TB_UP);
-  float4x4 proj_mat = perspective(PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
-  view_data->vp = mulmf44(proj_mat, view_mat);
-  view_data->inv_vp = inv_mf44(view_data->vp);
-  view->frustum = frustum_from_view_proj(&view_data->vp);
+  float4x4 view_mat = tb_look_forward(TB_ORIGIN, TB_FORWARD, TB_UP);
+  float4x4 proj_mat = tb_perspective(TB_PI_2, 16.0f / 9.0f, 0.001f, 1000.0f);
+  view_data->vp = tb_mulf44f44(proj_mat, view_mat);
+  view_data->inv_vp = tb_invf44(view_data->vp);
+  view->frustum = tb_frustum_from_view_proj(&view_data->vp);
 
   return id;
 }
 
-void tb_view_system_set_view_target(ViewSystem *self, TbViewId view,
+void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,
                                     TbRenderTargetId target) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "View Id out of range");
+    TB_CHECK(false, "TbView Id out of range");
   }
   TB_DYN_ARR_AT(self->views, view).target = target;
 }
 
-void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
-                                  const CommonViewData *data) {
+void tb_view_system_set_view_data(TbViewSystem *self, TbViewId view,
+                                  const TbCommonViewData *data) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "View Id out of range");
+    TB_CHECK(false, "TbView Id out of range");
   }
   TB_DYN_ARR_AT(self->views, view).view_data = *data;
 }
 
-void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
-                                   const CommonLightData *data) {
+void tb_view_system_set_light_data(TbViewSystem *self, TbViewId view,
+                                   const TbCommonLightData *data) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "View Id out of range");
+    TB_CHECK(false, "TbView Id out of range");
   }
   TB_DYN_ARR_AT(self->views, view).light_data = *data;
 }
 
-void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
-                                     const Frustum *frust) {
+void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
+                                     const TbFrustum *frust) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "View Id out of range");
+    TB_CHECK(false, "TbView Id out of range");
   }
   TB_DYN_ARR_AT(self->views, view).frustum = *frust;
 }
 
-VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view) {
+VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
+                                              TbViewId view) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "View Id out of range");
+    TB_CHECK(false, "TbView Id out of range");
   }
 
   return self->frame_states[self->render_system->frame_idx].sets[view];
 }
 
-const View *tb_get_view(ViewSystem *self, TbViewId view) {
+const TbView *tb_get_view(TbViewSystem *self, TbViewId view) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK_RETURN(false, "View Id out of range", NULL);
+    TB_CHECK_RETURN(false, "TbView Id out of range", NULL);
   }
   return &TB_DYN_ARR_AT(self->views, view);
 }

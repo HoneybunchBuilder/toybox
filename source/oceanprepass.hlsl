@@ -5,7 +5,7 @@ ConstantBuffer<OceanData> ocean_data : register(b0, space0);
 [[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
     : register(b1, space0);
 
-ConstantBuffer<CommonViewData> camera_data : register(b0, space1);
+ConstantBuffer<TbCommonViewData> camera_data : register(b0, space1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;

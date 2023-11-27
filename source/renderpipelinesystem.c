@@ -33,10 +33,10 @@
 
 typedef struct PassTransition {
   TbRenderTargetId render_target;
-  ImageTransition barrier;
+  TbImageTransition barrier;
 } PassTransition;
 
-typedef struct RenderPass {
+typedef struct TbRenderPass {
   uint32_t dep_count;
   TbRenderPassId deps[TB_MAX_RENDER_PASS_DEPS];
 
@@ -44,14 +44,14 @@ typedef struct RenderPass {
   PassTransition transitions[TB_MAX_RENDER_PASS_TRANS];
 
   uint32_t attach_count;
-  PassAttachment attachments[TB_MAX_ATTACHMENTS];
+  TbPassAttachment attachments[TB_MAX_ATTACHMENTS];
 
   VkRenderingInfo info[TB_MAX_FRAME_STATES];
 
 #ifdef TRACY_ENABLE
   char label[TB_RP_LABEL_LEN];
 #endif
-} RenderPass;
+} TbRenderPass;
 
 // For dependency graph construction
 typedef struct PassNode PassNode;
@@ -83,7 +83,7 @@ void sort_passes_recursive(PassNode *node, uint32_t *pass_order,
   }
 }
 
-void sort_pass_graph(RenderPipelineSystem *self) {
+void sort_pass_graph(TbRenderPipelineSystem *self) {
   // Build a graph of pass nodes to determine ordering
   const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
   PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, pass_count, PassNode);
@@ -101,7 +101,7 @@ void sort_pass_graph(RenderPipelineSystem *self) {
 
     // Search all other passes for children
     for (uint32_t i = 0; i < pass_count; ++i) {
-      const RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, i);
+      const TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, i);
       if (i != pass_idx) {
         for (uint32_t dep_idx = 0; dep_idx < pass->dep_count; ++dep_idx) {
           if (pass->deps[dep_idx] == pass_id) {
@@ -127,7 +127,7 @@ typedef struct BlurBatch {
   VkDescriptorSet set;
 } BlurBatch;
 
-VkResult create_depth_pipeline(RenderSystem *render_system,
+VkResult create_depth_pipeline(TbRenderSystem *render_system,
                                VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                VkPipeline *pipeline) {
@@ -245,7 +245,7 @@ VkResult create_depth_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_color_copy_pipeline(RenderSystem *render_system,
+VkResult create_color_copy_pipeline(TbRenderSystem *render_system,
                                     VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
@@ -363,7 +363,7 @@ VkResult create_color_copy_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_comp_copy_pipeline(RenderSystem *render_system,
+VkResult create_comp_copy_pipeline(TbRenderSystem *render_system,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -400,7 +400,7 @@ VkResult create_comp_copy_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_blur_pipelines(RenderSystem *render_system,
+VkResult create_blur_pipelines(TbRenderSystem *render_system,
                                VkPipelineLayout layout, VkPipeline *h_pipe,
                                VkPipeline *v_pipe) {
   VkResult err = VK_SUCCESS;
@@ -469,7 +469,7 @@ VkResult create_blur_pipelines(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_brightness_pipeline(RenderSystem *render_system,
+VkResult create_brightness_pipeline(TbRenderSystem *render_system,
                                     VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
@@ -586,7 +586,7 @@ VkResult create_brightness_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_tonemapping_pipeline(RenderSystem *render_system,
+VkResult create_tonemapping_pipeline(TbRenderSystem *render_system,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
                                      VkPipeline *pipeline) {
@@ -704,7 +704,7 @@ VkResult create_tonemapping_pipeline(RenderSystem *render_system,
   return err;
 }
 
-void record_fullscreen(VkCommandBuffer buffer, const DrawBatch *batch,
+void record_fullscreen(VkCommandBuffer buffer, const TbDrawBatch *batch,
                        const FullscreenBatch *fs_batch) {
   VkPipelineLayout layout = batch->layout;
 
@@ -721,7 +721,7 @@ void record_fullscreen(VkCommandBuffer buffer, const DrawBatch *batch,
 }
 
 void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   // Only expecting one draw per pass
   if (batch_count != 1) {
     return;
@@ -740,7 +740,7 @@ void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   // Only expecting one draw per pass
   if (batch_count != 1) {
     return;
@@ -759,13 +759,13 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                      uint32_t batch_count, const DispatchBatch *batches) {
+                      uint32_t batch_count, const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Compute Copy Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Compute Copy", 3, true);
   cmd_begin_label(buffer, "Compute Copy", (float4){0.4f, 0.0f, 0.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
+    const TbDispatchBatch *batch = &batches[batch_idx];
     const FullscreenBatch *fs_batch =
         (const FullscreenBatch *)batch->user_batch;
 
@@ -787,7 +787,7 @@ void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DrawBatch *batches) {
+                       uint32_t batch_count, const TbDrawBatch *batches) {
   // Only expecting one draw per pass
   if (batch_count != 1) {
     return;
@@ -806,13 +806,13 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DispatchBatch *batches) {
+                       uint32_t batch_count, const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Bloom Blur Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Bloom Blur", 3, true);
   cmd_begin_label(buffer, "Bloom Blur", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
+    const TbDispatchBatch *batch = &batches[batch_idx];
     const BlurBatch *blur_batch = (const BlurBatch *)batch->user_batch;
 
     VkPipelineLayout layout = batch->layout;
@@ -833,7 +833,7 @@ void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
+                        uint32_t batch_count, const TbDrawBatch *batches) {
   // Only expecting one draw per pass
   if (batch_count != 1) {
     return;
@@ -851,12 +851,12 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void register_pass(RenderPipelineSystem *self, RenderThread *thread,
+void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
                    TbRenderPassId id, uint32_t *command_buffers,
                    uint32_t command_buffer_count) {
-  RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
+  TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    FrameState *state = &thread->frame_states[frame_idx];
+    TbFrameState *state = &thread->frame_states[frame_idx];
 
     state->pass_command_buffer_count = command_buffer_count;
     {
@@ -884,7 +884,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
         self->render_target_system, pass->attachments[0].layer,
         pass->attachments[0].mip, target_id);
 
-    PassContext pass_context = (PassContext){
+    TbPassContext pass_context = (TbPassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
         .attachment_count = pass->attach_count,
@@ -905,7 +905,7 @@ void register_pass(RenderPipelineSystem *self, RenderThread *thread,
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
       const PassTransition *transition = &pass->transitions[trans_idx];
-      ImageTransition *barrier = &pass_context.barriers[trans_idx];
+      TbImageTransition *barrier = &pass_context.barriers[trans_idx];
       *barrier = transition->barrier;
       barrier->barrier.image = tb_render_target_get_image(
           self->render_target_system, frame_idx, transition->render_target);
@@ -939,13 +939,13 @@ typedef struct TbRenderPassCreateInfo {
   const char *name;
 } TbRenderPassCreateInfo;
 
-TbRenderPassId create_render_pass(RenderPipelineSystem *self,
+TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
                                   const TbRenderPassCreateInfo *create_info) {
   TB_CHECK_RETURN(create_info, "Invalid Create Info ptr", InvalidRenderPassId);
 
   TbRenderPassId id = TB_DYN_ARR_SIZE(self->render_passes);
-  TB_DYN_ARR_APPEND(self->render_passes, (RenderPass){0});
-  RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
+  TB_DYN_ARR_APPEND(self->render_passes, (TbRenderPass){0});
+  TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
 
 #ifdef TRACY_ENABLE
   if (create_info->name != NULL) {
@@ -971,7 +971,7 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
                sizeof(TbAttachmentInfo) * TB_MAX_ATTACHMENTS);
     for (uint32_t i = 0; i < pass->attach_count; ++i) {
       const TbAttachmentInfo *attach_info = &create_info->attachments[i];
-      pass->attachments[i] = (PassAttachment){
+      pass->attachments[i] = (TbPassAttachment){
           .clear_value = attach_info->clear_value,
           .layer = attach_info->layer,
           .mip = attach_info->mip,
@@ -993,7 +993,7 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
 
   // Populate rendering info if we target any attachments
   if (pass->attach_count > 0) {
-    RenderTargetSystem *rt_sys = self->render_target_system;
+    TbRenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
         rt_sys, pass->attachments[0].layer, pass->attachments[0].mip,
@@ -1052,10 +1052,10 @@ TbRenderPassId create_render_pass(RenderPipelineSystem *self,
   return id;
 }
 
-RenderPipelineSystem create_render_pipeline_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
-    RenderTargetSystem *render_target_system, ViewSystem *view_system) {
-  RenderPipelineSystem sys = {
+TbRenderPipelineSystem create_render_pipeline_system(
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
+    TbRenderTargetSystem *render_target_system, TbViewSystem *view_system) {
+  TbRenderPipelineSystem sys = {
       .render_system = render_system,
       .render_target_system = render_target_system,
       .view_system = view_system,
@@ -2454,7 +2454,7 @@ RenderPipelineSystem create_render_pipeline_system(
         tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, NULL);
         TB_CHECK(attach_count == 1, "Unexpected");
-        PassAttachment depth_info = {0};
+        TbPassAttachment depth_info = {0};
         tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, &depth_info);
 
@@ -2467,7 +2467,7 @@ RenderPipelineSystem create_render_pipeline_system(
       }
 
       {
-        DrawContextDescriptor desc = {
+        TbDrawContextDescriptor desc = {
             .batch_size = sizeof(FullscreenBatch),
             .draw_fn = record_depth_copy,
             .pass_id = sys.depth_copy_pass,
@@ -2485,7 +2485,7 @@ RenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment attach_info = {0};
+      TbPassAttachment attach_info = {0};
       tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, &attach_info);
 
@@ -2498,7 +2498,7 @@ RenderPipelineSystem create_render_pipeline_system(
       TB_VK_CHECK(err, "Failed to create color copy pipeline");
 
       {
-        DrawContextDescriptor desc = {
+        TbDrawContextDescriptor desc = {
             .batch_size = sizeof(FullscreenBatch),
             .draw_fn = record_color_copy,
             .pass_id = sys.color_copy_pass,
@@ -2517,7 +2517,7 @@ RenderPipelineSystem create_render_pipeline_system(
       TB_VK_CHECK(err, "Failed to create compute copy pipeline");
 
       // Contexts for specific copy operations
-      DispatchContextDescriptor desc = {
+      TbDispatchContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .dispatch_fn = record_comp_copy,
           .pass_id = sys.bloom_blur_pass,
@@ -2529,17 +2529,17 @@ RenderPipelineSystem create_render_pipeline_system(
     }
 
     // Create bloom work
-    err =
-        create_downsample_work(sys.render_system, &sys, sys.sampler,
-                               sys.bloom_downsample_pass, &sys.downsample_work);
-    err = create_upsample_work(sys.render_system, &sys, sys.sampler,
-                               sys.bloom_upsample_pass, &sys.upsample_work);
+    err = tb_create_downsample_work(sys.render_system, &sys, sys.sampler,
+                                    sys.bloom_downsample_pass,
+                                    &sys.downsample_work);
+    err = tb_create_upsample_work(sys.render_system, &sys, sys.sampler,
+                                  sys.bloom_upsample_pass, &sys.upsample_work);
 
     // Compute Luminance Histogram and Average work
-    err = create_lum_hist_work(sys.render_system, &sys, sys.sampler,
-                               sys.luminance_pass, &sys.lum_hist_work);
-    err = create_lum_avg_work(sys.render_system, &sys, sys.luminance_pass,
-                              &sys.lum_avg_work);
+    err = tb_create_lum_hist_work(sys.render_system, &sys, sys.sampler,
+                                  sys.luminance_pass, &sys.lum_hist_work);
+    err = tb_create_lum_avg_work(sys.render_system, &sys, sys.luminance_pass,
+                                 &sys.lum_avg_work);
 
     // Brightness
     {
@@ -2547,7 +2547,7 @@ RenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment attach_info = {0};
+      TbPassAttachment attach_info = {0};
       tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, &attach_info);
 
@@ -2559,7 +2559,7 @@ RenderPipelineSystem create_render_pipeline_system(
                                        &sys.brightness_pipe);
       TB_VK_CHECK(err, "Failed to create brightness pipeline");
 
-      DrawContextDescriptor desc = {
+      TbDrawContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .draw_fn = record_brightness,
           .pass_id = sys.brightness_pass,
@@ -2572,7 +2572,7 @@ RenderPipelineSystem create_render_pipeline_system(
 
     // Blur
     {
-      DispatchContextDescriptor desc = {
+      TbDispatchContextDescriptor desc = {
           .batch_size = sizeof(BlurBatch),
           .dispatch_fn = record_bloom_blur,
           .pass_id = sys.bloom_blur_pass,
@@ -2589,7 +2589,7 @@ RenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
                                          NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment attach_info = {0};
+      TbPassAttachment attach_info = {0};
       tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
                                          &attach_info);
 
@@ -2601,7 +2601,7 @@ RenderPipelineSystem create_render_pipeline_system(
                                         &sys.tonemap_pipe);
       TB_VK_CHECK(err, "Failed to create tonemapping pipeline");
 
-      DrawContextDescriptor desc = {
+      TbDrawContextDescriptor desc = {
           .batch_size = sizeof(FullscreenBatch),
           .draw_fn = record_tonemapping,
           .pass_id = sys.tonemap_pass,
@@ -2615,7 +2615,7 @@ RenderPipelineSystem create_render_pipeline_system(
   return sys;
 }
 
-void destroy_render_pipeline_system(RenderPipelineSystem *self) {
+void destroy_render_pipeline_system(TbRenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->render_system, self->sampler);
   tb_rnd_destroy_sampler(self->render_system, self->noise_sampler);
   tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
@@ -2633,11 +2633,11 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
   tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
 
-  destroy_downsample_work(self->render_system, &self->downsample_work);
-  destroy_upsample_work(self->render_system, &self->upsample_work);
+  tb_destroy_downsample_work(self->render_system, &self->downsample_work);
+  tb_destroy_upsample_work(self->render_system, &self->upsample_work);
 
-  destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
-  destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
+  tb_destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
+  tb_destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->render_system,
@@ -2651,10 +2651,10 @@ void destroy_render_pipeline_system(RenderPipelineSystem *self) {
   TB_DYN_ARR_DESTROY(self->render_passes);
   tb_free(self->std_alloc, self->pass_order);
 
-  *self = (RenderPipelineSystem){0};
+  *self = (TbRenderPipelineSystem){0};
 }
 
-void tick_core_desc_pool(RenderPipelineSystem *self) {
+void tick_core_desc_pool(TbRenderPipelineSystem *self) {
   VkResult err = VK_SUCCESS;
 #define SET_COUNT 5
   VkDescriptorPoolCreateInfo pool_info = {
@@ -2834,7 +2834,7 @@ void tick_core_desc_pool(RenderPipelineSystem *self) {
 #undef WRITE_COUNT
 }
 
-void tick_downsample_desc_pool(RenderPipelineSystem *self) {
+void tick_downsample_desc_pool(TbRenderPipelineSystem *self) {
   VkResult err = VK_SUCCESS;
 
   VkDescriptorPoolCreateInfo pool_info = {
@@ -2927,7 +2927,7 @@ void tick_downsample_desc_pool(RenderPipelineSystem *self) {
 #undef WRITE_COUNT
 }
 
-void tick_upsample_desc_pool(RenderPipelineSystem *self) {
+void tick_upsample_desc_pool(TbRenderPipelineSystem *self) {
   VkResult err = VK_SUCCESS;
 
   VkDescriptorPoolCreateInfo pool_info = {
@@ -3018,7 +3018,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
                true);
 
-  RenderPipelineSystem *self = ecs_field(it, RenderPipelineSystem, 1);
+  TbRenderPipelineSystem *self = ecs_field(it, TbRenderPipelineSystem, 1);
 
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
@@ -3060,7 +3060,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       FullscreenBatch fs_batch = {
           .set = depth_set,
       };
-      DrawBatch batch = {
+      TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
           .pipeline = self->depth_copy_pipe,
           .viewport = {0, 0, width, height, 0, 1},
@@ -3075,7 +3075,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       FullscreenBatch fs_batch = {
           .set = color_set,
       };
-      DrawBatch batch = {
+      TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
           .pipeline = self->color_copy_pipe,
           .viewport = {0, 0, width, height, 0, 1},
@@ -3093,12 +3093,12 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       {
         uint32_t group_x = (uint32_t)SDL_ceilf((float)width / 16.0f);
         uint32_t group_y = (uint32_t)SDL_ceilf((float)height / 16.0f);
-        LuminanceBatch lum_batch = {
+        TbLuminanceBatch lum_batch = {
             .set = lum_hist_set,
             .consts = {.params = {min_log_lum, 1 / (max_log_lum - min_log_lum),
                                   (float)width, (float)height}},
         };
-        DispatchBatch batch = {
+        TbDispatchBatch batch = {
             .layout = self->lum_hist_work.pipe_layout,
             .pipeline = self->lum_hist_work.pipeline,
             .user_batch = &lum_batch,
@@ -3110,13 +3110,13 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       }
       // Luminance average pass
       {
-        float time = clampf(1.f - SDL_expf(-it->delta_time * 1.1f), 0, 1);
-        LuminanceBatch lum_batch = {
+        float time = tb_clampf(1.f - SDL_expf(-it->delta_time * 1.1f), 0, 1);
+        TbLuminanceBatch lum_batch = {
             .set = lum_avg_set,
             .consts = {.params = {min_log_lum, (max_log_lum - min_log_lum),
                                   time, (float)width * (float)height}},
         };
-        DispatchBatch batch = {
+        TbDispatchBatch batch = {
             .layout = self->lum_avg_work.pipe_layout,
             .pipeline = self->lum_avg_work.pipeline,
             .user_batch = &lum_batch,
@@ -3132,7 +3132,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       FullscreenBatch fs_batch = {
           .set = color_set,
       };
-      DrawBatch batch = {
+      TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
           .pipeline = self->brightness_pipe,
           .viewport = {0, height, width, -(float)height, 0, 1},
@@ -3145,7 +3145,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
     // Blur passes
     {
       DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {0};
-      DispatchBatch down_batches[BLUR_BATCH_COUNT] = {0};
+      TbDispatchBatch down_batches[BLUR_BATCH_COUNT] = {0};
       for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
 
         uint32_t group_width = (width / 16) + 1;
@@ -3155,7 +3155,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
           group_height = ((height / (i * 2)) / 16) + 1;
         }
         downsample_batches[i] = (DownsampleBatch){.set = downsample_sets[i]};
-        down_batches[i] = (DispatchBatch){
+        down_batches[i] = (TbDispatchBatch){
             .layout = self->downsample_work.pipe_layout,
             .pipeline = self->downsample_work.pipeline,
             .user_batch = &downsample_batches[i],
@@ -3166,7 +3166,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       tb_render_pipeline_issue_dispatch_batch(self, self->downsample_work.ctx,
                                               BLUR_BATCH_COUNT, down_batches);
       UpsampleBatch upsample_batches[BLUR_BATCH_COUNT] = {0};
-      DispatchBatch up_batches[BLUR_BATCH_COUNT] = {0};
+      TbDispatchBatch up_batches[BLUR_BATCH_COUNT] = {0};
       for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
         uint32_t g = BLUR_BATCH_COUNT - (i + 1);
 
@@ -3177,7 +3177,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
           group_height = ((height / (g * 2)) / 16) + 1;
         }
         upsample_batches[i] = (UpsampleBatch){.set = upsample_sets[i]};
-        up_batches[i] = (DispatchBatch){
+        up_batches[i] = (TbDispatchBatch){
             .layout = self->downsample_work.pipe_layout,
             .pipeline = self->downsample_work.pipeline,
             .user_batch = &upsample_batches[i],
@@ -3195,7 +3195,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       FullscreenBatch fs_batch = {
           .set = tonemap_set,
       };
-      DrawBatch batch = {
+      TbDrawBatch batch = {
           .layout = self->tonemap_pipe_layout,
           .pipeline = self->tonemap_pipe,
           .viewport = {0, height, width, -(float)height, 0, 1},
@@ -3210,8 +3210,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 }
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
-  RenderPipelineSystem *rp_sys = ecs_field(it, RenderPipelineSystem, 1);
-  RenderSystem *rnd_sys = rp_sys->render_system;
+  TbRenderPipelineSystem *rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
+  TbRenderSystem *rnd_sys = rp_sys->render_system;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
     TracyCZoneN(resize_ctx, "Resize", true);
     tb_rnd_on_swapchain_resize(rp_sys);
@@ -3241,41 +3241,45 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
   }
 }
 
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                                     TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
+void tb_register_render_pipeline_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderTargetSystem *rt_sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderTargetSystem *rt_sys =
+      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  RenderPipelineSystem sys = create_render_pipeline_system(
-      std_alloc, tmp_alloc, rnd_sys, rt_sys, view_sys);
+  TbRenderPipelineSystem sys = create_render_pipeline_system(
+      world->std_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(RenderPipelineSystem), RenderPipelineSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbRenderPipelineSystem), TbRenderPipelineSystem,
+              &sys);
 
   ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
-             RenderPipelineSystem(RenderPipelineSystem))
+             TbRenderPipelineSystem(TbRenderPipelineSystem))
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
-             RenderPipelineSystem(RenderPipelineSystem))
+             TbRenderPipelineSystem(TbRenderPipelineSystem))
 }
 
-void tb_unregister_render_pipeline_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  RenderPipelineSystem *sys = ecs_singleton_get_mut(ecs, RenderPipelineSystem);
+void tb_unregister_render_pipeline_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  TbRenderPipelineSystem *sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   destroy_render_pipeline_system(sys);
-  ecs_singleton_remove(ecs, RenderPipelineSystem);
+  ecs_singleton_remove(ecs, TbRenderPipelineSystem);
 }
 
-void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
-  RenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
+void reimport_render_pass(TbRenderPipelineSystem *self, TbRenderPassId id) {
+  TbRenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
 
   {
-    RenderTargetSystem *rt_sys = self->render_target_system;
+    TbRenderTargetSystem *rt_sys = self->render_target_system;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
         rt_sys, rp->attachments[0].layer, rp->attachments[0].mip,
@@ -3284,9 +3288,9 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       // Update the pass context on each frame index
       {
-        FrameState *state =
+        TbFrameState *state =
             &self->render_system->render_thread->frame_states[i];
-        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
+        TbPassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
         context->width = extent.width;
         context->height = extent.height;
 
@@ -3318,7 +3322,7 @@ void reimport_render_pass(RenderPipelineSystem *self, TbRenderPassId id) {
   }
 }
 
-void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
+void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
   // Called by the core system as a hack when the swapchain resizes
   // This is where, on the main thread, we have to adjust to any render passes
   // and render targets to stay up to date with the latest swapchain
@@ -3347,16 +3351,16 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   // We now need to patch every pass's transitions so that their targets point
   // at the right VkImages
   TB_DYN_ARR_FOREACH(self->render_passes, pass_idx) {
-    RenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
+    TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, pass_idx);
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
       for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
            ++frame_idx) {
-        FrameState *state =
+        TbFrameState *state =
             &self->render_system->render_thread->frame_states[frame_idx];
-        PassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
+        TbPassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
         const PassTransition *transition = &pass->transitions[trans_idx];
-        ImageTransition *barrier = &context->barriers[trans_idx];
+        TbImageTransition *barrier = &context->barriers[trans_idx];
         *barrier = transition->barrier;
         barrier->barrier.image = tb_render_target_get_image(
             self->render_target_system, frame_idx, transition->render_target);
@@ -3368,14 +3372,14 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
   // Any draws that had descriptors that point to these re-created resources
   // are invalid
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    FrameState *state =
+    TbFrameState *state =
         &self->render_system->render_thread->frame_states[frame_idx];
     TB_DYN_ARR_FOREACH(state->draw_contexts, ctx_idx) {
-      DrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
+      TbDrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
       draw_ctx->batch_count = 0;
     }
     TB_DYN_ARR_FOREACH(state->dispatch_contexts, ctx_idx) {
-      DispatchContext *dispatch_ctx =
+      TbDispatchContext *dispatch_ctx =
           &TB_DYN_ARR_AT(state->dispatch_contexts, ctx_idx);
       dispatch_ctx->batch_count = 0;
     }
@@ -3383,13 +3387,13 @@ void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self) {
 }
 
 TbDrawContextId
-tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
-                                         const DrawContextDescriptor *desc) {
-  RenderThread *thread = self->render_system->render_thread;
+tb_render_pipeline_register_draw_context(TbRenderPipelineSystem *self,
+                                         const TbDrawContextDescriptor *desc) {
+  TbRenderThread *thread = self->render_system->render_thread;
   TbDrawContextId id = TB_DYN_ARR_SIZE(thread->frame_states[0].draw_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    FrameState *state = &thread->frame_states[frame_idx];
-    DrawContext ctx = {
+    TbFrameState *state = &thread->frame_states[frame_idx];
+    TbDrawContext ctx = {
         .pass_id = desc->pass_id,
         .user_batch_size = desc->batch_size,
         .record_fn = desc->draw_fn,
@@ -3400,13 +3404,13 @@ tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
 }
 
 TbDispatchContextId tb_render_pipeline_register_dispatch_context(
-    RenderPipelineSystem *self, const DispatchContextDescriptor *desc) {
-  RenderThread *thread = self->render_system->render_thread;
+    TbRenderPipelineSystem *self, const TbDispatchContextDescriptor *desc) {
+  TbRenderThread *thread = self->render_system->render_thread;
   TbDispatchContextId id =
       TB_DYN_ARR_SIZE(thread->frame_states[0].dispatch_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    FrameState *state = &thread->frame_states[frame_idx];
-    DispatchContext ctx = {
+    TbFrameState *state = &thread->frame_states[frame_idx];
+    TbDispatchContext ctx = {
         .pass_id = desc->pass_id,
         .user_batch_size = desc->batch_size,
         .record_fn = desc->dispatch_fn,
@@ -3416,15 +3420,15 @@ TbDispatchContextId tb_render_pipeline_register_dispatch_context(
   return id;
 }
 
-void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
+void tb_render_pipeline_get_attachments(TbRenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
-                                        PassAttachment *attachments) {
+                                        TbPassAttachment *attachments) {
   TB_CHECK(pass < TB_DYN_ARR_SIZE(self->render_passes), "Pass Id out of range");
   TB_CHECK(attach_count, "Attachment count pointer must be valid");
   TB_CHECK(*attach_count <= TB_MAX_ATTACHMENTS, "Too many attachments");
 
-  const RenderPass *p = &TB_DYN_ARR_AT(self->render_passes, pass);
+  const TbRenderPass *p = &TB_DYN_ARR_AT(self->render_passes, pass);
 
   if (attachments == NULL) {
     // Attachments ptr was not specified, set the attachment count and return
@@ -3434,22 +3438,22 @@ void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
     // Attachment count and attachment pointers were provided
     TB_CHECK(*attach_count == p->attach_count, "Unexpected size mismatch");
     SDL_memcpy(attachments, p->attachments,
-               sizeof(PassAttachment) * (*attach_count));
+               sizeof(TbPassAttachment) * (*attach_count));
   }
 }
 
-void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
+void tb_render_pipeline_issue_draw_batch(TbRenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
-                                         const DrawBatch *batches) {
-  RenderThread *thread = self->render_system->render_thread;
-  FrameState *state = &thread->frame_states[self->render_system->frame_idx];
+                                         const TbDrawBatch *batches) {
+  TbRenderThread *thread = self->render_system->render_thread;
+  TbFrameState *state = &thread->frame_states[self->render_system->frame_idx];
   if (draw_ctx >= TB_DYN_ARR_SIZE(state->draw_contexts)) {
     TB_CHECK(false, "Draw Context Id out of range");
     return;
   }
 
-  DrawContext *ctx = &TB_DYN_ARR_AT(state->draw_contexts, draw_ctx);
+  TbDrawContext *ctx = &TB_DYN_ARR_AT(state->draw_contexts, draw_ctx);
 
   const uint32_t write_head = ctx->batch_count;
   const uint32_t new_count = ctx->batch_count + batch_count;
@@ -3460,23 +3464,23 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
     ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
     ctx->batches =
-        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DrawBatch);
+        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, TbDrawBatch);
     ctx->batch_max = new_max;
 
     // Pointer Fixup
     for (uint32_t i = 0; i < new_count; ++i) {
-      DrawBatch *batch = &ctx->batches[i];
+      TbDrawBatch *batch = &ctx->batches[i];
       batch->user_batch =
           (uint8_t *)ctx->user_batches + (ctx->user_batch_size * i);
     }
   }
 
   for (uint32_t i = 0; i < batch_count; ++i) {
-    const DrawBatch *batch = &batches[i];
+    const TbDrawBatch *batch = &batches[i];
     void *user_dst = ((uint8_t *)ctx->user_batches) +
                      ((i + write_head) * ctx->user_batch_size);
     SDL_memcpy(user_dst, batch->user_batch, ctx->user_batch_size);
-    DrawBatch *write_batch = &ctx->batches[i + write_head];
+    TbDrawBatch *write_batch = &ctx->batches[i + write_head];
 
     // Must always copy draw data
     void *draws = write_batch->draws;
@@ -3496,18 +3500,19 @@ void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
   ctx->batch_count = new_count;
 }
 
-void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
+void tb_render_pipeline_issue_dispatch_batch(TbRenderPipelineSystem *self,
                                              TbDispatchContextId dispatch_ctx,
                                              uint32_t batch_count,
-                                             const DispatchBatch *batches) {
-  RenderThread *thread = self->render_system->render_thread;
-  FrameState *state = &thread->frame_states[self->render_system->frame_idx];
+                                             const TbDispatchBatch *batches) {
+  TbRenderThread *thread = self->render_system->render_thread;
+  TbFrameState *state = &thread->frame_states[self->render_system->frame_idx];
   if (dispatch_ctx >= TB_DYN_ARR_SIZE(state->dispatch_contexts)) {
     TB_CHECK(false, "Dispatch Context Id out of range");
     return;
   }
 
-  DispatchContext *ctx = &TB_DYN_ARR_AT(state->dispatch_contexts, dispatch_ctx);
+  TbDispatchContext *ctx =
+      &TB_DYN_ARR_AT(state->dispatch_contexts, dispatch_ctx);
 
   const uint32_t write_head = ctx->batch_count;
   const uint32_t new_count = ctx->batch_count + batch_count;
@@ -3517,8 +3522,8 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
     // changing is what we have to fix up
     ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
-    ctx->batches =
-        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, DispatchBatch);
+    ctx->batches = tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max,
+                                    TbDispatchBatch);
     // Pointer Fixup
     for (uint32_t i = 0; i < batch_count; ++i) {
       ctx->batches[i].user_batch =
@@ -3529,8 +3534,8 @@ void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
   }
 
   // Copy batches into frame state's batch list
-  DispatchBatch *dst = &ctx->batches[write_head];
-  SDL_memcpy(dst, batches, batch_count * sizeof(DispatchBatch));
+  TbDispatchBatch *dst = &ctx->batches[write_head];
+  SDL_memcpy(dst, batches, batch_count * sizeof(TbDispatchBatch));
 
   for (uint32_t i = 0; i < 0 + batch_count; ++i) {
     void *user_dst = ((uint8_t *)ctx->user_batches) +

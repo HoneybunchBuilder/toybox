@@ -10,8 +10,8 @@
 
 typedef uint32_t TbRenderPassId;
 typedef uint32_t TbDispatchContextId;
-typedef struct RenderPipelineSystem RenderPipelineSystem;
-typedef struct RenderSystem RenderSystem;
+typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
+typedef struct TbRenderSystem TbRenderSystem;
 
 typedef struct DownsampleBatch {
   VkDescriptorSet set;
@@ -35,17 +35,17 @@ typedef struct UpsampleRenderWork {
   TbDispatchContextId ctx;
 } UpsampleRenderWork;
 
-VkResult create_downsample_work(RenderSystem *render_system,
-                                RenderPipelineSystem *render_pipe,
-                                VkSampler sampler, TbRenderPassId pass,
+VkResult tb_create_downsample_work(TbRenderSystem *render_system,
+                                   TbRenderPipelineSystem *render_pipe,
+                                   VkSampler sampler, TbRenderPassId pass,
+                                   DownsampleRenderWork *work);
+void tb_destroy_downsample_work(TbRenderSystem *render_system,
                                 DownsampleRenderWork *work);
-void destroy_downsample_work(RenderSystem *render_system,
-                             DownsampleRenderWork *work);
 
-VkResult create_upsample_work(RenderSystem *render_system,
-                              RenderPipelineSystem *render_pipe,
-                              VkSampler sampler, TbRenderPassId pass,
+VkResult tb_create_upsample_work(TbRenderSystem *render_system,
+                                 TbRenderPipelineSystem *render_pipe,
+                                 VkSampler sampler, TbRenderPassId pass,
+                                 UpsampleRenderWork *work);
+void tb_destroy_upsample_work(TbRenderSystem *render_system,
                               UpsampleRenderWork *work);
-void destroy_upsample_work(RenderSystem *render_system,
-                           UpsampleRenderWork *work);
 #endif

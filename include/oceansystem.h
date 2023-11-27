@@ -4,15 +4,13 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 
-#define OceanSystemId 0xB000DEAD
-
-typedef struct SystemDescriptor SystemDescriptor;
-typedef struct MeshSystem MeshSystem;
-typedef struct ViewSystem ViewSystem;
-typedef struct RenderPipelineSystem RenderPipelineSystem;
-typedef struct RenderTargetSystem RenderTargetSystem;
-typedef struct VisualLoggingSystem VisualLoggingSystem;
-typedef struct AudioSystem AudioSystem;
+typedef struct TbWorld TbWorld;
+typedef struct TbMeshSystem TbMeshSystem;
+typedef struct TbViewSystem TbViewSystem;
+typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
+typedef struct TbRenderTargetSystem TbRenderTargetSystem;
+typedef struct TbVisualLoggingSystem TbVisualLoggingSystem;
+typedef struct TbAudioSystem TbAudioSystem;
 
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
@@ -26,16 +24,15 @@ typedef uint32_t TbSoundEffectId;
 #define TB_OCEAN_SFX_COUNT 4
 
 typedef struct ecs_query_t ecs_query_t;
-typedef struct ecs_world_t ecs_world_t;
 
 typedef struct TbOceanSystem {
-  RenderSystem *render_system;
-  RenderPipelineSystem *render_pipe_system;
-  MeshSystem *mesh_system;
-  ViewSystem *view_system;
-  RenderTargetSystem *render_target_system;
-  VisualLoggingSystem *vlog;
-  AudioSystem *audio_system;
+  TbRenderSystem *render_system;
+  TbRenderPipelineSystem *render_pipe_system;
+  TbMeshSystem *mesh_system;
+  TbViewSystem *view_system;
+  TbRenderTargetSystem *render_target_system;
+  TbVisualLoggingSystem *vlog;
+  TbAudioSystem *audio_system;
   TbAllocator tmp_alloc;
   TbAllocator std_alloc;
 
@@ -46,7 +43,7 @@ typedef struct TbOceanSystem {
   float wave_sound_timer;
 
   TbMeshId ocean_patch_mesh;
-  Transform ocean_transform;
+  TbTransform ocean_transform;
   float tile_width;
   float tile_depth;
   uint32_t ocean_index_type;
@@ -61,7 +58,7 @@ typedef struct TbOceanSystem {
   TbDrawContextId trans_depth_draw_ctx;
   TbDrawContextId trans_color_draw_ctx;
 
-  FrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
+  TbFrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
@@ -69,6 +66,5 @@ typedef struct TbOceanSystem {
   VkPipeline pipeline;
 } TbOceanSystem;
 
-void tb_register_ocean_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                           TbAllocator tmp_alloc);
-void tb_unregister_ocean_sys(ecs_world_t *ecs);
+void tb_register_ocean_sys(TbWorld *world);
+void tb_unregister_ocean_sys(TbWorld *world);

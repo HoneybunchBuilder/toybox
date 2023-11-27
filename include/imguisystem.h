@@ -4,12 +4,11 @@
 #include "tbrendercommon.h"
 #include "world.h"
 
-#define ImGuiSystemId 0xDEADFA11
-
-typedef struct RenderSystem RenderSystem;
-typedef struct RenderPipelineSystem RenderPipelineSystem;
-typedef struct RenderTargetSystem RenderTargetSystem;
-typedef struct InputSystem InputSystem;
+typedef struct TbRenderSystem TbRenderSystem;
+typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
+typedef struct TbRenderTargetSystem TbRenderTargetSystem;
+typedef struct TbInputSystem TbInputSystem;
+typedef struct TbWorld TbWorld;
 
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
@@ -22,32 +21,30 @@ typedef struct ImFontAtlas ImFontAtlas;
 typedef struct ImGuiContext ImGuiContext;
 typedef struct ImGuiIO ImGuiIO;
 
-typedef struct ecs_world_t ecs_world_t;
-
 #define TB_MAX_UI_CONTEXTS 4
 
-typedef struct UIContext {
+typedef struct TbUIContext {
   ImGuiContext *context;
   TbImage atlas;
   VkImageView atlas_view;
-} UIContext;
+} TbUIContext;
 
-typedef struct ImGuiFrameState {
+typedef struct TbImGuiFrameState {
   uint32_t set_count;
   VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
-} ImGuiFrameState;
+} TbImGuiFrameState;
 
-typedef struct ImGuiSystem {
+typedef struct TbImGuiSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  RenderSystem *render_system;
-  RenderPipelineSystem *render_pipe_system;
-  RenderTargetSystem *render_target_system;
-  InputSystem *input;
+  TbRenderSystem *render_system;
+  TbRenderPipelineSystem *render_pipe_system;
+  TbRenderTargetSystem *render_target_system;
+  TbInputSystem *input;
 
-  ImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
+  TbImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
 
   TbDrawContextId imgui_draw_ctx;
 
@@ -57,9 +54,8 @@ typedef struct ImGuiSystem {
   VkPipeline pipeline;
 
   uint32_t context_count;
-  UIContext contexts[TB_MAX_UI_CONTEXTS];
-} ImGuiSystem;
+  TbUIContext contexts[TB_MAX_UI_CONTEXTS];
+} TbImGuiSystem;
 
-void tb_register_imgui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                           TbAllocator tmp_alloc);
-void tb_unregister_imgui_sys(ecs_world_t *ecs);
+void tb_register_imgui_sys(TbWorld *world);
+void tb_unregister_imgui_sys(TbWorld *world);

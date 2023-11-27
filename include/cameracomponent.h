@@ -4,13 +4,10 @@
 
 #include "simd.h"
 
-#define CameraComponentId 0xDEADC0DE
-
-typedef struct ecs_world_t ecs_world_t;
-
+typedef struct TbWorld TbWorld;
 typedef uint32_t TbViewId;
 
-typedef struct CameraComponent {
+typedef struct TbCameraComponent {
   TbViewId view_id;
   float aspect_ratio;
   float fov;
@@ -18,6 +15,6 @@ typedef struct CameraComponent {
   float far;
   float width;
   float height;
-} CameraComponent;
+} TbCameraComponent;
 
-void tb_register_camera_component(ecs_world_t *ecs);
+void tb_register_camera_component(TbWorld *world);

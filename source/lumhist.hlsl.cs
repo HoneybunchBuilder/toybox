@@ -13,7 +13,7 @@ RWStructuredBuffer<uint> output : register(u1, space0);
 sampler static_sampler : register(s2, space0);
 
 [[vk::push_constant]]
-ConstantBuffer<LuminancePushConstants> consts : register(b3, space0);
+ConstantBuffer<TbLuminancePushConstants> consts : register(b3, space0);
 
 groupshared uint histogram_shared[GROUP_SIZE];
 

@@ -26,8 +26,8 @@ bool create_noclip_comp(ecs_world_t *ecs, ecs_entity_t e,
       }
     }
     if (noclip) {
-      ECS_COMPONENT(ecs, NoClipComponent);
-      NoClipComponent comp = {0};
+      ECS_COMPONENT(ecs, TbNoClipComponent);
+      TbNoClipComponent comp = {0};
       json_object_object_foreach(extra, key, value) {
         if (SDL_strcmp(key, "move_speed") == 0) {
           comp.move_speed = (float)json_object_get_double(value);
@@ -35,43 +35,43 @@ bool create_noclip_comp(ecs_world_t *ecs, ecs_entity_t e,
           comp.look_speed = (float)json_object_get_double(value);
         }
       }
-      ecs_set_ptr(ecs, e, NoClipComponent, &comp);
+      ecs_set_ptr(ecs, e, TbNoClipComponent, &comp);
     }
   }
   return true;
 }
 
 void remove_noclip_comps(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, NoClipComponent);
+  ECS_COMPONENT(ecs, TbNoClipComponent);
 
   // Remove noclip component from entities
   ecs_filter_t *filter =
       ecs_filter(ecs, {
                           .terms =
                               {
-                                  {.id = ecs_id(NoClipComponent)},
+                                  {.id = ecs_id(TbNoClipComponent)},
                               },
                       });
 
   ecs_iter_t it = ecs_filter_iter(ecs, filter);
   while (ecs_filter_next(&it)) {
-    NoClipComponent *noclip = ecs_field(&it, NoClipComponent, 1);
+    TbNoClipComponent *noclip = ecs_field(&it, TbNoClipComponent, 1);
     for (int32_t i = 0; i < it.count; ++i) {
-      *noclip = (NoClipComponent){0};
-      ecs_remove(ecs, it.entities[i], NoClipComponent);
+      *noclip = (TbNoClipComponent){0};
+      ecs_remove(ecs, it.entities[i], TbNoClipComponent);
     }
   }
   ecs_filter_fini(filter);
 }
 
 void tb_register_noclip_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, AssetSystem);
-  ECS_COMPONENT(ecs, NoClipControllerSystem);
-  // Add an AssetSystem to the no clip singleton in order
+  ECS_COMPONENT(ecs, TbAssetSystem);
+  ECS_TAG(ecs, TbNoClipControllerSystem);
+  // Add an TbAssetSystem to the no clip singleton in order
   // to allow for component parsing
-  AssetSystem asset = {
+  TbAssetSystem asset = {
       .add_fn = create_noclip_comp,
       .rem_fn = remove_noclip_comps,
   };
-  ecs_set_ptr(ecs, ecs_id(NoClipControllerSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(TbNoClipControllerSystem), TbAssetSystem, &asset);
 }

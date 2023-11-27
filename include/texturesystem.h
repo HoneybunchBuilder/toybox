@@ -6,18 +6,14 @@
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
-#define TextureSystemId 0xBADDCAFE
-
-typedef struct ecs_world_t ecs_world_t;
-
-typedef struct cgltf_texture cgltf_texture;
-
+typedef struct TbWorld TbWorld;
+typedef struct TbRenderSystem TbRenderSystem;
+typedef struct TbTexture TbTexture;
 typedef struct VkImageView_T *VkImageView;
-
-typedef struct RenderSystem RenderSystem;
-
+typedef struct cgltf_texture cgltf_texture;
 typedef uint64_t TbTextureId;
-static const TbTextureId InvalidTextureId = SDL_MAX_UINT64;
+
+static const TbTextureId TbInvalidTextureId = SDL_MAX_UINT64;
 
 typedef enum TbTextureUsage {
   TB_TEX_USAGE_UNKNOWN = 0,
@@ -27,13 +23,11 @@ typedef enum TbTextureUsage {
   TB_TEX_USAGE_BRDF,
 } TbTextureUsage;
 
-typedef struct TbTexture TbTexture;
-
-typedef struct TextureSystem {
+typedef struct TbTextureSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  RenderSystem *rnd_sys;
+  TbRenderSystem *rnd_sys;
 
   TB_DYN_ARR_OF(TbTexture) textures;
 
@@ -41,19 +35,20 @@ typedef struct TextureSystem {
   TbTextureId default_normal_tex;
   TbTextureId default_metal_rough_tex;
   TbTextureId brdf_tex;
-} TextureSystem;
+} TbTextureSystem;
 
-void tb_register_texture_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                             TbAllocator tmp_alloc);
-void tb_unregister_texture_sys(ecs_world_t *ecs);
+void tb_register_texture_sys(TbWorld *world);
+void tb_unregister_texture_sys(TbWorld *world);
 
-VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex);
-TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
-                                         const char *name, TbTextureUsage usage,
-                                         uint32_t width, uint32_t height,
-                                         const uint8_t *pixels, uint64_t size);
-TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
+VkImageView tb_tex_system_get_image_view(TbTextureSystem *self,
+                                         TbTextureId tex);
+TbTextureId tb_tex_system_create_texture(TbTextureSystem *self,
+                                         const char *path, const char *name,
+                                         TbTextureUsage usage, uint32_t width,
+                                         uint32_t height, const uint8_t *pixels,
+                                         uint64_t size);
+TbTextureId tb_tex_system_load_texture(TbTextureSystem *self, const char *path,
                                        const char *name,
                                        const cgltf_texture *texture);
-bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id);
-void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex);
+bool tb_tex_system_take_tex_ref(TbTextureSystem *self, TbTextureId id);
+void tb_tex_system_release_texture_ref(TbTextureSystem *self, TbTextureId tex);

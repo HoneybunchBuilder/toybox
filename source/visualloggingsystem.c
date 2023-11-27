@@ -52,13 +52,13 @@ typedef enum VLogShapeType {
 
 #define TB_MAX_VLOG_DRAWS 1024
 
-typedef struct VLogFrame {
+typedef struct TbVLogFrame {
   float timestamp;
   uint32_t loc_draw_count;
   VLogLocation loc_draws[TB_MAX_VLOG_DRAWS];
   uint32_t line_draw_count;
   VLogLine line_draws[TB_MAX_VLOG_DRAWS];
-} VLogFrame;
+} TbVLogFrame;
 
 typedef struct VLogDrawBatch {
   VkDescriptorSet view_set;
@@ -70,13 +70,13 @@ typedef struct VLogDrawBatch {
 } VLogDrawBatch;
 
 void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                      uint32_t batch_count, const DrawBatch *batches) {
+                      uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
   TracyCZoneNC(ctx, "Visual Logger Record", TracyCategoryColorRendering, true);
   // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 3, true);
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
+    const TbDrawBatch *batch = &batches[batch_idx];
     const VLogDrawBatch *vlog_batch = (const VLogDrawBatch *)batch->user_batch;
     if (batch->draw_count == 0) {
       continue;
@@ -93,13 +93,13 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       // Set push constants for draw
       if (vlog_batch->type == TB_VLOG_SHAPE_LOCATION) {
         const float3 scale = vlog_batch->shape_scale * shape->location.radius;
-        PrimitivePushConstants consts = {
+        TbPrimitivePushConstants consts = {
             .position = shape->location.position,
             .scale = scale,
-            .color = f3tof4(shape->location.color, 1),
+            .color = tb_f3tof4(shape->location.color, 1),
         };
         vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_ALL_GRAPHICS,
-                           0, sizeof(PrimitivePushConstants), &consts);
+                           0, sizeof(TbPrimitivePushConstants), &consts);
       } else if (vlog_batch->type == TB_VLOG_SHAPE_LINE) {
         // TODO: Set push constants for line drawing
       }
@@ -130,7 +130,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_primitive_pipeline(RenderSystem *render_system,
+VkResult create_primitive_pipeline(TbRenderSystem *render_system,
                                    VkFormat color_format, VkFormat depth_format,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
@@ -264,11 +264,11 @@ VkResult create_primitive_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VisualLoggingSystem create_visual_logging_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, RenderSystem *render_system,
-    ViewSystem *view_system, RenderPipelineSystem *render_pipe_system,
-    MeshSystem *mesh_system, CoreUISystem *coreui) {
-  VisualLoggingSystem sys = {
+TbVisualLoggingSystem create_visual_logging_system(
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
+    TbViewSystem *view_system, TbRenderPipelineSystem *render_pipe_system,
+    TbMeshSystem *mesh_system, TbCoreUISystem *coreui) {
+  TbVisualLoggingSystem sys = {
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
       .render_system = render_system,
@@ -297,7 +297,7 @@ VisualLoggingSystem create_visual_logging_system(
       cgltf_mesh *sphere_mesh = &data->meshes[0];
       // Must put mesh name on std_alloc for proper cleanup
       {
-        const char *static_name = "Sphere";
+        const char *static_name = "TbSphere";
         char *name = tb_alloc_nm_tp(std_alloc, sizeof(static_name) + 1, char);
         SDL_snprintf(name, sizeof(static_name), "%s", static_name);
         sphere_mesh->name = name;
@@ -333,7 +333,7 @@ VisualLoggingSystem create_visual_logging_system(
         .pPushConstantRanges =
             (VkPushConstantRange[1]){
                 {
-                    .size = sizeof(PrimitivePushConstants),
+                    .size = sizeof(TbPrimitivePushConstants),
                     .stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS,
                 },
             },
@@ -357,7 +357,7 @@ VisualLoggingSystem create_visual_logging_system(
         render_pipe_system, render_pipe_system->transparent_color_pass,
         &attach_count, NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
-    PassAttachment attach_info[2] = {0};
+    TbPassAttachment attach_info[2] = {0};
     tb_render_pipeline_get_attachments(
         render_pipe_system, render_pipe_system->transparent_color_pass,
         &attach_count, attach_info);
@@ -379,7 +379,7 @@ VisualLoggingSystem create_visual_logging_system(
   }
 
   {
-    DrawContextDescriptor desc = {
+    TbDrawContextDescriptor desc = {
         .batch_size = sizeof(VLogDrawBatch),
         .draw_fn = vlog_draw_record,
         .pass_id = render_pipe_system->transparent_color_pass,
@@ -391,7 +391,7 @@ VisualLoggingSystem create_visual_logging_system(
   return sys;
 }
 
-void destroy_visual_logging_system(VisualLoggingSystem *self) {
+void destroy_visual_logging_system(TbVisualLoggingSystem *self) {
 #ifndef FINAL
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->sphere_mesh);
 
@@ -400,7 +400,7 @@ void destroy_visual_logging_system(VisualLoggingSystem *self) {
 
   TB_DYN_ARR_DESTROY(self->frames);
 #endif
-  *self = (VisualLoggingSystem){0};
+  *self = (TbVisualLoggingSystem){0};
 }
 
 void vlog_draw_tick(ecs_iter_t *it) {
@@ -408,12 +408,12 @@ void vlog_draw_tick(ecs_iter_t *it) {
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
 
-  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
-  const CameraComponent *cameras = ecs_field(it, CameraComponent, 2);
+  TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
+  const TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 2);
 
   // Render primitives from selected frame
   if (sys->logging && sys->frames.capacity > 0) {
-    const VLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
+    const TbVLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
 
     // TODO: Make this less hacky
     const uint32_t width = sys->render_system->render_thread->swapchain.width;
@@ -421,7 +421,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
 
     // Get the vp matrix for the primary view
     for (int32_t i = 0; i < it->count; ++i) {
-      const CameraComponent *camera = &cameras[i];
+      const TbCameraComponent *camera = &cameras[i];
 
       for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
         const VLogLine *line = &frame->line_draws[i];
@@ -440,8 +440,8 @@ void vlog_draw_tick(ecs_iter_t *it) {
               tb_view_system_get_descriptor(sys->view_system, camera->view_id),
       };
 
-      DrawBatch *batch = tb_alloc_tp(sys->tmp_alloc, DrawBatch);
-      *batch = (DrawBatch){
+      TbDrawBatch *batch = tb_alloc_tp(sys->tmp_alloc, TbDrawBatch);
+      *batch = (TbDrawBatch){
           .layout = sys->pipe_layout,
           .pipeline = sys->pipeline,
           .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
@@ -470,7 +470,7 @@ void vlog_ui_tick(ecs_iter_t *it) {
 #ifndef FINAL
   TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
 
-  VisualLoggingSystem *sys = ecs_field(it, VisualLoggingSystem, 1);
+  TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
 
   uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
   uint32_t frame_cap = sys->frames.capacity;
@@ -528,73 +528,76 @@ void vlog_ui_tick(ecs_iter_t *it) {
       TB_DYN_ARR_RESERVE(sys->frames, frame_cap + 1024);
     }
     // If recording, insert a new frame
-    TB_DYN_ARR_APPEND(sys->frames, (VLogFrame){0});
+    TB_DYN_ARR_APPEND(sys->frames, (TbVLogFrame){0});
   }
 
   TracyCZoneEnd(ctx);
 #endif
 }
 
-void tb_register_visual_logging_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                                    TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, CoreUISystem);
-  ECS_COMPONENT(ecs, CameraComponent);
-  ECS_COMPONENT(ecs, VisualLoggingSystem);
+void tb_register_visual_logging_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbCoreUISystem);
+  ECS_COMPONENT(ecs, TbCameraComponent);
+  ECS_COMPONENT(ecs, TbVisualLoggingSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
-  CoreUISystem *coreui = ecs_singleton_get_mut(ecs, CoreUISystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
-  VisualLoggingSystem sys = create_visual_logging_system(
-      std_alloc, tmp_alloc, rnd_sys, view_sys, rp_sys, mesh_sys, coreui);
+  TbVisualLoggingSystem sys =
+      create_visual_logging_system(world->std_alloc, world->tmp_alloc, rnd_sys,
+                                   view_sys, rp_sys, mesh_sys, coreui);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(VisualLoggingSystem), VisualLoggingSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbVisualLoggingSystem), TbVisualLoggingSystem, &sys);
 
   ECS_SYSTEM(ecs, vlog_draw_tick, EcsOnUpdate,
-             VisualLoggingSystem(VisualLoggingSystem), CameraComponent);
+             TbVisualLoggingSystem(TbVisualLoggingSystem), TbCameraComponent);
   ECS_SYSTEM(ecs, vlog_ui_tick, EcsOnUpdate,
-             VisualLoggingSystem(VisualLoggingSystem));
+             TbVisualLoggingSystem(TbVisualLoggingSystem));
 }
 
-void tb_unregister_visual_logging_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, VisualLoggingSystem);
-  VisualLoggingSystem *sys = ecs_singleton_get_mut(ecs, VisualLoggingSystem);
+void tb_unregister_visual_logging_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbVisualLoggingSystem);
+  TbVisualLoggingSystem *sys =
+      ecs_singleton_get_mut(ecs, TbVisualLoggingSystem);
   destroy_visual_logging_system(sys);
-  ecs_singleton_remove(ecs, VisualLoggingSystem);
+  ecs_singleton_remove(ecs, TbVisualLoggingSystem);
 }
 
-VLogFrame *get_current_frame(VisualLoggingSystem *vlog) {
+TbVLogFrame *get_current_frame(TbVisualLoggingSystem *vlog) {
   // Expecting that upon creation the vlogger system has at least some space
   // allocated and that upon ticking the system will ensure that there will
   // always be a frame to put draws into.
   uint32_t tail = TB_DYN_ARR_SIZE(vlog->frames) - 1;
-  VLogFrame *frame = &TB_DYN_ARR_AT(vlog->frames, tail);
+  TbVLogFrame *frame = &TB_DYN_ARR_AT(vlog->frames, tail);
   TB_CHECK(frame, "Invalid frame");
   return frame;
 }
 
-VLogLocation *frame_acquire_location(VLogFrame *frame) {
+VLogLocation *frame_acquire_location(TbVLogFrame *frame) {
   TB_CHECK_RETURN(frame->loc_draw_count < TB_MAX_VLOG_DRAWS,
                   "Draw count exceeded frame max", NULL);
   return &frame->loc_draws[frame->loc_draw_count++];
 }
 
-VLogLine *frame_acquire_line(VLogFrame *frame) {
+VLogLine *frame_acquire_line(TbVLogFrame *frame) {
   TB_CHECK_RETURN(frame->line_draw_count < TB_MAX_VLOG_DRAWS,
                   "Draw count exceeded frame max", NULL);
   return &frame->line_draws[frame->line_draw_count++];
 }
 
-VLogShape *vlog_acquire_frame_shape(VisualLoggingSystem *vlog,
+VLogShape *vlog_acquire_frame_shape(TbVisualLoggingSystem *vlog,
                                     VLogShapeType type) {
-  VLogFrame *frame = get_current_frame(vlog);
+  TbVLogFrame *frame = get_current_frame(vlog);
   if (type == TB_VLOG_SHAPE_LOCATION) {
     return (VLogShape *)frame_acquire_location(frame);
   } else if (type == TB_VLOG_SHAPE_LINE) {
@@ -607,28 +610,28 @@ VLogShape *vlog_acquire_frame_shape(VisualLoggingSystem *vlog,
 // The public API down here is expected to be elided by the compiler when
 // producing a shipping build. This behavior needs to be verified
 
-void tb_vlog_begin_recording(VisualLoggingSystem *vlog) {
+void tb_vlog_begin_recording(TbVisualLoggingSystem *vlog) {
   (void)vlog;
 #ifndef FINAL
   TB_CHECK(vlog->recording == false, "Visual Logger is already recording");
   vlog->recording = true;
 #endif
 }
-void tb_vlog_end_recording(VisualLoggingSystem *vlog) {
+void tb_vlog_end_recording(TbVisualLoggingSystem *vlog) {
   (void)vlog;
 #ifndef FINAL
   TB_CHECK(vlog->recording == true, "Visual Logger is not recording");
   vlog->recording = false;
 #endif
 }
-void tb_vlog_clear(VisualLoggingSystem *vlog) {
+void tb_vlog_clear(TbVisualLoggingSystem *vlog) {
   (void)vlog;
 #ifndef FINAL
   TB_DYN_ARR_CLEAR(vlog->frames);
 #endif
 }
 
-void tb_vlog_line(VisualLoggingSystem *vlog, float3 start, float3 end,
+void tb_vlog_line(TbVisualLoggingSystem *vlog, float3 start, float3 end,
                   float3 color) {
   (void)vlog;
   (void)start;
@@ -650,8 +653,8 @@ void tb_vlog_line(VisualLoggingSystem *vlog, float3 start, float3 end,
 #endif
 }
 
-void tb_vlog_location(VisualLoggingSystem *vlog, float3 position, float radius,
-                      float3 color) {
+void tb_vlog_location(TbVisualLoggingSystem *vlog, float3 position,
+                      float radius, float3 color) {
   (void)vlog;
   (void)position;
   (void)radius;

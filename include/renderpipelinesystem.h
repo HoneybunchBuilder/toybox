@@ -10,8 +10,6 @@
 #include "tbrendercommon.h"
 #include <SDL2/SDL_stdinc.h>
 
-#define RenderPipelineSystemId 0xDABBAD00
-
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
 
 typedef uint32_t TbRenderPassId;
@@ -21,21 +19,21 @@ static const TbDrawContextId InvalidDrawContextId = SDL_MAX_UINT32;
 typedef uint32_t TbDispatchContextId;
 static const TbDispatchContextId InvalidDispatchContextId = SDL_MAX_UINT32;
 
-typedef struct RenderSystem RenderSystem;
-typedef struct RenderTargetSystem RenderTargetSystem;
-typedef struct RenderPass RenderPass;
-typedef struct ViewSystem ViewSystem;
+typedef struct TbRenderSystem TbRenderSystem;
+typedef struct TbRenderTargetSystem TbRenderTargetSystem;
+typedef struct TbRenderPass TbRenderPass;
+typedef struct TbViewSystem TbViewSystem;
 
-typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
 
-typedef struct PassAttachment {
+typedef struct TbPassAttachment {
   VkClearValue clear_value;
   uint32_t layer;
   uint32_t mip;
   TbRenderTargetId attachment;
-} PassAttachment;
+} TbPassAttachment;
 
-typedef struct DrawBatch {
+typedef struct TbDrawBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
   VkViewport viewport;
@@ -45,41 +43,41 @@ typedef struct DrawBatch {
   uint64_t draw_size;
   void *draws;
   uint32_t draw_max;
-} DrawBatch;
+} TbDrawBatch;
 
 #define MAX_GROUPS 8
-typedef struct DispatchBatch {
+typedef struct TbDispatchBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
   void *user_batch;
   uint32_t group_count;
   uint3 groups[MAX_GROUPS];
-} DispatchBatch;
+} TbDispatchBatch;
 
-typedef TB_DYN_ARR_OF(DrawBatch) DrawBatchList;
-typedef TB_DYN_ARR_OF(DispatchBatch) DispatchBatchList;
+typedef TB_DYN_ARR_OF(TbDrawBatch) DrawBatchList;
+typedef TB_DYN_ARR_OF(TbDispatchBatch) DispatchBatchList;
 
-typedef struct DrawContextDescriptor {
+typedef struct TbDrawContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
   tb_record_draw_batch *draw_fn;
-} DrawContextDescriptor;
-typedef struct DrawContext DrawContext;
+} TbDrawContextDescriptor;
+typedef struct TbDrawContext TbDrawContext;
 
-typedef struct DispatchContextDescriptor {
+typedef struct TbDispatchContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
   tb_record_dispatch_batch *dispatch_fn;
-} DispatchContextDescriptor;
-typedef struct DispatchContext DispatchContext;
+} TbDispatchContextDescriptor;
+typedef struct TbDispatchContext TbDispatchContext;
 
-typedef struct RenderPipelineSystem {
+typedef struct TbRenderPipelineSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  RenderSystem *render_system;
-  RenderTargetSystem *render_target_system;
-  ViewSystem *view_system;
+  TbRenderSystem *render_system;
+  TbRenderTargetSystem *render_target_system;
+  TbViewSystem *view_system;
 
   TbRenderPassId env_cap_passes[PREFILTER_PASS_COUNT];
   TbRenderPassId irradiance_pass;
@@ -100,7 +98,7 @@ typedef struct RenderPipelineSystem {
   TbRenderPassId tonemap_pass;
   TbRenderPassId ui_pass;
 
-  TB_DYN_ARR_OF(RenderPass) render_passes;
+  TB_DYN_ARR_OF(TbRenderPass) render_passes;
   uint32_t *pass_order; // Array that is kept at the same size as render_passes
 
   // Some default draw contexts
@@ -114,8 +112,8 @@ typedef struct RenderPipelineSystem {
   // New idea for bundling draw work prims
   DownsampleRenderWork downsample_work;
   UpsampleRenderWork upsample_work;
-  LumHistRenderWork lum_hist_work;
-  LumAvgRenderWork lum_avg_work;
+  TbLumHistRenderWork lum_hist_work;
+  TbLumAvgRenderWork lum_avg_work;
 
   VkSampler sampler;
   VkSampler noise_sampler;
@@ -134,35 +132,34 @@ typedef struct RenderPipelineSystem {
   VkPipeline comp_copy_pipe;
   VkPipeline tonemap_pipe;
 
-  FrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
-  FrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];
-  FrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
-} RenderPipelineSystem;
+  TbFrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
+  TbFrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];
+  TbFrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
+} TbRenderPipelineSystem;
 
-void tb_register_render_pipeline_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                                     TbAllocator tmp_alloc);
-void tb_unregister_render_pipeline_sys(ecs_world_t *ecs);
+void tb_register_render_pipeline_sys(TbWorld *world);
+void tb_unregister_render_pipeline_sys(TbWorld *world);
 
-void tb_rnd_on_swapchain_resize(RenderPipelineSystem *self);
+void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self);
 
 TbDrawContextId
-tb_render_pipeline_register_draw_context(RenderPipelineSystem *self,
-                                         const DrawContextDescriptor *desc);
+tb_render_pipeline_register_draw_context(TbRenderPipelineSystem *self,
+                                         const TbDrawContextDescriptor *desc);
 
 TbDispatchContextId tb_render_pipeline_register_dispatch_context(
-    RenderPipelineSystem *self, const DispatchContextDescriptor *desc);
+    TbRenderPipelineSystem *self, const TbDispatchContextDescriptor *desc);
 
-void tb_render_pipeline_get_attachments(RenderPipelineSystem *self,
+void tb_render_pipeline_get_attachments(TbRenderPipelineSystem *self,
                                         TbRenderPassId pass,
                                         uint32_t *attach_count,
-                                        PassAttachment *attachments);
+                                        TbPassAttachment *attachments);
 
-void tb_render_pipeline_issue_draw_batch(RenderPipelineSystem *self,
+void tb_render_pipeline_issue_draw_batch(TbRenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
-                                         const DrawBatch *batches);
+                                         const TbDrawBatch *batches);
 
-void tb_render_pipeline_issue_dispatch_batch(RenderPipelineSystem *self,
+void tb_render_pipeline_issue_dispatch_batch(TbRenderPipelineSystem *self,
                                              TbDispatchContextId dispatch_ctx,
                                              uint32_t batch_count,
-                                             const DispatchBatch *batches);
+                                             const TbDispatchBatch *batches);

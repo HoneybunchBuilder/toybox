@@ -13,15 +13,15 @@
 
 #include <flecs.h>
 
-bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
+bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
                                     const char *source_path,
                                     const cgltf_node *node,
-                                    MeshSystem *mesh_system,
-                                    MaterialSystem *mat_system) {
+                                    TbMeshSystem *mesh_system,
+                                    TbMaterialSystem *mat_system) {
   const uint32_t submesh_count = node->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
-  *self = (MeshComponent){
+  *self = (TbMeshComponent){
       .mesh_id = id,
       .submesh_count = submesh_count,
   };
@@ -63,8 +63,8 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
     offset += offset % (sizeof(uint16_t) * 4);
 
     // While we determine the vertex offset we'll also calculate the local space
-    // AABB for this mesh across all primitives
-    self->local_aabb = aabb_init();
+    // TbAABB for this mesh across all primitives
+    self->local_aabb = tb_aabb_init();
 
     // Determine the vertex offset for each primitive
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
@@ -86,13 +86,13 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
              type == cgltf_attribute_type_texcoord) &&
             index == 0) {
           if (type == cgltf_attribute_type_position) {
-            vertex_attributes |= VA_INPUT_PERM_POSITION;
+            vertex_attributes |= TB_INPUT_PERM_POSITION;
           } else if (type == cgltf_attribute_type_normal) {
-            vertex_attributes |= VA_INPUT_PERM_NORMAL;
+            vertex_attributes |= TB_INPUT_PERM_NORMAL;
           } else if (type == cgltf_attribute_type_tangent) {
-            vertex_attributes |= VA_INPUT_PERM_TANGENT;
+            vertex_attributes |= TB_INPUT_PERM_TANGENT;
           } else if (type == cgltf_attribute_type_texcoord) {
-            vertex_attributes |= VA_INPUT_PERM_TEXCOORD0;
+            vertex_attributes |= TB_INPUT_PERM_TEXCOORD0;
           }
 
           attrib_count++;
@@ -113,7 +113,7 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
         } else if (attr_type == cgltf_attribute_type_tangent) {
           attr_order[2] = attr_idx;
         } else if (attr_type == cgltf_attribute_type_texcoord && idx == 0) {
-          if (vertex_attributes & VA_INPUT_PERM_TANGENT) {
+          if (vertex_attributes & TB_INPUT_PERM_TANGENT) {
             attr_order[3] = attr_idx;
           } else {
             attr_order[2] = attr_idx;
@@ -121,7 +121,7 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
         }
       }
 
-      // Read AABB from gltf
+      // Read TbAABB from gltf
       {
         const cgltf_attribute *pos_attr = &prim->attributes[attr_order[0]];
 
@@ -131,19 +131,19 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
         float *min = pos_attr->data->min;
         float *max = pos_attr->data->max;
 
-        aabb_add_point(&self->local_aabb, (float3){min[0], min[1], min[2]});
-        aabb_add_point(&self->local_aabb, (float3){max[0], max[1], max[2]});
+        tb_aabb_add_point(&self->local_aabb, (float3){min[0], min[1], min[2]});
+        tb_aabb_add_point(&self->local_aabb, (float3){max[0], max[1], max[2]});
       }
 
       // Decode vertex attributes into full vertex input layouts
       TbVertexInput vertex_input = VI_Count;
       {
-        if (vertex_attributes & VA_INPUT_PERM_POSITION) {
-          if (vertex_attributes & VA_INPUT_PERM_NORMAL) {
+        if (vertex_attributes & TB_INPUT_PERM_POSITION) {
+          if (vertex_attributes & TB_INPUT_PERM_NORMAL) {
             vertex_input = VI_P3N3;
-            if (vertex_attributes & VA_INPUT_PERM_TEXCOORD0) {
+            if (vertex_attributes & TB_INPUT_PERM_TEXCOORD0) {
               vertex_input = VI_P3N3U2;
-              if (vertex_attributes & VA_INPUT_PERM_TANGENT) {
+              if (vertex_attributes & TB_INPUT_PERM_TANGENT) {
                 vertex_input = VI_P3N3T4U2;
               }
             }
@@ -168,15 +168,15 @@ bool create_mesh_component_internal(MeshComponent *self, TbMeshId id,
   return true;
 }
 
-void destroy_mesh_component_internal(MeshComponent *self,
-                                     MeshSystem *mesh_system,
-                                     MaterialSystem *mat_system) {
+void destroy_mesh_component_internal(TbMeshComponent *self,
+                                     TbMeshSystem *mesh_system,
+                                     TbMaterialSystem *mat_system) {
   for (uint32_t i = 0; i < self->submesh_count; ++i) {
     tb_mat_system_release_material_ref(mat_system, self->submeshes[i].material);
   }
   tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
 
-  *self = (MeshComponent){0};
+  *self = (TbMeshComponent){0};
 }
 
 bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
@@ -185,15 +185,15 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
   (void)extra;
   bool ret = true;
   if (node->mesh) {
-    ECS_COMPONENT(ecs, MeshSystem);
-    ECS_COMPONENT(ecs, MaterialSystem);
-    ECS_COMPONENT(ecs, RenderObjectSystem);
-    ECS_COMPONENT(ecs, RenderObject);
-    ECS_COMPONENT(ecs, MeshComponent);
+    ECS_COMPONENT(ecs, TbMeshSystem);
+    ECS_COMPONENT(ecs, TbMaterialSystem);
+    ECS_COMPONENT(ecs, TbRenderObjectSystem);
+    ECS_COMPONENT(ecs, TbRenderObject);
+    ECS_COMPONENT(ecs, TbMeshComponent);
     ECS_TAG(ecs, MeshRenderObject);
 
-    MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
-    MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+    TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+    TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
     /*
         We want everything to be as instanced as possible but we can't guarantee
@@ -219,12 +219,12 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
 
     // Find Mesh Component
     ecs_entity_t mesh_ent = 0;
-    MeshComponent *mesh_comp = NULL;
+    TbMeshComponent *mesh_comp = NULL;
     ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
     while (ecs_query_next(&mesh_it)) {
-      MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+      TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
       for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-        MeshComponent *mesh = &meshes[mesh_idx];
+        TbMeshComponent *mesh = &meshes[mesh_idx];
         if (mesh->mesh_id == id) {
           mesh_ent = mesh_it.entities[mesh_idx];
           mesh_comp = mesh;
@@ -233,65 +233,65 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
       }
     }
     if (mesh_comp == NULL) {
-      MeshComponent comp = {0};
+      TbMeshComponent comp = {0};
       ret = create_mesh_component_internal(&comp, id, source_path, node,
                                            mesh_sys, mat_sys);
       TB_DYN_ARR_RESET(comp.entities, mesh_sys->std_alloc, 16);
-      ecs_set_ptr(ecs, e, MeshComponent, &comp);
+      ecs_set_ptr(ecs, e, TbMeshComponent, &comp);
 
-      mesh_comp = ecs_get_mut(ecs, e, MeshComponent);
+      mesh_comp = ecs_get_mut(ecs, e, TbMeshComponent);
       mesh_ent = e;
     }
 
-    // Add a RenderObject to this entity
-    ecs_set(ecs, e, RenderObject, {0});
+    // Add a TbRenderObject to this entity
+    ecs_set(ecs, e, TbRenderObject, {0});
     ecs_add_id(ecs, e, MeshRenderObject);
 
     // And let the mesh component know about this entity
     TB_DYN_ARR_APPEND(mesh_comp->entities, e);
-    ecs_set_ptr(ecs, mesh_ent, MeshComponent, mesh_comp);
+    ecs_set_ptr(ecs, mesh_ent, TbMeshComponent, mesh_comp);
   }
   return ret;
 }
 
 void destroy_mesh_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
-  ECS_COMPONENT(ecs, MeshComponent);
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbMeshComponent);
 
   // Remove mesh component from entities
   ecs_filter_t *filter =
       ecs_filter(ecs, {
                           .terms =
                               {
-                                  {.id = ecs_id(MeshComponent)},
+                                  {.id = ecs_id(TbMeshComponent)},
                               },
                       });
 
   ecs_iter_t mesh_it = ecs_filter_iter(ecs, filter);
   while (ecs_filter_next(&mesh_it)) {
-    MeshComponent *mesh = ecs_field(&mesh_it, MeshComponent, 1);
-    MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
-    MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+    TbMeshComponent *mesh = ecs_field(&mesh_it, TbMeshComponent, 1);
+    TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+    TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
     for (int32_t i = 0; i < mesh_it.count; ++i) {
       destroy_mesh_component_internal(&mesh[i], mesh_sys, mat_sys);
     }
 
-    ecs_singleton_modified(ecs, MeshSystem);
-    ecs_singleton_modified(ecs, MaterialSystem);
+    ecs_singleton_modified(ecs, TbMeshSystem);
+    ecs_singleton_modified(ecs, TbMaterialSystem);
   }
   ecs_filter_fini(filter);
 }
 
 void tb_register_mesh_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, AssetSystem);
-  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
+  ECS_COMPONENT(ecs, TbMeshSystem);
   // Mark the mesh system entity as also having an asset
   // system that can parse and load mesh components
-  AssetSystem asset = {
+  TbAssetSystem asset = {
       .add_fn = create_mesh_component,
       .rem_fn = destroy_mesh_component,
   };
-  ecs_set_ptr(ecs, ecs_id(MeshSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbAssetSystem, &asset);
 }

@@ -36,8 +36,9 @@ static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
 char *tb_resolve_asset_path(TbAllocator tmp_alloc, const char *source_name) {
   const uint32_t max_asset_len = 2048;
   char *asset_path = tb_alloc(tmp_alloc, max_asset_len);
-  SDL_memset(asset_path, 0, max_asset_len);
-  SDL_snprintf(asset_path, max_asset_len, "%s%s", ASSET_PREFIX, source_name);
+  SDL_memset(asset_path, 0, max_asset_len); // NOLINT
+  SDL_snprintf(asset_path, max_asset_len, "%s%s", ASSET_PREFIX,
+               source_name); // NOLINT
 
   TB_CHECK_RETURN(asset_path, "Failed to resolve asset path.", NULL);
   return asset_path;

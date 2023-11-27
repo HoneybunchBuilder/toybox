@@ -1,6 +1,6 @@
 #include "imgui.hlsli"
 
-[[vk::push_constant]] ConstantBuffer<ImGuiPushConstants> consts : register(b0);
+[[vk::push_constant]] ConstantBuffer<TbImGuiPushConstants> consts : register(b0);
 
 Texture2D atlas : register(t0, space0);
 

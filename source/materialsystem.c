@@ -21,7 +21,7 @@ typedef struct TbMaterial {
   TbTextureId metal_rough_map;
 } TbMaterial;
 
-uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
+uint32_t find_mat_by_id(TbMaterialSystem *self, TbMaterialId id) {
   TB_DYN_ARR_FOREACH(self->materials, i) {
     if (TB_DYN_ARR_AT(self->materials, i).id == id) {
       return i;
@@ -31,10 +31,11 @@ uint32_t find_mat_by_id(MaterialSystem *self, TbMaterialId id) {
   return SDL_MAX_UINT32;
 }
 
-MaterialSystem create_material_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                                      RenderSystem *rnd_sys,
-                                      TextureSystem *tex_sys) {
-  MaterialSystem sys = {
+TbMaterialSystem create_material_system(TbAllocator std_alloc,
+                                        TbAllocator tmp_alloc,
+                                        TbRenderSystem *rnd_sys,
+                                        TbTextureSystem *tex_sys) {
+  TbMaterialSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .render_system = rnd_sys,
@@ -140,8 +141,8 @@ MaterialSystem create_material_system(TbAllocator std_alloc, TbAllocator tmp_all
   return sys;
 }
 
-void destroy_material_system(MaterialSystem *self) {
-  RenderSystem *render_system = self->render_system;
+void destroy_material_system(TbMaterialSystem *self) {
+  TbRenderSystem *render_system = self->render_system;
 
   tb_free(self->std_alloc, (void *)self->default_material);
 
@@ -159,44 +160,46 @@ void destroy_material_system(MaterialSystem *self) {
 
   TB_DYN_ARR_DESTROY(self->materials);
 
-  *self = (MaterialSystem){0};
+  *self = (TbMaterialSystem){0};
 }
 
-void tb_register_material_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                              TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, TextureSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
+void tb_register_material_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
+  ECS_COMPONENT(ecs, TbMaterialSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  TextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TextureSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
-  MaterialSystem sys =
-      create_material_system(std_alloc, tmp_alloc, rnd_sys, tex_sys);
+  TbMaterialSystem sys = create_material_system(
+      world->std_alloc, world->tmp_alloc, rnd_sys, tex_sys);
 
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(MaterialSystem), MaterialSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbMaterialSystem), TbMaterialSystem, &sys);
 }
 
-void tb_unregister_material_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, MaterialSystem);
-  MaterialSystem *sys = ecs_singleton_get_mut(ecs, MaterialSystem);
+void tb_unregister_material_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbMaterialSystem);
+  TbMaterialSystem *sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   destroy_material_system(sys);
-  ecs_singleton_remove(ecs, MaterialSystem);
+  ecs_singleton_remove(ecs, TbMaterialSystem);
 }
 
-VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self) {
+VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self) {
   return self->set_layout;
 }
 
-TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
+TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
+                                         const char *path,
                                          const cgltf_material *mat) {
   TracyCZoneN(ctx, "Load Material", true);
   VkResult err = VK_SUCCESS;
 
   // Hash the materials's path and gltf name to get the id
-  TbMaterialId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
+  TbMaterialId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_sdbm(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
 
   VkDevice device = self->render_system->render_thread->device;
 
@@ -405,17 +408,17 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
             .pbr_metallic_roughness =
                 {
                     .base_color_factor =
-                        atof4(mat->pbr_metallic_roughness.base_color_factor),
+                        tb_atof4(mat->pbr_metallic_roughness.base_color_factor),
                     .metal_rough_factors =
                         {mat->pbr_metallic_roughness.metallic_factor,
                          mat->pbr_metallic_roughness.roughness_factor},
                 },
             .pbr_specular_glossiness.diffuse_factor =
-                atof4(mat->pbr_specular_glossiness.diffuse_factor),
-            .specular =
-                f3tof4(atof3(mat->pbr_specular_glossiness.specular_factor),
-                       mat->pbr_specular_glossiness.glossiness_factor),
-            .emissives = f3tof4(atof3(mat->emissive_factor), 1.0f),
+                tb_atof4(mat->pbr_specular_glossiness.diffuse_factor),
+            .specular = tb_f3tof4(
+                tb_atof3(mat->pbr_specular_glossiness.specular_factor),
+                mat->pbr_specular_glossiness.glossiness_factor),
+            .emissives = tb_f3tof4(tb_atof3(mat->emissive_factor), 1.0f),
         };
 
         if (mat->has_emissive_strength) {
@@ -619,7 +622,8 @@ TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
   return id;
 }
 
-TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat) {
+TbMaterialPerm tb_mat_system_get_perm(TbMaterialSystem *self,
+                                      TbMaterialId mat) {
   const uint32_t index = find_mat_by_id(self, mat);
   if (index == SDL_MAX_UINT32) {
     TB_CHECK_RETURN(false, "Failed to find material to get permutation", 0);
@@ -627,7 +631,8 @@ TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat) {
   return TB_DYN_ARR_AT(self->materials, index).permutation;
 }
 
-VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat) {
+VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self,
+                                      TbMaterialId mat) {
   const uint32_t index = find_mat_by_id(self, mat);
   if (index == SDL_MAX_UINT32) {
     TB_CHECK_RETURN(false, "Failed to find material to get set", 0);
@@ -635,7 +640,7 @@ VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat) {
   return self->mat_sets[index];
 }
 
-void tb_mat_system_release_material_ref(MaterialSystem *self,
+void tb_mat_system_release_material_ref(TbMaterialSystem *self,
                                         TbMaterialId mat) {
   const uint32_t index = find_mat_by_id(self, mat);
   if (index == SDL_MAX_UINT32) {

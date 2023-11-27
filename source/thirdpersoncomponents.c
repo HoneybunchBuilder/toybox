@@ -31,15 +31,15 @@ bool try_attach_tp_move_comp(ecs_world_t *ecs, ecs_entity_t e,
     }
   }
 
-  ECS_COMPONENT(ecs, ThirdPersonMovementComponent);
+  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
 
-  ThirdPersonMovementComponent comp = {0};
+  TbThirdPersonMovementComponent comp = {0};
   json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "speed") == 0) {
       comp.speed = (float)json_object_get_double(value);
     }
   }
-  ecs_set_ptr(ecs, e, ThirdPersonMovementComponent, &comp);
+  ecs_set_ptr(ecs, e, TbThirdPersonMovementComponent, &comp);
 
   return true;
 }
@@ -65,11 +65,8 @@ bool try_attach_tp_cam_comp(ecs_world_t *ecs, ecs_entity_t e,
     }
   }
 
-  ECS_COMPONENT(ecs, ThirdPersonCameraComponent);
-
-  ThirdPersonCameraComponent comp = {0};
-  // TODO: Parse parameters
-  ecs_set_ptr(ecs, e, ThirdPersonCameraComponent, &comp);
+  ECS_TAG(ecs, TbThirdPersonCameraComponent);
+  ecs_add(ecs, e, TbThirdPersonCameraComponent);
 
   return true;
 }
@@ -80,25 +77,25 @@ bool try_attach_tp_cam_comp(ecs_world_t *ecs, ecs_entity_t e,
 // Need the hierarchy to be constructed first so we look it up in post-load
 // Expecting the camera to be attached to some child entity
 void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
-  ECS_COMPONENT(ecs, ThirdPersonMovementComponent);
-  ECS_COMPONENT(ecs, ThirdPersonCameraComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, CameraComponent);
+  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
+  ECS_TAG(ecs, TbThirdPersonCameraComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbRigidbodyComponent);
-  ThirdPersonMovementComponent *movement =
-      ecs_get_mut(ecs, e, ThirdPersonMovementComponent);
-  const TransformComponent *trans = ecs_get(ecs, e, TransformComponent);
+  TbThirdPersonMovementComponent *movement =
+      ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
+  const TbTransformComponent *trans = ecs_get(ecs, e, TbTransformComponent);
 
   TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
   TB_CHECK(trans->parent != InvalidEntityId, "Expected a valid parent");
   {
     bool sibling_camera = false;
-    const TransformComponent *parent = tb_transform_get_parent(ecs, trans);
+    const TbTransformComponent *parent = tb_transform_get_parent(ecs, trans);
     for (uint32_t i = 0; i < parent->child_count; ++i) {
       ecs_entity_t sibling = parent->children[i];
-      if (ecs_has(ecs, sibling, ThirdPersonCameraComponent) &&
-          ecs_has(ecs, sibling, CameraComponent)) {
+      if (ecs_has(ecs, sibling, TbThirdPersonCameraComponent) &&
+          ecs_has(ecs, sibling, TbCameraComponent)) {
         movement->camera = sibling;
         sibling_camera = true;
         break;
@@ -122,8 +119,8 @@ bool create_third_person_components(ecs_world_t *ecs, ecs_entity_t e,
   (void)source_path;
   (void)extra;
 
-  ECS_COMPONENT(ecs, ThirdPersonMovementComponent);
-  ECS_COMPONENT(ecs, ThirdPersonCameraComponent);
+  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
+  ECS_TAG(ecs, TbThirdPersonCameraComponent);
 
   bool ret = true;
   if (node && extra) {
@@ -134,16 +131,16 @@ bool create_third_person_components(ecs_world_t *ecs, ecs_entity_t e,
 }
 
 void post_load_third_person_components(ecs_world_t *ecs, ecs_entity_t e) {
-  ECS_COMPONENT(ecs, ThirdPersonMovementComponent);
+  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
 
-  if (ecs_has(ecs, e, ThirdPersonMovementComponent)) {
+  if (ecs_has(ecs, e, TbThirdPersonMovementComponent)) {
     post_load_tp_movement(ecs, e);
   }
 }
 
 void remove_third_person_components(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, ThirdPersonMovementComponent);
-  ECS_COMPONENT(ecs, ThirdPersonCameraComponent);
+  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
+  ECS_TAG(ecs, TbThirdPersonCameraComponent);
 
   // Remove movement from entities
   {
@@ -151,40 +148,17 @@ void remove_third_person_components(ecs_world_t *ecs) {
         ecs, {
                  .terms =
                      {
-                         {.id = ecs_id(ThirdPersonMovementComponent)},
+                         {.id = ecs_id(TbThirdPersonMovementComponent)},
                      },
              });
 
     ecs_iter_t it = ecs_filter_iter(ecs, filter);
     while (ecs_filter_next(&it)) {
-      ThirdPersonMovementComponent *comps =
-          ecs_field(&it, ThirdPersonMovementComponent, 1);
+      TbThirdPersonMovementComponent *comps =
+          ecs_field(&it, TbThirdPersonMovementComponent, 1);
 
       for (int32_t i = 0; i < it.count; ++i) {
-        comps[i] = (ThirdPersonMovementComponent){0};
-      }
-    }
-
-    ecs_filter_fini(filter);
-  }
-
-  // Remove camera from entities
-  {
-    ecs_filter_t *filter =
-        ecs_filter(ecs, {
-                            .terms =
-                                {
-                                    {.id = ecs_id(ThirdPersonCameraComponent)},
-                                },
-                        });
-
-    ecs_iter_t it = ecs_filter_iter(ecs, filter);
-    while (ecs_filter_next(&it)) {
-      ThirdPersonCameraComponent *comps =
-          ecs_field(&it, ThirdPersonCameraComponent, 1);
-
-      for (int32_t i = 0; i < it.count; ++i) {
-        comps[i] = (ThirdPersonCameraComponent){0};
+        comps[i] = (TbThirdPersonMovementComponent){0};
       }
     }
 
@@ -194,14 +168,14 @@ void remove_third_person_components(ecs_world_t *ecs) {
 
 void tb_register_third_person_components(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_TAG(ecs, ThirdPersonAssetSystem);
 
-  AssetSystem asset = {
+  TbAssetSystem asset = {
       .add_fn = create_third_person_components,
       .post_load_fn = post_load_third_person_components,
       .rem_fn = remove_third_person_components,
   };
 
-  ecs_set_ptr(ecs, ecs_id(ThirdPersonAssetSystem), AssetSystem, &asset);
+  ecs_set_ptr(ecs, ecs_id(ThirdPersonAssetSystem), TbAssetSystem, &asset);
 }

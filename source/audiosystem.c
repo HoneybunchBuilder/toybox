@@ -18,7 +18,7 @@ typedef struct TbSoundEffect {
   Mix_Chunk *chunk;
 } TbSoundEffect;
 
-void destroy_audio_system(AudioSystem *self) {
+void destroy_audio_system(TbAudioSystem *self) {
   TB_DYN_ARR_FOREACH(self->music, i) {
     TB_CHECK(TB_DYN_ARR_AT(self->music, i).ref_count == 0, "Leaking music");
   }
@@ -31,12 +31,12 @@ void destroy_audio_system(AudioSystem *self) {
 
   Mix_CloseAudio();
   Mix_Quit();
-  *self = (AudioSystem){0};
+  *self = (TbAudioSystem){0};
 }
 
 void tb_register_audio_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, AudioSystem);
+  ECS_COMPONENT(ecs, TbAudioSystem);
 
   int32_t ret = Mix_Init(MIX_INIT_OGG);
   TB_CHECK(ret != 0, "Failed to initialize SDL2 Mixer");
@@ -57,7 +57,7 @@ void tb_register_audio_sys(TbWorld *world) {
   ret = Mix_AllocateChannels(8);
   TB_CHECK(ret != 0, "Failed to allocate tracks for audio device");
 
-  AudioSystem sys = {
+  TbAudioSystem sys = {
       .std_alloc = world->std_alloc,
       .tmp_alloc = world->tmp_alloc,
       .frequency = freq,
@@ -68,17 +68,17 @@ void tb_register_audio_sys(TbWorld *world) {
   TB_DYN_ARR_RESET(sys.sfx, sys.std_alloc, 8);
 
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(AudioSystem), AudioSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbAudioSystem), TbAudioSystem, &sys);
 }
 
 void tb_unregister_audio_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, AudioSystem);
-  AudioSystem *sys = ecs_singleton_get_mut(ecs, AudioSystem);
+  ECS_COMPONENT(ecs, TbAudioSystem);
+  TbAudioSystem *sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
   destroy_audio_system(sys);
 }
 
-TbMusicId tb_audio_system_load_music(AudioSystem *self, const char *path) {
+TbMusicId tb_audio_system_load_music(TbAudioSystem *self, const char *path) {
   TracyCZoneN(ctx, "Audio System Load Music", true);
   TracyCZoneColor(ctx, TracyCategoryColorAudio);
 
@@ -92,7 +92,7 @@ TbMusicId tb_audio_system_load_music(AudioSystem *self, const char *path) {
   return id;
 }
 
-TbSoundEffectId tb_audio_system_load_effect(AudioSystem *self,
+TbSoundEffectId tb_audio_system_load_effect(TbAudioSystem *self,
                                             const char *path) {
   TracyCZoneN(ctx, "Audio System Load Effect", true);
   TracyCZoneColor(ctx, TracyCategoryColorAudio);
@@ -108,7 +108,7 @@ TbSoundEffectId tb_audio_system_load_effect(AudioSystem *self,
   return id;
 }
 
-void tb_audio_system_release_music_ref(AudioSystem *self, TbMusicId id) {
+void tb_audio_system_release_music_ref(TbAudioSystem *self, TbMusicId id) {
   TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
   TB_CHECK(
       music->ref_count > 0,
@@ -119,7 +119,7 @@ void tb_audio_system_release_music_ref(AudioSystem *self, TbMusicId id) {
   }
 }
 
-void tb_audio_system_release_effect_ref(AudioSystem *self, TbSoundEffectId id) {
+void tb_audio_system_release_effect_ref(TbAudioSystem *self, TbSoundEffectId id) {
   TbSoundEffect *effect = &TB_DYN_ARR_AT(self->sfx, id);
   TB_CHECK(
       effect->ref_count > 0,
@@ -130,7 +130,7 @@ void tb_audio_system_release_effect_ref(AudioSystem *self, TbSoundEffectId id) {
   }
 }
 
-void tb_audio_play_music(AudioSystem *self, TbMusicId id) {
+void tb_audio_play_music(TbAudioSystem *self, TbMusicId id) {
   TracyCZoneN(ctx, "Audio System Play Music", true);
   TracyCZoneColor(ctx, TracyCategoryColorAudio);
 
@@ -142,7 +142,7 @@ void tb_audio_play_music(AudioSystem *self, TbMusicId id) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_audio_play_effect(AudioSystem *self, TbSoundEffectId id) {
+void tb_audio_play_effect(TbAudioSystem *self, TbSoundEffectId id) {
   TracyCZoneN(ctx, "Audio System Play Effect", true);
   TracyCZoneColor(ctx, TracyCategoryColorAudio);
 

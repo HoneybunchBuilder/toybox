@@ -4,9 +4,9 @@
 
 #include "simd.h"
 
-ConstantBuffer<SkyData> sky_data : register(b0, space0); // Fragment Stage Only
+ConstantBuffer<TbSkyData> sky_data : register(b0, space0); // Fragment Stage Only
 
-[[vk::push_constant]] ConstantBuffer<SkyPushConstants> consts
+[[vk::push_constant]] ConstantBuffer<TbSkyPushConstants> consts
     : register(b1, space0);
 
 struct VertexIn {

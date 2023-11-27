@@ -5,7 +5,7 @@
 TextureCube env_texture : register(t0, space0);  // Fragment Stage Only
 SamplerState env_sampler : register(s1, space0); // Fragment Stage Only
 
-[[vk::push_constant]] ConstantBuffer<EnvFilterConstants> consts
+[[vk::push_constant]] ConstantBuffer<TbEnvFilterConstants> consts
     : register(b1, space0); // Fragment Stage Only
 
 struct VertexIn {
@@ -32,11 +32,11 @@ Interpolators vert(VertexIn i) {
 // Based on
 // http://byteblacksmith.com/improvements-to-the-canonical-one-liner-glsl-rand-for-opengl-es-2-0/
 float random(float2 co) {
-  float a = 12.9898;
-  float b = 78.233;
-  float c = 43758.5453;
+  float a = 12.9898f;
+  float b = 78.233f;
+  float c = 43758.5453f;
   float dt = dot(co.xy, float2(a, b));
-  float sn = fmod(dt, 3.14);
+  float sn = fmod(dt, 3.14f);
   return frac(sin(sn) * c);
 }
 
@@ -57,7 +57,7 @@ float2 hammersley_2d(uint i, uint N) {
 float3 importance_sample_ggx(float2 Xi, float roughness, float3 normal) {
   // Maps a 2D point to a hemisphere with spread based on roughness
   float alpha = roughness * roughness;
-  float phi = 2.0 * PI * Xi.x + random(normal.xz) * 0.1;
+  float phi = 2.0 * TB_PI * Xi.x + random(normal.xz) * 0.1;
   float cos_theta = sqrt((1.0 - Xi.y) / (1.0 + (alpha * alpha - 1.0) * Xi.y));
   float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
   float3 H = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
@@ -77,7 +77,7 @@ float d_ggx(float dot_NH, float roughness) {
   float alpha = roughness * roughness;
   float alpha2 = alpha * alpha;
   float denom = dot_NH * dot_NH * (alpha2 - 1.0) + 1.0;
-  return (alpha2) / (PI * denom * denom);
+  return (alpha2) / (TB_PI * denom * denom);
 }
 
 float3 prefilter_env_map(float3 R, float roughness) {
@@ -105,7 +105,7 @@ float3 prefilter_env_map(float3 R, float roughness) {
       // Slid angle of current smple
       float omega_s = 1.0 / (float(consts.sample_count) * pdf);
       // Solid angle of 1 pixel across all cube faces
-      float omega_p = 4.0 * PI / (6.0 * env_map_dim * env_map_dim);
+      float omega_p = 4.0 * TB_PI / (6.0 * env_map_dim * env_map_dim);
       // Biased (+1.0) mip level for better result
       float mip_level = roughness == 0.0
                             ? 0.0

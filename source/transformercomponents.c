@@ -1,8 +1,7 @@
 #include "transformercomponents.h"
 
+#include "world.h"
+
 #include <flecs.h>
 
-void tb_register_rotator_component(ecs_world_t *ecs) {
-  (void)ecs;
-  // TODO
-}
+void tb_register_rotator_component(TbWorld *world) { (void)world; }

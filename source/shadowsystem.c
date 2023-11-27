@@ -29,7 +29,7 @@
 #pragma clang diagnostic pop
 #endif
 
-VkResult create_shadow_pipeline(RenderSystem *render_system,
+VkResult create_shadow_pipeline(TbRenderSystem *render_system,
                                 VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *pipeline) {
@@ -153,14 +153,14 @@ VkResult create_shadow_pipeline(RenderSystem *render_system,
 }
 
 void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                        uint32_t batch_count, const DrawBatch *batches) {
+                        uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Shadow Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Shadows", 3, true);
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DrawBatch *batch = &batches[batch_idx];
-    const PrimitiveBatch *prim_batch =
-        (const PrimitiveBatch *)batch->user_batch;
+    const TbDrawBatch *batch = &batches[batch_idx];
+    const TbPrimitiveBatch *prim_batch =
+        (const TbPrimitiveBatch *)batch->user_batch;
     if (batch->draw_count == 0) {
       continue;
     }
@@ -183,8 +183,8 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
                             1, &prim_batch->trans_set, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const PrimitiveDraw *draw =
-          &((const PrimitiveDraw *)batch->draws)[draw_idx];
+      const TbPrimitiveDraw *draw =
+          &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
       if (draw->instance_count == 0) {
         continue;
       }
@@ -220,31 +220,31 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void shadow_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Update", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, ShadowSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
+  ECS_COMPONENT(ecs, TbShadowSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
 
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
-  ecs_singleton_modified(ecs, ViewSystem);
-  ShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, ShadowSystem);
-  ecs_singleton_modified(ecs, ShadowSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  ecs_singleton_modified(ecs, TbViewSystem);
+  TbShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
+  ecs_singleton_modified(ecs, TbShadowSystem);
 
   // For each camera, evaluate each light and calculate any necessary shadow
   // info
-  const CameraComponent *cameras = ecs_field(it, CameraComponent, 1);
+  const TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 1);
   for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
-    const CameraComponent *camera = &cameras[cam_idx];
+    const TbCameraComponent *camera = &cameras[cam_idx];
 
     const float near = camera->near;
     const float far = camera->far;
 
     // Calculate inv cam vp based on shadow draw distance
-    float4x4 inv_cam_vp = {.col0 = f4(0, 0, 0, 0)};
+    float4x4 inv_cam_vp = {.col0 = tb_f4(0, 0, 0, 0)};
     {
-      const View *v = tb_get_view(view_sys, camera->view_id);
+      const TbView *v = tb_get_view(view_sys, camera->view_id);
       float4 proj_params = v->view_data.proj_params;
       float4x4 view = v->view_data.v;
-      float4x4 proj = perspective(proj_params[2], proj_params[3], near, far);
-      inv_cam_vp = inv_mf44(mulmf44(proj, view));
+      float4x4 proj = tb_perspective(proj_params[2], proj_params[3], near, far);
+      inv_cam_vp = tb_invf44(tb_mulf44f44(proj, view));
     }
 
     const float cascade_split_lambda = 0.95f;
@@ -271,17 +271,17 @@ void shadow_update_tick(ecs_iter_t *it) {
 
     ecs_iter_t light_it = ecs_query_iter(ecs, shadow_sys->dir_light_query);
     while (ecs_query_next(&light_it)) {
-      DirectionalLightComponent *lights =
-          ecs_field(&light_it, DirectionalLightComponent, 1);
-      const TransformComponent *transforms =
-          ecs_field(&light_it, TransformComponent, 2);
+      TbDirectionalLightComponent *lights =
+          ecs_field(&light_it, TbDirectionalLightComponent, 1);
+      const TbTransformComponent *transforms =
+          ecs_field(&light_it, TbTransformComponent, 2);
       for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
-        DirectionalLightComponent *light = &lights[light_idx];
-        const TransformComponent *trans = &transforms[light_idx];
+        TbDirectionalLightComponent *light = &lights[light_idx];
+        const TbTransformComponent *trans = &transforms[light_idx];
 
-        Transform transform = trans->transform;
+        TbTransform transform = trans->transform;
 
-        CommonViewData data = {
+        TbCommonViewData data = {
             .view_pos = transform.position,
         };
 
@@ -294,9 +294,9 @@ void shadow_update_tick(ecs_iter_t *it) {
           // Project into world space
           for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; ++i) {
             const float3 corner = tb_frustum_corners[i];
-            float4 inv_corner = mulf44(
+            float4 inv_corner = tb_mulf44f4(
                 inv_cam_vp, (float4){corner[0], corner[1], corner[2], 1.0f});
-            frustum_corners[i] = f4tof3(inv_corner) / inv_corner[3];
+            frustum_corners[i] = tb_f4tof3(inv_corner) / inv_corner[3];
           }
           for (uint32_t i = 0; i < 4; i++) {
             float3 dist = frustum_corners[i + 4] - frustum_corners[i];
@@ -314,7 +314,7 @@ void shadow_update_tick(ecs_iter_t *it) {
           // Calculate radius
           float radius = 0.0f;
           for (uint32_t i = 0; i < TB_FRUSTUM_CORNER_COUNT; i++) {
-            float distance = magf3(frustum_corners[i] - center);
+            float distance = tb_magf3(frustum_corners[i] - center);
             radius = SDL_max(radius, distance);
           }
           radius = SDL_ceilf(radius * 16.0f) / 16.0f;
@@ -324,28 +324,28 @@ void shadow_update_tick(ecs_iter_t *it) {
 
           // Calculate projection
           float4x4 proj =
-              orthographic(min.x, max.x, min.y, max.y, min.z, max.z - min.z);
+              tb_orthographic(min.x, max.x, min.y, max.y, min.z, max.z - min.z);
 
           // Calc view matrix
           float4x4 view = {.col0 = {0}};
           {
-            const float3 forward = transform_get_forward(&transform);
+            const float3 forward = tb_transform_get_forward(&transform);
 
             const float3 offset = center + (forward * min[2]);
             // tb_vlog_location(self->vlog, offset, 1.0f, f3(0, 0, 1));
-            view = look_at(offset, center, TB_UP);
+            view = tb_look_at(offset, center, TB_UP);
           }
 
           // Calculate view projection matrix
           data.v = view;
           data.p = proj;
-          data.vp = mulmf44(proj, view);
+          data.vp = tb_mulf44f44(proj, view);
 
           // Inverse
-          data.inv_vp = inv_mf44(data.vp);
-          data.inv_proj = inv_mf44(proj);
+          data.inv_vp = tb_invf44(data.vp);
+          data.inv_proj = tb_invf44(proj);
 
-          Frustum frustum = frustum_from_view_proj(&data.vp);
+          TbFrustum frustum = tb_frustum_from_view_proj(&data.vp);
 
           tb_view_system_set_view_data(
               view_sys, light->cascade_views[cascade_idx], &data);
@@ -367,23 +367,24 @@ void shadow_update_tick(ecs_iter_t *it) {
 void shadow_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, ShadowSystem);
-  ECS_COMPONENT(ecs, MaterialSystem);
-  ECS_COMPONENT(ecs, MeshSystem);
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, RenderObject);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbShadowSystem);
+  ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbRenderObject);
 
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  ShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, ShadowSystem);
-  MaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, MaterialSystem);
-  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbRenderObjectSystem *ro_sys =
+      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
+  TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbAllocator tmp_alloc = shadow_sys->tmp_alloc;
 
@@ -391,15 +392,15 @@ void shadow_draw_tick(ecs_iter_t *it) {
   ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
   uint32_t mesh_count = 0;
   while (ecs_query_next(&mesh_it)) {
-    MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+    TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
     for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-      MeshComponent *mesh = &meshes[mesh_idx];
+      TbMeshComponent *mesh = &meshes[mesh_idx];
 
       uint32_t ent_count = TB_DYN_ARR_SIZE(mesh->entities);
 
       for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
            ++submesh_idx) {
-        SubMesh *sm = &mesh->submeshes[submesh_idx];
+        TbSubMesh *sm = &mesh->submeshes[submesh_idx];
         TbMaterialId mat = sm->material;
         TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
 
@@ -418,17 +419,17 @@ void shadow_draw_tick(ecs_iter_t *it) {
   }
 
   DrawBatchList batches = {0};
-  PrimitiveBatchList prim_batches = {0};
+  TbPrimitiveBatchList prim_batches = {0};
   TB_DYN_ARR_RESET(batches, tmp_alloc, mesh_count);
   TB_DYN_ARR_RESET(prim_batches, tmp_alloc, mesh_count);
-  PrimIndirectList prim_trans = {0};
+  TbPrimIndirectList prim_trans = {0};
   TB_DYN_ARR_RESET(prim_trans, tmp_alloc, mesh_count);
 
   TracyCZoneN(ctx2, "Iterate Meshes", true);
   while (ecs_query_next(&mesh_it)) {
-    MeshComponent *meshes = ecs_field(&mesh_it, MeshComponent, 1);
+    TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
     for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-      MeshComponent *mesh = &meshes[mesh_idx];
+      TbMeshComponent *mesh = &meshes[mesh_idx];
 
       VkBuffer geom_buffer =
           tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
@@ -436,7 +437,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
       for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
            ++submesh_idx) {
-        SubMesh *sm = &mesh->submeshes[submesh_idx];
+        TbSubMesh *sm = &mesh->submeshes[submesh_idx];
         TbMaterialId mat = sm->material;
 
         // Deduce some important details from the submesh
@@ -455,14 +456,14 @@ void shadow_draw_tick(ecs_iter_t *it) {
           VkPipeline pipeline = shadow_sys->pipeline;
 
           // Determine if we need to insert a new batch
-          DrawBatch *batch = NULL;
-          PrimitiveBatch *prim_batch = NULL;
-          IndirectionList *transforms = NULL;
+          TbDrawBatch *batch = NULL;
+          TbPrimitiveBatch *prim_batch = NULL;
+          TbIndirectionList *transforms = NULL;
           {
             // Try to find an existing suitable batch
             TB_DYN_ARR_FOREACH(batches, i) {
-              DrawBatch *db = &TB_DYN_ARR_AT(batches, i);
-              PrimitiveBatch *pb = &TB_DYN_ARR_AT(prim_batches, i);
+              TbDrawBatch *db = &TB_DYN_ARR_AT(batches, i);
+              TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(prim_batches, i);
               if (db->pipeline == pipeline && db->layout == layout &&
                   pb->perm == perm && pb->geom_buffer == geom_buffer) {
                 batch = db;
@@ -476,20 +477,20 @@ void shadow_draw_tick(ecs_iter_t *it) {
               // Worst case batch count is one batch having to carry every
               // mesh with the maximum number of possible submeshes
               const uint32_t max_draw_count = mesh_count;
-              DrawBatch db = {
+              TbDrawBatch db = {
                   .pipeline = pipeline,
                   .layout = layout,
-                  .draw_size = sizeof(PrimitiveDraw),
-                  .draws =
-                      tb_alloc_nm_tp(tmp_alloc, max_draw_count, PrimitiveDraw),
+                  .draw_size = sizeof(TbPrimitiveDraw),
+                  .draws = tb_alloc_nm_tp(tmp_alloc, max_draw_count,
+                                          TbPrimitiveDraw),
               };
-              PrimitiveBatch pb = {
+              TbPrimitiveBatch pb = {
                   .perm = perm,
                   .trans_set = transforms_set,
                   .geom_buffer = geom_buffer,
               };
 
-              IndirectionList il = {0};
+              TbIndirectionList il = {0};
               TB_DYN_ARR_RESET(il, tmp_alloc, max_draw_count);
 
               // Append it to the list and make sure we get a reference
@@ -507,9 +508,9 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
           // Determine if we need to insert a new draw
           {
-            PrimitiveDraw *draw = NULL;
+            TbPrimitiveDraw *draw = NULL;
             for (uint32_t i = 0; i < batch->draw_count; ++i) {
-              PrimitiveDraw *d = &((PrimitiveDraw *)batch->draws)[i];
+              TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
               if (d->index_count == index_count &&
                   d->index_offset == index_offset &&
                   d->index_type == index_type) {
@@ -519,7 +520,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
             }
             // No draw was found, create one
             if (draw == NULL) {
-              PrimitiveDraw d = {
+              TbPrimitiveDraw d = {
                   .index_count = index_count,
                   .index_offset = index_offset,
                   .index_type = index_type,
@@ -528,8 +529,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
               };
               // Append it to the list and make sure we get a reference
               uint32_t idx = batch->draw_count++;
-              ((PrimitiveDraw *)batch->draws)[idx] = d;
-              draw = &((PrimitiveDraw *)batch->draws)[idx];
+              ((TbPrimitiveDraw *)batch->draws)[idx] = d;
+              draw = &((TbPrimitiveDraw *)batch->draws)[idx];
             }
 
             draw->instance_count += TB_DYN_ARR_SIZE(mesh->entities);
@@ -537,7 +538,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
             // Append every render object's transform index to the list
             TB_DYN_ARR_FOREACH(mesh->entities, e_idx) {
               ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
-              const RenderObject *ro = ecs_get(ecs, entity, RenderObject);
+              const TbRenderObject *ro = ecs_get(ecs, entity, TbRenderObject);
               TB_DYN_ARR_APPEND(*transforms, ro->index);
             }
           }
@@ -556,7 +557,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
       TB_DYN_ARR_RESET(inst_buffers, tmp_alloc, count);
 
       TB_DYN_ARR_FOREACH(prim_trans, i) {
-        IndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
+        TbIndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
 
         const size_t trans_size =
             sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
@@ -607,7 +608,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
       VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
           rnd_sys, shadow_sys->desc_pool_list.pools, set_idx);
       const uint64_t offset = TB_DYN_ARR_AT(inst_buffers, i);
-      IndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
+      TbIndirectionList *transforms = &TB_DYN_ARR_AT(prim_trans, i);
       const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
       VkDescriptorBufferInfo *buffer_info =
@@ -638,10 +639,10 @@ void shadow_draw_tick(ecs_iter_t *it) {
   // For each shadow casting light we want to record shadow draws
   ecs_iter_t light_it = ecs_query_iter(ecs, shadow_sys->dir_light_query);
   while (ecs_query_next(&light_it)) {
-    DirectionalLightComponent *lights =
-        ecs_field(&light_it, DirectionalLightComponent, 1);
+    TbDirectionalLightComponent *lights =
+        ecs_field(&light_it, TbDirectionalLightComponent, 1);
     for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
-      const DirectionalLightComponent *light = &lights[light_idx];
+      const TbDirectionalLightComponent *light = &lights[light_idx];
 
       // Submit batch for each shadow cascade
       TracyCZoneN(ctx2, "Submit Batches", true);
@@ -652,8 +653,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
             view_sys, light->cascade_views[cascade_idx]);
 
         TB_DYN_ARR_FOREACH(batches, i) {
-          DrawBatch *batch = &TB_DYN_ARR_AT(batches, i);
-          PrimitiveBatch *prim_batch = (PrimitiveBatch *)batch->user_batch;
+          TbDrawBatch *batch = &TB_DYN_ARR_AT(batches, i);
+          TbPrimitiveBatch *prim_batch = (TbPrimitiveBatch *)batch->user_batch;
           prim_batch->view_set = view_set;
 
           const float dim = TB_SHADOW_MAP_DIM;
@@ -674,37 +675,38 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
 void tb_register_shadow_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, ViewSystem);
-  ECS_COMPONENT(ecs, ShadowSystem);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderPipelineSystem);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, MeshSystem);
+  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT(ecs, TbShadowSystem);
+  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbMeshSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  RenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, RenderPipelineSystem);
-  RenderObjectSystem *ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
-  MeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, MeshSystem);
-  ViewSystem *view_sys = ecs_singleton_get_mut(ecs, ViewSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderPipelineSystem *rp_sys =
+      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  TbRenderObjectSystem *ro_sys =
+      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  ShadowSystem sys = {
+  TbShadowSystem sys = {
       .std_alloc = world->std_alloc,
       .tmp_alloc = world->tmp_alloc,
       .dir_light_query =
           ecs_query(ecs, {.filter.terms =
                               {
-                                  {.id = ecs_id(DirectionalLightComponent)},
-                                  {.id = ecs_id(TransformComponent)},
+                                  {.id = ecs_id(TbDirectionalLightComponent)},
+                                  {.id = ecs_id(TbTransformComponent)},
                               }}),
   };
   // Need a draw context per cascade pass
   for (uint32_t i = 0; i < TB_CASCADE_COUNT; ++i) {
     sys.draw_ctxs[i] = tb_render_pipeline_register_draw_context(
-        rp_sys, &(DrawContextDescriptor){
-                    .batch_size = sizeof(PrimitiveBatch),
+        rp_sys, &(TbDrawContextDescriptor){
+                    .batch_size = sizeof(TbPrimitiveBatch),
                     .draw_fn = shadow_pass_record,
                     .pass_id = rp_sys->shadow_passes[i],
                 });
@@ -734,7 +736,7 @@ void tb_register_shadow_sys(TbWorld *world) {
       tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_passes[0],
                                          &attach_count, NULL);
       TB_CHECK(attach_count == 1, "Unexpected");
-      PassAttachment depth_info = {0};
+      TbPassAttachment depth_info = {0};
       tb_render_pipeline_get_attachments(rp_sys, rp_sys->shadow_passes[0],
                                          &attach_count, &depth_info);
 
@@ -747,24 +749,26 @@ void tb_register_shadow_sys(TbWorld *world) {
   }
 
   // Sets a singleton by ptr
-  ecs_set_ptr(ecs, ecs_id(ShadowSystem), ShadowSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbShadowSystem), TbShadowSystem, &sys);
 
-  ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, CameraComponent);
+  ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, TbCameraComponent);
 
-  ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnUpdate, ShadowSystem(ShadowSystem));
+  ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnUpdate,
+             TbShadowSystem(TbShadowSystem));
 }
 
-void tb_unregister_shadow_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, ShadowSystem);
+void tb_unregister_shadow_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbShadowSystem);
 
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  ShadowSystem *sys = ecs_singleton_get_mut(ecs, ShadowSystem);
+  TbShadowSystem *sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
   tb_rnd_destroy_pipeline(rnd_sys, sys->pipeline);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
   ecs_query_fini(sys->dir_light_query);
-  *sys = (ShadowSystem){0};
+  *sys = (TbShadowSystem){0};
 
-  ecs_singleton_remove(ecs, ShadowSystem);
+  ecs_singleton_remove(ecs, TbShadowSystem);
 }

@@ -15,7 +15,7 @@ void viewer_update_tick(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Viewer System Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
 
-  ViewerSystem *sys = ecs_field(it, ViewerSystem, 1);
+  TbViewerSystem *sys = ecs_field(it, TbViewerSystem, 1);
 
   if (sys->viewer_menu && *sys->viewer_menu) {
     if (igBegin("Viewer", sys->viewer_menu, 0)) {
@@ -59,27 +59,27 @@ void viewer_update_tick(ecs_iter_t *it) {
 
 void tb_register_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, ViewerSystem);
-  ECS_COMPONENT(ecs, CoreUISystem);
+  ECS_COMPONENT(ecs, TbViewerSystem);
+  ECS_COMPONENT(ecs, TbCoreUISystem);
 
-  CoreUISystem *coreui = ecs_singleton_get_mut(ecs, CoreUISystem);
+  TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
-  ViewerSystem sys = {
+  TbViewerSystem sys = {
       .std_alloc = world->std_alloc,
       .tmp_alloc = world->tmp_alloc,
       .viewer_menu = tb_coreui_register_menu(coreui, "Viewer"),
       .selected_scene = 0,
   };
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(ViewerSystem), ViewerSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbViewerSystem), TbViewerSystem, &sys);
 
-  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate, ViewerSystem(ViewerSystem));
+  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate, TbViewerSystem(TbViewerSystem));
 }
 
 void tb_unregister_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, ViewerSystem);
-  ViewerSystem *sys = ecs_singleton_get_mut(ecs, ViewerSystem);
-  *sys = (ViewerSystem){0};
-  ecs_singleton_remove(ecs, ViewerSystem);
+  ECS_COMPONENT(ecs, TbViewerSystem);
+  TbViewerSystem *sys = ecs_singleton_get_mut(ecs, TbViewerSystem);
+  *sys = (TbViewerSystem){0};
+  ecs_singleton_remove(ecs, TbViewerSystem);
 }

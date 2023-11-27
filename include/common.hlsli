@@ -8,23 +8,23 @@
 
 #define PUSH_CONSTANT_BYTES 128
 
-typedef struct SkyPushConstants {
+typedef struct TB_GPU_STRUCT TbSkyPushConstants {
   float4x4 vp;
-} SkyPushConstants;
+} TbSkyPushConstants;
 
-typedef struct EnvFilterConstants {
+typedef struct TB_GPU_STRUCT TbEnvFilterConstants {
   float roughness;
   uint32_t sample_count;
-} EnvFilterConstants;
+} TbEnvFilterConstants;
 
-typedef struct PrimitivePushConstants {
+typedef struct TB_GPU_STRUCT TbPrimitivePushConstants {
   float3 position;
   float3 scale;
   float4 color;
-} PrimitivePushConstants;
+} TbPrimitivePushConstants;
 
 // Constant per-view Camera Data
-typedef struct TB_GPU_STRUCT CommonViewData {
+typedef struct TB_GPU_STRUCT TbCommonViewData {
   float4x4 v;
   float4x4 p;
   float4x4 vp;
@@ -32,31 +32,31 @@ typedef struct TB_GPU_STRUCT CommonViewData {
   float4x4 inv_proj;
   float3 view_pos;
   float4 proj_params;
-} CommonViewData;
+} TbCommonViewData;
 
 // Constant per-view Light Data
 #define TB_CASCADE_COUNT 4
-typedef struct CommonLightData {
+typedef struct TB_GPU_STRUCT TbCommonLightData {
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
   float4x4 cascade_vps[TB_CASCADE_COUNT];
-} CommonLightData;
+} TbCommonLightData;
 
 // Constant per-object Object Data for common objects
-typedef struct CommonObjectData {
+typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
-} CommonObjectData;
+} TbCommonObjectData;
 
 // Common input layout info and permutation settings
-#define VA_INPUT_PERM_NONE 0x00000000
-#define VA_INPUT_PERM_POSITION 0x00000001
-#define VA_INPUT_PERM_NORMAL 0x00000002
-#define VA_INPUT_PERM_TEXCOORD0 0x00000004
-#define VA_INPUT_PERM_TEXCOORD1 0x00000008
-#define VA_INPUT_PERM_TANGENT 0x00000010
-#define VA_INPUT_PERM_COLOR 0x00000020
-#define VA_INPUT_PERM_COUNT 6
+#define TB_INPUT_PERM_NONE 0x00000000
+#define TB_INPUT_PERM_POSITION 0x00000001
+#define TB_INPUT_PERM_NORMAL 0x00000002
+#define TB_INPUT_PERM_TEXCOORD0 0x00000004
+#define TB_INPUT_PERM_TEXCOORD1 0x00000008
+#define TB_INPUT_PERM_TANGENT 0x00000010
+#define TB_INPUT_PERM_COLOR 0x00000020
+#define TB_INPUT_PERM_COUNT 6
 
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION

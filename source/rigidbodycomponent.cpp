@@ -211,7 +211,7 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto &bodies = jolt->GetBodyInterface();
 
   auto &rb = *ecs.entity(e).get_mut<TbRigidbodyComponent>();
-  auto trans = ecs.entity(e).get_mut<TransformComponent>();
+  auto trans = ecs.entity(e).get_mut<TbTransformComponent>();
 
   // Set the body position and rotation based on the final world transform
   // of the entity.
@@ -246,12 +246,12 @@ void remove_rigidbody_components(ecs_world_t *world) {
 void tb_register_rigidbody_component(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
-  AssetSystem asset = {
+  TbAssetSystem asset = {
       .add_fn = create_rigidbody_component,
       .post_load_fn = post_load_rigidbody_component,
       .rem_fn = remove_rigidbody_components,
   };
 
-  // Sets the AssetSystem component on the TbPhysicsSystem singleton entity
-  ecs.entity<TbPhysicsSystem>().set<AssetSystem>(asset);
+  // Sets the TbAssetSystem component on the TbPhysicsSystem singleton entity
+  ecs.entity<TbPhysicsSystem>().set<TbAssetSystem>(asset);
 }

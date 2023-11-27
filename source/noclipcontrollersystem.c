@@ -15,16 +15,16 @@
 void noclip_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, InputSystem);
+  ECS_COMPONENT(ecs, TbInputSystem);
 
-  InputSystem *input = ecs_singleton_get_mut(ecs, InputSystem);
+  TbInputSystem *input = ecs_singleton_get_mut(ecs, TbInputSystem);
 
-  TransformComponent *transforms = ecs_field(it, TransformComponent, 1);
-  NoClipComponent *noclips = ecs_field(it, NoClipComponent, 2);
+  TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 1);
+  TbNoClipComponent *noclips = ecs_field(it, TbNoClipComponent, 2);
 
   for (int32_t i = 0; i < it->count; ++i) {
-    TransformComponent *transform = &transforms[i];
-    NoClipComponent *noclip = &noclips[i];
+    TbTransformComponent *transform = &transforms[i];
+    TbNoClipComponent *noclip = &noclips[i];
 
     float2 look_axis = {0};
     float2 move_axis = {0};
@@ -33,7 +33,7 @@ void noclip_update_tick(ecs_iter_t *it) {
     // entity
     // Keyboard and mouse input
     {
-      const TBKeyboard *keyboard = &input->keyboard;
+      const TbKeyboard *keyboard = &input->keyboard;
       if (keyboard->key_W) {
         move_axis.y += 1.0f;
       }
@@ -46,7 +46,7 @@ void noclip_update_tick(ecs_iter_t *it) {
       if (keyboard->key_D) {
         move_axis.x += 1.0f;
       }
-      const TBMouse *mouse = &input->mouse;
+      const TbMouse *mouse = &input->mouse;
       if (mouse->left || mouse->right || mouse->middle) {
         look_axis = -mouse->axis;
       }
@@ -56,7 +56,7 @@ void noclip_update_tick(ecs_iter_t *it) {
     // Just controller 0 for now but only if keyboard input wasn't
     // specified
     {
-      const TBGameControllerState *ctl_state = &input->controller_states[0];
+      const TbGameControllerState *ctl_state = &input->controller_states[0];
       if (look_axis.x == 0 && look_axis.y == 0) {
         look_axis = -ctl_state->right_stick;
       }
@@ -66,9 +66,9 @@ void noclip_update_tick(ecs_iter_t *it) {
       }
     }
 
-    float3 forward = transform_get_forward(&transform->transform);
-    float3 right = crossf3(forward, TB_UP);
-    float3 up = crossf3(right, forward);
+    float3 forward = tb_transform_get_forward(&transform->transform);
+    float3 right = tb_crossf3(forward, TB_UP);
+    float3 up = tb_crossf3(right, forward);
 
     float3 velocity = {0};
     {
@@ -78,42 +78,32 @@ void noclip_update_tick(ecs_iter_t *it) {
       velocity += right * delta_move_speed * move_axis.x;
     }
 
-    Quaternion angular_velocity = {0};
+    TbQuaternion angular_velocity = {0};
     {
       float delta_look_speed = noclip->look_speed * it->delta_time;
 
-      Quaternion av0 =
-          angle_axis_to_quat(f3tof4(up, look_axis.x * delta_look_speed));
-      Quaternion av1 =
-          angle_axis_to_quat(f3tof4(right, look_axis.y * delta_look_speed));
+      TbQuaternion av0 =
+          tb_angle_axis_to_quat(tb_f3tof4(up, look_axis.x * delta_look_speed));
+      TbQuaternion av1 = tb_angle_axis_to_quat(
+          tb_f3tof4(right, look_axis.y * delta_look_speed));
 
-      angular_velocity = mulq(av0, av1);
+      angular_velocity = tb_mulq(av0, av1);
     }
 
-    translate(&transform->transform, velocity);
-    rotate(&transform->transform, angular_velocity);
+    tb_translate(&transform->transform, velocity);
+    tb_rotate(&transform->transform, angular_velocity);
     transform->dirty = true;
   }
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_noclip_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, NoClipComponent);
-  ECS_COMPONENT(ecs, NoClipControllerSystem);
-
-  ecs_singleton_set(ecs, NoClipControllerSystem, {0});
+void tb_register_noclip_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbNoClipComponent);
 
   ECS_SYSTEM(ecs, noclip_update_tick,
-             EcsOnUpdate, [out] TransformComponent, [out] NoClipComponent)
+             EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent)
 
   tb_register_noclip_component(ecs);
-}
-
-void tb_unregister_noclip_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, NoClipControllerSystem);
-  NoClipControllerSystem *sys =
-      ecs_singleton_get_mut(ecs, NoClipControllerSystem);
-  *sys = (NoClipControllerSystem){0};
-  ecs_singleton_remove(ecs, NoClipControllerSystem);
 }

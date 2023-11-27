@@ -88,32 +88,32 @@ typedef struct float3x3 {
   };
 } float3x3;
 
-typedef float4 Quaternion;
+typedef float4 TbQuaternion;
 
-typedef struct Transform {
+typedef struct TbTransform {
   float3 position;
   float3 scale;
-  Quaternion rotation;
-} Transform;
+  TbQuaternion rotation;
+} TbTransform;
 
-typedef struct Plane {
+typedef struct TbPlane {
   float4 xyzw;
-} Plane;
+} TbPlane;
 
-typedef struct Sphere {
+typedef struct TbSphere {
   float3 center;
   float radius;
-} Sphere;
+} TbSphere;
 
-typedef struct AABB {
+typedef struct TbAABB {
   float3 min;
   float3 max;
-} AABB;
+} TbAABB;
 
 // Must forward declare this for helper function;
 typedef struct cgltf_node cgltf_node;
 
-typedef enum FrustumPlane {
+typedef enum TbFrustumPlane {
   TopPlane,
   BottomPlane,
   LeftPlane,
@@ -121,92 +121,11 @@ typedef enum FrustumPlane {
   NearPlane,
   FarPlane,
   FrustumPlaneCount
-} FrustumPlane;
+} TbFrustumPlane;
 
-typedef struct Frustum {
-  Plane planes[FrustumPlaneCount];
-} Frustum;
-
-float3 atof3(const float f[3]);
-float4 atof4(const float f[4]);
-
-float2 f2(float x, float y);
-float3 f3(float x, float y, float z);
-float4 f4(float x, float y, float z, float w);
-float3 f4tof3(float4 f);
-float4 f3tof4(float3 f, float w);
-float2 f3tof2(float3 f);
-float3x4 m44tom34(float4x4 m);
-float3x3 m44tom33(float4x4 m);
-float4x4 m33tom44(float3x3 m);
-
-float dotf2(float2 x, float2 y);
-float dotf3(float3 x, float3 y);
-float dotf4(float4 x, float4 y);
-float3 crossf3(float3 x, float3 y);
-
-float magf2(float2 v);
-float magf3(float3 v);
-float magf4(float4 v);
-float magsqf3(float3 v);
-float magsqf4(float4 v);
-float norm_angle(float a);
-float2 normf2(float2 v);
-float3 normf3(float3 v);
-float4 normf4(float4 v);
-Quaternion normq(Quaternion q);
-
-float lenf3(float3 v);
-
-Transform trans_identity(void);
-
-float3x3 mf33_identity(void);
-float3x4 mf34_identity(void);
-float4x4 mf44_identity(void);
-
-float4 mulf44(float4x4 m, float4 v);
-float4 mul4f44f(float4 v, float4x4 m);
-
-float3 mulf33(float3x3 m, float3 v);
-
-float4x4 mulmf44(float4x4 x, float4x4 y);
-float4x4 inv_mf44(float4x4 m);
-float4x4 transpose_mf44(float4x4 m);
-float3x3 mf33_from_axes(float3 forward, float3 right, float3 up);
-
-Quaternion mf33_to_quat(float3x3 m);
-Quaternion quat_from_axes(float3 forward, float3 right, float3 up);
-Quaternion angle_axis_to_quat(float4 angle_axis);
-float3x3 quat_to_mf33(Quaternion quat);
-float4x4 quat_to_trans(Quaternion quat);
-
-Quaternion mulq(Quaternion p, Quaternion q);
-float3 qrotf3(Quaternion q, float3 v);
-
-bool tb_f4eq(float4 x, float4 y);
-bool tb_f3eq(float3 x, float3 y);
-
-bool tb_mf33eq(const float3x3 *x, const float3x3 *y);
-bool tb_mf44eq(const float4x4 *x, const float4x4 *y);
-
-bool tb_transeq(const Transform *x, const Transform *y);
-
-AABB aabb_init(void);
-void aabb_add_point(AABB *aabb, float3 point);
-float aabb_get_width(AABB aabb);
-float aabb_get_height(AABB aabb);
-float aabb_get_depth(AABB aabb);
-AABB aabb_rotate(Quaternion q, AABB aabb);
-AABB aabb_transform(float4x4 m, AABB aabb);
-
-void translate(Transform *t, float3 p);
-void scale(Transform *t, float3 s);
-void rotate(Transform *t, Quaternion r);
-
-float3 safe_reciprocal(float3 v);
-Quaternion inv_quat(Quaternion q);
-
-Transform inv_trans(Transform t);
+typedef struct TbFrustum {
+  TbPlane planes[FrustumPlaneCount];
+} TbFrustum;
 
 #define TB_FRUSTUM_CORNER_COUNT 8
 static const float3 tb_frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {
@@ -224,58 +143,137 @@ static const float3 tb_frustum_corners[TB_FRUSTUM_CORNER_COUNT] = {
 };
 
 // Reminder: Left Handed coordinate space
-#define TB_ORIGIN f3(0, 0, 0)
-#define TB_FORWARD f3(0, 0, -1)
-#define TB_BACKWARD f3(0, 0, 1)
-#define TB_LEFT f3(-1, 0, 0)
-#define TB_RIGHT f3(1, 0, 0)
-#define TB_UP f3(0, 1, 0)
-#define TB_DOWN f3(0, -1, 0)
+#define TB_ORIGIN tb_f3(0, 0, 0)
+#define TB_FORWARD tb_f3(0, 0, -1)
+#define TB_BACKWARD tb_f3(0, 0, 1)
+#define TB_LEFT tb_f3(-1, 0, 0)
+#define TB_RIGHT tb_f3(1, 0, 0)
+#define TB_UP tb_f3(0, 1, 0)
+#define TB_DOWN tb_f3(0, -1, 0)
 
 // X is left to right, Y is down to up and Z is front to back
 #define TB_WIDTH_IDX 0
 #define TB_HEIGHT_IDX 1
 #define TB_DEPTH_IDX 2
 
-float3 transform_get_forward(const Transform *t);
-float3 transform_get_right(const Transform *t);
-float3 transform_get_up(const Transform *t);
+float3 tb_atof3(const float f[3]);
+float4 tb_atof4(const float f[4]);
 
-Transform transform_combine(const Transform *x, const Transform *y);
-float4x4 transform_to_matrix(const Transform *t);
+float2 tb_f2(float x, float y);
+float3 tb_f3(float x, float y, float z);
+float4 tb_f4(float x, float y, float z, float w);
+float3 tb_f4tof3(float4 f);
+float4 tb_f3tof4(float3 f, float w);
+float2 tb_f3tof2(float3 f);
+float3x4 tb_f44tof34(float4x4 m);
+float3x3 tb_f44tof33(float4x4 m);
+float4x4 tb_f33tof44(float3x3 m);
 
-Transform tb_transform_from_node(const cgltf_node *node);
+float tb_dotf2(float2 x, float2 y);
+float tb_dotf3(float3 x, float3 y);
+float tb_dotf4(float4 x, float4 y);
+float3 tb_crossf3(float3 x, float3 y);
 
-float4x4 look_forward(float3 pos, float3 forward, float3 up);
-float4x4 look_at(float3 pos, float3 target, float3 up);
+float tb_magf2(float2 v);
+float tb_magf3(float3 v);
+float tb_magf4(float4 v);
+float tb_magsqf2(float2 v);
+float tb_magsqf3(float3 v);
+float tb_magsqf4(float4 v);
+float tb_norm_angle(float a);
+float2 tb_normf2(float2 v);
+float3 tb_normf3(float3 v);
+float4 tb_normf4(float4 v);
+TbQuaternion tb_normq(TbQuaternion q);
 
-Quaternion look_forward_quat(float3 forward, float3 up);
-Quaternion look_at_quat(float3 pos, float3 target, float3 up);
+TbTransform tb_trans_identity(void);
 
-Transform look_forward_transform(float3 pos, float3 forward, float3 up);
-Transform look_at_transform(float3 pos, float3 target, float3 up);
+float3x3 tb_f33_identity(void);
+float3x4 tb_f34_identity(void);
+float4x4 tb_f44_identity(void);
 
-float4x4 perspective(float fovy, float aspect, float zn, float zf);
-float4x4 orthographic(float r, float l, float t, float b, float zn, float zf);
+float4 tb_mulf44f4(float4x4 m, float4 v);
+float4 tb_mulf4f44(float4 v, float4x4 m);
 
-Frustum frustum_from_view_proj(const float4x4 *vp);
+float3 tb_mulf33f3(float3x3 m, float3 v);
 
-bool frustum_test_aabb(const Frustum *frust, const AABB *aabb);
+float4x4 tb_mulf44f44(float4x4 x, float4x4 y);
+float4x4 tb_invf44(float4x4 m);
+float4x4 tb_transpose_f44(float4x4 m);
+float3x3 tb_f33_from_axes(float3 forward, float3 right, float3 up);
 
-float deg_to_rad(float d);
-float rad_to_deg(float r);
+TbQuaternion tb_f33_to_quat(float3x3 m);
+TbQuaternion tb_quat_from_axes(float3 forward, float3 right, float3 up);
+TbQuaternion tb_angle_axis_to_quat(float4 angle_axis);
+float3x3 tb_quat_to_f33(TbQuaternion quat);
+float4x4 tb_quat_to_f44(TbQuaternion quat);
 
-float lerpf(float v0, float v1, float a);
-float3 lerpf3(float3 v0, float3 v1, float a);
+TbQuaternion tb_mulq(TbQuaternion q, TbQuaternion p);
+float3 tb_qrotf3(TbQuaternion q, float3 v);
 
-Quaternion slerp(Quaternion q0, Quaternion q1, float a);
+bool tb_f4eq(float4 x, float4 y);
+bool tb_f3eq(float3 x, float3 y);
 
-Transform trans_lerp(Transform t0, Transform t1, float a);
+bool tb_f33_eq(const float3x3 *x, const float3x3 *y);
+bool tb_f44_eq(const float4x4 *x, const float4x4 *y);
 
-float clampf(float v, float min, float max);
-float3 clampf3(float3 v, float3 min, float3 max);
+bool tb_trans_eq(const TbTransform *x, const TbTransform *y);
 
-float tb_randf(float min, float max);
+TbAABB tb_aabb_init(void);
+void tb_aabb_add_point(TbAABB *aabb, float3 point);
+float tb_aabb_get_width(TbAABB aabb);
+float tb_aabb_get_height(TbAABB aabb);
+float tb_aabb_get_depth(TbAABB aabb);
+TbAABB tb_aabb_rotate(TbQuaternion q, TbAABB aabb);
+TbAABB tb_aabb_transform(float4x4 m, TbAABB aabb);
+
+void tb_translate(TbTransform *t, float3 p);
+void tb_scale(TbTransform *t, float3 s);
+void tb_rotate(TbTransform *t, TbQuaternion r);
+
+float3 tb_safe_reciprocal(float3 v);
+TbQuaternion tb_inv_quat(TbQuaternion q);
+
+TbTransform tb_inv_trans(TbTransform t);
+
+float3 tb_transform_get_forward(const TbTransform *t);
+float3 tb_transform_get_right(const TbTransform *t);
+float3 tb_transform_get_up(const TbTransform *t);
+
+TbTransform tb_transform_combine(const TbTransform *x, const TbTransform *y);
+float4x4 tb_transform_to_matrix(const TbTransform *t);
+
+TbTransform tb_transform_from_node(const cgltf_node *node);
+
+float4x4 tb_look_forward(float3 pos, float3 forward, float3 up);
+float4x4 tb_look_at(float3 pos, float3 target, float3 up);
+
+TbQuaternion tb_look_forward_quat(float3 forward, float3 up);
+TbQuaternion tb_look_at_quat(float3 pos, float3 target, float3 up);
+
+TbTransform tb_look_forward_transform(float3 pos, float3 forward, float3 up);
+TbTransform tb_look_at_transform(float3 pos, float3 target, float3 up);
+
+float4x4 tb_perspective(float fovy, float aspect, float zn, float zf);
+float4x4 tb_orthographic(float r, float l, float t, float b, float zn,
+                         float zf);
+
+TbFrustum tb_frustum_from_view_proj(const float4x4 *vp);
+
+bool tb_frustum_test_aabb(const TbFrustum *frust, const TbAABB *aabb);
+
+float tb_deg_to_rad(float d);
+float tb_rad_to_deg(float r);
+
+float tb_lerpf(float f0, float f1, float a);
+float3 tb_lerpf3(float3 v0, float3 v1, float a);
+
+TbQuaternion tb_slerp(TbQuaternion q0, TbQuaternion q1, float a);
+
+TbTransform tb_trans_lerp(TbTransform t0, TbTransform t1, float a);
+
+float tb_clampf(float v, float min, float max);
+float3 tb_clampf3(float3 v, float3 min, float3 max);
 
 #endif
 

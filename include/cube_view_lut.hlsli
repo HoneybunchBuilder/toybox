@@ -26,7 +26,7 @@
   float4x4 matrices[DIR_COUNT] = {};
   for (uint32_t dir_idx = 0; dir_idx < DIR_COUNT; ++dir_idx)
   {
-    float4x4 proj = perspective(PI_2, 1.0, 0.001, 1.0f);
+    float4x4 proj = perspective(TB_PI_2, 1.0, 0.001, 1.0f);
     float4x4 view = look_forward((float3){0}, directions[dir_idx], ups[dir_idx]);
     matrices[dir_idx] = mulmf44(proj, view);
     

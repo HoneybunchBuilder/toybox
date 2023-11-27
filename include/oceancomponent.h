@@ -1,30 +1,28 @@
 #pragma once
 
 #include "simd.h"
-#include <stdint.h>
 
 #include "ocean.hlsli" // Must include simd.h before shader includes
 
-#define OceanComponentId 0xBAD22222
-#define OceanComponentIdStr "0xBAD22222"
+#define TbOceanComponentIdStr "0xBAD22222"
 
 typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
+typedef struct TbTransformComponent TbTransformComponent;
 
-typedef struct TransformComponent TransformComponent;
-
-typedef struct OceanComponent {
+typedef struct TbOceanComponent {
   float time;
   uint32_t wave_count;
-  OceanWave waves[TB_WAVE_MAX];
-} OceanComponent;
+  TbOceanWave waves[TB_WAVE_MAX];
+} TbOceanComponent;
 
-typedef struct OceanSample {
+typedef struct TbOceanSample {
   float3 pos;
   float3 tangent;
   float3 binormal;
-} OceanSample;
+} TbOceanSample;
 
-void tb_register_ocean_component(ecs_world_t *ecs);
+void tb_register_ocean_component(TbWorld *world);
 
-OceanSample tb_sample_ocean(const OceanComponent *ocean, ecs_world_t *ecs,
-                            TransformComponent *transform, float2 pos);
+TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
+                              TbTransformComponent *transform, float2 pos);

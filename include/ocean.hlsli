@@ -6,11 +6,11 @@
 #define TB_WAVE_MAX 8
 
 // To avoid struct packing issues
-typedef float4 OceanWave; // xy = dir, z = steep, w = wavelength
+typedef float4 TbOceanWave; // xy = dir, z = steep, w = wavelength
 
 typedef struct OceanData {
   float4 time_waves; // x = time, y = wave count
-  OceanWave wave[TB_WAVE_MAX];
+  TbOceanWave wave[TB_WAVE_MAX];
 } OceanData;
 
 typedef struct OceanPushConstants {
@@ -24,10 +24,10 @@ _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
 #endif
 
 #ifdef __HLSL_VERSION
-void gerstner_wave(OceanWave wave, float time, inout float3 pos,
+void gerstner_wave(TbOceanWave wave, float time, inout float3 pos,
                    inout float3 tangent, inout float3 binormal) {
   float steepness = wave.z;
-  float k = 2 * PI / wave.w;
+  float k = 2 * TB_PI / wave.w;
   float c = sqrt(9.8 / k);
   float2 d = normalize(wave.xy);
   float f = k * (dot(d, pos.xz) - c * time);

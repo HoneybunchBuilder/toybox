@@ -52,7 +52,7 @@ float fbm(float3 x) {
 
 float3 total_rayleigh(float3 lambda, float refractive_index,
                       float depolarization_factor, float num_molecules) {
-  return (8.0 * pow(PI, 3.0) * pow(pow(refractive_index, 2.0) - 1.0, 2.0) *
+  return (8.0 * pow(TB_PI, 3.0) * pow(pow(refractive_index, 2.0) - 1.0, 2.0) *
           (6.0 + 3.0 * depolarization_factor)) /
          (3.0 * num_molecules * pow(lambda, float3(4.0, 4.0, 4.0)) *
           (6.0 - 7.0 * depolarization_factor));
@@ -60,22 +60,22 @@ float3 total_rayleigh(float3 lambda, float refractive_index,
 
 float3 total_mie(float3 lambda, float3 K, float T, float mie_v) {
   float c = 0.2 * T * 10e-18;
-  return 0.434 * c * PI * pow((2.0 * PI) / lambda, mie_v - 2.0) * K;
+  return 0.434 * c * TB_PI * pow((2.0 * TB_PI) / lambda, mie_v - 2.0) * K;
 }
 
 float rayleigh_phase(float cos_theta) {
-  return (3.0 / (16.0 * PI)) * (1.0 + pow(cos_theta, 2.0));
+  return (3.0 / (16.0 * TB_PI)) * (1.0 + pow(cos_theta, 2.0));
 }
 
 float henyey_greenstein_phase(float cos_theta, float g) {
-  return (1.0 / (4.0 * PI)) *
+  return (1.0 / (4.0 * TB_PI)) *
          ((1.0 - pow(g, 2.0)) /
           pow(1.0 - 2.0 * g * cos_theta + pow(g, 2.0), 1.5));
 }
 
 float sun_intensity(float zenith_angle_cos, float sun_intensity_factor,
                     float sun_intensity_falloff_steepness) {
-  float cutoff_angle = PI / 1.95; // Earth shadow hack
+  float cutoff_angle = TB_PI / 1.95; // Earth shadow hack
   return sun_intensity_factor *
          max(0.0, 1.0 - exp(-((cutoff_angle - acos(zenith_angle_cos)) /
                               sun_intensity_falloff_steepness)));
@@ -120,7 +120,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   // Optical length, cutoff angle at 90 to avoid singularity
   float zenith_angle = acos(max(0.0, dot(up, normalize(view_pos))));
   float denom = cos(zenith_angle) +
-                0.15 * pow(93.885 - ((zenith_angle * 180.0) / PI), -1.253);
+                0.15 * pow(93.885 - ((zenith_angle * 180.0) / TB_PI), -1.253);
   float s_r = rayleigh_zenith_length / denom;
   float s_m = mie_zenith_length / denom;
 

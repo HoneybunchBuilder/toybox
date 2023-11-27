@@ -30,22 +30,22 @@ typedef struct SDL_Thread SDL_Thread;
 typedef struct SDL_semaphore SDL_semaphore;
 typedef struct SDL_mutex SDL_mutex;
 
-typedef struct World World;
+typedef struct TbWorld TbWorld;
 
-typedef struct LoadThread {
+typedef struct TbLoadThread {
   SDL_Thread *thread;
 
   TbGeneralAllocator std_alloc;
   TbArenaAllocator loading_arena;
-} LoadThread;
+} TbLoadThread;
 
 // Copy the request list and tell the load thread to begin loading
-void tb_signal_begin_load(LoadThread *thread, char const *const *scene_paths,
+void tb_signal_begin_load(TbLoadThread *thread, char const *const *scene_paths,
                           uint32_t scene_count);
 
 // Check to see if loading is complete
-bool tb_load_complete(LoadThread *thread, float *percent);
+bool tb_load_complete(TbLoadThread *thread, float *percent);
 
 // Returns a pointer to a const World* that points to a chunk of loadthread
 // owned memory that the main thread needs to copy and then decide how to append
-void tb_on_world_loaded(LoadThread *thread, World const **world);
+void tb_on_world_loaded(TbLoadThread *thread, TbWorld const **world);

@@ -2,28 +2,28 @@
 
 #include <stdint.h>
 
-typedef enum TBMSAA {
+typedef enum TbMSAA {
   TBMSAA_Off = 0,
   TBMSAA_x2 = 2,
   TBMSAA_x4 = 4,
   TBMSAA_x8 = 8,
   TBMSAA_x16 = 16,
-} TBMSAA;
+} TbMSAA;
 #define TBMSAAOptionCount 5
-static const TBMSAA TBMSAAOptions[TBMSAAOptionCount] = {
+static const TbMSAA TBMSAAOptions[TBMSAAOptionCount] = {
     TBMSAA_Off, TBMSAA_x2, TBMSAA_x4, TBMSAA_x8, TBMSAA_x16,
 };
 // static const char *TBMSAAOptionNames[TBMSAAOptionCount] = {
 //     "Off", "x2", "x4", "x8", "x16",
 // };
 
-typedef enum TBWindowMode {
+typedef enum TbWindowMode {
   TBWindowMode_Windowed,
   TBWindowMode_Borderless,
   TBWindowMode_Fullscreen,
   TBWindowMode_Count
-} TBWindowMode;
-static const TBWindowMode TBWindowModes[TBWindowMode_Count] = {
+} TbWindowMode;
+static const TbWindowMode TBWindowModes[TBWindowMode_Count] = {
     TBWindowMode_Windowed,
     TBWindowMode_Borderless,
     TBWindowMode_Fullscreen,
@@ -34,19 +34,19 @@ static const TBWindowMode TBWindowModes[TBWindowMode_Count] = {
 //     "Exclusive Fullscreen",
 // };
 
-typedef struct TBDisplayMode {
+typedef struct TbDisplayMode {
   uint32_t width;
   uint32_t height;
   uint32_t refresh_rate; // in Hz
-} TBDisplayMode;
+} TbDisplayMode;
 
-typedef enum TBVsyncMode {
+typedef enum TbVsyncMode {
   TBVsync_Off,
   TBVsync_Adaptive,
   TBVsync_On,
   TBVsync_Count,
-} TBVsyncMode;
-static const TBVsyncMode TBVsyncModes[TBVsync_Count] = {
+} TbVsyncMode;
+static const TbVsyncMode TBVsyncModes[TBVsync_Count] = {
     TBVsync_Off,
     TBVsync_Adaptive,
     TBVsync_On,
@@ -57,11 +57,11 @@ static const TBVsyncMode TBVsyncModes[TBVsync_Count] = {
 //     "On",
 // };
 
-typedef struct TBSettings {
-  TBMSAA msaa;
-  TBWindowMode windowing_mode;
+typedef struct TbSettings {
+  TbMSAA msaa;
+  TbWindowMode windowing_mode;
   int32_t display_index;
-  TBDisplayMode display_mode;
-  TBVsyncMode vsync_mode;
+  TbDisplayMode display_mode;
+  TbVsyncMode vsync_mode;
   float resolution_scale;
-} TBSettings;
+} TbSettings;

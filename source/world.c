@@ -82,38 +82,35 @@ void *ecs_realloc(void *original, ecs_size_t size) {
 }
 
 TbCreateWorldSystemsFn tb_create_default_world =
-    ^(TbWorld *world, RenderThread *thread, SDL_Window *window) {
-      ecs_world_t *ecs = world->ecs;
-      TbAllocator std_alloc = world->std_alloc;
-      TbAllocator tmp_alloc = world->tmp_alloc;
+    ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
       tb_register_physics_sys(world);
-      tb_register_light_sys(ecs);
+      tb_register_light_sys(world);
       tb_register_audio_sys(world);
-      tb_register_render_sys(ecs, std_alloc, tmp_alloc, thread);
-      tb_register_input_sys(ecs, tmp_alloc, window);
-      tb_register_render_target_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_texture_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_view_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_render_object_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_render_pipeline_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_material_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_mesh_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_sky_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_imgui_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_noclip_sys(ecs);
-      tb_register_core_ui_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_visual_logging_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_ocean_sys(ecs, std_alloc, tmp_alloc);
-      tb_register_camera_sys(ecs, std_alloc, tmp_alloc);
+      tb_register_render_sys(world, thread);
+      tb_register_input_sys(world, window);
+      tb_register_render_target_sys(world);
+      tb_register_texture_sys(world);
+      tb_register_view_sys(world);
+      tb_register_render_object_sys(world);
+      tb_register_render_pipeline_sys(world);
+      tb_register_material_sys(world);
+      tb_register_mesh_sys(world);
+      tb_register_sky_sys(world);
+      tb_register_imgui_sys(world);
+      tb_register_noclip_sys(world);
+      tb_register_core_ui_sys(world);
+      tb_register_visual_logging_sys(world);
+      tb_register_ocean_sys(world);
+      tb_register_camera_sys(world);
       tb_register_shadow_sys(world);
-      tb_register_time_of_day_sys(ecs);
-      tb_register_rotator_sys(ecs, tmp_alloc);
+      tb_register_time_of_day_sys(world);
+      tb_register_rotator_sys(world);
       tb_register_third_person_systems(world);
     };
 
 TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
                         TbCreateWorldSystemsFn create_fn,
-                        RenderThread *render_thread, SDL_Window *window) {
+                        TbRenderThread *render_thread, SDL_Window *window) {
   // Ensure the instrumented allocator is used
   ecs_os_set_api_defaults();
   ecs_os_api_t os_api = ecs_os_api;
@@ -153,8 +150,8 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
     return false;
   }
   // Manually check flecs for quit event
-  ECS_COMPONENT(ecs, InputSystem);
-  const InputSystem *in_sys = ecs_singleton_get(ecs, InputSystem);
+  ECS_COMPONENT(ecs, TbInputSystem);
+  const TbInputSystem *in_sys = ecs_singleton_get(ecs, TbInputSystem);
   if (in_sys) {
     for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {
       if (in_sys->events[event_idx].type == SDL_QUIT) {
@@ -181,24 +178,24 @@ void tb_destroy_world(TbWorld *world) {
 
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
   tb_unregister_physics_sys(world);
-  tb_unregister_rotator_sys(ecs);
-  tb_unregister_time_of_day_sys(ecs);
-  tb_unregister_camera_sys(ecs);
-  tb_unregister_shadow_sys(ecs);
-  tb_unregister_visual_logging_sys(ecs);
-  tb_unregister_ocean_sys(ecs);
-  tb_unregister_sky_sys(ecs);
-  tb_unregister_core_ui_sys(ecs);
-  tb_unregister_imgui_sys(ecs);
-  tb_unregister_mesh_sys(ecs);
-  tb_unregister_material_sys(ecs);
-  tb_unregister_render_pipeline_sys(ecs);
-  tb_unregister_render_object_sys(ecs);
-  tb_unregister_view_sys(ecs);
-  tb_unregister_texture_sys(ecs);
-  tb_unregister_render_target_sys(ecs);
-  tb_unregister_render_sys(ecs);
-  tb_unregister_light_sys(ecs);
+  tb_unregister_rotator_sys(world);
+  tb_unregister_time_of_day_sys(world);
+  tb_unregister_camera_sys(world);
+  tb_unregister_shadow_sys(world);
+  tb_unregister_visual_logging_sys(world);
+  tb_unregister_ocean_sys(world);
+  tb_unregister_sky_sys(world);
+  tb_unregister_core_ui_sys(world);
+  tb_unregister_imgui_sys(world);
+  tb_unregister_mesh_sys(world);
+  tb_unregister_material_sys(world);
+  tb_unregister_render_pipeline_sys(world);
+  tb_unregister_render_object_sys(world);
+  tb_unregister_view_sys(world);
+  tb_unregister_texture_sys(world);
+  tb_unregister_render_target_sys(world);
+  tb_unregister_render_sys(world);
+  tb_unregister_light_sys(world);
 
   ecs_fini(ecs);
 }
@@ -208,8 +205,8 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
                          ecs_entity_t parent, const cgltf_node *node) {
   ecs_world_t *ecs = world->ecs;
   ECS_TAG(ecs, NoTransform);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbAssetSystem);
 
   TbAllocator std_alloc = world->std_alloc;
   TbAllocator tmp_alloc = world->tmp_alloc;
@@ -238,12 +235,13 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   ecs_entity_t ent = ecs_new(ecs, 0);
 
   // Attempt to add a component for each asset system provided
-  ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
-                                                    {.id = ecs_id(AssetSystem)},
-                                                }});
+  ecs_filter_t *asset_filter =
+      ecs_filter(ecs, {.terms = {
+                           {.id = ecs_id(TbAssetSystem)},
+                       }});
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {
-    AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+    TbAssetSystem *asset_sys = ecs_field(&asset_it, TbAssetSystem, 1);
     for (int32_t i = 0; i < asset_it.count; ++i) {
       if (!asset_sys[i].add_fn(ecs, ent, root_scene_path, node, json)) {
         TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
@@ -255,13 +253,13 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   // Add a transform component to the entity unless directed not to
   // by some loaded component
   if (!ecs_has(ecs, ent, NoTransform)) {
-    TransformComponent trans = {
+    TbTransformComponent trans = {
         .dirty = true,
         .parent = parent,
         .child_count = node->children_count,
         .transform = tb_transform_from_node(node),
     };
-    ecs_set_ptr(ecs, ent, TransformComponent, &trans);
+    ecs_set_ptr(ecs, ent, TbTransformComponent, &trans);
   }
   if (node->name) {
     // Don't set node names right now since they can conflict at the moment
@@ -269,7 +267,8 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   }
 
   if (node->children_count > 0) {
-    TransformComponent *trans_comp = ecs_get_mut(ecs, ent, TransformComponent);
+    TbTransformComponent *trans_comp =
+        ecs_get_mut(ecs, ent, TbTransformComponent);
     // Make sure this entity actually has a transform
     if (trans_comp) {
       trans_comp->children =
@@ -282,7 +281,7 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
         children[i] =
             load_entity(world, scene, tok, data, root_scene_path, ent, child);
       }
-      ecs_modified(ecs, ent, TransformComponent);
+      ecs_modified(ecs, ent, TbTransformComponent);
     }
   }
 
@@ -293,7 +292,7 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
   // Get qualified path to scene asset
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
@@ -325,13 +324,13 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   {
     ecs_filter_t *asset_filter =
         ecs_filter(ecs, {.terms = {
-                             {.id = ecs_id(AssetSystem)},
+                             {.id = ecs_id(TbAssetSystem)},
                          }});
     ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
     while (ecs_filter_next(&asset_it)) {
-      AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+      TbAssetSystem *asset_sys = ecs_field(&asset_it, TbAssetSystem, 1);
       for (int32_t i = 0; i < asset_it.count; ++i) {
-        ComponentPostLoadFn post_fn = asset_sys[i].post_load_fn;
+        TbComponentPostLoadFn post_fn = asset_sys[i].post_load_fn;
         if (post_fn) {
           TB_DYN_ARR_FOREACH(scene.entities, i) {
             post_fn(ecs, TB_DYN_ARR_AT(scene.entities, i));
@@ -347,16 +346,17 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
 void tb_unload_scene(TbWorld *world, TbScene *scene) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, AssetSystem);
+  ECS_COMPONENT(ecs, TbAssetSystem);
 
   // Remove all components managed by the asset system from the scene
   // TODO: This doesn't handle the case of multiple scenes
-  ecs_filter_t *asset_filter = ecs_filter(ecs, {.terms = {
-                                                    {.id = ecs_id(AssetSystem)},
-                                                }});
+  ecs_filter_t *asset_filter =
+      ecs_filter(ecs, {.terms = {
+                           {.id = ecs_id(TbAssetSystem)},
+                       }});
   ecs_iter_t asset_it = ecs_filter_iter(ecs, asset_filter);
   while (ecs_filter_next(&asset_it)) {
-    AssetSystem *asset_sys = ecs_field(&asset_it, AssetSystem, 1);
+    TbAssetSystem *asset_sys = ecs_field(&asset_it, TbAssetSystem, 1);
     for (int32_t i = 0; i < asset_it.count; ++i) {
       asset_sys[i].rem_fn(ecs);
     }

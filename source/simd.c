@@ -22,52 +22,54 @@
 #define unroll_loop_4 _Pragma("clang loop unroll_count(4)")
 #endif
 
-float3 atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
-float4 atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
+float3 tb_atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
+float4 tb_atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
 
-float2 f2(float x, float y) { return (float2){x, y}; }
-float3 f3(float x, float y, float z) { return (float3){x, y, z}; }
-float4 f4(float x, float y, float z, float w) { return (float4){x, y, z, w}; }
+float2 tb_f2(float x, float y) { return (float2){x, y}; }
+float3 tb_f3(float x, float y, float z) { return (float3){x, y, z}; }
+float4 tb_f4(float x, float y, float z, float w) {
+  return (float4){x, y, z, w};
+}
 
-float3 f4tof3(float4 f) { return (float3){f.x, f.y, f.z}; }
-float4 f3tof4(float3 f, float w) { return (float4){f.x, f.y, f.z, w}; }
-float2 f3tof2(float3 f) { return (float2){f.x, f.y}; }
+float3 tb_f4tof3(float4 f) { return (float3){f.x, f.y, f.z}; }
+float4 tb_f3tof4(float3 f, float w) { return (float4){f.x, f.y, f.z, w}; }
+float2 tb_f3tof2(float3 f) { return (float2){f.x, f.y}; }
 
-float3x4 m44tom34(float4x4 m) {
+float3x4 tb_f44tof34(float4x4 m) {
   return (float3x4){
       .col0 = m.col0,
       .col1 = m.col1,
       .col2 = m.col2,
   };
 }
-float3x3 m44tom33(float4x4 m) {
+float3x3 tb_f44tof33(float4x4 m) {
   return (float3x3){
-      .col0 = f4tof3(m.col0),
-      .col1 = f4tof3(m.col1),
-      .col2 = f4tof3(m.col2),
+      .col0 = tb_f4tof3(m.col0),
+      .col1 = tb_f4tof3(m.col1),
+      .col2 = tb_f4tof3(m.col2),
   };
 }
 
-float4x4 m33tom44(float3x3 m) {
+float4x4 tb_f33tof44(float3x3 m) {
   return (float4x4){
-      .col0 = f3tof4(m.col0, 0.0f),
-      .col1 = f3tof4(m.col1, 0.0f),
-      .col2 = f3tof4(m.col2, 0.0f),
+      .col0 = tb_f3tof4(m.col0, 0.0f),
+      .col1 = tb_f3tof4(m.col1, 0.0f),
+      .col2 = tb_f3tof4(m.col2, 0.0f),
       .col3 = {0.0f, 0.0f, 0.0f, 1.0f},
   };
 }
 
-float dotf2(float2 x, float2 y) { return (x.x * y.x) + (x.y * y.y); }
+float tb_dotf2(float2 x, float2 y) { return (x.x * y.x) + (x.y * y.y); }
 
-float dotf3(float3 x, float3 y) {
+float tb_dotf3(float3 x, float3 y) {
   return (x.x * y.x) + (x.y * y.y) + (x.z * y.z);
 }
 
-float dotf4(float4 x, float4 y) {
+float tb_dotf4(float4 x, float4 y) {
   return (x.x * y.x) + (x.y * y.y) + (x.z * y.z) + (x.w * y.w);
 }
 
-float3 crossf3(float3 x, float3 y) {
+float3 tb_crossf3(float3 x, float3 y) {
   return (float3){
       (x.y * y.z) - (x.z * y.y),
       (x.z * y.x) - (x.x * y.z),
@@ -75,38 +77,32 @@ float3 crossf3(float3 x, float3 y) {
   };
 }
 
-float magf2(float2 v) { return sqrtf((v.x * v.x) + (v.y * v.y)); }
+float tb_magf2(float2 v) { return sqrtf(tb_magsqf2(v)); }
+float tb_magf3(float3 v) { return sqrtf(tb_magsqf3(v)); }
+float tb_magf4(float4 v) { return sqrtf(tb_magsqf4(v)); }
 
-float magf3(float3 v) { return sqrtf((v.x * v.x) + (v.y * v.y) + (v.z * v.z)); }
+float tb_magsqf2(float2 v) { return tb_dotf2(v, v); }
+float tb_magsqf3(float3 v) { return tb_dotf3(v, v); }
+float tb_magsqf4(float4 v) { return tb_dotf4(v, v); }
 
-float magf4(float4 v) {
-  return sqrtf((v.x * v.x) + (v.y * v.y) + (v.z * v.z) + (v.w * v.w));
-}
-
-float magsqf3(float3 v) { return (v.x * v.x) + (v.y * v.y) + (v.z * v.z); }
-
-float magsqf4(float4 v) {
-  return (v.x * v.x) + (v.y * v.y) + (v.z * v.z) + (v.w * v.w);
-}
-
-float norm_angle(float a) {
-  a = SDL_fmod(a, TAU);
+float tb_norm_angle(float a) {
+  a = SDL_fmod(a, TB_TAU);
   if (a < 0.0f) {
-    a += TAU;
+    a += TB_TAU;
   }
   return a;
 }
 
-float2 normf2(float2 v) {
-  float inv_sum = 1 / magf2(v);
+float2 tb_normf2(float2 v) {
+  float inv_sum = 1 / tb_magf2(v);
   return (float2){
       v.x * inv_sum,
       v.y * inv_sum,
   };
 }
 
-float3 normf3(float3 v) {
-  float inv_sum = 1 / magf3(v);
+float3 tb_normf3(float3 v) {
+  float inv_sum = 1 / tb_magf3(v);
   return (float3){
       v.x * inv_sum,
       v.y * inv_sum,
@@ -114,23 +110,23 @@ float3 normf3(float3 v) {
   };
 }
 
-float4 normf4(float4 v) {
-  float inv_sum = 1 / magf4(v);
+float4 tb_normf4(float4 v) {
+  float inv_sum = 1 / tb_magf4(v);
   return (float4){v.x * inv_sum, v.y * inv_sum, v.z * inv_sum, v.w * inv_sum};
 }
 
-Quaternion normq(Quaternion q) { return (Quaternion)normf4((float4)q); }
+TbQuaternion tb_normq(TbQuaternion q) {
+  return (TbQuaternion)tb_normf4((float4)q);
+}
 
-float lenf3(float3 v) { return sqrtf(dotf3(v, v)); }
-
-Transform trans_identity(void) {
-  return (Transform){
-      .rotation = f4(0, 0, 0, 1),
-      .scale = f3(1, 1, 1),
+TbTransform tb_trans_identity(void) {
+  return (TbTransform){
+      .rotation = tb_f4(0, 0, 0, 1),
+      .scale = tb_f3(1, 1, 1),
   };
 }
 
-float3x3 mf33_identity(void) {
+float3x3 tb_f33_identity(void) {
   return (float3x3){
       (float3){1, 0, 0},
       (float3){0, 1, 0},
@@ -138,7 +134,7 @@ float3x3 mf33_identity(void) {
   };
 }
 
-float3x4 mf34_identity(void) {
+float3x4 tb_f34_identity(void) {
   return (float3x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
@@ -146,7 +142,7 @@ float3x4 mf34_identity(void) {
   };
 }
 
-float4x4 mf44_identity(void) {
+float4x4 tb_f44_identity(void) {
   return (float4x4){
       (float4){1, 0, 0, 0},
       (float4){0, 1, 0, 0},
@@ -155,7 +151,7 @@ float4x4 mf44_identity(void) {
   };
 }
 
-float4 mulf44(float4x4 m, float4 v) {
+float4 tb_mulf44f4(float4x4 m, float4 v) {
   float4 out = {0};
 
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
@@ -169,7 +165,7 @@ float4 mulf44(float4x4 m, float4 v) {
   return out;
 }
 
-float3 mulf33(float3x3 m, float3 v) {
+float3 tb_mulf33f3(float3x3 m, float3 v) {
   float3 out = {0};
 
   unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
@@ -183,7 +179,7 @@ float3 mulf33(float3x3 m, float3 v) {
   return out;
 }
 
-float4 mul4f44f(float4 v, float4x4 m) {
+float4 tb_mulf4f44(float4 v, float4x4 m) {
   float4 out = {0};
 
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
@@ -197,7 +193,7 @@ float4 mul4f44f(float4 v, float4x4 m) {
   return out;
 }
 
-float4x4 mulmf44(float4x4 x, float4x4 y) {
+float4x4 tb_mulf44f44(float4x4 x, float4x4 y) {
   float4x4 o = {.col0 = {0}};
   unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
@@ -211,7 +207,7 @@ float4x4 mulmf44(float4x4 x, float4x4 y) {
   return o;
 }
 
-float4x4 inv_mf44(float4x4 m) {
+float4x4 tb_invf44(float4x4 m) {
   TracyCZoneN(ctx, "inv_mf44", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
 
@@ -274,7 +270,7 @@ float4x4 inv_mf44(float4x4 m) {
   return out;
 }
 
-float4x4 transpose_mf44(float4x4 m) {
+float4x4 tb_transpose_f44(float4x4 m) {
   return (float4x4){
       .col0 = (float4){m.cols[0].x, m.cols[1].x, m.cols[2].x, m.cols[3].x},
       .col1 = (float4){m.cols[0].y, m.cols[1].y, m.cols[2].y, m.cols[3].y},
@@ -283,7 +279,7 @@ float4x4 transpose_mf44(float4x4 m) {
   };
 }
 
-float3x3 mf33_from_axes(float3 forward, float3 right, float3 up) {
+float3x3 tb_f33_from_axes(float3 forward, float3 right, float3 up) {
   return (float3x3){
       .col0 = {forward.x, forward.y, forward.z},
       .col1 = {right.x, right.y, right.z},
@@ -291,7 +287,7 @@ float3x3 mf33_from_axes(float3 forward, float3 right, float3 up) {
   };
 }
 
-Quaternion mf33_to_quat(float3x3 mat) {
+TbQuaternion tb_f33_to_quat(float3x3 mat) {
   float four_x_squared_minus_1 = mat.cols[0].x - mat.cols[1].y - mat.cols[2].z;
   float four_y_squared_minus_1 = mat.cols[1].y - mat.cols[0].x - mat.cols[2].z;
   float four_z_squared_minus_1 = mat.cols[2].z - mat.cols[0].x - mat.cols[1].y;
@@ -317,28 +313,28 @@ Quaternion mf33_to_quat(float3x3 mat) {
 
   switch (biggest_index) {
   case 0:
-    return (Quaternion){
+    return (TbQuaternion){
         (mat.cols[2].y - mat.cols[1].z) * mult,
         (mat.cols[0].z - mat.cols[2].x) * mult,
         (mat.cols[1].x - mat.cols[0].y) * mult,
         biggest_val,
     };
   case 1:
-    return (Quaternion){
+    return (TbQuaternion){
         biggest_val,
         (mat.cols[2].x + mat.cols[1].y) * mult,
         (mat.cols[0].z + mat.cols[2].x) * mult,
         (mat.cols[1].y - mat.cols[0].z) * mult,
     };
   case 2:
-    return (Quaternion){
+    return (TbQuaternion){
         (mat.cols[1].x + mat.cols[0].y) * mult,
         biggest_val,
         (mat.cols[2].y + mat.cols[1].z) * mult,
         (mat.cols[0].z - mat.cols[2].x) * mult,
     };
   case 3:
-    return (Quaternion){
+    return (TbQuaternion){
         (mat.cols[0].z + mat.cols[2].x) * mult,
         (mat.cols[2].y + mat.cols[1].z) * mult,
         biggest_val,
@@ -346,17 +342,17 @@ Quaternion mf33_to_quat(float3x3 mat) {
     };
   default:
     SDL_assert(false);
-    return (Quaternion){0, 0, 0, 1};
+    return (TbQuaternion){0, 0, 0, 1};
   }
 }
 
-Quaternion quat_from_axes(float3 forward, float3 right, float3 up) {
-  return mf33_to_quat(mf33_from_axes(forward, right, up));
+TbQuaternion tb_quat_from_axes(float3 forward, float3 right, float3 up) {
+  return tb_f33_to_quat(tb_f33_from_axes(forward, right, up));
 }
 
-Quaternion angle_axis_to_quat(float4 angle_axis) {
+TbQuaternion tb_angle_axis_to_quat(float4 angle_axis) {
   float s = SDL_sinf(angle_axis.w * 0.5f);
-  return normq((Quaternion){
+  return tb_normq((TbQuaternion){
       angle_axis.x * s,
       angle_axis.y * s,
       angle_axis.z * s,
@@ -364,7 +360,7 @@ Quaternion angle_axis_to_quat(float4 angle_axis) {
   });
 }
 
-float3x3 quat_to_mf33(Quaternion q) {
+float3x3 tb_quat_to_f33(TbQuaternion q) {
   float qxx = q.x * q.x;
   float qyy = q.y * q.y;
   float qzz = q.z * q.z;
@@ -394,10 +390,12 @@ float3x3 quat_to_mf33(Quaternion q) {
   };
 }
 
-float4x4 quat_to_trans(Quaternion q) { return m33tom44(quat_to_mf33(q)); }
+float4x4 tb_quat_to_f44(TbQuaternion q) {
+  return tb_f33tof44(tb_quat_to_f33(q));
+}
 
-Quaternion mulq(Quaternion q, Quaternion p) {
-  return (Quaternion){
+TbQuaternion tb_mulq(TbQuaternion q, TbQuaternion p) {
+  return (TbQuaternion){
       (p.w * q.x) + (p.x * q.w) + (p.y * q.z) - (p.z * q.y),
       (p.w * q.y) + (p.y * q.w) + (p.z * q.x) - (p.x * q.z),
       (p.w * q.z) + (p.z * q.w) + (p.x * q.y) - (p.y * q.x),
@@ -406,10 +404,10 @@ Quaternion mulq(Quaternion q, Quaternion p) {
 }
 
 // https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 qrotf3(Quaternion q, float3 v) {
+float3 tb_qrotf3(TbQuaternion q, float3 v) {
   float3 u = q.xyz;
-  float3 uv = crossf3(u, v);
-  float3 uuv = crossf3(u, uv);
+  float3 uv = tb_crossf3(u, v);
+  float3 uuv = tb_crossf3(u, uv);
 
   return v + ((uv * q.w) + uuv) * 2.0f;
 }
@@ -421,29 +419,29 @@ bool tb_f3eq(float3 x, float3 y) {
   return x.x == y.x && x.y == y.y && x.z == y.z;
 }
 
-bool tb_mf33eq(const float3x3 *x, const float3x3 *y) {
+bool tb_f33_eq(const float3x3 *x, const float3x3 *y) {
   return tb_f3eq(x->col0, y->col0) && tb_f3eq(x->col1, y->col1) &&
          tb_f3eq(x->col2, y->col2);
 }
 
-bool tb_mf44eq(const float4x4 *x, const float4x4 *y) {
+bool tb_f44_eq(const float4x4 *x, const float4x4 *y) {
   return tb_f4eq(x->col0, y->col0) && tb_f4eq(x->col1, y->col1) &&
          tb_f4eq(x->col2, y->col2) && tb_f4eq(x->col3, y->col3);
 }
 
-bool tb_transeq(const Transform *x, const Transform *y) {
+bool tb_trans_eq(const TbTransform *x, const TbTransform *y) {
   return tb_f3eq(x->position, y->position) &&
          tb_f4eq(x->rotation, y->rotation) && tb_f3eq(x->scale, y->scale);
 }
 
-AABB aabb_init(void) {
-  return (AABB){
+TbAABB tb_aabb_init(void) {
+  return (TbAABB){
       .min = {FLT_MAX, FLT_MAX, FLT_MAX},
       .max = {-FLT_MAX, -FLT_MAX, -FLT_MAX},
   };
 }
 
-void aabb_add_point(AABB *aabb, float3 point) {
+void tb_aabb_add_point(TbAABB *aabb, float3 point) {
   aabb->min.x = SDL_min(aabb->min.x, point.x);
   aabb->min.y = SDL_min(aabb->min.y, point.y);
   aabb->min.z = SDL_min(aabb->min.z, point.z);
@@ -452,46 +450,46 @@ void aabb_add_point(AABB *aabb, float3 point) {
   aabb->max.z = SDL_max(aabb->max.z, point.z);
 }
 
-float aabb_get_width(AABB aabb) {
+float tb_aabb_get_width(TbAABB aabb) {
   return SDL_fabsf(aabb.max[TB_WIDTH_IDX] - aabb.min[TB_WIDTH_IDX]);
 }
 
-float aabb_get_height(AABB aabb) {
+float tb_aabb_get_height(TbAABB aabb) {
   return SDL_fabsf(aabb.max[TB_HEIGHT_IDX] - aabb.min[TB_HEIGHT_IDX]);
 }
 
-float aabb_get_depth(AABB aabb) {
+float tb_aabb_get_depth(TbAABB aabb) {
   return SDL_fabsf(aabb.max[TB_DEPTH_IDX] - aabb.min[TB_DEPTH_IDX]);
 }
 
-AABB aabb_rotate(Quaternion q, AABB aabb) {
-  return (AABB){
-      .min = qrotf3(q, aabb.min),
-      .max = qrotf3(q, aabb.max),
+TbAABB tb_aabb_rotate(TbQuaternion q, TbAABB aabb) {
+  return (TbAABB){
+      .min = tb_qrotf3(q, aabb.min),
+      .max = tb_qrotf3(q, aabb.max),
   };
 }
 
-AABB aabb_transform(float4x4 m, AABB aabb) {
-  return (AABB){
-      .min = f4tof3(mulf44(m, f3tof4(aabb.min, 1.0f))),
-      .max = f4tof3(mulf44(m, f3tof4(aabb.max, 1.0f))),
+TbAABB tb_aabb_transform(float4x4 m, TbAABB aabb) {
+  return (TbAABB){
+      .min = tb_f4tof3(tb_mulf44f4(m, tb_f3tof4(aabb.min, 1.0f))),
+      .max = tb_f4tof3(tb_mulf44f4(m, tb_f3tof4(aabb.max, 1.0f))),
   };
 }
 
-void translate(Transform *t, float3 p) {
+void tb_translate(TbTransform *t, float3 p) {
   SDL_assert(t);
   t->position += p;
 }
-void scale(Transform *t, float3 s) {
+void tb_scale(TbTransform *t, float3 s) {
   SDL_assert(t);
   t->scale *= s;
 }
-void rotate(Transform *t, Quaternion r) {
+void tb_rotate(TbTransform *t, TbQuaternion r) {
   SDL_assert(t);
-  t->rotation = mulq(t->rotation, r);
+  t->rotation = tb_mulq(t->rotation, r);
 }
 
-float3 safe_reciprocal(float3 v) {
+float3 tb_safe_reciprocal(float3 v) {
   float3 r = 0;
   if (v.x != 0) {
     r.x = 1.0f / v.x;
@@ -505,47 +503,49 @@ float3 safe_reciprocal(float3 v) {
   return r;
 }
 
-Quaternion inv_quat(Quaternion q) { return f4(-1, -1, -1, 1) * normq(q); }
+TbQuaternion tb_inv_quat(TbQuaternion q) {
+  return tb_f4(-1, -1, -1, 1) * tb_normq(q);
+}
 
-Transform inv_trans(Transform t) {
+TbTransform tb_inv_trans(TbTransform t) {
   // The opposite of what we do in transform_combine
-  float3 inv_scale = safe_reciprocal(t.scale);
-  Quaternion inv_rot = inv_quat(t.rotation);
+  float3 inv_scale = tb_safe_reciprocal(t.scale);
+  TbQuaternion inv_rot = tb_inv_quat(t.rotation);
   float3 scaled_position = inv_scale * t.position;
-  float3 inv_pos = -qrotf3(inv_rot, scaled_position);
+  float3 inv_pos = -tb_qrotf3(inv_rot, scaled_position);
 
-  return (Transform){
+  return (TbTransform){
       .position = inv_pos,
       .rotation = inv_rot,
       .scale = inv_scale,
   };
 }
 
-float3 transform_get_forward(const Transform *t) {
-  return normf3(qrotf3(t->rotation, TB_FORWARD));
+float3 tb_transform_get_forward(const TbTransform *t) {
+  return tb_normf3(tb_qrotf3(t->rotation, TB_FORWARD));
 }
 
-float3 transform_get_right(const Transform *t) {
-  return normf3(qrotf3(t->rotation, TB_RIGHT));
+float3 tb_transform_get_right(const TbTransform *t) {
+  return tb_normf3(tb_qrotf3(t->rotation, TB_RIGHT));
 }
 
-float3 transform_get_up(const Transform *t) {
-  return normf3(qrotf3(t->rotation, TB_UP));
+float3 tb_transform_get_up(const TbTransform *t) {
+  return tb_normf3(tb_qrotf3(t->rotation, TB_UP));
 }
 
-Transform transform_combine(const Transform *x, const Transform *y) {
-  // Transform the x position by the y transform
+TbTransform tb_transform_combine(const TbTransform *x, const TbTransform *y) {
+  // TbTransform the x position by the y transform
   float3 scaled = y->scale * x->position;
-  float3 pos_prime = qrotf3(y->rotation, scaled) + y->position;
+  float3 pos_prime = tb_qrotf3(y->rotation, scaled) + y->position;
 
-  return (Transform){
+  return (TbTransform){
       .position = pos_prime,
       .rotation = x->rotation,
       .scale = x->scale,
   };
 }
 
-float4x4 transform_to_matrix(const Transform *t) {
+float4x4 tb_transform_to_matrix(const TbTransform *t) {
   TracyCZoneN(ctx, "transform_to_matrix", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
   SDL_assert(t);
@@ -559,7 +559,7 @@ float4x4 transform_to_matrix(const Transform *t) {
   };
 
   // Rotation matrix from quaternion
-  float4x4 r = quat_to_trans(t->rotation);
+  float4x4 r = tb_quat_to_f44(t->rotation);
 
   // Scale matrix
   float4x4 s = {
@@ -570,18 +570,18 @@ float4x4 transform_to_matrix(const Transform *t) {
   };
 
   // Transformation matrix = p * r * s
-  float4x4 m = mulmf44(mulmf44(p, r), s);
+  float4x4 m = tb_mulf44f44(tb_mulf44f44(p, r), s);
   TracyCZoneEnd(ctx);
   return m;
 }
 
-Transform tb_transform_from_node(const cgltf_node *node) {
-  Transform transform = {.position = {0}};
+TbTransform tb_transform_from_node(const cgltf_node *node) {
+  TbTransform transform = {.position = {0}};
 
   transform.position = (float3){node->translation[0], node->translation[1],
                                 node->translation[2]};
 
-  transform.rotation = normq((Quaternion){
+  transform.rotation = tb_normq((TbQuaternion){
       node->rotation[0],
       node->rotation[1],
       node->rotation[2],
@@ -594,50 +594,51 @@ Transform tb_transform_from_node(const cgltf_node *node) {
 }
 
 // Right Handed
-float4x4 look_forward(float3 pos, float3 forward, float3 up) {
-  forward = normf3(forward);
-  float3 right = normf3(crossf3(forward, normf3(up)));
-  up = crossf3(right, forward);
+float4x4 tb_look_forward(float3 pos, float3 forward, float3 up) {
+  forward = tb_normf3(forward);
+  float3 right = tb_normf3(tb_crossf3(forward, tb_normf3(up)));
+  up = tb_crossf3(right, forward);
 
   return (float4x4){
       (float4){right.x, up.x, -forward.x, 0},
       (float4){right.y, up.y, -forward.y, 0},
       (float4){right.z, up.z, -forward.z, 0},
-      (float4){-dotf3(right, pos), -dotf3(up, pos), dotf3(forward, pos), 1},
+      (float4){-tb_dotf3(right, pos), -tb_dotf3(up, pos),
+               tb_dotf3(forward, pos), 1},
   };
 }
 
-float4x4 look_at(float3 pos, float3 target, float3 up) {
-  float3 forward = normf3(target - pos);
-  return look_forward(pos, forward, up);
+float4x4 tb_look_at(float3 pos, float3 target, float3 up) {
+  float3 forward = tb_normf3(target - pos);
+  return tb_look_forward(pos, forward, up);
 }
 
-Quaternion look_forward_quat(float3 forward, float3 up) {
-  float4x4 look_mat = look_forward(TB_ORIGIN, forward, up);
-  return mf33_to_quat(m44tom33(look_mat));
+TbQuaternion tb_look_forward_quat(float3 forward, float3 up) {
+  float4x4 look_mat = tb_look_forward(TB_ORIGIN, forward, up);
+  return tb_f33_to_quat(tb_f44tof33(look_mat));
 }
 
-Quaternion look_at_quat(float3 pos, float3 target, float3 up) {
-  float3 forward = normf3(target - pos);
-  return look_forward_quat(forward, up);
+TbQuaternion tb_look_at_quat(float3 pos, float3 target, float3 up) {
+  float3 forward = tb_normf3(target - pos);
+  return tb_look_forward_quat(forward, up);
 }
 
-Transform look_forward_transform(float3 pos, float3 forward, float3 up) {
-  float4x4 look_mat = look_forward(pos, forward, up);
-  return (Transform){
+TbTransform tb_look_forward_transform(float3 pos, float3 forward, float3 up) {
+  float4x4 look_mat = tb_look_forward(pos, forward, up);
+  return (TbTransform){
       .position = pos,
-      .rotation = mf33_to_quat(m44tom33(look_mat)),
+      .rotation = tb_f33_to_quat(tb_f44tof33(look_mat)),
       .scale = (float3){1, 1, 1},
   };
 }
 
-Transform look_at_transform(float3 pos, float3 target, float3 up) {
-  float3 forward = normf3(target - pos);
-  return look_forward_transform(pos, forward, up);
+TbTransform tb_look_at_transform(float3 pos, float3 target, float3 up) {
+  float3 forward = tb_normf3(target - pos);
+  return tb_look_forward_transform(pos, forward, up);
 }
 
 // Right Handed
-float4x4 perspective(float fovy, float aspect, float zn, float zf) {
+float4x4 tb_perspective(float fovy, float aspect, float zn, float zf) {
   float focal_length = 1.0f / tanf(fovy * 0.5f);
   float m00 = focal_length / aspect;
   float m11 = focal_length;
@@ -666,7 +667,8 @@ float4x4 perspective(float fovy, float aspect, float zn, float zf) {
 }
 
 // Right Handed
-float4x4 orthographic(float r, float l, float t, float b, float zn, float zf) {
+float4x4 tb_orthographic(float r, float l, float t, float b, float zn,
+                         float zf) {
   return (float4x4){
       (float4){2.0f / (r - l), 0, 0, 0},
       (float4){0, 2.0f / (t - b), 0, 0},
@@ -677,8 +679,8 @@ float4x4 orthographic(float r, float l, float t, float b, float zn, float zf) {
 
 // See //
 // https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
-Frustum frustum_from_view_proj(const float4x4 *vp) {
-  Frustum f = {
+TbFrustum tb_frustum_from_view_proj(const float4x4 *vp) {
+  TbFrustum f = {
       .planes[LeftPlane] =
           (float4){
               vp->cols[0].w + vp->cols[0].x,
@@ -724,8 +726,9 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
   };
   // Must normalize planes
   for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {
-    Plane *p = &f.planes[i];
-    const float norm_length = lenf3((float3){p->xyzw.x, p->xyzw.y, p->xyzw.z});
+    TbPlane *p = &f.planes[i];
+    const float norm_length =
+        tb_magf3((float3){p->xyzw.x, p->xyzw.y, p->xyzw.z});
     p->xyzw.x /= norm_length;
     p->xyzw.y /= norm_length;
     p->xyzw.z /= norm_length;
@@ -734,11 +737,11 @@ Frustum frustum_from_view_proj(const float4x4 *vp) {
   return f;
 }
 
-bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
+bool tb_frustum_test_aabb(const TbFrustum *frust, const TbAABB *aabb) {
   // See
   // https://www.braynzarsoft.net/viewtutorial/q16390-34-aabb-cpu-side-frustum-culling
   for (uint32_t i = 0; i < FrustumPlaneCount; ++i) {
-    const Plane *plane = &frust->planes[i];
+    const TbPlane *plane = &frust->planes[i];
     const float3 normal = (float3){plane->xyzw.x, plane->xyzw.y, plane->xyzw.z};
     const float plane_const = plane->xyzw.w;
 
@@ -748,26 +751,26 @@ bool frustum_test_aabb(const Frustum *frust, const AABB *aabb) {
         normal.z < 0.0f ? aabb->min.z : aabb->max.z,
     };
 
-    if (dotf3(normal, axis) + plane_const < 0.0f) {
-      // The AABB was outside one of the planes and failed this test
+    if (tb_dotf3(normal, axis) + plane_const < 0.0f) {
+      // The TbAABB was outside one of the planes and failed this test
       return false;
     }
   }
-  // The AABB was inside each plane
+  // The TbAABB was inside each plane
   return true;
 }
 
-float deg_to_rad(float d) { return d * (M_PI / 180.0f); }
-float rad_to_deg(float r) { return r * (180 / M_PI); }
+float tb_deg_to_rad(float d) { return d * (M_PI / 180.0f); }
+float tb_rad_to_deg(float r) { return r * (180 / M_PI); }
 
 // https://en.wikipedia.org/wiki/Linear_interpolation
-float lerpf(float f0, float f1, float a) { return (1 - a) * f0 + a * f1; }
-float3 lerpf3(float3 v0, float3 v1, float a) {
+float tb_lerpf(float f0, float f1, float a) { return (1 - a) * f0 + a * f1; }
+float3 tb_lerpf3(float3 v0, float3 v1, float a) {
   return ((1 - a) * v0) + (a * v1);
 }
 
 // https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm
-Quaternion slerp(Quaternion q0, Quaternion q1, float a) {
+TbQuaternion tb_slerp(TbQuaternion q0, TbQuaternion q1, float a) {
   // Calc angle between quaternions
   float cos_half_theta = q0.w * q1.w + q0.x * q1.x + q0.y * q1.y + q0.z * q1.z;
   // If q1=q2 or q1=-q2 then alpha = 0 and we can return q1
@@ -780,7 +783,7 @@ Quaternion slerp(Quaternion q0, Quaternion q1, float a) {
   // if alpha = 180 degrees then result is not fully defined
   // we could rotate around any axis normal to qa or qb
   if (SDL_fabsf(sin_half_theta) < 0.001f) { // fabs is floating point absolute
-    return (Quaternion){
+    return (TbQuaternion){
         q0.x * 0.5f + q1.x * 0.5f,
         q0.y * 0.5f + q1.y * 0.5f,
         q0.z * 0.5f + q1.z * 0.5f,
@@ -791,7 +794,7 @@ Quaternion slerp(Quaternion q0, Quaternion q1, float a) {
   float ratio_a = SDL_sinf((1.0f - a) * half_theta) / sin_half_theta;
   float ratio_b = SDL_sinf(a * half_theta) / sin_half_theta;
 
-  return (Quaternion){
+  return (TbQuaternion){
       q0.x * ratio_a + q1.x * ratio_b,
       q0.y * ratio_a + q1.y * ratio_b,
       q0.z * ratio_a + q1.z * ratio_b,
@@ -799,15 +802,15 @@ Quaternion slerp(Quaternion q0, Quaternion q1, float a) {
   };
 }
 
-Transform trans_lerp(Transform t0, Transform t1, float a) {
-  return (Transform){
-      .position = lerpf3(t0.position, t1.position, a),
-      .rotation = slerp(t0.rotation, t1.rotation, a),
-      .scale = lerpf3(t0.scale, t1.scale, a),
+TbTransform tb_trans_lerp(TbTransform t0, TbTransform t1, float a) {
+  return (TbTransform){
+      .position = tb_lerpf3(t0.position, t1.position, a),
+      .rotation = tb_slerp(t0.rotation, t1.rotation, a),
+      .scale = tb_lerpf3(t0.scale, t1.scale, a),
   };
 }
 
-float clampf(float v, float min, float max) {
+float tb_clampf(float v, float min, float max) {
   if (v < min) {
     return min;
   }
@@ -817,17 +820,12 @@ float clampf(float v, float min, float max) {
   return v;
 }
 
-float3 clampf3(float3 v, float3 min, float3 max) {
+float3 tb_clampf3(float3 v, float3 min, float3 max) {
   return (float3){
-      clampf(v.x, min.x, max.x),
-      clampf(v.y, min.y, max.y),
-      clampf(v.z, min.z, max.z),
+      tb_clampf(v.x, min.x, max.x),
+      tb_clampf(v.y, min.y, max.y),
+      tb_clampf(v.z, min.z, max.z),
   };
-}
-
-float tb_randf(float min, float max) {
-  float r = (float)rand() / (float)RAND_MAX;
-  return min + r * (max - min);
 }
 
 #ifdef __clang__

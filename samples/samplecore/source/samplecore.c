@@ -67,7 +67,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   TbArenaAllocator arena = {0};
   {
     SDL_Log("%s", "Creating Arena Allocator");
-    const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
+    const size_t arena_alloc_size = 1024ull * 1024ull * 512ull; // 512 MB
     tb_create_arena_alloc("Main Arena", &arena, arena_alloc_size);
   }
 
@@ -105,8 +105,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Must create render thread on the heap like this
-  RenderThread *render_thread = tb_alloc_tp(gp_alloc.alloc, RenderThread);
-  RenderThreadDescriptor render_thread_desc = {
+  TbRenderThread *render_thread = tb_alloc_tp(gp_alloc.alloc, TbRenderThread);
+  TbRenderThreadDescriptor render_thread_desc = {
       .window = window,
   };
   TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
@@ -140,7 +140,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     last_time = time;
 
     if (!tb_tick_world(&world, delta_time_seconds)) {
-      running = false;
+      running = false; // NOLINT
       TracyCZoneEnd(trcy_ctx);
       break;
     }

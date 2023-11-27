@@ -8,17 +8,15 @@ typedef uint64_t ecs_entity_t;
 typedef struct cgltf_node cgltf_node;
 typedef struct json_object json_object;
 
-typedef bool (*ComponentAddFn)(ecs_world_t *ecs, ecs_entity_t e,
-                               const char *source_path, const cgltf_node *node,
-                               json_object *extra);
-
-typedef void (*ComponentPostLoadFn)(ecs_world_t *ecs, ecs_entity_t e);
-
-typedef void (*ComponentRemoveFn)(ecs_world_t *ecs);
+typedef bool (*TbComponentAddFn)(ecs_world_t *ecs, ecs_entity_t e,
+                                 const char *source_path,
+                                 const cgltf_node *node, json_object *extra);
+typedef void (*TbComponentPostLoadFn)(ecs_world_t *ecs, ecs_entity_t e);
+typedef void (*TbComponentRemoveFn)(ecs_world_t *ecs);
 
 // A type of system that the world cares about
-typedef struct AssetSystem {
-  ComponentAddFn add_fn;
-  ComponentPostLoadFn post_load_fn;
-  ComponentRemoveFn rem_fn;
-} AssetSystem;
+typedef struct TbAssetSystem {
+  TbComponentAddFn add_fn;
+  TbComponentPostLoadFn post_load_fn;
+  TbComponentRemoveFn rem_fn;
+} TbAssetSystem;

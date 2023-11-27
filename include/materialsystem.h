@@ -6,30 +6,25 @@
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
-#define MaterialSystemId 0x1BADB002
-
 typedef struct cgltf_material cgltf_material;
-
-typedef struct ecs_world_t ecs_world_t;
-
+typedef struct TbWorld TbWorld;
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
-
-typedef struct RenderSystem RenderSystem;
-typedef struct TextureSystem TextureSystem;
-
+typedef struct TbRenderSystem TbRenderSystem;
+typedef struct TbTextureSystem TbTextureSystem;
+typedef struct TbMaterial TbMaterial;
 typedef uint64_t TbMaterialId;
 typedef uint64_t TbTextureId;
 typedef uint64_t TbMaterialPerm;
 
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
-typedef struct TbMaterial TbMaterial;
-typedef struct MaterialSystem {
+
+typedef struct TbMaterialSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  RenderSystem *render_system;
-  TextureSystem *texture_system;
+  TbRenderSystem *render_system;
+  TbTextureSystem *texture_system;
 
   VkSampler sampler;        // Immutable sampler for material descriptor sets
   VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
@@ -41,18 +36,19 @@ typedef struct MaterialSystem {
   // These two arrays are to be kept in sync
   TB_DYN_ARR_OF(TbMaterial) materials;
   VkDescriptorSet *mat_sets;
-} MaterialSystem;
+} TbMaterialSystem;
 
-void tb_register_material_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                              TbAllocator tmp_alloc);
-void tb_unregister_material_sys(ecs_world_t *ecs);
+void tb_register_material_sys(TbWorld *world);
+void tb_unregister_material_sys(TbWorld *world);
 
-VkDescriptorSetLayout tb_mat_system_get_set_layout(MaterialSystem *self);
+VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self);
 
-TbMaterialId tb_mat_system_load_material(MaterialSystem *self, const char *path,
+TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
+                                         const char *path,
                                          const cgltf_material *material);
 
-TbMaterialPerm tb_mat_system_get_perm(MaterialSystem *self, TbMaterialId mat);
-VkDescriptorSet tb_mat_system_get_set(MaterialSystem *self, TbMaterialId mat);
+TbMaterialPerm tb_mat_system_get_perm(TbMaterialSystem *self, TbMaterialId mat);
+VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self, TbMaterialId mat);
 
-void tb_mat_system_release_material_ref(MaterialSystem *self, TbMaterialId mat);
+void tb_mat_system_release_material_ref(TbMaterialSystem *self,
+                                        TbMaterialId mat);

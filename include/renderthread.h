@@ -20,19 +20,19 @@ typedef struct VmaPool_T *VmaPool;
 
 typedef uint32_t TbRenderPassId;
 
-typedef struct RenderThreadDescriptor {
+typedef struct TbRenderThreadDescriptor {
   SDL_Window *window;
-} RenderThreadDescriptor;
+} TbRenderThreadDescriptor;
 
-typedef struct ImageTransition {
+typedef struct TbImageTransition {
   VkPipelineStageFlags src_flags;
   VkPipelineStageFlags dst_flags;
   VkImageMemoryBarrier barrier;
-} ImageTransition;
+} TbImageTransition;
 
 typedef struct VkRenderingInfo VkRenderingInfo;
 
-typedef struct PassContext {
+typedef struct TbPassContext {
   TbRenderPassId id;
   uint32_t command_buffer_index;
   uint32_t attachment_count;
@@ -41,42 +41,42 @@ typedef struct PassContext {
   uint32_t height;
 
   uint32_t barrier_count;
-  ImageTransition barriers[TB_MAX_BARRIERS];
+  TbImageTransition barriers[TB_MAX_BARRIERS];
 
   VkRenderingInfo *render_info;
 
 #ifdef TRACY_ENABLE
   char label[TB_RP_LABEL_LEN];
 #endif
-} PassContext;
+} TbPassContext;
 
-typedef struct DrawBatch DrawBatch;
+typedef struct TbDrawBatch TbDrawBatch;
 
-typedef struct DrawContext {
+typedef struct TbDrawContext {
   TbRenderPassId pass_id;
   tb_record_draw_batch *record_fn;
   uint32_t batch_count;
-  DrawBatch *batches;
+  TbDrawBatch *batches;
   uint32_t user_batch_size;
   void *user_batches;
   uint32_t batch_max;
-} DrawContext;
+} TbDrawContext;
 
-typedef struct DispatchBatch DispatchBatch;
+typedef struct TbDispatchBatch TbDispatchBatch;
 
-typedef struct DispatchContext {
+typedef struct TbDispatchContext {
   TbRenderPassId pass_id;
   tb_record_dispatch_batch *record_fn;
   uint32_t batch_count;
-  DispatchBatch *batches;
+  TbDispatchBatch *batches;
   uint32_t user_batch_size;
   void *user_batches;
   uint32_t batch_max;
-} DispatchContext;
+} TbDispatchContext;
 
 #define TB_MAX_COMMAND_BUFFERS 64
 
-typedef struct FrameState {
+typedef struct TbFrameState {
   SDL_semaphore *wait_sem;
   SDL_semaphore *signal_sem;
 
@@ -100,18 +100,18 @@ typedef struct FrameState {
 
   // Memory expected to be actually allocated by the main thread
   // The main thread will write to this and the render thread will read it
-  SetWriteQueue set_write_queue;
-  BufferCopyQueue buf_copy_queue;
-  BufferImageCopyQueue buf_img_copy_queue;
+  TbSetWriteQueue set_write_queue;
+  TbBufferCopyQueue buf_copy_queue;
+  TbBufferImageCopyQueue buf_img_copy_queue;
 
   TbArenaAllocator tmp_alloc;
 
-  TB_DYN_ARR_OF(PassContext) pass_contexts;
-  TB_DYN_ARR_OF(DrawContext) draw_contexts;
-  TB_DYN_ARR_OF(DispatchContext) dispatch_contexts;
-} FrameState;
+  TB_DYN_ARR_OF(TbPassContext) pass_contexts;
+  TB_DYN_ARR_OF(TbDrawContext) draw_contexts;
+  TB_DYN_ARR_OF(TbDispatchContext) dispatch_contexts;
+} TbFrameState;
 
-typedef struct Swapchain {
+typedef struct TbSwapchain {
   bool valid;
   VkSwapchainKHR swapchain;
   uint32_t image_count;
@@ -120,14 +120,14 @@ typedef struct Swapchain {
   VkPresentModeKHR present_mode;
   uint32_t width;
   uint32_t height;
-} Swapchain;
+} TbSwapchain;
 
-typedef struct RenderExtensionSupport {
+typedef struct TbRenderExtensionSupport {
   bool portability : 1;
   bool calibrated_timestamps : 1;
-} RenderExtensionSupport;
+} TbRenderExtensionSupport;
 
-typedef struct RenderThread {
+typedef struct TbRenderThread {
   SDL_Window *window;
   SDL_Thread *thread;
   SDL_semaphore *initialized;
@@ -154,7 +154,7 @@ typedef struct RenderThread {
   uint32_t graphics_queue_family_index;
   uint32_t present_queue_family_index;
 
-  RenderExtensionSupport ext_support;
+  TbRenderExtensionSupport ext_support;
 
   VkDevice device;
   VkQueue present_queue;
@@ -162,26 +162,27 @@ typedef struct RenderThread {
 
   VmaAllocator vma_alloc;
 
-  Swapchain swapchain;
+  TbSwapchain swapchain;
 
   VkSampler default_sampler;
 
   uint32_t frame_idx;
   uint64_t frame_count;
-  FrameState frame_states[TB_MAX_FRAME_STATES];
+  TbFrameState frame_states[TB_MAX_FRAME_STATES];
 
   uint8_t stop_signal;
   uint8_t swapchain_resize_signal;
-} RenderThread;
+} TbRenderThread;
 
-bool tb_start_render_thread(RenderThreadDescriptor *desc, RenderThread *thread);
+bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
+                            TbRenderThread *thread);
 
-void tb_signal_render(RenderThread *thread, uint32_t frame_idx);
+void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx);
 
-void tb_wait_render(RenderThread *thread, uint32_t frame_idx);
+void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx);
 
-void tb_wait_thread_initialized(RenderThread *thread);
+void tb_wait_thread_initialized(TbRenderThread *thread);
 
-void tb_stop_render_thread(RenderThread *thread);
+void tb_stop_render_thread(TbRenderThread *thread);
 
-void tb_destroy_render_thread(RenderThread *thread);
+void tb_destroy_render_thread(TbRenderThread *thread);

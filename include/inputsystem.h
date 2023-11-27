@@ -6,17 +6,14 @@
 
 #include <SDL2/SDL_events.h>
 
-#define InputSystemId 0x8BADF00D
-
 typedef struct SDL_Window SDL_Window;
 typedef struct _SDL_GameController SDL_GameController;
-
-typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
 
 #define TB_MAX_GAME_CONTROLLERS 4
 #define TB_MAX_EVENTS 5
 
-typedef enum TBButtonBits {
+typedef enum TbButtonBits {
   TB_BUTTON_A = 0x00000001,
   TB_BUTTON_B = 0x00000002,
   TB_BUTTON_X = 0x00000004,
@@ -43,10 +40,10 @@ typedef enum TBButtonBits {
   TB_BUTTON_PADDLE2 = 0x00020000,
   TB_BUTTON_PADDLE3 = 0x00040000,
   TB_BUTTON_PADDLE4 = 0x00080000,
-} TBButtonBits;
-typedef uint32_t TBButtons;
+} TbButtonBits;
+typedef uint32_t TbButtons;
 
-typedef struct TBKeyboard {
+typedef struct TbKeyboard {
   uint8_t key_A : 1;
   uint8_t key_B : 1;
   uint8_t key_C : 1;
@@ -74,38 +71,37 @@ typedef struct TBKeyboard {
   uint8_t key_Y : 1;
   uint8_t key_Z : 1;
   uint8_t key_space : 1;
-} TBKeyboard;
+} TbKeyboard;
 
-typedef struct TBMouse {
+typedef struct TbMouse {
   uint8_t left : 1;
   uint8_t middle : 1;
   uint8_t right : 1;
   float2 wheel;
   float2 axis;
-} TBMouse;
+} TbMouse;
 
-typedef struct TBGameControllerState {
+typedef struct TbGameControllerState {
   float2 left_stick;
   float2 right_stick;
-  TBButtons buttons;
+  TbButtons buttons;
   float left_trigger;
   float right_trigger;
-} TBGameControllerState;
+} TbGameControllerState;
 
-typedef struct InputSystem {
+typedef struct TbInputSystem {
   TbAllocator tmp_alloc;
   SDL_Window *window;
 
   uint32_t event_count;
   SDL_Event events[TB_MAX_EVENTS];
 
-  TBKeyboard keyboard;
-  TBMouse mouse;
+  TbKeyboard keyboard;
+  TbMouse mouse;
 
   uint32_t controller_count;
   SDL_GameController *controllers[TB_MAX_GAME_CONTROLLERS];
-  TBGameControllerState controller_states[TB_MAX_GAME_CONTROLLERS];
-} InputSystem;
+  TbGameControllerState controller_states[TB_MAX_GAME_CONTROLLERS];
+} TbInputSystem;
 
-void tb_register_input_sys(ecs_world_t *ecs, TbAllocator tmp_alloc,
-                           SDL_Window *window);
+void tb_register_input_sys(TbWorld *world, SDL_Window *window);

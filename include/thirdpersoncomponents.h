@@ -14,15 +14,11 @@ extern "C" {
 typedef uint64_t ecs_entity_t;
 typedef struct TbWorld TbWorld;
 
-typedef struct ThirdPersonMovementComponent {
+typedef struct TbThirdPersonMovementComponent {
   float speed;
   ecs_entity_t camera;
   ecs_entity_t body;
-} ThirdPersonMovementComponent;
-
-typedef struct ThirdPersonCameraComponent {
-  float placeholder;
-} ThirdPersonCameraComponent;
+} TbThirdPersonMovementComponent;
 
 void tb_register_third_person_components(TbWorld *world);
 

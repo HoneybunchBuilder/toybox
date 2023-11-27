@@ -4,7 +4,7 @@
 
 #define AMBIENT 0.3
 
-struct View {
+struct TbView {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
   Texture2D brdf_lut;
@@ -13,7 +13,7 @@ struct View {
 };
 
 struct Light {
-  CommonLightData light;
+  TbCommonLightData light;
   Texture2DArray shadow_map;
   SamplerComparisonState shadow_sampler;
 };
@@ -303,7 +303,7 @@ float shadow_visibility(Light l, Surface s) {
   return visibility;
 }
 
-float3 pbr_lighting_common(View v, Light l, Surface s) {
+float3 pbr_lighting_common(TbView v, Light l, Surface s) {
   float3 out_color = 0;
 
   // Calculate shadow first

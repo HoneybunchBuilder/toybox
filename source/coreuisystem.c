@@ -8,14 +8,15 @@
 
 #include <flecs.h>
 
-typedef struct CoreUIMenu {
+typedef struct TbCoreUIMenu {
   bool *active;
   const char *name;
-} CoreUIMenu;
+} TbCoreUIMenu;
 
-CoreUISystem create_coreui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                                  ImGuiSystem *imgui_system) {
-  CoreUISystem sys = {
+TbCoreUISystem create_coreui_system(TbAllocator std_alloc,
+                                    TbAllocator tmp_alloc,
+                                    TbImGuiSystem *imgui_system) {
+  TbCoreUISystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .imgui = imgui_system,
@@ -29,14 +30,14 @@ CoreUISystem create_coreui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   return sys;
 }
 
-void destroy_coreui_system(CoreUISystem *self) {
+void destroy_coreui_system(TbCoreUISystem *self) {
   // Clean up registry
   TB_DYN_ARR_FOREACH(self->menu_registry, i) {
-    CoreUIMenu menu = TB_DYN_ARR_AT(self->menu_registry, i);
+    TbCoreUIMenu menu = TB_DYN_ARR_AT(self->menu_registry, i);
     tb_free(self->std_alloc, menu.active);
   }
   TB_DYN_ARR_DESTROY(self->menu_registry);
-  *self = (CoreUISystem){0};
+  *self = (TbCoreUISystem){0};
 }
 
 void coreui_show_about(bool *open) {
@@ -51,15 +52,15 @@ void coreui_show_about(bool *open) {
 
 void coreui_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Core UI System Tick", TracyCategoryColorUI, true);
-  CoreUISystem *sys = ecs_field(it, CoreUISystem, 1);
+  TbCoreUISystem *sys = ecs_field(it, TbCoreUISystem, 1);
 
   if (sys->imgui->context_count > 0) {
-    const UIContext *ui_ctx = &sys->imgui->contexts[0];
+    const TbUIContext *ui_ctx = &sys->imgui->contexts[0];
     igSetCurrentContext(ui_ctx->context);
 
     if (igBeginMainMenuBar()) {
       TB_DYN_ARR_FOREACH(sys->menu_registry, i) {
-        CoreUIMenu *menu = &TB_DYN_ARR_AT(sys->menu_registry, i);
+        TbCoreUIMenu *menu = &TB_DYN_ARR_AT(sys->menu_registry, i);
         if (igBeginMenu(menu->name, true)) {
           *menu->active = !*menu->active;
           igEndMenu();
@@ -80,35 +81,38 @@ void coreui_update_tick(ecs_iter_t *it) {
 }
 
 void destroy_core_ui_sys(ecs_iter_t *it) {
-  CoreUISystem *sys = ecs_field(it, CoreUISystem, 1);
+  TbCoreUISystem *sys = ecs_field(it, TbCoreUISystem, 1);
   destroy_coreui_system(sys);
 }
 
-void tb_register_core_ui_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                             TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, ImGuiSystem);
-  ECS_COMPONENT(ecs, CoreUISystem);
+void tb_register_core_ui_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbImGuiSystem);
+  ECS_COMPONENT(ecs, TbCoreUISystem);
 
-  ImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, ImGuiSystem);
-  CoreUISystem sys = create_coreui_system(std_alloc, tmp_alloc, imgui_sys);
+  TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+  TbCoreUISystem sys =
+      create_coreui_system(world->std_alloc, world->tmp_alloc, imgui_sys);
 
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(CoreUISystem), CoreUISystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbCoreUISystem), TbCoreUISystem, &sys);
 
-  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate, CoreUISystem(CoreUISystem));
+  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate,
+             TbCoreUISystem(TbCoreUISystem));
 }
 
-void tb_unregister_core_ui_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, CoreUISystem);
-  CoreUISystem *sys = ecs_singleton_get_mut(ecs, CoreUISystem);
-  *sys = (CoreUISystem){0};
-  ecs_singleton_remove(ecs, CoreUISystem);
+void tb_unregister_core_ui_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbCoreUISystem);
+  TbCoreUISystem *sys = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  *sys = (TbCoreUISystem){0};
+  ecs_singleton_remove(ecs, TbCoreUISystem);
 }
 
-bool *tb_coreui_register_menu(CoreUISystem *self, const char *name) {
+bool *tb_coreui_register_menu(TbCoreUISystem *self, const char *name) {
   // Store the bool on the heap so it survives registry resizes
   bool *active = tb_alloc_tp(self->std_alloc, bool);
-  CoreUIMenu menu = {
+  TbCoreUIMenu menu = {
       .active = active,
       .name = name,
   };

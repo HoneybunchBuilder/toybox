@@ -26,7 +26,7 @@ static void *arena_alloc(void *user_data, size_t size) {
   if ((intptr_t)ptr % 16 != 0) {
     padding = (16 - (intptr_t)ptr % 16);
   }
-  ptr = (void *)((intptr_t)ptr + padding);
+  ptr = (void *)((intptr_t)ptr + padding); // NOLINT
 
   SDL_assert((intptr_t)ptr % 16 == 0);
 
@@ -66,7 +66,7 @@ static void arena_free(void *user_data, void *ptr) {
 }
 
 void tb_create_arena_alloc(const char *name, TbArenaAllocator *a,
-                            size_t max_size) {
+                           size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
   void *data = mi_heap_recalloc(heap, NULL, 1, max_size);

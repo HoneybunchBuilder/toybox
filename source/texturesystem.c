@@ -18,7 +18,7 @@ typedef struct TbTexture {
   VkImageView image_view;
 } TBTexture;
 
-uint32_t find_tex_by_id(TextureSystem *self, TbTextureId id) {
+uint32_t find_tex_by_id(TbTextureSystem *self, TbTextureId id) {
   TB_DYN_ARR_FOREACH(self->textures, i) {
     if (TB_DYN_ARR_AT(self->textures, i).id == id) {
       return i;
@@ -77,12 +77,12 @@ static ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
 }
 
 TbTextureId calc_tex_id(const char *path, const char *name) {
-  TbTextureId id = sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = sdbm(id, (const uint8_t *)name, SDL_strlen(name));
+  TbTextureId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_sdbm(id, (const uint8_t *)name, SDL_strlen(name));
   return id;
 }
 
-TbTexture *alloc_tex(TextureSystem *self, TbTextureId id) {
+TbTexture *alloc_tex(TbTextureSystem *self, TbTextureId id) {
   uint32_t index = TB_DYN_ARR_SIZE(self->textures);
   TbTexture tex = {.id = id, .ref_count = 1};
   TB_DYN_ARR_APPEND(self->textures, tex);
@@ -126,7 +126,7 @@ static VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
   return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 }
 
-TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
+TbTextureId tb_tex_system_create_texture_ktx2(TbTextureSystem *self,
                                               const char *path,
                                               const char *name,
                                               ktxTexture2 *ktx) {
@@ -141,7 +141,7 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
 
   // If texture wasn't found, load it now
   VkResult err = VK_SUCCESS;
-  RenderSystem *rnd_sys = self->rnd_sys;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   TbTexture *texture = alloc_tex(self, id);
 
@@ -156,7 +156,8 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
     VkFormat format = (VkFormat)ktx->vkFormat;
 
     TB_CHECK_RETURN(ktx->generateMipmaps == false,
-                    "Not expecting to have to generate mips", InvalidTextureId);
+                    "Not expecting to have to generate mips",
+                    TbInvalidTextureId);
 
     // Allocate gpu image
     {
@@ -179,7 +180,7 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
                                         &create_info, name, &texture->gpu_image,
                                         &texture->host_buffer);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
 
     // Create image view
@@ -206,11 +207,11 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
               },
       };
       char view_name[100] = {0};
-      SDL_snprintf(view_name, 100, "%s Image View", name);
+      SDL_snprintf(view_name, 100, "%s Image TbView", name); // NOLINT
       err = tb_rnd_create_image_view(rnd_sys, &create_info, view_name,
                                      &texture->image_view);
       TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
 
     // Issue uploads
@@ -243,15 +244,16 @@ TbTextureId tb_tex_system_create_texture_ktx2(TextureSystem *self,
   return id;
 }
 
-TextureSystem create_texture_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                                    RenderSystem *rnd_sys) {
-  TextureSystem sys = {
+TbTextureSystem create_texture_system(TbAllocator std_alloc,
+                                      TbAllocator tmp_alloc,
+                                      TbRenderSystem *rnd_sys) {
+  TbTextureSystem sys = {
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
       .rnd_sys = rnd_sys,
-      .default_color_tex = InvalidTextureId,
-      .default_normal_tex = InvalidTextureId,
-      .default_metal_rough_tex = InvalidTextureId,
+      .default_color_tex = TbInvalidTextureId,
+      .default_normal_tex = TbInvalidTextureId,
+      .default_metal_rough_tex = TbInvalidTextureId,
   };
 
   // Init textures dyn array
@@ -315,7 +317,7 @@ TextureSystem create_texture_system(TbAllocator std_alloc, TbAllocator tmp_alloc
   return sys;
 }
 
-void destroy_texture_system(TextureSystem *self) {
+void destroy_texture_system(TbTextureSystem *self) {
   tb_tex_system_release_texture_ref(self, self->default_metal_rough_tex);
   tb_tex_system_release_texture_ref(self, self->default_normal_tex);
   tb_tex_system_release_texture_ref(self, self->default_color_tex);
@@ -328,33 +330,36 @@ void destroy_texture_system(TextureSystem *self) {
   }
   TB_DYN_ARR_DESTROY(self->textures);
 
-  *self = (TextureSystem){
-      .default_color_tex = InvalidTextureId,
-      .default_normal_tex = InvalidTextureId,
-      .default_metal_rough_tex = InvalidTextureId,
+  *self = (TbTextureSystem){
+      .default_color_tex = TbInvalidTextureId,
+      .default_normal_tex = TbInvalidTextureId,
+      .default_metal_rough_tex = TbInvalidTextureId,
   };
 }
 
-void tb_register_texture_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                             TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, TextureSystem);
-  RenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  ecs_singleton_modified(ecs, RenderSystem);
+void tb_register_texture_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  ecs_singleton_modified(ecs, TbRenderSystem);
 
-  TextureSystem sys = create_texture_system(std_alloc, tmp_alloc, rnd_sys);
+  TbTextureSystem sys =
+      create_texture_system(world->std_alloc, world->tmp_alloc, rnd_sys);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(TextureSystem), TextureSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbTextureSystem), TbTextureSystem, &sys);
 }
 
-void tb_unregister_texture_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TextureSystem);
-  TextureSystem *sys = ecs_singleton_get_mut(ecs, TextureSystem);
+void tb_unregister_texture_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbTextureSystem);
+  TbTextureSystem *sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
   destroy_texture_system(sys);
-  ecs_singleton_remove(ecs, TextureSystem);
+  ecs_singleton_remove(ecs, TbTextureSystem);
 }
 
-VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
+VkImageView tb_tex_system_get_image_view(TbTextureSystem *self,
+                                         TbTextureId tex) {
   const uint32_t index = find_tex_by_id(self, tex);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32,
                   "Failed to find texture by id when retrieving image view",
@@ -363,10 +368,11 @@ VkImageView tb_tex_system_get_image_view(TextureSystem *self, TbTextureId tex) {
   return TB_DYN_ARR_AT(self->textures, index).image_view;
 }
 
-TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
-                                         const char *name, TbTextureUsage usage,
-                                         uint32_t width, uint32_t height,
-                                         const uint8_t *pixels, uint64_t size) {
+TbTextureId tb_tex_system_create_texture(TbTextureSystem *self,
+                                         const char *path, const char *name,
+                                         TbTextureUsage usage, uint32_t width,
+                                         uint32_t height, const uint8_t *pixels,
+                                         uint64_t size) {
   TbTextureId id = calc_tex_id(path, name);
   uint32_t index = find_tex_by_id(self, id);
 
@@ -378,7 +384,7 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
 
   // If texture wasn't found, load it now
   VkResult err = VK_SUCCESS;
-  RenderSystem *rnd_sys = self->rnd_sys;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   TbTexture *texture = alloc_tex(self, id);
 
@@ -414,7 +420,7 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
                                         name, &texture->gpu_image,
                                         &texture->host_buffer);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
 
     // Create image view
@@ -441,11 +447,11 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
               },
       };
       char view_name[100] = {0};
-      SDL_snprintf(view_name, 100, "%s Image View", name);
+      SDL_snprintf(view_name, 100, "%s Image TbView", name); // NOLINT
       err = tb_rnd_create_image_view(rnd_sys, &create_info, view_name,
                                      &texture->image_view);
       TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
 
     // Issue upload
@@ -485,7 +491,7 @@ TbTextureId tb_tex_system_create_texture(TextureSystem *self, const char *path,
   return id;
 }
 
-TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
+TbTextureId tb_tex_system_alloc_texture(TbTextureSystem *self, const char *name,
                                         const VkImageCreateInfo *create_info) {
   TbTextureId id = calc_tex_id("", name);
   uint32_t index = find_tex_by_id(self, id);
@@ -497,7 +503,7 @@ TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
   }
 
   VkResult err = VK_SUCCESS;
-  RenderSystem *rnd_sys = self->rnd_sys;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   TbTexture *texture = alloc_tex(self, id);
 
@@ -508,7 +514,7 @@ TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
       err = tb_rnd_sys_alloc_gpu_image(rnd_sys, create_info, 0, name,
                                        &texture->gpu_image);
       TB_VK_CHECK_RET(err, "Failed to allocate gpu image for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
 
     // Create image view
@@ -535,19 +541,19 @@ TbTextureId tb_tex_system_alloc_texture(TextureSystem *self, const char *name,
               },
       };
       char view_name[100] = {0};
-      SDL_snprintf(view_name, 100, "%s Image View", name);
+      SDL_snprintf(view_name, 100, "%s Image TbView", name); // NOLINT
       err = tb_rnd_create_image_view(rnd_sys, &create_info, view_name,
                                      &texture->image_view);
       TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
   }
 
   return id;
 }
 
-TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
-                                         const TbImage *image,
+TbTextureId tb_tex_system_import_texture(TbTextureSystem *self,
+                                         const char *name, const TbImage *image,
                                          VkFormat format) {
   TbTextureId id = calc_tex_id("", name);
   uint32_t index = find_tex_by_id(self, id);
@@ -559,7 +565,7 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
   }
 
   VkResult err = VK_SUCCESS;
-  RenderSystem *rnd_sys = self->rnd_sys;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   TbTexture *texture = alloc_tex(self, id);
 
@@ -587,11 +593,11 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
             },
     };
     char view_name[100] = {0};
-    SDL_snprintf(view_name, 100, "%s Image View", name);
+    SDL_snprintf(view_name, 100, "%s Image TbView", name); // NOLINT
     err = tb_rnd_create_image_view(rnd_sys, &create_info, view_name,
                                    &texture->image_view);
     TB_VK_CHECK_RET(err, "Failed to allocate image view for texture",
-                    InvalidTextureId);
+                    TbInvalidTextureId);
   }
 
   texture->gpu_image = *image;
@@ -599,13 +605,13 @@ TbTextureId tb_tex_system_import_texture(TextureSystem *self, const char *name,
   return id;
 }
 
-TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
+TbTextureId tb_tex_system_load_texture(TbTextureSystem *self, const char *path,
                                        const char *name,
                                        const cgltf_texture *texture) {
   TracyCZoneN(ctx, "Load Texture", true);
   // Must use basisu image
   TB_CHECK_RETURN(texture->has_basisu, "Expecting basisu image",
-                  InvalidTextureId);
+                  TbInvalidTextureId);
 
   const cgltf_image *image = texture->basisu_image;
   const cgltf_buffer_view *image_view = image->buffer_view;
@@ -616,7 +622,7 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
   const int32_t raw_size = (int32_t)image_view->size;
 
   TB_CHECK_RETURN(image->buffer_view->buffer->uri == NULL,
-                  "Not setup to load data from uri", InvalidTextureId);
+                  "Not setup to load data from uri", TbInvalidTextureId);
 
   // Load the ktx texture
   ktxTexture2 *ktx = NULL;
@@ -627,14 +633,14 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
         ktxTexture2_CreateFromMemory(raw_data, raw_size, flags, &ktx);
     TB_CHECK_RETURN(err == KTX_SUCCESS,
                     "Failed to create KTX texture from memory",
-                    InvalidTextureId);
+                    TbInvalidTextureId);
 
     bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
     if (needs_transcoding) {
       // TODO: pre-calculate the best format for the platform
       err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
       TB_CHECK_RETURN(err == KTX_SUCCESS, "Failed transcode basis texture",
-                      InvalidTextureId);
+                      TbInvalidTextureId);
     }
   }
 
@@ -644,7 +650,7 @@ TbTextureId tb_tex_system_load_texture(TextureSystem *self, const char *path,
   return tex;
 }
 
-bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id) {
+bool tb_tex_system_take_tex_ref(TbTextureSystem *self, TbTextureId id) {
   uint32_t index = find_tex_by_id(self, id);
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find texture", false);
 
@@ -652,7 +658,7 @@ bool tb_tex_system_take_tex_ref(TextureSystem *self, TbTextureId id) {
   return true;
 }
 
-void tb_tex_system_release_texture_ref(TextureSystem *self, TbTextureId tex) {
+void tb_tex_system_release_texture_ref(TbTextureSystem *self, TbTextureId tex) {
   const uint32_t index = find_tex_by_id(self, tex);
   if (index == SDL_MAX_UINT32) {
     TB_CHECK(false, "Failed to find texture to release");

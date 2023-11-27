@@ -15,13 +15,13 @@
 #endif
 
 void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                       uint32_t batch_count, const DispatchBatch *batches) {
+                       uint32_t batch_count, const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Downsample Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Downsample", 3, true);
   cmd_begin_label(buffer, "Downsample", (float4){0.0f, 0.5f, 0.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
+    const TbDispatchBatch *batch = &batches[batch_idx];
     const DownsampleBatch *down_batch =
         (const DownsampleBatch *)batch->user_batch;
 
@@ -42,7 +42,7 @@ void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_downsample_set_layout(RenderSystem *render_system,
+VkResult create_downsample_set_layout(TbRenderSystem *render_system,
                                       VkSampler sampler,
                                       VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
@@ -77,7 +77,7 @@ VkResult create_downsample_set_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_downsample_pipe_layout(RenderSystem *render_system,
+VkResult create_downsample_pipe_layout(TbRenderSystem *render_system,
                                        VkDescriptorSetLayout set_layout,
                                        VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -94,7 +94,7 @@ VkResult create_downsample_pipe_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_downsample_pipeline(RenderSystem *render_system,
+VkResult create_downsample_pipeline(TbRenderSystem *render_system,
                                     VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -133,13 +133,13 @@ VkResult create_downsample_pipeline(RenderSystem *render_system,
 }
 
 void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                     uint32_t batch_count, const DispatchBatch *batches) {
+                     uint32_t batch_count, const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Upsample Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Upsample", 3, true);
   cmd_begin_label(buffer, "Upsample", (float4){0.0f, 0.5f, 0.0f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
+    const TbDispatchBatch *batch = &batches[batch_idx];
     const UpsampleBatch *up_batch = (const UpsampleBatch *)batch->user_batch;
 
     VkPipelineLayout layout = batch->layout;
@@ -159,7 +159,7 @@ void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_upsample_set_layout(RenderSystem *render_system,
+VkResult create_upsample_set_layout(TbRenderSystem *render_system,
                                     VkSampler sampler,
                                     VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
@@ -194,7 +194,7 @@ VkResult create_upsample_set_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_upsample_pipe_layout(RenderSystem *render_system,
+VkResult create_upsample_pipe_layout(TbRenderSystem *render_system,
                                      VkDescriptorSetLayout set_layout,
                                      VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -211,7 +211,7 @@ VkResult create_upsample_pipe_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_upsample_pipeline(RenderSystem *render_system,
+VkResult create_upsample_pipeline(TbRenderSystem *render_system,
                                   VkPipelineLayout layout,
                                   VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -248,59 +248,55 @@ VkResult create_upsample_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_downsample_work(RenderSystem *render_system,
-                                RenderPipelineSystem *render_pipe,
-                                VkSampler sampler, TbRenderPassId pass,
-                                DownsampleRenderWork *work) {
-  VkResult err = VK_SUCCESS;
-  err = create_downsample_set_layout(render_system, sampler, &work->set_layout);
-  err = create_downsample_pipe_layout(render_system, work->set_layout,
-                                      &work->pipe_layout);
-  err = create_downsample_pipeline(render_system, work->pipe_layout,
-                                   &work->pipeline);
+VkResult tb_create_downsample_work(TbRenderSystem *render_system,
+                                   TbRenderPipelineSystem *render_pipe,
+                                   VkSampler sampler, TbRenderPassId pass,
+                                   DownsampleRenderWork *work) {
+  create_downsample_set_layout(render_system, sampler, &work->set_layout);
+  create_downsample_pipe_layout(render_system, work->set_layout,
+                                &work->pipe_layout);
+  create_downsample_pipeline(render_system, work->pipe_layout, &work->pipeline);
 
   work->ctx = tb_render_pipeline_register_dispatch_context(
-      render_pipe, &(DispatchContextDescriptor){
+      render_pipe, &(TbDispatchContextDescriptor){
                        .batch_size = sizeof(DownsampleBatch),
                        .dispatch_fn = record_downsample,
                        .pass_id = pass,
                    });
   TB_CHECK(work->ctx != InvalidDispatchContextId,
            "Failed to create downsample dispatch context");
-  return err;
+  return VK_SUCCESS;
 }
 
-void destroy_downsample_work(RenderSystem *render_system,
-                             DownsampleRenderWork *work) {
+void tb_destroy_downsample_work(TbRenderSystem *render_system,
+                                DownsampleRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);
 }
 
-VkResult create_upsample_work(RenderSystem *render_system,
-                              RenderPipelineSystem *render_pipe,
-                              VkSampler sampler, TbRenderPassId pass,
-                              UpsampleRenderWork *work) {
-  VkResult err = VK_SUCCESS;
-  err = create_upsample_set_layout(render_system, sampler, &work->set_layout);
-  err = create_upsample_pipe_layout(render_system, work->set_layout,
-                                    &work->pipe_layout);
-  err = create_upsample_pipeline(render_system, work->pipe_layout,
-                                 &work->pipeline);
+VkResult tb_create_upsample_work(TbRenderSystem *render_system,
+                                 TbRenderPipelineSystem *render_pipe,
+                                 VkSampler sampler, TbRenderPassId pass,
+                                 UpsampleRenderWork *work) {
+  create_upsample_set_layout(render_system, sampler, &work->set_layout);
+  create_upsample_pipe_layout(render_system, work->set_layout,
+                              &work->pipe_layout);
+  create_upsample_pipeline(render_system, work->pipe_layout, &work->pipeline);
 
   work->ctx = tb_render_pipeline_register_dispatch_context(
-      render_pipe, &(DispatchContextDescriptor){
+      render_pipe, &(TbDispatchContextDescriptor){
                        .batch_size = sizeof(UpsampleBatch),
                        .dispatch_fn = record_upsample,
                        .pass_id = pass,
                    });
   TB_CHECK(work->ctx != InvalidDispatchContextId,
            "Failed to create upsample dispatch context");
-  return err;
+  return VK_SUCCESS;
 }
 
-void destroy_upsample_work(RenderSystem *render_system,
-                           UpsampleRenderWork *work) {
+void tb_destroy_upsample_work(TbRenderSystem *render_system,
+                              UpsampleRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);

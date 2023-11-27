@@ -17,7 +17,7 @@ typedef struct RenderTargetLayerViews {
   RenderTargetMipView mip_views[TB_MAX_MIPS];
 } RenderTargetLayerViews;
 
-typedef struct RenderTarget {
+typedef struct TbRenderTarget {
   bool imported;
   VkFormat format;
   TbImage images[TB_MAX_FRAME_STATES];
@@ -25,10 +25,10 @@ typedef struct RenderTarget {
   uint32_t layer_count;
   uint32_t mip_count;
   RenderTargetLayerViews layer_views[TB_MAX_LAYERS];
-} RenderTarget;
+} TbRenderTarget;
 
-bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
-                          const RenderTargetDescriptor *desc) {
+bool create_render_target(TbRenderTargetSystem *self, TbRenderTarget *rt,
+                          const TbRenderTargetDescriptor *desc) {
   VkResult err = VK_SUCCESS;
 
   VkImageUsageFlagBits usage =
@@ -82,7 +82,7 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
 
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       char view_name[100] = {0};
-      SDL_snprintf(view_name, 100, "%s View", desc->name);
+      SDL_snprintf(view_name, 100, "%s TbView", desc->name); // NOLINT
 
       VkImageViewCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -109,13 +109,18 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
       for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
         RenderTargetMipView *mip_view = &rt->layer_views[0].mip_views[mip_idx];
 
-        mip_view->extent.width = desc->extent.width * SDL_powf(0.5f, mip_idx);
-        mip_view->extent.height = desc->extent.height * SDL_powf(0.5f, mip_idx);
+        float mip_idxf = (float)mip_idx;
+
+        mip_view->extent.width =
+            (uint32_t)((float)desc->extent.width * SDL_powf(0.5f, mip_idxf));
+        mip_view->extent.height =
+            (uint32_t)((float)desc->extent.height * SDL_powf(0.5f, mip_idxf));
         mip_view->extent.depth = desc->extent.depth;
 
         for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
           char view_name[100] = {0};
-          SDL_snprintf(view_name, 100, "%s Mip %d View", desc->name, mip_idx);
+          // NOLINTNEXTLINE
+          SDL_snprintf(view_name, 100, "%s Mip %d TbView", desc->name, mip_idx);
 
           VkImageViewCreateInfo create_info = {
               .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -139,15 +144,19 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
         for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
           RenderTargetMipView *mip_view = &layer_view->mip_views[mip_idx];
 
-          mip_view->extent.width = desc->extent.width * SDL_powf(0.5f, mip_idx);
+          float mip_idxf = (float)mip_idx;
+
+          mip_view->extent.width =
+              (uint32_t)((float)desc->extent.width * SDL_powf(0.5f, mip_idxf));
           mip_view->extent.height =
-              desc->extent.height * SDL_powf(0.5f, mip_idx);
+              (uint32_t)((float)desc->extent.height * SDL_powf(0.5f, mip_idxf));
           mip_view->extent.depth = desc->extent.depth;
 
           for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
             char view_name[100] = {0};
-            SDL_snprintf(view_name, 100, "%s Layer %d Mip %d View", desc->name,
-                         layer, mip_idx);
+            // NOLINTNEXTLINE
+            SDL_snprintf(view_name, 100, "%s Layer %d Mip %d TbView",
+                         desc->name, layer, mip_idx);
 
             VkImageViewCreateInfo create_info = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -168,8 +177,9 @@ bool create_render_target(RenderTargetSystem *self, RenderTarget *rt,
   return true;
 }
 
-void resize_render_target(RenderTargetSystem *self, RenderTarget *render_target,
-                          RenderTargetDescriptor *desc) {
+void resize_render_target(TbRenderTargetSystem *self,
+                          TbRenderTarget *render_target,
+                          TbRenderTargetDescriptor *desc) {
   // Clean up old images and views
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_free_gpu_image(self->render_system, &render_target->images[i]);
@@ -188,12 +198,12 @@ void resize_render_target(RenderTargetSystem *self, RenderTarget *render_target,
   create_render_target(self, render_target, desc);
 }
 
-void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
-                            const RenderTargetDescriptor *rt_desc,
+void reimport_render_target(TbRenderTargetSystem *self, TbRenderTargetId target,
+                            const TbRenderTargetDescriptor *rt_desc,
                             const VkImage *images) {
   VkResult err = VK_SUCCESS;
 
-  RenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, target);
+  TbRenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, target);
   // HACK: Assuming only one mip here
   // Pretty much assuming a swapchain only
 
@@ -225,17 +235,17 @@ void reimport_render_target(RenderTargetSystem *self, TbRenderTargetId target,
         .subresourceRange = {aspect, 0, 1, 0, 1},
     };
     err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                   "Imported Render Target View",
+                                   "Imported Render Target TbView",
                                    &rt->layer_views[0].mip_views[0].views[i]);
     TB_VK_CHECK(err, "Failed to create image view for imported render target");
     rt->views[i] = rt->layer_views[0].mip_views[0].views[i];
   }
 }
 
-RenderTargetSystem create_render_target_system(RenderSystem *render_system,
-                                               TbAllocator std_alloc,
-                                               TbAllocator tmp_alloc) {
-  RenderTargetSystem sys = {
+TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
+                                                 TbAllocator std_alloc,
+                                                 TbAllocator tmp_alloc) {
+  TbRenderTargetSystem sys = {
       .render_system = render_system,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
@@ -245,14 +255,14 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
   // Create some default render targets
   {
-    const Swapchain *swapchain = &render_system->render_thread->swapchain;
+    const TbSwapchain *swapchain = &render_system->render_thread->swapchain;
     const VkFormat swap_format = swapchain->format;
     const uint32_t width = swapchain->width;
     const uint32_t height = swapchain->height;
 
     // Create depth target
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Depth Buffer",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
@@ -270,7 +280,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Create normal prepass target
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Normal Prepass Buffer",
           .format = VK_FORMAT_R8G8B8A8_UNORM,
           .extent =
@@ -287,7 +297,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
     }
     // Create hdr color target
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "HDR Color",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
@@ -305,7 +315,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Create depth copy target which has a different format
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Depth Copy",
           .format = VK_FORMAT_R32_SFLOAT,
           .extent =
@@ -323,7 +333,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Create color copy target
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Color Copy",
           .format = swap_format,
           .extent =
@@ -342,7 +352,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
     // Create sky capture cube
     {
       const uint32_t mip_count = (uint32_t)(floorf(log2f(512.0f))) + 1u;
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Sky Cubemap Capture",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
@@ -360,7 +370,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Create irradiance map
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Irradiance Map",
           .format = VK_FORMAT_R32G32B32A32_SFLOAT,
           .extent =
@@ -379,7 +389,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
     // Create prefiltered env cubemap
     {
       const uint32_t mip_count = (uint32_t)(floorf(log2f(512.0f))) + 1u;
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Prefiltered Environment Map",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
@@ -397,7 +407,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Create shadow map
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Shadow Cascades",
           .format = VK_FORMAT_D32_SFLOAT,
           .extent =
@@ -414,7 +424,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
     }
     // Create brightness target
     {
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
@@ -434,7 +444,7 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
       // Minimum size for bloom target ensures we always have 5 mips
       uint32_t bloom_width = SDL_max(width, 32);
       uint32_t bloom_height = SDL_max(height, 32);
-      RenderTargetDescriptor rt_desc = {
+      TbRenderTargetDescriptor rt_desc = {
           .name = "Bloom Mip Chain",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
@@ -452,8 +462,8 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
 
     // Import swapchain target
     {
-      RenderTargetDescriptor rt_desc = {
-          .name = "Swapchain",
+      TbRenderTargetDescriptor rt_desc = {
+          .name = "TbSwapchain",
           .format = swap_format,
           .extent =
               {
@@ -477,10 +487,10 @@ RenderTargetSystem create_render_target_system(RenderSystem *render_system,
   return sys;
 }
 
-void destroy_render_target_system(RenderTargetSystem *self) {
+void destroy_render_target_system(TbRenderTargetSystem *self) {
   // Destroy all render targets
   TB_DYN_ARR_FOREACH(self->render_targets, rt_idx) {
-    RenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, rt_idx);
+    TbRenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, rt_idx);
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       if (!rt->imported) {
         // Imported targets are supposed to be cleaned up externally
@@ -502,37 +512,38 @@ void destroy_render_target_system(RenderTargetSystem *self) {
   }
   TB_DYN_ARR_DESTROY(self->render_targets);
 
-  *self = (RenderTargetSystem){0};
+  *self = (TbRenderTargetSystem){0};
 }
 
-void tb_register_render_target_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                                   TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  ECS_COMPONENT(ecs, RenderSystem);
+void tb_register_render_target_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  ECS_COMPONENT(ecs, TbRenderSystem);
 
-  RenderSystem *render_system = ecs_singleton_get_mut(ecs, RenderSystem);
+  TbRenderSystem *render_system = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  RenderTargetSystem sys =
-      create_render_target_system(render_system, std_alloc, tmp_alloc);
+  TbRenderTargetSystem sys = create_render_target_system(
+      render_system, world->std_alloc, world->tmp_alloc);
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(RenderTargetSystem), RenderTargetSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbRenderTargetSystem), TbRenderTargetSystem, &sys);
 }
 
-void tb_unregister_render_target_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, RenderTargetSystem);
-  RenderTargetSystem *sys = ecs_singleton_get_mut(ecs, RenderTargetSystem);
+void tb_unregister_render_target_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderTargetSystem);
+  TbRenderTargetSystem *sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
   destroy_render_target_system(sys);
-  ecs_singleton_remove(ecs, RenderTargetSystem);
+  ecs_singleton_remove(ecs, TbRenderTargetSystem);
 }
 
-void tb_reimport_swapchain(RenderTargetSystem *self) {
+void tb_reimport_swapchain(TbRenderTargetSystem *self) {
   // Called when the swapchain resizes
-  const Swapchain *swapchain = &self->render_system->render_thread->swapchain;
+  const TbSwapchain *swapchain = &self->render_system->render_thread->swapchain;
   const VkFormat swap_format = swapchain->format;
   const uint32_t width = swapchain->width;
   const uint32_t height = swapchain->height;
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Depth Buffer",
         .format = VK_FORMAT_D32_SFLOAT,
         .extent =
@@ -550,7 +561,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         &rt_desc);
   }
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Normal Prepass Buffer",
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .extent =
@@ -568,7 +579,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         &rt_desc);
   }
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "HDR Color",
         .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
@@ -585,7 +596,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         self, &TB_DYN_ARR_AT(self->render_targets, self->hdr_color), &rt_desc);
   }
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Depth Copy",
         .format = VK_FORMAT_R32_SFLOAT,
         .extent =
@@ -603,7 +614,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
         &rt_desc);
   }
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Color Copy",
         .format = swap_format,
         .extent =
@@ -622,7 +633,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
 
   // Resize brightness target
   {
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Brightness",
         .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
@@ -643,7 +654,7 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
     // Minimum size for bloom target ensures we always have 4 mips
     uint32_t bloom_width = SDL_max(width, 64);
     uint32_t bloom_height = SDL_max(height, 64);
-    RenderTargetDescriptor rt_desc = {
+    TbRenderTargetDescriptor rt_desc = {
         .name = "Bloom Mip Chain",
         .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
         .extent =
@@ -663,8 +674,8 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
 
   // Finally reimport swapchain
   {
-    RenderTargetDescriptor rt_desc = {
-        .name = "Swapchain",
+    TbRenderTargetDescriptor rt_desc = {
+        .name = "TbSwapchain",
         .format = swap_format,
         .extent =
             {
@@ -685,21 +696,22 @@ void tb_reimport_swapchain(RenderTargetSystem *self) {
   }
 }
 
-TbRenderTargetId alloc_render_target(RenderTargetSystem *self) {
+TbRenderTargetId alloc_render_target(TbRenderTargetSystem *self) {
   TbRenderTargetId id = TB_DYN_ARR_SIZE(self->render_targets);
-  RenderTarget rt = {0};
+  TbRenderTarget rt = {0};
   TB_DYN_ARR_APPEND(self->render_targets, rt);
   return id;
 }
 
-TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
-                                         const RenderTargetDescriptor *rt_desc,
-                                         const VkImage *images) {
+TbRenderTargetId
+tb_import_render_target(TbRenderTargetSystem *self,
+                        const TbRenderTargetDescriptor *rt_desc,
+                        const VkImage *images) {
   TbRenderTargetId id = alloc_render_target(self);
 
   VkResult err = VK_SUCCESS;
 
-  RenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, id);
+  TbRenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, id);
 
   VkImageAspectFlagBits aspect = VK_IMAGE_ASPECT_COLOR_BIT;
   if (rt_desc->format == VK_FORMAT_D32_SFLOAT) {
@@ -735,11 +747,11 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
         .subresourceRange = {aspect, 0, 1, 0, 1},
     };
     err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                   "Imported Render Target View",
+                                   "Imported Render Target TbView",
                                    &rt->layer_views[0].mip_views[0].views[i]);
     TB_VK_CHECK_RET(err,
                     "Failed to create image view for imported render target",
-                    InvalidRenderTargetId);
+                    TbInvalidRenderTargetId);
     rt->views[i] = rt->layer_views[0].mip_views[0].views[i];
   }
 
@@ -747,24 +759,25 @@ TbRenderTargetId tb_import_render_target(RenderTargetSystem *self,
 }
 
 TbRenderTargetId
-tb_create_render_target(RenderTargetSystem *self,
-                        const RenderTargetDescriptor *rt_desc) {
+tb_create_render_target(TbRenderTargetSystem *self,
+                        const TbRenderTargetDescriptor *rt_desc) {
 
   TbRenderTargetId id = alloc_render_target(self);
-  RenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, id);
+  TbRenderTarget *rt = &TB_DYN_ARR_AT(self->render_targets, id);
   bool ok = create_render_target(self, rt, rt_desc);
-  TB_CHECK_RETURN(ok, "Failed to create render target", InvalidRenderTargetId);
+  TB_CHECK_RETURN(ok, "Failed to create render target",
+                  TbInvalidRenderTargetId);
   return id;
 }
 
-uint32_t tb_render_target_get_mip_count(RenderTargetSystem *self,
+uint32_t tb_render_target_get_mip_count(TbRenderTargetSystem *self,
                                         TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", 0xFFFFFFFF);
   return TB_DYN_ARR_AT(self->render_targets, rt).mip_count;
 }
 
-VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
+VkExtent3D tb_render_target_get_extent(TbRenderTargetSystem *self,
                                        TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", (VkExtent3D){0});
@@ -774,7 +787,7 @@ VkExtent3D tb_render_target_get_extent(RenderTargetSystem *self,
       .extent;
 }
 
-VkExtent3D tb_render_target_get_mip_extent(RenderTargetSystem *self,
+VkExtent3D tb_render_target_get_mip_extent(TbRenderTargetSystem *self,
                                            uint32_t layer, uint32_t mip,
                                            TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
@@ -785,14 +798,14 @@ VkExtent3D tb_render_target_get_mip_extent(RenderTargetSystem *self,
       .extent;
 }
 
-VkFormat tb_render_target_get_format(RenderTargetSystem *self,
+VkFormat tb_render_target_get_format(TbRenderTargetSystem *self,
                                      TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", VK_FORMAT_UNDEFINED);
   return TB_DYN_ARR_AT(self->render_targets, rt).format;
 }
 
-VkImageView tb_render_target_get_view(RenderTargetSystem *self,
+VkImageView tb_render_target_get_view(TbRenderTargetSystem *self,
                                       uint32_t frame_idx, TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", VK_NULL_HANDLE);
@@ -800,7 +813,7 @@ VkImageView tb_render_target_get_view(RenderTargetSystem *self,
   return TB_DYN_ARR_AT(self->render_targets, rt).views[frame_idx];
 }
 
-VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
+VkImageView tb_render_target_get_mip_view(TbRenderTargetSystem *self,
                                           uint32_t layer, uint32_t mip,
                                           uint32_t frame_idx,
                                           TbRenderTargetId rt) {
@@ -812,8 +825,8 @@ VkImageView tb_render_target_get_mip_view(RenderTargetSystem *self,
       .views[frame_idx];
 }
 
-VkImage tb_render_target_get_image(RenderTargetSystem *self, uint32_t frame_idx,
-                                   TbRenderTargetId rt) {
+VkImage tb_render_target_get_image(TbRenderTargetSystem *self,
+                                   uint32_t frame_idx, TbRenderTargetId rt) {
   TB_CHECK_RETURN(rt < TB_DYN_ARR_SIZE(self->render_targets),
                   "Render target index out of range", VK_NULL_HANDLE);
   return TB_DYN_ARR_AT(self->render_targets, rt).images[frame_idx].image;

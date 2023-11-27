@@ -2,15 +2,13 @@
 
 #include "allocator.h"
 
-#define TimeOfDaySystemId 0x1337BEEF
+typedef struct TbWorld TbWorld;
 
-typedef struct ecs_world_t ecs_world_t;
-
-typedef struct TimeOfDaySystem {
+typedef struct TbTimeOfDaySystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
   float time;
-} TimeOfDaySystem;
+} TbTimeOfDaySystem;
 
-void tb_register_time_of_day_sys(ecs_world_t *ecs);
-void tb_unregister_time_of_day_sys(ecs_world_t *ecs);
+void tb_register_time_of_day_sys(TbWorld *world);
+void tb_unregister_time_of_day_sys(TbWorld *world);

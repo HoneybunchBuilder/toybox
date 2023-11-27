@@ -13,10 +13,10 @@
 
 #define TB_CREATE_LAYOUT(layout)
 
-RenderObjectSystem create_render_object_system(TbAllocator std_alloc,
-                                               TbAllocator tmp_alloc,
-                                               RenderSystem *rnd_sys) {
-  tb_auto sys = (RenderObjectSystem){
+TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
+                                                 TbAllocator tmp_alloc,
+                                                 TbRenderSystem *rnd_sys) {
+  tb_auto sys = (TbRenderObjectSystem){
       .render_system = rnd_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
@@ -41,23 +41,23 @@ RenderObjectSystem create_render_object_system(TbAllocator std_alloc,
   return sys;
 }
 
-void destroy_render_object_system(RenderObjectSystem *self) {
+void destroy_render_object_system(TbRenderObjectSystem *self) {
   tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
 
-  *self = (RenderObjectSystem){0};
+  *self = (TbRenderObjectSystem){0};
 }
 
 void tick_render_object_system(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Object System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, RenderObject);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbRenderObject);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  tb_auto ro_sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
 
-  TransformsBuffer *trans_buffer = &ro_sys->trans_buffers[rnd_sys->frame_idx];
+  TbTransformsBuffer *trans_buffer = &ro_sys->trans_buffers[rnd_sys->frame_idx];
 
   int32_t prev_count = trans_buffer->obj_count;
   int32_t obj_count = 0;
@@ -86,7 +86,7 @@ void tick_render_object_system(ecs_iter_t *it) {
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "Transform Buffer",
+    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "TbTransform Buffer",
                                  &trans_buffer->gpu, &trans_buffer->host,
                                  (void **)&trans_ptr);
   } else {
@@ -97,8 +97,8 @@ void tick_render_object_system(ecs_iter_t *it) {
   {
     tb_auto obj_idx = 0ul;
     while (ecs_query_next(&obj_it)) {
-      tb_auto trans_comps = ecs_field(&obj_it, TransformComponent, 1);
-      tb_auto rnd_objs = ecs_field(&obj_it, RenderObject, 2);
+      tb_auto trans_comps = ecs_field(&obj_it, TbTransformComponent, 1);
+      tb_auto rnd_objs = ecs_field(&obj_it, TbRenderObject, 2);
       for (tb_auto i = 0; i < obj_it.count; ++i) {
         // TODO: We want to only have to do this when transforms are dirty
         // but we need to triple buffer the transform buffers to avoid
@@ -148,42 +148,44 @@ void tick_render_object_system(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-VkDescriptorSet tb_render_object_sys_get_set(RenderObjectSystem *sys) {
+VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
   return tb_rnd_frame_desc_pool_get_set(sys->render_system, sys->pools, 0);
 }
 
-void tb_register_render_object_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                                   TbAllocator tmp_alloc) {
-  ECS_COMPONENT(ecs, RenderSystem);
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  ECS_COMPONENT(ecs, RenderObject);
-  ECS_COMPONENT(ecs, TransformComponent);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, RenderSystem);
-  tb_auto sys = create_render_object_system(std_alloc, tmp_alloc, rnd_sys);
+void tb_register_render_object_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  ECS_COMPONENT(ecs, TbRenderObject);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys =
+      create_render_object_system(world->std_alloc, world->tmp_alloc, rnd_sys);
   sys.obj_query =
       ecs_query(ecs, {
                          .filter.terms =
                              {
                                  {
-                                     .id = ecs_id(TransformComponent),
+                                     .id = ecs_id(TbTransformComponent),
                                  },
                                  {
-                                     .id = ecs_id(RenderObject),
+                                     .id = ecs_id(TbRenderObject),
                                  },
                              },
                      });
   // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(RenderObjectSystem), RenderObjectSystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbRenderObjectSystem), TbRenderObjectSystem, &sys);
 
   // Register a tick function
   ECS_SYSTEM(ecs, tick_render_object_system, EcsOnUpdate,
-             RenderObjectSystem(RenderObjectSystem));
+             TbRenderObjectSystem(TbRenderObjectSystem));
 }
 
-void tb_unregister_render_object_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, RenderObjectSystem);
-  tb_auto *sys = ecs_singleton_get_mut(ecs, RenderObjectSystem);
+void tb_unregister_render_object_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbRenderObjectSystem);
+  tb_auto *sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   ecs_query_fini(sys->obj_query);
   destroy_render_object_system(sys);
-  ecs_singleton_remove(ecs, RenderObjectSystem);
+  ecs_singleton_remove(ecs, TbRenderObjectSystem);
 }

@@ -81,7 +81,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_OBJECT_SET(space)                                                 \
-  StructuredBuffer<CommonObjectData> object_data : register(t0, space);
+  StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_INDIRECT_SET(space)                                               \
@@ -89,18 +89,18 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_VIEW_SET(space)                                                   \
-  ConstantBuffer<CommonViewData> camera_data : register(b0, space);            \
+  ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);            \
   TextureCube irradiance_map : register(t1, space);                            \
   TextureCube prefiltered_map : register(t2, space);                           \
   Texture2D brdf_lut : register(t3, space);                                    \
-  ConstantBuffer<CommonLightData> light_data : register(b4, space);            \
+  ConstantBuffer<TbCommonLightData> light_data : register(b4, space);            \
   Texture2DArray shadow_map : register(t5, space);                             \
   sampler filtered_env_sampler : register(s7, space);                          \
   sampler brdf_sampler : register(s8, space);
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \
-    View v;                                                                    \
+    TbView v;                                                                    \
     v.irradiance_map = irradiance_map;                                         \
     v.prefiltered_map = prefiltered_map;                                       \
     v.brdf_lut = brdf_lut;                                                     \

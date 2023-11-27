@@ -16,7 +16,7 @@
 /*
   HACK:
   This time of day system makes a few assumptions:
-  1) That the scene has one entity with a Directional Light and Transform
+  1) That the scene has one entity with a Directional Light and TbTransform
   component attached and one entity with a Sky component attached. Otherwise it
   will not work as intended. Note that the time of day system doesn't require
   any explicit dependency on the lighting or sky systems.
@@ -32,8 +32,8 @@
   a Sky component attached but misconfiguration seems hard to message to a user.
 */
 
-void destroy_time_of_day_system(TimeOfDaySystem *self) {
-  *self = (TimeOfDaySystem){0};
+void destroy_time_of_day_system(TbTimeOfDaySystem *self) {
+  *self = (TbTimeOfDaySystem){0};
 }
 
 float3 lookup_sun_color(float norm) {
@@ -41,10 +41,10 @@ float3 lookup_sun_color(float norm) {
   float temperature = 0.0f;
   if (norm < 0.25f) {
     // As sun rises, so does the color temp
-    temperature = lerpf(1000, 12000, norm * 4.0f);
+    temperature = tb_lerpf(1000, 12000, norm * 4.0f);
   } else if (norm < 0.5f) {
     // As the sun sets, the color temp goes back down
-    temperature = lerpf(12000, 1000, (norm - 0.25f) * 4.0f);
+    temperature = tb_lerpf(12000, 1000, (norm - 0.25f) * 4.0f);
   } else {
     // When the sun is set, until it rises, we just bail as the sun should
     // not be providing any light
@@ -111,27 +111,27 @@ float3 lookup_sun_color(float norm) {
 
 void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
-  TimeOfDaySystem *sys = ecs_field(it, TimeOfDaySystem, 1);
+  TbTimeOfDaySystem *sys = ecs_field(it, TbTimeOfDaySystem, 1);
   sys->time +=
       it->delta_time * 0.002f; // go a litte slower than everything else
 
-  SkyComponent *skys = ecs_field(it, SkyComponent, 2);
-  DirectionalLightComponent *lights =
-      ecs_field(it, DirectionalLightComponent, 3);
-  TransformComponent *transforms = ecs_field(it, TransformComponent, 4);
+  TbSkyComponent *skys = ecs_field(it, TbSkyComponent, 2);
+  TbDirectionalLightComponent *lights =
+      ecs_field(it, TbDirectionalLightComponent, 3);
+  TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 4);
 
   for (int32_t i = 0; i < it->count; ++i) {
-    SkyComponent *sky = &skys[i];
-    DirectionalLightComponent *light = &lights[i];
-    TransformComponent *trans = &transforms[i];
+    TbSkyComponent *sky = &skys[i];
+    TbDirectionalLightComponent *light = &lights[i];
+    TbTransformComponent *trans = &transforms[i];
 
     const float time_norm =
-        (sys->time > TAU ? sys->time - TAU : sys->time) / TAU;
+        (sys->time > TB_TAU ? sys->time - TB_TAU : sys->time) / TB_TAU;
     trans->transform.rotation =
-        angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, sys->time});
+        tb_angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, sys->time});
     light->color = lookup_sun_color(time_norm);
 
-    float3 sun_dir = -transform_get_forward(&trans->transform);
+    float3 sun_dir = -tb_transform_get_forward(&trans->transform);
 
     // Update sky component's time and sun direction
     sky->time = sys->time;
@@ -140,27 +140,29 @@ void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_time_of_day_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, SkyComponent);
-  ECS_COMPONENT(ecs, DirectionalLightComponent);
-  ECS_COMPONENT(ecs, TransformComponent);
-  ECS_COMPONENT(ecs, TimeOfDaySystem);
+void tb_register_time_of_day_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbSkyComponent);
+  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT(ecs, TbTimeOfDaySystem);
 
-  TimeOfDaySystem sys = {
+  TbTimeOfDaySystem sys = {
       .time = 0.3f, // Start with some time so it's not pitch black
   };
 
   // Sets a singleton by ptr
-  ecs_set_ptr(ecs, ecs_id(TimeOfDaySystem), TimeOfDaySystem, &sys);
+  ecs_set_ptr(ecs, ecs_id(TbTimeOfDaySystem), TbTimeOfDaySystem, &sys);
 
   ECS_SYSTEM(ecs, time_of_day_tick, EcsPreUpdate,
-             TimeOfDaySystem(TimeOfDaySystem), [inout] SkyComponent,
-             [inout] DirectionalLightComponent, [inout] TransformComponent);
+             TbTimeOfDaySystem(TbTimeOfDaySystem), [inout] TbSkyComponent,
+             [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
 }
 
-void tb_unregister_time_of_day_sys(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TimeOfDaySystem);
-  TimeOfDaySystem *sys = ecs_singleton_get_mut(ecs, TimeOfDaySystem);
+void tb_unregister_time_of_day_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbTimeOfDaySystem);
+  TbTimeOfDaySystem *sys = ecs_singleton_get_mut(ecs, TbTimeOfDaySystem);
   destroy_time_of_day_system(sys);
-  ecs_singleton_remove(ecs, TimeOfDaySystem);
+  ecs_singleton_remove(ecs, TbTimeOfDaySystem);
 }

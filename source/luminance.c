@@ -16,10 +16,10 @@
 #endif
 
 void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
-                       const DispatchBatch *batches) {
+                       const TbDispatchBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const DispatchBatch *batch = &batches[batch_idx];
-    const LuminanceBatch *lum_set = (const LuminanceBatch *)batch->user_batch;
+    const TbDispatchBatch *batch = &batches[batch_idx];
+    const TbLuminanceBatch *lum_set = (const TbLuminanceBatch *)batch->user_batch;
 
     VkPipelineLayout layout = batch->layout;
 
@@ -27,7 +27,7 @@ void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0,
                             1, &lum_set->set, 0, NULL);
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(LuminancePushConstants), &lum_set->consts);
+                       sizeof(TbLuminancePushConstants), &lum_set->consts);
 
     for (uint32_t i = 0; i < batch->group_count; i++) {
       uint3 group = batch->groups[i];
@@ -38,7 +38,7 @@ void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
 
 void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                              uint32_t batch_count,
-                             const DispatchBatch *batches) {
+                             const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Luminance Gather Record", TracyCategoryColorRendering,
                true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Luminance Gather", 3, true);
@@ -51,7 +51,7 @@ void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_lum_gather_set_layout(RenderSystem *render_system,
+VkResult create_lum_gather_set_layout(TbRenderSystem *render_system,
                                       VkSampler sampler,
                                       VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
@@ -86,7 +86,7 @@ VkResult create_lum_gather_set_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_gather_pipe_layout(RenderSystem *render_system,
+VkResult create_lum_gather_pipe_layout(TbRenderSystem *render_system,
                                        VkDescriptorSetLayout set_layout,
                                        VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -101,7 +101,7 @@ VkResult create_lum_gather_pipe_layout(RenderSystem *render_system,
           (VkPushConstantRange[1]){
               {
                   .offset = 0,
-                  .size = sizeof(LuminancePushConstants),
+                  .size = sizeof(TbLuminancePushConstants),
                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
           },
@@ -112,7 +112,7 @@ VkResult create_lum_gather_pipe_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_gather_pipeline(RenderSystem *render_system,
+VkResult create_lum_gather_pipeline(TbRenderSystem *render_system,
                                     VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -150,10 +150,10 @@ VkResult create_lum_gather_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_hist_work(RenderSystem *render_system,
-                              RenderPipelineSystem *render_pipe,
+VkResult tb_create_lum_hist_work(TbRenderSystem *render_system,
+                              TbRenderPipelineSystem *render_pipe,
                               VkSampler sampler, TbRenderPassId pass,
-                              LumHistRenderWork *work) {
+                              TbLumHistRenderWork *work) {
   VkResult err = VK_SUCCESS;
   err = create_lum_gather_set_layout(render_system, sampler, &work->set_layout);
 
@@ -176,8 +176,8 @@ VkResult create_lum_hist_work(RenderSystem *render_system,
     TB_VK_CHECK(err, "Failed to create luminance histogram buffer");
   }
 
-  DispatchContextDescriptor desc = {
-      .batch_size = sizeof(LuminanceBatch),
+  TbDispatchContextDescriptor desc = {
+      .batch_size = sizeof(TbLuminanceBatch),
       .dispatch_fn = record_luminance_gather,
       .pass_id = pass,
   };
@@ -187,8 +187,8 @@ VkResult create_lum_hist_work(RenderSystem *render_system,
   return err;
 }
 
-void destroy_lum_hist_work(RenderSystem *render_system,
-                           LumHistRenderWork *work) {
+void tb_destroy_lum_hist_work(TbRenderSystem *render_system,
+                           TbLumHistRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);
@@ -197,7 +197,7 @@ void destroy_lum_hist_work(RenderSystem *render_system,
 
 void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                               uint32_t batch_count,
-                              const DispatchBatch *batches) {
+                              const TbDispatchBatch *batches) {
   TracyCZoneNC(ctx, "Luminance Average Record", TracyCategoryColorRendering,
                true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Luminance Average", 3, true);
@@ -211,7 +211,7 @@ void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_lum_avg_set_layout(RenderSystem *render_system,
+VkResult create_lum_avg_set_layout(TbRenderSystem *render_system,
                                    VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -238,7 +238,7 @@ VkResult create_lum_avg_set_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_avg_pipeline(RenderSystem *render_system,
+VkResult create_lum_avg_pipeline(TbRenderSystem *render_system,
                                  VkPipelineLayout layout,
                                  VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -276,7 +276,7 @@ VkResult create_lum_avg_pipeline(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_avg_pipe_layout(RenderSystem *render_system,
+VkResult create_lum_avg_pipe_layout(TbRenderSystem *render_system,
                                     VkDescriptorSetLayout set_layout,
                                     VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -291,7 +291,7 @@ VkResult create_lum_avg_pipe_layout(RenderSystem *render_system,
           (VkPushConstantRange[1]){
               {
                   .offset = 0,
-                  .size = sizeof(LuminancePushConstants),
+                  .size = sizeof(TbLuminancePushConstants),
                   .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
           },
@@ -302,9 +302,9 @@ VkResult create_lum_avg_pipe_layout(RenderSystem *render_system,
   return err;
 }
 
-VkResult create_lum_avg_work(RenderSystem *render_system,
-                             RenderPipelineSystem *render_pipe,
-                             TbRenderPassId pass, LumAvgRenderWork *work) {
+VkResult tb_create_lum_avg_work(TbRenderSystem *render_system,
+                             TbRenderPipelineSystem *render_pipe,
+                             TbRenderPassId pass, TbLumAvgRenderWork *work) {
   VkResult err = VK_SUCCESS;
   err = create_lum_avg_set_layout(render_system, &work->set_layout);
 
@@ -326,8 +326,8 @@ VkResult create_lum_avg_work(RenderSystem *render_system,
     TB_VK_CHECK(err, "Failed to create luminance average buffer");
   }
 
-  DispatchContextDescriptor desc = {
-      .batch_size = sizeof(LuminanceBatch),
+  TbDispatchContextDescriptor desc = {
+      .batch_size = sizeof(TbLuminanceBatch),
       .dispatch_fn = record_luminance_average,
       .pass_id = pass,
   };
@@ -337,7 +337,7 @@ VkResult create_lum_avg_work(RenderSystem *render_system,
   return err;
 }
 
-void destroy_lum_avg_work(RenderSystem *render_system, LumAvgRenderWork *work) {
+void tb_destroy_lum_avg_work(TbRenderSystem *render_system, TbLumAvgRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);

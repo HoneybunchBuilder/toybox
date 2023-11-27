@@ -14,4 +14,4 @@
     different constants, and turns out to be a prime. this is one of the
     algorithms used in berkeley db (see sleepycat) and elsewhere.
 */
-uint64_t sdbm(uint64_t hash, const uint8_t *data, uint64_t len);
+uint64_t tb_sdbm(uint64_t hash, const uint8_t *data, uint64_t len);

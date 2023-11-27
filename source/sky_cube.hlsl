@@ -2,7 +2,7 @@
 #include "cube_view_lut.hlsli"
 #include "sky_common.hlsli"
 
-ConstantBuffer<SkyData> sky_data : register(b0, space0); // Fragment Stage Only
+ConstantBuffer<TbSkyData> sky_data : register(b0, space0); // Fragment Stage Only
 
 struct VertexIn {
   float3 local_pos : SV_POSITION;

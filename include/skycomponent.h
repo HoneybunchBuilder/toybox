@@ -2,16 +2,15 @@
 
 #include "simd.h"
 
-#define SkyComponentId 0xCAFEB0BA
-#define SkyComponentIdStr "0xCAFEB0BA"
+#define TbSkyComponentIdStr "0xCAFEB0BA"
 
-typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
 
-typedef struct SkyComponent {
+typedef struct TbSkyComponent {
   float time;
   float cirrus;
   float cumulus;
   float3 sun_dir;
-} SkyComponent;
+} TbSkyComponent;
 
-void tb_register_sky_component(ecs_world_t *ecs);
+void tb_register_sky_component(TbWorld *world);

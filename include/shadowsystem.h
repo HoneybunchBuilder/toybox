@@ -4,8 +4,6 @@
 #include "common.hlsli"
 #include "rendersystem.h"
 
-#define ShadowSystemId 0xB105F00D
-
 typedef struct TbWorld TbWorld;
 typedef uint32_t TbDrawContextId;
 
@@ -15,7 +13,7 @@ typedef struct VkPipeline_T *VkPipeline;
 typedef struct ecs_world_t ecs_world_t;
 typedef struct ecs_query_t ecs_query_t;
 
-typedef struct ShadowSystem {
+typedef struct TbShadowSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
@@ -24,8 +22,8 @@ typedef struct ShadowSystem {
   VkPipeline pipeline;
 
   ecs_query_t *dir_light_query;
-  FrameDescriptorPoolList desc_pool_list;
-} ShadowSystem;
+  TbFrameDescriptorPoolList desc_pool_list;
+} TbShadowSystem;
 
 void tb_register_shadow_sys(TbWorld *world);
-void tb_unregister_shadow_sys(ecs_world_t *ecs);
+void tb_unregister_shadow_sys(TbWorld *world);

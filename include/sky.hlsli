@@ -1,8 +1,8 @@
 #pragma once
 
-typedef struct SkyData {
+typedef struct TbSkyData {
   float time;
   float cirrus;
   float cumulus;
   float3 sun_dir;
-} SkyData;
+} TbSkyData;

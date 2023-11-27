@@ -5,63 +5,59 @@
 #include "dynarray.h"
 #include "tbrendercommon.h"
 
-#define ViewSystemId 0xFEE1DEAD
-
-typedef struct RenderSystem RenderSystem;
-typedef struct TextureSystem TextureSystem;
-typedef struct RenderTargetSystem RenderTargetSystem;
+typedef struct TbRenderSystem TbRenderSystem;
+typedef struct TbTextureSystem TbTextureSystem;
+typedef struct TbRenderTargetSystem TbRenderTargetSystem;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
-
-typedef struct ecs_world_t ecs_world_t;
-
+typedef struct TbWorld TbWorld;
 typedef uint32_t TbViewId;
 typedef uint32_t TbRenderTargetId;
-static const TbViewId InvalidViewId = SDL_MAX_UINT32;
+static const TbViewId TbInvalidViewId = SDL_MAX_UINT32;
 
-typedef struct ViewSystemFrameState {
+typedef struct TbViewSystemFrameState {
   uint32_t set_count;
   VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
-} ViewSystemFrameState;
+} TbViewSystemFrameState;
 
 #define TB_MAX_PASSES_PER_VIEW 4
 
-typedef struct View {
+typedef struct TbView {
   TbRenderTargetId target;
-  CommonViewData view_data;
-  CommonLightData light_data;
-  Frustum frustum;
-} View;
+  TbCommonViewData view_data;
+  TbCommonLightData light_data;
+  TbFrustum frustum;
+} TbView;
 
-typedef struct ViewSystem {
-  RenderSystem *render_system;
-  RenderTargetSystem *render_target_system;
-  TextureSystem *texture_system;
+typedef struct TbViewSystem {
+  TbRenderSystem *render_system;
+  TbRenderTargetSystem *render_target_system;
+  TbTextureSystem *texture_system;
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
   VkSampler brdf_sampler;
   VkSampler filtered_env_sampler;
   VkDescriptorSetLayout set_layout;
-  ViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
+  TbViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
 
-  TB_DYN_ARR_OF(View) views;
-} ViewSystem;
+  TB_DYN_ARR_OF(TbView) views;
+} TbViewSystem;
 
-void tb_register_view_sys(ecs_world_t *ecs, TbAllocator std_alloc,
-                          TbAllocator tmp_alloc);
-void tb_unregister_view_sys(ecs_world_t *ecs);
+void tb_register_view_sys(TbWorld *world);
+void tb_unregister_view_sys(TbWorld *world);
 
-TbViewId tb_view_system_create_view(ViewSystem *self);
-void tb_view_system_set_view_target(ViewSystem *self, TbViewId view,
+TbViewId tb_view_system_create_view(TbViewSystem *self);
+void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,
                                     TbRenderTargetId target);
-void tb_view_system_set_view_data(ViewSystem *self, TbViewId view,
-                                  const CommonViewData *data);
-void tb_view_system_set_light_data(ViewSystem *self, TbViewId view,
-                                   const CommonLightData *data);
-void tb_view_system_set_view_frustum(ViewSystem *self, TbViewId view,
-                                     const Frustum *frust);
-VkDescriptorSet tb_view_system_get_descriptor(ViewSystem *self, TbViewId view);
-const View *tb_get_view(ViewSystem *self, TbViewId view);
+void tb_view_system_set_view_data(TbViewSystem *self, TbViewId view,
+                                  const TbCommonViewData *data);
+void tb_view_system_set_light_data(TbViewSystem *self, TbViewId view,
+                                   const TbCommonLightData *data);
+void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
+                                     const TbFrustum *frust);
+VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
+                                              TbViewId view);
+const TbView *tb_get_view(TbViewSystem *self, TbViewId view);

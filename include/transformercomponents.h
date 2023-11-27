@@ -2,14 +2,13 @@
 
 #include "simd.h"
 
-#define RotatorComponentId 0xBABE0000
-#define RotatorComponentIdStr "0xBABE0000"
+#define TbRotatorComponentIdStr "0xBABE0000"
 
-typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
 
-typedef struct RotatorComponent {
+typedef struct TbRotatorComponent {
   float3 axis;
   float speed;
-} RotatorComponent;
+} TbRotatorComponent;
 
-void tb_register_rotator_component(ecs_world_t *ecs);
+void tb_register_rotator_component(TbWorld *world);
