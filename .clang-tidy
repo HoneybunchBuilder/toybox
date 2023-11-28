@@ -1,4 +1,7 @@
 ---
-Checks:          '-*,bugprone-*,performance-*,portability-*,clang-analyzer-*,readability-inconsistent*,-bugprone-easily-swappable-parameters'
+Checks:          '-*,bugprone-*,performance-*,portability-*,clang-analyzer-*,readability-inconsistent*,-bugprone-easily-swappable-parameters,-clang-diagnostic-error'
 WarningsAsErrors:  '*'
-HeaderFilterRegex: '.*,-*vulkan*,-*Tracy*,-*flecs*,-*vcpkg_installed*'
+HeaderFilterRegex: '-^((?!/vcpkg_installed/).)*$'
+ExtraArgs: '-fblocks'
+UseColor: true
+FormatStyle: 'file'

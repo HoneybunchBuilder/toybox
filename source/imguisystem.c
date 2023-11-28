@@ -1,15 +1,11 @@
 #include "imguisystem.h"
 
 // Ignore some warnings for the generated headers
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "imgui_frag.h"
 #include "imgui_vert.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 #include "inputsystem.h"
 #include "profiling.h"
@@ -374,7 +370,6 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                   TbRenderPipelineSystem *render_pipe_system,
                                   TbRenderTargetSystem *render_target_system,
                                   TbInputSystem *input_system) {
-
   TbImGuiSystem sys = {
       .render_system = render_system,
       .render_pipe_system = render_pipe_system,
@@ -391,6 +386,9 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   for (uint32_t i = 0; i < sys.context_count; ++i) {
     err = ui_context_init(render_system, context_atlases[i], &sys.contexts[i]);
     TB_VK_CHECK(err, "Failed to initialize UI context");
+    if (err != VK_SUCCESS) {
+      break;
+    }
   }
 
   // Look up UI pipeline

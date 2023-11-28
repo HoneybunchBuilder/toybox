@@ -30,6 +30,8 @@ We allocate space and export a symbol to be used as the Class for the on-stack a
 We keep these in a separate file so that we can include the runtime code in test subprojects but not include the data so that compiled code that sees the data in libSystem doesn't get confused by a second copy.  Somehow these don't get unified in a common block.
 **********************/
 
+// NOLINTBEGIN
+
 void * _NSConcreteStackBlock[32] = { 0 };
 void * _NSConcreteMallocBlock[32] = { 0 };
 void * _NSConcreteAutoBlock[32] = { 0 };
@@ -39,3 +41,5 @@ void * _NSConcreteWeakBlockVariable[32] = { 0 };
 
 void _Block_copy_error(void) {
 }
+
+// NOLINTEND

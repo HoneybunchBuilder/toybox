@@ -381,5 +381,4 @@ void copy_skydome(void *dst) {
   geom_bytes += sizeof(skydome_normals);
 
   SDL_memcpy(geom_bytes, skydome_uvs, sizeof(skydome_uvs));
-  geom_bytes += sizeof(skydome_uvs);
 }

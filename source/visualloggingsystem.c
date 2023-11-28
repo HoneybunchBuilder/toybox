@@ -18,15 +18,11 @@
 #include <flecs.h>
 
 // Ignore some warnings for the generated headers
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "primitive_frag.h"
 #include "primitive_vert.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 typedef struct VLogLocation {
   float3 position;

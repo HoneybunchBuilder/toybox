@@ -292,8 +292,9 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
               self->tmp_alloc, write_count, VkWriteDescriptorSet);
           VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
               self->tmp_alloc, material_count, VkDescriptorBufferInfo);
-          VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-              self->tmp_alloc, material_count * 3, VkDescriptorImageInfo);
+          VkDescriptorImageInfo *image_info =
+              tb_alloc_nm_tp(self->tmp_alloc, (uint64_t)material_count * 3,
+                             VkDescriptorImageInfo);
           for (uint32_t i = 0; i < material_count; ++i) {
             uint32_t write_idx = i * 4;
 

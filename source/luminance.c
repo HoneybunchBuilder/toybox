@@ -5,21 +5,18 @@
 #include "rendersystem.h"
 #include "tbcommon.h"
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "lumavg_comp.h"
 #include "lumhist_comp.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
                        const TbDispatchBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const TbDispatchBatch *batch = &batches[batch_idx];
-    const TbLuminanceBatch *lum_set = (const TbLuminanceBatch *)batch->user_batch;
+    const TbLuminanceBatch *lum_set =
+        (const TbLuminanceBatch *)batch->user_batch;
 
     VkPipelineLayout layout = batch->layout;
 
@@ -151,9 +148,9 @@ VkResult create_lum_gather_pipeline(TbRenderSystem *render_system,
 }
 
 VkResult tb_create_lum_hist_work(TbRenderSystem *render_system,
-                              TbRenderPipelineSystem *render_pipe,
-                              VkSampler sampler, TbRenderPassId pass,
-                              TbLumHistRenderWork *work) {
+                                 TbRenderPipelineSystem *render_pipe,
+                                 VkSampler sampler, TbRenderPassId pass,
+                                 TbLumHistRenderWork *work) {
   VkResult err = VK_SUCCESS;
   err = create_lum_gather_set_layout(render_system, sampler, &work->set_layout);
 
@@ -188,7 +185,7 @@ VkResult tb_create_lum_hist_work(TbRenderSystem *render_system,
 }
 
 void tb_destroy_lum_hist_work(TbRenderSystem *render_system,
-                           TbLumHistRenderWork *work) {
+                              TbLumHistRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);
@@ -303,8 +300,8 @@ VkResult create_lum_avg_pipe_layout(TbRenderSystem *render_system,
 }
 
 VkResult tb_create_lum_avg_work(TbRenderSystem *render_system,
-                             TbRenderPipelineSystem *render_pipe,
-                             TbRenderPassId pass, TbLumAvgRenderWork *work) {
+                                TbRenderPipelineSystem *render_pipe,
+                                TbRenderPassId pass, TbLumAvgRenderWork *work) {
   VkResult err = VK_SUCCESS;
   err = create_lum_avg_set_layout(render_system, &work->set_layout);
 
@@ -337,7 +334,8 @@ VkResult tb_create_lum_avg_work(TbRenderSystem *render_system,
   return err;
 }
 
-void tb_destroy_lum_avg_work(TbRenderSystem *render_system, TbLumAvgRenderWork *work) {
+void tb_destroy_lum_avg_work(TbRenderSystem *render_system,
+                             TbLumAvgRenderWork *work) {
   tb_rnd_destroy_set_layout(render_system, work->set_layout);
   tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
   tb_rnd_destroy_pipeline(render_system, work->pipeline);

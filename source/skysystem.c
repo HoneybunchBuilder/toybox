@@ -1,10 +1,8 @@
 #include "skysystem.h"
 
 // Ignore some warnings for the generated headers
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "env_filter_frag.h"
 #include "env_filter_vert.h"
 #include "irradiance_frag.h"
@@ -13,9 +11,7 @@
 #include "sky_cube_vert.h"
 #include "sky_frag.h"
 #include "sky_vert.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 #include "assetsystem.h"
 #include "cameracomponent.h"

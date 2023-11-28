@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-completeness"
 #pragma clang diagnostic ignored "-Wnullability-extension"
@@ -29,12 +28,9 @@
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #pragma clang diagnostic ignored "-Wimplicit-fallthrough"
-#endif
 
 #define VMA_STATS_STRING_ENABLED 0
 
 #include <vk_mem_alloc.h>
 
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif

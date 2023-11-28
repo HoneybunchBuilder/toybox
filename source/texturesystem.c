@@ -226,15 +226,11 @@ TbTextureId tb_tex_system_create_texture_ktx2(TbTextureSystem *self,
           .uploads = uploads,
       };
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
       // Iterate over texture levels to fill out upload requests
       ktxTexture_IterateLevels(ktx, iterate_ktx2_levels, &iter_data);
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
       // Will handle transitioning the image's layout to shader read only
       tb_rnd_upload_buffer_to_image(rnd_sys, uploads, mip_levels);

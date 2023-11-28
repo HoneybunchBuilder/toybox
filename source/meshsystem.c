@@ -23,10 +23,8 @@
 #include <meshoptimizer.h>
 
 // Ignore some warnings for the generated headers
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "gltf_P3N3T4U2_frag.h"
 #include "gltf_P3N3T4U2_vert.h"
 #include "gltf_P3N3U2_frag.h"
@@ -35,9 +33,7 @@
 #include "gltf_P3N3_vert.h"
 #include "opaque_prepass_frag.h"
 #include "opaque_prepass_vert.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 static const uint64_t pos_stride = sizeof(uint16_t) * 4;
 static const uint64_t attr_stride = sizeof(uint16_t) * 2;

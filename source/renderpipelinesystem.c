@@ -10,10 +10,8 @@
 
 #include <flecs.h>
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "blur_h_comp.h"
 #include "blur_v_comp.h"
 #include "brightness_frag.h"
@@ -25,9 +23,7 @@
 #include "depthcopy_vert.h"
 #include "tonemap_frag.h"
 #include "tonemap_vert.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 #define BLUR_BATCH_COUNT (TB_BLOOM_MIPS - 1)
 

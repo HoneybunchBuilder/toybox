@@ -19,15 +19,13 @@
 #include <flecs.h>
 
 // Ignore some warnings for the generated headers
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
+// NOLINTBEGIN
 #include "depth_frag.h"
 #include "depth_vert.h"
-#ifdef __clang__
+// NOLINTEND
 #pragma clang diagnostic pop
-#endif
 
 VkResult create_shadow_pipeline(TbRenderSystem *render_system,
                                 VkFormat depth_format,

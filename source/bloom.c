@@ -4,15 +4,11 @@
 #include "renderpipelinesystem.h"
 #include "tbcommon.h"
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#endif
 #include "downsample_comp.h"
 #include "upsample_comp.h"
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDispatchBatch *batches) {

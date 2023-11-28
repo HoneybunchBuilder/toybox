@@ -18,11 +18,9 @@ extern "C" {
   they are not
 */
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
 #pragma clang diagnostic ignored "-Wnested-anon-types"
-#endif
 
 #ifndef TB_USE_INVERSE_DEPTH
 // #define TB_USE_INVERSE_DEPTH 1
@@ -277,9 +275,7 @@ float3 tb_clampf3(float3 v, float3 min, float3 max);
 
 #endif
 
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
 
 #ifdef __cplusplus
 }

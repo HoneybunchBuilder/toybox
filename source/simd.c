@@ -12,15 +12,11 @@
 #include "profiling.h"
 #include "tbgltf.h"
 
-#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#endif
 
-#ifdef __clang__
 #define unroll_loop_3 _Pragma("clang loop unroll_count(3)")
 #define unroll_loop_4 _Pragma("clang loop unroll_count(4)")
-#endif
 
 float3 tb_atof3(const float f[3]) { return (float3){f[0], f[1], f[2]}; }
 float4 tb_atof4(const float f[4]) { return (float4){f[0], f[1], f[2], f[3]}; }
@@ -828,6 +824,4 @@ float3 tb_clampf3(float3 v, float3 min, float3 max) {
   };
 }
 
-#ifdef __clang__
 #pragma clang diagnostic pop
-#endif
