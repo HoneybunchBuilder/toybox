@@ -20,27 +20,28 @@
 
 #ifdef __HLSL_VERSION
 #define PACKED
-#define PADDING(t, n) t n;
 #else
 #define PACKED __attribute__((__packed__))
-#define PADDING(t, n)
 #endif
 
 // Omitting texture rotation because it's not widely used
 typedef struct PACKED TextureTransform {
   float2 offset;
   float2 scale;
-} TextureTransform;
+}
+TextureTransform;
 
 typedef struct PACKED PBRMetallicRoughness {
   float4 base_color_factor;
   float4 metal_rough_factors;
-} PBRMetallicRoughness;
+}
+PBRMetallicRoughness;
 
 typedef struct PACKED PBRSpecularGlossiness {
   float4 diffuse_factor;
   float4 spec_gloss_factors;
-} PBRSpecularGlossiness;
+}
+PBRSpecularGlossiness;
 
 typedef struct PACKED GLTFMaterialData {
   TextureTransform tex_transform;
@@ -51,13 +52,15 @@ typedef struct PACKED GLTFMaterialData {
   float4 attenuation_params;
   float4 thickness_factor;
   float4 emissives;
-} GLTFMaterialData;
+}
+GLTFMaterialData;
 
 #define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
 typedef struct PACKED MaterialPushConstants {
   uint perm;
-} MaterialPushConstants;
+}
+MaterialPushConstants;
 
 // If a shader, provide some helper functions and macros
 #ifdef __HLSL_VERSION
@@ -76,12 +79,18 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   Texture2D metal_rough_map : register(t3, space);                             \
   sampler material_sampler : register(s4, space);                              \
   SamplerComparisonState shadow_sampler : register(s5, space);                 \
-  [[vk::push_constant]] ConstantBuffer<MaterialPushConstants> consts           \
-      : register(b6, space);
+  [[vk::push_constant]]                                                        \
+  ConstantBuffer<MaterialPushConstants> consts : register(b6, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_OBJECT_SET(space)                                                 \
   StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
+
+#define GLTF_GEOM_SET(space)                                                   \
+  StructuredBuffer<int3> pos_buffer : register(t0, space);                     \
+  StructuredBuffer<half3> norm_buffer : register(t1, space);                   \
+  StructuredBuffer<half4> tan_buffer : register(t2, space);                    \
+  StructuredBuffer<int2> uv0_buffer : register(t3, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_INDIRECT_SET(space)                                               \
@@ -89,18 +98,18 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_VIEW_SET(space)                                                   \
-  ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);            \
+  ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);          \
   TextureCube irradiance_map : register(t1, space);                            \
   TextureCube prefiltered_map : register(t2, space);                           \
   Texture2D brdf_lut : register(t3, space);                                    \
-  ConstantBuffer<TbCommonLightData> light_data : register(b4, space);            \
+  ConstantBuffer<TbCommonLightData> light_data : register(b4, space);          \
   Texture2DArray shadow_map : register(t5, space);                             \
   sampler filtered_env_sampler : register(s7, space);                          \
   sampler brdf_sampler : register(s8, space);
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \
-    TbView v;                                                                    \
+    TbView v;                                                                  \
     v.irradiance_map = irradiance_map;                                         \
     v.prefiltered_map = prefiltered_map;                                       \
     v.brdf_lut = brdf_lut;                                                     \

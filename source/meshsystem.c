@@ -1446,11 +1446,13 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                 draw->instance_count += TB_DYN_ARR_SIZE(mesh->entities);
 
                 // Append every render object's transform index to the list
+                // And also tell each render object what its vertex layout
+                // permutation is
                 TB_DYN_ARR_FOREACH(mesh->entities, e_idx) {
                   ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
-                  const TbRenderObject *ro =
-                      ecs_get(ecs, entity, TbRenderObject);
+                  TbRenderObject *ro = ecs_get_mut(ecs, entity, TbRenderObject);
                   TB_DYN_ARR_APPEND(*transforms, ro->index);
+                  ro->perm = sm->vertex_input;
                 }
               }
             }

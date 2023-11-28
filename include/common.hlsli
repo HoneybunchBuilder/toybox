@@ -10,18 +10,21 @@
 
 typedef struct TB_GPU_STRUCT TbSkyPushConstants {
   float4x4 vp;
-} TbSkyPushConstants;
+}
+TbSkyPushConstants;
 
 typedef struct TB_GPU_STRUCT TbEnvFilterConstants {
   float roughness;
   uint32_t sample_count;
-} TbEnvFilterConstants;
+}
+TbEnvFilterConstants;
 
 typedef struct TB_GPU_STRUCT TbPrimitivePushConstants {
   float3 position;
   float3 scale;
   float4 color;
-} TbPrimitivePushConstants;
+}
+TbPrimitivePushConstants;
 
 // Constant per-view Camera Data
 typedef struct TB_GPU_STRUCT TbCommonViewData {
@@ -32,7 +35,8 @@ typedef struct TB_GPU_STRUCT TbCommonViewData {
   float4x4 inv_proj;
   float3 view_pos;
   float4 proj_params;
-} TbCommonViewData;
+}
+TbCommonViewData;
 
 // Constant per-view Light Data
 #define TB_CASCADE_COUNT 4
@@ -41,12 +45,15 @@ typedef struct TB_GPU_STRUCT TbCommonLightData {
   float3 light_dir;
   float4 cascade_splits;
   float4x4 cascade_vps[TB_CASCADE_COUNT];
-} TbCommonLightData;
+}
+TbCommonLightData;
 
 // Constant per-object Object Data for common objects
 typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
-} TbCommonObjectData;
+  int32_t perm; // Input layout permutation
+}
+TbCommonObjectData;
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000
@@ -60,6 +67,38 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
+
+int3 tb_vert_get_local_pos(int32_t perm, int32_t vertex,
+                           StructuredBuffer<int3> buffer) {
+  if (perm & TB_INPUT_PERM_POSITION) {
+    return buffer[vertex];
+  }
+  return 0;
+}
+
+half3 tb_vert_get_normal(int32_t perm, int32_t vertex,
+                         StructuredBuffer<half3> buffer) {
+  if (perm & TB_INPUT_PERM_POSITION) {
+    return buffer[vertex];
+  }
+  return 0;
+}
+
+half4 tb_vert_get_tangent(int32_t perm, int32_t vertex,
+                          StructuredBuffer<half4> buffer) {
+  if (perm & TB_INPUT_PERM_POSITION) {
+    return buffer[vertex];
+  }
+  return 0;
+}
+
+int2 tb_vert_get_uv0(int32_t perm, int32_t vertex,
+                     StructuredBuffer<int2> buffer) {
+  if (perm & TB_INPUT_PERM_POSITION) {
+    return buffer[vertex];
+  }
+  return 0;
+}
 
 float4 aa_to_quat(float4 aa) {
   float s = sin(aa.w * 0.5f);

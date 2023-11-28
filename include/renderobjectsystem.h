@@ -26,6 +26,7 @@ typedef struct VkDescriptorSet_T *VkDescriptorSet;
 typedef struct ecs_query_t ecs_query_t;
 
 typedef struct TbRenderObject {
+  int32_t perm;
   int32_t index;
 } TbRenderObject;
 

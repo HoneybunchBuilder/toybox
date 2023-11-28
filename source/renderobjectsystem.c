@@ -75,23 +75,23 @@ void tick_render_object_system(ecs_iter_t *it) {
 
   obj_it = ecs_query_iter(ecs, ro_sys->obj_query); // reset query
 
-  float4x4 *trans_ptr = NULL;
+  TbCommonObjectData *obj_ptr = NULL;
   if (obj_count > prev_count) {
     // We need to resize the GPU buffer
     tb_rnd_free_gpu_buffer(ro_sys->render_system, &trans_buffer->gpu);
     tb_auto create_info = (VkBufferCreateInfo){
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = sizeof(float4x4) * obj_count,
+        .size = sizeof(TbCommonObjectData) * obj_count,
         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
     tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "TbTransform Buffer",
                                  &trans_buffer->gpu, &trans_buffer->host,
-                                 (void **)&trans_ptr);
+                                 (void **)&obj_ptr);
   } else {
     tb_rnd_sys_update_gpu_buffer(rnd_sys, &trans_buffer->gpu,
-                                 &trans_buffer->host, (void **)&trans_ptr);
+                                 &trans_buffer->host, (void **)&obj_ptr);
   }
 
   {
@@ -105,8 +105,9 @@ void tick_render_object_system(ecs_iter_t *it) {
         // stomping the transform and when a transform is dirty *all* transform
         // buffers need that new data.
         // Maybe we need some kind of queueing procedure?
-        trans_ptr[obj_idx] =
+        obj_ptr[obj_idx].m =
             tb_transform_get_world_matrix(ecs, &trans_comps[i]);
+        obj_ptr[obj_idx].perm = rnd_objs[i].perm;
         rnd_objs[i].index = obj_idx;
         obj_idx++;
       }
