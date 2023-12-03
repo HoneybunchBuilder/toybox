@@ -6,13 +6,11 @@ GLTF_MATERIAL_SET(space0)
 GLTF_INDIRECT_SET(space1);
 GLTF_VIEW_SET(space2);
 GLTF_OBJECT_SET(space3);
+GLTF_MESH_SET(space4);
 
 struct VertexIn {
-  int3 local_pos : SV_POSITION;
+  int vert_idx : SV_VertexID;
   int inst : SV_InstanceID;
-  half3 normal : NORMAL0;
-  half4 tangent : TANGENT0;
-  int2 uv : TEXCOORD0;
 };
 
 struct Interpolators {
@@ -26,9 +24,19 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  int32_t trans_idx = trans_indices[i.inst];
-  float4x4 m = object_data[trans_idx].m;
-  float3 world_pos = mul(m, float4(i.local_pos, 1)).xyz;
+  int32_t obj_idx = trans_indices[i.inst];
+  int32_t vert_perm = object_data[obj_idx].perm;
+
+  // Gather vertex data from supplied descriptors
+  // These functions will give us suitable defaults if this object
+  // doesn't provide these vertex attributes
+  int3 local_pos = tb_vert_get_local_pos(vert_perm, i.vert_idx, pos_buffer);
+  float3 normal = tb_vert_get_normal(vert_perm, i.vert_idx, norm_buffer);
+  float4 tangent = tb_vert_get_tangent(vert_perm, i.vert_idx, tan_buffer);
+  int2 uv0 = tb_vert_get_uv0(vert_perm, i.vert_idx, uv0_buffer);
+
+  float4x4 m = object_data[obj_idx].m; // Per object model matrix
+  float3 world_pos = mul(m, float4(local_pos, 1)).xyz;
   float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
   float3x3 orientation = (float3x3)m;
@@ -37,14 +45,14 @@ Interpolators vert(VertexIn i) {
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
   o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
-  o.normal = normalize(mul(orientation, i.normal)); // convert to world-space
-  o.tangent = normalize(mul(orientation, i.tangent.xyz));
-  o.binormal = normalize(cross(o.tangent, o.normal) * i.tangent.w);
-  o.uv = uv_transform(i.uv, material_data.tex_transform);
+  o.normal = normalize(mul(orientation, normal)); // convert to world-space
+  o.tangent = normalize(mul(orientation, tangent.xyz));
+  o.binormal = normalize(cross(o.tangent, o.normal) * tangent.w);
+  o.uv = uv_transform(uv0, material_data.tex_transform);
   return o;
 }
 
-float4 frag(Interpolators i, bool front_face : SV_IsFrontFace) : SV_TARGET {
+float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
   float4 base_color = 1;
 
   // World-space normal

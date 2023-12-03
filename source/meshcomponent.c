@@ -10,13 +10,13 @@
 #include "profiling.h"
 #include "renderobjectsystem.h"
 #include "tbgltf.h"
+#include "tbutil.h"
 
 #include <flecs.h>
 
 bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
                                     const char *source_path,
                                     const cgltf_node *node,
-                                    TbMeshSystem *mesh_system,
                                     TbMaterialSystem *mat_system) {
   const uint32_t submesh_count = node->mesh->primitives_count;
   TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
@@ -56,26 +56,25 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
       TB_CHECK_RETURN(self->submeshes[prim_idx].material,
                       "Failed to load material", false);
 
-      offset += (indices->count * indices->stride);
+      size_t index_size =
+          tb_calc_aligned_size(indices->count, indices->stride, 16);
+      offset += index_size;
     }
-    // Provide padding between vertex and index sections of the buffer
-    // to ensure alignment is correct
-    offset += offset % (sizeof(uint16_t) * 4);
 
     // While we determine the vertex offset we'll also calculate the local space
     // TbAABB for this mesh across all primitives
     self->local_aabb = tb_aabb_init();
 
     // Determine the vertex offset for each primitive
+    uint32_t vertex_offset = 0;
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &node->mesh->primitives[prim_idx];
 
-      self->submeshes[prim_idx].vertex_offset = offset;
-
-      uint64_t vertex_attributes = 0;
+      self->submeshes[prim_idx].vertex_offset = vertex_offset;
+      vertex_offset += prim->attributes[0].data->count;
 
       // Determine input permutation and attribute count
-      uint32_t attrib_count = 0;
+      uint64_t vertex_attributes = 0;
       for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
            ++attr_idx) {
         cgltf_attribute_type type = prim->attributes[attr_idx].type;
@@ -94,36 +93,13 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
           } else if (type == cgltf_attribute_type_texcoord) {
             vertex_attributes |= TB_INPUT_PERM_TEXCOORD0;
           }
-
-          attrib_count++;
         }
       }
+      self->submeshes[prim_idx].vertex_perm = vertex_attributes;
 
-      // Reorder attributes
-      uint32_t *attr_order =
-          tb_alloc(mesh_system->tmp_alloc, sizeof(uint32_t) * attrib_count);
-      for (uint32_t attr_idx = 0; attr_idx < (uint32_t)prim->attributes_count;
-           ++attr_idx) {
-        cgltf_attribute_type attr_type = prim->attributes[attr_idx].type;
-        int32_t idx = prim->attributes[attr_idx].index;
-        if (attr_type == cgltf_attribute_type_position) {
-          attr_order[0] = attr_idx;
-        } else if (attr_type == cgltf_attribute_type_normal) {
-          attr_order[1] = attr_idx;
-        } else if (attr_type == cgltf_attribute_type_tangent) {
-          attr_order[2] = attr_idx;
-        } else if (attr_type == cgltf_attribute_type_texcoord && idx == 0) {
-          if (vertex_attributes & TB_INPUT_PERM_TANGENT) {
-            attr_order[3] = attr_idx;
-          } else {
-            attr_order[2] = attr_idx;
-          }
-        }
-      }
-
-      // Read TbAABB from gltf
+      // Read AABB from gltf
       {
-        const cgltf_attribute *pos_attr = &prim->attributes[attr_order[0]];
+        const cgltf_attribute *pos_attr = &prim->attributes[0];
 
         TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
                  "Unexpected vertex attribute type");
@@ -133,33 +109,6 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
 
         tb_aabb_add_point(&self->local_aabb, (float3){min[0], min[1], min[2]});
         tb_aabb_add_point(&self->local_aabb, (float3){max[0], max[1], max[2]});
-      }
-
-      // Decode vertex attributes into full vertex input layouts
-      TbVertexInput vertex_input = VI_Count;
-      {
-        if (vertex_attributes & TB_INPUT_PERM_POSITION) {
-          if (vertex_attributes & TB_INPUT_PERM_NORMAL) {
-            vertex_input = VI_P3N3;
-            if (vertex_attributes & TB_INPUT_PERM_TEXCOORD0) {
-              vertex_input = VI_P3N3U2;
-              if (vertex_attributes & TB_INPUT_PERM_TANGENT) {
-                vertex_input = VI_P3N3T4U2;
-              }
-            }
-          }
-        }
-      }
-      TB_CHECK_RETURN(vertex_input < VI_Count, "Unexpected vertex input",
-                      false);
-
-      self->submeshes[prim_idx].vertex_input = vertex_input;
-
-      for (cgltf_size attr_idx = 0; attr_idx < attrib_count; ++attr_idx) {
-        cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
-        cgltf_accessor *accessor = attr->data;
-
-        offset += accessor->stride * accessor->count;
       }
     }
 
@@ -215,7 +164,7 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
 
     // Load mesh
     TbMeshId id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
-    TB_CHECK_RETURN(id != InvalidMeshId, "Failed to load mesh", false);
+    TB_CHECK_RETURN(id != TbInvalidMeshId, "Failed to load mesh", false);
 
     // Find Mesh Component
     ecs_entity_t mesh_ent = 0;
@@ -234,8 +183,8 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
     }
     if (mesh_comp == NULL) {
       TbMeshComponent comp = {0};
-      ret = create_mesh_component_internal(&comp, id, source_path, node,
-                                           mesh_sys, mat_sys);
+      ret =
+          create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
       TB_DYN_ARR_RESET(comp.entities, mesh_sys->std_alloc, 16);
       ecs_set_ptr(ecs, e, TbMeshComponent, &comp);
 

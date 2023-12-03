@@ -18,23 +18,23 @@ typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
 typedef struct TbCameraComponent TbCameraComponent;
 typedef struct TbMeshComponent TbMeshComponent;
 typedef struct TbMesh TbMesh;
-typedef struct cgltf_mesh cgltf_mesh;
-typedef struct VkBuffer_T *VkBuffer;
 typedef struct TbWorld TbWorld;
-typedef struct ecs_query_t ecs_query_t;
 typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
+typedef struct cgltf_mesh cgltf_mesh;
+typedef struct VkBuffer_T *VkBuffer;
+typedef struct VkWriteDescriptorSet VkWriteDescriptorSet;
+typedef struct ecs_query_t ecs_query_t;
 
-static const TbMeshId InvalidMeshId = SDL_MAX_UINT64;
+static const TbMeshId TbInvalidMeshId = SDL_MAX_UINT64;
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
 
 typedef struct TbPrimitiveDraw {
   VkIndexType index_type;
   uint32_t index_count;
   uint64_t index_offset;
-  uint32_t vertex_binding_count;
-  uint64_t vertex_binding_offsets[TB_VERTEX_BINDING_MAX];
+  uint32_t vertex_offset;
   uint32_t instance_count;
 } TbPrimitiveDraw;
 
@@ -44,12 +44,14 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorSet inst_set;
   VkDescriptorSet trans_set;
   VkDescriptorSet mat_set;
+  VkDescriptorSet mesh_set;
   VkBuffer geom_buffer;
 } TbPrimitiveBatch;
 
 typedef TB_DYN_ARR_OF(int32_t) TbIndirectionList;
 typedef TB_DYN_ARR_OF(TbPrimitiveBatch) TbPrimitiveBatchList;
 typedef TB_DYN_ARR_OF(TbIndirectionList) TbPrimIndirectList;
+typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbAttrWriteList;
 
 typedef struct TbMeshSystem {
   TbAllocator std_alloc;
@@ -69,6 +71,7 @@ typedef struct TbMeshSystem {
   TbDrawContextId opaque_draw_ctx2;
   TbDrawContextId transparent_draw_ctx2;
 
+  VkDescriptorSetLayout mesh_set_layout;
   VkDescriptorSetLayout obj_set_layout;
   VkDescriptorSetLayout view_set_layout;
   VkPipelineLayout pipe_layout;
@@ -76,15 +79,18 @@ typedef struct TbMeshSystem {
   VkPipelineLayout prepass_layout;
   VkPipeline prepass_pipe;
 
-  uint32_t pipe_count;
-  VkPipeline *opaque_pipelines;
-  VkPipeline *transparent_pipelines;
+  VkPipeline opaque_pipeline;
+  VkPipeline transparent_pipeline;
 
   VkPipelineLayout shadow_pipe_layout;
   VkPipeline shadow_pipeline;
 
   TB_DYN_ARR_OF(TbMesh) meshes;
-  TbFrameDescriptorPoolList desc_pool_list;
+  TbAttrWriteList attr_writes;
+  // For per object indirect transform indices
+  TbFrameDescriptorPoolList obj_pool_list;
+  // For per mesh bindless vertex buffers
+  TbDescriptorPool mesh_pool;
 } TbMeshSystem;
 
 void tb_register_mesh_sys(TbWorld *world);
@@ -94,4 +100,5 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                                   const cgltf_node *node);
 bool tb_mesh_system_take_mesh_ref(TbMeshSystem *self, TbMeshId id);
 VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id);
+VkDescriptorSet tb_mesh_system_get_set(TbMeshSystem *self, TbMeshId id);
 void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id);

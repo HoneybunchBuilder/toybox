@@ -295,7 +295,7 @@ TbVisualLoggingSystem create_visual_logging_system(
       {
         const char *static_name = "TbSphere";
         char *name = tb_alloc_nm_tp(std_alloc, sizeof(static_name) + 1, char);
-        SDL_snprintf(name, sizeof(static_name), "%s", static_name);
+        SDL_snprintf(name, sizeof(static_name) + 1, "%s", static_name);
         sphere_mesh->name = name;
       }
       sys.sphere_index_type = sphere_mesh->primitives->indices->stride == 2

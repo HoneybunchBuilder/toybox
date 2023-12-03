@@ -14,6 +14,7 @@
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "tbrand.h"
+#include "tbutil.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "visualloggingsystem.h"
@@ -404,11 +405,10 @@ TbOceanSystem create_ocean_system(
                                : VK_INDEX_TYPE_UINT32;
     sys.ocean_index_count = ocean_mesh->primitives->indices->count;
 
-    uint64_t index_size =
-        sys.ocean_index_count *
-        (sys.ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4);
-    uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
-    sys.ocean_pos_offset = index_size + idx_padding;
+    uint64_t index_size = tb_calc_aligned_size(
+        sys.ocean_index_count,
+        sys.ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4, 16);
+    sys.ocean_pos_offset = index_size;
 
     sys.ocean_patch_mesh =
         tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);

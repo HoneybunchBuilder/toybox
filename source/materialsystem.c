@@ -198,8 +198,8 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
   VkResult err = VK_SUCCESS;
 
   // Hash the materials's path and gltf name to get the id
-  TbMaterialId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = tb_sdbm(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
+  TbMaterialId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_hash(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
 
   VkDevice device = self->render_system->render_thread->device;
 

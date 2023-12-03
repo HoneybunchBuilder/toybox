@@ -1,4 +1,5 @@
 #include "common.hlsli"
+#include "gltf.hlsli"
 #include "shadow.hlsli"
 
 // Indirection data
@@ -10,10 +11,12 @@ ConstantBuffer<TbCommonViewData> camera_data : register(b0, space1);
 // Object data
 StructuredBuffer<TbCommonObjectData> object_data : register(t0, space2);
 
+// Mesh data
+GLTF_MESH_SET(space3);
+
 struct VertexIn {
-  int3 local_pos : SV_POSITION;
-  int inst : SV_InstanceID;
-  half3 normal : NORMAL0;
+  int32_t vert_idx : SV_VertexID;
+  int32_t inst : SV_InstanceID;
 };
 
 struct Interpolators {
@@ -22,14 +25,17 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  int32_t trans_idx = trans_indices[i.inst];
-  float4x4 m = object_data[trans_idx].m;
-  float3 world_pos = mul(m, float4(i.local_pos, 1)).xyz;
-  float3x3 orientation = (float3x3)m;
+  TbCommonObjectData obj_data = object_data[trans_indices[i.inst]];
+
+  int3 local_pos = tb_vert_get_local_pos(obj_data.perm, i.vert_idx, pos_buffer);
+  float3 normal = tb_vert_get_normal(obj_data.perm, i.vert_idx, norm_buffer);
+
+  float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
+  float3x3 orientation = (float3x3)obj_data.m;
 
   Interpolators o;
   o.clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
-  o.normal = mul(orientation, i.normal); // convert to world-space normal
+  o.normal = mul(orientation, normal); // convert to world-space normal
   return o;
 }
 

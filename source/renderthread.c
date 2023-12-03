@@ -306,7 +306,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     TbFrameState *state = &states[i];
 
     tb_create_arena_alloc("Render Thread Frame State Tmp Alloc",
-                           &state->tmp_alloc, 128 * 1024 * 1024);
+                          &state->tmp_alloc, 128 * 1024 * 1024);
 
     state->wait_sem = SDL_CreateSemaphore(0);
     TB_CHECK_RETURN(state->wait_sem,
@@ -750,20 +750,31 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 
   VkPhysicalDeviceVulkan13Features vk_13_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .dynamicRendering = true,
-      .shaderDemoteToHelperInvocation = true,
-      .maintenance4 = true,
+      .dynamicRendering = VK_TRUE,
+      .shaderDemoteToHelperInvocation = VK_TRUE,
+      .maintenance4 = VK_TRUE,
+  };
+
+  VkPhysicalDeviceVulkan12Features vk_12_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+      .pNext = &vk_13_features,
+      .shaderFloat16 = VK_TRUE,
+      .descriptorIndexing = VK_TRUE,
+      .descriptorBindingPartiallyBound = VK_TRUE,
   };
 
   VkPhysicalDeviceVulkan11Features vk_11_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-      .pNext = &vk_13_features,
+      .pNext = &vk_12_features,
       .multiview = VK_TRUE,
+      .storageBuffer16BitAccess = VK_TRUE,
+      //.storageInputOutput16 = VK_TRUE,
   };
 
   VkPhysicalDeviceFeatures vk_features = {
       .samplerAnisotropy = VK_TRUE,
       .depthClamp = VK_TRUE,
+      .shaderInt16 = VK_TRUE,
   };
 
   VkDeviceCreateInfo create_info = {0};
@@ -1006,7 +1017,8 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
   VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;
   err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, &vk_swapchain);
   TB_VK_CHECK_RET(err, "Failed to create swapchain", false);
-  SET_VK_NAME(device, vk_swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "TbSwapchain");
+  SET_VK_NAME(device, vk_swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+              "TbSwapchain");
 
   *swapchain = (TbSwapchain){
       .valid = true,
@@ -1031,7 +1043,7 @@ bool init_render_thread(TbRenderThread *thread) {
   {
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
     tb_create_arena_alloc("Render Arena", &thread->render_arena,
-                           arena_alloc_size);
+                          arena_alloc_size);
 
     tb_create_gen_alloc(&thread->std_alloc, "Render Std Alloc");
   }
@@ -1468,7 +1480,8 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
         if (pass->attachment_count > 0) {
           TB_DYN_ARR_FOREACH(state->draw_contexts, draw_idx) {
-            TbDrawContext *draw = &TB_DYN_ARR_AT(state->draw_contexts, draw_idx);
+            TbDrawContext *draw =
+                &TB_DYN_ARR_AT(state->draw_contexts, draw_idx);
             if (draw->pass_id == pass->id && draw->batch_count > 0) {
               draw->record_fn(gpu_ctx, pass_buffer, draw->batch_count,
                               draw->batches);

@@ -25,6 +25,12 @@ typedef struct TbFrameDescriptorPool {
   VkDescriptorSet *sets;
 } TbFrameDescriptorPool;
 
+typedef struct TbDescriptorPool {
+  uint32_t set_count;
+  VkDescriptorPool set_pool;
+  VkDescriptorSet *sets;
+} TbDescriptorPool;
+
 typedef struct TbFrameDescriptorPoolList {
   TbFrameDescriptorPool pools[TB_MAX_FRAME_STATES];
 } TbFrameDescriptorPoolList;
@@ -172,5 +178,12 @@ tb_rnd_frame_desc_pool_tick(TbRenderSystem *self,
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                TbFrameDescriptorPool *pools,
                                                uint32_t set_idx);
+
+VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
+                                 const VkDescriptorPoolCreateInfo *pool_info,
+                                 const VkDescriptorSetLayout *layouts,
+                                 TbDescriptorPool *pool, uint32_t set_count);
+VkDescriptorSet tb_rnd_desc_pool_get_set(TbDescriptorPool *pool,
+                                         uint32_t set_idx);
 
 void tb_flush_alloc(TbRenderSystem *self, VmaAllocation alloc);

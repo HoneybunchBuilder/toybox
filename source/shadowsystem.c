@@ -80,14 +80,6 @@ VkResult create_shadow_pipeline(TbRenderSystem *render_system,
           &(VkPipelineVertexInputStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 1,
-              .pVertexBindingDescriptions =
-                  (VkVertexInputBindingDescription[1]){
-                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX}},
-              .vertexAttributeDescriptionCount = 1,
-              .pVertexAttributeDescriptions =
-                  (VkVertexInputAttributeDescription[1]){
-                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0}},
           },
       .pInputAssemblyState =
           &(VkPipelineInputAssemblyStateCreateInfo){
@@ -166,20 +158,16 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     TracyCZoneNC(batch_ctx, "Shadow Batch", TracyCategoryColorRendering, true);
     cmd_begin_label(buffer, "Shadow Batch", (float4){0.8f, 0.0f, 0.4f, 1.0f});
 
-    VkBuffer geom_buffer = prim_batch->geom_buffer;
-
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
+    VkDescriptorSet sets[4] = {prim_batch->inst_set, prim_batch->view_set,
+                               prim_batch->trans_set, prim_batch->mesh_set};
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            1, &prim_batch->inst_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            1, &prim_batch->view_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
-                            1, &prim_batch->trans_set, 0, NULL);
+                            4, sets, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       const TbPrimitiveDraw *draw =
           &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
@@ -192,15 +180,10 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
       if (draw->index_count > 0) {
         // Don't need to bind material data
-        vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
-                             draw->index_type);
-        // We only need the first two vertex binding for positions
-        // This should be a safe assumption
-        vkCmdBindVertexBuffers(buffer, 0, 1, &geom_buffer,
-                               &draw->vertex_binding_offsets[0]);
-
-        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0, 0,
-                         0);
+        vkCmdBindIndexBuffer(buffer, prim_batch->geom_buffer,
+                             draw->index_offset, draw->index_type);
+        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
+                         draw->vertex_offset, 0);
       }
 
       cmd_end_label(buffer);
@@ -431,6 +414,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
       VkBuffer geom_buffer =
           tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
+      VkDescriptorSet mesh_set =
+          tb_mesh_system_get_set(mesh_sys, mesh->mesh_id);
       VkDescriptorSet transforms_set = tb_render_object_sys_get_set(ro_sys);
 
       for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
@@ -446,6 +431,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
         const uint32_t index_count = sm->index_count;
         const uint64_t index_offset = sm->index_offset;
+        const uint32_t vertex_offset = sm->vertex_offset;
         const VkIndexType index_type = (VkIndexType)sm->index_type;
 
         // Handle Opaque and Transparent draws
@@ -463,7 +449,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
               TbDrawBatch *db = &TB_DYN_ARR_AT(batches, i);
               TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(prim_batches, i);
               if (db->pipeline == pipeline && db->layout == layout &&
-                  pb->perm == perm && pb->geom_buffer == geom_buffer) {
+                  pb->perm == perm && pb->geom_buffer == geom_buffer &&
+                  pb->mesh_set == mesh_set) {
                 batch = db;
                 prim_batch = pb;
                 transforms = &TB_DYN_ARR_AT(prim_trans, i);
@@ -485,6 +472,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
               TbPrimitiveBatch pb = {
                   .perm = perm,
                   .trans_set = transforms_set,
+                  .mesh_set = mesh_set,
                   .geom_buffer = geom_buffer,
               };
 
@@ -511,6 +499,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
               TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
               if (d->index_count == index_count &&
                   d->index_offset == index_offset &&
+                  d->vertex_offset == vertex_offset &&
                   d->index_type == index_type) {
                 draw = d;
                 break;
@@ -521,9 +510,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
               TbPrimitiveDraw d = {
                   .index_count = index_count,
                   .index_offset = index_offset,
+                  .vertex_offset = vertex_offset,
                   .index_type = index_type,
-                  .vertex_binding_count = 1,
-                  .vertex_binding_offsets[0] = sm->vertex_offset,
               };
               // Append it to the list and make sure we get a reference
               uint32_t idx = batch->draw_count++;
@@ -716,12 +704,13 @@ void tb_register_shadow_sys(TbWorld *world) {
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 3,
+          .setLayoutCount = 4,
           .pSetLayouts =
-              (VkDescriptorSetLayout[3]){
+              (VkDescriptorSetLayout[4]){
                   mesh_sys->obj_set_layout,
                   view_sys->set_layout,
                   ro_sys->set_layout,
+                  mesh_sys->mesh_set_layout,
               },
       };
       err = tb_rnd_create_pipeline_layout(

@@ -14,6 +14,7 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tbutil.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "vkdbg.h"
@@ -25,18 +26,11 @@
 // Ignore some warnings for the generated headers
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "gltf_P3N3T4U2_frag.h"
-#include "gltf_P3N3T4U2_vert.h"
-#include "gltf_P3N3U2_frag.h"
-#include "gltf_P3N3U2_vert.h"
-#include "gltf_P3N3_frag.h"
-#include "gltf_P3N3_vert.h"
+#include "gltf_frag.h"
+#include "gltf_vert.h"
 #include "opaque_prepass_frag.h"
 #include "opaque_prepass_vert.h"
 #pragma clang diagnostic pop
-
-static const uint64_t pos_stride = sizeof(uint16_t) * 4;
-static const uint64_t attr_stride = sizeof(uint16_t) * 2;
 
 typedef struct TbMesh {
   TbMeshId id;
@@ -104,18 +98,6 @@ VkResult create_prepass_pipeline(TbRenderSystem *render_system,
           &(VkPipelineVertexInputStateCreateInfo){
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-              .vertexBindingDescriptionCount = 2,
-              .pVertexBindingDescriptions =
-                  (VkVertexInputBindingDescription[2]){
-                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-                      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-                  },
-              .vertexAttributeDescriptionCount = 2,
-              .pVertexAttributeDescriptions =
-                  (VkVertexInputAttributeDescription[2]){
-                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-                      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
-                  },
           },
       .pInputAssemblyState =
           &(VkPipelineInputAssemblyStateCreateInfo){
@@ -193,169 +175,35 @@ VkResult create_prepass_pipeline(TbRenderSystem *render_system,
 }
 
 VkResult create_mesh_pipelines(TbRenderSystem *render_system,
-                               TbAllocator std_alloc, VkFormat color_format,
-                               VkFormat depth_format,
+                               VkFormat color_format, VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
-                               uint32_t *pipe_count, VkPipeline **opaque_pipes,
-                               VkPipeline **transparent_pipes) {
+                               VkPipeline *opaque_pipe,
+                               VkPipeline *transparent_pipe) {
   VkResult err = VK_SUCCESS;
 
-  // VI 1: Position & Normal - P3N3
-  // VI 2: Position & Normal & Texcoord0 - P3N3U2
-  // VI 3: Position & Normal & Tangent & Texcoord0 - P3N3T4U2
-
-  VkVertexInputBindingDescription vert_bindings_P3N3[2] = {
-      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-  };
-
-  VkVertexInputBindingDescription vert_bindings_P3N3U2[3] = {
-      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-      {2, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-  };
-
-  VkVertexInputBindingDescription vert_bindings_P3N3T4U2[4] = {
-      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
-      {1, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-      {2, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-      {3, sizeof(uint16_t) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
-  };
-
-  VkVertexInputAttributeDescription vert_attrs_P3N3[2] = {
-      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
-  };
-
-  VkVertexInputAttributeDescription vert_attrs_P3N3U2[3] = {
-      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
-      {2, 2, VK_FORMAT_R16G16_SINT, 0},
-  };
-
-  VkVertexInputAttributeDescription vert_attrs_P3N3T4U2[4] = {
-      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
-      {1, 1, VK_FORMAT_R8G8B8A8_SNORM, 0},
-      {2, 2, VK_FORMAT_R8G8B8A8_SNORM, 0},
-      {3, 3, VK_FORMAT_R16G16_SINT, 0},
-  };
-
-  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 2,
-      .pVertexBindingDescriptions = vert_bindings_P3N3,
-      .vertexAttributeDescriptionCount = 2,
-      .pVertexAttributeDescriptions = vert_attrs_P3N3,
-  };
-
-  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 3,
-      .pVertexBindingDescriptions = vert_bindings_P3N3U2,
-      .vertexAttributeDescriptionCount = 3,
-      .pVertexAttributeDescriptions = vert_attrs_P3N3U2,
-  };
-
-  VkPipelineVertexInputStateCreateInfo vert_input_state_P3N3T4U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 4,
-      .pVertexBindingDescriptions = vert_bindings_P3N3T4U2,
-      .vertexAttributeDescriptionCount = 4,
-      .pVertexAttributeDescriptions = vert_attrs_P3N3T4U2,
-  };
-
   // Load Shader Modules
-  VkShaderModule vert_mod_P3N3 = VK_NULL_HANDLE;
-  VkShaderModule frag_mod_P3N3 = VK_NULL_HANDLE;
-  VkShaderModule vert_mod_P3N3U2 = VK_NULL_HANDLE;
-  VkShaderModule frag_mod_P3N3U2 = VK_NULL_HANDLE;
-  VkShaderModule vert_mod_P3N3T4U2 = VK_NULL_HANDLE;
-  VkShaderModule frag_mod_P3N3T4U2 = VK_NULL_HANDLE;
-
-  VkShaderModuleCreateInfo shader_mod_create_info = {
-      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-  };
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_vert;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3 Vert", &vert_mod_P3N3);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3_frag;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3 Frag", &frag_mod_P3N3);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_vert;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3U2 Vert", &vert_mod_P3N3U2);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3U2_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3U2_frag;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3U2 Frag", &frag_mod_P3N3U2);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_vert);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_vert;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3T4U2 Vert", &vert_mod_P3N3T4U2);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  shader_mod_create_info.codeSize = sizeof(gltf_P3N3T4U2_frag);
-  shader_mod_create_info.pCode = (const uint32_t *)gltf_P3N3T4U2_frag;
-  err = tb_rnd_create_shader(render_system, &shader_mod_create_info,
-                             "P3N3T4U2 Frag", &frag_mod_P3N3T4U2);
-  TB_VK_CHECK_RET(err, "Failed to create shader module", err);
-
-  VkPipelineShaderStageCreateInfo vert_stage_P3N3 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = vert_mod_P3N3,
-      .pName = "vert",
-  };
-  VkPipelineShaderStageCreateInfo frag_stage_P3N3 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = frag_mod_P3N3,
-      .pName = "frag",
-  };
-  VkPipelineShaderStageCreateInfo vert_stage_P3N3U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = vert_mod_P3N3U2,
-      .pName = "vert",
-  };
-  VkPipelineShaderStageCreateInfo frag_stage_P3N3U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = frag_mod_P3N3U2,
-      .pName = "frag",
-  };
-  VkPipelineShaderStageCreateInfo vert_stage_P3N3T4U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = vert_mod_P3N3T4U2,
-      .pName = "vert",
-  };
-  VkPipelineShaderStageCreateInfo frag_stage_P3N3T4U2 = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = frag_mod_P3N3T4U2,
-      .pName = "frag",
-  };
-
-  VkPipelineShaderStageCreateInfo stages_P3N3[2] = {vert_stage_P3N3,
-                                                    frag_stage_P3N3};
-
-  VkPipelineShaderStageCreateInfo stages_P3N3U2[2] = {vert_stage_P3N3U2,
-                                                      frag_stage_P3N3U2};
-
-  VkPipelineShaderStageCreateInfo stages_P3N3T4U2[2] = {vert_stage_P3N3T4U2,
-                                                        frag_stage_P3N3T4U2};
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_vert),
+        .pCode = (const uint32_t *)gltf_vert,
+    };
+    err = tb_rnd_create_shader(render_system, &create_info, "GLTF Vert",
+                               &vert_mod);
+    TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+  }
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_frag),
+        .pCode = (const uint32_t *)gltf_frag,
+    };
+    err = tb_rnd_create_shader(render_system, &create_info, "GLTF Frag",
+                               &frag_mod);
+    TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+  }
 
   VkGraphicsPipelineCreateInfo create_info_base = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -367,6 +215,25 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
               .depthAttachmentFormat = depth_format,
           },
       .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              }},
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
       .pInputAssemblyState =
           &(VkPipelineInputAssemblyStateCreateInfo){
               .sType =
@@ -426,29 +293,16 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
               .dynamicStateCount = 3,
-              .pDynamicStates =
-                  (VkDynamicState[3]){
-                      VK_DYNAMIC_STATE_VIEWPORT,
-                      VK_DYNAMIC_STATE_SCISSOR,
-                      VK_DYNAMIC_STATE_CULL_MODE,
-                  },
+              .pDynamicStates = (VkDynamicState[3]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR,
+                                                    VK_DYNAMIC_STATE_CULL_MODE},
           },
       .layout = pipe_layout,
   };
 
-  VkGraphicsPipelineCreateInfo opaque_bases[VI_Count] = {0};
-  opaque_bases[0] = create_info_base;
-  opaque_bases[0].pStages = stages_P3N3;
-  opaque_bases[0].pVertexInputState = &vert_input_state_P3N3;
-  opaque_bases[1] = create_info_base;
-  opaque_bases[1].pStages = stages_P3N3U2;
-  opaque_bases[1].pVertexInputState = &vert_input_state_P3N3U2;
-  opaque_bases[2] = create_info_base;
-  opaque_bases[2].pStages = stages_P3N3T4U2;
-  opaque_bases[2].pVertexInputState = &vert_input_state_P3N3T4U2;
-
-  VkGraphicsPipelineCreateInfo trans_base = create_info_base;
-  trans_base.pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
+  VkGraphicsPipelineCreateInfo opaque_ci = create_info_base;
+  VkGraphicsPipelineCreateInfo trans_ci = create_info_base;
+  trans_ci.pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
       .attachmentCount = 1,
       .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
@@ -464,43 +318,22 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
       }},
   };
-  VkGraphicsPipelineCreateInfo trans_bases[VI_Count] = {0};
-  trans_bases[0] = trans_base;
-  trans_bases[0].pStages = stages_P3N3;
-  trans_bases[0].pVertexInputState = &vert_input_state_P3N3;
-  trans_bases[1] = trans_base;
-  trans_bases[1].pStages = stages_P3N3U2;
-  trans_bases[1].pVertexInputState = &vert_input_state_P3N3U2;
-  trans_bases[2] = trans_base;
-  trans_bases[2].pStages = stages_P3N3T4U2;
-  trans_bases[2].pVertexInputState = &vert_input_state_P3N3T4U2;
 
   // Create pipelines
   {
-    VkPipeline *op_pipes = tb_alloc_nm_tp(std_alloc, VI_Count, VkPipeline);
-    err =
-        tb_rnd_create_graphics_pipelines(render_system, VI_Count, opaque_bases,
-                                         "Opaque Mesh Pipeline", op_pipes);
-    TB_VK_CHECK_RET(err, "Failed to create opaque pipelines", err);
+    err = tb_rnd_create_graphics_pipelines(render_system, 1, &opaque_ci,
+                                           "Opaque Mesh Pipeline", opaque_pipe);
+    TB_VK_CHECK_RET(err, "Failed to create opaque pipeline", err);
 
-    VkPipeline *trans_pipes = tb_alloc_nm_tp(std_alloc, VI_Count, VkPipeline);
-    err = tb_rnd_create_graphics_pipelines(render_system, VI_Count, trans_bases,
+    err = tb_rnd_create_graphics_pipelines(render_system, 1, &trans_ci,
                                            "Transparent Mesh Pipeline",
-                                           trans_pipes);
-    TB_VK_CHECK_RET(err, "Failed to create trans pipelines", err);
-
-    *opaque_pipes = op_pipes;
-    *transparent_pipes = trans_pipes;
-    *pipe_count = VI_Count;
+                                           transparent_pipe);
+    TB_VK_CHECK_RET(err, "Failed to create trans pipeline", err);
   }
 
   // Can destroy shader moduless
-  tb_rnd_destroy_shader(render_system, vert_mod_P3N3);
-  tb_rnd_destroy_shader(render_system, frag_mod_P3N3);
-  tb_rnd_destroy_shader(render_system, vert_mod_P3N3U2);
-  tb_rnd_destroy_shader(render_system, frag_mod_P3N3U2);
-  tb_rnd_destroy_shader(render_system, vert_mod_P3N3T4U2);
-  tb_rnd_destroy_shader(render_system, frag_mod_P3N3T4U2);
+  tb_rnd_destroy_shader(render_system, vert_mod);
+  tb_rnd_destroy_shader(render_system, frag_mod);
 
   return err;
 }
@@ -530,12 +363,10 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
+    VkDescriptorSet sets[4] = {prim_batch->inst_set, prim_batch->view_set,
+                               prim_batch->trans_set, prim_batch->mesh_set};
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            1, &prim_batch->inst_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            1, &prim_batch->view_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
-                            1, &prim_batch->trans_set, 0, NULL);
+                            4, sets, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       const TbPrimitiveDraw *draw =
           &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
@@ -555,14 +386,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         // Don't need to bind material data
         vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
                              draw->index_type);
-        // We only need the first two vertex bindings for positions and normals
-        // Those are expected to always be the first two bindings
-        for (uint32_t vb_idx = 0; vb_idx < 2; ++vb_idx) {
-          vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
-                                 &draw->vertex_binding_offsets[vb_idx]);
-        }
-        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0, 0,
-                         0);
+        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
+                         draw->vertex_offset, 0);
       }
 
       cmd_end_label(buffer);
@@ -600,12 +425,10 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
+    VkDescriptorSet sets[4] = {prim_batch->inst_set, prim_batch->view_set,
+                               prim_batch->trans_set, prim_batch->mesh_set};
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            1, &prim_batch->inst_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
-                            1, &prim_batch->view_set, 0, NULL);
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 3,
-                            1, &prim_batch->trans_set, 0, NULL);
+                            4, sets, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       const TbPrimitiveDraw *draw =
           &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
@@ -630,14 +453,8 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
         vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
                              draw->index_type);
-        for (uint32_t vb_idx = 0; vb_idx < draw->vertex_binding_count;
-             ++vb_idx) {
-          vkCmdBindVertexBuffers(buffer, vb_idx, 1, &geom_buffer,
-                                 &draw->vertex_binding_offsets[vb_idx]);
-        }
-
-        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0, 0,
-                         0);
+        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
+                         draw->vertex_offset, 0);
       }
       TracyCZoneEnd(draw_ctx);
     }
@@ -688,6 +505,7 @@ TbMeshSystem create_mesh_system_internal(
       .render_pipe_system = render_pipe_system,
   };
   TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.attr_writes, std_alloc, 64);
   TbRenderPassId prepass_id = render_pipe_system->opaque_depth_normal_pass;
   TbRenderPassId opaque_pass_id = render_pipe_system->opaque_color_pass;
   TbRenderPassId transparent_pass_id =
@@ -696,6 +514,57 @@ TbMeshSystem create_mesh_system_internal(
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
+
+    // Create mesh descriptor set layout
+    {
+      VkDescriptorSetLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+          .pNext =
+              &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                  .sType =
+                      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                  .bindingCount = TB_INPUT_PERM_COUNT,
+                  .pBindingFlags =
+                      (VkDescriptorBindingFlags[TB_INPUT_PERM_COUNT]){
+                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
+                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
+                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
+                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
+                      },
+              },
+          .bindingCount = TB_INPUT_PERM_COUNT,
+          .pBindings =
+              (VkDescriptorSetLayoutBinding[TB_INPUT_PERM_COUNT]){
+                  {
+                      .binding = 0,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+                  {
+                      .binding = 1,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+                  {
+                      .binding = 2,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+                  {
+                      .binding = 3,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+              },
+      };
+      err = tb_rnd_create_set_layout(render_system, &create_info, "Mesh Layout",
+                                     &sys.mesh_set_layout);
+      TB_VK_CHECK(err, "Failed to create mesh set layout");
+    }
 
     // Create instance descriptor set layout
     {
@@ -724,12 +593,13 @@ TbMeshSystem create_mesh_system_internal(
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 3,
+          .setLayoutCount = 4,
           .pSetLayouts =
-              (VkDescriptorSetLayout[3]){
+              (VkDescriptorSetLayout[4]){
                   sys.obj_set_layout,
                   sys.view_set_layout,
                   render_object_system->set_layout,
+                  sys.mesh_set_layout,
               },
       };
       err = tb_rnd_create_pipeline_layout(render_system, &create_info,
@@ -750,13 +620,14 @@ TbMeshSystem create_mesh_system_internal(
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 4,
+          .setLayoutCount = 5,
           .pSetLayouts =
-              (VkDescriptorSetLayout[4]){
+              (VkDescriptorSetLayout[5]){
                   material_system->set_layout,
                   sys.obj_set_layout,
                   sys.view_set_layout,
                   render_object_system->set_layout,
+                  sys.mesh_set_layout,
               },
           .pushConstantRangeCount = 1,
           .pPushConstantRanges =
@@ -808,10 +679,9 @@ TbMeshSystem create_mesh_system_internal(
           break;
         }
       }
-      err = create_mesh_pipelines(sys.render_system, sys.std_alloc,
-                                  color_format, depth_format, sys.pipe_layout,
-                                  &sys.pipe_count, &sys.opaque_pipelines,
-                                  &sys.transparent_pipelines);
+      err = create_mesh_pipelines(sys.render_system, color_format, depth_format,
+                                  sys.pipe_layout, &sys.opaque_pipeline,
+                                  &sys.transparent_pipeline);
       TB_VK_CHECK(err, "Failed to create mesh pipelines");
     }
   }
@@ -840,10 +710,8 @@ TbMeshSystem create_mesh_system_internal(
 void destroy_mesh_system(TbMeshSystem *self) {
   TbRenderSystem *render_system = self->render_system;
 
-  for (uint32_t i = 0; i < self->pipe_count; ++i) {
-    tb_rnd_destroy_pipeline(render_system, self->opaque_pipelines[i]);
-    tb_rnd_destroy_pipeline(render_system, self->transparent_pipelines[i]);
-  }
+  tb_rnd_destroy_pipeline(render_system, self->opaque_pipeline);
+  tb_rnd_destroy_pipeline(render_system, self->transparent_pipeline);
   tb_rnd_destroy_pipeline(render_system, self->prepass_pipe);
   tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
   tb_rnd_destroy_pipe_layout(render_system, self->prepass_layout);
@@ -857,24 +725,6 @@ void destroy_mesh_system(TbMeshSystem *self) {
   TB_DYN_ARR_DESTROY(self->meshes);
 
   *self = (TbMeshSystem){0};
-}
-
-uint32_t get_pipeline_for_input(TbMeshSystem *self, TbVertexInput input) {
-  TracyCZone(ctx, true);
-  // We know the layout of the distribution of pipelines so we
-  // can decode the vertex input and the material permutation
-  // from the index
-  for (uint32_t pipe_idx = 0; pipe_idx < self->pipe_count; ++pipe_idx) {
-    const TbVertexInput vi = pipe_idx;
-
-    if (input == vi) {
-      TracyCZoneEnd(ctx);
-      return pipe_idx;
-    }
-  }
-  TracyCZoneEnd(ctx);
-  TB_CHECK_RETURN(false, "Failed to find pipeline for given mesh permutations",
-                  SDL_MAX_UINT32);
 }
 
 uint32_t find_mesh_by_id(TbMeshSystem *self, TbMeshId id) {
@@ -969,150 +819,240 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   // an id We'd prefer to use a name but gltfpack is currently
   // stripping mesh names
   const cgltf_mesh *mesh = node->mesh;
-  TB_CHECK_RETURN(mesh, "Given node has no mesh", InvalidMeshId);
+  TB_CHECK_RETURN(mesh, "Given node has no mesh", TbInvalidMeshId);
 
-  TbMeshId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = tb_sdbm(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
+  TbMeshId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_hash(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
 
   uint32_t index = find_mesh_by_id(self, id);
+  if (index != SDL_MAX_UINT32) {
+    // Mesh was found, just return that
+    TB_DYN_ARR_AT(self->meshes, index).ref_count++;
+    return id;
+  }
 
   // Mesh was not found, load it now
-  if (index == SDL_MAX_UINT32) {
-    index = TB_DYN_ARR_SIZE(self->meshes);
-    {
-      TbMesh m = {.id = id};
-      TB_DYN_ARR_APPEND(self->meshes, m);
+  index = TB_DYN_ARR_SIZE(self->meshes);
+  {
+    TbMesh m = {.id = id};
+    TB_DYN_ARR_APPEND(self->meshes, m);
+  }
+  TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, index);
+
+  // Determine how big this mesh is
+  uint64_t index_size = 0;
+  uint64_t geom_size = 0;
+  uint64_t attr_size_per_type[cgltf_attribute_type_max_enum] = {0};
+  {
+    uint64_t vertex_size = 0;
+    uint32_t vertex_count = 0;
+    for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
+         ++prim_idx) {
+      cgltf_primitive *prim = &mesh->primitives[prim_idx];
+      cgltf_accessor *indices = prim->indices;
+      cgltf_size idx_size =
+          tb_calc_aligned_size(indices->count, indices->stride, 16);
+
+      index_size += idx_size;
+      vertex_count = prim->attributes[0].data->count;
+
+      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+           ++attr_idx) {
+        // Only care about certain attributes at the moment
+        cgltf_attribute_type type = prim->attributes[attr_idx].type;
+        int32_t idx = prim->attributes[attr_idx].index;
+        if ((type == cgltf_attribute_type_position ||
+             type == cgltf_attribute_type_normal ||
+             type == cgltf_attribute_type_tangent ||
+             type == cgltf_attribute_type_texcoord) &&
+            idx == 0) {
+          cgltf_accessor *attr = prim->attributes[attr_idx].data;
+          uint64_t attr_size = vertex_count * attr->stride;
+          attr_size_per_type[type] += attr_size;
+        }
+      }
+
+      for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
+        tb_auto attr_size = attr_size_per_type[i];
+        if (attr_size > 0) {
+          attr_size_per_type[i] = tb_calc_aligned_size(1, attr_size, 16);
+          vertex_size += attr_size_per_type[i];
+        }
+      }
     }
-    TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, index);
 
-    // Determine how big this mesh is
-    uint64_t geom_size = 0;
-    uint64_t vertex_offset = 0;
-    {
-      uint64_t index_size = 0;
-      uint64_t vertex_size = 0;
+    geom_size = index_size + vertex_size;
+  }
 
-      for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
-           ++prim_idx) {
-        cgltf_primitive *prim = &mesh->primitives[prim_idx];
+  uint64_t attr_offset_per_type[cgltf_attribute_type_max_enum] = {0};
+  {
+    uint64_t offset = index_size;
+    for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
+      tb_auto attr_size = attr_size_per_type[i];
+      if (attr_size > 0) {
+        attr_offset_per_type[i] = offset;
+        offset += attr_size;
+      }
+    }
+  }
+
+  VkResult err = VK_SUCCESS;
+
+  // Create space for the mesh on the GPU
+  void *ptr = NULL;
+  {
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = geom_size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
+                                       mesh->name, &tb_mesh->gpu_buffer,
+                                       &tb_mesh->host_buffer, &ptr);
+    TB_VK_CHECK_RET(err, "Failed to create mesh buffer", false);
+  }
+
+  // We need to update the per-mesh descriptor pool
+  {
+    const uint32_t mesh_count = TB_DYN_ARR_SIZE(self->meshes);
+    VkDescriptorPoolCreateInfo pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = mesh_count * 4,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .descriptorCount = mesh_count * 4,
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                },
+            },
+    };
+    tb_auto layouts =
+        tb_alloc_nm_tp(self->tmp_alloc, mesh_count, VkDescriptorSetLayout);
+    for (uint32_t i = 0; i < mesh_count; ++i) {
+      layouts[i] = self->mesh_set_layout;
+    }
+    tb_rnd_resize_desc_pool(self->render_system, &pool_info, layouts,
+                            &self->mesh_pool, mesh_count);
+  }
+
+  // Read the cgltf mesh into the driver owned memory
+  {
+    uint64_t idx_offset = 0;
+    uint64_t vertex_count = 0;
+    for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
+         ++prim_idx) {
+      cgltf_primitive *prim = &mesh->primitives[prim_idx];
+      {
         cgltf_accessor *indices = prim->indices;
+        cgltf_buffer_view *view = indices->buffer_view;
+        cgltf_size src_size = indices->count * indices->stride;
+        cgltf_size padded_size =
+            tb_calc_aligned_size(indices->count, indices->stride, 16);
 
-        index_size += (indices->count * indices->stride);
+        // Decode the buffer
+        cgltf_result res = decompress_buffer_view(self->std_alloc, view);
+        TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
-        for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
-             ++attr_idx) {
-          // Only care about certain attributes at the moment
-          cgltf_attribute_type type = prim->attributes[attr_idx].type;
-          int32_t index = prim->attributes[attr_idx].index;
-          if ((type == cgltf_attribute_type_position ||
-               type == cgltf_attribute_type_normal ||
-               type == cgltf_attribute_type_tangent ||
-               type == cgltf_attribute_type_texcoord) &&
-              index == 0) {
-            cgltf_accessor *attr = prim->attributes[attr_idx].data;
-            vertex_size += attr->count * attr->stride;
+        void *src = ((uint8_t *)view->data) + indices->offset;
+        void *dst = ((uint8_t *)(ptr)) + idx_offset;
+        SDL_memcpy(dst, src, src_size); // NOLINT
+        idx_offset += padded_size;
+      }
+
+      // Determine the order of attributes
+      cgltf_size attr_order[4] = {0};
+      {
+        const cgltf_attribute_type req_order[4] = {
+            cgltf_attribute_type_position,
+            cgltf_attribute_type_normal,
+            cgltf_attribute_type_tangent,
+            cgltf_attribute_type_texcoord,
+        };
+        cgltf_size attr_target_idx = 0;
+        for (uint32_t i = 0; i < 4; ++i) {
+          bool found = false;
+          for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+               ++attr_idx) {
+            cgltf_attribute *attr = &prim->attributes[attr_idx];
+            if (attr->type == req_order[i]) {
+              attr_order[attr_target_idx] = attr_idx;
+              attr_target_idx++;
+              found = true;
+            }
+            if (found) {
+              break;
+            }
           }
         }
       }
 
-      // Calculate the necessary padding between the index and
-      // vertex contents of the buffer. Otherwise we'll get a
-      // validation error. The vertex content needs to start
-      // that the correct attribAddress which must be a
-      // multiple of the size of the first attribute
-      uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
-      vertex_offset = index_size + idx_padding;
+      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+           ++attr_idx) {
+        cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
+        cgltf_accessor *accessor = attr->data;
+        cgltf_buffer_view *view = accessor->buffer_view;
 
-      geom_size = vertex_offset + vertex_size;
+        uint64_t mesh_vert_offset = vertex_count * attr->data->stride;
+        uint64_t vtx_offset =
+            attr_offset_per_type[attr->type] + mesh_vert_offset;
+
+        size_t src_size = accessor->stride * accessor->count;
+
+        // Decode the buffer
+        cgltf_result res = decompress_buffer_view(self->std_alloc, view);
+        TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+        void *src = ((uint8_t *)view->data) + accessor->offset;
+        void *dst = ((uint8_t *)(ptr)) + vtx_offset;
+        SDL_memcpy(dst, src, src_size); // NOLINT
+      }
+
+      vertex_count += prim->attributes[0].data->count;
     }
 
-    VkResult err = VK_SUCCESS;
-
-    // Create space for the mesh on the GPU
-    void *ptr = NULL;
+    // Construct one write per primitive
     {
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = geom_size,
-          .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      };
-      err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
-                                         mesh->name, &tb_mesh->gpu_buffer,
-                                         &tb_mesh->host_buffer, &ptr);
-      TB_VK_CHECK_RET(err, "Failed to create mesh buffer", false);
-    }
-
-    // Read the cgltf mesh into the driver owned memory
-    {
-      uint64_t idx_offset = 0;
-      uint64_t vtx_offset = vertex_offset;
-      for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
-           ++prim_idx) {
-        cgltf_primitive *prim = &mesh->primitives[prim_idx];
-
-        {
-          cgltf_accessor *indices = prim->indices;
-          cgltf_buffer_view *view = indices->buffer_view;
-          cgltf_size index_size = indices->count * indices->stride;
-
-          // Decode the buffer
-          cgltf_result res = decompress_buffer_view(self->std_alloc, view);
-          TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
-
-          void *src = ((uint8_t *)view->data) + indices->offset;
-          void *dst = ((uint8_t *)(ptr)) + idx_offset;
-          SDL_memcpy(dst, src, index_size); // NOLINT
-          idx_offset += index_size;
-        }
-
-        // Determine the order of attributes
-        cgltf_size attr_order[4] = {0};
-        {
-          const cgltf_attribute_type req_order[4] = {
-              cgltf_attribute_type_position,
-              cgltf_attribute_type_normal,
-              cgltf_attribute_type_tangent,
-              cgltf_attribute_type_texcoord,
+      // Helper block for crafting writes
+      tb_auto append_write_hlpr =
+          ^(TbAttrWriteList *out_writes, VkBuffer buffer, uint32_t binding,
+            uint64_t offset, uint64_t index, uint64_t size) {
+            // Need to do this alloc because we need the buffer info to survive
+            // a copy up to the render thread
+            tb_auto buffer_info =
+                tb_alloc_tp(self->tmp_alloc, VkDescriptorBufferInfo);
+            *buffer_info = (VkDescriptorBufferInfo){
+                .buffer = buffer,
+                .offset = offset,
+                .range = size,
+            };
+            tb_auto write = (VkWriteDescriptorSet){
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet =
+                    (VkDescriptorSet)index, // Actually will be looked up later
+                .dstBinding = binding,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = buffer_info,
+            };
+            TB_DYN_ARR_APPEND(*out_writes, write);
           };
-          cgltf_size attr_target_idx = 0;
-          for (uint32_t i = 0; i < 4; ++i) {
-            bool found = false;
-            for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
-                 ++attr_idx) {
-              cgltf_attribute *attr = &prim->attributes[attr_idx];
-              if (attr->type == req_order[i]) {
-                attr_order[attr_target_idx] = attr_idx;
-                attr_target_idx++;
-                found = true;
-              }
-              if (found) {
-                break;
-              }
-            }
-          }
-        }
 
-        for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
-             ++attr_idx) {
-          cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
-          cgltf_accessor *accessor = attr->data;
-          cgltf_buffer_view *view = accessor->buffer_view;
-
-          size_t attr_offset = accessor->offset;
-          size_t attr_size = accessor->stride * accessor->count;
-
-          // Decode the buffer
-          cgltf_result res = decompress_buffer_view(self->std_alloc, view);
-          TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
-
-          void *src = ((uint8_t *)view->data) + attr_offset;
-          void *dst = ((uint8_t *)(ptr)) + vtx_offset;
-          SDL_memcpy(dst, src, attr_size); // NOLINT
-          vtx_offset += attr_size;
-        }
+      for (cgltf_size attr_idx = 0;
+           attr_idx < mesh->primitives[0].attributes_count; ++attr_idx) {
+        cgltf_attribute *attr = &mesh->primitives[0].attributes[attr_idx];
+        // HACK - this mapping is kind of incidental
+        uint32_t binding = ((int32_t)attr->type) - 1;
+        // Record a necessary descriptor set write
+        VkBuffer buffer = tb_mesh->gpu_buffer.buffer;
+        append_write_hlpr(&self->attr_writes, buffer, binding,
+                          attr_offset_per_type[attr->type], index,
+                          attr_size_per_type[attr->type]);
       }
     }
 
@@ -1140,6 +1080,11 @@ VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id) {
   TB_CHECK_RETURN(buffer, "Failed to retrieve buffer", VK_NULL_HANDLE);
 
   return buffer;
+}
+
+VkDescriptorSet tb_mesh_system_get_set(TbMeshSystem *self, TbMeshId id) {
+  int32_t global_mesh_idx = find_mesh_by_id(self, id);
+  return tb_rnd_desc_pool_get_set(&self->mesh_pool, global_mesh_idx);
 }
 
 void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id) {
@@ -1211,6 +1156,19 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbAllocator tmp_alloc = mesh_sys->tmp_alloc;
+
+  // Issue any new mesh descriptor writes
+  if (!TB_DYN_ARR_EMPTY(mesh_sys->attr_writes)) {
+    const uint32_t write_count = TB_DYN_ARR_SIZE(mesh_sys->attr_writes);
+    // Last minute descriptor set adjustment
+    TB_DYN_ARR_FOREACH(mesh_sys->attr_writes, i) {
+      tb_auto write = &TB_DYN_ARR_AT(mesh_sys->attr_writes, i);
+      uint32_t index = (uint64_t)write->dstSet;
+      write->dstSet = tb_rnd_desc_pool_get_set(&mesh_sys->mesh_pool, index);
+    }
+    tb_rnd_update_descriptors(rnd_sys, write_count, mesh_sys->attr_writes.data);
+    TB_DYN_ARR_CLEAR(mesh_sys->attr_writes);
+  }
 
   // For each camera
   ecs_iter_t camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
@@ -1286,14 +1244,14 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
           VkBuffer geom_buffer =
               tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
+          VkDescriptorSet mesh_set =
+              tb_mesh_system_get_set(mesh_sys, mesh->mesh_id);
           VkDescriptorSet transforms_set = tb_render_object_sys_get_set(ro_sys);
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
             TbSubMesh *sm = &mesh->submeshes[submesh_idx];
             TbMaterialId mat = sm->material;
-            uint32_t pipe_idx =
-                get_pipeline_for_input(mesh_sys, sm->vertex_input);
 
             // Deduce some important details from the submesh
             TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
@@ -1301,6 +1259,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
             const uint32_t index_count = sm->index_count;
             const uint64_t index_offset = sm->index_offset;
+            const uint32_t vertex_offset = sm->vertex_offset;
             const VkIndexType index_type = (VkIndexType)sm->index_type;
 
             // Handle Opaque and Transparent draws
@@ -1310,9 +1269,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
               if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
                 opaque = false;
               }
-              VkPipeline pipeline = mesh_sys->opaque_pipelines[pipe_idx];
+              VkPipeline pipeline = mesh_sys->opaque_pipeline;
               if (!opaque) {
-                pipeline = mesh_sys->transparent_pipelines[pipe_idx];
+                pipeline = mesh_sys->transparent_pipeline;
               }
 
               // Determine if we need to insert a new batch
@@ -1335,7 +1294,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(*prim_batches, i);
                   if (db->pipeline == pipeline && db->layout == layout &&
                       pb->perm == perm && pb->view_set == view_set &&
-                      pb->mat_set == mat_set &&
+                      pb->mat_set == mat_set && pb->mesh_set == mesh_set &&
                       pb->geom_buffer == geom_buffer) {
                     batch = db;
                     transforms = &TB_DYN_ARR_AT(*trans_list, i);
@@ -1362,6 +1321,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                       .view_set = view_set,
                       .mat_set = mat_set,
                       .trans_set = transforms_set,
+                      .mesh_set = mesh_set,
                       .geom_buffer = geom_buffer,
                   };
 
@@ -1388,6 +1348,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
                   if (d->index_count == index_count &&
                       d->index_offset == index_offset &&
+                      d->vertex_offset == vertex_offset &&
                       d->index_type == index_type) {
                     draw = d;
                     break;
@@ -1398,44 +1359,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   TbPrimitiveDraw d = {
                       .index_count = index_count,
                       .index_offset = index_offset,
+                      .vertex_offset = vertex_offset,
                       .index_type = index_type,
                   };
-
-                  const uint64_t base_vert_offset = sm->vertex_offset;
-                  const uint32_t vertex_count = sm->vertex_count;
-
-                  switch (sm->vertex_input) {
-                  case VI_P3N3:
-                    d.vertex_binding_count = 2;
-                    d.vertex_binding_offsets[0] = base_vert_offset;
-                    d.vertex_binding_offsets[1] =
-                        base_vert_offset + (vertex_count * pos_stride);
-                    break;
-                  case VI_P3N3U2:
-                    d.vertex_binding_count = 3;
-                    d.vertex_binding_offsets[0] = base_vert_offset;
-                    d.vertex_binding_offsets[1] =
-                        base_vert_offset + (vertex_count * pos_stride);
-                    d.vertex_binding_offsets[2] =
-                        base_vert_offset +
-                        (vertex_count * (pos_stride + attr_stride));
-                    break;
-                  case VI_P3N3T4U2:
-                    d.vertex_binding_count = 4;
-                    d.vertex_binding_offsets[0] = base_vert_offset;
-                    d.vertex_binding_offsets[1] =
-                        base_vert_offset + (vertex_count * pos_stride);
-                    d.vertex_binding_offsets[2] =
-                        base_vert_offset +
-                        (vertex_count * (pos_stride + attr_stride));
-                    d.vertex_binding_offsets[3] =
-                        base_vert_offset +
-                        (vertex_count * (pos_stride + (attr_stride * 2)));
-                    break;
-                  default:
-                    TB_CHECK(false, "Unexepcted vertex input");
-                    break;
-                  }
 
                   // Append it to the list and make sure we get a reference
                   uint32_t idx = batch->draw_count++;
@@ -1452,7 +1378,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
                   TbRenderObject *ro = ecs_get_mut(ecs, entity, TbRenderObject);
                   TB_DYN_ARR_APPEND(*transforms, ro->index);
-                  ro->perm = sm->vertex_input;
+                  ro->perm = sm->vertex_perm;
                 }
               }
             }
@@ -1548,7 +1474,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           layouts[i] = mesh_sys->obj_set_layout;
         }
         VkResult err = tb_rnd_frame_desc_pool_tick(
-            rnd_sys, &pool_info, layouts, mesh_sys->desc_pool_list.pools,
+            rnd_sys, &pool_info, layouts, mesh_sys->obj_pool_list.pools,
             set_count);
         TB_VK_CHECK(err, "Failed to update descriptor pool");
 
@@ -1561,7 +1487,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         uint32_t set_idx = 0;
         TB_DYN_ARR_FOREACH(opaque_inst_buffers, i) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
+              rnd_sys, mesh_sys->obj_pool_list.pools, set_idx);
           const uint64_t offset = TB_DYN_ARR_AT(opaque_inst_buffers, i);
           TbIndirectionList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
@@ -1589,13 +1515,12 @@ void mesh_draw_tick2(ecs_iter_t *it) {
         }
         TB_DYN_ARR_FOREACH(trans_inst_buffers, i) {
           VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, mesh_sys->desc_pool_list.pools, set_idx);
+              rnd_sys, mesh_sys->obj_pool_list.pools, set_idx);
           const uint64_t offset = TB_DYN_ARR_AT(trans_inst_buffers, i);
           TbIndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
           const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
-          VkDescriptorBufferInfo *buffer_info =
-              tb_alloc_tp(tmp_alloc, VkDescriptorBufferInfo);
+          tb_auto buffer_info = tb_alloc_tp(tmp_alloc, VkDescriptorBufferInfo);
           *buffer_info = (VkDescriptorBufferInfo){
               .buffer = gpu_buf,
               .offset = offset,

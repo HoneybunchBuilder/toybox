@@ -12,20 +12,13 @@ typedef uint64_t TbMeshId;
 typedef uint64_t TbMaterialId;
 typedef uint64_t ecs_entity_t;
 
-typedef enum TbVertexInput {
-  VI_P3N3 = 0,
-  VI_P3N3U2 = 1,
-  VI_P3N3T4U2 = 2,
-  VI_Count = 3,
-} TbVertexInput;
-
 typedef struct TbSubMesh {
   uint32_t index_type;
   uint32_t index_count;
   uint64_t index_offset;
   uint64_t vertex_offset;
   uint32_t vertex_count;
-  TbVertexInput vertex_input;
+  uint32_t vertex_perm;
   TbMaterialId material;
 } TbSubMesh;
 

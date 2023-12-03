@@ -77,8 +77,8 @@ static ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
 }
 
 TbTextureId calc_tex_id(const char *path, const char *name) {
-  TbTextureId id = tb_sdbm(0, (const uint8_t *)path, SDL_strlen(path));
-  id = tb_sdbm(id, (const uint8_t *)name, SDL_strlen(name));
+  TbTextureId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
+  id = tb_hash(id, (const uint8_t *)name, SDL_strlen(name));
   return id;
 }
 

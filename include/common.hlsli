@@ -60,42 +60,40 @@ TbCommonObjectData;
 #define TB_INPUT_PERM_POSITION 0x00000001
 #define TB_INPUT_PERM_NORMAL 0x00000002
 #define TB_INPUT_PERM_TEXCOORD0 0x00000004
-#define TB_INPUT_PERM_TEXCOORD1 0x00000008
-#define TB_INPUT_PERM_TANGENT 0x00000010
-#define TB_INPUT_PERM_COLOR 0x00000020
-#define TB_INPUT_PERM_COUNT 6
+#define TB_INPUT_PERM_TANGENT 0x00000008
+#define TB_INPUT_PERM_COUNT 4
 
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 
-int3 tb_vert_get_local_pos(int32_t perm, int32_t vertex,
-                           StructuredBuffer<int3> buffer) {
-  if (perm & TB_INPUT_PERM_POSITION) {
-    return buffer[vertex];
+int3 tb_vert_get_local_pos(int32_t perm, int32_t index,
+                           StructuredBuffer<int16_t4> buffer) {
+  if ((perm & TB_INPUT_PERM_POSITION) > 0) {
+    return buffer[index].xyz;
   }
   return 0;
 }
 
-half3 tb_vert_get_normal(int32_t perm, int32_t vertex,
-                         StructuredBuffer<half3> buffer) {
-  if (perm & TB_INPUT_PERM_POSITION) {
-    return buffer[vertex];
+float3 tb_vert_get_normal(uint32_t perm, uint32_t index,
+                          ByteAddressBuffer buffer) {
+  if ((perm & TB_INPUT_PERM_NORMAL) > 0) {
+    return buffer.Load3(index);
   }
   return 0;
 }
 
-half4 tb_vert_get_tangent(int32_t perm, int32_t vertex,
-                          StructuredBuffer<half4> buffer) {
-  if (perm & TB_INPUT_PERM_POSITION) {
-    return buffer[vertex];
+float4 tb_vert_get_tangent(uint32_t perm, uint32_t index,
+                           ByteAddressBuffer buffer) {
+  if ((perm & TB_INPUT_PERM_TANGENT) > 0) {
+    return buffer.Load4(index);
   }
   return 0;
 }
 
-int2 tb_vert_get_uv0(int32_t perm, int32_t vertex,
-                     StructuredBuffer<int2> buffer) {
-  if (perm & TB_INPUT_PERM_POSITION) {
-    return buffer[vertex];
+int2 tb_vert_get_uv0(uint32_t perm, uint32_t index,
+                     StructuredBuffer<int16_t2> buffer) {
+  if ((perm & TB_INPUT_PERM_TEXCOORD0) > 0) {
+    return buffer[index];
   }
   return 0;
 }

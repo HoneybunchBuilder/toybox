@@ -943,3 +943,44 @@ VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                uint32_t set_idx) {
   return pools[self->frame_idx].sets[set_idx];
 }
+
+VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
+                                 const VkDescriptorPoolCreateInfo *pool_info,
+                                 const VkDescriptorSetLayout *layouts,
+                                 TbDescriptorPool *pool, uint32_t set_count) {
+  VkResult err = VK_SUCCESS;
+
+  // Resize the pool
+  if (pool->set_count < set_count) {
+    if (pool->set_pool) {
+      tb_rnd_destroy_descriptor_pool(self, pool->set_pool);
+    }
+
+    err =
+        tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->set_pool);
+    TB_VK_CHECK(err, "Failed to create pool");
+    pool->set_count = set_count;
+    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
+                                  VkDescriptorSet);
+  } else {
+    vkResetDescriptorPool(self->render_thread->device, pool->set_pool, 0);
+    pool->set_count = set_count;
+  }
+
+  VkDescriptorSetAllocateInfo alloc_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorSetCount = pool->set_count,
+      .descriptorPool = pool->set_pool,
+      .pSetLayouts = layouts,
+  };
+  err = vkAllocateDescriptorSets(self->render_thread->device, &alloc_info,
+                                 pool->sets);
+  TB_VK_CHECK(err, "Failed to re-allocate descriptor sets");
+
+  return err;
+}
+
+VkDescriptorSet tb_rnd_desc_pool_get_set(TbDescriptorPool *pool,
+                                         uint32_t set_idx) {
+  return pool->sets[set_idx];
+}
