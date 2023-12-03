@@ -13,7 +13,6 @@ typedef struct TbWorld TbWorld;
 
 typedef struct TbRenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
-
   TbSetWriteQueue set_write_queue;
   TbBufferCopyQueue buf_copy_queue;
   TbBufferImageCopyQueue buf_img_copy_queue;
@@ -117,6 +116,10 @@ VkResult tb_rnd_create_sampler(TbRenderSystem *self,
 VkResult tb_rnd_create_image_view(TbRenderSystem *self,
                                   const VkImageViewCreateInfo *create_info,
                                   const char *name, VkImageView *view);
+
+VkResult tb_rnd_create_buffer_view(TbRenderSystem *self,
+                                   const VkBufferViewCreateInfo *create_info,
+                                   const char *name, VkBufferView *view);
 
 VkResult
 tb_rnd_create_set_layout(TbRenderSystem *self,

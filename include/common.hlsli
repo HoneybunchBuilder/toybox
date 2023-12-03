@@ -66,8 +66,7 @@ TbCommonObjectData;
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 
-int3 tb_vert_get_local_pos(int32_t perm, int32_t index,
-                           StructuredBuffer<int16_t4> buffer) {
+int3 tb_vert_get_local_pos(int32_t perm, int32_t index, RWBuffer<int4> buffer) {
   if ((perm & TB_INPUT_PERM_POSITION) > 0) {
     return buffer[index].xyz;
   }
@@ -75,23 +74,22 @@ int3 tb_vert_get_local_pos(int32_t perm, int32_t index,
 }
 
 float3 tb_vert_get_normal(uint32_t perm, uint32_t index,
-                          ByteAddressBuffer buffer) {
+                          RWBuffer<float4> buffer) {
   if ((perm & TB_INPUT_PERM_NORMAL) > 0) {
-    return buffer.Load3(index);
+    return buffer[index].xyz;
   }
   return 0;
 }
 
 float4 tb_vert_get_tangent(uint32_t perm, uint32_t index,
-                           ByteAddressBuffer buffer) {
+                           RWBuffer<float4> buffer) {
   if ((perm & TB_INPUT_PERM_TANGENT) > 0) {
-    return buffer.Load4(index);
+    return buffer[index].xyzw;
   }
   return 0;
 }
 
-int2 tb_vert_get_uv0(uint32_t perm, uint32_t index,
-                     StructuredBuffer<int16_t2> buffer) {
+int2 tb_vert_get_uv0(uint32_t perm, uint32_t index, RWBuffer<int2> buffer) {
   if ((perm & TB_INPUT_PERM_TEXCOORD0) > 0) {
     return buffer[index];
   }

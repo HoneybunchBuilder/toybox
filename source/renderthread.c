@@ -768,13 +768,13 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .pNext = &vk_12_features,
       .multiview = VK_TRUE,
       .storageBuffer16BitAccess = VK_TRUE,
-      //.storageInputOutput16 = VK_TRUE,
   };
 
   VkPhysicalDeviceFeatures vk_features = {
       .samplerAnisotropy = VK_TRUE,
       .depthClamp = VK_TRUE,
       .shaderInt16 = VK_TRUE,
+      .vertexPipelineStoresAndAtomics = VK_TRUE,
   };
 
   VkDeviceCreateInfo create_info = {0};

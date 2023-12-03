@@ -719,6 +719,17 @@ VkResult tb_rnd_create_image_view(TbRenderSystem *self,
   return err;
 }
 
+VkResult tb_rnd_create_buffer_view(TbRenderSystem *self,
+                                   const VkBufferViewCreateInfo *create_info,
+                                   const char *name, VkBufferView *view) {
+  VkResult err = vkCreateBufferView(self->render_thread->device, create_info,
+                                    &self->vk_host_alloc_cb, view);
+  TB_VK_CHECK_RET(err, "Failed to create buffer view", err);
+  SET_VK_NAME(self->render_thread->device, *view, VK_OBJECT_TYPE_BUFFER_VIEW,
+              name);
+  return err;
+}
+
 VkResult
 tb_rnd_create_set_layout(TbRenderSystem *self,
                          const VkDescriptorSetLayoutCreateInfo *create_info,

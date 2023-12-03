@@ -32,11 +32,14 @@
 #include "opaque_prepass_vert.h"
 #pragma clang diagnostic pop
 
+typedef struct VkBufferView_T *VkBufferView;
+
 typedef struct TbMesh {
   TbMeshId id;
   uint32_t ref_count;
   TbHostBuffer host_buffer;
   TbBuffer gpu_buffer;
+  VkBufferView attr_views[cgltf_attribute_type_max_enum];
 } TbMesh;
 
 VkResult create_prepass_pipeline(TbRenderSystem *render_system,
@@ -538,25 +541,25 @@ TbMeshSystem create_mesh_system_internal(
                   {
                       .binding = 0,
                       .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
                   {
                       .binding = 1,
                       .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
                   {
                       .binding = 2,
                       .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
                   {
                       .binding = 3,
                       .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
               },
@@ -824,20 +827,20 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   TbMeshId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
   id = tb_hash(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
 
-  uint32_t index = find_mesh_by_id(self, id);
-  if (index != SDL_MAX_UINT32) {
+  uint32_t mesh_idx = find_mesh_by_id(self, id);
+  if (mesh_idx != SDL_MAX_UINT32) {
     // Mesh was found, just return that
-    TB_DYN_ARR_AT(self->meshes, index).ref_count++;
+    TB_DYN_ARR_AT(self->meshes, mesh_idx).ref_count++;
     return id;
   }
 
   // Mesh was not found, load it now
-  index = TB_DYN_ARR_SIZE(self->meshes);
+  mesh_idx = TB_DYN_ARR_SIZE(self->meshes);
   {
     TbMesh m = {.id = id};
     TB_DYN_ARR_APPEND(self->meshes, m);
   }
-  TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, index);
+  TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, mesh_idx);
 
   // Determine how big this mesh is
   uint64_t index_size = 0;
@@ -908,6 +911,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                  VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
     err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
@@ -927,7 +931,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             (VkDescriptorPoolSize[1]){
                 {
                     .descriptorCount = mesh_count * 4,
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                 },
             },
     };
@@ -1019,17 +1023,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
     {
       // Helper block for crafting writes
       tb_auto append_write_hlpr =
-          ^(TbAttrWriteList *out_writes, VkBuffer buffer, uint32_t binding,
-            uint64_t offset, uint64_t index, uint64_t size) {
-            // Need to do this alloc because we need the buffer info to survive
-            // a copy up to the render thread
-            tb_auto buffer_info =
-                tb_alloc_tp(self->tmp_alloc, VkDescriptorBufferInfo);
-            *buffer_info = (VkDescriptorBufferInfo){
-                .buffer = buffer,
-                .offset = offset,
-                .range = size,
-            };
+          ^(TbAttrWriteList *out_writes, uint32_t binding, uint64_t index) {
             tb_auto write = (VkWriteDescriptorSet){
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .dstSet =
@@ -1037,22 +1031,38 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                 .dstBinding = binding,
                 .dstArrayElement = 0,
                 .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .pBufferInfo = buffer_info,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
             };
             TB_DYN_ARR_APPEND(*out_writes, write);
           };
 
-      for (cgltf_size attr_idx = 0;
-           attr_idx < mesh->primitives[0].attributes_count; ++attr_idx) {
+      static const VkFormat
+          attr_formats_per_type[cgltf_attribute_type_max_enum] = {
+              VK_FORMAT_UNDEFINED,      VK_FORMAT_R16G16B16A16_SINT,
+              VK_FORMAT_R8G8B8A8_SNORM, VK_FORMAT_R8G8B8A8_SNORM,
+              VK_FORMAT_R16G16_SINT,
+          };
+
+      for (size_t attr_idx = 0; attr_idx < mesh->primitives[0].attributes_count;
+           ++attr_idx) {
         cgltf_attribute *attr = &mesh->primitives[0].attributes[attr_idx];
+
         // HACK - this mapping is kind of incidental
         uint32_t binding = ((int32_t)attr->type) - 1;
-        // Record a necessary descriptor set write
-        VkBuffer buffer = tb_mesh->gpu_buffer.buffer;
-        append_write_hlpr(&self->attr_writes, buffer, binding,
-                          attr_offset_per_type[attr->type], index,
-                          attr_size_per_type[attr->type]);
+
+        // Create a buffer view per attribute
+        VkBufferViewCreateInfo view_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = tb_mesh->gpu_buffer.buffer,
+            .offset = attr_offset_per_type[attr->type],
+            .range = VK_WHOLE_SIZE,
+            .format = attr_formats_per_type[attr->type],
+        };
+        tb_rnd_create_buffer_view(self->render_system, &view_info,
+                                  "Mesh Attribute View",
+                                  &tb_mesh->attr_views[binding]);
+
+        append_write_hlpr(&self->attr_writes, binding, mesh_idx);
       }
     }
 
@@ -1060,7 +1070,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
     tb_flush_alloc(self->render_system, tb_mesh->gpu_buffer.alloc);
   }
 
-  TB_DYN_ARR_AT(self->meshes, index).ref_count++;
+  TB_DYN_ARR_AT(self->meshes, mesh_idx).ref_count++;
   return id;
 }
 
@@ -1164,7 +1174,10 @@ void mesh_draw_tick2(ecs_iter_t *it) {
     TB_DYN_ARR_FOREACH(mesh_sys->attr_writes, i) {
       tb_auto write = &TB_DYN_ARR_AT(mesh_sys->attr_writes, i);
       uint32_t index = (uint64_t)write->dstSet;
+      tb_auto *mesh = &TB_DYN_ARR_AT(mesh_sys->meshes, index);
       write->dstSet = tb_rnd_desc_pool_get_set(&mesh_sys->mesh_pool, index);
+      // HACK: write->dstBinding is more coincidental than anything
+      write->pTexelBufferView = &mesh->attr_views[write->dstBinding];
     }
     tb_rnd_update_descriptors(rnd_sys, write_count, mesh_sys->attr_writes.data);
     TB_DYN_ARR_CLEAR(mesh_sys->attr_writes);

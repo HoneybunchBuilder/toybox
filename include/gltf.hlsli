@@ -87,10 +87,10 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
 
 #define GLTF_MESH_SET(space)                                                   \
-  StructuredBuffer<int16_t4> pos_buffer : register(t0, space);                 \
-  ByteAddressBuffer norm_buffer : register(t1, space);                         \
-  ByteAddressBuffer tan_buffer : register(t2, space);                          \
-  StructuredBuffer<int16_t2> uv0_buffer : register(t3, space);
+  RWBuffer<int4> pos_buffer : register(u0, space);                             \
+  RWBuffer<float4> norm_buffer : register(u1, space);                          \
+  RWBuffer<float4> tan_buffer : register(u2, space);                           \
+  RWBuffer<int2> uv0_buffer : register(u3, space);
 
 // TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_INDIRECT_SET(space)                                               \
