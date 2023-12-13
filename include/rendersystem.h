@@ -25,8 +25,9 @@ typedef struct TbFrameDescriptorPool {
 } TbFrameDescriptorPool;
 
 typedef struct TbDescriptorPool {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
+  uint64_t count;
+  VkDescriptorPool pool;
+  uint64_t capacity;
   VkDescriptorSet *sets;
 } TbDescriptorPool;
 
@@ -185,7 +186,8 @@ VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
 VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
                                  const VkDescriptorPoolCreateInfo *pool_info,
                                  const VkDescriptorSetLayout *layouts,
-                                 TbDescriptorPool *pool, uint32_t set_count);
+                                 void *alloc_next, TbDescriptorPool *pool,
+                                 uint32_t set_count);
 VkDescriptorSet tb_rnd_desc_pool_get_set(TbDescriptorPool *pool,
                                          uint32_t set_idx);
 

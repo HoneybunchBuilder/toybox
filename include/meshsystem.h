@@ -20,7 +20,7 @@ typedef struct TbMeshComponent TbMeshComponent;
 typedef struct TbMesh TbMesh;
 typedef struct TbWorld TbWorld;
 typedef uint64_t TbMeshId;
-typedef uint64_t TbMaterialPerm;
+typedef uint32_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct VkBuffer_T *VkBuffer;
@@ -31,8 +31,10 @@ static const TbMeshId TbInvalidMeshId = SDL_MAX_UINT64;
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
 
 typedef struct TbPrimitiveDraw {
+  VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
+  uint32_t material_index;
   uint64_t index_offset;
   uint32_t vertex_offset;
   uint32_t instance_count;
@@ -40,12 +42,12 @@ typedef struct TbPrimitiveDraw {
 
 typedef struct TbPrimitiveBatch {
   uint64_t perm;
-  VkDescriptorSet view_set;
   VkDescriptorSet inst_set;
+  VkDescriptorSet view_set;
   VkDescriptorSet trans_set;
-  VkDescriptorSet mat_set;
   VkDescriptorSet mesh_set;
-  VkBuffer geom_buffer;
+  VkDescriptorSet mat_set;
+  VkDescriptorSet tex_set;
 } TbPrimitiveBatch;
 
 typedef TB_DYN_ARR_OF(int32_t) TbIndirectionList;
@@ -73,7 +75,6 @@ typedef struct TbMeshSystem {
 
   VkDescriptorSetLayout mesh_set_layout;
   VkDescriptorSetLayout obj_set_layout;
-  VkDescriptorSetLayout view_set_layout;
   VkPipelineLayout pipe_layout;
 
   VkPipelineLayout prepass_layout;

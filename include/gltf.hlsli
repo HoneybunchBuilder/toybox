@@ -18,32 +18,26 @@
 #define GLTF_PERM_ALPHA_BLEND 0x00002000
 #define GLTF_PERM_DOUBLE_SIDED 0x00004000
 
-#ifdef __HLSL_VERSION
-#define PACKED
-#else
-#define PACKED __attribute__((__packed__))
-#endif
-
 // Omitting texture rotation because it's not widely used
-typedef struct PACKED TextureTransform {
+typedef struct TB_GPU_STRUCT TextureTransform {
   float2 offset;
   float2 scale;
 }
 TextureTransform;
 
-typedef struct PACKED PBRMetallicRoughness {
+typedef struct TB_GPU_STRUCT PBRMetallicRoughness {
   float4 base_color_factor;
   float4 metal_rough_factors;
 }
 PBRMetallicRoughness;
 
-typedef struct PACKED PBRSpecularGlossiness {
+typedef struct TB_GPU_STRUCT PBRSpecularGlossiness {
   float4 diffuse_factor;
   float4 spec_gloss_factors;
 }
 PBRSpecularGlossiness;
 
-typedef struct PACKED GLTFMaterialData {
+typedef struct TB_GPU_STRUCT GLTFMaterialData {
   TextureTransform tex_transform;
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
@@ -52,15 +46,19 @@ typedef struct PACKED GLTFMaterialData {
   float4 attenuation_params;
   float4 thickness_factor;
   float4 emissives;
+  int32_t perm;
+  uint32_t color_idx;
+  uint32_t normal_idx;
+  uint32_t pbr_idx;
 }
 GLTFMaterialData;
 
-#define ALPHA_CUTOFF(m) m.sheen_alpha.w
-
-typedef struct PACKED MaterialPushConstants {
-  uint perm;
+typedef struct GLTFPushConstants {
+  int32_t mat_idx;
 }
-MaterialPushConstants;
+GLTFPushConstants;
+
+#define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
 // If a shader, provide some helper functions and macros
 #ifdef __HLSL_VERSION
@@ -72,17 +70,13 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   return uv;
 }
 
-#define GLTF_MATERIAL_SET(space)                                               \
-  ConstantBuffer<GLTFMaterialData> material_data : register(b0, space);        \
-  Texture2D base_color_map : register(t1, space);                              \
-  Texture2D normal_map : register(t2, space);                                  \
-  Texture2D metal_rough_map : register(t3, space);                             \
-  sampler material_sampler : register(s4, space);                              \
-  SamplerComparisonState shadow_sampler : register(s5, space);                 \
-  [[vk::push_constant]]                                                        \
-  ConstantBuffer<MaterialPushConstants> consts : register(b6, space);
+#define GLTF_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
 
-// TODO: should probably move this somewhere outside of the GLTF concept
+#define GLTF_MATERIAL_SET(space)                                               \
+  sampler material_sampler : register(s0, space);                              \
+  SamplerComparisonState shadow_sampler : register(s1, space);                 \
+  StructuredBuffer<GLTFMaterialData> gltf_data[] : register(t2, space);
+
 #define GLTF_OBJECT_SET(space)                                                 \
   StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
 
@@ -92,11 +86,9 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   RWBuffer<float4> tan_buffer : register(u2, space);                           \
   RWBuffer<int2> uv0_buffer : register(u3, space);
 
-// TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_INDIRECT_SET(space)                                               \
   StructuredBuffer<int32_t> trans_indices : register(t0, space);
 
-// TODO: should probably move this somewhere outside of the GLTF concept
 #define GLTF_VIEW_SET(space)                                                   \
   ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);          \
   TextureCube irradiance_map : register(t1, space);                            \
@@ -131,13 +123,9 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
     s.N = normal;                                                              \
     s.V = view;                                                                \
     s.R = refl;                                                                \
-    s.emissives = material_data.emissives;                                     \
+    s.emissives = gltf.emissives;                                              \
                                                                                \
     out.rgb = pbr_lighting_common(v, l, s);                                    \
     out.a = color.a;                                                           \
   }
-
-#else
-_Static_assert(sizeof(MaterialPushConstants) <= PUSH_CONSTANT_BYTES,
-               "Too Many Push Constants");
 #endif

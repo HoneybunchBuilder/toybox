@@ -52,6 +52,7 @@ TbCommonLightData;
 typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
   int32_t perm; // Input layout permutation
+  int32_t mat_idx;
 }
 TbCommonObjectData;
 

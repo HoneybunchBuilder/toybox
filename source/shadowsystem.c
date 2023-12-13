@@ -144,8 +144,9 @@ VkResult create_shadow_pipeline(TbRenderSystem *render_system,
 
 void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Shadow Record", TracyCategoryColorRendering, true);
+  TracyCZoneNC(ctx, "Record Shadows", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Shadows", 3, true);
+  cmd_begin_label(buffer, "Shadows", (float4){0.8f, 0.0f, 0.4f, 1.0f});
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const TbDrawBatch *batch = &batches[batch_idx];
@@ -156,7 +157,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     }
 
     TracyCZoneNC(batch_ctx, "Shadow Batch", TracyCategoryColorRendering, true);
-    cmd_begin_label(buffer, "Shadow Batch", (float4){0.8f, 0.0f, 0.4f, 1.0f});
+    cmd_begin_label(buffer, "Batch", (float4){0.4f, 0.0f, 0.2f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -175,25 +176,22 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
 
-      TracyCZoneNC(draw_ctx, "Submesh Draw", TracyCategoryColorRendering, true);
-      cmd_begin_label(buffer, "Submesh Draw", (float4){0.6f, 0.0f, 0.3f, 1.0f});
-
+      TracyCZoneNC(draw_ctx, "Record Submesh", TracyCategoryColorRendering,
+                   true);
       if (draw->index_count > 0) {
         // Don't need to bind material data
-        vkCmdBindIndexBuffer(buffer, prim_batch->geom_buffer,
-                             draw->index_offset, draw->index_type);
+        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
+                             draw->index_type);
         vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
                          draw->vertex_offset, 0);
       }
-
-      cmd_end_label(buffer);
       TracyCZoneEnd(draw_ctx);
     }
 
     cmd_end_label(buffer);
     TracyCZoneEnd(batch_ctx);
   }
-
+  cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
@@ -449,8 +447,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
               TbDrawBatch *db = &TB_DYN_ARR_AT(batches, i);
               TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(prim_batches, i);
               if (db->pipeline == pipeline && db->layout == layout &&
-                  pb->perm == perm && pb->geom_buffer == geom_buffer &&
-                  pb->mesh_set == mesh_set) {
+                  pb->perm == perm && pb->mesh_set == mesh_set) {
                 batch = db;
                 prim_batch = pb;
                 transforms = &TB_DYN_ARR_AT(prim_trans, i);
@@ -473,7 +470,6 @@ void shadow_draw_tick(ecs_iter_t *it) {
                   .perm = perm,
                   .trans_set = transforms_set,
                   .mesh_set = mesh_set,
-                  .geom_buffer = geom_buffer,
               };
 
               TbIndirectionList il = {0};
@@ -497,7 +493,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
             TbPrimitiveDraw *draw = NULL;
             for (uint32_t i = 0; i < batch->draw_count; ++i) {
               TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
-              if (d->index_count == index_count &&
+              if (d->geom_buffer == geom_buffer &&
+                  d->index_count == index_count &&
                   d->index_offset == index_offset &&
                   d->vertex_offset == vertex_offset &&
                   d->index_type == index_type) {
@@ -508,6 +505,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
             // No draw was found, create one
             if (draw == NULL) {
               TbPrimitiveDraw d = {
+                  .geom_buffer = geom_buffer,
                   .index_count = index_count,
                   .index_offset = index_offset,
                   .vertex_offset = vertex_offset,

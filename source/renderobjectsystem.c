@@ -33,7 +33,8 @@ TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
                   .binding = 0,
                   .descriptorCount = 1,
                   .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                  .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  .stageFlags =
+                      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
               },
       },
       "Object Descriptor Set Layout", &sys.set_layout);

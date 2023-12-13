@@ -252,11 +252,45 @@ TbTextureSystem create_texture_system(TbAllocator std_alloc,
       .default_metal_rough_tex = TbInvalidTextureId,
   };
 
+  // Create descriptor set layout
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+        VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+    const uint32_t binding_count = 1;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 2048, // HACK: High upper bound
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Texture Table Layout",
+                             &sys.set_layout);
+  }
+
   // Init textures dyn array
   TB_DYN_ARR_RESET(sys.textures, sys.std_alloc, 4);
 
+  // All white 2x2 RGBA image
   {
-    // All white 2x2 RGBA image
     const uint8_t pixels[] = {
         255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255,
@@ -265,8 +299,8 @@ TbTextureSystem create_texture_system(TbAllocator std_alloc,
         &sys, "", "Default Color Texture", TB_TEX_USAGE_COLOR, 2, 2, pixels,
         sizeof(pixels));
   }
+  // 2x2 blank normal image
   {
-    // 2x2 blank normal image
     const uint8_t pixels[] = {
         0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
         0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
@@ -275,8 +309,8 @@ TbTextureSystem create_texture_system(TbAllocator std_alloc,
         &sys, "", "Default Normal Texture", TB_TEX_USAGE_NORMAL, 2, 2, pixels,
         sizeof(pixels));
   }
+  // 2x2 blank metal rough image
   {
-    // 2x2 blank metal rough image
     const uint8_t pixels[] = {
         255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255,
@@ -285,7 +319,6 @@ TbTextureSystem create_texture_system(TbAllocator std_alloc,
         &sys, "", "Default Metal Rough Texture", TB_TEX_USAGE_METAL_ROUGH, 2, 2,
         pixels, sizeof(pixels));
   }
-
   // Load BRDF LUT texture
   {
     const char *path = ASSET_PREFIX "textures/brdf.ktx2";
@@ -333,6 +366,79 @@ void destroy_texture_system(TbTextureSystem *self) {
   };
 }
 
+void tick_texture_system(ecs_iter_t *it) {
+  ecs_world_t *ecs = it->world;
+
+  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
+
+  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
+  const uint64_t incoming_tex_count = TB_DYN_ARR_SIZE(tex_sys->textures);
+  if (incoming_tex_count > tex_sys->set_pool.capacity) {
+    tex_sys->set_pool.capacity = incoming_tex_count + 128;
+    const uint64_t desc_count = tex_sys->set_pool.capacity;
+
+    // Re-create pool and allocate the one set that everything will be bound to
+    {
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+          .maxSets = tex_sys->set_pool.capacity,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              (VkDescriptorPoolSize[1]){
+                  {
+                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                      .descriptorCount = desc_count * 4,
+                  },
+              },
+      };
+      VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+          .sType =
+              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+          .descriptorSetCount = 1,
+          .pDescriptorCounts = (uint32_t[1]){incoming_tex_count},
+      };
+      tb_rnd_resize_desc_pool(rnd_sys, &create_info, &tex_sys->set_layout,
+                              &alloc_info, &tex_sys->set_pool, 1);
+    }
+  } else {
+    // Nothing to do :)
+    return;
+  }
+
+  // Write all textures into the descriptor set table
+  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  {
+    tb_auto tex_count = TB_DYN_ARR_SIZE(tex_sys->textures);
+    TB_DYN_ARR_RESET(writes, tex_sys->tmp_alloc, tex_count);
+    tb_auto image_info =
+        tb_alloc_nm_tp(tex_sys->tmp_alloc, tex_count, VkDescriptorImageInfo);
+
+    TB_DYN_ARR_FOREACH(tex_sys->textures, i) {
+      tb_auto texture = &TB_DYN_ARR_AT(tex_sys->textures, i);
+
+      image_info[i] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = texture->image_view,
+      };
+
+      tb_auto write = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .dstSet = tb_tex_sys_get_set(tex_sys),
+          .dstArrayElement = i,
+          .pImageInfo = &image_info[i],
+      };
+      TB_DYN_ARR_APPEND(writes, write);
+    }
+  }
+  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+}
+
 void tb_register_texture_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
@@ -342,6 +448,10 @@ void tb_register_texture_sys(TbWorld *world) {
 
   TbTextureSystem sys =
       create_texture_system(world->std_alloc, world->tmp_alloc, rnd_sys);
+
+  ECS_SYSTEM(ecs, tick_texture_system, EcsOnUpdate,
+             TbTextureSystem(TbTextureSystem));
+
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbTextureSystem), TbTextureSystem, &sys);
 }
@@ -352,6 +462,18 @@ void tb_unregister_texture_sys(TbWorld *world) {
   TbTextureSystem *sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
   destroy_texture_system(sys);
   ecs_singleton_remove(ecs, TbTextureSystem);
+}
+
+VkDescriptorSet tb_tex_sys_get_set(TbTextureSystem *self) {
+  return self->set_pool.sets[0];
+}
+
+uint32_t tb_tex_system_get_index(TbTextureSystem *self, TbTextureId tex) {
+  const uint32_t index = find_tex_by_id(self, tex);
+  TB_CHECK_RETURN(index != SDL_MAX_UINT32,
+                  "Failed to find texture by id when retrieving image index",
+                  SDL_MAX_UINT32);
+  return index;
 }
 
 VkImageView tb_tex_system_get_image_view(TbTextureSystem *self,

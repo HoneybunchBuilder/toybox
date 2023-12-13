@@ -760,7 +760,13 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .pNext = &vk_13_features,
       .shaderFloat16 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,
+      .descriptorBindingVariableDescriptorCount = VK_TRUE,
       .descriptorBindingPartiallyBound = VK_TRUE,
+      .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+      .descriptorBindingUpdateUnusedWhilePending = VK_TRUE,
+      .runtimeDescriptorArray = VK_TRUE,
+      .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+      .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
   };
 
   VkPhysicalDeviceVulkan11Features vk_11_features = {

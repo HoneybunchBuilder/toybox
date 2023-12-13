@@ -873,8 +873,10 @@ void tb_rnd_destroy_pipeline(TbRenderSystem *self, VkPipeline pipeline) {
 
 void tb_rnd_destroy_descriptor_pool(TbRenderSystem *self,
                                     VkDescriptorPool pool) {
-  vkDestroyDescriptorPool(self->render_thread->device, pool,
-                          &self->vk_host_alloc_cb);
+  if (pool) {
+    vkDestroyDescriptorPool(self->render_thread->device, pool,
+                            &self->vk_host_alloc_cb);
+  }
 }
 
 void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
@@ -895,17 +897,19 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
         &TB_DYN_ARR_AT(state->set_write_queue, head + i);
     *write = writes[i];
 
+    const tb_auto desc_count = write->descriptorCount;
     if (write->pBufferInfo != NULL) {
-      VkDescriptorBufferInfo *info =
-          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorBufferInfo);
-      *info = *write->pBufferInfo;
+      VkDescriptorBufferInfo *info = tb_alloc_nm_tp(
+          rt_state_tmp_alloc, desc_count, VkDescriptorBufferInfo);
+      SDL_memcpy(info, write->pBufferInfo,
+                 sizeof(VkDescriptorBufferInfo) * desc_count);
       write->pBufferInfo = info;
     }
-
     if (write->pImageInfo != NULL) {
       VkDescriptorImageInfo *info =
-          tb_alloc_tp(rt_state_tmp_alloc, VkDescriptorImageInfo);
-      *info = *write->pImageInfo;
+          tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkDescriptorImageInfo);
+      SDL_memcpy(info, write->pImageInfo,
+                 sizeof(VkDescriptorImageInfo) * desc_count);
       write->pImageInfo = info;
     }
   }
@@ -958,30 +962,31 @@ VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
 VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
                                  const VkDescriptorPoolCreateInfo *pool_info,
                                  const VkDescriptorSetLayout *layouts,
-                                 TbDescriptorPool *pool, uint32_t set_count) {
+                                 void *alloc_next, TbDescriptorPool *pool,
+                                 uint32_t set_count) {
   VkResult err = VK_SUCCESS;
 
   // Resize the pool
-  if (pool->set_count < set_count) {
-    if (pool->set_pool) {
-      tb_rnd_destroy_descriptor_pool(self, pool->set_pool);
+  if (pool->count < set_count) {
+    if (pool->pool) {
+      tb_rnd_destroy_descriptor_pool(self, pool->pool);
     }
 
-    err =
-        tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->set_pool);
+    err = tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->pool);
     TB_VK_CHECK(err, "Failed to create pool");
-    pool->set_count = set_count;
-    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
+    pool->count = set_count;
+    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->count,
                                   VkDescriptorSet);
   } else {
-    vkResetDescriptorPool(self->render_thread->device, pool->set_pool, 0);
-    pool->set_count = set_count;
+    vkResetDescriptorPool(self->render_thread->device, pool->pool, 0);
+    pool->count = set_count;
   }
 
   VkDescriptorSetAllocateInfo alloc_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-      .descriptorSetCount = pool->set_count,
-      .descriptorPool = pool->set_pool,
+      .pNext = alloc_next,
+      .descriptorSetCount = pool->count,
+      .descriptorPool = pool->pool,
       .pSetLayouts = layouts,
   };
   err = vkAllocateDescriptorSets(self->render_thread->device, &alloc_info,

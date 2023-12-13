@@ -3,6 +3,7 @@
 #include "SDL2/SDL_stdinc.h"
 #include "allocator.h"
 #include "dynarray.h"
+#include "rendersystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
@@ -15,7 +16,7 @@ typedef struct TbTextureSystem TbTextureSystem;
 typedef struct TbMaterial TbMaterial;
 typedef uint64_t TbMaterialId;
 typedef uint64_t TbTextureId;
-typedef uint64_t TbMaterialPerm;
+typedef uint32_t TbMaterialPerm;
 
 static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
 
@@ -29,13 +30,15 @@ typedef struct TbMaterialSystem {
   VkSampler sampler;        // Immutable sampler for material descriptor sets
   VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
   VkDescriptorSetLayout set_layout;
-  VkDescriptorPool mat_set_pool;
 
   const cgltf_material *default_material;
 
   // These two arrays are to be kept in sync
   TB_DYN_ARR_OF(TbMaterial) materials;
-  VkDescriptorSet *mat_sets;
+
+  // Descriptor pool that owns descriptor arrays of material buffer data, color,
+  // normal and pbr textures
+  TbDescriptorPool mat_pool;
 } TbMaterialSystem;
 
 void tb_register_material_sys(TbWorld *world);
@@ -48,7 +51,9 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
                                          const cgltf_material *material);
 
 TbMaterialPerm tb_mat_system_get_perm(TbMaterialSystem *self, TbMaterialId mat);
-VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self, TbMaterialId mat);
+uint32_t tb_mat_sys_get_idx(TbMaterialSystem *self, TbMaterialId mat);
+
+VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self);
 
 void tb_mat_system_release_material_ref(TbMaterialSystem *self,
                                         TbMaterialId mat);

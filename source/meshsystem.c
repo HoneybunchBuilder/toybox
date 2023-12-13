@@ -15,6 +15,7 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbutil.h"
+#include "texturesystem.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "vkdbg.h"
@@ -355,10 +356,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
 
-    TracyCZoneNC(batch_ctx, "Mesh Batch", TracyCategoryColorRendering, true);
-    cmd_begin_label(buffer, "Mesh Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
-
-    VkBuffer geom_buffer = prim_batch->geom_buffer;
+    TracyCZoneNC(batch_ctx, "Record Mesh", TracyCategoryColorRendering, true);
+    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -377,23 +376,19 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
 
-      TracyCZoneNC(draw_ctx, "Submesh Draw", TracyCategoryColorRendering, true);
-      cmd_begin_label(buffer, "Submesh Draw", (float4){0.0f, 0.0f, 0.4f, 1.0f});
-
+      TracyCZoneNC(draw_ctx, "Record Submesh", TracyCategoryColorRendering,
+                   true);
       if (draw->index_count > 0) {
         VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
         if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
           cull_flags = VK_CULL_MODE_NONE;
         }
         vkCmdSetCullMode(buffer, cull_flags);
-        // Don't need to bind material data
-        vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
+        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
                              draw->index_type);
         vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
                          draw->vertex_offset, 0);
       }
-
-      cmd_end_label(buffer);
       TracyCZoneEnd(draw_ctx);
     }
 
@@ -417,10 +412,8 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
 
-    TracyCZoneNC(batch_ctx, "Batch", TracyCategoryColorRendering, true);
-    cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
-
-    VkBuffer geom_buffer = prim_batch->geom_buffer;
+    TracyCZoneNC(batch_ctx, "Record Mesh", TracyCategoryColorRendering, true);
+    cmd_begin_label(buffer, "Mesh Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
@@ -428,10 +421,12 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    VkDescriptorSet sets[4] = {prim_batch->inst_set, prim_batch->view_set,
-                               prim_batch->trans_set, prim_batch->mesh_set};
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
-                            4, sets, 0, NULL);
+    const uint32_t set_count = 6;
+    VkDescriptorSet sets[set_count] = {
+        prim_batch->inst_set, prim_batch->view_set, prim_batch->trans_set,
+        prim_batch->mesh_set, prim_batch->tex_set,  prim_batch->mat_set};
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                            set_count, sets, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       const TbPrimitiveDraw *draw =
           &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
@@ -439,22 +434,19 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
         continue;
       }
 
-      TracyCZoneNC(draw_ctx, "Batch", TracyCategoryColorRendering, true);
+      TracyCZoneNC(draw_ctx, "Record Submesh", TracyCategoryColorRendering,
+                   true);
       if (draw->index_count > 0) {
         VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
         if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
           cull_flags = VK_CULL_MODE_NONE;
         }
         vkCmdSetCullMode(buffer, cull_flags);
-
-        // Bind material data
-        vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                                0, 1, &prim_batch->mat_set, 0, NULL);
-        vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                           sizeof(MaterialPushConstants),
-                           &(MaterialPushConstants){prim_batch->perm});
-
-        vkCmdBindIndexBuffer(buffer, geom_buffer, draw->index_offset,
+        vkCmdPushConstants(buffer, layout,
+                           VK_SHADER_STAGE_VERTEX_BIT |
+                               VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, sizeof(GLTFPushConstants), &draw->material_index);
+        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
                              draw->index_type);
         vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
                          draw->vertex_offset, 0);
@@ -469,7 +461,7 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 void opaque_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                          uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Opaque Record", TracyCategoryColorRendering, true);
+  TracyCZoneNC(ctx, "Opaque Mesh Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
   mesh_record_common2(gpu_ctx, buffer, batch_count, batches);
@@ -481,7 +473,7 @@ void opaque_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                               uint32_t batch_count,
                               const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Mesh Transparent Record", TracyCategoryColorRendering,
+  TracyCZoneNC(ctx, "Transparent Mesh Record", TracyCategoryColorRendering,
                true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
                     true);
@@ -495,8 +487,8 @@ void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 TbMeshSystem create_mesh_system_internal(
     TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
-    TbMaterialSystem *material_system, TbViewSystem *view_system,
-    TbRenderObjectSystem *render_object_system,
+    TbMaterialSystem *material_system, TbTextureSystem *texture_system,
+    TbViewSystem *view_system, TbRenderObjectSystem *render_object_system,
     TbRenderPipelineSystem *render_pipe_system) {
   TbMeshSystem sys = {
       .std_alloc = std_alloc,
@@ -580,7 +572,8 @@ TbMeshSystem create_mesh_system_internal(
                       .binding = 0,
                       .descriptorCount = 1,
                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                    VK_SHADER_STAGE_FRAGMENT_BIT,
                   },
               },
       };
@@ -588,9 +581,6 @@ TbMeshSystem create_mesh_system_internal(
                                      "Instance Layout", &sys.obj_set_layout);
       TB_VK_CHECK(err, "Failed to create instanced set layout");
     }
-
-    // Get descriptor set layouts from related systems
-    { sys.view_set_layout = view_system->set_layout; }
 
     // Create prepass pipeline layout
     {
@@ -600,7 +590,7 @@ TbMeshSystem create_mesh_system_internal(
           .pSetLayouts =
               (VkDescriptorSetLayout[4]){
                   sys.obj_set_layout,
-                  sys.view_set_layout,
+                  view_system->set_layout,
                   render_object_system->set_layout,
                   sys.mesh_set_layout,
               },
@@ -621,24 +611,26 @@ TbMeshSystem create_mesh_system_internal(
 
     // Create pipeline layouts
     {
+      const uint32_t layout_count = 6;
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 5,
+          .setLayoutCount = layout_count,
           .pSetLayouts =
-              (VkDescriptorSetLayout[5]){
-                  material_system->set_layout,
+              (VkDescriptorSetLayout[layout_count]){
                   sys.obj_set_layout,
-                  sys.view_set_layout,
+                  view_system->set_layout,
                   render_object_system->set_layout,
                   sys.mesh_set_layout,
+                  texture_system->set_layout,
+                  material_system->set_layout,
               },
           .pushConstantRangeCount = 1,
           .pPushConstantRanges =
               (VkPushConstantRange[1]){
                   {
-                      .offset = 0,
-                      .size = sizeof(MaterialPushConstants),
-                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                      .size = sizeof(GLTFPushConstants),
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                    VK_SHADER_STAGE_FRAGMENT_BIT,
                   },
               },
       };
@@ -940,7 +932,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
     for (uint32_t i = 0; i < mesh_count; ++i) {
       layouts[i] = self->mesh_set_layout;
     }
-    tb_rnd_resize_desc_pool(self->render_system, &pool_info, layouts,
+    tb_rnd_resize_desc_pool(self->render_system, &pool_info, layouts, NULL,
                             &self->mesh_pool, mesh_count);
   }
 
@@ -1150,22 +1142,22 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbRenderObject);
   ECS_COMPONENT(ecs, TbRenderObjectSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
 
-  TbMeshSystem *mesh_sys = ecs_field(it, TbMeshSystem, 1);
-  TbRenderObjectSystem *ro_sys =
-      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto *mesh_sys = ecs_field(it, TbMeshSystem, 1);
+  tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  TbAllocator tmp_alloc = mesh_sys->tmp_alloc;
+  tb_auto tmp_alloc = mesh_sys->tmp_alloc;
 
   // Issue any new mesh descriptor writes
   if (!TB_DYN_ARR_EMPTY(mesh_sys->attr_writes)) {
@@ -1260,6 +1252,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
           VkDescriptorSet mesh_set =
               tb_mesh_system_get_set(mesh_sys, mesh->mesh_id);
           VkDescriptorSet transforms_set = tb_render_object_sys_get_set(ro_sys);
+          VkDescriptorSet tex_set = tb_tex_sys_get_set(tex_sys);
+          VkDescriptorSet mat_set = tb_mat_system_get_set(mat_sys);
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
@@ -1268,7 +1262,7 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
             // Deduce some important details from the submesh
             TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
-            VkDescriptorSet mat_set = tb_mat_system_get_set(mat_sys, mat);
+            uint32_t mat_idx = tb_mat_sys_get_idx(mat_sys, mat);
 
             const uint32_t index_count = sm->index_count;
             const uint64_t index_offset = sm->index_offset;
@@ -1307,8 +1301,8 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(*prim_batches, i);
                   if (db->pipeline == pipeline && db->layout == layout &&
                       pb->perm == perm && pb->view_set == view_set &&
-                      pb->mat_set == mat_set && pb->mesh_set == mesh_set &&
-                      pb->geom_buffer == geom_buffer) {
+                      pb->mat_set == mat_set && pb->tex_set == tex_set &&
+                      pb->mesh_set == mesh_set) {
                     batch = db;
                     transforms = &TB_DYN_ARR_AT(*trans_list, i);
                     break;
@@ -1333,9 +1327,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                       .perm = perm,
                       .view_set = view_set,
                       .mat_set = mat_set,
+                      .tex_set = tex_set,
                       .trans_set = transforms_set,
                       .mesh_set = mesh_set,
-                      .geom_buffer = geom_buffer,
                   };
 
                   TbIndirectionList il = {0};
@@ -1362,7 +1356,9 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                   if (d->index_count == index_count &&
                       d->index_offset == index_offset &&
                       d->vertex_offset == vertex_offset &&
-                      d->index_type == index_type) {
+                      d->material_index == mat_idx &&
+                      d->index_type == index_type &&
+                      d->geom_buffer == geom_buffer) {
                     draw = d;
                     break;
                   }
@@ -1370,10 +1366,12 @@ void mesh_draw_tick2(ecs_iter_t *it) {
                 // No draw was found, create one
                 if (draw == NULL) {
                   TbPrimitiveDraw d = {
+                      .geom_buffer = geom_buffer,
                       .index_count = index_count,
                       .index_offset = index_offset,
                       .vertex_offset = vertex_offset,
                       .index_type = index_type,
+                      .material_index = mat_idx,
                   };
 
                   // Append it to the list and make sure we get a reference
@@ -1589,6 +1587,7 @@ void tb_register_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbMaterialSystem);
+  ECS_COMPONENT(ecs, TbTextureSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbRenderObjectSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
@@ -1599,17 +1598,16 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbAssetSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  TbRenderObjectSystem *ro_sys =
-      ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  tb_auto *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
-  TbMeshSystem sys =
+  tb_auto sys =
       create_mesh_system_internal(world->std_alloc, world->tmp_alloc, rnd_sys,
-                                  mat_sys, view_sys, ro_sys, rp_sys);
+                                  mat_sys, tex_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});
