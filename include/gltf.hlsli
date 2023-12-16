@@ -37,7 +37,7 @@ typedef struct TB_GPU_STRUCT PBRSpecularGlossiness {
 }
 PBRSpecularGlossiness;
 
-typedef struct TB_GPU_STRUCT GLTFMaterialData {
+typedef struct TB_GPU_STRUCT TbGLTFMaterialData {
   TextureTransform tex_transform;
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
@@ -51,12 +51,16 @@ typedef struct TB_GPU_STRUCT GLTFMaterialData {
   uint32_t normal_idx;
   uint32_t pbr_idx;
 }
-GLTFMaterialData;
+TbGLTFMaterialData;
 
-typedef struct GLTFPushConstants {
-  int32_t mat_idx;
+// Per-draw lookup table
+typedef struct TB_GPU_STRUCT TbGLTFDrawData {
+  int32_t perm; // Input layout permutation
+  uint32_t obj_idx;
+  uint32_t mesh_idx;
+  uint32_t mat_idx;
 }
-GLTFPushConstants;
+TbGLTFDrawData;
 
 #define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
@@ -70,24 +74,16 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   return uv;
 }
 
-#define GLTF_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
+// Macros for declaring access to GLTF specific descriptor sets managed
+// by specific systems
 
 #define GLTF_MATERIAL_SET(space)                                               \
   sampler material_sampler : register(s0, space);                              \
   SamplerComparisonState shadow_sampler : register(s1, space);                 \
-  StructuredBuffer<GLTFMaterialData> gltf_data[] : register(t2, space);
+  StructuredBuffer<TbGLTFMaterialData> gltf_data[] : register(t2, space);
 
-#define GLTF_OBJECT_SET(space)                                                 \
-  StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
-
-#define GLTF_MESH_SET(space)                                                   \
-  RWBuffer<int4> pos_buffer : register(u0, space);                             \
-  RWBuffer<float4> norm_buffer : register(u1, space);                          \
-  RWBuffer<float4> tan_buffer : register(u2, space);                           \
-  RWBuffer<int2> uv0_buffer : register(u3, space);
-
-#define GLTF_INDIRECT_SET(space)                                               \
-  StructuredBuffer<int32_t> trans_indices : register(t0, space);
+#define GLTF_DRAW_SET(space)                                                   \
+  StructuredBuffer<TbGLTFDrawData> draw_data : register(t0, space);
 
 #define GLTF_VIEW_SET(space)                                                   \
   ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);          \
@@ -128,4 +124,16 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
     out.rgb = pbr_lighting_common(v, l, s);                                    \
     out.a = color.a;                                                           \
   }
+
+TbGLTFDrawData tb_get_gltf_draw_data(int32_t draw,
+                                     StructuredBuffer<TbGLTFDrawData> data) {
+  return data[NonUniformResourceIndex(draw)];
+}
+
+TbGLTFMaterialData
+tb_get_gltf_mat_data(int32_t mat,
+                     StructuredBuffer<TbGLTFMaterialData> buffers[]) {
+  return buffers[NonUniformResourceIndex(mat)][0];
+}
+
 #endif

@@ -2,14 +2,15 @@
 
 #include "dynarray.h"
 #include "simd.h"
+#include "tbrendercommon.h"
 
 typedef struct ecs_world_t ecs_world_t;
 
 #define TB_SUBMESH_MAX 8
 #define TB_VERTEX_BINDING_MAX 4
 
-typedef uint64_t TbMeshId;
-typedef uint64_t TbMaterialId;
+typedef TbResourceId TbMeshId;
+typedef TbResourceId TbMaterialId;
 typedef uint64_t ecs_entity_t;
 
 typedef struct TbSubMesh {

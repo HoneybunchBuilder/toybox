@@ -11,11 +11,13 @@ typedef float4 TbOceanWave; // xy = dir, z = steep, w = wavelength
 typedef struct OceanData {
   float4 time_waves; // x = time, y = wave count
   TbOceanWave wave[TB_WAVE_MAX];
-} OceanData;
+}
+OceanData;
 
 typedef struct OceanPushConstants {
   float4x4 m;
-} OceanPushConstants;
+}
+OceanPushConstants;
 
 // If not in a shader, make a quick static assert check
 #ifndef __HLSL_VERSION
@@ -24,6 +26,16 @@ _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
 #endif
 
 #ifdef __HLSL_VERSION
+
+#define OCEAN_SET(space)                                                       \
+  ConstantBuffer<OceanData> ocean_data : register(b0, space);                  \
+  Texture2D depth_map : register(t1, space);                                   \
+  Texture2D color_map : register(t2, space);                                   \
+  sampler material_sampler : register(s3, space);                              \
+  SamplerComparisonState shadow_sampler : register(s4, space);                 \
+  [[vk::push_constant]]                                                        \
+  ConstantBuffer<OceanPushConstants> consts : register(b5, space);
+
 void gerstner_wave(TbOceanWave wave, float time, inout float3 pos,
                    inout float3 tangent, inout float3 binormal) {
   float steepness = wave.z;

@@ -48,13 +48,23 @@ typedef struct TB_GPU_STRUCT TbCommonLightData {
 }
 TbCommonLightData;
 
-// Constant per-object Object Data for common objects
+// Per-instance object data
 typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
-  int32_t perm; // Input layout permutation
-  int32_t mat_idx;
 }
 TbCommonObjectData;
+
+// Macros for declaring access to common toybox descriptor sets
+// that represent global loaded resource tables
+#define TB_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
+#define TB_OBJECT_SET(space)                                                   \
+  StructuredBuffer<TbCommonObjectData> object_data[] : register(t0, space);
+#define TB_IDX_SET(space) RWBuffer<int32_t> idx_buffers[] : register(u0, space);
+#define TB_POS_SET(space) RWBuffer<int4> pos_buffers[] : register(u0, space);
+#define TB_NORM_SET(space)                                                     \
+  RWBuffer<float4> norm_buffers[] : register(u0, space);
+#define TB_TAN_SET(space) RWBuffer<float4> tan_buffers[] : register(u0, space);
+#define TB_UV0_SET(space) RWBuffer<int2> uv0_buffers[] : register(u0, space);
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000
@@ -67,32 +77,47 @@ TbCommonObjectData;
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION
 
-int3 tb_vert_get_local_pos(int32_t perm, int32_t index, RWBuffer<int4> buffer) {
+TbCommonObjectData
+tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffers[]) {
+  return buffers[NonUniformResourceIndex(obj)][0];
+}
+
+Texture2D tb_get_texture(int32_t tex, Texture2D textures[]) {
+  return textures[NonUniformResourceIndex(tex)];
+}
+
+int32_t tb_get_idx(int32_t vertex, int32_t mesh, RWBuffer<int32_t> buffers[]) {
+  return buffers[NonUniformResourceIndex(mesh)][vertex];
+}
+
+int3 tb_vert_get_local_pos(int32_t perm, int32_t index, int32_t mesh,
+                           RWBuffer<int4> buffers[]) {
   if ((perm & TB_INPUT_PERM_POSITION) > 0) {
-    return buffer[index].xyz;
+    return buffers[NonUniformResourceIndex(mesh)][index].xyz;
   }
   return 0;
 }
 
-float3 tb_vert_get_normal(uint32_t perm, uint32_t index,
-                          RWBuffer<float4> buffer) {
+float3 tb_vert_get_normal(int32_t perm, int32_t index, int32_t mesh,
+                          RWBuffer<float4> buffers[]) {
   if ((perm & TB_INPUT_PERM_NORMAL) > 0) {
-    return buffer[index].xyz;
+    return buffers[NonUniformResourceIndex(mesh)][index].xyz;
   }
   return 0;
 }
 
-float4 tb_vert_get_tangent(uint32_t perm, uint32_t index,
-                           RWBuffer<float4> buffer) {
+float4 tb_vert_get_tangent(int32_t perm, int32_t index, int32_t mesh,
+                           RWBuffer<float4> buffers[]) {
   if ((perm & TB_INPUT_PERM_TANGENT) > 0) {
-    return buffer[index].xyzw;
+    return buffers[NonUniformResourceIndex(mesh)][index].xyzw;
   }
   return 0;
 }
 
-int2 tb_vert_get_uv0(uint32_t perm, uint32_t index, RWBuffer<int2> buffer) {
+int2 tb_vert_get_uv0(int32_t perm, int32_t index, int32_t mesh,
+                     RWBuffer<int2> buffers[]) {
   if ((perm & TB_INPUT_PERM_TEXCOORD0) > 0) {
-    return buffer[index];
+    return buffers[NonUniformResourceIndex(mesh)][index];
   }
   return 0;
 }

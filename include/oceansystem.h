@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tbrendercommon.h"
 
 typedef struct TbWorld TbWorld;
 typedef struct TbMeshSystem TbMeshSystem;
@@ -15,7 +16,7 @@ typedef struct TbAudioSystem TbAudioSystem;
 typedef struct VkDescriptorPool_T *VkDescriptorPool;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
-typedef uint64_t TbMeshId;
+typedef TbResourceId TbMeshId;
 typedef uint32_t TbDrawContextId;
 
 typedef uint32_t TbMusicId;

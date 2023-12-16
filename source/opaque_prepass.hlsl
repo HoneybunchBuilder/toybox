@@ -1,22 +1,17 @@
 #include "common.hlsli"
 #include "gltf.hlsli"
-#include "shadow.hlsli"
 
-// Indirection data
-StructuredBuffer<int32_t> trans_indices : register(t0, space0);
-
-// Per-view data
-ConstantBuffer<TbCommonViewData> camera_data : register(b0, space1);
-
-// Object data
-StructuredBuffer<TbCommonObjectData> object_data : register(t0, space2);
-
-// Mesh data
-GLTF_MESH_SET(space3);
+ConstantBuffer<TbCommonViewData> camera_data : register(b0, space0);
+GLTF_DRAW_SET(space1);
+TB_OBJECT_SET(space2);
+TB_IDX_SET(space3);
+TB_POS_SET(space4);
+TB_NORM_SET(space5);
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;
-  int32_t inst : SV_InstanceID;
+  [[vk::builtin("DrawIndex")]]
+  uint32_t draw_idx : POSITION0;
 };
 
 struct Interpolators {
@@ -25,10 +20,15 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  TbCommonObjectData obj_data = object_data[trans_indices[i.inst]];
+  TbGLTFDrawData draw = draw_data[i.draw_idx];
 
-  int3 local_pos = tb_vert_get_local_pos(obj_data.perm, i.vert_idx, pos_buffer);
-  float3 normal = tb_vert_get_normal(obj_data.perm, i.vert_idx, norm_buffer);
+  int32_t obj_idx = draw.obj_idx;
+  TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
+
+  int32_t mesh_idx = draw.mesh_idx;
+  int32_t idx = tb_get_idx(i.vert_idx, mesh_idx, idx_buffers);
+  int3 local_pos = tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
+  float3 normal = tb_vert_get_normal(draw.perm, idx, mesh_idx, norm_buffers);
 
   float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
   float3x3 orientation = (float3x3)obj_data.m;

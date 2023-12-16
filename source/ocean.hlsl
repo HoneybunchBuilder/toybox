@@ -6,14 +6,7 @@
 #include "ocean.hlsli"
 #include "pbr.hlsli"
 
-ConstantBuffer<OceanData> ocean_data : register(b0, space0);
-Texture2D depth_map : register(t1, space0);
-Texture2D color_map : register(t2, space0);
-sampler material_sampler : register(s3, space0);
-SamplerComparisonState shadow_sampler : register(s4, space0);
-[[vk::push_constant]] ConstantBuffer<OceanPushConstants> consts
-    : register(b5, space0);
-
+OCEAN_SET(space0);
 GLTF_VIEW_SET(space1);
 
 struct VertexIn {

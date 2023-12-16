@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "dynarray.h"
 #include "simd.h"
+#include "tbrendercommon.h"
 
 typedef struct TbVLogFrame TbVLogFrame;
 
@@ -16,7 +17,7 @@ typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkBuffer_T *VkBuffer;
 typedef uint32_t TbDrawContextId;
-typedef uint64_t TbMeshId;
+typedef TbResourceId TbMeshId;
 
 typedef struct TbWorld TbWorld;
 

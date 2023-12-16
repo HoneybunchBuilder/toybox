@@ -418,7 +418,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                   VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
       };
       VmaAllocationCreateInfo alloc_create_info = {
           .usage = VMA_MEMORY_USAGE_AUTO,
@@ -748,8 +749,14 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
+  VkPhysicalDeviceRobustness2FeaturesEXT vk_rob2_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+      .nullDescriptor = VK_TRUE,
+  };
+
   VkPhysicalDeviceVulkan13Features vk_13_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+      .pNext = &vk_rob2_features,
       .dynamicRendering = VK_TRUE,
       .shaderDemoteToHelperInvocation = VK_TRUE,
       .maintenance4 = VK_TRUE,
@@ -767,6 +774,8 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .runtimeDescriptorArray = VK_TRUE,
       .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
+      .shaderStorageTexelBufferArrayNonUniformIndexing = VK_TRUE,
+      .drawIndirectCount = VK_TRUE,
   };
 
   VkPhysicalDeviceVulkan11Features vk_11_features = {
@@ -774,6 +783,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .pNext = &vk_12_features,
       .multiview = VK_TRUE,
       .storageBuffer16BitAccess = VK_TRUE,
+      .shaderDrawParameters = VK_TRUE,
   };
 
   VkPhysicalDeviceFeatures vk_features = {
@@ -781,6 +791,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .depthClamp = VK_TRUE,
       .shaderInt16 = VK_TRUE,
       .vertexPipelineStoresAndAtomics = VK_TRUE,
+      .multiDrawIndirect = VK_TRUE,
   };
 
   VkDeviceCreateInfo create_info = {0};
@@ -1285,7 +1296,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       // Upload all buffer requests
       if (TB_DYN_ARR_SIZE(state->buf_copy_queue) > 0) {
         TB_DYN_ARR_FOREACH(state->buf_copy_queue, i) {
-          const BufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
+          const TbBufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
           vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
         }
         TB_DYN_ARR_CLEAR(state->buf_copy_queue);

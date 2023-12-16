@@ -756,8 +756,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
     uint64_t tile_offset = 0;
     {
       uint64_t size = sizeof(float4) * visible_tile_count;
-      err = tb_rnd_sys_tmp_buffer_copy(render_system, size, 0x40,
-                                       visible_tile_offsets, &tile_offset);
+      err = tb_rnd_sys_copy_to_tmp_buffer(render_system, size, 0x40,
+                                          visible_tile_offsets, &tile_offset);
       TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
     }
 
@@ -790,8 +790,9 @@ void ocean_draw_tick(ecs_iter_t *it) {
           for (uint32_t i = 0; i < ocean_count; ++i) {
             layouts[i] = sys->set_layout;
           }
-          err = tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
-                                            sys->ocean_pools, ocean_count);
+          err =
+              tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
+                                          NULL, sys->ocean_pools, ocean_count);
           TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
         }
 
@@ -824,8 +825,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
           // Write ocean data into the tmp buffer we know will wind up on the
           // GPU
           uint64_t offset = 0;
-          err = tb_rnd_sys_tmp_buffer_copy(render_system, sizeof(OceanData),
-                                           0x40, &data, &offset);
+          err = tb_rnd_sys_copy_to_tmp_buffer(render_system, sizeof(OceanData),
+                                              0x40, &data, &offset);
           TB_VK_CHECK(err,
                       "Failed to make tmp host buffer allocation for ocean");
 

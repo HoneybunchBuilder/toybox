@@ -60,4 +60,5 @@ void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
                                      const TbFrustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
                                               TbViewId view);
+VkDescriptorSet tb_view_sys_get_set(TbViewSystem *self);
 const TbView *tb_get_view(TbViewSystem *self, TbViewId view);

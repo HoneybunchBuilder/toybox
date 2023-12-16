@@ -21,9 +21,9 @@ typedef struct TbMaterial {
   TbTextureId metal_rough_map;
 } TbMaterial;
 
-uint32_t find_mat_by_id(TbMaterialSystem *self, TbMaterialId id) {
+uint32_t find_mat_by_hash(TbMaterialSystem *self, uint64_t id) {
   TB_DYN_ARR_FOREACH(self->materials, i) {
-    if (TB_DYN_ARR_AT(self->materials, i).id == id) {
+    if (TB_DYN_ARR_AT(self->materials, i).id.id == id) {
       return i;
       break;
     }
@@ -87,8 +87,8 @@ TbMaterialSystem create_material_system(TbAllocator std_alloc,
   // Create descriptor set layout for materials
   {
     const VkDescriptorBindingFlags flags =
-        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT;
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
     const uint32_t binding_count = 3;
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -271,10 +271,10 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
   tb_auto tex_sys = self->texture_system;
 
   // Hash the materials's path and gltf name to get the id
-  TbMaterialId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
+  uint64_t id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
   id = tb_hash(id, (const uint8_t *)mat->name, SDL_strlen(mat->name));
 
-  uint32_t index = find_mat_by_id(self, id);
+  uint32_t index = find_mat_by_hash(self, id);
 
   // Material was not found, load it now
   if (index == SDL_MAX_UINT32) {
@@ -395,7 +395,7 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
 
       // Gather material buffer data and copy to the GPU
       {
-        GLTFMaterialData data = {
+        TbGLTFMaterialData data = {
             .tex_transform =
                 {
                     .offset =
@@ -442,7 +442,7 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
         {
           VkBufferCreateInfo create_info = {
               .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-              .size = sizeof(GLTFMaterialData),
+              .size = sizeof(TbGLTFMaterialData),
               .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -459,7 +459,7 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
       }
     }
 
-    material->id = id;
+    material->id = (TbMaterialId){id, index};
     material->ref_count = 0;
   } else {
     TbMaterial *material = &TB_DYN_ARR_AT(self->materials, index);
@@ -473,25 +473,16 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
   TB_DYN_ARR_AT(self->materials, index).ref_count++;
 
   TracyCZoneEnd(ctx);
-  return id;
+  return (TbMaterialId){id, index};
 }
 
 TbMaterialPerm tb_mat_system_get_perm(TbMaterialSystem *self,
                                       TbMaterialId mat) {
-  const uint32_t index = find_mat_by_id(self, mat);
+  const uint32_t index = mat.idx;
   if (index == SDL_MAX_UINT32) {
     TB_CHECK_RETURN(false, "Failed to find material to get permutation", 0);
   }
   return TB_DYN_ARR_AT(self->materials, index).permutation;
-}
-
-uint32_t tb_mat_sys_get_idx(TbMaterialSystem *self, TbMaterialId mat) {
-  const uint32_t index = find_mat_by_id(self, mat);
-  if (index == SDL_MAX_UINT32) {
-    TB_CHECK_RETURN(false, "Failed to find material to get permutation",
-                    SDL_MAX_UINT32);
-  }
-  return index;
 }
 
 VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self) {
@@ -500,7 +491,7 @@ VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self) {
 
 void tb_mat_system_release_material_ref(TbMaterialSystem *self,
                                         TbMaterialId mat) {
-  const uint32_t index = find_mat_by_id(self, mat);
+  const uint32_t index = mat.idx;
   if (index == SDL_MAX_UINT32) {
     TB_CHECK(false, "Failed to find material to release");
     return;

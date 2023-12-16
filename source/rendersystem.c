@@ -290,7 +290,7 @@ void render_frame_end(ecs_iter_t *it) {
       vmaGetAllocationMemoryProperties(sys->vma_alloc,
                                        thread_state->tmp_gpu_alloc, &flags);
       if ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
-        BufferCopy up = {
+        TbBufferCopy up = {
             .dst = thread_state->tmp_gpu_buffer,
             .src = state->tmp_host_buffer.buffer,
             .region =
@@ -453,20 +453,20 @@ VkResult tb_rnd_sys_alloc_gpu_image(TbRenderSystem *self,
   return err;
 }
 
-VkResult tb_rnd_sys_tmp_buffer_copy(TbRenderSystem *self, uint64_t size,
-                                    uint32_t alignment, const void *data,
-                                    uint64_t *offset) {
+VkResult tb_rnd_sys_copy_to_tmp_buffer(TbRenderSystem *self, uint64_t size,
+                                       uint32_t alignment, const void *data,
+                                       uint64_t *offset) {
   void *ptr = NULL;
   VkResult err =
-      tb_rnd_sys_tmp_buffer_get_ptr(self, size, alignment, offset, &ptr);
+      tb_rnd_sys_copy_to_tmp_buffer2(self, size, alignment, offset, &ptr);
   TB_VK_CHECK_RET(err, "Failed to copy data to tmp buffer", err);
   SDL_memcpy(ptr, data, size); // NOLINT
   return err;
 }
 
-VkResult tb_rnd_sys_tmp_buffer_get_ptr(TbRenderSystem *self, uint64_t size,
-                                       uint32_t alignment, uint64_t *offset,
-                                       void **ptr) {
+VkResult tb_rnd_sys_copy_to_tmp_buffer2(TbRenderSystem *self, uint64_t size,
+                                        uint32_t alignment, uint64_t *offset,
+                                        void **ptr) {
   VkResult err = VK_SUCCESS;
 
   // Make an allocation on the tmp buffer
@@ -497,7 +497,7 @@ VkResult tb_rnd_sys_create_gpu_buffer(TbRenderSystem *self,
   err = alloc_host_buffer(self, create_info, name, host);
   TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-  BufferCopy upload = {
+  TbBufferCopy upload = {
       .src = host->buffer,
       .dst = buffer->buffer,
       .region =
@@ -529,7 +529,7 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(TbRenderSystem *self,
   err = alloc_tmp_buffer(self, create_info->size, alignment, &host);
   TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
 
-  BufferCopy upload = {
+  TbBufferCopy upload = {
       .src = tb_rnd_get_gpu_tmp_buffer(self),
       .dst = buffer->buffer,
       .region =
@@ -681,7 +681,7 @@ VkResult tb_rnd_sys_update_gpu_buffer(TbRenderSystem *self,
 
   if (!try_map(self->vma_alloc, buffer->alloc, ptr)) {
     // Schedule another upload
-    BufferCopy upload = {
+    TbBufferCopy upload = {
         .src = host->buffer,
         .dst = buffer->buffer,
         .region =
@@ -810,7 +810,7 @@ VkResult tb_rnd_create_graphics_pipelines(
   return err;
 }
 
-void tb_rnd_upload_buffers(TbRenderSystem *self, BufferCopy *uploads,
+void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
                            uint32_t upload_count) {
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
   uint32_t head = TB_DYN_ARR_SIZE(state->buf_copy_queue);
@@ -893,33 +893,38 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
 
   // Append uploads to queue
   for (uint32_t i = 0; i < write_count; ++i) {
-    VkWriteDescriptorSet *write =
-        &TB_DYN_ARR_AT(state->set_write_queue, head + i);
+    tb_auto write = &TB_DYN_ARR_AT(state->set_write_queue, head + i);
     *write = writes[i];
 
     const tb_auto desc_count = write->descriptorCount;
     if (write->pBufferInfo != NULL) {
-      VkDescriptorBufferInfo *info = tb_alloc_nm_tp(
-          rt_state_tmp_alloc, desc_count, VkDescriptorBufferInfo);
+      tb_auto *info = tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count,
+                                     VkDescriptorBufferInfo);
       SDL_memcpy(info, write->pBufferInfo,
                  sizeof(VkDescriptorBufferInfo) * desc_count);
       write->pBufferInfo = info;
     }
     if (write->pImageInfo != NULL) {
-      VkDescriptorImageInfo *info =
+      tb_auto *info =
           tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkDescriptorImageInfo);
       SDL_memcpy(info, write->pImageInfo,
                  sizeof(VkDescriptorImageInfo) * desc_count);
       write->pImageInfo = info;
     }
+    if (write->pTexelBufferView != NULL) {
+      tb_auto *info =
+          tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkBufferView);
+      SDL_memcpy(info, write->pTexelBufferView,
+                 sizeof(VkBufferView) * desc_count);
+      write->pTexelBufferView = info;
+    }
   }
 }
 
-VkResult
-tb_rnd_frame_desc_pool_tick(TbRenderSystem *self,
-                            const VkDescriptorPoolCreateInfo *pool_info,
-                            const VkDescriptorSetLayout *layouts,
-                            TbFrameDescriptorPool *pools, uint32_t set_count) {
+VkResult tb_rnd_frame_desc_pool_tick(
+    TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
+    const VkDescriptorSetLayout *layouts, void *alloc_next,
+    TbFrameDescriptorPool *pools, uint32_t set_count) {
   VkResult err = VK_SUCCESS;
   TbFrameDescriptorPool *pool = &pools[self->frame_idx];
 
@@ -942,6 +947,7 @@ tb_rnd_frame_desc_pool_tick(TbRenderSystem *self,
 
   VkDescriptorSetAllocateInfo alloc_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .pNext = alloc_next,
       .descriptorSetCount = pool->set_count,
       .descriptorPool = pool->set_pool,
       .pSetLayouts = layouts,

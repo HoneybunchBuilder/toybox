@@ -60,12 +60,12 @@ VkResult tb_rnd_sys_alloc_gpu_image(TbRenderSystem *self,
                                     VmaAllocationCreateFlags vma_flags,
                                     const char *name, TbImage *image);
 
-VkResult tb_rnd_sys_tmp_buffer_copy(TbRenderSystem *self, uint64_t size,
-                                    uint32_t alignment, const void *data,
-                                    uint64_t *offset);
-VkResult tb_rnd_sys_tmp_buffer_get_ptr(TbRenderSystem *self, uint64_t size,
-                                       uint32_t alignment, uint64_t *offset,
-                                       void **ptr);
+VkResult tb_rnd_sys_copy_to_tmp_buffer(TbRenderSystem *self, uint64_t size,
+                                       uint32_t alignment, const void *data,
+                                       uint64_t *offset);
+VkResult tb_rnd_sys_copy_to_tmp_buffer2(TbRenderSystem *self, uint64_t size,
+                                        uint32_t alignment, uint64_t *offset,
+                                        void **ptr);
 
 // Create a GPU buffer and just get a pointer to some mapped memory that
 // the caller just needs to fill out.
@@ -151,7 +151,7 @@ VkResult tb_rnd_create_graphics_pipelines(
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,
     VkPipeline *pipelines);
 
-void tb_rnd_upload_buffers(TbRenderSystem *self, BufferCopy *uploads,
+void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
                            uint32_t upload_count);
 void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
                                    BufferImageCopy *uploads,
@@ -174,11 +174,10 @@ void tb_rnd_destroy_descriptor_pool(TbRenderSystem *self,
 void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
                                const VkWriteDescriptorSet *writes);
 
-VkResult
-tb_rnd_frame_desc_pool_tick(TbRenderSystem *self,
-                            const VkDescriptorPoolCreateInfo *pool_info,
-                            const VkDescriptorSetLayout *layouts,
-                            TbFrameDescriptorPool *pools, uint32_t set_count);
+VkResult tb_rnd_frame_desc_pool_tick(
+    TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
+    const VkDescriptorSetLayout *layouts, void *alloc_next,
+    TbFrameDescriptorPool *pools, uint32_t set_count);
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                TbFrameDescriptorPool *pools,
                                                uint32_t set_idx);

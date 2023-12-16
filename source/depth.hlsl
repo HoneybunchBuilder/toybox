@@ -1,15 +1,16 @@
 #include "common.hlsli"
 #include "gltf.hlsli"
-#include "shadow.hlsli"
 
-GLTF_INDIRECT_SET(space0);
-GLTF_VIEW_SET(space1);
-GLTF_OBJECT_SET(space2);
-GLTF_MESH_SET(space3);
+GLTF_VIEW_SET(space0);
+GLTF_DRAW_SET(space1);
+TB_OBJECT_SET(space2);
+TB_IDX_SET(space3)
+TB_POS_SET(space4);
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;
-  int32_t inst : SV_InstanceID;
+  [[vk::builtin("DrawIndex")]]
+  uint32_t draw_idx : POSITION0;
 };
 
 struct Interpolators {
@@ -17,9 +18,13 @@ struct Interpolators {
 };
 
 Interpolators vert(VertexIn i) {
-  TbCommonObjectData obj_data = object_data[trans_indices[i.inst]];
+  TbGLTFDrawData draw = tb_get_gltf_draw_data(i.draw_idx, draw_data);
+  uint32_t obj_idx = draw.obj_idx;
+  uint32_t mesh_idx = draw.mesh_idx;
+  TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
 
-  int3 local_pos = tb_vert_get_local_pos(obj_data.perm, i.vert_idx, pos_buffer);
+  int32_t idx = tb_get_idx(i.vert_idx, mesh_idx, idx_buffers);
+  int3 local_pos = tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
 
   float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
   float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));

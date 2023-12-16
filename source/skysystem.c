@@ -1123,7 +1123,7 @@ void sky_draw_tick(ecs_iter_t *it) {
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbSkyData), 0x40, &data,
+    err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbSkyData), 0x40, &data,
                                      &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 

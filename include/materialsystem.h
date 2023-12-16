@@ -14,11 +14,11 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbTextureSystem TbTextureSystem;
 typedef struct TbMaterial TbMaterial;
-typedef uint64_t TbMaterialId;
+typedef TbResourceId TbMaterialId;
 typedef uint64_t TbTextureId;
 typedef uint32_t TbMaterialPerm;
 
-static const TbMaterialId InvalidMaterialId = SDL_MAX_UINT64;
+static const TbMaterialId InvalidMaterialId = {SDL_MAX_UINT64, SDL_MAX_UINT32};
 
 typedef struct TbMaterialSystem {
   TbAllocator std_alloc;
@@ -51,7 +51,6 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
                                          const cgltf_material *material);
 
 TbMaterialPerm tb_mat_system_get_perm(TbMaterialSystem *self, TbMaterialId mat);
-uint32_t tb_mat_sys_get_idx(TbMaterialSystem *self, TbMaterialId mat);
 
 VkDescriptorSet tb_mat_system_get_set(TbMaterialSystem *self);
 

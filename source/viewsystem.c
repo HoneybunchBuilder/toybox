@@ -246,12 +246,12 @@ void view_update_tick(ecs_iter_t *it) {
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t view_offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbCommonViewData), 0x40,
-                                     view_data, &view_offset);
+    err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonViewData), 0x40,
+                                        view_data, &view_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
     uint64_t light_offset = 0;
-    err = tb_rnd_sys_tmp_buffer_copy(rnd_sys, sizeof(TbCommonLightData), 0x40,
-                                     light_data, &light_offset);
+    err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonLightData),
+                                        0x40, light_data, &light_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
 
     uint32_t buffer_idx = view_idx * buf_count;

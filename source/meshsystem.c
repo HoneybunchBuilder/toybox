@@ -40,7 +40,9 @@ typedef struct TbMesh {
   uint32_t ref_count;
   TbHostBuffer host_buffer;
   TbBuffer gpu_buffer;
-  VkBufferView attr_views[cgltf_attribute_type_max_enum];
+  VkIndexType idx_type;
+  VkBufferView index_view;
+  VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 } TbMesh;
 
 VkResult create_prepass_pipeline(TbRenderSystem *render_system,
@@ -158,12 +160,11 @@ VkResult create_prepass_pipeline(TbRenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 3,
+              .dynamicStateCount = 2,
               .pDynamicStates =
-                  (VkDynamicState[3]){
+                  (VkDynamicState[2]){
                       VK_DYNAMIC_STATE_VIEWPORT,
                       VK_DYNAMIC_STATE_SCISSOR,
-                      VK_DYNAMIC_STATE_CULL_MODE,
                   },
           },
       .layout = pipe_layout,
@@ -296,10 +297,9 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
       .pDynamicState =
           &(VkPipelineDynamicStateCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-              .dynamicStateCount = 3,
-              .pDynamicStates = (VkDynamicState[3]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                    VK_DYNAMIC_STATE_SCISSOR,
-                                                    VK_DYNAMIC_STATE_CULL_MODE},
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
           },
       .layout = pipe_layout,
   };
@@ -342,8 +342,8 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
   return err;
 }
 
-void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                     uint32_t batch_count, const TbDrawBatch *batches) {
+void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                    uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Opaque Prepass", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass", 3, true);
   cmd_begin_label(buffer, "Opaque Prepass", (float4){0.0f, 0.0f, 1.0f, 1.0f});
@@ -365,30 +365,19 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    VkDescriptorSet sets[4] = {prim_batch->inst_set, prim_batch->view_set,
-                               prim_batch->trans_set, prim_batch->mesh_set};
+    const uint32_t set_count = 6;
+    VkDescriptorSet sets[set_count] = {
+        prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
+        prim_batch->idx_set,  prim_batch->pos_set,  prim_batch->norm_set};
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            4, sets, 0, NULL);
-    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const TbPrimitiveDraw *draw =
-          &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
-      if (draw->instance_count == 0) {
-        continue;
-      }
+                            set_count, sets, 0, NULL);
 
-      TracyCZoneNC(draw_ctx, "Record Submesh", TracyCategoryColorRendering,
-                   true);
-      if (draw->index_count > 0) {
-        VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-        if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
-          cull_flags = VK_CULL_MODE_NONE;
-        }
-        vkCmdSetCullMode(buffer, cull_flags);
-        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
-                             draw->index_type);
-        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
-                         draw->vertex_offset, 0);
-      }
+    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+      tb_auto draw = &((const TbIndirectDraw *)batch->draws)[draw_idx];
+      TracyCZoneNC(draw_ctx, "Record Indirect Draw",
+                   TracyCategoryColorRendering, true);
+      vkCmdDrawIndirect(buffer, draw->buffer, draw->offset, draw->draw_count,
+                        draw->stride);
       TracyCZoneEnd(draw_ctx);
     }
 
@@ -401,8 +390,8 @@ void prepass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                         uint32_t batch_count, const TbDrawBatch *batches) {
+void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const TbDrawBatch *batch = &batches[batch_idx];
@@ -421,36 +410,21 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t set_count = 6;
-    VkDescriptorSet sets[set_count] = {
-        prim_batch->inst_set, prim_batch->view_set, prim_batch->trans_set,
-        prim_batch->mesh_set, prim_batch->tex_set,  prim_batch->mat_set};
+    const uint32_t set_count = 10;
+    const VkDescriptorSet sets[set_count] = {
+        prim_batch->view_set, prim_batch->mat_set,  prim_batch->draw_set,
+        prim_batch->obj_set,  prim_batch->tex_set,  prim_batch->idx_set,
+        prim_batch->pos_set,  prim_batch->norm_set, prim_batch->tan_set,
+        prim_batch->uv0_set,
+    };
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             set_count, sets, 0, NULL);
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      const TbPrimitiveDraw *draw =
-          &((const TbPrimitiveDraw *)batch->draws)[draw_idx];
-      if (draw->instance_count == 0) {
-        continue;
-      }
-
-      TracyCZoneNC(draw_ctx, "Record Submesh", TracyCategoryColorRendering,
-                   true);
-      if (draw->index_count > 0) {
-        VkCullModeFlags cull_flags = VK_CULL_MODE_BACK_BIT;
-        if (prim_batch->perm & GLTF_PERM_DOUBLE_SIDED) {
-          cull_flags = VK_CULL_MODE_NONE;
-        }
-        vkCmdSetCullMode(buffer, cull_flags);
-        vkCmdPushConstants(buffer, layout,
-                           VK_SHADER_STAGE_VERTEX_BIT |
-                               VK_SHADER_STAGE_FRAGMENT_BIT,
-                           0, sizeof(GLTFPushConstants), &draw->material_index);
-        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
-                             draw->index_type);
-        vkCmdDrawIndexed(buffer, draw->index_count, draw->instance_count, 0,
-                         draw->vertex_offset, 0);
-      }
+      TracyCZoneNC(draw_ctx, "Record Indirect Draw",
+                   TracyCategoryColorRendering, true);
+      tb_auto draw = &((const TbIndirectDraw *)batch->draws)[draw_idx];
+      vkCmdDrawIndirect(buffer, draw->buffer, draw->offset, draw->draw_count,
+                        draw->stride);
       TracyCZoneEnd(draw_ctx);
     }
 
@@ -459,27 +433,26 @@ void mesh_record_common2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   }
 }
 
-void opaque_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                         uint32_t batch_count, const TbDrawBatch *batches) {
+void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                        uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Opaque Mesh Record", TracyCategoryColorRendering, true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
-  mesh_record_common2(gpu_ctx, buffer, batch_count, batches);
+  mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
-void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-                              uint32_t batch_count,
-                              const TbDrawBatch *batches) {
+void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+                             uint32_t batch_count, const TbDrawBatch *batches) {
   TracyCZoneNC(ctx, "Transparent Mesh Record", TracyCategoryColorRendering,
                true);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Transparent Meshes",
                   (float4){0.0f, 0.0f, 1.0f, 1.0f});
-  mesh_record_common2(gpu_ctx, buffer, batch_count, batches);
+  mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
@@ -487,20 +460,18 @@ void transparent_pass_record2(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 TbMeshSystem create_mesh_system_internal(
     TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
-    TbMaterialSystem *material_system, TbTextureSystem *texture_system,
-    TbViewSystem *view_system, TbRenderObjectSystem *render_object_system,
-    TbRenderPipelineSystem *render_pipe_system) {
+    TbMaterialSystem *mat_sys, TbTextureSystem *tex_sys, TbViewSystem *view_sys,
+    TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *render_pipe_system) {
   TbMeshSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .render_system = render_system,
-      .material_system = material_system,
-      .view_system = view_system,
-      .render_object_system = render_object_system,
+      .material_system = mat_sys,
+      .view_system = view_sys,
+      .render_object_system = ro_sys,
       .render_pipe_system = render_pipe_system,
   };
   TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
-  TB_DYN_ARR_RESET(sys.attr_writes, std_alloc, 64);
   TbRenderPassId prepass_id = render_pipe_system->opaque_depth_normal_pass;
   TbRenderPassId opaque_pass_id = render_pipe_system->opaque_color_pass;
   TbRenderPassId transparent_pass_id =
@@ -512,53 +483,32 @@ TbMeshSystem create_mesh_system_internal(
 
     // Create mesh descriptor set layout
     {
+      const VkDescriptorBindingFlags flags =
+          VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
       VkDescriptorSetLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
           .pNext =
               &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
                   .sType =
                       VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                  .bindingCount = TB_INPUT_PERM_COUNT,
-                  .pBindingFlags =
-                      (VkDescriptorBindingFlags[TB_INPUT_PERM_COUNT]){
-                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                      },
+                  .bindingCount = 1,
+                  .pBindingFlags = (VkDescriptorBindingFlags[1]){flags},
               },
-          .bindingCount = TB_INPUT_PERM_COUNT,
+          .bindingCount = 1,
           .pBindings =
-              (VkDescriptorSetLayoutBinding[TB_INPUT_PERM_COUNT]){
+              (VkDescriptorSetLayoutBinding[1]){
                   {
                       .binding = 0,
-                      .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-                  {
-                      .binding = 1,
-                      .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-                  {
-                      .binding = 2,
-                      .descriptorCount = 1,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-                  {
-                      .binding = 3,
-                      .descriptorCount = 1,
+                      .descriptorCount = 2048,
                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
               },
       };
-      err = tb_rnd_create_set_layout(render_system, &create_info, "Mesh Layout",
-                                     &sys.mesh_set_layout);
-      TB_VK_CHECK(err, "Failed to create mesh set layout");
+      err = tb_rnd_create_set_layout(render_system, &create_info,
+                                     "Mesh Attr Layout", &sys.mesh_set_layout);
+      TB_VK_CHECK(err, "Failed to create mesh attr set layout");
     }
 
     // Create instance descriptor set layout
@@ -578,7 +528,7 @@ TbMeshSystem create_mesh_system_internal(
               },
       };
       err = tb_rnd_create_set_layout(render_system, &create_info,
-                                     "Instance Layout", &sys.obj_set_layout);
+                                     "Instance Layout", &sys.draw_set_layout);
       TB_VK_CHECK(err, "Failed to create instanced set layout");
     }
 
@@ -586,12 +536,14 @@ TbMeshSystem create_mesh_system_internal(
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 4,
+          .setLayoutCount = 6,
           .pSetLayouts =
-              (VkDescriptorSetLayout[4]){
-                  sys.obj_set_layout,
-                  view_system->set_layout,
-                  render_object_system->set_layout,
+              (VkDescriptorSetLayout[6]){
+                  view_sys->set_layout,
+                  sys.draw_set_layout,
+                  ro_sys->set_layout,
+                  sys.mesh_set_layout,
+                  sys.mesh_set_layout,
                   sys.mesh_set_layout,
               },
       };
@@ -611,27 +563,22 @@ TbMeshSystem create_mesh_system_internal(
 
     // Create pipeline layouts
     {
-      const uint32_t layout_count = 6;
+      const uint32_t layout_count = 10;
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = layout_count,
           .pSetLayouts =
               (VkDescriptorSetLayout[layout_count]){
-                  sys.obj_set_layout,
-                  view_system->set_layout,
-                  render_object_system->set_layout,
+                  view_sys->set_layout,
+                  mat_sys->set_layout,
+                  sys.draw_set_layout,
+                  ro_sys->set_layout,
+                  tex_sys->set_layout,
                   sys.mesh_set_layout,
-                  texture_system->set_layout,
-                  material_system->set_layout,
-              },
-          .pushConstantRangeCount = 1,
-          .pPushConstantRanges =
-              (VkPushConstantRange[1]){
-                  {
-                      .size = sizeof(GLTFPushConstants),
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                                    VK_SHADER_STAGE_FRAGMENT_BIT,
-                  },
+                  sys.mesh_set_layout,
+                  sys.mesh_set_layout,
+                  sys.mesh_set_layout,
+                  sys.mesh_set_layout,
               },
       };
       tb_rnd_create_pipeline_layout(render_system, &create_info,
@@ -684,19 +631,19 @@ TbMeshSystem create_mesh_system_internal(
   sys.prepass_draw_ctx2 = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = prepass_record2,
+                              .draw_fn = prepass_record,
                               .pass_id = prepass_id,
                           });
   sys.opaque_draw_ctx2 = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = opaque_pass_record2,
+                              .draw_fn = opaque_pass_record,
                               .pass_id = opaque_pass_id,
                           });
   sys.transparent_draw_ctx2 = tb_render_pipeline_register_draw_context(
       render_pipe_system, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = transparent_pass_record2,
+                              .draw_fn = transparent_pass_record,
                               .pass_id = transparent_pass_id,
                           });
   return sys;
@@ -722,9 +669,9 @@ void destroy_mesh_system(TbMeshSystem *self) {
   *self = (TbMeshSystem){0};
 }
 
-uint32_t find_mesh_by_id(TbMeshSystem *self, TbMeshId id) {
+uint32_t find_mesh_by_id(TbMeshSystem *self, uint64_t id) {
   TB_DYN_ARR_FOREACH(self->meshes, i) {
-    if (TB_DYN_ARR_AT(self->meshes, i).id == id) {
+    if (TB_DYN_ARR_AT(self->meshes, i).id.id == id) {
       return i;
       break;
     }
@@ -816,20 +763,20 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   const cgltf_mesh *mesh = node->mesh;
   TB_CHECK_RETURN(mesh, "Given node has no mesh", TbInvalidMeshId);
 
-  TbMeshId id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
+  uint64_t id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
   id = tb_hash(id, (const uint8_t *)mesh, sizeof(cgltf_mesh));
 
   uint32_t mesh_idx = find_mesh_by_id(self, id);
   if (mesh_idx != SDL_MAX_UINT32) {
     // Mesh was found, just return that
     TB_DYN_ARR_AT(self->meshes, mesh_idx).ref_count++;
-    return id;
+    return (TbMeshId){id, mesh_idx};
   }
 
   // Mesh was not found, load it now
   mesh_idx = TB_DYN_ARR_SIZE(self->meshes);
   {
-    TbMesh m = {.id = id};
+    TbMesh m = {.id = {.id = id, .idx = mesh_idx}};
     TB_DYN_ARR_APPEND(self->meshes, m);
   }
   TbMesh *tb_mesh = &TB_DYN_ARR_AT(self->meshes, mesh_idx);
@@ -839,6 +786,18 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   uint64_t geom_size = 0;
   uint64_t attr_size_per_type[cgltf_attribute_type_max_enum] = {0};
   {
+    // Determine mesh index type
+    {
+      tb_auto stride = mesh->primitives[0].indices->stride;
+      if (stride == sizeof(uint16_t)) {
+        tb_mesh->idx_type = VK_INDEX_TYPE_UINT16;
+      } else if (stride == sizeof(uint32_t)) {
+        tb_mesh->idx_type = VK_INDEX_TYPE_UINT32;
+      } else {
+        TB_CHECK(false, "Unexpected index stride");
+      }
+    }
+
     uint64_t vertex_size = 0;
     uint32_t vertex_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
@@ -909,31 +868,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
     err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
                                        mesh->name, &tb_mesh->gpu_buffer,
                                        &tb_mesh->host_buffer, &ptr);
-    TB_VK_CHECK_RET(err, "Failed to create mesh buffer", false);
-  }
-
-  // We need to update the per-mesh descriptor pool
-  {
-    const uint32_t mesh_count = TB_DYN_ARR_SIZE(self->meshes);
-    VkDescriptorPoolCreateInfo pool_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = mesh_count * 4,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .descriptorCount = mesh_count * 4,
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                },
-            },
-    };
-    tb_auto layouts =
-        tb_alloc_nm_tp(self->tmp_alloc, mesh_count, VkDescriptorSetLayout);
-    for (uint32_t i = 0; i < mesh_count; ++i) {
-      layouts[i] = self->mesh_set_layout;
-    }
-    tb_rnd_resize_desc_pool(self->render_system, &pool_info, layouts, NULL,
-                            &self->mesh_pool, mesh_count);
+    TB_VK_CHECK_RET(err, "Failed to create mesh buffer", TbInvalidMeshId);
   }
 
   // Read the cgltf mesh into the driver owned memory
@@ -1013,21 +948,6 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
 
     // Construct one write per primitive
     {
-      // Helper block for crafting writes
-      tb_auto append_write_hlpr =
-          ^(TbAttrWriteList *out_writes, uint32_t binding, uint64_t index) {
-            tb_auto write = (VkWriteDescriptorSet){
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet =
-                    (VkDescriptorSet)index, // Actually will be looked up later
-                .dstBinding = binding,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-            };
-            TB_DYN_ARR_APPEND(*out_writes, write);
-          };
-
       static const VkFormat
           attr_formats_per_type[cgltf_attribute_type_max_enum] = {
               VK_FORMAT_UNDEFINED,      VK_FORMAT_R16G16B16A16_SINT,
@@ -1035,26 +955,38 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
               VK_FORMAT_R16G16_SINT,
           };
 
+      // Create one buffer view for indices
+      {
+        VkFormat idx_format = VK_FORMAT_R16_UINT;
+        if (tb_mesh->idx_type == VK_INDEX_TYPE_UINT32) {
+          idx_format = VK_FORMAT_R32_UINT;
+        }
+        VkBufferViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = tb_mesh->gpu_buffer.buffer,
+            .offset = 0,
+            .range = index_size,
+            .format = idx_format,
+        };
+        tb_rnd_create_buffer_view(self->render_system, &create_info,
+                                  "Mesh Index View", &tb_mesh->index_view);
+      }
+
       for (size_t attr_idx = 0; attr_idx < mesh->primitives[0].attributes_count;
            ++attr_idx) {
         cgltf_attribute *attr = &mesh->primitives[0].attributes[attr_idx];
 
-        // HACK - this mapping is kind of incidental
-        uint32_t binding = ((int32_t)attr->type) - 1;
-
         // Create a buffer view per attribute
-        VkBufferViewCreateInfo view_info = {
+        VkBufferViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
             .buffer = tb_mesh->gpu_buffer.buffer,
             .offset = attr_offset_per_type[attr->type],
             .range = VK_WHOLE_SIZE,
             .format = attr_formats_per_type[attr->type],
         };
-        tb_rnd_create_buffer_view(self->render_system, &view_info,
+        tb_rnd_create_buffer_view(self->render_system, &create_info,
                                   "Mesh Attribute View",
-                                  &tb_mesh->attr_views[binding]);
-
-        append_write_hlpr(&self->attr_writes, binding, mesh_idx);
+                                  &tb_mesh->attr_views[attr->type - 1]);
       }
     }
 
@@ -1063,18 +995,18 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   }
 
   TB_DYN_ARR_AT(self->meshes, mesh_idx).ref_count++;
-  return id;
+  return (TbMeshId){id, mesh_idx};
 }
 
 bool tb_mesh_system_take_mesh_ref(TbMeshSystem *self, TbMeshId id) {
-  uint32_t index = find_mesh_by_id(self, id);
+  uint32_t index = id.idx;
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh", false);
   TB_DYN_ARR_AT(self->meshes, index).ref_count++;
   return true;
 }
 
 VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id) {
-  uint32_t index = find_mesh_by_id(self, id);
+  uint32_t index = id.idx;
   TB_CHECK_RETURN(index != SDL_MAX_UINT32, "Failed to find mesh",
                   VK_NULL_HANDLE);
 
@@ -1084,13 +1016,8 @@ VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id) {
   return buffer;
 }
 
-VkDescriptorSet tb_mesh_system_get_set(TbMeshSystem *self, TbMeshId id) {
-  int32_t global_mesh_idx = find_mesh_by_id(self, id);
-  return tb_rnd_desc_pool_get_set(&self->mesh_pool, global_mesh_idx);
-}
-
 void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id) {
-  uint32_t index = find_mesh_by_id(self, id);
+  uint32_t index = id.idx;
 
   if (index == SDL_MAX_UINT32) {
     TB_CHECK(false, "Failed to find mesh");
@@ -1124,16 +1051,123 @@ void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id) {
   }
 }
 
-// Second implementation focused more on instanced draws
-/* Pseudocode
-  for each camera
-    determine which meshes are visible
-  for each visible mesh
-    group submesh draws by instance
-  for each unique submesh
-    issue a batch of instanced draws
-*/
-void mesh_draw_tick2(ecs_iter_t *it) {
+VkDescriptorSet tb_mesh_system_get_idx_set(TbMeshSystem *self) {
+  return self->mesh_pool.sets[0];
+}
+VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self) {
+  return self->mesh_pool.sets[1];
+}
+VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self) {
+  return self->mesh_pool.sets[2];
+}
+VkDescriptorSet tb_mesh_system_get_tan_set(TbMeshSystem *self) {
+  return self->mesh_pool.sets[3];
+}
+VkDescriptorSet tb_mesh_system_get_uv0_set(TbMeshSystem *self) {
+  return self->mesh_pool.sets[4];
+}
+
+void mesh_descriptor_update(ecs_iter_t *it) {
+  ecs_world_t *ecs = it->world;
+
+  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT(ecs, TbRenderSystem);
+
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
+  // If the number of meshes has grown to the point where we have run out of
+  // space in the descriptor pool we must reallocate. That means destroying the
+  // old pool and creating a new pool for all the new writes
+  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+  const uint64_t incoming_mesh_count = TB_DYN_ARR_SIZE(mesh_sys->meshes);
+  if (incoming_mesh_count > mesh_sys->mesh_pool.capacity) {
+    mesh_sys->mesh_pool.capacity = (incoming_mesh_count + 128) * view_count;
+    const uint64_t desc_count = mesh_sys->mesh_pool.capacity;
+
+    // Re-create pool and allocate the one set that everything will be bound to
+    {
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = view_count,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              (VkDescriptorPoolSize[1]){
+                  {
+                      .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                      .descriptorCount = desc_count,
+                  },
+              },
+      };
+      VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+          .sType =
+              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+          .descriptorSetCount = view_count,
+          .pDescriptorCounts =
+              (uint32_t[view_count]){incoming_mesh_count, incoming_mesh_count,
+                                     incoming_mesh_count, incoming_mesh_count,
+                                     incoming_mesh_count},
+      };
+      VkDescriptorSetLayout layouts[view_count] = {
+          mesh_sys->mesh_set_layout, mesh_sys->mesh_set_layout,
+          mesh_sys->mesh_set_layout, mesh_sys->mesh_set_layout,
+          mesh_sys->mesh_set_layout};
+      tb_rnd_resize_desc_pool(rnd_sys, &create_info, layouts, &alloc_info,
+                              &mesh_sys->mesh_pool, view_count);
+    }
+  } else {
+    // No work to do :)
+    return;
+  }
+
+  // Write the index view descriptor
+  {
+    tb_auto mesh_count = TB_DYN_ARR_SIZE(mesh_sys->meshes);
+    tb_auto index_views =
+        tb_alloc_nm_tp(mesh_sys->tmp_alloc, mesh_count, VkBufferView);
+
+    TB_DYN_ARR_FOREACH(mesh_sys->meshes, i) {
+      tb_auto mesh = &TB_DYN_ARR_AT(mesh_sys->meshes, i);
+      index_views[i] = mesh->index_view;
+    }
+
+    tb_auto write = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .descriptorCount = mesh_count,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+        .dstSet = mesh_sys->mesh_pool.sets[0],
+        .dstBinding = 0,
+        .pTexelBufferView = index_views,
+    };
+
+    tb_rnd_update_descriptors(rnd_sys, 1, &write);
+  }
+
+  // Just write all mesh vertex info to the descriptor set
+  VkWriteDescriptorSet writes[TB_INPUT_PERM_COUNT] = {0};
+  for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
+    tb_auto mesh_count = TB_DYN_ARR_SIZE(mesh_sys->meshes);
+    tb_auto buffer_views =
+        tb_alloc_nm_tp(mesh_sys->tmp_alloc, mesh_count, VkBufferView);
+
+    TB_DYN_ARR_FOREACH(mesh_sys->meshes, i) {
+      tb_auto mesh = &TB_DYN_ARR_AT(mesh_sys->meshes, i);
+      buffer_views[i] = mesh->attr_views[attr_idx];
+    }
+
+    writes[attr_idx] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .descriptorCount = mesh_count,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+        .dstSet = mesh_sys->mesh_pool.sets[attr_idx + 1],
+        .dstBinding = 0,
+        .pTexelBufferView = buffer_views,
+    };
+  }
+  tb_rnd_update_descriptors(rnd_sys, TB_INPUT_PERM_COUNT, writes);
+}
+
+void mesh_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
@@ -1157,31 +1191,13 @@ void mesh_draw_tick2(ecs_iter_t *it) {
   tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  tb_auto tmp_alloc = mesh_sys->tmp_alloc;
-
-  // Issue any new mesh descriptor writes
-  if (!TB_DYN_ARR_EMPTY(mesh_sys->attr_writes)) {
-    const uint32_t write_count = TB_DYN_ARR_SIZE(mesh_sys->attr_writes);
-    // Last minute descriptor set adjustment
-    TB_DYN_ARR_FOREACH(mesh_sys->attr_writes, i) {
-      tb_auto write = &TB_DYN_ARR_AT(mesh_sys->attr_writes, i);
-      uint32_t index = (uint64_t)write->dstSet;
-      tb_auto *mesh = &TB_DYN_ARR_AT(mesh_sys->meshes, index);
-      write->dstSet = tb_rnd_desc_pool_get_set(&mesh_sys->mesh_pool, index);
-      // HACK: write->dstBinding is more coincidental than anything
-      write->pTexelBufferView = &mesh->attr_views[write->dstBinding];
-    }
-    tb_rnd_update_descriptors(rnd_sys, write_count, mesh_sys->attr_writes.data);
-    TB_DYN_ARR_CLEAR(mesh_sys->attr_writes);
-  }
-
   // For each camera
-  ecs_iter_t camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
+  tb_auto camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
   while (ecs_query_next(&camera_it)) {
-    TbCameraComponent *cameras = ecs_field(&camera_it, TbCameraComponent, 1);
+    tb_auto *cameras = ecs_field(&camera_it, TbCameraComponent, 1);
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
-      TbCameraComponent *camera = &cameras[cam_idx];
-      VkDescriptorSet view_set =
+      tb_auto *camera = &cameras[cam_idx];
+      tb_auto view_set =
           tb_view_system_get_descriptor(view_sys, camera->view_id);
 
       const float width = camera->width;
@@ -1189,392 +1205,283 @@ void mesh_draw_tick2(ecs_iter_t *it) {
 
       // Run query to determine how many meshes so we can pre-allocate space for
       // batches
-      ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
-      uint32_t opaque_mesh_count = 0;
-      uint32_t trans_mesh_count = 0;
+      tb_auto mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+      uint32_t opaque_draw_count = 0;
+      uint32_t trans_draw_count = 0;
       while (ecs_query_next(&mesh_it)) {
-        TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
-        for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          TbMeshComponent *mesh = &meshes[mesh_idx];
-
-          uint32_t mesh_count = TB_DYN_ARR_SIZE(mesh->entities);
+        tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+          tb_auto *mesh = &meshes[mesh_idx];
+          tb_auto mesh_count = TB_DYN_ARR_SIZE(mesh->entities);
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
-            TbSubMesh *sm = &mesh->submeshes[submesh_idx];
-            TbMaterialId mat = sm->material;
-            TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
+            tb_auto *sm = &mesh->submeshes[submesh_idx];
+            tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
-            bool trans =
-                perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND;
-            if (trans) {
-              trans_mesh_count += mesh->submesh_count * mesh_count;
+            if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
+              trans_draw_count += mesh->submesh_count * mesh_count;
             } else {
-              opaque_mesh_count += mesh->submesh_count * mesh_count;
+              opaque_draw_count += mesh->submesh_count * mesh_count;
             }
           }
         }
       }
       mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
 
-      const uint32_t max_obj_count = opaque_mesh_count + trans_mesh_count;
-      if (max_obj_count == 0) {
+      const uint32_t max_draw_count = opaque_draw_count + trans_draw_count;
+      if (max_draw_count == 0) {
         continue;
       }
 
-      // Init arrays on an allocator with a fast allocation
-      // so we can inexpensivley append
-      // Note that worst case is each mesh needs a separate mesh
-      DrawBatchList opaque_batches = {0};
-      DrawBatchList trans_batches = {0};
-      TbPrimitiveBatchList opaque_prim_batches = {0};
-      TbPrimitiveBatchList trans_prim_batches = {0};
-      if (opaque_mesh_count) {
-        TB_DYN_ARR_RESET(opaque_batches, tmp_alloc, opaque_mesh_count);
-        TB_DYN_ARR_RESET(opaque_prim_batches, tmp_alloc, opaque_mesh_count);
+      tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
+      tb_auto tex_set = tb_tex_sys_get_set(tex_sys);
+      tb_auto mat_set = tb_mat_system_get_set(mat_sys);
+      tb_auto idx_set = tb_mesh_system_get_idx_set(mesh_sys);
+      tb_auto pos_set = tb_mesh_system_get_pos_set(mesh_sys);
+      tb_auto norm_set = tb_mesh_system_get_norm_set(mesh_sys);
+      tb_auto tan_set = tb_mesh_system_get_tan_set(mesh_sys);
+      tb_auto uv0_set = tb_mesh_system_get_uv0_set(mesh_sys);
+
+      // Allocate indirect draw buffers
+      VkDrawIndirectCommand *opaque_draw_cmds = NULL;
+      uint64_t opaque_cmds_offset = 0;
+      uint32_t opaque_cmd_count = 0;
+      {
+        uint64_t size = sizeof(VkDrawIndirectCommand) * opaque_draw_count;
+        tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, size, 0x40, &opaque_cmds_offset,
+                                       (void **)&opaque_draw_cmds);
       }
-      if (trans_mesh_count) {
-        TB_DYN_ARR_RESET(trans_batches, tmp_alloc, trans_mesh_count);
-        TB_DYN_ARR_RESET(trans_prim_batches, tmp_alloc, trans_mesh_count);
+      VkDrawIndirectCommand *trans_draw_cmds = NULL;
+      uint64_t trans_cmds_offset = 0;
+      uint32_t trans_cmd_count = 0;
+      {
+        uint64_t size = sizeof(VkDrawIndirectCommand) * trans_draw_count;
+        tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, size, 0x40, &trans_cmds_offset,
+                                       (void **)&trans_draw_cmds);
       }
-      TbPrimIndirectList opaque_prim_trans = {0};
-      TbPrimIndirectList trans_prim_trans = {0};
-      TB_DYN_ARR_RESET(opaque_prim_trans, tmp_alloc, max_obj_count);
-      TB_DYN_ARR_RESET(trans_prim_trans, tmp_alloc, max_obj_count);
+
+      // Allocate per-draw storage buffers
+      TbGLTFDrawData *opaque_draw_data = NULL;
+      const uint64_t opaque_data_size =
+          sizeof(TbGLTFDrawData) * opaque_draw_count;
+      uint64_t opaque_data_offset = 0;
+      tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, opaque_data_size, 0x40,
+                                     &opaque_data_offset,
+                                     (void **)&opaque_draw_data);
+
+      TbGLTFDrawData *trans_draw_data = NULL;
+      const uint64_t trans_data_size =
+          sizeof(TbGLTFDrawData) * trans_draw_count;
+      uint64_t trans_data_offset = 0;
+      tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, trans_data_size, 0x40,
+                                     &trans_data_offset,
+                                     (void **)&trans_draw_data);
+
+      // Allocate per-draw descriptor sets
+      {
+        VkDescriptorPoolCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = 2,
+            .poolSizeCount = 1,
+            .pPoolSizes =
+                (VkDescriptorPoolSize[1]){
+                    {
+                        .descriptorCount = 1,
+                        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    },
+                },
+        };
+        VkDescriptorSetLayout layouts[2] = {
+            mesh_sys->draw_set_layout,
+            mesh_sys->draw_set_layout,
+        };
+        tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
+                                    mesh_sys->draw_pools.pools, 2);
+      }
+
       TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
-        TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          TbMeshComponent *mesh = &meshes[mesh_idx];
+          tb_auto *mesh = &meshes[mesh_idx];
 
-          VkBuffer geom_buffer =
-              tb_mesh_system_get_gpu_mesh(mesh_sys, mesh->mesh_id);
-          VkDescriptorSet mesh_set =
-              tb_mesh_system_get_set(mesh_sys, mesh->mesh_id);
-          VkDescriptorSet transforms_set = tb_render_object_sys_get_set(ro_sys);
-          VkDescriptorSet tex_set = tb_tex_sys_get_set(tex_sys);
-          VkDescriptorSet mat_set = tb_mat_system_get_set(mat_sys);
+          // A mesh component can point to multiple instances
+          // This allows mesh components to be instanced by default and
+          // trivially looked up by movement type
+          TB_DYN_ARR_FOREACH(mesh->entities, ent) {
+            tb_auto entity = TB_DYN_ARR_AT(mesh->entities, ent);
+            tb_auto *ro = ecs_get_mut(ecs, entity, TbRenderObject);
 
-          for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
-               ++submesh_idx) {
-            TbSubMesh *sm = &mesh->submeshes[submesh_idx];
-            TbMaterialId mat = sm->material;
+            for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
+                 ++submesh_idx) {
+              tb_auto *sm = &mesh->submeshes[submesh_idx];
+              tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
-            // Deduce some important details from the submesh
-            TbMaterialPerm perm = tb_mat_system_get_perm(mat_sys, mat);
-            uint32_t mat_idx = tb_mat_sys_get_idx(mat_sys, mat);
-
-            const uint32_t index_count = sm->index_count;
-            const uint64_t index_offset = sm->index_offset;
-            const uint32_t vertex_offset = sm->vertex_offset;
-            const VkIndexType index_type = (VkIndexType)sm->index_type;
-
-            // Handle Opaque and Transparent draws
-            {
-              VkPipelineLayout layout = mesh_sys->pipe_layout;
-              bool opaque = true;
+              // Deduce whether to write to opaque or transparent data
+              tb_auto draw_cmds = opaque_draw_cmds;
+              tb_auto draw_count = &opaque_cmd_count;
+              tb_auto draw_data = opaque_draw_data;
               if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
-                opaque = false;
-              }
-              VkPipeline pipeline = mesh_sys->opaque_pipeline;
-              if (!opaque) {
-                pipeline = mesh_sys->transparent_pipeline;
+                draw_cmds = trans_draw_cmds;
+                draw_count = &trans_cmd_count;
+                draw_data = trans_draw_data;
               }
 
-              // Determine if we need to insert a new batch
-              TbDrawBatch *batch = NULL;
-              TbPrimitiveBatch *prim_batch = NULL;
-              TbIndirectionList *transforms = NULL;
-              {
-                DrawBatchList *batches = &opaque_batches;
-                TbPrimitiveBatchList *prim_batches = &opaque_prim_batches;
-                TbPrimIndirectList *trans_list = &opaque_prim_trans;
-                if (!opaque) {
-                  batches = &trans_batches;
-                  prim_batches = &trans_prim_batches;
-                  trans_list = &trans_prim_trans;
-                }
-
-                // Try to find an existing suitable batch
-                TB_DYN_ARR_FOREACH(*batches, i) {
-                  TbDrawBatch *db = &TB_DYN_ARR_AT(*batches, i);
-                  TbPrimitiveBatch *pb = &TB_DYN_ARR_AT(*prim_batches, i);
-                  if (db->pipeline == pipeline && db->layout == layout &&
-                      pb->perm == perm && pb->view_set == view_set &&
-                      pb->mat_set == mat_set && pb->tex_set == tex_set &&
-                      pb->mesh_set == mesh_set) {
-                    batch = db;
-                    transforms = &TB_DYN_ARR_AT(*trans_list, i);
-                    break;
-                  }
-                }
-                // No batch was found, create one
-                if (batch == NULL) {
-                  // Worst case batch count is one batch having to carry every
-                  // mesh with the maximum number of possible submeshes
-                  const uint32_t max_draw_count =
-                      opaque_mesh_count + trans_mesh_count;
-                  TbDrawBatch db = {
-                      .pipeline = pipeline,
-                      .layout = layout,
-                      .viewport = {0, height, width, -(float)height, 0, 1},
-                      .scissor = (VkRect2D){{0, 0}, {width, height}},
-                      .draw_size = sizeof(TbPrimitiveDraw),
-                      .draws = tb_alloc_nm_tp(tmp_alloc, max_draw_count,
-                                              TbPrimitiveDraw),
-                  };
-                  TbPrimitiveBatch pb = {
-                      .perm = perm,
-                      .view_set = view_set,
-                      .mat_set = mat_set,
-                      .tex_set = tex_set,
-                      .trans_set = transforms_set,
-                      .mesh_set = mesh_set,
-                  };
-
-                  TbIndirectionList il = {0};
-                  TB_DYN_ARR_RESET(il, tmp_alloc, max_draw_count);
-
-                  // Append it to the list and make sure we get a reference
-                  uint32_t idx = TB_DYN_ARR_SIZE(*prim_batches);
-                  TB_DYN_ARR_APPEND(*prim_batches, pb);
-                  prim_batch = &TB_DYN_ARR_AT(*prim_batches, idx);
-                  TB_DYN_ARR_APPEND(*batches, db);
-                  batch = &TB_DYN_ARR_AT(*batches, idx);
-                  TB_DYN_ARR_APPEND(*trans_list, il);
-                  transforms = &TB_DYN_ARR_AT(*trans_list, idx);
-
-                  batch->user_batch = prim_batch;
-                }
-              }
-
-              // Determine if we need to insert a new draw
-              {
-                TbPrimitiveDraw *draw = NULL;
-                for (uint32_t i = 0; i < batch->draw_count; ++i) {
-                  TbPrimitiveDraw *d = &((TbPrimitiveDraw *)batch->draws)[i];
-                  if (d->index_count == index_count &&
-                      d->index_offset == index_offset &&
-                      d->vertex_offset == vertex_offset &&
-                      d->material_index == mat_idx &&
-                      d->index_type == index_type &&
-                      d->geom_buffer == geom_buffer) {
-                    draw = d;
-                    break;
-                  }
-                }
-                // No draw was found, create one
-                if (draw == NULL) {
-                  TbPrimitiveDraw d = {
-                      .geom_buffer = geom_buffer,
-                      .index_count = index_count,
-                      .index_offset = index_offset,
-                      .vertex_offset = vertex_offset,
-                      .index_type = index_type,
-                      .material_index = mat_idx,
-                  };
-
-                  // Append it to the list and make sure we get a reference
-                  uint32_t idx = batch->draw_count++;
-                  ((TbPrimitiveDraw *)batch->draws)[idx] = d;
-                  draw = &((TbPrimitiveDraw *)batch->draws)[idx];
-                }
-
-                draw->instance_count += TB_DYN_ARR_SIZE(mesh->entities);
-
-                // Append every render object's transform index to the list
-                // And also tell each render object what its vertex layout
-                // permutation is
-                TB_DYN_ARR_FOREACH(mesh->entities, e_idx) {
-                  ecs_entity_t entity = TB_DYN_ARR_AT(mesh->entities, e_idx);
-                  TbRenderObject *ro = ecs_get_mut(ecs, entity, TbRenderObject);
-                  TB_DYN_ARR_APPEND(*transforms, ro->index);
-                  ro->perm = sm->vertex_perm;
-                }
-              }
+              // Write a command and a piece of draw data into the buffers
+              tb_auto draw_idx = *draw_count;
+              draw_cmds[draw_idx] = (VkDrawIndirectCommand){
+                  .vertexCount = sm->index_count,
+                  .instanceCount = 1,
+              };
+              draw_data[draw_idx] =
+                  (TbGLTFDrawData){
+                      .perm = sm->vertex_perm,
+                      .obj_idx = ro->index,
+                      .mesh_idx = mesh->mesh_id.idx,
+                      .mat_idx = sm->material.idx,
+                  },
+              (*draw_count) += 1;
             }
           }
         }
       }
       TracyCZoneEnd(ctx2);
 
-      // Establish prepass batches by making a batch for each opaque
-      // batch but with a different pipeline and the same primitive batch
-      DrawBatchList prepass_batches = {0};
-      TB_DYN_ARR_RESET(prepass_batches, tmp_alloc,
-                       TB_DYN_ARR_SIZE(opaque_batches));
+      VkDescriptorSet opaque_draw_set = tb_rnd_frame_desc_pool_get_set(
+          rnd_sys, mesh_sys->draw_pools.pools, 0);
+      VkDescriptorSet trans_draw_set = tb_rnd_frame_desc_pool_get_set(
+          rnd_sys, mesh_sys->draw_pools.pools, 1);
+
+      // Opaque batch is a bit special since we need to share with the shadow
+      // system
+      mesh_sys->opaque_batch = tb_alloc_tp(mesh_sys->tmp_alloc, TbDrawBatch);
+      tb_auto opaque_prim_batch =
+          tb_alloc_tp(mesh_sys->tmp_alloc, TbPrimitiveBatch);
+
+      *opaque_prim_batch = (TbPrimitiveBatch){
+          .view_set = view_set,
+          .mat_set = mat_set,
+          .draw_set = opaque_draw_set,
+          .obj_set = obj_set,
+          .tex_set = tex_set,
+          .idx_set = idx_set,
+          .pos_set = pos_set,
+          .norm_set = norm_set,
+          .tan_set = tan_set,
+          .uv0_set = uv0_set,
+      };
+
+      // Define batches
+      tb_auto opaque_draw = tb_alloc_tp(mesh_sys->tmp_alloc, TbIndirectDraw);
+      *opaque_draw =
+          (TbIndirectDraw){
+              .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
+              .draw_count = opaque_cmd_count,
+              .offset = opaque_cmds_offset,
+              .stride = sizeof(VkDrawIndirectCommand),
+          },
+
+      *mesh_sys->opaque_batch = (TbDrawBatch){
+          .layout = mesh_sys->pipe_layout,
+          .pipeline = mesh_sys->opaque_pipeline,
+          .viewport = {0, height, width, -(float)height, 0, 1},
+          .scissor = {{0, 0}, {width, height}},
+          .user_batch = opaque_prim_batch,
+          .draw_count = 1,
+          .draw_size = sizeof(TbIndirectDraw),
+          .draws = opaque_draw,
+          .draw_max = 1,
+      };
+
+      TbDrawBatch trans_batch = {
+          .layout = mesh_sys->pipe_layout,
+          .pipeline = mesh_sys->transparent_pipeline,
+          .viewport = {0, height, width, -(float)height, 0, 1},
+          .scissor = {{0, 0}, {width, height}},
+          .user_batch =
+              &(TbPrimitiveBatch){
+                  .view_set = view_set,
+                  .mat_set = mat_set,
+                  .draw_set = trans_draw_set,
+                  .obj_set = obj_set,
+                  .tex_set = tex_set,
+                  .idx_set = idx_set,
+                  .pos_set = pos_set,
+                  .norm_set = norm_set,
+                  .tan_set = tan_set,
+                  .uv0_set = uv0_set,
+              },
+          .draw_count = 1,
+          .draw_size = sizeof(TbIndirectDraw),
+          .draws =
+              &(TbIndirectDraw){
+                  .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
+                  .draw_count = trans_cmd_count,
+                  .offset = trans_cmds_offset,
+                  .stride = sizeof(VkDrawIndirectCommand),
+              },
+          .draw_max = 1,
+      };
+
+      // Prepass batch is the same as opaque but with different pipeline
+      tb_auto prepass_batch = *mesh_sys->opaque_batch;
       {
-        TracyCZoneN(ctx2, "Handle Prepass", true);
-        VkPipelineLayout layout = mesh_sys->prepass_layout;
-        VkPipeline pipeline = mesh_sys->prepass_pipe;
-
-        TB_DYN_ARR_FOREACH(opaque_batches, i) {
-          const TbDrawBatch *op_batch = &TB_DYN_ARR_AT(opaque_batches, i);
-
-          TbDrawBatch pre_batch = *op_batch;
-          pre_batch.pipeline = pipeline;
-          pre_batch.layout = layout;
-
-          TB_DYN_ARR_APPEND(prepass_batches, pre_batch);
-        }
-        TracyCZoneEnd(ctx2);
+        prepass_batch.pipeline = mesh_sys->prepass_pipe;
+        prepass_batch.layout = mesh_sys->prepass_layout;
       }
 
-      // Write transform lists to the GPU temp buffer
-      TB_DYN_ARR_OF(uint64_t) opaque_inst_buffers = {0};
-      TB_DYN_ARR_OF(uint64_t) trans_inst_buffers = {0};
+      // Write draw data buffer to descriptor sets
       {
-        TracyCZoneN(ctx2, "Gather Transforms", true);
-        const uint32_t op_count = TB_DYN_ARR_SIZE(opaque_prim_trans);
-        if (op_count) {
-          TB_DYN_ARR_RESET(opaque_inst_buffers, tmp_alloc, op_count);
-
-          TB_DYN_ARR_FOREACH(opaque_prim_trans, i) {
-            TbIndirectionList *transforms =
-                &TB_DYN_ARR_AT(opaque_prim_trans, i);
-
-            const size_t trans_size =
-                sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
-
-            uint64_t offset = 0;
-            tb_rnd_sys_tmp_buffer_copy(rnd_sys, trans_size, 0x40,
-                                       transforms->data, &offset);
-            TB_DYN_ARR_APPEND(opaque_inst_buffers, offset);
-          }
-        }
-
-        const uint32_t trans_count = TB_DYN_ARR_SIZE(trans_prim_trans);
-        if (trans_count) {
-          TB_DYN_ARR_RESET(trans_inst_buffers, tmp_alloc, trans_count);
-
-          TB_DYN_ARR_FOREACH(trans_prim_trans, i) {
-            TbIndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
-
-            const size_t trans_size =
-                sizeof(int32_t) * TB_DYN_ARR_SIZE(*transforms);
-
-            uint64_t offset = 0;
-            tb_rnd_sys_tmp_buffer_copy(rnd_sys, trans_size, 0x40,
-                                       transforms->data, &offset);
-            TB_DYN_ARR_APPEND(trans_inst_buffers, offset);
-          }
-        }
-        TracyCZoneEnd(ctx2);
-      }
-
-      // Alloc and write transform descriptor sets
-      {
-        TracyCZoneN(ctx2, "Write Descriptors", true);
-        const uint32_t set_count = TB_DYN_ARR_SIZE(opaque_inst_buffers) +
-                                   TB_DYN_ARR_SIZE(trans_inst_buffers);
-        VkDescriptorPoolCreateInfo pool_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = set_count * 4,
-            .poolSizeCount = 1,
-            .pPoolSizes =
-                (VkDescriptorPoolSize[1]){
-                    {
-                        .descriptorCount = set_count * 4,
-                        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    },
-                },
-        };
-        VkDescriptorSetLayout *layouts =
-            tb_alloc_nm_tp(tmp_alloc, set_count, VkDescriptorSetLayout);
-        for (uint32_t i = 0; i < set_count; ++i) {
-          layouts[i] = mesh_sys->obj_set_layout;
-        }
-        VkResult err = tb_rnd_frame_desc_pool_tick(
-            rnd_sys, &pool_info, layouts, mesh_sys->obj_pool_list.pools,
-            set_count);
-        TB_VK_CHECK(err, "Failed to update descriptor pool");
-
-        VkBuffer gpu_buf = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
-
-        // Get and write a buffer to each descriptor set
-        VkWriteDescriptorSet *writes =
-            tb_alloc_nm_tp(tmp_alloc, set_count, VkWriteDescriptorSet);
-
-        uint32_t set_idx = 0;
-        TB_DYN_ARR_FOREACH(opaque_inst_buffers, i) {
-          VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, mesh_sys->obj_pool_list.pools, set_idx);
-          const uint64_t offset = TB_DYN_ARR_AT(opaque_inst_buffers, i);
-          TbIndirectionList *transforms = &TB_DYN_ARR_AT(opaque_prim_trans, i);
-          const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
-
-          VkDescriptorBufferInfo *buffer_info =
-              tb_alloc_tp(tmp_alloc, VkDescriptorBufferInfo);
-          *buffer_info = (VkDescriptorBufferInfo){
-              .buffer = gpu_buf,
-              .offset = offset,
-              .range = sizeof(int32_t) * trans_count,
-          };
-
-          writes[set_idx++] = (VkWriteDescriptorSet){
+        if (opaque_data_size > 0) {
+          VkWriteDescriptorSet write = {
               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-              .dstSet = set,
-              .dstBinding = 0,
-              .dstArrayElement = 0,
+              .dstSet = opaque_draw_set,
               .descriptorCount = 1,
               .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              .pBufferInfo = buffer_info,
+              .pBufferInfo =
+                  &(VkDescriptorBufferInfo){
+                      .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
+                      .offset = opaque_data_offset,
+                      .range = opaque_data_size,
+                  },
           };
-
-          // Need to make sure the batch is also using the correct sets
-          TB_DYN_ARR_AT(opaque_prim_batches, i).inst_set = set;
+          tb_rnd_update_descriptors(rnd_sys, 1, &write);
         }
-        TB_DYN_ARR_FOREACH(trans_inst_buffers, i) {
-          VkDescriptorSet set = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, mesh_sys->obj_pool_list.pools, set_idx);
-          const uint64_t offset = TB_DYN_ARR_AT(trans_inst_buffers, i);
-          TbIndirectionList *transforms = &TB_DYN_ARR_AT(trans_prim_trans, i);
-          const uint64_t trans_count = TB_DYN_ARR_SIZE(*transforms);
 
-          tb_auto buffer_info = tb_alloc_tp(tmp_alloc, VkDescriptorBufferInfo);
-          *buffer_info = (VkDescriptorBufferInfo){
-              .buffer = gpu_buf,
-              .offset = offset,
-              .range = sizeof(int32_t) * trans_count,
-          };
-
-          writes[set_idx++] = (VkWriteDescriptorSet){
+        if (trans_data_size > 0) {
+          VkWriteDescriptorSet write = {
               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-              .dstSet = set,
-              .dstBinding = 0,
-              .dstArrayElement = 0,
+              .dstSet = trans_draw_set,
               .descriptorCount = 1,
               .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-              .pBufferInfo = buffer_info,
+              .pBufferInfo =
+                  &(VkDescriptorBufferInfo){
+                      .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
+                      .offset = trans_data_offset,
+                      .range = trans_data_size,
+                  },
           };
-
-          // Need to make sure the batch is also using the correct sets
-          TB_DYN_ARR_AT(trans_prim_batches, i).inst_set = set;
+          tb_rnd_update_descriptors(rnd_sys, 1, &write);
         }
-
-        tb_rnd_update_descriptors(rnd_sys, set_count, writes);
-        TracyCZoneEnd(ctx2);
       }
 
-      // Submit batches
       {
         TracyCZoneN(ctx2, "Submit Batches", true);
-        TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx2;
-        TbDrawContextId opaque_ctx2 = mesh_sys->opaque_draw_ctx2;
-        TbDrawContextId trans_ctx2 = mesh_sys->transparent_draw_ctx2;
+        if (opaque_data_size > 0) {
+          TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx2;
+          tb_render_pipeline_issue_draw_batch(rp_sys, prepass_ctx2, 1,
+                                              &prepass_batch);
 
-        // For prepass
-        tb_render_pipeline_issue_draw_batch(rp_sys, prepass_ctx2,
-                                            TB_DYN_ARR_SIZE(prepass_batches),
-                                            prepass_batches.data);
-        // For opaque pass
-        tb_render_pipeline_issue_draw_batch(rp_sys, opaque_ctx2,
-                                            TB_DYN_ARR_SIZE(opaque_batches),
-                                            opaque_batches.data);
-        // For transparent pass
-        tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2,
-                                            TB_DYN_ARR_SIZE(trans_batches),
-                                            trans_batches.data);
+          TbDrawContextId opaque_ctx2 = mesh_sys->opaque_draw_ctx2;
+          tb_render_pipeline_issue_draw_batch(rp_sys, opaque_ctx2, 1,
+                                              mesh_sys->opaque_batch);
+        }
+        if (trans_data_size > 0) {
+          TbDrawContextId trans_ctx2 = mesh_sys->transparent_draw_ctx2;
+          tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2, 1,
+                                              &trans_batch);
+        }
         TracyCZoneEnd(ctx2);
       }
     }
@@ -1628,7 +1535,9 @@ void tb_register_mesh_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbMeshSystem, &sys);
 
-  ECS_SYSTEM(ecs, mesh_draw_tick2, EcsOnUpdate, TbMeshSystem(TbMeshSystem));
+  ECS_SYSTEM(ecs, mesh_descriptor_update, EcsOnUpdate,
+             TbMeshSystem(TbMeshSystem));
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnUpdate, TbMeshSystem(TbMeshSystem));
 
   tb_register_mesh_component(ecs);
 }

@@ -19,7 +19,7 @@ typedef struct TbCameraComponent TbCameraComponent;
 typedef struct TbMeshComponent TbMeshComponent;
 typedef struct TbMesh TbMesh;
 typedef struct TbWorld TbWorld;
-typedef uint64_t TbMeshId;
+typedef TbResourceId TbMeshId;
 typedef uint32_t TbMaterialPerm;
 typedef uint32_t TbDrawContextId;
 typedef struct cgltf_mesh cgltf_mesh;
@@ -27,33 +27,37 @@ typedef struct VkBuffer_T *VkBuffer;
 typedef struct VkWriteDescriptorSet VkWriteDescriptorSet;
 typedef struct ecs_query_t ecs_query_t;
 
-static const TbMeshId TbInvalidMeshId = SDL_MAX_UINT64;
+static const TbMeshId TbInvalidMeshId = {SDL_MAX_UINT64, SDL_MAX_UINT32};
 static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
 
 typedef struct TbPrimitiveDraw {
   VkBuffer geom_buffer;
   VkIndexType index_type;
   uint32_t index_count;
-  uint32_t material_index;
   uint64_t index_offset;
   uint32_t vertex_offset;
   uint32_t instance_count;
 } TbPrimitiveDraw;
 
-typedef struct TbPrimitiveBatch {
-  uint64_t perm;
-  VkDescriptorSet inst_set;
-  VkDescriptorSet view_set;
-  VkDescriptorSet trans_set;
-  VkDescriptorSet mesh_set;
-  VkDescriptorSet mat_set;
-  VkDescriptorSet tex_set;
-} TbPrimitiveBatch;
+typedef struct TbIndirectDraw {
+  VkBuffer buffer;
+  uint64_t offset;
+  uint32_t draw_count;
+  uint32_t stride;
+} TbIndirectDraw;
 
-typedef TB_DYN_ARR_OF(int32_t) TbIndirectionList;
-typedef TB_DYN_ARR_OF(TbPrimitiveBatch) TbPrimitiveBatchList;
-typedef TB_DYN_ARR_OF(TbIndirectionList) TbPrimIndirectList;
-typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbAttrWriteList;
+typedef struct TbPrimitiveBatch {
+  VkDescriptorSet view_set;
+  VkDescriptorSet mat_set;
+  VkDescriptorSet draw_set;
+  VkDescriptorSet obj_set;
+  VkDescriptorSet tex_set;
+  VkDescriptorSet idx_set;
+  VkDescriptorSet pos_set;
+  VkDescriptorSet norm_set;
+  VkDescriptorSet tan_set;
+  VkDescriptorSet uv0_set;
+} TbPrimitiveBatch;
 
 typedef struct TbMeshSystem {
   TbAllocator std_alloc;
@@ -74,22 +78,20 @@ typedef struct TbMeshSystem {
   TbDrawContextId transparent_draw_ctx2;
 
   VkDescriptorSetLayout mesh_set_layout;
-  VkDescriptorSetLayout obj_set_layout;
+  VkDescriptorSetLayout draw_set_layout;
   VkPipelineLayout pipe_layout;
+  VkPipeline opaque_pipeline;
+  VkPipeline transparent_pipeline;
 
   VkPipelineLayout prepass_layout;
   VkPipeline prepass_pipe;
 
-  VkPipeline opaque_pipeline;
-  VkPipeline transparent_pipeline;
-
-  VkPipelineLayout shadow_pipe_layout;
-  VkPipeline shadow_pipeline;
+  // Re-used by shadows
+  TbDrawBatch *opaque_batch;
 
   TB_DYN_ARR_OF(TbMesh) meshes;
-  TbAttrWriteList attr_writes;
-  // For per object indirect transform indices
-  TbFrameDescriptorPoolList obj_pool_list;
+  // For per draw data
+  TbFrameDescriptorPoolList draw_pools;
   // For per mesh bindless vertex buffers
   TbDescriptorPool mesh_pool;
 } TbMeshSystem;
@@ -101,5 +103,9 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                                   const cgltf_node *node);
 bool tb_mesh_system_take_mesh_ref(TbMeshSystem *self, TbMeshId id);
 VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id);
-VkDescriptorSet tb_mesh_system_get_set(TbMeshSystem *self, TbMeshId id);
 void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id);
+
+VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self);
+VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self);
+VkDescriptorSet tb_mesh_system_get_tan_set(TbMeshSystem *self);
+VkDescriptorSet tb_mesh_system_get_uv0_set(TbMeshSystem *self);

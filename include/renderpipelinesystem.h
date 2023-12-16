@@ -54,9 +54,6 @@ typedef struct TbDispatchBatch {
   uint3 groups[MAX_GROUPS];
 } TbDispatchBatch;
 
-typedef TB_DYN_ARR_OF(TbDrawBatch) DrawBatchList;
-typedef TB_DYN_ARR_OF(TbDispatchBatch) DispatchBatchList;
-
 typedef struct TbDrawContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;

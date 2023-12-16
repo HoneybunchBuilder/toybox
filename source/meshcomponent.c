@@ -53,7 +53,7 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
       // Load materials
       self->submeshes[prim_idx].material =
           tb_mat_system_load_material(mat_system, source_path, material);
-      TB_CHECK_RETURN(self->submeshes[prim_idx].material,
+      TB_CHECK_RETURN(self->submeshes[prim_idx].material.id,
                       "Failed to load material", false);
 
       size_t index_size =
@@ -164,7 +164,6 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
 
     // Load mesh
     TbMeshId id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
-    TB_CHECK_RETURN(id != TbInvalidMeshId, "Failed to load mesh", false);
 
     // Find Mesh Component
     ecs_entity_t mesh_ent = 0;
@@ -174,7 +173,7 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
       TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
       for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
         TbMeshComponent *mesh = &meshes[mesh_idx];
-        if (mesh->mesh_id == id) {
+        if (mesh->mesh_id.id == id.id) {
           mesh_ent = mesh_it.entities[mesh_idx];
           mesh_comp = mesh;
           break;

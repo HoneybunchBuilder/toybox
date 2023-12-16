@@ -15,11 +15,16 @@
 #define TB_MAX_RENDER_PASS_TRANS 16
 #define TB_MAX_BARRIERS 16
 
-typedef struct BufferCopy {
+typedef struct TbResourceId {
+  uint64_t id;
+  uint32_t idx;
+} TbResourceId;
+
+typedef struct TbBufferCopy {
   VkBuffer src;
   VkBuffer dst;
   VkBufferCopy region;
-} BufferCopy;
+} TbBufferCopy;
 
 typedef struct BufferImageCopy {
   VkBuffer src;
@@ -29,7 +34,7 @@ typedef struct BufferImageCopy {
 } BufferImageCopy;
 
 typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbSetWriteQueue;
-typedef TB_DYN_ARR_OF(BufferCopy) TbBufferCopyQueue;
+typedef TB_DYN_ARR_OF(TbBufferCopy) TbBufferCopyQueue;
 typedef TB_DYN_ARR_OF(BufferImageCopy) TbBufferImageCopyQueue;
 
 typedef struct TbHostBuffer {

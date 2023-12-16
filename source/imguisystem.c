@@ -632,7 +632,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
           // to the gpu every frame
           uint64_t tmp_offset = 0;
           void *tmp_ptr = NULL;
-          if (tb_rnd_sys_tmp_buffer_get_ptr(sys->render_system, imgui_size,
+          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->render_system, imgui_size,
                                             0x40, &tmp_offset,
                                             &tmp_ptr) != VK_SUCCESS) {
             TracyCZoneEnd(ctx);

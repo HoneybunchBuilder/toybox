@@ -2,19 +2,21 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-GLTF_INDIRECT_SET(space0);
-GLTF_VIEW_SET(space1);
-GLTF_OBJECT_SET(space2);
-GLTF_MESH_SET(space3);
-GLTF_TEXTURE_SET(space4);
-GLTF_MATERIAL_SET(space5);
-
-[[vk::push_constant]]
-ConstantBuffer<GLTFPushConstants> consts : register(b0, space6);
+GLTF_VIEW_SET(space0);
+GLTF_MATERIAL_SET(space1);
+GLTF_DRAW_SET(space2);
+TB_OBJECT_SET(space3);
+TB_TEXTURE_SET(space4);
+TB_IDX_SET(space5)
+TB_POS_SET(space6);
+TB_NORM_SET(space7);
+TB_TAN_SET(space8);
+TB_UV0_SET(space9);
 
 struct VertexIn {
-  int vert_idx : SV_VertexID;
-  int inst : SV_InstanceID;
+  int32_t vert_idx : SV_VertexID;
+  [[vk::builtin("DrawIndex")]]
+  uint32_t draw_idx : POSITION0;
 };
 
 struct Interpolators {
@@ -25,31 +27,33 @@ struct Interpolators {
   float3 tangent : TANGENT0;
   float3 binormal : BINORMAL0;
   float2 uv : TEXCOORD0;
-  int32_t obj_idx : TEXCOORD1;
+  uint32_t mat_idx : TEXCOORD1;
 };
 
 Interpolators vert(VertexIn i) {
-  int32_t obj_idx = trans_indices[i.inst];
-  TbCommonObjectData obj_data = object_data[NonUniformResourceIndex(obj_idx)];
-  int32_t vert_perm = obj_data.perm;
-  int32_t mat_idx = consts.mat_idx;
-  GLTFMaterialData gltf = gltf_data[NonUniformResourceIndex(mat_idx)][0];
+  TbGLTFDrawData draw = tb_get_gltf_draw_data(i.draw_idx, draw_data);
+  int32_t vert_perm = draw.perm;
+  uint32_t obj_idx = draw.obj_idx;
+  uint32_t mesh_idx = draw.mesh_idx;
+  uint32_t mat_idx = draw.mat_idx;
+
+  TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
+  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(mat_idx, gltf_data);
   int32_t mat_perm = gltf.perm;
 
   // Gather vertex data from supplied descriptors
   // These functions will give us suitable defaults if this object
   // doesn't provide these vertex attributes
-  int3 local_pos = tb_vert_get_local_pos(vert_perm, i.vert_idx, pos_buffer);
-  float3 normal = tb_vert_get_normal(vert_perm, i.vert_idx, norm_buffer);
-  float4 tangent = tb_vert_get_tangent(vert_perm, i.vert_idx, tan_buffer);
-  int2 uv0 = tb_vert_get_uv0(vert_perm, i.vert_idx, uv0_buffer);
+  int32_t idx = tb_get_idx(i.vert_idx, mesh_idx, idx_buffers);
+  int3 local_pos = tb_vert_get_local_pos(vert_perm, idx, mesh_idx, pos_buffers);
+  float3 normal = tb_vert_get_normal(vert_perm, idx, mesh_idx, norm_buffers);
+  float4 tangent = tb_vert_get_tangent(vert_perm, idx, mesh_idx, tan_buffers);
+  int2 uv0 = tb_vert_get_uv0(vert_perm, idx, mesh_idx, uv0_buffers);
 
-  float4x4 m = object_data[NonUniformResourceIndex(obj_idx)]
-                   .m; // Per object model matrix
-  float3 world_pos = mul(m, float4(local_pos, 1)).xyz;
+  float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
   float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
-  float3x3 orientation = (float3x3)m;
+  float3x3 orientation = (float3x3)obj_data.m;
 
   Interpolators o;
   o.clip_pos = clip_pos;
@@ -59,30 +63,26 @@ Interpolators vert(VertexIn i) {
   o.tangent = normalize(mul(orientation, tangent.xyz));
   o.binormal = normalize(cross(o.tangent, o.normal) * tangent.w);
   o.uv = uv_transform(uv0, gltf.tex_transform);
-  o.obj_idx = obj_idx;
+  o.mat_idx = mat_idx;
   return o;
 }
 
 float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
-  TbCommonObjectData obj_data = object_data[NonUniformResourceIndex(i.obj_idx)];
-  int32_t mat_idx = consts.mat_idx;
-  GLTFMaterialData gltf = gltf_data[NonUniformResourceIndex(mat_idx)][0];
-  int32_t mat_perm = gltf.perm;
+  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(i.mat_idx, gltf_data);
 
   float4 base_color = 1;
 
   // World-space normal
   float3 N = normalize(i.normal);
-  if ((mat_perm & GLTF_PERM_NORMAL_MAP) > 0) {
+  if ((gltf.perm & GLTF_PERM_NORMAL_MAP) > 0) {
     // Construct TBN
     float3x3 tbn = float3x3(normalize(i.binormal), normalize(i.tangent),
                             normalize(i.normal));
 
     // Convert from tangent space to world space
-    float3 tangent_space_normal =
-        gltf_textures[NonUniformResourceIndex(gltf.normal_idx)]
-            .Sample(material_sampler, i.uv)
-            .xyz;
+    float3 tangent_space_normal = tb_get_texture(gltf.normal_idx, gltf_textures)
+                                      .Sample(material_sampler, i.uv)
+                                      .xyz;
     tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
     N = normalize(mul(tangent_space_normal, tbn));
   }
@@ -93,7 +93,7 @@ float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
   float2 screen_uv = (i.clip_pos.xy / i.clip_pos.w) * 0.5 + 0.5;
 
   float4 out_color = 0;
-  if ((mat_perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) > 0) {
+  if ((gltf.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) > 0) {
     PBRMetallicRoughness mr = gltf.pbr_metallic_roughness;
     float metallic = mr.metal_rough_factors[0];
     float roughness = mr.metal_rough_factors[1];
@@ -101,24 +101,22 @@ float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
     // TODO: Handle alpha masking
     {
       base_color = mr.base_color_factor;
-      if ((mat_perm & GLTF_PERM_BASE_COLOR_MAP) > 0) {
-        base_color *=
-            gltf_textures[NonUniformResourceIndex(gltf.color_idx)].Sample(
-                material_sampler, i.uv);
+      if ((gltf.perm & GLTF_PERM_BASE_COLOR_MAP) > 0) {
+        base_color *= tb_get_texture(gltf.color_idx, gltf_textures)
+                          .Sample(material_sampler, i.uv);
       }
-      if (mat_perm & GLTF_PERM_ALPHA_CLIP) {
+      if ((gltf.perm & GLTF_PERM_ALPHA_CLIP) > 0) {
         if (base_color.a < ALPHA_CUTOFF(gltf)) {
           discard;
         }
       }
     }
 
-    if ((mat_perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) > 0) {
+    if ((gltf.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) > 0) {
       // The red channel of this texture *may* store occlusion.
       // TODO: Check the perm for occlusion
-      float4 mr_sample =
-          gltf_textures[NonUniformResourceIndex(gltf.pbr_idx)].Sample(
-              material_sampler, i.uv);
+      float4 mr_sample = tb_get_texture(gltf.pbr_idx, gltf_textures)
+                             .Sample(material_sampler, i.uv);
       roughness *= mr_sample.g;
       metallic *= mr_sample.b;
     }
