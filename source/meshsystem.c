@@ -1334,13 +1334,14 @@ void mesh_draw_tick(ecs_iter_t *it) {
                   .vertexCount = sm->index_count,
                   .instanceCount = 1,
               };
-              draw_data[draw_idx] =
-                  (TbGLTFDrawData){
-                      .perm = sm->vertex_perm,
-                      .obj_idx = ro->index,
-                      .mesh_idx = mesh->mesh_id.idx,
-                      .mat_idx = sm->material.idx,
-                  },
+              draw_data[draw_idx] = (TbGLTFDrawData){
+                  .perm = sm->vertex_perm,
+                  .obj_idx = ro->index,
+                  .mesh_idx = mesh->mesh_id.idx,
+                  .mat_idx = sm->material.idx,
+                  .index_offset = sm->index_offset,
+                  .vertex_offset = sm->vertex_offset,
+              };
               (*draw_count) += 1;
             }
           }

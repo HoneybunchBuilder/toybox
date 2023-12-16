@@ -44,7 +44,9 @@ Interpolators vert(VertexIn i) {
   // Gather vertex data from supplied descriptors
   // These functions will give us suitable defaults if this object
   // doesn't provide these vertex attributes
-  int32_t idx = tb_get_idx(i.vert_idx, mesh_idx, idx_buffers);
+  int32_t idx =
+      tb_get_idx(i.vert_idx + draw.index_offset, mesh_idx, idx_buffers) +
+      draw.vertex_offset;
   int3 local_pos = tb_vert_get_local_pos(vert_perm, idx, mesh_idx, pos_buffers);
   float3 normal = tb_vert_get_normal(vert_perm, idx, mesh_idx, norm_buffers);
   float4 tangent = tb_vert_get_tangent(vert_perm, idx, mesh_idx, tan_buffers);

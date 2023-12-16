@@ -59,6 +59,10 @@ typedef struct TB_GPU_STRUCT TbGLTFDrawData {
   uint32_t obj_idx;
   uint32_t mesh_idx;
   uint32_t mat_idx;
+  uint32_t index_offset;
+  uint32_t vertex_offset;
+  uint32_t pad0;
+  uint32_t pad1;
 }
 TbGLTFDrawData;
 

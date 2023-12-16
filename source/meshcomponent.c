@@ -56,9 +56,11 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
       TB_CHECK_RETURN(self->submeshes[prim_idx].material.id,
                       "Failed to load material", false);
 
+      // calculate the aligned size
       size_t index_size =
           tb_calc_aligned_size(indices->count, indices->stride, 16);
-      offset += index_size;
+      // calculate number of indices that represent that aligned size
+      offset += (index_size / indices->stride);
     }
 
     // While we determine the vertex offset we'll also calculate the local space

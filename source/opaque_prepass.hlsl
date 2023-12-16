@@ -26,7 +26,9 @@ Interpolators vert(VertexIn i) {
   TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
 
   int32_t mesh_idx = draw.mesh_idx;
-  int32_t idx = tb_get_idx(i.vert_idx, mesh_idx, idx_buffers);
+  int32_t idx =
+      tb_get_idx(i.vert_idx + draw.index_offset, mesh_idx, idx_buffers) +
+      draw.vertex_offset;
   int3 local_pos = tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
   float3 normal = tb_vert_get_normal(draw.perm, idx, mesh_idx, norm_buffers);
 
