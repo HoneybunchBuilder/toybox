@@ -1081,8 +1081,9 @@ void mesh_descriptor_update(ecs_iter_t *it) {
   // old pool and creating a new pool for all the new writes
   const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
   const uint64_t incoming_mesh_count = TB_DYN_ARR_SIZE(mesh_sys->meshes);
-  if (incoming_mesh_count > mesh_sys->mesh_pool.capacity) {
-    mesh_sys->mesh_pool.capacity = (incoming_mesh_count + 128) * view_count;
+  const uint64_t incoming_cap = (incoming_mesh_count + 128) * view_count;
+  if (incoming_cap > mesh_sys->mesh_pool.capacity) {
+    mesh_sys->mesh_pool.capacity = incoming_cap;
     const uint64_t desc_count = mesh_sys->mesh_pool.capacity;
 
     // Re-create pool and allocate the one set that everything will be bound to
@@ -1115,7 +1116,8 @@ void mesh_descriptor_update(ecs_iter_t *it) {
       tb_rnd_resize_desc_pool(rnd_sys, &create_info, layouts, &alloc_info,
                               &mesh_sys->mesh_pool, view_count);
     }
-  } else {
+  }
+  if (incoming_mesh_count <= mesh_sys->mesh_pool.count) {
     // No work to do :)
     return;
   }
