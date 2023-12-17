@@ -48,7 +48,19 @@ typedef int32_t __attribute__((ext_vector_type(2))) int2;
 typedef uint32_t __attribute__((ext_vector_type(4))) uint4;
 typedef uint32_t __attribute__((ext_vector_type(3))) uint3;
 typedef uint32_t __attribute__((ext_vector_type(2))) uint2;
-typedef uint32_t uint; // For hlsl compatibility
+
+typedef __fp16 __attribute__((ext_vector_type(4))) half4;
+typedef __fp16 __attribute__((ext_vector_type(3))) half3;
+typedef __fp16 __attribute__((ext_vector_type(2))) half2;
+typedef __fp16 half;
+
+typedef int16_t __attribute__((ext_vector_type(4))) int16_t4;
+typedef int16_t __attribute__((ext_vector_type(3))) int16_t3;
+typedef int16_t __attribute__((ext_vector_type(2))) int16_t2;
+
+typedef uint16_t __attribute__((ext_vector_type(4))) uint16_t4;
+typedef uint16_t __attribute__((ext_vector_type(3))) uint16_t3;
+typedef uint16_t __attribute__((ext_vector_type(2))) uint16_t2;
 
 // All matrices are column major since HLSL expects that by default
 

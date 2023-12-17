@@ -572,21 +572,14 @@ float4x4 tb_transform_to_matrix(const TbTransform *t) {
 }
 
 TbTransform tb_transform_from_node(const cgltf_node *node) {
-  TbTransform transform = {.position = {0}};
-
-  transform.position = (float3){node->translation[0], node->translation[1],
-                                node->translation[2]};
-
-  transform.rotation = tb_normq((TbQuaternion){
-      node->rotation[0],
-      node->rotation[1],
-      node->rotation[2],
-      node->rotation[3],
-  });
-
-  transform.scale = (float3){node->scale[0], node->scale[1], node->scale[2]};
-
-  return transform;
+  SDL_assert(node);
+  return (TbTransform){
+      .position = tb_f3(node->translation[0], node->translation[1],
+                        node->translation[2]),
+      .rotation = tb_normq(tb_f4(node->rotation[0], node->rotation[1],
+                                 node->rotation[2], node->rotation[3])),
+      .scale = tb_f3(node->scale[0], node->scale[1], node->scale[2]),
+  };
 }
 
 // Right Handed
