@@ -94,6 +94,7 @@ typedef struct TbMeshSystem {
   TbFrameDescriptorPoolList draw_pools;
   // For per mesh bindless vertex buffers
   TbDescriptorPool mesh_pool;
+  uint32_t mesh_desc_count;
 } TbMeshSystem;
 
 void tb_register_mesh_sys(TbWorld *world);
