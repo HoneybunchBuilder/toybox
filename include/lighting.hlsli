@@ -72,9 +72,10 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
 float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
                    float2 brdf, float3 albedo, float metallic, float roughness,
                    float shadow) {
-  float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
+  float s = max(shadow, 0.3);
+  float3 F = fresnel_schlick_roughness(NdotV, F0, roughness) * s;
 
-  float3 kd = lerp(1.0f - F, 0.0f, metallic * shadow);
+  float3 kd = lerp(1.0f - F, 0.0f, metallic * s);
 
   float3 diffuse_ibl = kd * albedo * irradiance;
 
@@ -280,9 +281,10 @@ float shadow_visibility(Light l, Surface s) {
     }
   }
 
-  const float3 cascade_colors[TB_CASCADE_COUNT] = {
-      float3(1.0f, 0.0, 0.0f), float3(0.0f, 1.0f, 0.0f),
-      float3(0.0f, 0.0f, 1.0f), float3(1.0f, 1.0f, 0.0f)};
+  const float3 cascade_colors[TB_CASCADE_COUNT] = { float3(1.0f, 0.0, 0.0f),
+                                                    float3(0.0f, 1.0f, 0.0f),
+                                                    float3(0.0f, 0.0f, 1.0f),
+                                                    float3(1.0f, 1.0f, 0.0f) };
 
   // return cascade_colors[cascade_idx];
 
