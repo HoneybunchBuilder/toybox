@@ -101,8 +101,17 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
 
       // Read AABB from gltf
       {
-        const cgltf_attribute *pos_attr = &prim->attributes[0];
+        const cgltf_attribute *pos_attr = NULL;
+        // Find position attribute
+        for (size_t i = 0; i < prim->attributes_count; ++i) {
+          tb_auto attr = &prim->attributes[i];
+          if (attr->type == cgltf_attribute_type_position) {
+            pos_attr = attr;
+            break;
+          }
+        }
 
+        TB_CHECK(pos_attr, "Expected a position attribute");
         TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
                  "Unexpected vertex attribute type");
 
