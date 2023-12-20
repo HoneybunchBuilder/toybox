@@ -500,7 +500,7 @@ TbMeshSystem create_mesh_system_internal(
               (VkDescriptorSetLayoutBinding[1]){
                   {
                       .binding = 0,
-                      .descriptorCount = 2048,
+                      .descriptorCount = 4096,
                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                   },
@@ -1282,25 +1282,26 @@ void mesh_draw_tick(ecs_iter_t *it) {
                                      (void **)&trans_draw_data);
 
       // Allocate per-draw descriptor sets
+      const uint32_t set_count = 2;
       {
         VkDescriptorPoolCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = 2,
+            .maxSets = set_count * 8,
             .poolSizeCount = 1,
             .pPoolSizes =
                 (VkDescriptorPoolSize[1]){
                     {
-                        .descriptorCount = 1,
+                        .descriptorCount = set_count * 8,
                         .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     },
                 },
         };
-        VkDescriptorSetLayout layouts[2] = {
+        VkDescriptorSetLayout layouts[set_count] = {
             mesh_sys->draw_set_layout,
             mesh_sys->draw_set_layout,
         };
         tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
-                                    mesh_sys->draw_pools.pools, 2);
+                                    mesh_sys->draw_pools.pools, set_count);
       }
 
       TracyCZoneN(ctx2, "Iterate Meshes", true);

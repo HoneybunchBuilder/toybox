@@ -132,7 +132,7 @@ void tick_render_object_system(ecs_iter_t *it) {
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         .poolSizeCount = 1,
         .pPoolSizes = (VkDescriptorPoolSize[1]){{
-            .descriptorCount = 1,
+            .descriptorCount = trans_buffer->obj_count,
             .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         }},
         .maxSets = 1,
