@@ -40,17 +40,17 @@ typedef struct TbLumAvgRenderWork {
   TbDispatchContextId ctx;
 } TbLumAvgRenderWork;
 
-VkResult tb_create_lum_hist_work(TbRenderSystem *render_system,
-                                 TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_lum_hist_work(TbRenderSystem *rnd_sys,
+                                 TbRenderPipelineSystem *rp_sys,
                                  VkSampler sampler, TbRenderPassId pass,
                                  TbLumHistRenderWork *work);
 
-void tb_destroy_lum_hist_work(TbRenderSystem *render_system,
+void tb_destroy_lum_hist_work(TbRenderSystem *rnd_sys,
                               TbLumHistRenderWork *work);
 
-VkResult tb_create_lum_avg_work(TbRenderSystem *render_system,
-                                TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_lum_avg_work(TbRenderSystem *rnd_sys,
+                                TbRenderPipelineSystem *rp_sys,
                                 TbRenderPassId pass, TbLumAvgRenderWork *work);
-void tb_destroy_lum_avg_work(TbRenderSystem *render_system,
+void tb_destroy_lum_avg_work(TbRenderSystem *rnd_sys,
                              TbLumAvgRenderWork *work);
 #endif

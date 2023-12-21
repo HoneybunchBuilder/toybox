@@ -46,9 +46,9 @@ void camera_update_tick(ecs_iter_t *it) {
 
   // TODO: Find a cleaner expression for updating this
   camera->width =
-      (float)view_sys->render_system->render_thread->swapchain.width;
+      (float)view_sys->rnd_sys->render_thread->swapchain.width;
   camera->height =
-      (float)view_sys->render_system->render_thread->swapchain.height;
+      (float)view_sys->rnd_sys->render_thread->swapchain.height;
 
   // Calculate view projection matrix
   view_data.vp = tb_mulf44f44(proj, view);
@@ -61,7 +61,7 @@ void camera_update_tick(ecs_iter_t *it) {
   // HACK - setting target here to the swapchain in a janky way that's
   // just used to facilitate other hacks
   tb_view_system_set_view_target(view_sys, camera->view_id,
-                                 view_sys->render_target_system->swapchain);
+                                 view_sys->rt_sys->swapchain);
   tb_view_system_set_view_data(view_sys, camera->view_id, &view_data);
   tb_view_system_set_view_frustum(view_sys, camera->view_id, &frustum);
   TracyCZoneEnd(ctx);

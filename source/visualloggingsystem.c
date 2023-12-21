@@ -126,7 +126,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_primitive_pipeline(TbRenderSystem *render_system,
+VkResult create_primitive_pipeline(TbRenderSystem *rnd_sys,
                                    VkFormat color_format, VkFormat depth_format,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
@@ -141,13 +141,13 @@ VkResult create_primitive_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(primitive_vert);
     create_info.pCode = (const uint32_t *)primitive_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Primitive Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Primitive Vert",
                                &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load primitive vert shader module", err);
 
     create_info.codeSize = sizeof(primitive_frag);
     create_info.pCode = (const uint32_t *)primitive_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Primitive Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Primitive Frag",
                                &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load primitive frag shader module", err);
   }
@@ -250,26 +250,26 @@ VkResult create_primitive_pipeline(TbRenderSystem *render_system,
       .layout = layout,
   };
 
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Primitive Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create primitive pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, vert_mod);
-  tb_rnd_destroy_shader(render_system, frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
   return err;
 }
 
 TbVisualLoggingSystem create_visual_logging_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
-    TbViewSystem *view_system, TbRenderPipelineSystem *render_pipe_system,
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+    TbViewSystem *view_sys, TbRenderPipelineSystem *rp_sys,
     TbMeshSystem *mesh_system, TbCoreUISystem *coreui) {
   TbVisualLoggingSystem sys = {
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
-      .render_system = render_system,
-      .view_system = view_system,
-      .render_pipe_system = render_pipe_system,
+      .rnd_sys = rnd_sys,
+      .view_sys = view_sys,
+      .rp_sys = rp_sys,
       .mesh_system = mesh_system,
       .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
   };
@@ -336,10 +336,10 @@ TbVisualLoggingSystem create_visual_logging_system(
         .setLayoutCount = 1,
         .pSetLayouts =
             (VkDescriptorSetLayout[1]){
-                view_system->set_layout,
+                view_sys->set_layout,
             },
     };
-    err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+    err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
                                         "Primitive Pipeline Layout",
                                         &sys.pipe_layout);
     TB_VK_CHECK(err, "Failed to create primitive pipeline layout");
@@ -350,17 +350,17 @@ TbVisualLoggingSystem create_visual_logging_system(
     VkFormat color_format = VK_FORMAT_UNDEFINED;
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
     tb_render_pipeline_get_attachments(
-        render_pipe_system, render_pipe_system->transparent_color_pass,
+        rp_sys, rp_sys->transparent_color_pass,
         &attach_count, NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
     TbPassAttachment attach_info[2] = {0};
     tb_render_pipeline_get_attachments(
-        render_pipe_system, render_pipe_system->transparent_color_pass,
+        rp_sys, rp_sys->transparent_color_pass,
         &attach_count, attach_info);
 
     for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
       VkFormat format =
-          tb_render_target_get_format(render_pipe_system->render_target_system,
+          tb_render_target_get_format(rp_sys->rt_sys,
                                       attach_info[attach_idx].attachment);
       if (format == VK_FORMAT_D32_SFLOAT) {
         depth_format = format;
@@ -369,7 +369,7 @@ TbVisualLoggingSystem create_visual_logging_system(
       }
     }
 
-    err = create_primitive_pipeline(render_system, color_format, depth_format,
+    err = create_primitive_pipeline(rnd_sys, color_format, depth_format,
                                     sys.pipe_layout, &sys.pipeline);
     TB_VK_CHECK(err, "Failed to create primitive pipeline");
   }
@@ -378,10 +378,10 @@ TbVisualLoggingSystem create_visual_logging_system(
     TbDrawContextDescriptor desc = {
         .batch_size = sizeof(VLogDrawBatch),
         .draw_fn = vlog_draw_record,
-        .pass_id = render_pipe_system->transparent_color_pass,
+        .pass_id = rp_sys->transparent_color_pass,
     };
     sys.draw_ctx =
-        tb_render_pipeline_register_draw_context(render_pipe_system, &desc);
+        tb_render_pipeline_register_draw_context(rp_sys, &desc);
   }
 
   return sys;
@@ -391,8 +391,8 @@ void destroy_visual_logging_system(TbVisualLoggingSystem *self) {
 #ifndef FINAL
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->sphere_mesh);
 
-  tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
-  tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->pipe_layout);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->pipeline);
 
   TB_DYN_ARR_DESTROY(self->frames);
 #endif
@@ -412,8 +412,8 @@ void vlog_draw_tick(ecs_iter_t *it) {
     const TbVLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
 
     // TODO: Make this less hacky
-    const uint32_t width = sys->render_system->render_thread->swapchain.width;
-    const uint32_t height = sys->render_system->render_thread->swapchain.height;
+    const uint32_t width = sys->rnd_sys->render_thread->swapchain.width;
+    const uint32_t height = sys->rnd_sys->render_thread->swapchain.height;
 
     // Get the vp matrix for the primary view
     for (int32_t i = 0; i < it->count; ++i) {
@@ -433,7 +433,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
           .shape_scale = sys->sphere_scale,
           .type = TB_VLOG_SHAPE_LOCATION,
           .view_set =
-              tb_view_system_get_descriptor(sys->view_system, camera->view_id),
+              tb_view_system_get_descriptor(sys->view_sys, camera->view_id),
       };
 
       TbDrawBatch *batch = tb_alloc_tp(sys->tmp_alloc, TbDrawBatch);
@@ -452,7 +452,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
         ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
       }
 
-      tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+      tb_render_pipeline_issue_draw_batch(sys->rp_sys,
                                           sys->draw_ctx, 1, batch);
     }
   }

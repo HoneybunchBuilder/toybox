@@ -22,10 +22,10 @@ typedef struct TbSkySystemFrameState {
 #define PREFILTER_PASS_COUNT 10
 
 typedef struct TbSkySystem {
-  TbRenderSystem *render_system;
-  TbRenderPipelineSystem *render_pipe_system;
-  TbRenderTargetSystem *render_target_system;
-  TbViewSystem *view_system;
+  TbRenderSystem *rnd_sys;
+  TbRenderPipelineSystem *rp_sys;
+  TbRenderTargetSystem *rt_sys;
+  TbViewSystem *view_sys;
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 

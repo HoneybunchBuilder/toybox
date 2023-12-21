@@ -30,7 +30,7 @@ uint32_t find_tex_by_id(TbTextureSystem *self, TbTextureId id) {
 typedef struct KTX2IterData {
   VkBuffer buffer;
   VkImage image;
-  BufferImageCopy *uploads;
+  TbBufferImageCopy *uploads;
   uint64_t offset;
 } KTX2IterData;
 
@@ -42,7 +42,7 @@ static ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
   (void)pixels;
   KTX2IterData *user_data = (KTX2IterData *)userdata;
 
-  user_data->uploads[mip_level] = (BufferImageCopy){
+  user_data->uploads[mip_level] = (TbBufferImageCopy){
       .src = user_data->buffer,
       .dst = user_data->image,
       .region =
@@ -216,8 +216,8 @@ TbTextureId tb_tex_system_create_texture_ktx2(TbTextureSystem *self,
 
     // Issue uploads
     {
-      BufferImageCopy *uploads =
-          tb_alloc_nm_tp(rnd_sys->tmp_alloc, mip_levels, BufferImageCopy);
+      TbBufferImageCopy *uploads =
+          tb_alloc_nm_tp(rnd_sys->tmp_alloc, mip_levels, TbBufferImageCopy);
 
       KTX2IterData iter_data = {
           .buffer = texture->host_buffer.buffer,
@@ -574,7 +574,7 @@ TbTextureId tb_tex_system_create_texture(TbTextureSystem *self,
 
     // Issue upload
     {
-      BufferImageCopy upload = {
+      TbBufferImageCopy upload = {
           .src = texture->host_buffer.buffer,
           .dst = texture->gpu_image.image,
           .region =

@@ -26,16 +26,16 @@ typedef struct TbBufferCopy {
   VkBufferCopy region;
 } TbBufferCopy;
 
-typedef struct BufferImageCopy {
+typedef struct TbBufferImageCopy {
   VkBuffer src;
   VkImage dst;
   VkBufferImageCopy region;
   VkImageSubresourceRange range;
-} BufferImageCopy;
+} TbBufferImageCopy;
 
 typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbSetWriteQueue;
 typedef TB_DYN_ARR_OF(TbBufferCopy) TbBufferCopyQueue;
-typedef TB_DYN_ARR_OF(BufferImageCopy) TbBufferImageCopyQueue;
+typedef TB_DYN_ARR_OF(TbBufferImageCopy) TbBufferImageCopyQueue;
 
 typedef struct TbHostBuffer {
   VkBuffer buffer;

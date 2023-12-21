@@ -1305,7 +1305,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       // Upload all buffer to image requests
       if (TB_DYN_ARR_SIZE(state->buf_img_copy_queue) > 0) {
         TB_DYN_ARR_FOREACH(state->buf_img_copy_queue, i) {
-          const BufferImageCopy *up =
+          const TbBufferImageCopy *up =
               &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
 
           // Issue an upload command only if the src buffer exists

@@ -37,7 +37,7 @@ typedef struct TbTransformsBuffer {
 } TbTransformsBuffer;
 
 typedef struct TbRenderObjectSystem {
-  TbRenderSystem *render_system;
+  TbRenderSystem *rnd_sys;
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 

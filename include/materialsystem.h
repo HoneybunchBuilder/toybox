@@ -24,7 +24,7 @@ typedef struct TbMaterialSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *render_system;
+  TbRenderSystem *rnd_sys;
   TbTextureSystem *texture_system;
 
   VkSampler sampler;        // Immutable sampler for material descriptor sets

@@ -45,8 +45,7 @@ typedef struct TbMesh {
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 } TbMesh;
 
-VkResult create_prepass_pipeline(TbRenderSystem *render_system,
-                                 VkFormat depth_format,
+VkResult create_prepass_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                                  VkPipelineLayout pipe_layout,
                                  VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -60,15 +59,15 @@ VkResult create_prepass_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(opaque_prepass_vert);
     create_info.pCode = (const uint32_t *)opaque_prepass_vert;
-    err = tb_rnd_create_shader(render_system, &create_info,
-                               "Opaque Prepass Vert", &vert_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Vert",
+                               &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load opaque prepass vert shader module",
                     err);
 
     create_info.codeSize = sizeof(opaque_prepass_frag);
     create_info.pCode = (const uint32_t *)opaque_prepass_frag;
-    err = tb_rnd_create_shader(render_system, &create_info,
-                               "Opaque Prepass Frag", &frag_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag",
+                               &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load opaque prepass frag shader module",
                     err);
   }
@@ -169,18 +168,18 @@ VkResult create_prepass_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Opaque Prepass Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, vert_mod);
-  tb_rnd_destroy_shader(render_system, frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
   return err;
 }
 
-VkResult create_mesh_pipelines(TbRenderSystem *render_system,
-                               VkFormat color_format, VkFormat depth_format,
+VkResult create_mesh_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
+                               VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                VkPipeline *opaque_pipe,
                                VkPipeline *transparent_pipe) {
@@ -195,8 +194,7 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
         .codeSize = sizeof(gltf_vert),
         .pCode = (const uint32_t *)gltf_vert,
     };
-    err = tb_rnd_create_shader(render_system, &create_info, "GLTF Vert",
-                               &vert_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to create shader module", err);
   }
   {
@@ -205,8 +203,7 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
         .codeSize = sizeof(gltf_frag),
         .pCode = (const uint32_t *)gltf_frag,
     };
-    err = tb_rnd_create_shader(render_system, &create_info, "GLTF Frag",
-                               &frag_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to create shader module", err);
   }
 
@@ -325,19 +322,18 @@ VkResult create_mesh_pipelines(TbRenderSystem *render_system,
 
   // Create pipelines
   {
-    err = tb_rnd_create_graphics_pipelines(render_system, 1, &opaque_ci,
+    err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &opaque_ci,
                                            "Opaque Mesh Pipeline", opaque_pipe);
     TB_VK_CHECK_RET(err, "Failed to create opaque pipeline", err);
 
-    err = tb_rnd_create_graphics_pipelines(render_system, 1, &trans_ci,
-                                           "Transparent Mesh Pipeline",
-                                           transparent_pipe);
+    err = tb_rnd_create_graphics_pipelines(
+        rnd_sys, 1, &trans_ci, "Transparent Mesh Pipeline", transparent_pipe);
     TB_VK_CHECK_RET(err, "Failed to create trans pipeline", err);
   }
 
   // Can destroy shader moduless
-  tb_rnd_destroy_shader(render_system, vert_mod);
-  tb_rnd_destroy_shader(render_system, frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
   return err;
 }
@@ -459,23 +455,22 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 TbMeshSystem create_mesh_system_internal(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
     TbMaterialSystem *mat_sys, TbTextureSystem *tex_sys, TbViewSystem *view_sys,
-    TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *render_pipe_system) {
+    TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
-      .render_system = render_system,
+      .rnd_sys = rnd_sys,
       .material_system = mat_sys,
-      .view_system = view_sys,
+      .view_sys = view_sys,
       .render_object_system = ro_sys,
-      .render_pipe_system = render_pipe_system,
+      .rp_sys = rp_sys,
   };
   TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
-  TbRenderPassId prepass_id = render_pipe_system->opaque_depth_normal_pass;
-  TbRenderPassId opaque_pass_id = render_pipe_system->opaque_color_pass;
-  TbRenderPassId transparent_pass_id =
-      render_pipe_system->transparent_color_pass;
+  TbRenderPassId prepass_id = rp_sys->opaque_depth_normal_pass;
+  TbRenderPassId opaque_pass_id = rp_sys->opaque_color_pass;
+  TbRenderPassId transparent_pass_id = rp_sys->transparent_color_pass;
 
   // Setup mesh system for rendering
   {
@@ -506,8 +501,8 @@ TbMeshSystem create_mesh_system_internal(
                   },
               },
       };
-      err = tb_rnd_create_set_layout(render_system, &create_info,
-                                     "Mesh Attr Layout", &sys.mesh_set_layout);
+      err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Mesh Attr Layout",
+                                     &sys.mesh_set_layout);
       TB_VK_CHECK(err, "Failed to create mesh attr set layout");
     }
 
@@ -527,8 +522,8 @@ TbMeshSystem create_mesh_system_internal(
                   },
               },
       };
-      err = tb_rnd_create_set_layout(render_system, &create_info,
-                                     "Instance Layout", &sys.draw_set_layout);
+      err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Instance Layout",
+                                     &sys.draw_set_layout);
       TB_VK_CHECK(err, "Failed to create instanced set layout");
     }
 
@@ -547,7 +542,7 @@ TbMeshSystem create_mesh_system_internal(
                   sys.mesh_set_layout,
               },
       };
-      err = tb_rnd_create_pipeline_layout(render_system, &create_info,
+      err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
                                           "Opaque Depth Normal Prepass Layout",
                                           &sys.prepass_layout);
       TB_VK_CHECK(err, "Failed to create opaque prepass set layout");
@@ -556,7 +551,7 @@ TbMeshSystem create_mesh_system_internal(
     // Create prepass pipeline
     {
       VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-      err = create_prepass_pipeline(sys.render_system, depth_format,
+      err = create_prepass_pipeline(sys.rnd_sys, depth_format,
                                     sys.prepass_layout, &sys.prepass_pipe);
       TB_VK_CHECK(err, "Failed to create opaque prepass pipeline");
     }
@@ -581,47 +576,43 @@ TbMeshSystem create_mesh_system_internal(
                   sys.mesh_set_layout,
               },
       };
-      tb_rnd_create_pipeline_layout(render_system, &create_info,
+      tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
                                     "GLTF Pipeline Layout", &sys.pipe_layout);
     }
 
     // Create opaque and transparent pipelines
     {
       uint32_t attach_count = 0;
-      tb_render_pipeline_get_attachments(
-          sys.render_pipe_system,
-          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
-          NULL);
+      tb_render_pipeline_get_attachments(sys.rp_sys,
+                                         sys.rp_sys->opaque_depth_normal_pass,
+                                         &attach_count, NULL);
       TB_CHECK(attach_count == 2, "Unexpected");
       TbPassAttachment depth_info = {0};
-      tb_render_pipeline_get_attachments(
-          sys.render_pipe_system,
-          sys.render_pipe_system->opaque_depth_normal_pass, &attach_count,
-          &depth_info);
+      tb_render_pipeline_get_attachments(sys.rp_sys,
+                                         sys.rp_sys->opaque_depth_normal_pass,
+                                         &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          sys.render_pipe_system->render_target_system, depth_info.attachment);
+          sys.rp_sys->rt_sys, depth_info.attachment);
 
       VkFormat color_format = VK_FORMAT_UNDEFINED;
       tb_render_pipeline_get_attachments(
-          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
-          &attach_count, NULL);
+          sys.rp_sys, sys.rp_sys->opaque_color_pass, &attach_count, NULL);
       TB_CHECK(attach_count == 2, "Unexpected");
       TbPassAttachment attach_info[2] = {0};
-      tb_render_pipeline_get_attachments(
-          sys.render_pipe_system, sys.render_pipe_system->opaque_color_pass,
-          &attach_count, attach_info);
+      tb_render_pipeline_get_attachments(sys.rp_sys,
+                                         sys.rp_sys->opaque_color_pass,
+                                         &attach_count, attach_info);
 
       for (uint32_t i = 0; i < attach_count; i++) {
         VkFormat format = tb_render_target_get_format(
-            sys.render_pipe_system->render_target_system,
-            attach_info[i].attachment);
+            sys.rp_sys->rt_sys, attach_info[i].attachment);
         if (format != VK_FORMAT_D32_SFLOAT) {
           color_format = format;
           break;
         }
       }
-      err = create_mesh_pipelines(sys.render_system, color_format, depth_format,
+      err = create_mesh_pipelines(sys.rnd_sys, color_format, depth_format,
                                   sys.pipe_layout, &sys.opaque_pipeline,
                                   &sys.transparent_pipeline);
       TB_VK_CHECK(err, "Failed to create mesh pipelines");
@@ -629,34 +620,34 @@ TbMeshSystem create_mesh_system_internal(
   }
   // Register drawing with the pipelines
   sys.prepass_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = prepass_record,
-                              .pass_id = prepass_id,
-                          });
+      rp_sys, &(TbDrawContextDescriptor){
+                  .batch_size = sizeof(TbPrimitiveBatch),
+                  .draw_fn = prepass_record,
+                  .pass_id = prepass_id,
+              });
   sys.opaque_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = opaque_pass_record,
-                              .pass_id = opaque_pass_id,
-                          });
+      rp_sys, &(TbDrawContextDescriptor){
+                  .batch_size = sizeof(TbPrimitiveBatch),
+                  .draw_fn = opaque_pass_record,
+                  .pass_id = opaque_pass_id,
+              });
   sys.transparent_draw_ctx2 = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(TbPrimitiveBatch),
-                              .draw_fn = transparent_pass_record,
-                              .pass_id = transparent_pass_id,
-                          });
+      rp_sys, &(TbDrawContextDescriptor){
+                  .batch_size = sizeof(TbPrimitiveBatch),
+                  .draw_fn = transparent_pass_record,
+                  .pass_id = transparent_pass_id,
+              });
   return sys;
 }
 
 void destroy_mesh_system(TbMeshSystem *self) {
-  TbRenderSystem *render_system = self->render_system;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
-  tb_rnd_destroy_pipeline(render_system, self->opaque_pipeline);
-  tb_rnd_destroy_pipeline(render_system, self->transparent_pipeline);
-  tb_rnd_destroy_pipeline(render_system, self->prepass_pipe);
-  tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_pipe_layout(render_system, self->prepass_layout);
+  tb_rnd_destroy_pipeline(rnd_sys, self->opaque_pipeline);
+  tb_rnd_destroy_pipeline(rnd_sys, self->transparent_pipeline);
+  tb_rnd_destroy_pipeline(rnd_sys, self->prepass_pipe);
+  tb_rnd_destroy_pipe_layout(rnd_sys, self->pipe_layout);
+  tb_rnd_destroy_pipe_layout(rnd_sys, self->prepass_layout);
 
   TB_DYN_ARR_FOREACH(self->meshes, i) {
     if (TB_DYN_ARR_AT(self->meshes, i).ref_count != 0) {
@@ -865,8 +856,8 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                  VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    err = tb_rnd_sys_create_gpu_buffer(self->render_system, &create_info,
-                                       mesh->name, &tb_mesh->gpu_buffer,
+    err = tb_rnd_sys_create_gpu_buffer(self->rnd_sys, &create_info, mesh->name,
+                                       &tb_mesh->gpu_buffer,
                                        &tb_mesh->host_buffer, &ptr);
     TB_VK_CHECK_RET(err, "Failed to create mesh buffer", TbInvalidMeshId);
   }
@@ -968,7 +959,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             .range = index_size,
             .format = idx_format,
         };
-        tb_rnd_create_buffer_view(self->render_system, &create_info,
+        tb_rnd_create_buffer_view(self->rnd_sys, &create_info,
                                   "Mesh Index View", &tb_mesh->index_view);
       }
 
@@ -984,14 +975,14 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             .range = VK_WHOLE_SIZE,
             .format = attr_formats_per_type[attr->type],
         };
-        tb_rnd_create_buffer_view(self->render_system, &create_info,
+        tb_rnd_create_buffer_view(self->rnd_sys, &create_info,
                                   "Mesh Attribute View",
                                   &tb_mesh->attr_views[attr->type - 1]);
       }
     }
 
     // Make sure to flush the gpu alloc if necessary
-    tb_flush_alloc(self->render_system, tb_mesh->gpu_buffer.alloc);
+    tb_flush_alloc(self->rnd_sys, tb_mesh->gpu_buffer.alloc);
   }
 
   TB_DYN_ARR_AT(self->meshes, mesh_idx).ref_count++;
@@ -1036,7 +1027,7 @@ void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id) {
 
   if (mesh->ref_count == 0) {
     // Free the mesh at this index
-    VmaAllocator vma_alloc = self->render_system->vma_alloc;
+    VmaAllocator vma_alloc = self->rnd_sys->vma_alloc;
 
     TbHostBuffer *host_buf = &mesh->host_buffer;
     TbBuffer *gpu_buf = &mesh->gpu_buffer;

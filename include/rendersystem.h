@@ -154,7 +154,7 @@ VkResult tb_rnd_create_graphics_pipelines(
 void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
                            uint32_t upload_count);
 void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
-                                   BufferImageCopy *uploads,
+                                   TbBufferImageCopy *uploads,
                                    uint32_t upload_count);
 
 void tb_rnd_free_gpu_buffer(TbRenderSystem *self, TbBuffer *buffer);

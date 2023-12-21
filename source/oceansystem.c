@@ -101,8 +101,8 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_ocean_pipelines(TbRenderSystem *render_system,
-                                VkFormat color_format, VkFormat depth_format,
+VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
+                                VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *prepass_pipeline,
                                 VkPipeline *pipeline) {
@@ -121,27 +121,27 @@ VkResult create_ocean_pipelines(TbRenderSystem *render_system,
 
     create_info.codeSize = sizeof(oceanprepass_vert);
     create_info.pCode = (const uint32_t *)oceanprepass_vert;
-    err = tb_rnd_create_shader(render_system, &create_info,
-                               "Ocean Prepass Vert", &oceanprepass_vert_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepass Vert",
+                               &oceanprepass_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load ocean prepass vert shader module",
                     err);
 
     create_info.codeSize = sizeof(oceanprepass_frag);
     create_info.pCode = (const uint32_t *)oceanprepass_frag;
-    err = tb_rnd_create_shader(render_system, &create_info,
-                               "Ocean Prepass Frag", &oceanprepass_frag_mod);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepass Frag",
+                               &oceanprepass_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load ocean prepass frag shader module",
                     err);
 
     create_info.codeSize = sizeof(ocean_vert);
     create_info.pCode = (const uint32_t *)ocean_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Vert",
                                &ocean_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load ocean vert shader module", err);
 
     create_info.codeSize = sizeof(ocean_frag);
     create_info.pCode = (const uint32_t *)ocean_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Ocean Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Frag",
                                &ocean_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load ocean frag shader module", err);
   }
@@ -258,7 +258,7 @@ VkResult create_ocean_pipelines(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Ocean Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
 
@@ -297,33 +297,33 @@ VkResult create_ocean_pipelines(TbRenderSystem *render_system,
           .maxDepthBounds = 1.0f,
       },
 
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
-                                         "Ocean Prepass Pipeline",
-                                         prepass_pipeline);
+  err = tb_rnd_create_graphics_pipelines(
+      rnd_sys, 1, &create_info, "Ocean Prepass Pipeline", prepass_pipeline);
   TB_VK_CHECK_RET(err, "Failed to create ocean prepass pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, oceanprepass_vert_mod);
-  tb_rnd_destroy_shader(render_system, oceanprepass_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, oceanprepass_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, oceanprepass_frag_mod);
 
-  tb_rnd_destroy_shader(render_system, ocean_vert_mod);
-  tb_rnd_destroy_shader(render_system, ocean_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, ocean_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, ocean_frag_mod);
 
   return err;
 }
 
-TbOceanSystem create_ocean_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
-    TbRenderPipelineSystem *render_pipe_system, TbMeshSystem *mesh_system,
-    TbViewSystem *view_system, TbRenderTargetSystem *render_target_system,
-    TbVisualLoggingSystem *vlog, TbAudioSystem *audio_system) {
+TbOceanSystem
+create_ocean_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+                    TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
+                    TbMeshSystem *mesh_system, TbViewSystem *view_sys,
+                    TbRenderTargetSystem *rt_sys, TbVisualLoggingSystem *vlog,
+                    TbAudioSystem *audio_system) {
   TbOceanSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
-      .render_system = render_system,
-      .render_pipe_system = render_pipe_system,
+      .rnd_sys = rnd_sys,
+      .rp_sys = rp_sys,
       .mesh_system = mesh_system,
-      .view_system = view_system,
-      .render_target_system = render_target_system,
+      .view_sys = view_sys,
+      .rt_sys = rt_sys,
       .vlog = vlog,
       .audio_system = audio_system,
 
@@ -433,7 +433,7 @@ TbOceanSystem create_ocean_system(
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info, "Ocean Sampler",
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Ocean Sampler",
                                 &sys.sampler);
     TB_VK_CHECK(err, "Failed to create ocean sampler");
   }
@@ -452,8 +452,8 @@ TbOceanSystem create_ocean_system(
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info,
-                                "Ocean Shadow Sampler", &sys.shadow_sampler);
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Ocean Shadow Sampler",
+                                &sys.shadow_sampler);
     TB_VK_CHECK(err, "Failed to create ocean shadow sampler");
   }
 
@@ -496,9 +496,8 @@ TbOceanSystem create_ocean_system(
                 .pImmutableSamplers = &sys.shadow_sampler,
             },
         }};
-    err = tb_rnd_create_set_layout(render_system, &create_info,
-                                   "Ocean Descriptor Set Layout",
-                                   &sys.set_layout);
+    err = tb_rnd_create_set_layout(
+        rnd_sys, &create_info, "Ocean Descriptor Set Layout", &sys.set_layout);
     TB_VK_CHECK(err, "Failed to create ocean descriptor set layout");
   }
 
@@ -510,7 +509,7 @@ TbOceanSystem create_ocean_system(
         .pSetLayouts =
             (VkDescriptorSetLayout[2]){
                 sys.set_layout,
-                sys.view_system->set_layout,
+                sys.view_sys->set_layout,
             },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =
@@ -522,66 +521,63 @@ TbOceanSystem create_ocean_system(
             },
     };
     err = tb_rnd_create_pipeline_layout(
-        render_system, &create_info, "Ocean Pipeline Layout", &sys.pipe_layout);
+        rnd_sys, &create_info, "Ocean Pipeline Layout", &sys.pipe_layout);
     TB_VK_CHECK(err, "Failed to create ocean pipeline layout");
   }
 
   // Retrieve passes
-  TbRenderPassId depth_id = sys.render_pipe_system->transparent_depth_pass;
-  TbRenderPassId color_id = sys.render_pipe_system->transparent_color_pass;
+  TbRenderPassId depth_id = sys.rp_sys->transparent_depth_pass;
+  TbRenderPassId color_id = sys.rp_sys->transparent_color_pass;
 
   {
     uint32_t attach_count = 0;
     tb_render_pipeline_get_attachments(
-        sys.render_pipe_system, sys.render_pipe_system->transparent_depth_pass,
-        &attach_count, NULL);
+        sys.rp_sys, sys.rp_sys->transparent_depth_pass, &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexpected");
     TbPassAttachment depth_info = {0};
-    tb_render_pipeline_get_attachments(
-        sys.render_pipe_system, sys.render_pipe_system->transparent_depth_pass,
-        &attach_count, &depth_info);
+    tb_render_pipeline_get_attachments(sys.rp_sys,
+                                       sys.rp_sys->transparent_depth_pass,
+                                       &attach_count, &depth_info);
 
-    VkFormat depth_format = tb_render_target_get_format(
-        sys.render_pipe_system->render_target_system, depth_info.attachment);
+    VkFormat depth_format =
+        tb_render_target_get_format(sys.rp_sys->rt_sys, depth_info.attachment);
 
     VkFormat color_format = VK_FORMAT_UNDEFINED;
     tb_render_pipeline_get_attachments(
-        sys.render_pipe_system, sys.render_pipe_system->transparent_color_pass,
-        &attach_count, NULL);
+        sys.rp_sys, sys.rp_sys->transparent_color_pass, &attach_count, NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
     TbPassAttachment attach_info[2] = {0};
-    tb_render_pipeline_get_attachments(
-        sys.render_pipe_system, sys.render_pipe_system->transparent_color_pass,
-        &attach_count, attach_info);
+    tb_render_pipeline_get_attachments(sys.rp_sys,
+                                       sys.rp_sys->transparent_color_pass,
+                                       &attach_count, attach_info);
 
     for (uint32_t i = 0; i < attach_count; i++) {
-      VkFormat format = tb_render_target_get_format(
-          sys.render_pipe_system->render_target_system,
-          attach_info[i].attachment);
+      VkFormat format = tb_render_target_get_format(sys.rp_sys->rt_sys,
+                                                    attach_info[i].attachment);
       if (format != VK_FORMAT_D32_SFLOAT) {
         color_format = format;
         break;
       }
     }
 
-    err = create_ocean_pipelines(render_system, color_format, depth_format,
+    err = create_ocean_pipelines(rnd_sys, color_format, depth_format,
                                  sys.pipe_layout, &sys.prepass_pipeline,
                                  &sys.pipeline);
     TB_VK_CHECK(err, "Failed to create ocean pipeline");
   }
 
   sys.trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(OceanDrawBatch),
-                              .draw_fn = ocean_prepass_record,
-                              .pass_id = depth_id,
-                          });
+      rp_sys, &(TbDrawContextDescriptor){
+                  .batch_size = sizeof(OceanDrawBatch),
+                  .draw_fn = ocean_prepass_record,
+                  .pass_id = depth_id,
+              });
   sys.trans_color_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(OceanDrawBatch),
-                              .draw_fn = ocean_pass_record,
-                              .pass_id = color_id,
-                          });
+      rp_sys, &(TbDrawContextDescriptor){
+                  .batch_size = sizeof(OceanDrawBatch),
+                  .draw_fn = ocean_pass_record,
+                  .pass_id = color_id,
+              });
 
   sys.ocean_geom_buffer =
       tb_mesh_system_get_gpu_mesh(mesh_system, sys.ocean_patch_mesh);
@@ -598,18 +594,18 @@ void destroy_ocean_system(TbOceanSystem *self) {
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->ocean_patch_mesh);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(self->render_system,
+    tb_rnd_destroy_descriptor_pool(self->rnd_sys,
                                    self->ocean_pools[i].set_pool);
   }
 
-  tb_rnd_destroy_sampler(self->render_system, self->sampler);
-  tb_rnd_destroy_sampler(self->render_system, self->shadow_sampler);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->sampler);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->shadow_sampler);
 
-  tb_rnd_destroy_pipeline(self->render_system, self->prepass_pipeline);
-  tb_rnd_destroy_pipeline(self->render_system, self->pipeline);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->prepass_pipeline);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->pipeline);
 
-  tb_rnd_destroy_pipe_layout(self->render_system, self->pipe_layout);
-  tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->pipe_layout);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
 
   *self = (TbOceanSystem){0};
 }
@@ -657,15 +653,15 @@ void ocean_draw_tick(ecs_iter_t *it) {
   ecs_singleton_modified(ecs, TbOceanSystem);
 
   // TODO: Make this less hacky
-  const uint32_t width = sys->render_system->render_thread->swapchain.width;
-  const uint32_t height = sys->render_system->render_thread->swapchain.height;
+  const uint32_t width = sys->rnd_sys->render_thread->swapchain.width;
+  const uint32_t height = sys->rnd_sys->render_thread->swapchain.height;
 
   TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 1);
   for (int32_t i = 0; i < it->count; ++i) {
     TbCameraComponent *camera = &cameras[i];
 
     VkResult err = VK_SUCCESS;
-    TbRenderSystem *render_system = sys->render_system;
+    TbRenderSystem *rnd_sys = sys->rnd_sys;
 
     // We want to draw a number of ocean tiles to cover the entire ocean plane
     // Since only visible ocean tiles need to be drawn we can calculate the
@@ -673,7 +669,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
 
     // Get the camera's view so we can examine its frustum and decide where to
     // place ocean tiles
-    const TbView *view = tb_get_view(sys->view_system, camera->view_id);
+    const TbView *view = tb_get_view(sys->view_sys, camera->view_id);
     float4x4 inv_v = tb_invf44(view->view_data.v);
 
     // Get frustum TbAABB in view space by taking a unit frustum and
@@ -756,7 +752,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
     uint64_t tile_offset = 0;
     {
       uint64_t size = sizeof(float4) * visible_tile_count;
-      err = tb_rnd_sys_copy_to_tmp_buffer(render_system, size, 0x40,
+      err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, size, 0x40,
                                           visible_tile_offsets, &tile_offset);
       TB_VK_CHECK(err, "Failed to allocate ocean instance buffer");
     }
@@ -790,9 +786,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
           for (uint32_t i = 0; i < ocean_count; ++i) {
             layouts[i] = sys->set_layout;
           }
-          err =
-              tb_rnd_frame_desc_pool_tick(render_system, &pool_info, layouts,
-                                          NULL, sys->ocean_pools, ocean_count);
+          err = tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, layouts, NULL,
+                                            sys->ocean_pools, ocean_count);
           TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
         }
 
@@ -825,16 +820,16 @@ void ocean_draw_tick(ecs_iter_t *it) {
           // Write ocean data into the tmp buffer we know will wind up on the
           // GPU
           uint64_t offset = 0;
-          err = tb_rnd_sys_copy_to_tmp_buffer(render_system, sizeof(OceanData),
-                                              0x40, &data, &offset);
+          err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(OceanData), 0x40,
+                                              &data, &offset);
           TB_VK_CHECK(err,
                       "Failed to make tmp host buffer allocation for ocean");
 
-          VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(render_system);
+          VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
           // Get the descriptor we want to write to
-          VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
-              render_system, sys->ocean_pools, oc_idx);
+          VkDescriptorSet ocean_set =
+              tb_rnd_frame_desc_pool_get_set(rnd_sys, sys->ocean_pools, oc_idx);
 
           buffer_info[oc_idx] = (VkDescriptorBufferInfo){
               .buffer = tmp_gpu_buffer,
@@ -843,12 +838,10 @@ void ocean_draw_tick(ecs_iter_t *it) {
           };
 
           VkImageView depth_view = tb_render_target_get_view(
-              sys->render_target_system, render_system->frame_idx,
-              sys->render_target_system->depth_buffer_copy);
+              sys->rt_sys, rnd_sys->frame_idx, sys->rt_sys->depth_buffer_copy);
 
           VkImageView color_view = tb_render_target_get_view(
-              sys->render_target_system, render_system->frame_idx,
-              sys->render_target_system->color_copy);
+              sys->rt_sys, rnd_sys->frame_idx, sys->rt_sys->color_copy);
 
           depth_info[oc_idx] = (VkDescriptorImageInfo){
               .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -889,7 +882,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
               .pImageInfo = &color_info[oc_idx],
           };
         }
-        tb_rnd_update_descriptors(render_system, write_count, writes);
+        tb_rnd_update_descriptors(rnd_sys, write_count, writes);
       }
 
       // Draw the ocean
@@ -910,11 +903,11 @@ void ocean_draw_tick(ecs_iter_t *it) {
             tb_alloc_nm_tp(sys->tmp_alloc, batch_max, TbDrawBatch);
 
         VkDescriptorSet view_set =
-            tb_view_system_get_descriptor(sys->view_system, camera->view_id);
+            tb_view_system_get_descriptor(sys->view_sys, camera->view_id);
 
         for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
           VkDescriptorSet ocean_set = tb_rnd_frame_desc_pool_get_set(
-              sys->render_system, sys->ocean_pools, ocean_idx);
+              sys->rnd_sys, sys->ocean_pools, ocean_idx);
 
           ocean_draw_batches[batch_count] = (TbDrawBatch){
               .pipeline = sys->pipeline,
@@ -934,7 +927,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
               .view_set = view_set,
               .ocean_set = ocean_set,
               .consts = ocean_consts,
-              .inst_buffer = tb_rnd_get_gpu_tmp_buffer(sys->render_system),
+              .inst_buffer = tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys),
               .inst_offset = tile_offset,
               .inst_count = visible_tile_count,
               .geom_buffer = sys->ocean_geom_buffer,
@@ -946,10 +939,10 @@ void ocean_draw_tick(ecs_iter_t *it) {
         }
 
         // Draw to the prepass and the ocean pass
-        tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+        tb_render_pipeline_issue_draw_batch(sys->rp_sys,
                                             sys->trans_depth_draw_ctx,
                                             batch_count, prepass_draw_batches);
-        tb_render_pipeline_issue_draw_batch(sys->render_pipe_system,
+        tb_render_pipeline_issue_draw_batch(sys->rp_sys,
                                             sys->trans_color_draw_ctx,
                                             batch_count, ocean_draw_batches);
       }

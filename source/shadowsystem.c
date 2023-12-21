@@ -26,7 +26,7 @@
 // NOLINTEND
 #pragma clang diagnostic pop
 
-VkResult create_shadow_pipeline(TbRenderSystem *render_system,
+VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys,
                                 VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *pipeline) {
@@ -41,13 +41,13 @@ VkResult create_shadow_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(depth_vert);
     create_info.pCode = (const uint32_t *)depth_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Shadow Vert",
                                &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load shadow vert shader module", err);
 
     create_info.codeSize = sizeof(depth_frag);
     create_info.pCode = (const uint32_t *)depth_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Shadow Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Shadow Frag",
                                &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load shadow frag shader module", err);
   }
@@ -131,12 +131,12 @@ VkResult create_shadow_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Shadow Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create shadow pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, vert_mod);
-  tb_rnd_destroy_shader(render_system, frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
   return err;
 }
@@ -463,7 +463,7 @@ void tb_register_shadow_sys(TbWorld *world) {
                                          &attach_count, &depth_info);
 
       VkFormat depth_format = tb_render_target_get_format(
-          rp_sys->render_target_system, depth_info.attachment);
+          rp_sys->rt_sys, depth_info.attachment);
       err = create_shadow_pipeline(rnd_sys, depth_format, sys.pipe_layout,
                                    &sys.pipeline);
       TB_VK_CHECK(err, "Failed to create shadow pipeline");

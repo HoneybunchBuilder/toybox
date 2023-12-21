@@ -39,9 +39,9 @@ typedef struct TbImGuiSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *render_system;
-  TbRenderPipelineSystem *render_pipe_system;
-  TbRenderTargetSystem *render_target_system;
+  TbRenderSystem *rnd_sys;
+  TbRenderPipelineSystem *rp_sys;
+  TbRenderTargetSystem *rt_sys;
   TbInputSystem *input;
 
   TbImGuiFrameState frame_states[TB_MAX_FRAME_STATES];

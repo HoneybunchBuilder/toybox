@@ -123,8 +123,7 @@ typedef struct BlurBatch {
   VkDescriptorSet set;
 } BlurBatch;
 
-VkResult create_depth_pipeline(TbRenderSystem *render_system,
-                               VkFormat depth_format,
+VkResult create_depth_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                                VkPipelineLayout pipe_layout,
                                VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -138,13 +137,13 @@ VkResult create_depth_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(depthcopy_vert);
     create_info.pCode = (const uint32_t *)depthcopy_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Vert",
                                &depth_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load depth copy vert shader module", err);
 
     create_info.codeSize = sizeof(depthcopy_frag);
     create_info.pCode = (const uint32_t *)depthcopy_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Depth Copy Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Frag",
                                &depth_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load depth copy frag shader module", err);
   }
@@ -231,17 +230,17 @@ VkResult create_depth_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Depth Copy Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, depth_vert_mod);
-  tb_rnd_destroy_shader(render_system, depth_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, depth_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, depth_frag_mod);
 
   return err;
 }
 
-VkResult create_color_copy_pipeline(TbRenderSystem *render_system,
+VkResult create_color_copy_pipeline(TbRenderSystem *rnd_sys,
                                     VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
@@ -256,13 +255,13 @@ VkResult create_color_copy_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(colorcopy_vert);
     create_info.pCode = (const uint32_t *)colorcopy_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Color Copy Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Vert",
                                &color_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load color copy vert shader module", err);
 
     create_info.codeSize = sizeof(colorcopy_frag);
     create_info.pCode = (const uint32_t *)colorcopy_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Color Copy Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Frag",
                                &color_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load color copy frag shader module", err);
   }
@@ -349,17 +348,17 @@ VkResult create_color_copy_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Color Copy Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, color_vert_mod);
-  tb_rnd_destroy_shader(render_system, color_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, color_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, color_frag_mod);
 
   return err;
 }
 
-VkResult create_comp_copy_pipeline(TbRenderSystem *render_system,
+VkResult create_comp_copy_pipeline(TbRenderSystem *rnd_sys,
                                    VkPipelineLayout layout,
                                    VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -371,7 +370,7 @@ VkResult create_comp_copy_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(copy_comp);
     create_info.pCode = (const uint32_t *)copy_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Copy Comp",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Copy Comp",
                                &copy_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load copy compute shader module", err);
   }
@@ -387,18 +386,17 @@ VkResult create_comp_copy_pipeline(TbRenderSystem *render_system,
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
                                         "Compute Copy Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create compute copy pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, copy_comp_mod);
+  tb_rnd_destroy_shader(rnd_sys, copy_comp_mod);
 
   return err;
 }
 
-VkResult create_blur_pipelines(TbRenderSystem *render_system,
-                               VkPipelineLayout layout, VkPipeline *h_pipe,
-                               VkPipeline *v_pipe) {
+VkResult create_blur_pipelines(TbRenderSystem *rnd_sys, VkPipelineLayout layout,
+                               VkPipeline *h_pipe, VkPipeline *v_pipe) {
   VkResult err = VK_SUCCESS;
   VkShaderModule blur_h_comp_mod = VK_NULL_HANDLE;
   VkShaderModule blur_v_comp_mod = VK_NULL_HANDLE;
@@ -409,7 +407,7 @@ VkResult create_blur_pipelines(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(blur_h_comp);
     create_info.pCode = (const uint32_t *)blur_h_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Blur H Comp",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Blur H Comp",
                                &blur_h_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
   }
@@ -420,7 +418,7 @@ VkResult create_blur_pipelines(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(blur_v_comp);
     create_info.pCode = (const uint32_t *)blur_v_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Blur V Comp",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Blur V Comp",
                                &blur_v_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
   }
@@ -437,7 +435,7 @@ VkResult create_blur_pipelines(TbRenderSystem *render_system,
             },
         .layout = layout,
     };
-    err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+    err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
                                           "Blur H Pipeline", h_pipe);
     TB_VK_CHECK_RET(err, "Failed to create horizontal blur pipeline", err);
   }
@@ -454,18 +452,18 @@ VkResult create_blur_pipelines(TbRenderSystem *render_system,
             },
         .layout = layout,
     };
-    err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+    err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
                                           "Blur V Pipeline", v_pipe);
     TB_VK_CHECK_RET(err, "Failed to create vertical blur pipeline", err);
   }
 
-  tb_rnd_destroy_shader(render_system, blur_h_comp_mod);
-  tb_rnd_destroy_shader(render_system, blur_v_comp_mod);
+  tb_rnd_destroy_shader(rnd_sys, blur_h_comp_mod);
+  tb_rnd_destroy_shader(rnd_sys, blur_v_comp_mod);
 
   return err;
 }
 
-VkResult create_brightness_pipeline(TbRenderSystem *render_system,
+VkResult create_brightness_pipeline(TbRenderSystem *rnd_sys,
                                     VkFormat color_format,
                                     VkPipelineLayout pipe_layout,
                                     VkPipeline *pipeline) {
@@ -479,13 +477,13 @@ VkResult create_brightness_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(brightness_vert);
     create_info.pCode = (const uint32_t *)brightness_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Brightness Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Vert",
                                &brightness_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load brightness vert shader module", err);
 
     create_info.codeSize = sizeof(brightness_frag);
     create_info.pCode = (const uint32_t *)brightness_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Brightness Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Frag",
                                &brightness_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load brightness frag shader module", err);
   }
@@ -572,17 +570,17 @@ VkResult create_brightness_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Brightness Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, brightness_vert_mod);
-  tb_rnd_destroy_shader(render_system, brightness_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, brightness_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, brightness_frag_mod);
 
   return err;
 }
 
-VkResult create_tonemapping_pipeline(TbRenderSystem *render_system,
+VkResult create_tonemapping_pipeline(TbRenderSystem *rnd_sys,
                                      VkFormat swap_target_format,
                                      VkPipelineLayout pipe_layout,
                                      VkPipeline *pipeline) {
@@ -597,13 +595,13 @@ VkResult create_tonemapping_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(tonemap_vert);
     create_info.pCode = (const uint32_t *)tonemap_vert;
-    err = tb_rnd_create_shader(render_system, &create_info, "Tonemapping Vert",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Vert",
                                &tonemap_vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load tonemapping vert shader module", err);
 
     create_info.codeSize = sizeof(tonemap_frag);
     create_info.pCode = (const uint32_t *)tonemap_frag;
-    err = tb_rnd_create_shader(render_system, &create_info, "Tonemapping Frag",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Frag",
                                &tonemap_frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load tonemapping frag shader module", err);
   }
@@ -690,12 +688,12 @@ VkResult create_tonemapping_pipeline(TbRenderSystem *render_system,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
                                          "Tonmapping Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, tonemap_vert_mod);
-  tb_rnd_destroy_shader(render_system, tonemap_frag_mod);
+  tb_rnd_destroy_shader(rnd_sys, tonemap_vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, tonemap_frag_mod);
 
   return err;
 }
@@ -877,8 +875,8 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
     TB_CHECK(pass->transition_count <= TB_MAX_BARRIERS, "Out of range");
     TbRenderTargetId target_id = pass->attachments[0].attachment;
     VkExtent3D target_ext = tb_render_target_get_mip_extent(
-        self->render_target_system, pass->attachments[0].layer,
-        pass->attachments[0].mip, target_id);
+        self->rt_sys, pass->attachments[0].layer, pass->attachments[0].mip,
+        target_id);
 
     TbPassContext pass_context = (TbPassContext){
         .id = id,
@@ -904,7 +902,7 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
       TbImageTransition *barrier = &pass_context.barriers[trans_idx];
       *barrier = transition->barrier;
       barrier->barrier.image = tb_render_target_get_image(
-          self->render_target_system, frame_idx, transition->render_target);
+          self->rt_sys, frame_idx, transition->render_target);
     }
 
     TB_DYN_ARR_APPEND(state->pass_contexts, pass_context);
@@ -989,7 +987,7 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
 
   // Populate rendering info if we target any attachments
   if (pass->attach_count > 0) {
-    TbRenderTargetSystem *rt_sys = self->render_target_system;
+    TbRenderTargetSystem *rt_sys = self->rt_sys;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
         rt_sys, pass->attachments[0].layer, pass->attachments[0].mip,
@@ -1004,10 +1002,10 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
 
       for (uint32_t rt_idx = 0; rt_idx < pass->attach_count; ++rt_idx) {
         const TbAttachmentInfo *attachment = &create_info->attachments[rt_idx];
-        VkFormat format = tb_render_target_get_format(
-            self->render_target_system, attachment->attachment);
+        VkFormat format =
+            tb_render_target_get_format(self->rt_sys, attachment->attachment);
         VkImageView view = tb_render_target_get_mip_view(
-            self->render_target_system, attachment->layer, attachment->mip, i,
+            self->rt_sys, attachment->layer, attachment->mip, i,
             attachment->attachment);
 
         VkRenderingAttachmentInfo *info = &color_attachments[color_count];
@@ -1049,12 +1047,12 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
 }
 
 TbRenderPipelineSystem create_render_pipeline_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *render_system,
-    TbRenderTargetSystem *render_target_system, TbViewSystem *view_system) {
+    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+    TbRenderTargetSystem *rt_sys, TbViewSystem *view_sys) {
   TbRenderPipelineSystem sys = {
-      .render_system = render_system,
-      .render_target_system = render_target_system,
-      .view_system = view_system,
+      .rnd_sys = rnd_sys,
+      .rt_sys = rt_sys,
+      .view_sys = view_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
   };
@@ -1065,30 +1063,28 @@ TbRenderPipelineSystem create_render_pipeline_system(
   // Create some default passes
   {
     // Look up the render targets we know will be needed
-    const TbRenderTargetId env_cube = render_target_system->env_cube;
-    const TbRenderTargetId irradiance_map =
-        render_target_system->irradiance_map;
-    const TbRenderTargetId prefiltered_cube =
-        render_target_system->prefiltered_cube;
-    const TbRenderTargetId opaque_depth = render_target_system->depth_buffer;
-    const TbRenderTargetId opaque_normal = render_target_system->normal_buffer;
-    const TbRenderTargetId hdr_color = render_target_system->hdr_color;
-    const TbRenderTargetId depth_copy = render_target_system->depth_buffer_copy;
-    const TbRenderTargetId color_copy = render_target_system->color_copy;
-    const TbRenderTargetId swapchain_target = render_target_system->swapchain;
-    const TbRenderTargetId transparent_depth =
-        render_target_system->depth_buffer;
-    const TbRenderTargetId shadow_map = render_target_system->shadow_map;
-    const TbRenderTargetId brightness = render_target_system->brightness;
+    const TbRenderTargetId env_cube = rt_sys->env_cube;
+    const TbRenderTargetId irradiance_map = rt_sys->irradiance_map;
+    const TbRenderTargetId prefiltered_cube = rt_sys->prefiltered_cube;
+    const TbRenderTargetId opaque_depth = rt_sys->depth_buffer;
+    const TbRenderTargetId opaque_normal = rt_sys->normal_buffer;
+    const TbRenderTargetId hdr_color = rt_sys->hdr_color;
+    const TbRenderTargetId depth_copy = rt_sys->depth_buffer_copy;
+    const TbRenderTargetId color_copy = rt_sys->color_copy;
+    const TbRenderTargetId swapchain_target = rt_sys->swapchain;
+    const TbRenderTargetId transparent_depth = rt_sys->depth_buffer;
+    const TbRenderTargetId shadow_map = rt_sys->shadow_map;
+    const TbRenderTargetId brightness = rt_sys->brightness;
+    const TbRenderTargetId aa_output = rt_sys->aa_output;
 
     // Create opaque depth normal pass
     {
       TbRenderPassCreateInfo create_info = {
-          .transition_count = 2,
+          .transition_count = 3,
           .transitions =
-              (PassTransition[2]){
+              (PassTransition[3]){
                   {
-                      .render_target = sys.render_target_system->depth_buffer,
+                      .render_target = sys.rt_sys->depth_buffer,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1116,7 +1112,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                           },
                   },
                   {
-                      .render_target = sys.render_target_system->normal_buffer,
+                      .render_target = sys.rt_sys->normal_buffer,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1129,6 +1125,34 @@ TbRenderPipelineSystem create_render_pipeline_system(
                                       .srcAccessMask = VK_ACCESS_NONE,
                                       .dstAccessMask =
                                           VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                      .newLayout =
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      .subresourceRange =
+                                          {
+                                              .aspectMask =
+                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .levelCount = 1,
+                                              .layerCount = 1,
+                                          },
+                                  },
+                          },
+                  },
+                  // We know we can fit some extra transitions here
+                  {
+                      .render_target = sys.rt_sys->hdr_color,
+                      .barrier =
+                          {
+                              .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              .dst_flags =
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                              .barrier =
+                                  {
+                                      .sType =
+                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                                      .srcAccessMask = VK_ACCESS_NONE,
+                                      .dstAccessMask =
                                           VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                       .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                                       .newLayout =
@@ -1276,7 +1300,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                           },
                   },
                   {
-                      .render_target = sys.render_target_system->irradiance_map,
+                      .render_target = sys.rt_sys->irradiance_map,
                       .barrier =
                           {
                               .src_flags =
@@ -1330,7 +1354,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
         if (i == 0) {
           trans_count = 1;
           transitions[0] = (PassTransition){
-              .render_target = sys.render_target_system->prefiltered_cube,
+              .render_target = sys.rt_sys->prefiltered_cube,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1389,7 +1413,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
       const uint32_t trans_count = 1;
       PassTransition transitions[1] = {
           {
-              .render_target = sys.render_target_system->shadow_map,
+              .render_target = sys.rt_sys->shadow_map,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1448,7 +1472,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
     {
       // Transition irradiance map, prefiltered env map and shadow map
       PassTransition irr_trans = {
-          .render_target = sys.render_target_system->irradiance_map,
+          .render_target = sys.rt_sys->irradiance_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1468,7 +1492,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                   },
           }};
       PassTransition filter_trans = {
-          .render_target = sys.render_target_system->prefiltered_cube,
+          .render_target = sys.rt_sys->prefiltered_cube,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1487,30 +1511,8 @@ TbRenderPipelineSystem create_render_pipeline_system(
                           },
                   },
           }};
-      PassTransition color_trans = {
-          .render_target = sys.render_target_system->hdr_color,
-          .barrier =
-              {
-                  .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  .dst_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  .barrier =
-                      {
-                          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                          .srcAccessMask = VK_ACCESS_NONE,
-                          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                          .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          .subresourceRange =
-                              {
-                                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                  .levelCount = 1,
-                                  .layerCount = 1,
-                              },
-                      },
-              },
-      };
       PassTransition normal_trans = {
-          .render_target = sys.render_target_system->normal_buffer,
+          .render_target = sys.rt_sys->normal_buffer,
           .barrier =
               {
                   .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1534,7 +1536,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
               },
       };
       PassTransition depth_trans = {
-          .render_target = sys.render_target_system->depth_buffer,
+          .render_target = sys.rt_sys->depth_buffer,
           .barrier =
               {
                   .src_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
@@ -1558,7 +1560,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
               },
       };
       PassTransition shadow_trans = {
-          .render_target = sys.render_target_system->shadow_map,
+          .render_target = sys.rt_sys->shadow_map,
           .barrier = {
               .src_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
               .dst_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1578,9 +1580,9 @@ TbRenderPipelineSystem create_render_pipeline_system(
                           },
                   },
           }};
-      const uint32_t transition_count = 6;
-      PassTransition transitions[6] = {shadow_trans, irr_trans,   filter_trans,
-                                       color_trans,  depth_trans, normal_trans};
+      const uint32_t transition_count = 5;
+      PassTransition transitions[5] = {shadow_trans, irr_trans, filter_trans,
+                                       depth_trans, normal_trans};
 
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 2,
@@ -1646,8 +1648,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
           .transitions =
               (PassTransition[1]){
                   {
-                      .render_target =
-                          sys.render_target_system->depth_buffer_copy,
+                      .render_target = sys.rt_sys->depth_buffer_copy,
                       .barrier =
                           {
                               .src_flags =
@@ -1701,7 +1702,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
           .transitions =
               (PassTransition[2]){
                   {
-                      .render_target = sys.render_target_system->hdr_color,
+                      .render_target = sys.rt_sys->hdr_color,
                       .barrier =
                           {
                               .src_flags =
@@ -1731,7 +1732,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                           },
                   },
                   {
-                      .render_target = sys.render_target_system->color_copy,
+                      .render_target = sys.rt_sys->color_copy,
                       .barrier =
                           {
                               .src_flags =
@@ -1786,7 +1787,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
           .transitions =
               (PassTransition[1]){
                   {
-                      .render_target = sys.render_target_system->depth_buffer,
+                      .render_target = sys.rt_sys->depth_buffer,
                       .barrier =
                           {
                               .src_flags =
@@ -1835,7 +1836,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
     {
       PassTransition transitions[3] = {
           {
-              .render_target = sys.render_target_system->hdr_color,
+              .render_target = sys.rt_sys->hdr_color,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
@@ -1861,7 +1862,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                   },
           },
           {
-              .render_target = sys.render_target_system->color_copy,
+              .render_target = sys.rt_sys->color_copy,
               .barrier =
                   {
                       .src_flags =
@@ -1887,7 +1888,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                   },
           },
           {
-              .render_target = sys.render_target_system->depth_buffer_copy,
+              .render_target = sys.rt_sys->depth_buffer_copy,
               .barrier =
                   {
                       .src_flags =
@@ -1946,7 +1947,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
       static const size_t trans_count = 2;
       PassTransition transitions[2] = {
           {
-              .render_target = sys.render_target_system->hdr_color,
+              .render_target = sys.rt_sys->hdr_color,
               .barrier =
                   {
                       // We know that the hdr color buffer will need to be r/w
@@ -1976,7 +1977,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                   },
           },
           {
-              .render_target = sys.render_target_system->brightness,
+              .render_target = sys.rt_sys->brightness,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2044,7 +2045,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
               (PassTransition[2]){
                   // Need to read brightness
                   {
-                      .render_target = sys.render_target_system->brightness,
+                      .render_target = sys.rt_sys->brightness,
                       .barrier =
                           {
                               .src_flags =
@@ -2073,8 +2074,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                   },
                   // We need the bloom chain to be readable and writable
                   {
-                      .render_target =
-                          sys.render_target_system->bloom_mip_chain,
+                      .render_target = sys.rt_sys->bloom_mip_chain,
                       .barrier =
                           {
                               .src_flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2119,14 +2119,13 @@ TbRenderPipelineSystem create_render_pipeline_system(
                "Failed to create bloom upsample pass");
       sys.bloom_upsample_pass = id;
     }
-
     // Create tonemapping pass
     {
       const uint32_t trans_count = 1;
       // Need to read bloom mip chain (mip 0 only)
       PassTransition transitions[1] = {
           {
-              .render_target = sys.render_target_system->bloom_mip_chain,
+              .render_target = sys.rt_sys->bloom_mip_chain,
               .barrier =
                   {
                       .src_flags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2164,51 +2163,39 @@ TbRenderPipelineSystem create_render_pipeline_system(
                       .attachment = swapchain_target,
                   },
               },
-          .name = "Tonemap Pass",
+          .name = "Tonemapping Pass",
       };
       TbRenderPassId id = create_render_pass(&sys, &create_info);
       TB_CHECK(id != InvalidRenderPassId, "Failed to create tonemap pass");
       sys.tonemap_pass = id;
     }
-    // Create UI Pass
+    // Create anti-aliasing pass
     {
       TbRenderPassCreateInfo create_info = {
           .dependency_count = 1,
           .dependencies = (TbRenderPassId[1]){sys.tonemap_pass},
-          .transition_count = 1,
-          .transitions =
-              (PassTransition[1]){
+          .transition_count = 0,
+          .transitions = 0,
+          .attachment_count = 1,
+          .attachments =
+              (TbAttachmentInfo[1]){
                   {
-                      .render_target = sys.render_target_system->hdr_color,
-                      .barrier =
-                          {
-                              .src_flags =
-                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              .dst_flags =
-                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                              .barrier =
-                                  {
-                                      .sType =
-                                          VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                      .srcAccessMask =
-                                          VK_ACCESS_SHADER_READ_BIT,
-                                      .dstAccessMask =
-                                          VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                      .oldLayout =
-                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                      .newLayout =
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                      .subresourceRange =
-                                          {
-                                              .aspectMask =
-                                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                              .levelCount = 1,
-                                              .layerCount = 1,
-                                          },
-                                  },
-                          },
+                      .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,
+                      .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                      .attachment = swapchain_target,
                   },
               },
+          .name = "FXAA Pass",
+      };
+      TbRenderPassId id = create_render_pass(&sys, &create_info);
+      TB_CHECK(id != InvalidRenderPassId, "Failed to create fxaa pass");
+      sys.fxaa_pass = id;
+    }
+    // Create UI Pass
+    {
+      TbRenderPassCreateInfo create_info = {
+          .dependency_count = 1,
+          .dependencies = (TbRenderPassId[1]){sys.fxaa_pass},
           .attachment_count = 1,
           .attachments =
               (TbAttachmentInfo[1]){
@@ -2258,7 +2245,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
       // Register passes in execution order
       for (uint32_t pass_idx = 0; pass_idx < pass_count; ++pass_idx) {
         const uint32_t idx = sys.pass_order[pass_idx];
-        register_pass(&sys, sys.render_system->render_thread, idx,
+        register_pass(&sys, sys.rnd_sys->render_thread, idx,
                       command_buffer_indices, command_buffer_count);
       }
     }
@@ -2286,7 +2273,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
             .maxLod = 1.0f,
             .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
         };
-        err = tb_rnd_create_sampler(render_system, &create_info, "Copy Sampler",
+        err = tb_rnd_create_sampler(rnd_sys, &create_info, "Copy Sampler",
                                     &sys.sampler);
         TB_VK_CHECK(err, "Failed to create copy sampler");
       }
@@ -2304,8 +2291,8 @@ TbRenderPipelineSystem create_render_pipeline_system(
             .maxLod = 1.0f,
             .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
         };
-        err = tb_rnd_create_sampler(render_system, &create_info,
-                                    "Noise Sampler", &sys.noise_sampler);
+        err = tb_rnd_create_sampler(rnd_sys, &create_info, "Noise Sampler",
+                                    &sys.noise_sampler);
         TB_VK_CHECK(err, "Failed to create noise sampler");
       }
 #endif
@@ -2329,7 +2316,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                     .pImmutableSamplers = &sys.sampler,
                 },
             }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
+        err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                        "Copy Descriptor Set Layout",
                                        &sys.copy_set_layout);
         TB_VK_CHECK(err, "Failed to create copy descriptor set layout");
@@ -2360,7 +2347,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                     .pImmutableSamplers = &sys.sampler,
                 },
             }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
+        err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                        "Compute Copy Descriptor Set Layout",
                                        &sys.comp_copy_set_layout);
         TB_VK_CHECK(err, "Failed to create compute copy descriptor set layout");
@@ -2397,7 +2384,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                     .pImmutableSamplers = &sys.sampler,
                 },
             }};
-        err = tb_rnd_create_set_layout(render_system, &create_info,
+        err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                        "Tonemap Descriptor Set Layout",
                                        &sys.tonemap_set_layout);
         TB_VK_CHECK(err, "Failed to create tonemap set layout");
@@ -2412,7 +2399,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                     sys.copy_set_layout,
                 },
         };
-        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.rnd_sys, &create_info,
                                             "Copy Pipeline Layout",
                                             &sys.copy_pipe_layout);
         TB_VK_CHECK(err, "Failed to create copy pipeline layout");
@@ -2427,7 +2414,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                     sys.tonemap_set_layout,
                 },
         };
-        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.rnd_sys, &create_info,
                                             "Tonemap Pipeline Layout",
                                             &sys.tonemap_pipe_layout);
         TB_VK_CHECK(err, "Failed to create tonemap pipeline layout");
@@ -2439,7 +2426,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
             .setLayoutCount = 1,
             .pSetLayouts = (VkDescriptorSetLayout[1]){sys.comp_copy_set_layout},
         };
-        err = tb_rnd_create_pipeline_layout(sys.render_system, &create_info,
+        err = tb_rnd_create_pipeline_layout(sys.rnd_sys, &create_info,
                                             "Comp Copy Pipeline Layout",
                                             &sys.comp_copy_pipe_layout);
         TB_VK_CHECK(err, "Failed to create compute copy pipeline layout");
@@ -2454,10 +2441,10 @@ TbRenderPipelineSystem create_render_pipeline_system(
         tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, &depth_info);
 
-        VkFormat depth_format = tb_render_target_get_format(
-            sys.render_target_system, depth_info.attachment);
+        VkFormat depth_format =
+            tb_render_target_get_format(sys.rt_sys, depth_info.attachment);
 
-        err = create_depth_pipeline(sys.render_system, depth_format,
+        err = create_depth_pipeline(sys.rnd_sys, depth_format,
                                     sys.copy_pipe_layout, &sys.depth_copy_pipe);
         TB_VK_CHECK(err, "Failed to create depth copy pipeline");
       }
@@ -2485,10 +2472,10 @@ TbRenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, &attach_info);
 
-      VkFormat color_format = tb_render_target_get_format(
-          sys.render_target_system, attach_info.attachment);
+      VkFormat color_format =
+          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
 
-      err = create_color_copy_pipeline(sys.render_system, color_format,
+      err = create_color_copy_pipeline(sys.rnd_sys, color_format,
                                        sys.copy_pipe_layout,
                                        &sys.color_copy_pipe);
       TB_VK_CHECK(err, "Failed to create color copy pipeline");
@@ -2508,8 +2495,8 @@ TbRenderPipelineSystem create_render_pipeline_system(
 
     // Compute Copy
     {
-      err = create_comp_copy_pipeline(
-          sys.render_system, sys.comp_copy_pipe_layout, &sys.comp_copy_pipe);
+      err = create_comp_copy_pipeline(sys.rnd_sys, sys.comp_copy_pipe_layout,
+                                      &sys.comp_copy_pipe);
       TB_VK_CHECK(err, "Failed to create compute copy pipeline");
 
       // Contexts for specific copy operations
@@ -2525,16 +2512,16 @@ TbRenderPipelineSystem create_render_pipeline_system(
     }
 
     // Create bloom work
-    err = tb_create_downsample_work(sys.render_system, &sys, sys.sampler,
+    err = tb_create_downsample_work(sys.rnd_sys, &sys, sys.sampler,
                                     sys.bloom_downsample_pass,
                                     &sys.downsample_work);
-    err = tb_create_upsample_work(sys.render_system, &sys, sys.sampler,
+    err = tb_create_upsample_work(sys.rnd_sys, &sys, sys.sampler,
                                   sys.bloom_upsample_pass, &sys.upsample_work);
 
     // Compute Luminance Histogram and Average work
-    err = tb_create_lum_hist_work(sys.render_system, &sys, sys.sampler,
+    err = tb_create_lum_hist_work(sys.rnd_sys, &sys, sys.sampler,
                                   sys.luminance_pass, &sys.lum_hist_work);
-    err = tb_create_lum_avg_work(sys.render_system, &sys, sys.luminance_pass,
+    err = tb_create_lum_avg_work(sys.rnd_sys, &sys, sys.luminance_pass,
                                  &sys.lum_avg_work);
 
     // Brightness
@@ -2547,10 +2534,10 @@ TbRenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, &attach_info);
 
-      VkFormat color_format = tb_render_target_get_format(
-          sys.render_target_system, attach_info.attachment);
+      VkFormat color_format =
+          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
 
-      err = create_brightness_pipeline(sys.render_system, color_format,
+      err = create_brightness_pipeline(sys.rnd_sys, color_format,
                                        sys.copy_pipe_layout,
                                        &sys.brightness_pipe);
       TB_VK_CHECK(err, "Failed to create brightness pipeline");
@@ -2589,10 +2576,10 @@ TbRenderPipelineSystem create_render_pipeline_system(
       tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
                                          &attach_info);
 
-      VkFormat swap_target_format = tb_render_target_get_format(
-          sys.render_target_system, attach_info.attachment);
+      VkFormat swap_target_format =
+          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
 
-      err = create_tonemapping_pipeline(sys.render_system, swap_target_format,
+      err = create_tonemapping_pipeline(sys.rnd_sys, swap_target_format,
                                         sys.tonemap_pipe_layout,
                                         &sys.tonemap_pipe);
       TB_VK_CHECK(err, "Failed to create tonemapping pipeline");
@@ -2612,35 +2599,35 @@ TbRenderPipelineSystem create_render_pipeline_system(
 }
 
 void destroy_render_pipeline_system(TbRenderPipelineSystem *self) {
-  tb_rnd_destroy_sampler(self->render_system, self->sampler);
-  tb_rnd_destroy_sampler(self->render_system, self->noise_sampler);
-  tb_rnd_destroy_set_layout(self->render_system, self->copy_set_layout);
-  tb_rnd_destroy_set_layout(self->render_system, self->comp_copy_set_layout);
-  tb_rnd_destroy_set_layout(self->render_system, self->tonemap_set_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->blur_pipe_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->copy_pipe_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->comp_copy_pipe_layout);
-  tb_rnd_destroy_pipe_layout(self->render_system, self->tonemap_pipe_layout);
-  tb_rnd_destroy_pipeline(self->render_system, self->blur_h_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->blur_v_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->depth_copy_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->color_copy_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->comp_copy_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->brightness_pipe);
-  tb_rnd_destroy_pipeline(self->render_system, self->tonemap_pipe);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->sampler);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->noise_sampler);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->copy_set_layout);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->comp_copy_set_layout);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->tonemap_set_layout);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->blur_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->copy_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->comp_copy_pipe_layout);
+  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->tonemap_pipe_layout);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->blur_h_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->blur_v_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->depth_copy_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->color_copy_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->comp_copy_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->brightness_pipe);
+  tb_rnd_destroy_pipeline(self->rnd_sys, self->tonemap_pipe);
 
-  tb_destroy_downsample_work(self->render_system, &self->downsample_work);
-  tb_destroy_upsample_work(self->render_system, &self->upsample_work);
+  tb_destroy_downsample_work(self->rnd_sys, &self->downsample_work);
+  tb_destroy_upsample_work(self->rnd_sys, &self->upsample_work);
 
-  tb_destroy_lum_avg_work(self->render_system, &self->lum_avg_work);
-  tb_destroy_lum_hist_work(self->render_system, &self->lum_hist_work);
+  tb_destroy_lum_avg_work(self->rnd_sys, &self->lum_avg_work);
+  tb_destroy_lum_hist_work(self->rnd_sys, &self->lum_hist_work);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(self->render_system,
+    tb_rnd_destroy_descriptor_pool(self->rnd_sys,
                                    self->descriptor_pools[i].set_pool);
-    tb_rnd_destroy_descriptor_pool(self->render_system,
+    tb_rnd_destroy_descriptor_pool(self->rnd_sys,
                                    self->down_desc_pools[i].set_pool);
-    tb_rnd_destroy_descriptor_pool(self->render_system,
+    tb_rnd_destroy_descriptor_pool(self->rnd_sys,
                                    self->up_desc_pools[i].set_pool);
   }
 
@@ -2678,33 +2665,31 @@ void tick_core_desc_pool(TbRenderPipelineSystem *self) {
       self->lum_hist_work.set_layout, self->lum_avg_work.set_layout,
       self->tonemap_set_layout,
   };
-  err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
-                                    NULL, self->descriptor_pools, SET_COUNT);
+  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
+                                    self->descriptor_pools, SET_COUNT);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 #undef SET_COUNT
 
-  VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
-      self->render_system, self->descriptor_pools, 0);
-  VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
-      self->render_system, self->descriptor_pools, 1);
-  VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
-      self->render_system, self->descriptor_pools, 2);
-  VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
-      self->render_system, self->descriptor_pools, 3);
-  VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-      self->render_system, self->descriptor_pools, 4);
+  VkDescriptorSet depth_set =
+      tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->descriptor_pools, 0);
+  VkDescriptorSet color_set =
+      tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->descriptor_pools, 1);
+  VkDescriptorSet lum_hist_set =
+      tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->descriptor_pools, 2);
+  VkDescriptorSet lum_avg_set =
+      tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->descriptor_pools, 3);
+  VkDescriptorSet tonemap_set =
+      tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->descriptor_pools, 4);
 
   VkImageView depth_view = tb_render_target_get_view(
-      self->render_target_system, self->render_system->frame_idx,
-      self->render_target_system->depth_buffer);
+      self->rt_sys, self->rnd_sys->frame_idx, self->rt_sys->depth_buffer);
   VkImageView color_view = tb_render_target_get_view(
-      self->render_target_system, self->render_system->frame_idx,
-      self->render_target_system->hdr_color);
+      self->rt_sys, self->rnd_sys->frame_idx, self->rt_sys->hdr_color);
   VkBuffer lum_hist_buffer = self->lum_hist_work.lum_histogram.buffer;
   VkBuffer lum_avg_buffer = self->lum_avg_work.lum_avg.buffer;
   VkImageView bloom_full_view = tb_render_target_get_mip_view(
-      self->render_target_system, 0, 0, self->render_system->frame_idx,
-      self->render_target_system->bloom_mip_chain);
+      self->rt_sys, 0, 0, self->rnd_sys->frame_idx,
+      self->rt_sys->bloom_mip_chain);
 
 #define WRITE_COUNT 9
   VkWriteDescriptorSet writes[WRITE_COUNT] = {
@@ -2826,7 +2811,7 @@ void tick_core_desc_pool(TbRenderPipelineSystem *self) {
               },
       },
   };
-  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+  tb_rnd_update_descriptors(self->rnd_sys, WRITE_COUNT, writes);
 #undef WRITE_COUNT
 }
 
@@ -2854,35 +2839,33 @@ void tick_downsample_desc_pool(TbRenderPipelineSystem *self) {
     layouts[i] = self->downsample_work.set_layout;
   }
 
-  err = tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
-                                    NULL, self->down_desc_pools,
-                                    BLUR_BATCH_COUNT);
+  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
+                                    self->down_desc_pools, BLUR_BATCH_COUNT);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 
 #define WRITE_COUNT BLUR_BATCH_COUNT * 2
   VkDescriptorSet sets[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
-    sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
-                                             self->down_desc_pools, i);
+    sets[i] =
+        tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->down_desc_pools, i);
   }
   VkImageView input[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
     if (i == 0) {
       // First input is always the brightness target
       input[i] = tb_render_target_get_view(
-          self->render_target_system, self->render_system->frame_idx,
-          self->render_target_system->brightness);
+          self->rt_sys, self->rnd_sys->frame_idx, self->rt_sys->brightness);
     } else {
-      input[i] = tb_render_target_get_mip_view(
-          self->render_target_system, 0, i, self->render_system->frame_idx,
-          self->render_target_system->bloom_mip_chain);
+      input[i] = tb_render_target_get_mip_view(self->rt_sys, 0, i,
+                                               self->rnd_sys->frame_idx,
+                                               self->rt_sys->bloom_mip_chain);
     }
   }
   VkImageView output[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
-    output[i] = tb_render_target_get_mip_view(
-        self->render_target_system, 0, i + 1, self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
+    output[i] = tb_render_target_get_mip_view(self->rt_sys, 0, i + 1,
+                                              self->rnd_sys->frame_idx,
+                                              self->rt_sys->bloom_mip_chain);
   }
 
   VkWriteDescriptorSet writes[WRITE_COUNT] = {0};
@@ -2920,7 +2903,7 @@ void tick_downsample_desc_pool(TbRenderPipelineSystem *self) {
     };
     set_idx++;
   }
-  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+  tb_rnd_update_descriptors(self->rnd_sys, WRITE_COUNT, writes);
 #undef WRITE_COUNT
 }
 
@@ -2948,30 +2931,27 @@ void tick_upsample_desc_pool(TbRenderPipelineSystem *self) {
     layouts[i] = self->upsample_work.set_layout;
   }
 
-  err =
-      tb_rnd_frame_desc_pool_tick(self->render_system, &pool_info, layouts,
-                                  NULL, self->up_desc_pools, BLUR_BATCH_COUNT);
+  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
+                                    self->up_desc_pools, BLUR_BATCH_COUNT);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 
 #define WRITE_COUNT BLUR_BATCH_COUNT * 2
   VkDescriptorSet sets[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
-    sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
-                                             self->up_desc_pools, i);
+    sets[i] =
+        tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->up_desc_pools, i);
   }
   VkImageView input[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
     input[i] = tb_render_target_get_mip_view(
-        self->render_target_system, 0, BLUR_BATCH_COUNT - i,
-        self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
+        self->rt_sys, 0, BLUR_BATCH_COUNT - i, self->rnd_sys->frame_idx,
+        self->rt_sys->bloom_mip_chain);
   }
   VkImageView output[BLUR_BATCH_COUNT] = {0};
   for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
     output[i] = tb_render_target_get_mip_view(
-        self->render_target_system, 0, BLUR_BATCH_COUNT - i - 1,
-        self->render_system->frame_idx,
-        self->render_target_system->bloom_mip_chain);
+        self->rt_sys, 0, BLUR_BATCH_COUNT - i - 1, self->rnd_sys->frame_idx,
+        self->rt_sys->bloom_mip_chain);
   }
 
   VkWriteDescriptorSet writes[WRITE_COUNT] = {0};
@@ -3008,7 +2988,7 @@ void tick_upsample_desc_pool(TbRenderPipelineSystem *self) {
     };
     set_idx++;
   }
-  tb_rnd_update_descriptors(self->render_system, WRITE_COUNT, writes);
+  tb_rnd_update_descriptors(self->rnd_sys, WRITE_COUNT, writes);
 #undef WRITE_COUNT
 }
 
@@ -3029,29 +3009,28 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
   // Issue draws for full screen passes
   {
     VkDescriptorSet depth_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 0);
+        self->rnd_sys, self->descriptor_pools, 0);
     VkDescriptorSet color_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 1);
+        self->rnd_sys, self->descriptor_pools, 1);
     VkDescriptorSet lum_hist_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 2);
+        self->rnd_sys, self->descriptor_pools, 2);
     VkDescriptorSet lum_avg_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 3);
+        self->rnd_sys, self->descriptor_pools, 3);
     VkDescriptorSet tonemap_set = tb_rnd_frame_desc_pool_get_set(
-        self->render_system, self->descriptor_pools, 4);
+        self->rnd_sys, self->descriptor_pools, 4);
 
     VkDescriptorSet downsample_sets[BLUR_BATCH_COUNT] = {0};
     VkDescriptorSet upsample_sets[BLUR_BATCH_COUNT] = {0};
     for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
       downsample_sets[i] = tb_rnd_frame_desc_pool_get_set(
-          self->render_system, self->down_desc_pools, i);
-      upsample_sets[i] = tb_rnd_frame_desc_pool_get_set(self->render_system,
-                                                        self->up_desc_pools, i);
+          self->rnd_sys, self->down_desc_pools, i);
+      upsample_sets[i] =
+          tb_rnd_frame_desc_pool_get_set(self->rnd_sys, self->up_desc_pools, i);
     }
 
     // TODO: Make this less hacky
-    const uint32_t width = self->render_system->render_thread->swapchain.width;
-    const uint32_t height =
-        self->render_system->render_thread->swapchain.height;
+    const uint32_t width = self->rnd_sys->render_thread->swapchain.width;
+    const uint32_t height = self->rnd_sys->render_thread->swapchain.height;
 
     // Depth copy pass
     {
@@ -3209,7 +3188,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
   TbRenderPipelineSystem *rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
-  TbRenderSystem *rnd_sys = rp_sys->render_system;
+  TbRenderSystem *rnd_sys = rp_sys->rnd_sys;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
     TracyCZoneN(resize_ctx, "Resize", true);
     tb_rnd_on_swapchain_resize(rp_sys);
@@ -3277,7 +3256,7 @@ void reimport_render_pass(TbRenderPipelineSystem *self, TbRenderPassId id) {
   TbRenderPass *rp = &TB_DYN_ARR_AT(self->render_passes, id);
 
   {
-    TbRenderTargetSystem *rt_sys = self->render_target_system;
+    TbRenderTargetSystem *rt_sys = self->rt_sys;
     // HACK: Assume all attachments have the same extents
     const VkExtent3D extent = tb_render_target_get_mip_extent(
         rt_sys, rp->attachments[0].layer, rp->attachments[0].mip,
@@ -3286,8 +3265,7 @@ void reimport_render_pass(TbRenderPipelineSystem *self, TbRenderPassId id) {
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       // Update the pass context on each frame index
       {
-        TbFrameState *state =
-            &self->render_system->render_thread->frame_states[i];
+        TbFrameState *state = &self->rnd_sys->render_thread->frame_states[i];
         TbPassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, id);
         context->width = extent.width;
         context->height = extent.height;
@@ -3328,7 +3306,7 @@ void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
   // Reimport the swapchain target and resize all default targets
   // The render thread should have created the necessary resources before
   // signaling the main thread
-  tb_reimport_swapchain(self->render_target_system);
+  tb_reimport_swapchain(self->rt_sys);
 
   // Render target system is up to date, now we just have to re-create all
   // render passes
@@ -3355,13 +3333,13 @@ void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
       for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES;
            ++frame_idx) {
         TbFrameState *state =
-            &self->render_system->render_thread->frame_states[frame_idx];
+            &self->rnd_sys->render_thread->frame_states[frame_idx];
         TbPassContext *context = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
         const PassTransition *transition = &pass->transitions[trans_idx];
         TbImageTransition *barrier = &context->barriers[trans_idx];
         *barrier = transition->barrier;
         barrier->barrier.image = tb_render_target_get_image(
-            self->render_target_system, frame_idx, transition->render_target);
+            self->rt_sys, frame_idx, transition->render_target);
       }
     }
   }
@@ -3371,7 +3349,7 @@ void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
   // are invalid
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     TbFrameState *state =
-        &self->render_system->render_thread->frame_states[frame_idx];
+        &self->rnd_sys->render_thread->frame_states[frame_idx];
     TB_DYN_ARR_FOREACH(state->draw_contexts, ctx_idx) {
       TbDrawContext *draw_ctx = &TB_DYN_ARR_AT(state->draw_contexts, ctx_idx);
       draw_ctx->batch_count = 0;
@@ -3387,7 +3365,7 @@ void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
 TbDrawContextId
 tb_render_pipeline_register_draw_context(TbRenderPipelineSystem *self,
                                          const TbDrawContextDescriptor *desc) {
-  TbRenderThread *thread = self->render_system->render_thread;
+  TbRenderThread *thread = self->rnd_sys->render_thread;
   TbDrawContextId id = TB_DYN_ARR_SIZE(thread->frame_states[0].draw_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     TbFrameState *state = &thread->frame_states[frame_idx];
@@ -3403,7 +3381,7 @@ tb_render_pipeline_register_draw_context(TbRenderPipelineSystem *self,
 
 TbDispatchContextId tb_render_pipeline_register_dispatch_context(
     TbRenderPipelineSystem *self, const TbDispatchContextDescriptor *desc) {
-  TbRenderThread *thread = self->render_system->render_thread;
+  TbRenderThread *thread = self->rnd_sys->render_thread;
   TbDispatchContextId id =
       TB_DYN_ARR_SIZE(thread->frame_states[0].dispatch_contexts);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
@@ -3444,8 +3422,8 @@ void tb_render_pipeline_issue_draw_batch(TbRenderPipelineSystem *self,
                                          TbDrawContextId draw_ctx,
                                          uint32_t batch_count,
                                          const TbDrawBatch *batches) {
-  TbRenderThread *thread = self->render_system->render_thread;
-  TbFrameState *state = &thread->frame_states[self->render_system->frame_idx];
+  TbRenderThread *thread = self->rnd_sys->render_thread;
+  TbFrameState *state = &thread->frame_states[self->rnd_sys->frame_idx];
   if (draw_ctx >= TB_DYN_ARR_SIZE(state->draw_contexts)) {
     TB_CHECK(false, "Draw Context Id out of range");
     return;
@@ -3502,8 +3480,8 @@ void tb_render_pipeline_issue_dispatch_batch(TbRenderPipelineSystem *self,
                                              TbDispatchContextId dispatch_ctx,
                                              uint32_t batch_count,
                                              const TbDispatchBatch *batches) {
-  TbRenderThread *thread = self->render_system->render_thread;
-  TbFrameState *state = &thread->frame_states[self->render_system->frame_idx];
+  TbRenderThread *thread = self->rnd_sys->render_thread;
+  TbFrameState *state = &thread->frame_states[self->rnd_sys->frame_idx];
   if (dispatch_ctx >= TB_DYN_ARR_SIZE(state->dispatch_contexts)) {
     TB_CHECK(false, "Dispatch Context Id out of range");
     return;

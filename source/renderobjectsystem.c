@@ -17,7 +17,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
                                                  TbAllocator tmp_alloc,
                                                  TbRenderSystem *rnd_sys) {
   tb_auto sys = (TbRenderObjectSystem){
-      .render_system = rnd_sys,
+      .rnd_sys = rnd_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
   };
@@ -53,7 +53,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
 }
 
 void destroy_render_object_system(TbRenderObjectSystem *self) {
-  tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
 
   *self = (TbRenderObjectSystem){0};
 }
@@ -89,7 +89,7 @@ void tick_render_object_system(ecs_iter_t *it) {
   TbCommonObjectData *obj_ptr = NULL;
   if (obj_count > prev_count) {
     // We need to resize the GPU buffer
-    tb_rnd_free_gpu_buffer(ro_sys->render_system, &trans_buffer->gpu);
+    tb_rnd_free_gpu_buffer(ro_sys->rnd_sys, &trans_buffer->gpu);
     tb_auto create_info = (VkBufferCreateInfo){
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(TbCommonObjectData) * obj_count,
@@ -171,7 +171,7 @@ void tick_render_object_system(ecs_iter_t *it) {
 }
 
 VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
-  return tb_rnd_frame_desc_pool_get_set(sys->render_system, sys->pools, 0);
+  return tb_rnd_frame_desc_pool_get_set(sys->rnd_sys, sys->pools, 0);
 }
 
 void tb_register_render_object_sys(TbWorld *world) {
