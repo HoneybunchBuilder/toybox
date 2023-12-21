@@ -465,7 +465,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
     {
       TbRenderTargetDescriptor rt_desc = {
           .name = "LDR Target",
-          .format = VK_FORMAT_R8G8B8A8_SRGB,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
           .extent =
               {
                   .width = width,
@@ -483,7 +483,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
     {
       TbRenderTargetDescriptor rt_desc = {
           .name = "FXAA Output",
-          .format = VK_FORMAT_R8G8B8A8_SRGB,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
           .extent =
               {
                   .width = width,
