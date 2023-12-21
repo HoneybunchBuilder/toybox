@@ -1,10 +1,11 @@
 #include "imgui.hlsli"
 
-[[vk::push_constant]] ConstantBuffer<TbImGuiPushConstants> consts : register(b0);
+[[vk::push_constant]]
+ConstantBuffer<TbImGuiPushConstants> consts : register(b0);
 
 Texture2D atlas : register(t0, space0);
 
-sampler static_sampler : register(s1, space0);
+SamplerState static_sampler : register(s1, space0);
 
 struct VertexIn {
   float2 position : SV_POSITION;

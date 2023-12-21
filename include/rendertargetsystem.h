@@ -27,7 +27,7 @@ typedef struct TbRenderTargetSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *render_system;
+  TbRenderSystem *rnd_sys;
 
   TB_DYN_ARR_OF(TbRenderTarget) render_targets;
 
@@ -43,6 +43,8 @@ typedef struct TbRenderTargetSystem {
   TbRenderTargetId shadow_map;
   TbRenderTargetId brightness;
   TbRenderTargetId bloom_mip_chain;
+  TbRenderTargetId ldr_target;
+  TbRenderTargetId aa_output;
 } TbRenderTargetSystem;
 
 void tb_register_render_target_sys(TbWorld *world);

@@ -17,8 +17,8 @@ TbViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                 TbRenderTargetSystem *rt_sys,
                                 TbTextureSystem *tex_sys) {
   TbViewSystem sys = {
-      .render_system = rnd_sys,
-      .render_target_system = rt_sys,
+      .rnd_sys = rnd_sys,
+      .rt_sys = rt_sys,
       .texture_system = tex_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
@@ -141,13 +141,13 @@ TbViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
 void destroy_view_system(TbViewSystem *self) {
   TB_DYN_ARR_DESTROY(self->views);
 
-  tb_rnd_destroy_sampler(self->render_system, self->brdf_sampler);
-  tb_rnd_destroy_sampler(self->render_system, self->filtered_env_sampler);
-  tb_rnd_destroy_set_layout(self->render_system, self->set_layout);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->brdf_sampler);
+  tb_rnd_destroy_sampler(self->rnd_sys, self->filtered_env_sampler);
+  tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     TbViewSystemFrameState *state = &self->frame_states[i];
-    tb_rnd_destroy_descriptor_pool(self->render_system, state->set_pool);
+    tb_rnd_destroy_descriptor_pool(self->rnd_sys, state->set_pool);
   }
 
   *self = (TbViewSystem){0};
@@ -167,8 +167,8 @@ void view_update_tick(ecs_iter_t *it) {
 
   VkResult err = VK_SUCCESS;
 
-  TbRenderSystem *rnd_sys = sys->render_system;
-  TbRenderTargetSystem *rt_sys = sys->render_target_system;
+  TbRenderSystem *rnd_sys = sys->rnd_sys;
+  TbRenderTargetSystem *rt_sys = sys->rt_sys;
 
   VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
@@ -446,7 +446,7 @@ VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
     TB_CHECK(false, "TbView Id out of range");
   }
 
-  return self->frame_states[self->render_system->frame_idx].sets[view];
+  return self->frame_states[self->rnd_sys->frame_idx].sets[view];
 }
 
 const TbView *tb_get_view(TbViewSystem *self, TbViewId view) {

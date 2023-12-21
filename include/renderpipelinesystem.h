@@ -72,9 +72,9 @@ typedef struct TbRenderPipelineSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *render_system;
-  TbRenderTargetSystem *render_target_system;
-  TbViewSystem *view_system;
+  TbRenderSystem *rnd_sys;
+  TbRenderTargetSystem *rt_sys;
+  TbViewSystem *view_sys;
 
   TbRenderPassId env_cap_passes[PREFILTER_PASS_COUNT];
   TbRenderPassId irradiance_pass;
@@ -93,6 +93,7 @@ typedef struct TbRenderPipelineSystem {
   TbRenderPassId bloom_downsample_pass;
   TbRenderPassId bloom_upsample_pass;
   TbRenderPassId tonemap_pass;
+  TbRenderPassId fxaa_pass;
   TbRenderPassId ui_pass;
 
   TB_DYN_ARR_OF(TbRenderPass) render_passes;

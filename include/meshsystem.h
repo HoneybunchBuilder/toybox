@@ -63,11 +63,11 @@ typedef struct TbMeshSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *render_system;
+  TbRenderSystem *rnd_sys;
   TbMaterialSystem *material_system;
-  TbViewSystem *view_system;
+  TbViewSystem *view_sys;
   TbRenderObjectSystem *render_object_system;
-  TbRenderPipelineSystem *render_pipe_system;
+  TbRenderPipelineSystem *rp_sys;
 
   ecs_query_t *camera_query;
   ecs_query_t *mesh_query;

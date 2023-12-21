@@ -35,9 +35,9 @@ bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
           .near = persp->znear,
           .far = persp->zfar,
           .width =
-              (float)view_sys->render_system->render_thread->swapchain.width,
+              (float)view_sys->rnd_sys->render_thread->swapchain.width,
           .height =
-              (float)view_sys->render_system->render_thread->swapchain.height,
+              (float)view_sys->rnd_sys->render_thread->swapchain.height,
       };
       ecs_set_ptr(ecs, e, TbCameraComponent, &comp);
     } else {

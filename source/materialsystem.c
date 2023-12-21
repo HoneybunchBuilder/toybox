@@ -38,7 +38,7 @@ TbMaterialSystem create_material_system(TbAllocator std_alloc,
   TbMaterialSystem sys = {
       .std_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
-      .render_system = rnd_sys,
+      .rnd_sys = rnd_sys,
       .texture_system = tex_sys,
   };
 
@@ -138,13 +138,13 @@ TbMaterialSystem create_material_system(TbAllocator std_alloc,
 }
 
 void destroy_material_system(TbMaterialSystem *self) {
-  TbRenderSystem *render_system = self->render_system;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   tb_free(self->std_alloc, (void *)self->default_material);
 
-  tb_rnd_destroy_set_layout(render_system, self->set_layout);
-  tb_rnd_destroy_sampler(render_system, self->sampler);
-  tb_rnd_destroy_sampler(render_system, self->shadow_sampler);
+  tb_rnd_destroy_set_layout(rnd_sys, self->set_layout);
+  tb_rnd_destroy_sampler(rnd_sys, self->sampler);
+  tb_rnd_destroy_sampler(rnd_sys, self->shadow_sampler);
 
   TB_DYN_ARR_FOREACH(self->materials, i) {
     if (TB_DYN_ARR_AT(self->materials, i).ref_count != 0) {
@@ -449,7 +449,7 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
           };
           // HACK: Known alignment for uniform buffers
           err = tb_rnd_sys_create_gpu_buffer2_tmp(
-              self->render_system, &create_info, &data, mat->name,
+              self->rnd_sys, &create_info, &data, mat->name,
               &material->gpu_buffer, 0x40);
           TB_VK_CHECK_RET(
               err,
@@ -514,7 +514,7 @@ void tb_mat_system_release_material_ref(TbMaterialSystem *self,
 
   if (material->ref_count == 0) {
     // Free the mesh at this index
-    VmaAllocator vma_alloc = self->render_system->vma_alloc;
+    VmaAllocator vma_alloc = self->rnd_sys->vma_alloc;
 
     TbBuffer *gpu_buf = &material->gpu_buffer;
     vmaDestroyBuffer(vma_alloc, gpu_buf->buffer, gpu_buf->alloc);

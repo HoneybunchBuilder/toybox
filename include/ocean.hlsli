@@ -31,7 +31,7 @@ _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
   ConstantBuffer<OceanData> ocean_data : register(b0, space);                  \
   Texture2D depth_map : register(t1, space);                                   \
   Texture2D color_map : register(t2, space);                                   \
-  sampler material_sampler : register(s3, space);                              \
+  SamplerState material_sampler : register(s3, space);                         \
   SamplerComparisonState shadow_sampler : register(s4, space);                 \
   [[vk::push_constant]]                                                        \
   ConstantBuffer<OceanPushConstants> consts : register(b5, space);

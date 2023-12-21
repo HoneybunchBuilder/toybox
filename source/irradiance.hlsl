@@ -2,8 +2,8 @@
 #include "cube_view_lut.hlsli"
 #include "pbr.hlsli"
 
-TextureCube env_map : register(t0, space0);      // Fragment Stage Only
-sampler material_sampler : register(s1, space0); // Immutable Sampler
+TextureCube env_map : register(t0, space0);           // Fragment Stage Only
+SamplerState material_sampler : register(s1, space0); // Immutable Sampler
 
 struct VertexIn {
   float3 local_pos : POSITION0;

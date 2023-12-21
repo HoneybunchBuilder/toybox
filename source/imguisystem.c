@@ -272,7 +272,7 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult ui_context_init(TbRenderSystem *render_system, ImFontAtlas *atlas,
+VkResult ui_context_init(TbRenderSystem *rnd_sys, ImFontAtlas *atlas,
                          TbUIContext *context) {
   VkResult err = VK_SUCCESS;
   *context = (TbUIContext){
@@ -308,7 +308,7 @@ VkResult ui_context_init(TbRenderSystem *render_system, ImFontAtlas *atlas,
 
     const uint64_t atlas_size =
         (uint64_t)tex_w * (uint64_t)tex_h * (uint64_t)bytes_pp;
-    err = tb_rnd_sys_create_gpu_image_tmp(render_system, pixels, atlas_size, 16,
+    err = tb_rnd_sys_create_gpu_image_tmp(rnd_sys, pixels, atlas_size, 16,
                                           &create_info, "ImGui Atlas",
                                           &context->atlas);
     TB_VK_CHECK_RET(err, "Failed to create imgui atlas", err);
@@ -337,11 +337,11 @@ VkResult ui_context_init(TbRenderSystem *render_system, ImFontAtlas *atlas,
                 1,
             },
     };
-    err = vkCreateImageView(render_system->render_thread->device, &create_info,
-                            &render_system->vk_host_alloc_cb,
+    err = vkCreateImageView(rnd_sys->render_thread->device, &create_info,
+                            &rnd_sys->vk_host_alloc_cb,
                             &context->atlas_view);
     TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", err);
-    SET_VK_NAME(render_system->render_thread->device, context->atlas_view,
+    SET_VK_NAME(rnd_sys->render_thread->device, context->atlas_view,
                 VK_OBJECT_TYPE_IMAGE_VIEW, "ImGui Atlas");
   }
 
@@ -355,10 +355,10 @@ VkResult ui_context_init(TbRenderSystem *render_system, ImFontAtlas *atlas,
   return err;
 }
 
-void ui_context_destroy(TbRenderSystem *render_system, TbUIContext *context) {
-  tb_rnd_free_gpu_image(render_system, &context->atlas);
-  vkDestroyImageView(render_system->render_thread->device, context->atlas_view,
-                     &render_system->vk_host_alloc_cb);
+void ui_context_destroy(TbRenderSystem *rnd_sys, TbUIContext *context) {
+  tb_rnd_free_gpu_image(rnd_sys, &context->atlas);
+  vkDestroyImageView(rnd_sys->render_thread->device, context->atlas_view,
+                     &rnd_sys->vk_host_alloc_cb);
   igDestroyContext(context->context);
   *context = (TbUIContext){0};
 }
@@ -366,14 +366,14 @@ void ui_context_destroy(TbRenderSystem *render_system, TbUIContext *context) {
 TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                                   uint32_t context_count,
                                   ImFontAtlas **context_atlases,
-                                  TbRenderSystem *render_system,
-                                  TbRenderPipelineSystem *render_pipe_system,
-                                  TbRenderTargetSystem *render_target_system,
+                                  TbRenderSystem *rnd_sys,
+                                  TbRenderPipelineSystem *rp_sys,
+                                  TbRenderTargetSystem *rt_sys,
                                   TbInputSystem *input_system) {
   TbImGuiSystem sys = {
-      .render_system = render_system,
-      .render_pipe_system = render_pipe_system,
-      .render_target_system = render_target_system,
+      .rnd_sys = rnd_sys,
+      .rp_sys = rp_sys,
+      .rt_sys = rt_sys,
       .input = input_system,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
@@ -384,7 +384,7 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
 
   // Initialize each context
   for (uint32_t i = 0; i < sys.context_count; ++i) {
-    err = ui_context_init(render_system, context_atlases[i], &sys.contexts[i]);
+    err = ui_context_init(rnd_sys, context_atlases[i], &sys.contexts[i]);
     TB_VK_CHECK(err, "Failed to initialize UI context");
     if (err != VK_SUCCESS) {
       break;
@@ -392,18 +392,18 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   }
 
   // Look up UI pipeline
-  TbRenderPassId ui_pass_id = render_pipe_system->ui_pass;
+  TbRenderPassId ui_pass_id = rp_sys->ui_pass;
 
   uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
+  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id,
                                      &attach_count, NULL);
   TB_CHECK(attach_count == 1, "Unexpected");
   TbPassAttachment ui_info = {0};
-  tb_render_pipeline_get_attachments(render_pipe_system, ui_pass_id,
+  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id,
                                      &attach_count, &ui_info);
 
   VkFormat ui_target_format =
-      tb_render_target_get_format(render_target_system, ui_info.attachment);
+      tb_render_target_get_format(rt_sys, ui_info.attachment);
 
   // Create Immutable Sampler
   {
@@ -420,20 +420,20 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
-    err = tb_rnd_create_sampler(render_system, &create_info, "ImGui Sampler",
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "ImGui Sampler",
                                 &sys.sampler);
     TB_VK_CHECK(err, "Failed to create imgui sampler");
   }
 
   // Create imgui pipeline
   err = create_imgui_pipeline(
-      render_system->render_thread->device, &render_system->vk_host_alloc_cb,
-      render_system->pipeline_cache, sys.sampler, ui_target_format,
+      rnd_sys->render_thread->device, &rnd_sys->vk_host_alloc_cb,
+      rnd_sys->pipeline_cache, sys.sampler, ui_target_format,
       &sys.pipe_layout, &sys.set_layout, &sys.pipeline);
   TB_VK_CHECK(err, "Failed to create imgui pipeline");
 
   sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(
-      render_pipe_system, &(TbDrawContextDescriptor){
+      rp_sys, &(TbDrawContextDescriptor){
                               .batch_size = sizeof(ImGuiDrawBatch),
                               .draw_fn = imgui_pass_record,
                               .pass_id = ui_pass_id,
@@ -443,21 +443,21 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
 }
 
 void destroy_imgui_system(TbImGuiSystem *self) {
-  TbRenderSystem *render_system = self->render_system;
+  TbRenderSystem *rnd_sys = self->rnd_sys;
 
   for (uint32_t i = 0; i < self->context_count; ++i) {
-    ui_context_destroy(self->render_system, &self->contexts[i]);
+    ui_context_destroy(self->rnd_sys, &self->contexts[i]);
   }
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(render_system,
+    tb_rnd_destroy_descriptor_pool(rnd_sys,
                                    self->frame_states[i].set_pool);
   }
 
-  tb_rnd_destroy_sampler(render_system, self->sampler);
-  tb_rnd_destroy_set_layout(render_system, self->set_layout);
-  tb_rnd_destroy_pipe_layout(render_system, self->pipe_layout);
-  tb_rnd_destroy_pipeline(render_system, self->pipeline);
+  tb_rnd_destroy_sampler(rnd_sys, self->sampler);
+  tb_rnd_destroy_set_layout(rnd_sys, self->set_layout);
+  tb_rnd_destroy_pipe_layout(rnd_sys, self->pipe_layout);
+  tb_rnd_destroy_pipeline(rnd_sys, self->pipeline);
 
   *self = (TbImGuiSystem){0};
 }
@@ -470,7 +470,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
   VkResult err = VK_SUCCESS;
 
   if (sys->context_count > 0 && it->delta_time > 0) {
-    TbRenderSystem *rnd_sys = sys->render_system;
+    TbRenderSystem *rnd_sys = sys->rnd_sys;
 
     TbImGuiFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
     // Allocate all the descriptor sets for this frame
@@ -502,7 +502,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
         state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
                                        state->set_count, VkDescriptorSet);
       } else {
-        vkResetDescriptorPool(sys->render_system->render_thread->device,
+        vkResetDescriptorPool(sys->rnd_sys->render_thread->device,
                               state->set_pool, 0);
         state->set_count = sys->context_count;
       }
@@ -552,18 +552,18 @@ void imgui_draw_tick(ecs_iter_t *it) {
           .pImageInfo = &image_info[imgui_idx],
       };
     }
-    tb_rnd_update_descriptors(sys->render_system, sys->context_count, writes);
+    tb_rnd_update_descriptors(sys->rnd_sys, sys->context_count, writes);
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
     ImGuiDrawBatch *imgui_batches =
-        tb_alloc_nm_tp(sys->render_system->render_thread
-                           ->frame_states[sys->render_system->frame_idx]
+        tb_alloc_nm_tp(sys->rnd_sys->render_thread
+                           ->frame_states[sys->rnd_sys->frame_idx]
                            .tmp_alloc.alloc,
                        sys->context_count, ImGuiDrawBatch);
     TbDrawBatch *batches =
-        tb_alloc_nm_tp(sys->render_system->render_thread
-                           ->frame_states[sys->render_system->frame_idx]
+        tb_alloc_nm_tp(sys->rnd_sys->render_thread
+                           ->frame_states[sys->rnd_sys->frame_idx]
                            .tmp_alloc.alloc,
                        sys->context_count, TbDrawBatch);
 
@@ -600,8 +600,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
       // Apply basic IO
       io->DeltaTime = it->delta_time; // Note that ImGui expects seconds
       io->DisplaySize = (ImVec2){
-          (float)sys->render_system->render_thread->swapchain.width,
-          (float)sys->render_system->render_thread->swapchain.height,
+          (float)sys->rnd_sys->render_thread->swapchain.width,
+          (float)sys->rnd_sys->render_thread->swapchain.height,
       };
 
       igRender();
@@ -632,7 +632,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
           // to the gpu every frame
           uint64_t tmp_offset = 0;
           void *tmp_ptr = NULL;
-          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->render_system, imgui_size,
+          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->rnd_sys, imgui_size,
                                             0x40, &tmp_offset,
                                             &tmp_ptr) != VK_SUCCESS) {
             TracyCZoneEnd(ctx);
@@ -683,7 +683,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
           // Send the render system a batch to draw
           {
             VkBuffer gpu_tmp_buffer =
-                tb_rnd_get_gpu_tmp_buffer(sys->render_system);
+                tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys);
 
             const float width = draw_data->DisplaySize.x;
             const float height = draw_data->DisplaySize.y;
@@ -692,8 +692,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
             const float scale_y = 2.0f / height;
 
             ImGuiDraw *draws =
-                tb_alloc_nm_tp(sys->render_system->render_thread
-                                   ->frame_states[sys->render_system->frame_idx]
+                tb_alloc_nm_tp(sys->rnd_sys->render_thread
+                                   ->frame_states[sys->rnd_sys->frame_idx]
                                    .tmp_alloc.alloc,
                                imgui_draw_count, ImGuiDraw);
             {
@@ -748,7 +748,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
       // Issue draw batches
       tb_render_pipeline_issue_draw_batch(
-          sys->render_pipe_system, sys->imgui_draw_ctx, batch_count, batches);
+          sys->rp_sys, sys->imgui_draw_ctx, batch_count, batches);
 
       igNewFrame();
     }

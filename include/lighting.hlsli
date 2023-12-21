@@ -8,8 +8,8 @@ struct TbView {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
   Texture2D brdf_lut;
-  sampler filtered_env_sampler;
-  sampler brdf_sampler;
+  SamplerState filtered_env_sampler;
+  SamplerState brdf_sampler;
 };
 
 struct Light {

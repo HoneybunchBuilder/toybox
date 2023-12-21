@@ -82,7 +82,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 // by specific systems
 
 #define GLTF_MATERIAL_SET(space)                                               \
-  sampler material_sampler : register(s0, space);                              \
+  SamplerState material_sampler : register(s0, space);                         \
   SamplerComparisonState shadow_sampler : register(s1, space);                 \
   StructuredBuffer<TbGLTFMaterialData> gltf_data[] : register(t2, space);
 
@@ -96,8 +96,8 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   Texture2D brdf_lut : register(t3, space);                                    \
   ConstantBuffer<TbCommonLightData> light_data : register(b4, space);          \
   Texture2DArray shadow_map : register(t5, space);                             \
-  sampler filtered_env_sampler : register(s7, space);                          \
-  sampler brdf_sampler : register(s8, space);
+  SamplerState filtered_env_sampler : register(s7, space);                     \
+  SamplerState brdf_sampler : register(s8, space);
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \

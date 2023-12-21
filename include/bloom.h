@@ -35,17 +35,17 @@ typedef struct UpsampleRenderWork {
   TbDispatchContextId ctx;
 } UpsampleRenderWork;
 
-VkResult tb_create_downsample_work(TbRenderSystem *render_system,
-                                   TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_downsample_work(TbRenderSystem *rnd_sys,
+                                   TbRenderPipelineSystem *rp_sys,
                                    VkSampler sampler, TbRenderPassId pass,
                                    DownsampleRenderWork *work);
-void tb_destroy_downsample_work(TbRenderSystem *render_system,
+void tb_destroy_downsample_work(TbRenderSystem *rnd_sys,
                                 DownsampleRenderWork *work);
 
-VkResult tb_create_upsample_work(TbRenderSystem *render_system,
-                                 TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_upsample_work(TbRenderSystem *rnd_sys,
+                                 TbRenderPipelineSystem *rp_sys,
                                  VkSampler sampler, TbRenderPassId pass,
                                  UpsampleRenderWork *work);
-void tb_destroy_upsample_work(TbRenderSystem *render_system,
+void tb_destroy_upsample_work(TbRenderSystem *rnd_sys,
                               UpsampleRenderWork *work);
 #endif

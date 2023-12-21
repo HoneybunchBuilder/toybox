@@ -27,11 +27,11 @@ typedef uint32_t TbSoundEffectId;
 typedef struct ecs_query_t ecs_query_t;
 
 typedef struct TbOceanSystem {
-  TbRenderSystem *render_system;
-  TbRenderPipelineSystem *render_pipe_system;
+  TbRenderSystem *rnd_sys;
+  TbRenderPipelineSystem *rp_sys;
   TbMeshSystem *mesh_system;
-  TbViewSystem *view_system;
-  TbRenderTargetSystem *render_target_system;
+  TbViewSystem *view_sys;
+  TbRenderTargetSystem *rt_sys;
   TbVisualLoggingSystem *vlog;
   TbAudioSystem *audio_system;
   TbAllocator tmp_alloc;

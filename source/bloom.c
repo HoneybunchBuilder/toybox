@@ -38,7 +38,7 @@ void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_downsample_set_layout(TbRenderSystem *render_system,
+VkResult create_downsample_set_layout(TbRenderSystem *rnd_sys,
                                       VkSampler sampler,
                                       VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
@@ -67,13 +67,13 @@ VkResult create_downsample_set_layout(TbRenderSystem *render_system,
               },
           },
   };
-  VkResult err = tb_rnd_create_set_layout(render_system, &create_info,
+  VkResult err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                           "Downsample Set Layout", layout);
   TB_VK_CHECK(err, "Failed to create downsample descriptor set layout");
   return err;
 }
 
-VkResult create_downsample_pipe_layout(TbRenderSystem *render_system,
+VkResult create_downsample_pipe_layout(TbRenderSystem *rnd_sys,
                                        VkDescriptorSetLayout set_layout,
                                        VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -85,12 +85,12 @@ VkResult create_downsample_pipe_layout(TbRenderSystem *render_system,
           },
   };
   VkResult err = tb_rnd_create_pipeline_layout(
-      render_system, &create_info, "Downsample Pipeline Layout", layout);
+      rnd_sys, &create_info, "Downsample Pipeline Layout", layout);
   TB_VK_CHECK(err, "Failed to create downsample pipeline layout");
   return err;
 }
 
-VkResult create_downsample_pipeline(TbRenderSystem *render_system,
+VkResult create_downsample_pipeline(TbRenderSystem *rnd_sys,
                                     VkPipelineLayout layout,
                                     VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -102,7 +102,7 @@ VkResult create_downsample_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(downsample_comp);
     create_info.pCode = (const uint32_t *)downsample_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Downsample Comp",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Downsample Comp",
                                &downsample_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load downsample compute shader module",
                     err);
@@ -119,11 +119,11 @@ VkResult create_downsample_pipeline(TbRenderSystem *render_system,
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
                                         "Downsample Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create downsample pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, downsample_comp_mod);
+  tb_rnd_destroy_shader(rnd_sys, downsample_comp_mod);
 
   return err;
 }
@@ -155,7 +155,7 @@ void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_upsample_set_layout(TbRenderSystem *render_system,
+VkResult create_upsample_set_layout(TbRenderSystem *rnd_sys,
                                     VkSampler sampler,
                                     VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
@@ -184,13 +184,13 @@ VkResult create_upsample_set_layout(TbRenderSystem *render_system,
               },
           },
   };
-  VkResult err = tb_rnd_create_set_layout(render_system, &create_info,
+  VkResult err = tb_rnd_create_set_layout(rnd_sys, &create_info,
                                           "Upsample Set Layout", layout);
   TB_VK_CHECK(err, "Failed to create upsample descriptor set layout");
   return err;
 }
 
-VkResult create_upsample_pipe_layout(TbRenderSystem *render_system,
+VkResult create_upsample_pipe_layout(TbRenderSystem *rnd_sys,
                                      VkDescriptorSetLayout set_layout,
                                      VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
@@ -202,12 +202,12 @@ VkResult create_upsample_pipe_layout(TbRenderSystem *render_system,
           },
   };
   VkResult err = tb_rnd_create_pipeline_layout(
-      render_system, &create_info, "Upsample Pipeline Layout", layout);
+      rnd_sys, &create_info, "Upsample Pipeline Layout", layout);
   TB_VK_CHECK(err, "Failed to create upsample pipeline layout");
   return err;
 }
 
-VkResult create_upsample_pipeline(TbRenderSystem *render_system,
+VkResult create_upsample_pipeline(TbRenderSystem *rnd_sys,
                                   VkPipelineLayout layout,
                                   VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
@@ -219,7 +219,7 @@ VkResult create_upsample_pipeline(TbRenderSystem *render_system,
     };
     create_info.codeSize = sizeof(upsample_comp);
     create_info.pCode = (const uint32_t *)upsample_comp;
-    err = tb_rnd_create_shader(render_system, &create_info, "Upsample Comp",
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Upsample Comp",
                                &upsample_comp_mod);
     TB_VK_CHECK_RET(err, "Failed to load upsample compute shader module", err);
   }
@@ -235,26 +235,26 @@ VkResult create_upsample_pipeline(TbRenderSystem *render_system,
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(render_system, 1, &create_info,
+  err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
                                         "Upsample Pipeline", pipeline);
   TB_VK_CHECK_RET(err, "Failed to create upsample pipeline", err);
 
-  tb_rnd_destroy_shader(render_system, upsample_comp_mod);
+  tb_rnd_destroy_shader(rnd_sys, upsample_comp_mod);
 
   return err;
 }
 
-VkResult tb_create_downsample_work(TbRenderSystem *render_system,
-                                   TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_downsample_work(TbRenderSystem *rnd_sys,
+                                   TbRenderPipelineSystem *rp_sys,
                                    VkSampler sampler, TbRenderPassId pass,
                                    DownsampleRenderWork *work) {
-  create_downsample_set_layout(render_system, sampler, &work->set_layout);
-  create_downsample_pipe_layout(render_system, work->set_layout,
+  create_downsample_set_layout(rnd_sys, sampler, &work->set_layout);
+  create_downsample_pipe_layout(rnd_sys, work->set_layout,
                                 &work->pipe_layout);
-  create_downsample_pipeline(render_system, work->pipe_layout, &work->pipeline);
+  create_downsample_pipeline(rnd_sys, work->pipe_layout, &work->pipeline);
 
   work->ctx = tb_render_pipeline_register_dispatch_context(
-      render_pipe, &(TbDispatchContextDescriptor){
+      rp_sys, &(TbDispatchContextDescriptor){
                        .batch_size = sizeof(DownsampleBatch),
                        .dispatch_fn = record_downsample,
                        .pass_id = pass,
@@ -264,24 +264,24 @@ VkResult tb_create_downsample_work(TbRenderSystem *render_system,
   return VK_SUCCESS;
 }
 
-void tb_destroy_downsample_work(TbRenderSystem *render_system,
+void tb_destroy_downsample_work(TbRenderSystem *rnd_sys,
                                 DownsampleRenderWork *work) {
-  tb_rnd_destroy_set_layout(render_system, work->set_layout);
-  tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
-  tb_rnd_destroy_pipeline(render_system, work->pipeline);
+  tb_rnd_destroy_set_layout(rnd_sys, work->set_layout);
+  tb_rnd_destroy_pipe_layout(rnd_sys, work->pipe_layout);
+  tb_rnd_destroy_pipeline(rnd_sys, work->pipeline);
 }
 
-VkResult tb_create_upsample_work(TbRenderSystem *render_system,
-                                 TbRenderPipelineSystem *render_pipe,
+VkResult tb_create_upsample_work(TbRenderSystem *rnd_sys,
+                                 TbRenderPipelineSystem *rp_sys,
                                  VkSampler sampler, TbRenderPassId pass,
                                  UpsampleRenderWork *work) {
-  create_upsample_set_layout(render_system, sampler, &work->set_layout);
-  create_upsample_pipe_layout(render_system, work->set_layout,
+  create_upsample_set_layout(rnd_sys, sampler, &work->set_layout);
+  create_upsample_pipe_layout(rnd_sys, work->set_layout,
                               &work->pipe_layout);
-  create_upsample_pipeline(render_system, work->pipe_layout, &work->pipeline);
+  create_upsample_pipeline(rnd_sys, work->pipe_layout, &work->pipeline);
 
   work->ctx = tb_render_pipeline_register_dispatch_context(
-      render_pipe, &(TbDispatchContextDescriptor){
+      rp_sys, &(TbDispatchContextDescriptor){
                        .batch_size = sizeof(UpsampleBatch),
                        .dispatch_fn = record_upsample,
                        .pass_id = pass,
@@ -291,9 +291,9 @@ VkResult tb_create_upsample_work(TbRenderSystem *render_system,
   return VK_SUCCESS;
 }
 
-void tb_destroy_upsample_work(TbRenderSystem *render_system,
+void tb_destroy_upsample_work(TbRenderSystem *rnd_sys,
                               UpsampleRenderWork *work) {
-  tb_rnd_destroy_set_layout(render_system, work->set_layout);
-  tb_rnd_destroy_pipe_layout(render_system, work->pipe_layout);
-  tb_rnd_destroy_pipeline(render_system, work->pipeline);
+  tb_rnd_destroy_set_layout(rnd_sys, work->set_layout);
+  tb_rnd_destroy_pipe_layout(rnd_sys, work->pipe_layout);
+  tb_rnd_destroy_pipeline(rnd_sys, work->pipeline);
 }

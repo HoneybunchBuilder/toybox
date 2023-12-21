@@ -633,7 +633,7 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(TbRenderSystem *self, const void *data,
   // We do this copy even on UMA platforms because we need the transition
   // If the buffer is null the copy will be skipped but the transition
   // will still occur
-  BufferImageCopy copy = {
+  TbBufferImageCopy copy = {
       .src = buffer,
       .dst = image->image,
       .region =
@@ -822,7 +822,7 @@ void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
 }
 
 void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
-                                   BufferImageCopy *uploads,
+                                   TbBufferImageCopy *uploads,
                                    uint32_t upload_count) {
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
   uint32_t head = TB_DYN_ARR_SIZE(state->buf_img_copy_queue);

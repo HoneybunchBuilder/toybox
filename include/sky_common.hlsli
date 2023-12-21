@@ -38,6 +38,7 @@ float noise(float3 p) {
   return o4.y * d.y + o4.x * (1.0 - d.y);
 }
 
+// causes problems on AMD :(
 float fbm(float3 x) {
   float v = 0.0;
   float a = 0.5;
@@ -153,6 +154,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
   color = pow(color, 1.0 / sunfade);
 
   // Cirrus clouds
+  /*
   float density =
       smoothstep(1.0 - cirrus, 1.0,
                  fbm(view_pos.xyz / view_dir_y * 2.0 + time * 0.05)) *
@@ -167,6 +169,7 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
     color = lerp(color, color * density * 5.0,
                  min(density, 1.0) * max(view_dir_y, 0.0));
   }
+  */
 
   return color;
 }

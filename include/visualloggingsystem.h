@@ -25,9 +25,9 @@ typedef struct TbVisualLoggingSystem {
   TbAllocator tmp_alloc;
   TbAllocator std_alloc;
 
-  TbRenderSystem *render_system;
-  TbViewSystem *view_system;
-  TbRenderPipelineSystem *render_pipe_system;
+  TbRenderSystem *rnd_sys;
+  TbViewSystem *view_sys;
+  TbRenderPipelineSystem *rp_sys;
   TbMeshSystem *mesh_system;
 
   bool *ui;

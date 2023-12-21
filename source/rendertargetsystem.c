@@ -73,7 +73,7 @@ bool create_render_target(TbRenderTargetSystem *self, TbRenderTarget *rt,
       };
       VmaAllocationCreateFlags flags =
           VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-      err = tb_rnd_sys_alloc_gpu_image(self->render_system, &create_info, flags,
+      err = tb_rnd_sys_alloc_gpu_image(self->rnd_sys, &create_info, flags,
                                        desc->name, &rt->images[i]);
       TB_VK_CHECK_RET(err, "Failed to allocate image for render target", false);
 
@@ -92,8 +92,8 @@ bool create_render_target(TbRenderTargetSystem *self, TbRenderTarget *rt,
           .subresourceRange = {aspect, 0, desc->mip_count, 0,
                                desc->layer_count},
       };
-      err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                     view_name, &rt->views[i]);
+      err = tb_rnd_create_image_view(self->rnd_sys, &create_info, view_name,
+                                     &rt->views[i]);
       TB_VK_CHECK_RET(err, "Failed to create image view for render target",
                       false);
     }
@@ -129,8 +129,8 @@ bool create_render_target(TbRenderTargetSystem *self, TbRenderTarget *rt,
               .image = rt->images[i].image,
               .subresourceRange = {aspect, mip_idx, 1, 0, desc->layer_count},
           };
-          err = tb_rnd_create_image_view(self->render_system, &create_info,
-                                         view_name, &mip_view->views[i]);
+          err = tb_rnd_create_image_view(self->rnd_sys, &create_info, view_name,
+                                         &mip_view->views[i]);
           TB_VK_CHECK_RET(err, "Failed to create image view for render target",
                           false);
         }
@@ -165,7 +165,7 @@ bool create_render_target(TbRenderTargetSystem *self, TbRenderTarget *rt,
                 .image = rt->images[i].image,
                 .subresourceRange = {aspect, mip_idx, 1, layer, 1},
             };
-            err = tb_rnd_create_image_view(self->render_system, &create_info,
+            err = tb_rnd_create_image_view(self->rnd_sys, &create_info,
                                            view_name, &mip_view->views[i]);
             TB_VK_CHECK_RET(
                 err, "Failed to create image view for render target", false);
@@ -182,13 +182,13 @@ void resize_render_target(TbRenderTargetSystem *self,
                           TbRenderTargetDescriptor *desc) {
   // Clean up old images and views
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_free_gpu_image(self->render_system, &render_target->images[i]);
-    tb_rnd_destroy_image_view(self->render_system, render_target->views[i]);
+    tb_rnd_free_gpu_image(self->rnd_sys, &render_target->images[i]);
+    tb_rnd_destroy_image_view(self->rnd_sys, render_target->views[i]);
     for (uint32_t layer = 0; layer < render_target->layer_count; ++layer) {
       for (uint32_t mip_idx = 0; mip_idx < render_target->mip_count;
            ++mip_idx) {
         tb_rnd_destroy_image_view(
-            self->render_system,
+            self->rnd_sys,
             render_target->layer_views[layer].mip_views[mip_idx].views[i]);
       }
     }
@@ -211,7 +211,7 @@ void reimport_render_target(TbRenderTargetSystem *self, TbRenderTargetId target,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     for (uint32_t layer = 0; layer < rt->layer_count; ++layer) {
       for (uint32_t mip_idx = 0; mip_idx < rt->mip_count; ++mip_idx) {
-        tb_rnd_destroy_image_view(self->render_system,
+        tb_rnd_destroy_image_view(self->rnd_sys,
                                   rt->layer_views->mip_views[mip_idx].views[i]);
       }
     }
@@ -234,7 +234,7 @@ void reimport_render_target(TbRenderTargetSystem *self, TbRenderTargetId target,
         .image = images[i],
         .subresourceRange = {aspect, 0, 1, 0, 1},
     };
-    err = tb_rnd_create_image_view(self->render_system, &create_info,
+    err = tb_rnd_create_image_view(self->rnd_sys, &create_info,
                                    "Imported Render Target TbView",
                                    &rt->layer_views[0].mip_views[0].views[i]);
     TB_VK_CHECK(err, "Failed to create image view for imported render target");
@@ -242,11 +242,11 @@ void reimport_render_target(TbRenderTargetSystem *self, TbRenderTargetId target,
   }
 }
 
-TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
+TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
                                                  TbAllocator std_alloc,
                                                  TbAllocator tmp_alloc) {
   TbRenderTargetSystem sys = {
-      .render_system = render_system,
+      .rnd_sys = rnd_sys,
       .tmp_alloc = tmp_alloc,
       .std_alloc = std_alloc,
   };
@@ -255,7 +255,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
 
   // Create some default render targets
   {
-    const TbSwapchain *swapchain = &render_system->render_thread->swapchain;
+    const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
     const VkFormat swap_format = swapchain->format;
     const uint32_t width = swapchain->width;
     const uint32_t height = swapchain->height;
@@ -425,6 +425,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
     // Create brightness target
     {
       TbRenderTargetDescriptor rt_desc = {
+          .name = "Brightness",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
           .extent =
               {
@@ -460,6 +461,41 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
       sys.bloom_mip_chain = tb_create_render_target(&sys, &rt_desc);
     }
 
+    // Create target for tonemapping to output to that isn't a swapchain
+    {
+      TbRenderTargetDescriptor rt_desc = {
+          .name = "LDR Target",
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      sys.ldr_target = tb_create_render_target(&sys, &rt_desc);
+    }
+
+    // Create target for anti-aliasing after tonemapping but before ui
+    {
+      TbRenderTargetDescriptor rt_desc = {
+          .name = "FXAA Output",
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
+          .extent =
+              {
+                  .width = width,
+                  .height = height,
+                  .depth = 1,
+              },
+          .mip_count = 1,
+          .layer_count = 1,
+          .view_type = VK_IMAGE_VIEW_TYPE_2D,
+      };
+      sys.aa_output = tb_create_render_target(&sys, &rt_desc);
+    }
     // Import swapchain target
     {
       TbRenderTargetDescriptor rt_desc = {
@@ -477,8 +513,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *render_system,
       };
       VkImage images[TB_MAX_FRAME_STATES] = {0};
       for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-        images[i] =
-            render_system->render_thread->frame_states[i].swapchain_image;
+        images[i] = rnd_sys->render_thread->frame_states[i].swapchain_image;
       }
       sys.swapchain = tb_import_render_target(&sys, &rt_desc, images);
     }
@@ -494,9 +529,9 @@ void destroy_render_target_system(TbRenderTargetSystem *self) {
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
       if (!rt->imported) {
         // Imported targets are supposed to be cleaned up externally
-        tb_rnd_free_gpu_image(self->render_system, &rt->images[i]);
+        tb_rnd_free_gpu_image(self->rnd_sys, &rt->images[i]);
       }
-      tb_rnd_destroy_image_view(self->render_system, rt->views[i]);
+      tb_rnd_destroy_image_view(self->rnd_sys, rt->views[i]);
     }
     if (!rt->imported) {
       for (uint32_t layer = 0; layer < rt->layer_count; ++layer) {
@@ -504,7 +539,7 @@ void destroy_render_target_system(TbRenderTargetSystem *self) {
           for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
             RenderTargetMipView *mip_view =
                 &rt->layer_views[layer].mip_views[mip_idx];
-            tb_rnd_destroy_image_view(self->render_system, mip_view->views[i]);
+            tb_rnd_destroy_image_view(self->rnd_sys, mip_view->views[i]);
           }
         }
       }
@@ -520,10 +555,10 @@ void tb_register_render_target_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbRenderTargetSystem);
   ECS_COMPONENT(ecs, TbRenderSystem);
 
-  TbRenderSystem *render_system = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  TbRenderTargetSystem sys = create_render_target_system(
-      render_system, world->std_alloc, world->tmp_alloc);
+  TbRenderTargetSystem sys =
+      create_render_target_system(rnd_sys, world->std_alloc, world->tmp_alloc);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderTargetSystem), TbRenderTargetSystem, &sys);
 }
@@ -538,7 +573,7 @@ void tb_unregister_render_target_sys(TbWorld *world) {
 
 void tb_reimport_swapchain(TbRenderTargetSystem *self) {
   // Called when the swapchain resizes
-  const TbSwapchain *swapchain = &self->render_system->render_thread->swapchain;
+  const TbSwapchain *swapchain = &self->rnd_sys->render_thread->swapchain;
   const VkFormat swap_format = swapchain->format;
   const uint32_t width = swapchain->width;
   const uint32_t height = swapchain->height;
@@ -689,8 +724,7 @@ void tb_reimport_swapchain(TbRenderTargetSystem *self) {
     };
     VkImage images[TB_MAX_FRAME_STATES] = {0};
     for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-      images[i] =
-          self->render_system->render_thread->frame_states[i].swapchain_image;
+      images[i] = self->rnd_sys->render_thread->frame_states[i].swapchain_image;
     }
     reimport_render_target(self, self->swapchain, &rt_desc, images);
   }
@@ -746,7 +780,7 @@ tb_import_render_target(TbRenderTargetSystem *self,
         .image = images[i],
         .subresourceRange = {aspect, 0, 1, 0, 1},
     };
-    err = tb_rnd_create_image_view(self->render_system, &create_info,
+    err = tb_rnd_create_image_view(self->rnd_sys, &create_info,
                                    "Imported Render Target TbView",
                                    &rt->layer_views[0].mip_views[0].views[i]);
     TB_VK_CHECK_RET(err,
