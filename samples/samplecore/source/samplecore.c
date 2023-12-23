@@ -81,6 +81,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   TbAllocator tmp_alloc = arena.alloc;
 
   {
+    // This hint must be set before init for xbox controllers to work
+    SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
                            SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC);
     if (res != 0) {
