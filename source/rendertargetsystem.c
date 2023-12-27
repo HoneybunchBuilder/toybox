@@ -478,24 +478,6 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
       };
       sys.ldr_target = tb_create_render_target(&sys, &rt_desc);
     }
-
-    // Create target for anti-aliasing after tonemapping but before ui
-    {
-      TbRenderTargetDescriptor rt_desc = {
-          .name = "FXAA Output",
-          .format = VK_FORMAT_R8G8B8A8_UNORM,
-          .extent =
-              {
-                  .width = width,
-                  .height = height,
-                  .depth = 1,
-              },
-          .mip_count = 1,
-          .layer_count = 1,
-          .view_type = VK_IMAGE_VIEW_TYPE_2D,
-      };
-      sys.aa_output = tb_create_render_target(&sys, &rt_desc);
-    }
     // Import swapchain target
     {
       TbRenderTargetDescriptor rt_desc = {

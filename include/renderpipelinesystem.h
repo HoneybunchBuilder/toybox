@@ -33,38 +33,17 @@ typedef struct TbPassAttachment {
   TbRenderTargetId attachment;
 } TbPassAttachment;
 
-typedef struct TbDrawBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-  VkViewport viewport;
-  VkRect2D scissor;
-  void *user_batch;
-  uint32_t draw_count;
-  uint64_t draw_size;
-  void *draws;
-  uint32_t draw_max;
-} TbDrawBatch;
-
-#define MAX_GROUPS 8
-typedef struct TbDispatchBatch {
-  VkPipelineLayout layout;
-  VkPipeline pipeline;
-  void *user_batch;
-  uint32_t group_count;
-  uint3 groups[MAX_GROUPS];
-} TbDispatchBatch;
-
 typedef struct TbDrawContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
-  tb_record_draw_batch *draw_fn;
+  tb_record_draw_batch_fn *draw_fn;
 } TbDrawContextDescriptor;
 typedef struct TbDrawContext TbDrawContext;
 
 typedef struct TbDispatchContextDescriptor {
   TbRenderPassId pass_id;
   uint64_t batch_size;
-  tb_record_dispatch_batch *dispatch_fn;
+  tb_record_dispatch_batch_fn *dispatch_fn;
 } TbDispatchContextDescriptor;
 typedef struct TbDispatchContext TbDispatchContext;
 

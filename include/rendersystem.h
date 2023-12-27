@@ -18,23 +18,6 @@ typedef struct TbRenderSystemFrameState {
   TbBufferImageCopyQueue buf_img_copy_queue;
 } TbRenderSystemFrameState;
 
-typedef struct TbFrameDescriptorPool {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
-  VkDescriptorSet *sets;
-} TbFrameDescriptorPool;
-
-typedef struct TbDescriptorPool {
-  uint64_t count;
-  VkDescriptorPool pool;
-  uint64_t capacity;
-  VkDescriptorSet *sets;
-} TbDescriptorPool;
-
-typedef struct TbFrameDescriptorPoolList {
-  TbFrameDescriptorPool pools[TB_MAX_FRAME_STATES];
-} TbFrameDescriptorPoolList;
-
 typedef struct TbRenderSystem {
   TbAllocator std_alloc;
   TbAllocator tmp_alloc;

@@ -20,6 +20,7 @@
 #include "audiosystem.h"
 #include "camerasystem.h"
 #include "coreuisystem.h"
+#include "fxaa.h"
 #include "imguisystem.h"
 #include "inputsystem.h"
 #include "lightsystem.h"
@@ -93,6 +94,7 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_view_sys(world);
       tb_register_render_object_sys(world);
       tb_register_render_pipeline_sys(world);
+      tb_register_fxaa_system(world);
       tb_register_material_sys(world);
       tb_register_mesh_sys(world);
       tb_register_sky_sys(world);
@@ -189,6 +191,7 @@ void tb_destroy_world(TbWorld *world) {
   tb_unregister_imgui_sys(world);
   tb_unregister_mesh_sys(world);
   tb_unregister_material_sys(world);
+  tb_unregister_fxaa_system(world);
   tb_unregister_render_pipeline_sys(world);
   tb_unregister_render_object_sys(world);
   tb_unregister_view_sys(world);

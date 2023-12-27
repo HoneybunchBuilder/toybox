@@ -792,6 +792,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .shaderInt16 = VK_TRUE,
       .vertexPipelineStoresAndAtomics = VK_TRUE,
       .multiDrawIndirect = VK_TRUE,
+      .shaderImageGatherExtended = VK_TRUE,
   };
 
   VkDeviceCreateInfo create_info = {0};

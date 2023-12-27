@@ -44,7 +44,6 @@ typedef struct TbRenderTargetSystem {
   TbRenderTargetId brightness;
   TbRenderTargetId bloom_mip_chain;
   TbRenderTargetId ldr_target;
-  TbRenderTargetId aa_output;
 } TbRenderTargetSystem;
 
 void tb_register_render_target_sys(TbWorld *world);

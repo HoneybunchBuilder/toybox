@@ -6,7 +6,7 @@
 #define TB_FXAA_SUBPIXEL_ON 1
 #define TB_FXAA_SUBPIXEL_FASTER 2
 
-typedef struct FXAAPushConstants {
+typedef struct TbFXAAPushConstants {
   float edge_threshold_min;
   float edge_threshold;
 
@@ -19,16 +19,16 @@ typedef struct FXAAPushConstants {
   float search_accel;
   float search_threshold;
 }
-FXAAPushConstants;
+TbFXAAPushConstants;
 
 #define FXAA_SET(space)                                                        \
   Texture2D input : register(t0, space);                                       \
   SamplerState in_sampler : register(s1, space);                               \
   [[vk::push_constant]]                                                        \
-  ConstantBuffer<FXAAPushConstants> consts : register(b2, space);
+  ConstantBuffer<TbFXAAPushConstants> consts : register(b2, space);
 
 // If not in a shader, make a quick static assert check
 #ifndef __HLSL_VERSION
-_Static_assert(sizeof(FXAAPushConstants) <= PUSH_CONSTANT_BYTES,
+_Static_assert(sizeof(TbFXAAPushConstants) <= PUSH_CONSTANT_BYTES,
                "Push constant structure exceeds max size");
 #endif

@@ -54,7 +54,7 @@ typedef struct TbDrawBatch TbDrawBatch;
 
 typedef struct TbDrawContext {
   TbRenderPassId pass_id;
-  tb_record_draw_batch *record_fn;
+  tb_record_draw_batch_fn *record_fn;
   uint32_t batch_count;
   TbDrawBatch *batches;
   uint32_t user_batch_size;
@@ -66,7 +66,7 @@ typedef struct TbDispatchBatch TbDispatchBatch;
 
 typedef struct TbDispatchContext {
   TbRenderPassId pass_id;
-  tb_record_dispatch_batch *record_fn;
+  tb_record_dispatch_batch_fn *record_fn;
   uint32_t batch_count;
   TbDispatchBatch *batches;
   uint32_t user_batch_size;

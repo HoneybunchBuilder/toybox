@@ -15,6 +15,48 @@
 #define TB_MAX_RENDER_PASS_TRANS 16
 #define TB_MAX_BARRIERS 16
 
+typedef struct TbDrawBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+  VkViewport viewport;
+  VkRect2D scissor;
+  void *user_batch;
+  uint32_t draw_count;
+  uint64_t draw_size;
+  void *draws;
+  uint32_t draw_max;
+} TbDrawBatch;
+
+#define MAX_GROUPS 8
+typedef struct TbDispatchBatch {
+  VkPipelineLayout layout;
+  VkPipeline pipeline;
+  void *user_batch;
+  uint32_t group_count;
+  uint3 groups[MAX_GROUPS];
+} TbDispatchBatch;
+
+typedef struct TbFullscreenBatch {
+  VkDescriptorSet set;
+} TbFullscreenBatch;
+
+typedef struct TbFrameDescriptorPool {
+  uint32_t set_count;
+  VkDescriptorPool set_pool;
+  VkDescriptorSet *sets;
+} TbFrameDescriptorPool;
+
+typedef struct TbDescriptorPool {
+  uint64_t count;
+  VkDescriptorPool pool;
+  uint64_t capacity;
+  VkDescriptorSet *sets;
+} TbDescriptorPool;
+
+typedef struct TbFrameDescriptorPoolList {
+  TbFrameDescriptorPool pools[TB_MAX_FRAME_STATES];
+} TbFrameDescriptorPoolList;
+
 typedef struct TbResourceId {
   uint64_t id;
   uint32_t idx;
@@ -57,14 +99,16 @@ typedef struct TbImage {
   VmaAllocationInfo info;
 } TbImage;
 
-typedef struct TbDrawBatch TbDrawBatch;
-typedef struct TbDispatchBatch TbDispatchBatch;
 typedef struct TracyCGPUContext TracyCGPUContext;
 
-typedef void tb_record_draw_batch(TracyCGPUContext *gpu_ctx,
-                                  VkCommandBuffer buffer, uint32_t batch_count,
-                                  const TbDrawBatch *batches);
-typedef void tb_record_dispatch_batch(TracyCGPUContext *gpu_ctx,
-                                      VkCommandBuffer buffer,
-                                      uint32_t batch_count,
-                                      const TbDispatchBatch *batches);
+typedef void tb_record_draw_batch_fn(TracyCGPUContext *gpu_ctx,
+                                     VkCommandBuffer buffer,
+                                     uint32_t batch_count,
+                                     const TbDrawBatch *batches);
+typedef void tb_record_dispatch_batch_fn(TracyCGPUContext *gpu_ctx,
+                                         VkCommandBuffer buffer,
+                                         uint32_t batch_count,
+                                         const TbDispatchBatch *batches);
+
+void tb_record_fullscreen(VkCommandBuffer buffer, const TbDrawBatch *batch,
+                          const TbFullscreenBatch *fs_batch);
