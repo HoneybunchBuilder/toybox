@@ -10,7 +10,7 @@ typedef struct TbFXAAPushConstants {
   float edge_threshold_min;
   float edge_threshold;
 
-  uint32_t subpixel;
+  int32_t subpixel;
   float subpixel_trim;
   float subpixel_trim_scale;
   float subpixel_cap;
