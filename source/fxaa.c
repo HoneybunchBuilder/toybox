@@ -98,12 +98,12 @@ void tick_fxaa_draw(ecs_iter_t *it) {
   {
     VkDescriptorPoolCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1,
+        .maxSets = 4,
         .poolSizeCount = 1,
         .pPoolSizes =
             (VkDescriptorPoolSize[1]){
                 {
-                    .descriptorCount = 1,
+                    .descriptorCount = 4,
                     .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 },
             },
@@ -229,6 +229,9 @@ void tb_register_fxaa_system(TbWorld *world) {
       tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Frag", &frag_mod);
     }
 
+const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
+    const VkFormat swap_format = swapchain->format;
+
     VkGraphicsPipelineCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext =
@@ -236,7 +239,7 @@ void tb_register_fxaa_system(TbWorld *world) {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                 .colorAttachmentCount = 1,
                 .pColorAttachmentFormats =
-                    (VkFormat[1]){VK_FORMAT_B8G8R8A8_UNORM},
+                    (VkFormat[1]){swap_format},
             },
         .stageCount = 2,
         .pStages =
