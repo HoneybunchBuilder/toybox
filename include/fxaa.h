@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fxaa.hlsli"
 #include "tbrendercommon.h"
 
 typedef struct TbWorld TbWorld;
@@ -15,6 +16,8 @@ typedef uint32_t TbDrawContextId;
 typedef struct TbFXAASystem {
   TbRenderTargetId input_target;
   TbRenderTargetId output_target;
+
+  TbFXAAPushConstants settings;
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;

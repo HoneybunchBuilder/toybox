@@ -1,6 +1,5 @@
 #include "fxaa.h"
 
-#include "fxaa.hlsli"
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
@@ -16,6 +15,11 @@
 #include "fxaa_vert.h"
 #pragma clang diagnostic pop
 
+typedef struct FXAABatch {
+  VkDescriptorSet set;
+  TbFXAAPushConstants consts;
+} FXAABatch;
+
 void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                  uint32_t batch_count, const TbDrawBatch *batches) {
   // Only expecting one draw per pass
@@ -26,8 +30,18 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "FXAA", 3, true);
   cmd_begin_label(buffer, "FXAA", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
-  tb_record_fullscreen(buffer, batches,
-                       (const TbFullscreenBatch *)batches->user_batch);
+  tb_auto batch = &batches[0];
+  tb_auto fxaa_batch = (const FXAABatch *)batches->user_batch;
+
+  // Just drawing a fullscreen triangle
+  vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
+  vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+  vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+  vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          batch->layout, 0, 1, &fxaa_batch->set, 0, NULL);
+  vkCmdPushConstants(buffer, batch->layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                     sizeof(TbFXAAPushConstants), &fxaa_batch->consts);
+  vkCmdDraw(buffer, 3, 1, 0, 0);
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
@@ -90,15 +104,16 @@ void tick_fxaa_draw(ecs_iter_t *it) {
     const uint32_t width = rnd_sys->render_thread->swapchain.width;
     const uint32_t height = rnd_sys->render_thread->swapchain.height;
 
-    TbFullscreenBatch fs_batch = {
+    FXAABatch fxaa_batch = {
         .set = tb_rnd_frame_desc_pool_get_set(rnd_sys, self->pools.pools, 0),
+        .consts = self->settings,
     };
     TbDrawBatch batch = {
         .layout = self->pipe_layout,
         .pipeline = self->pipeline,
         .viewport = {0, height, width, -(float)height, 0, 1},
         .scissor = {{0, 0}, {width, height}},
-        .user_batch = &fs_batch,
+        .user_batch = &fxaa_batch,
     };
     tb_render_pipeline_issue_draw_batch(rp_sys, self->draw_ctx, 1, &batch);
   }
@@ -278,7 +293,7 @@ void tb_register_fxaa_system(TbWorld *world) {
   // Register draw context
   {
     TbDrawContextDescriptor desc = {
-        .batch_size = sizeof(TbFullscreenBatch),
+        .batch_size = sizeof(FXAABatch),
         .draw_fn = record_fxaa,
         .pass_id = rp_sys->fxaa_pass,
     };
@@ -286,6 +301,18 @@ void tb_register_fxaa_system(TbWorld *world) {
     TB_CHECK(sys.draw_ctx != InvalidDispatchContextId,
              "Failed to create fxaa draw context");
   }
+
+  sys.settings = (TbFXAAPushConstants){
+      .edge_threshold = 1.0 / 8.0,
+      .edge_threshold_min = 1.0 / 24.0,
+      .search_steps = 32,
+      .search_accel = 1,
+      .search_threshold = 1.0 / 4.0,
+      .subpixel = 1,
+      .subpixel_cap = 3.0 / 4.0,
+      .subpixel_trim = 1.0 / 4.0,
+      .subpixel_trim_scale = 1.0 / (1.0 - sys.settings.subpixel_trim),
+  };
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
