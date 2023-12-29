@@ -49,38 +49,6 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-void tick_fxaa_ui(ecs_iter_t *it) {
-  tb_auto ecs = it->world;
-  ECS_COMPONENT(ecs, TbFXAASystem);
-  tb_auto self = ecs_field(it, TbFXAASystem, 1);
-
-  tb_auto settings = &self->settings;
-  if (igBegin("FXAA", NULL, 0)) {
-    igSliderFloat("Edge Threshold", &settings->edge_threshold, 0.25f, 1.0f,
-                  "%.4f", 0);
-    igSliderFloat("Edge Threshold Min", &settings->edge_threshold_min,
-                  1.0f / 32.0f, 1.0f / 12.0f, "%.4f", 0);
-    igSeparator();
-
-    igSliderInt("Subpixel", &settings->subpixel, 0, 2, "%d", 0);
-    igSliderFloat("Subpixel Trim", &settings->subpixel_trim, 0.0f, 0.5f, "%.4f",
-                  0);
-    igSliderFloat("Subpixel Trim Scale", &settings->subpixel_trim_scale, 0.0f,
-                  10.0f, "%.4f", 0);
-    igSliderFloat("Subpixel Cap", &settings->subpixel_cap, 0.0f, 1.0f, "%4f",
-                  0);
-    igSeparator();
-
-    igSliderFloat("Search Steps", &settings->search_steps, 1.0f, 128.0f, "%.0f",
-                  0);
-    igSliderFloat("Search Acceleration", &settings->search_accel, 1.0f, 4.0f,
-                  "%.0f", 0);
-    igSliderFloat("Search Threshold", &settings->search_threshold, 0.0f, 0.5f,
-                  "%.4f", 0);
-    igEnd();
-  }
-}
-
 void tick_fxaa_draw(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "FXAA Draw Tick", TracyCategoryColorRendering, true);
   tb_auto ecs = it->world;
@@ -335,22 +303,9 @@ void tb_register_fxaa_system(TbWorld *world) {
              "Failed to create fxaa draw context");
   }
 
-  sys.settings = (TbFXAAPushConstants){
-      .edge_threshold = 1.0 / 16.0,
-      .edge_threshold_min = 1.0 / 12.0,
-      .search_steps = 32,
-      .search_accel = 1,
-      .search_threshold = 1.0 / 4.0,
-      .subpixel = 1,
-      .subpixel_cap = 7.0 / 8.0,
-      .subpixel_trim = 1.0 / 8.0,
-      .subpixel_trim_scale = 1.0 / (1.0 - sys.settings.subpixel_trim),
-  };
-
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
 
-  ECS_SYSTEM(ecs, tick_fxaa_ui, EcsOnUpdate, TbFXAASystem(TbFXAASystem));
   ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnUpdate, TbFXAASystem(TbFXAASystem));
 }
 

@@ -7,6 +7,7 @@
 #define TB_FXAA_SUBPIXEL_FASTER 2
 
 typedef struct TbFXAAPushConstants {
+  int32_t on;
   float edge_threshold_min;
   float edge_threshold;
 

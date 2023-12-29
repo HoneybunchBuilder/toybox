@@ -20,6 +20,10 @@ float3 sample_lod0(Texture2D tex, float2 uv) {
 }
 
 float4 frag(Interpolators i) : SV_Target {
+  if (consts.on == 0) {
+    return float4(sample_lod0(input, i.uv0), 1.0f);
+  }
+
   float2 input_size;
   input.GetDimensions(input_size.x, input_size.y);
   float2 texel_size = float2(1.0 / input_size.x, 1.0 / input_size.y);

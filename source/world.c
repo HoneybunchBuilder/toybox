@@ -34,6 +34,7 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "rotatorsystem.h"
+#include "settings.h"
 #include "shadowsystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
@@ -95,6 +96,7 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_render_object_sys(world);
       tb_register_render_pipeline_sys(world);
       tb_register_fxaa_system(world);
+      tb_register_settings_system(world);
       tb_register_material_sys(world);
       tb_register_mesh_sys(world);
       tb_register_sky_sys(world);
@@ -192,6 +194,7 @@ void tb_destroy_world(TbWorld *world) {
   tb_unregister_mesh_sys(world);
   tb_unregister_material_sys(world);
   tb_unregister_fxaa_system(world);
+  tb_unregister_settings_system(world);
   tb_unregister_render_pipeline_sys(world);
   tb_unregister_render_object_sys(world);
   tb_unregister_view_sys(world);
