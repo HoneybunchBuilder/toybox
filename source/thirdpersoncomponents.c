@@ -38,6 +38,22 @@ bool try_attach_tp_move_comp(ecs_world_t *ecs, ecs_entity_t e,
     if (SDL_strcmp(key, "speed") == 0) {
       comp.speed = (float)json_object_get_double(value);
     }
+    if (SDL_strcmp(key, "jump") == 0) {
+      comp.jump = (bool)json_object_get_boolean(value);
+    }
+    if (SDL_strcmp(key, "jump_velocity") == 0) {
+      comp.jump_velocity = (float)json_object_get_double(value);
+    }
+
+    if (SDL_strcmp(key, "fixed_rotation") == 0) {
+      comp.fixed_rotation = (bool)json_object_get_boolean(value);
+    }
+    if (SDL_strcmp(key, "angle") == 0) {
+      comp.angle = (float)json_object_get_double(value);
+    }
+    if (SDL_strcmp(key, "distance") == 0) {
+      comp.distance = (float)json_object_get_double(value);
+    }
   }
   ecs_set_ptr(ecs, e, TbThirdPersonMovementComponent, &comp);
 

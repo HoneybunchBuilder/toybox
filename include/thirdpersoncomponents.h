@@ -15,9 +15,17 @@ typedef uint64_t ecs_entity_t;
 typedef struct TbWorld TbWorld;
 
 typedef struct TbThirdPersonMovementComponent {
-  float speed;
-  ecs_entity_t camera;
+  // Character movement configuration
   ecs_entity_t body;
+  float speed;
+  bool jump;
+  float jump_velocity;
+
+  // Camera configuration
+  ecs_entity_t camera;
+  bool fixed_rotation;
+  float angle;
+  float distance;
 } TbThirdPersonMovementComponent;
 
 void tb_register_third_person_components(TbWorld *world);

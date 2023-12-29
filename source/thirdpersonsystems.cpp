@@ -28,23 +28,31 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
   {
     // The camera is parented to the body, so the normalized position of the
     // camera is the local space vector from the body to the camera
-    float3 body_to_cam = tb_normf3(camera_trans.position);
+    auto body_to_cam = tb_normf3(camera_trans.position);
 
     // Read mouse/controller input to rotate the vector to determine the
     // direction we want the camera to live at
-    // Arcball the camera around the boat
+
+    if (move.fixed_rotation)
+    // Camera stays focused on the character from a specific
     {
-      float look_speed = 5.0f;
-      float look_yaw = 0.0f;
-      float look_pitch = 0.0f;
+      auto rotation =
+          tb_angle_axis_to_quat(tb_f3tof4(TB_RIGHT, tb_deg_to_rad(move.angle)));
+      body_to_cam = tb_normf3(tb_qrotf3(rotation, TB_FORWARD));
+    } else
+    // Arcball the camera around the character
+    {
+      auto look_speed = 5.0f;
+      auto look_yaw = 0.0f;
+      auto look_pitch = 0.0f;
       if (input.mouse.left || input.mouse.right || input.mouse.middle) {
-        float2 look_axis = input.mouse.axis;
+        auto look_axis = input.mouse.axis;
         look_yaw = -look_axis.x * delta_time * look_speed;
         look_pitch = -look_axis.y * delta_time * look_speed;
       } else if (input.controller_count > 0) {
-        const TbGameControllerState *ctl_state = &input.controller_states[0];
-        float2 look_axis = ctl_state->right_stick;
-        float deadzone = 0.15f;
+        const auto *ctl_state = &input.controller_states[0];
+        auto look_axis = ctl_state->right_stick;
+        auto deadzone = 0.15f;
         if (look_axis.x > -deadzone && look_axis.x < deadzone) {
           look_axis.x = 0.0f;
         }
@@ -55,18 +63,16 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
         look_pitch = look_axis.y * delta_time;
       }
 
-      TbQuaternion yaw_quat = tb_angle_axis_to_quat(tb_f4(0, 1, 0, look_yaw));
+      auto yaw_quat = tb_angle_axis_to_quat(tb_f4(0, 1, 0, look_yaw));
       body_to_cam = tb_normf3(tb_qrotf3(yaw_quat, body_to_cam));
-      float3 right = tb_normf3(tb_crossf3(TB_UP, body_to_cam));
-      TbQuaternion pitch_quat = tb_angle_axis_to_quat(tb_f3tof4(right, look_pitch));
+      auto right = tb_normf3(tb_crossf3(TB_UP, body_to_cam));
+      auto pitch_quat = tb_angle_axis_to_quat(tb_f3tof4(right, look_pitch));
       body_to_cam = tb_normf3(tb_qrotf3(pitch_quat, body_to_cam));
     }
 
     // Construct target position to move the camera to
-    // TODO: Make this adjustable by the player
-    static float distance = 10.0f;
-    distance += input.mouse.wheel.y;
-    distance = tb_clampf(distance, 5, 15);
+    // TODO: Allow other modifiers
+    float distance = move.distance;
     float3 camera_pos = body_to_cam * distance;
 
     // TODO: The local space offset we want the camera to focus on
@@ -74,10 +80,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     float3 target_pos = {0};
     camera_pos += target_pos;
 
-    TbTransform look_trans =
-        tb_look_forward_transform(camera_pos, -body_to_cam, TB_UP);
-
-    camera_trans = look_trans;
+    camera_trans = tb_look_forward_transform(camera_pos, -body_to_cam, TB_UP);
     camera_trans_comp.dirty = true;
   }
 
@@ -127,8 +130,10 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     }
 
     // Jump
-    if (input.keyboard.key_space && SDL_fabsf(velocity.y) <= 0.001f) {
-      velocity += tb_f3(0, 10, 0);
+    if (move.jump) {
+      if (input.keyboard.key_space && SDL_fabsf(velocity.y) <= 0.001f) {
+        velocity += tb_f3(0, move.jump_velocity, 0);
+      }
     }
 
     // Clamp planar speed without affecting jump velocity
