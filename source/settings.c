@@ -8,49 +8,47 @@
 
 #include <flecs.h>
 
-static const TbFXAAPushConstants tb_fxaa_off = {
-    .on = false,
-};
-
-static const TbFXAAPushConstants tb_fxaa_low = {
-    .on = true,
-    .edge_threshold = 1.0 / 2.0,
-    .edge_threshold_min = 1.0 / 12.0,
-    .search_steps = 16,
-    .search_accel = 1,
-    .search_threshold = 1.0 / 4.0,
-    .subpixel = 0,
-    .subpixel_cap = 1.0 / 4.0,
-    .subpixel_trim = 1.0 / 2.0,
-    .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 2.0)),
-};
-static const TbFXAAPushConstants tb_fxaa_medium = {
-    .on = true,
-    .edge_threshold = 1.0 / 4.0,
-    .edge_threshold_min = 1.0 / 16.0,
-    .search_steps = 32,
-    .search_accel = 1,
-    .search_threshold = 1.0 / 4.0,
-    .subpixel = 1,
-    .subpixel_cap = 3.0 / 4.0,
-    .subpixel_trim = 1.0 / 4.0,
-    .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 4.0)),
-};
-static const TbFXAAPushConstants tb_fxaa_high = {
-    .on = true,
-    .edge_threshold = 1.0 / 8.0,
-    .edge_threshold_min = 1.0 / 32.0,
-    .search_steps = 64,
-    .search_accel = 1,
-    .search_threshold = 1.0 / 4.0,
-    .subpixel = 1,
-    .subpixel_cap = 7.0 / 8.0,
-    .subpixel_trim = 1.0 / 8.0,
-    .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 8.0)),
-};
-static const TbFXAAPushConstants tb_fxaa_custom = {0};
 static const TbFXAAPushConstants tb_fxaa_options[] = {
-    tb_fxaa_off, tb_fxaa_low, tb_fxaa_medium, tb_fxaa_high, tb_fxaa_custom,
+    {
+        .on = false,
+    },
+    {
+        .on = true,
+        .edge_threshold = 1.0 / 2.0,
+        .edge_threshold_min = 1.0 / 12.0,
+        .search_steps = 16,
+        .search_accel = 1,
+        .search_threshold = 1.0 / 4.0,
+        .subpixel = 0,
+        .subpixel_cap = 1.0 / 4.0,
+        .subpixel_trim = 1.0 / 2.0,
+        .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 2.0)),
+    },
+    {
+        .on = true,
+        .edge_threshold = 1.0 / 4.0,
+        .edge_threshold_min = 1.0 / 16.0,
+        .search_steps = 32,
+        .search_accel = 1,
+        .search_threshold = 1.0 / 4.0,
+        .subpixel = 1,
+        .subpixel_cap = 3.0 / 4.0,
+        .subpixel_trim = 1.0 / 4.0,
+        .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 4.0)),
+    },
+    {
+        .on = true,
+        .edge_threshold = 1.0 / 8.0,
+        .edge_threshold_min = 1.0 / 32.0,
+        .search_steps = 64,
+        .search_accel = 1,
+        .search_threshold = 1.0 / 4.0,
+        .subpixel = 1,
+        .subpixel_cap = 7.0 / 8.0,
+        .subpixel_trim = 1.0 / 8.0,
+        .subpixel_trim_scale = 1.0 / (1.0 - (1.0 / 8.0)),
+    },
+    {0},
 };
 static const char *tb_fxaa_items[] = {
     "Off", "Low", "Medium", "High", "Custom",
@@ -116,7 +114,7 @@ void tb_register_settings_system(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);
 
-  ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
+  ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings))
 }
 
 void tb_unregister_settings_system(TbWorld *world) {
