@@ -150,65 +150,19 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
     ECS_COMPONENT(ecs, TbRenderObjectSystem);
     ECS_COMPONENT(ecs, TbRenderObject);
     ECS_COMPONENT(ecs, TbMeshComponent);
-    ECS_TAG(ecs, MeshRenderObject);
 
     TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
     TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
-    /*
-        We want everything to be as instanced as possible but we can't guarantee
-      that gltfpack will be able to construct perfect instanced batches for us.
-
-      Instead we check the node before we decide how to create a component.
-        If we already have a component that uses this mesh id, we instead
-      append it and its material to an existing component.
-        If there is no existing component that uses this mesh, create one.
-      There may be components with only 1 instance; that is okay.
-
-      Thoughts on Node Mobility
-        If the user can mark up in Blender which nodes are stationary that info
-      can be used to organize meshes into different components based on whether
-      or not we expect the transform to ever update. That way we only have to
-      shuffle transforms to the GPU for the set of transforms that actually
-      could possibly be updated.
-    */
-
     // Load mesh
     TbMeshId id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
-    // Find Mesh Component
-    ecs_entity_t mesh_ent = 0;
-    TbMeshComponent *mesh_comp = NULL;
-    ecs_iter_t mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
-    while (ecs_query_next(&mesh_it)) {
-      TbMeshComponent *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
-      for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-        TbMeshComponent *mesh = &meshes[mesh_idx];
-        if (mesh->mesh_id.id == id.id) {
-          mesh_ent = mesh_it.entities[mesh_idx];
-          mesh_comp = mesh;
-          break;
-        }
-      }
-    }
-    if (mesh_comp == NULL) {
-      TbMeshComponent comp = {0};
-      ret =
-          create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
-      TB_DYN_ARR_RESET(comp.entities, mesh_sys->std_alloc, 16);
-      ecs_set_ptr(ecs, e, TbMeshComponent, &comp);
+    TbMeshComponent comp = {0};
+    ret = create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
+    ecs_set_ptr(ecs, e, TbMeshComponent, &comp);
 
-      mesh_comp = ecs_get_mut(ecs, e, TbMeshComponent);
-      mesh_ent = e;
-    }
-
-    // Add a TbRenderObject to this entity
+    // Mark this entity as a render object
     ecs_set(ecs, e, TbRenderObject, {0});
-    ecs_add_id(ecs, e, MeshRenderObject);
-
-    // And let the mesh component know about this entity
-    TB_DYN_ARR_APPEND(mesh_comp->entities, e);
-    ecs_set_ptr(ecs, mesh_ent, TbMeshComponent, mesh_comp);
   }
   return ret;
 }

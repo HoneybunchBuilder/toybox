@@ -10,8 +10,8 @@
 
 typedef struct ecs_world_t ecs_world_t;
 
-static const uint32_t InvalidEntityId = 0xFFFF;
-static const uint32_t InvalidComponentId = 0xFFFF;
+static const uint32_t TbInvalidEntityId = 0;
+static const uint32_t TbInvalidComponentId = 0;
 
 typedef struct TbWorld {
   ecs_world_t *ecs;

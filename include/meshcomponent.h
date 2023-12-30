@@ -25,7 +25,6 @@ typedef struct TbSubMesh {
 
 typedef struct TbMeshComponent {
   TbMeshId mesh_id;
-  TB_DYN_ARR_OF(ecs_entity_t) entities;
   uint32_t submesh_count;
   TbSubMesh submeshes[TB_SUBMESH_MAX];
   TbAABB local_aabb;

@@ -36,6 +36,7 @@
 #include "rotatorsystem.h"
 #include "settings.h"
 #include "shadowsystem.h"
+#include "shootersystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
 #include "thirdpersonsystems.h"
@@ -110,6 +111,7 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_time_of_day_sys(world);
       tb_register_rotator_sys(world);
       tb_register_third_person_systems(world);
+      tb_register_shooter_system(world);
     };
 
 TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
@@ -140,6 +142,7 @@ TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
 // flecs explorer
 #ifndef FINAL
   ecs_singleton_set(world.ecs, EcsRest, {0});
+  ECS_IMPORT(world.ecs, FlecsMonitor);
 #endif
 
   return world;
@@ -181,6 +184,7 @@ void tb_destroy_world(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
+  tb_unregister_shooter_system(world);
   tb_unregister_physics_sys(world);
   tb_unregister_rotator_sys(world);
   tb_unregister_time_of_day_sys(world);
@@ -256,6 +260,22 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   }
   ecs_filter_fini(asset_filter);
 
+  // See if the entity has any special tags
+  if (json) {
+    json_object_object_foreach(json, key, value) {
+      if (SDL_strcmp(key, "notransform") == 0) {
+        if (json_object_get_boolean(value) > 0) {
+          ecs_add_id(ecs, ent, NoTransform);
+        }
+      }
+    }
+  }
+
+  // If parent has no transform, we inherit that
+  if (parent != TbInvalidEntityId && ecs_has(ecs, parent, NoTransform)) {
+    ecs_add_id(ecs, ent, NoTransform);
+  }
+
   // Add a transform component to the entity unless directed not to
   // by some loaded component
   if (!ecs_has(ecs, ent, NoTransform)) {
@@ -267,9 +287,9 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
     };
     ecs_set_ptr(ecs, ent, TbTransformComponent, &trans);
   }
-  if (node->name) {
-    // Don't set node names right now since they can conflict at the moment
-    // ecs_set_name(ecs, e, node->name);
+
+  if (node->name && ecs_lookup(ecs, node->name) == TbInvalidEntityId) {
+    ecs_set_name(ecs, ent, node->name);
   }
 
   if (node->children_count > 0) {
@@ -315,7 +335,7 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     const cgltf_node *node = data->scene->nodes[i];
     ecs_entity_t ent = load_entity(world, &scene, tok, data, scene_path,
-                                   InvalidEntityId, node);
+                                   TbInvalidEntityId, node);
     TB_DYN_ARR_APPEND(scene.entities, ent);
   }
 

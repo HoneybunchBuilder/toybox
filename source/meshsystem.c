@@ -1206,7 +1206,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
         tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
           tb_auto *mesh = &meshes[mesh_idx];
-          tb_auto mesh_count = TB_DYN_ARR_SIZE(mesh->entities);
 
           for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
                ++submesh_idx) {
@@ -1214,9 +1213,9 @@ void mesh_draw_tick(ecs_iter_t *it) {
             tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
             if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
-              trans_draw_count += mesh->submesh_count * mesh_count;
+              trans_draw_count += mesh->submesh_count;
             } else {
-              opaque_draw_count += mesh->submesh_count * mesh_count;
+              opaque_draw_count += mesh->submesh_count;
             }
           }
         }
@@ -1300,45 +1299,39 @@ void mesh_draw_tick(ecs_iter_t *it) {
         tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
           tb_auto *mesh = &meshes[mesh_idx];
+          tb_auto entity = mesh_it.entities[mesh_idx];
+          tb_auto *ro = ecs_get_mut(ecs, entity, TbRenderObject);
 
-          // A mesh component can point to multiple instances
-          // This allows mesh components to be instanced by default and
-          // trivially looked up by movement type
-          TB_DYN_ARR_FOREACH(mesh->entities, ent) {
-            tb_auto entity = TB_DYN_ARR_AT(mesh->entities, ent);
-            tb_auto *ro = ecs_get_mut(ecs, entity, TbRenderObject);
+          for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
+               ++submesh_idx) {
+            tb_auto *sm = &mesh->submeshes[submesh_idx];
+            tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
-            for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
-                 ++submesh_idx) {
-              tb_auto *sm = &mesh->submeshes[submesh_idx];
-              tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
-
-              // Deduce whether to write to opaque or transparent data
-              tb_auto draw_cmds = opaque_draw_cmds;
-              tb_auto draw_count = &opaque_cmd_count;
-              tb_auto draw_data = opaque_draw_data;
-              if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
-                draw_cmds = trans_draw_cmds;
-                draw_count = &trans_cmd_count;
-                draw_data = trans_draw_data;
-              }
-
-              // Write a command and a piece of draw data into the buffers
-              tb_auto draw_idx = *draw_count;
-              draw_cmds[draw_idx] = (VkDrawIndirectCommand){
-                  .vertexCount = sm->index_count,
-                  .instanceCount = 1,
-              };
-              draw_data[draw_idx] = (TbGLTFDrawData){
-                  .perm = sm->vertex_perm,
-                  .obj_idx = ro->index,
-                  .mesh_idx = mesh->mesh_id.idx,
-                  .mat_idx = sm->material.idx,
-                  .index_offset = sm->index_offset,
-                  .vertex_offset = sm->vertex_offset,
-              };
-              (*draw_count) += 1;
+            // Deduce whether to write to opaque or transparent data
+            tb_auto draw_cmds = opaque_draw_cmds;
+            tb_auto draw_count = &opaque_cmd_count;
+            tb_auto draw_data = opaque_draw_data;
+            if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
+              draw_cmds = trans_draw_cmds;
+              draw_count = &trans_cmd_count;
+              draw_data = trans_draw_data;
             }
+
+            // Write a command and a piece of draw data into the buffers
+            tb_auto draw_idx = *draw_count;
+            draw_cmds[draw_idx] = (VkDrawIndirectCommand){
+                .vertexCount = sm->index_count,
+                .instanceCount = 1,
+            };
+            draw_data[draw_idx] = (TbGLTFDrawData){
+                .perm = sm->vertex_perm,
+                .obj_idx = ro->index,
+                .mesh_idx = mesh->mesh_id.idx,
+                .mat_idx = sm->material.idx,
+                .index_offset = sm->index_offset,
+                .vertex_offset = sm->vertex_offset,
+            };
+            (*draw_count) += 1;
           }
         }
       }

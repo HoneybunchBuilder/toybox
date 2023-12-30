@@ -104,7 +104,7 @@ void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
 
   TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
-  TB_CHECK(trans->parent != InvalidEntityId, "Expected a valid parent");
+  TB_CHECK(trans->parent != TbInvalidEntityId, "Expected a valid parent");
   {
     bool sibling_camera = false;
     const TbTransformComponent *parent = tb_transform_get_parent(ecs, trans);
