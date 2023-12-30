@@ -1087,10 +1087,11 @@ void mesh_descriptor_update(ecs_iter_t *it) {
               (VkDescriptorPoolSize[1]){
                   {
                       .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                      .descriptorCount = desc_count,
+                      .descriptorCount = desc_count * view_count,
                   },
               },
       };
+      
       VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
           .sType =
               VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,

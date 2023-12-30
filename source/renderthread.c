@@ -1248,6 +1248,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         // If the surface was lost we could re-create it.
         // But the surface is owned by SDL2
         SDL_assert(err == VK_SUCCESS);
+      } else if (err == VK_NOT_READY) {
       } else {
         SDL_assert(err == VK_SUCCESS);
       }
