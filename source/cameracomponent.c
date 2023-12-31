@@ -71,27 +71,24 @@ void destroy_camera_components(ecs_world_t *ecs) {
 
 void tb_register_camera_component(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT_DEFINE(ecs, TbCameraComponent);
   ECS_TAG(ecs, TbCameraSystem);
 
-  // Metadata for transform component
-  {
-    ecs_struct(ecs,
-               {
-                   .entity = ecs_id(TbCameraComponent),
-                   .members =
-                       {
-                           {.name = "view_id", .type = ecs_id(ecs_i32_t)},
-                           {.name = "aspect_ratio", .type = ecs_id(ecs_f32_t)},
-                           {.name = "fov", .type = ecs_id(ecs_f32_t)},
-                           {.name = "near", .type = ecs_id(ecs_f32_t)},
-                           {.name = "far", .type = ecs_id(ecs_f32_t)},
-                           {.name = "width", .type = ecs_id(ecs_f32_t)},
-                           {.name = "height", .type = ecs_id(ecs_f32_t)},
-                       },
-               });
-  }
+  // Metadata for camera component
+  ecs_struct(ecs,
+             {
+                 .entity = ecs_id(TbCameraComponent),
+                 .members =
+                     {
+                         {.name = "view_id", .type = ecs_id(ecs_i32_t)},
+                         {.name = "aspect_ratio", .type = ecs_id(ecs_f32_t)},
+                         {.name = "fov", .type = ecs_id(ecs_f32_t)},
+                         {.name = "near", .type = ecs_id(ecs_f32_t)},
+                         {.name = "far", .type = ecs_id(ecs_f32_t)},
+                         {.name = "width", .type = ecs_id(ecs_f32_t)},
+                         {.name = "height", .type = ecs_id(ecs_f32_t)},
+                     },
+             });
 
   // Add an asset system to handle loading cameras
   TbAssetSystem asset = {

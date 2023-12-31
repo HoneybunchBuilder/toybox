@@ -6,6 +6,7 @@
 #include "tbgltf.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
+#include "world.h"
 
 #include <flecs.h>
 
@@ -57,9 +58,7 @@ void light_update_tick(ecs_iter_t *it) {
 void tb_register_light_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbLightSystem);
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
 
   TbLightSystem sys = {
       .dir_light_query =

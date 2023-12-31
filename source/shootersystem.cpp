@@ -78,6 +78,9 @@ void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
   ZoneScopedN("Shooter Update Tick");
   auto ecs = it.world();
 
+  static float timer = 0.0f;
+  timer += it.delta_time();
+
   auto input_sys = ecs.get_mut<TbInputSystem>();
   auto phys_sys = ecs.get_mut<TbPhysicsSystem>();
 
@@ -88,25 +91,24 @@ void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
     // TODO: How to convert mouse position into direction relative to player
   }
   if (input_sys->controller_count > 0) {
-    auto controller = input_sys->controller_states[0];
-    dir = controller.right_stick.xxy;
-    dir.y = 0;
+    auto stick = input_sys->controller_states[0].right_stick;
+    dir = -tb_f3(stick.x, 0, stick.y);
   }
   if (tb_magf3(dir) < 0.0001f) {
     return;
   }
   dir = tb_normf3(dir);
 
-  static bool once = true;
-  if (once) {
-    once = false;
-  } else {
-    // return;
-  }
-
   for (auto i : it) {
+    auto entity = it.entity(i);
     auto &shooter = shooters[i];
     auto &shooter_trans = transforms[i];
+
+    if (timer - shooter.last_fire_time >= 0.1f) {
+      shooter.last_fire_time = timer;
+    } else {
+      continue;
+    }
 
     // Spawn the projectile by cloning the prefab entity
     auto prefab = ecs.entity(shooter.projectile_prefab);
@@ -117,44 +119,38 @@ void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
       }
     });
 
-    auto proj = ecs.entity();
-
-    auto pos =
-        tb_transform_get_world_trans(ecs.c_ptr(), &shooter_trans).position;
-
-    // Must add a transform to the prefab
-    {
-      TbTransformComponent proj_trans = {};
-      proj_trans.dirty = true;
-      proj_trans.entity = proj;
-      proj_trans.transform = tb_trans_identity();
-      proj_trans.transform.position = pos;
-      proj.set<TbTransformComponent>(proj_trans);
-    }
-    // Must also add a rigidbody component manually
-    {
-      auto jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
-      auto &bodies = jolt->GetBodyInterface();
-
-      float radius = 0.25f;
-      auto shape = JPH::SphereShapeSettings(radius).Create().Get();
-
-      JPH::BodyCreationSettings settings(
-          shape, JPH::Vec3(pos.x, pos.y, pos.z), JPH::Quat::sIdentity(),
-          JPH::EMotionType::Dynamic, Layers::MOVING);
-
-      auto body = bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
-      TbRigidbodyComponent comp = {body.GetIndexAndSequenceNumber()};
-      proj.set<TbRigidbodyComponent>(comp);
-
-      // Now apply velocity manually
-      float3 vel = dir * 0.1f;
-      bodies.SetLinearAndAngularVelocity(body, JPH::Vec3(vel.x, vel.y, vel.z),
-                                         JPH::Vec3(0, 0, 0));
-    }
+    auto pos = tb_transform_get_world_trans(ecs.c_ptr(), entity).position;
 
     // Add a copy of the mesh entity as a child
-    mesh.clone().child_of(proj);
+    {
+      auto clone = ecs.entity()
+                       .is_a(shooter.projectile_prefab)
+                       .enable()
+                       .override(ecs_id(TbRigidbodyComponent));
+      // Must manually create a unique rigid body
+      {
+        auto jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
+        auto &bodies = jolt->GetBodyInterface();
+
+        float radius = 0.25f;
+        auto shape = JPH::SphereShapeSettings(radius).Create().Get();
+
+        JPH::BodyCreationSettings settings(
+            shape, JPH::Vec3(pos.x, pos.y, pos.z), JPH::Quat::sIdentity(),
+            JPH::EMotionType::Dynamic, Layers::MOVING);
+
+        auto body =
+            bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
+        TbRigidbodyComponent comp = {body.GetIndexAndSequenceNumber()};
+        clone.set<TbRigidbodyComponent>(comp);
+
+        // Now apply velocity manually
+        float3 vel = dir * 15.0f;
+        bodies.SetLinearAndAngularVelocity(body, JPH::Vec3(vel.x, vel.y, vel.z),
+                                           JPH::Vec3(0, 0, 0));
+      }
+      ecs.entity().is_a(mesh).child_of(clone).enable();
+    }
   }
 }
 

@@ -396,7 +396,6 @@ void tb_register_shadow_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbShadowSystem);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbRenderObjectSystem);

@@ -81,7 +81,6 @@ void destroy_ocean_components(ecs_world_t *ecs) {
 
 void tb_register_ocean_component(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbOceanSystem);
 
   // Register asset system for parsing ocean components
@@ -122,8 +121,8 @@ TbOceanSample gerstner_wave(TbOceanWave wave, TbOceanSample sample,
 }
 
 TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
-                              TbTransformComponent *transform, float2 pos) {
-  float4x4 mat = tb_transform_get_world_matrix(ecs, transform);
+                              ecs_entity_t entity, float2 pos) {
+  float4x4 mat = tb_transform_get_world_matrix(ecs, entity);
 
   uint32_t wave_count = ocean->wave_count;
   if (wave_count > TB_WAVE_MAX) {

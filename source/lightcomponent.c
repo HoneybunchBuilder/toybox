@@ -65,7 +65,6 @@ void remove_dir_light_components(ecs_world_t *ecs) {
 }
 
 void tb_register_light_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbLightSystem);
   // Register an asset system for handling lights
   TbAssetSystem asset = {

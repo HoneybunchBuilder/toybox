@@ -18,7 +18,7 @@
 void update_tp_movement(flecs::world &ecs, float delta_time,
                         const TbInputSystem &input,
                         TbThirdPersonMovementComponent &move,
-                        TbTransformComponent &trans_comp) {
+                        flecs::entity entity) {
   auto &camera_trans_comp =
       *ecs.entity(move.camera).get_mut<TbTransformComponent>();
   auto &camera_trans = camera_trans_comp.transform;
@@ -94,9 +94,9 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     TbQuaternion move_rot = {};
     {
       TbTransform camera_world_trans =
-          tb_transform_get_world_trans(ecs.c_ptr(), &camera_trans_comp);
+          tb_transform_get_world_trans(ecs.c_ptr(), move.camera);
       TbTransform body_world_trans =
-          tb_transform_get_world_trans(ecs.c_ptr(), &trans_comp);
+          tb_transform_get_world_trans(ecs.c_ptr(), entity);
       float3 dir =
           tb_normf3(body_world_trans.position - camera_world_trans.position);
       float2 planar_dir = tb_normf2(dir.xz);
@@ -164,20 +164,18 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 }
 
 void tp_movement_update_tick(flecs::iter &it,
-                             TbThirdPersonMovementComponent *move,
-                             TbTransformComponent *trans) {
+                             TbThirdPersonMovementComponent *move) {
   auto ecs = it.world();
   const auto &input_sys = *ecs.get<TbInputSystem>();
   for (auto i : it) {
-    update_tp_movement(ecs, it.delta_time(), input_sys, move[i], trans[i]);
+    update_tp_movement(ecs, it.delta_time(), input_sys, move[i], it.entity(i));
   }
 }
 
 void tb_register_third_person_systems(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
-  ecs.system<TbThirdPersonMovementComponent, TbTransformComponent>(
-         "ThirdPersonMovementSystem")
+  ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")
       .kind(EcsPreUpdate)
       .iter(tp_movement_update_tick);
 

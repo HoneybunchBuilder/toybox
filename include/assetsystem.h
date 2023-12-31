@@ -3,8 +3,8 @@
 #include <SDL2/SDL_stdinc.h>
 #include <stdbool.h>
 
-typedef struct ecs_world_t ecs_world_t;
-typedef uint64_t ecs_entity_t;
+#include <flecs.h>
+
 typedef struct cgltf_node cgltf_node;
 typedef struct json_object json_object;
 
@@ -20,3 +20,4 @@ typedef struct TbAssetSystem {
   TbComponentPostLoadFn post_load_fn;
   TbComponentRemoveFn rem_fn;
 } TbAssetSystem;
+extern ECS_COMPONENT_DECLARE(TbAssetSystem);

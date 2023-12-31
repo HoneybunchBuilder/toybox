@@ -6,6 +6,7 @@
 
 #define TbOceanComponentIdStr "0xBAD22222"
 
+typedef uint64_t ecs_entity_t;
 typedef struct ecs_world_t ecs_world_t;
 typedef struct TbWorld TbWorld;
 typedef struct TbTransformComponent TbTransformComponent;
@@ -25,4 +26,4 @@ typedef struct TbOceanSample {
 void tb_register_ocean_component(TbWorld *world);
 
 TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
-                              TbTransformComponent *transform, float2 pos);
+                              ecs_entity_t entity, float2 pos);

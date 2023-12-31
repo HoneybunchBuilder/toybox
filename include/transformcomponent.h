@@ -2,7 +2,8 @@
 
 #include "dynarray.h"
 #include "simd.h"
-#include "world.h"
+
+#include <flecs.h>
 
 #define TransformComponentId 0xDEADBEEF
 
@@ -10,24 +11,19 @@
 extern "C" {
 #endif
 
-typedef struct ecs_world_t ecs_world_t;
-typedef uint64_t ecs_entity_t;
-
 typedef struct TbTransformComponent {
   bool dirty;
   float4x4 world_matrix;
   TbTransform transform;
-  ecs_entity_t entity;
 } TbTransformComponent;
+extern ECS_COMPONENT_DECLARE(TbTransformComponent);
 
-float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
-                                       TbTransformComponent *self);
-TbTransform tb_transform_get_world_trans(ecs_world_t *ecs,
-                                         const TbTransformComponent *self);
-void tb_transform_mark_dirty(ecs_world_t *ecs, TbTransformComponent *self);
-void tb_transform_update(ecs_world_t *ecs, TbTransformComponent *self,
+float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity);
+TbTransform tb_transform_get_world_trans(ecs_world_t *ecs, ecs_entity_t entity);
+void tb_transform_mark_dirty(ecs_world_t *ecs, ecs_entity_t entity);
+void tb_transform_update(ecs_world_t *ecs, ecs_entity_t entity,
                          const TbTransform *trans);
-void tb_transform_set_world(ecs_world_t *ecs, TbTransformComponent *self,
+void tb_transform_set_world(ecs_world_t *ecs, ecs_entity_t entity,
                             const TbTransform *trans);
 
 #ifdef __cplusplus

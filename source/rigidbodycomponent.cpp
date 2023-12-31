@@ -23,6 +23,8 @@
 #include <flecs.h>
 #include <json-c/json.h>
 
+ECS_COMPONENT_DECLARE(TbRigidbodyComponent);
+
 JPH::ShapeRefC create_box_shape(float3 half_extents) {
   JPH::BoxShapeSettings settings(
       JPH::Vec3(half_extents.x, half_extents.y, half_extents.z));
@@ -213,11 +215,10 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto &bodies = jolt->GetBodyInterface();
 
   auto rb = ecs.entity(e).get_mut<TbRigidbodyComponent>();
-  auto trans = ecs.entity(e).get_mut<TbTransformComponent>();
 
   // Set the body position and rotation based on the final world transform
   // of the entity.
-  auto world_trans = tb_transform_get_world_trans(ecs.c_ptr(), trans);
+  auto world_trans = tb_transform_get_world_trans(ecs.c_ptr(), e);
   auto pos = world_trans.position;
   // This only works because we're assuming that there is no offset rotation
   auto rot = world_trans.rotation;
@@ -247,6 +248,8 @@ void remove_rigidbody_components(ecs_world_t *world) {
 
 void tb_register_rigidbody_component(TbWorld *world) {
   flecs::world ecs(world->ecs);
+
+  ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyComponent);
 
   // Create an observer to trigger when a component is added
 

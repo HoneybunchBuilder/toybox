@@ -95,15 +95,13 @@ bool try_attach_tp_cam_comp(ecs_world_t *ecs, ecs_entity_t e,
 void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
   ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
   ECS_TAG(ecs, TbThirdPersonCameraComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbRigidbodyComponent);
   tb_auto movement = ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
-  tb_auto trans = ecs_get(ecs, e, TbTransformComponent);
 
   TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
 
-  tb_auto parent = ecs_get_parent(ecs, trans->entity);
+  tb_auto parent = ecs_get_parent(ecs, e);
   if (parent != TbInvalidEntityId) {
     bool parent_body = ecs_has(ecs, parent, TbRigidbodyComponent);
     if (parent_body) {
@@ -184,7 +182,6 @@ void remove_third_person_components(ecs_world_t *ecs) {
 
 void tb_register_third_person_components(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_TAG(ecs, ThirdPersonAssetSystem);
 
   TbAssetSystem asset = {

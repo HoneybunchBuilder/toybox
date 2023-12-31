@@ -1166,7 +1166,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, TbMeshComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbMaterialSystem);
@@ -1485,11 +1484,8 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbRenderObjectSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbMeshComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbAssetSystem);
 
   tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
@@ -1524,8 +1520,6 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, mesh_descriptor_update, EcsOnUpdate,
              TbMeshSystem(TbMeshSystem));
   ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnUpdate, TbMeshSystem(TbMeshSystem));
-
-  tb_register_mesh_component(ecs);
 }
 
 void tb_unregister_mesh_sys(TbWorld *world) {

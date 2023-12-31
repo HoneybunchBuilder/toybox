@@ -70,7 +70,6 @@ void remove_sky_components(ecs_world_t *ecs) {
 
 void tb_register_sky_component(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbSkySystem);
   // Register a system for loading skies
   TbAssetSystem asset = {

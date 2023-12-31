@@ -6,6 +6,7 @@
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
+#include "world.h"
 
 #include "blocks/Block.h"
 
@@ -108,13 +109,13 @@ void tick_render_object_system(ecs_iter_t *it) {
       tb_auto trans_comps = ecs_field(&obj_it, TbTransformComponent, 1);
       tb_auto rnd_objs = ecs_field(&obj_it, TbRenderObject, 2);
       for (tb_auto i = 0; i < obj_it.count; ++i) {
+        tb_auto entity = obj_it.entities[i];
         // TODO: We want to only have to do this when transforms are dirty
         // but we need to triple buffer the transform buffers to avoid
         // stomping the transform and when a transform is dirty *all* transform
         // buffers need that new data.
         // Maybe we need some kind of queueing procedure?
-        obj_ptr[obj_idx].m =
-            tb_transform_get_world_matrix(ecs, &trans_comps[i]);
+        obj_ptr[obj_idx].m = tb_transform_get_world_matrix(ecs, entity);
         rnd_objs[i].index = obj_idx;
         obj_idx++;
       }
@@ -174,9 +175,19 @@ VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
 void tb_register_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT_DEFINE(ecs, TbRenderObject);
   ECS_COMPONENT_DEFINE(ecs, TbRenderObjectSystem);
+
+  // Metadata for TbRenderObject
+  ecs_struct(ecs, {
+                      .entity = ecs_id(TbRenderObject),
+                      .members =
+                          {
+                              {.name = "perm", .type = ecs_id(ecs_u32_t)},
+                              {.name = "index", .type = ecs_id(ecs_u32_t)},
+                          },
+                  });
+
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto sys =
       create_render_object_system(world->std_alloc, world->tmp_alloc, rnd_sys);

@@ -1,6 +1,7 @@
 #include "rotatorsystem.h"
 
 #include "profiling.h"
+#include "tbcommon.h"
 #include "transformcomponent.h"
 #include "transformercomponents.h"
 #include "world.h"
@@ -15,14 +16,15 @@ void rotator_system_tick(ecs_iter_t *it) {
   TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 2);
 
   for (int32_t i = 0; i < it->count; ++i) {
-    TbRotatorComponent *rotator = &rotators[i];
-    TbTransformComponent *trans = &transforms[i];
+    tb_auto entity = it->entities[i];
+    tb_auto rotator = &rotators[i];
+    tb_auto trans = &transforms[i];
 
     TbQuaternion rot = tb_angle_axis_to_quat(
         tb_f3tof4(rotator->axis, rotator->speed * it->delta_time));
 
     trans->transform.rotation = tb_mulq(trans->transform.rotation, rot);
-    tb_transform_mark_dirty(it->world, trans);
+    tb_transform_mark_dirty(it->world, entity);
   }
   TracyCZoneEnd(ctx);
 }
@@ -30,7 +32,6 @@ void rotator_system_tick(ecs_iter_t *it) {
 void tb_register_rotator_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRotatorComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
 
   ECS_SYSTEM(ecs, rotator_system_tick,
              EcsOnUpdate, [in] TbRotatorComponent, [out] TbTransformComponent);

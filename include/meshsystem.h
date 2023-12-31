@@ -16,7 +16,6 @@ typedef struct TbViewSystem TbViewSystem;
 typedef struct TbRenderObjectSystem TbRenderObjectSystem;
 typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
 typedef struct TbCameraComponent TbCameraComponent;
-typedef struct TbMeshComponent TbMeshComponent;
 typedef struct TbMesh TbMesh;
 typedef struct TbWorld TbWorld;
 typedef TbResourceId TbMeshId;

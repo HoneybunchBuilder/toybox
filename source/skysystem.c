@@ -1005,7 +1005,6 @@ void sky_draw_tick(ecs_iter_t *it) {
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbSkyComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
 
   TbSkySystem *sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
   sky_sys->time += it->delta_time;
@@ -1283,10 +1282,8 @@ void tb_register_sky_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbRenderTargetSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbSkySystem);
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbSkyComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   TbRenderPipelineSystem *rp_sys =

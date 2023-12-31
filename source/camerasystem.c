@@ -26,10 +26,11 @@ void camera_update_tick(ecs_iter_t *it) {
   tb_auto transforms = ecs_field(it, TbTransformComponent, 2);
 
   for (int32_t i = 0; i < it->count; ++i) {
+    tb_auto entity = it->entities[i];
     tb_auto camera = &cameras[i];
     tb_auto transform = &transforms[i];
 
-    tb_auto cam_world = tb_transform_get_world_matrix(ecs, transform);
+    tb_auto cam_world = tb_transform_get_world_matrix(ecs, entity);
 
     float3 pos = cam_world.col3.xyz;
     float3 forward = tb_mulf33f3(tb_f44tof33(cam_world), TB_FORWARD);
@@ -72,9 +73,6 @@ void camera_update_tick(ecs_iter_t *it) {
 
 void tb_register_camera_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-
-  ECS_COMPONENT(ecs, TbTransformComponent);
-  ECS_COMPONENT(ecs, TbAssetSystem);
 
   ECS_SYSTEM(ecs, camera_update_tick, EcsOnUpdate, TbCameraComponent,
              TbTransformComponent);

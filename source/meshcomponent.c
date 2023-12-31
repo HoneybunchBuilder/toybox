@@ -11,8 +11,9 @@
 #include "renderobjectsystem.h"
 #include "tbgltf.h"
 #include "tbutil.h"
+#include "world.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbMeshComponent);
 
 bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
                                     const char *source_path,
@@ -147,13 +148,12 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
   if (node->mesh) {
     ECS_COMPONENT(ecs, TbMeshSystem);
     ECS_COMPONENT(ecs, TbMaterialSystem);
-    ECS_COMPONENT(ecs, TbMeshComponent);
 
-    TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-    TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+    tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+    tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
     // Load mesh
-    TbMeshId id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
+    tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
     TbMeshComponent comp = {0};
     ret = create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
@@ -168,7 +168,6 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
 void destroy_mesh_component(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbMaterialSystem);
-  ECS_COMPONENT(ecs, TbMeshComponent);
 
   // Remove mesh component from entities
   ecs_filter_t *filter =
@@ -195,9 +194,31 @@ void destroy_mesh_component(ecs_world_t *ecs) {
   ecs_filter_fini(filter);
 }
 
-void tb_register_mesh_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbAssetSystem);
+void tb_register_mesh_component(TbWorld *world) {
+  tb_auto ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbResourceId);
+  ECS_COMPONENT_DEFINE(ecs, TbMeshComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
+
+  // Metadata for mesh component and helpers
+  ecs_struct(ecs, {
+                      .entity = ecs_id(TbResourceId),
+                      .members =
+                          {
+                              {.name = "id", .type = ecs_id(ecs_u64_t)},
+                              {.name = "idx", .type = ecs_id(ecs_u32_t)},
+                          },
+                  });
+  ecs_struct(ecs,
+             {
+                 .entity = ecs_id(TbMeshComponent),
+                 .members =
+                     {
+                         {.name = "mesh_id", .type = ecs_id(TbResourceId)},
+                         {.name = "submesh_count", .type = ecs_id(ecs_u32_t)},
+                     },
+             });
+
   // Mark the mesh system entity as also having an asset
   // system that can parse and load mesh components
   TbAssetSystem asset = {

@@ -11,7 +11,9 @@ typedef struct Projectile {
 
 typedef struct ShooterComponent {
   const char *prefab_name;
+  float fire_rate;
   ecs_entity_t projectile_prefab;
+  float last_fire_time;
 } ShooterComponent;
 
 #ifdef __cplusplus

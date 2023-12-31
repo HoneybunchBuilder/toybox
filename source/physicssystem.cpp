@@ -148,7 +148,7 @@ void physics_update_tick(flecs::iter it) {
           .scale = trans.transform.scale,
           .rotation = {rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW()},
       };
-      tb_transform_set_world(ecs.c_ptr(), &trans, &updated);
+      tb_transform_set_world(ecs.c_ptr(), e, &updated);
     });
   }
 }

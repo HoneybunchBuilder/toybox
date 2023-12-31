@@ -65,7 +65,6 @@ void remove_noclip_comps(ecs_world_t *ecs) {
 }
 
 void tb_register_noclip_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_TAG(ecs, TbNoClipControllerSystem);
   // Add an TbAssetSystem to the no clip singleton in order
   // to allow for component parsing

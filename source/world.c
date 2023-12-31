@@ -13,6 +13,7 @@
 #include "meshcomponent.h"
 #include "noclipcomponent.h"
 #include "oceancomponent.h"
+#include "rigidbodycomponent.h"
 #include "skycomponent.h"
 #include "transformcomponent.h"
 #include "transformercomponents.h"
@@ -84,11 +85,71 @@ void *ecs_realloc(void *original, ecs_size_t size) {
   return ptr;
 }
 
+ECS_COMPONENT_DECLARE(float3);
+ECS_COMPONENT_DECLARE(float4);
+ECS_COMPONENT_DECLARE(float4x4);
+ECS_COMPONENT_DECLARE(TbTransform);
 ECS_COMPONENT_DECLARE(TbTransformComponent);
+ECS_COMPONENT_DECLARE(TbAssetSystem);
 
 TbCreateWorldSystemsFn tb_create_default_world =
     ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
+      ecs_world_t *ecs = world->ecs;
+
+      // Define some components that no one else will
+      ECS_COMPONENT_DEFINE(ecs, float3);
+      ECS_COMPONENT_DEFINE(ecs, float4);
+      ECS_COMPONENT_DEFINE(ecs, float4x4);
+      ECS_COMPONENT_DEFINE(ecs, TbTransform);
+      ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
+      ECS_COMPONENT_DEFINE(ecs, TbAssetSystem);
+
+      // Register components from other modules
+      // TODO: use flecs modules
+      tb_register_rigidbody_component(world);
+      tb_register_mesh_component(world);
       tb_register_camera_component(world);
+
+      // Metadata for transform component
+      {
+        ecs_struct(ecs, {.entity = ecs_id(float3),
+                         .members = {
+                             {.name = "x", .type = ecs_id(ecs_f32_t)},
+                             {.name = "y", .type = ecs_id(ecs_f32_t)},
+                             {.name = "z", .type = ecs_id(ecs_f32_t)},
+                         }});
+        ecs_struct(ecs, {.entity = ecs_id(float4),
+                         .members = {
+                             {.name = "x", .type = ecs_id(ecs_f32_t)},
+                             {.name = "y", .type = ecs_id(ecs_f32_t)},
+                             {.name = "z", .type = ecs_id(ecs_f32_t)},
+                             {.name = "w", .type = ecs_id(ecs_f32_t)},
+                         }});
+        ecs_struct(ecs, {.entity = ecs_id(float4x4),
+                         .members = {
+                             {.name = "col0", .type = ecs_id(float4)},
+                             {.name = "col1", .type = ecs_id(float4)},
+                             {.name = "col2", .type = ecs_id(float4)},
+                             {.name = "col3", .type = ecs_id(float4)},
+                         }});
+        ecs_struct(ecs, {.entity = ecs_id(TbTransform),
+                         .members = {
+                             {.name = "position", .type = ecs_id(float3)},
+                             {.name = "scale", .type = ecs_id(float3)},
+                             {.name = "rotation", .type = ecs_id(float4)},
+                         }});
+        ecs_struct(
+            ecs, {
+                     .entity = ecs_id(TbTransformComponent),
+                     .members =
+                         {
+                             {.name = "dirty", .type = ecs_id(ecs_bool_t)},
+                             {.name = "world_matrix", .type = ecs_id(float4x4)},
+                             {.name = "transform", .type = ecs_id(TbTransform)},
+                             {.name = "entity", .type = ecs_id(ecs_entity_t)},
+                         },
+                 });
+      }
 
       tb_register_physics_sys(world);
       tb_register_light_sys(world);
@@ -220,8 +281,6 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   ecs_world_t *ecs = world->ecs;
   ECS_TAG(ecs, EcsDisabled);
   ECS_TAG(ecs, EcsPrefab);
-  ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
-  ECS_COMPONENT(ecs, TbAssetSystem);
 
   TbAllocator tmp_alloc = world->tmp_alloc;
 
@@ -247,16 +306,24 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
 
   // See if the entity is enabled or a prefab
   bool enabled = true;
+  bool prefab = false;
   if (json) {
     tb_auto enabled_obj = json_object_object_get(json, "enabled");
     if (enabled_obj) {
       enabled = (bool)json_object_get_boolean(enabled_obj);
+    }
+    tb_auto prefab_obj = json_object_object_get(json, "prefab");
+    if (prefab_obj) {
+      prefab = (bool)json_object_get_boolean(prefab_obj);
     }
   }
   // We inherit some properties from a parent
   if (parent != TbInvalidEntityId) {
     if (ecs_has(ecs, parent, EcsDisabled)) {
       enabled = false;
+    }
+    if (ecs_has(ecs, parent, EcsPrefab)) {
+      prefab = true;
     }
   }
 
@@ -266,7 +333,12 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   }
 
   // Create an entity
-  ecs_entity_t ent = ecs_new_entity(ecs, 0);
+  ecs_entity_t ent = 0;
+  if (prefab) {
+    ent = ecs_new_prefab(ecs, 0);
+  } else {
+    ent = ecs_new_entity(ecs, 0);
+  }
 
   if (name) {
     ecs_set_name(ecs, ent, name);
@@ -276,8 +348,6 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   if (parent != TbInvalidEntityId) {
     ecs_add_pair(ecs, ent, EcsChildOf, parent);
   }
-
-  ecs_enable(ecs, ent, enabled);
 
   // Attempt to add a component for each asset system provided
   ecs_filter_t *asset_filter =
@@ -299,7 +369,6 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   {
     TbTransformComponent trans = {
         .dirty = true,
-        .entity = ent,
         .transform = tb_transform_from_node(node),
     };
     ecs_set_ptr(ecs, ent, TbTransformComponent, &trans);
@@ -317,12 +386,13 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
     }
   }
 
+  ecs_enable(ecs, ent, enabled);
+
   TB_DYN_ARR_APPEND(scene->entities, ent);
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
   // Get qualified path to scene asset
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
@@ -374,7 +444,6 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
 void tb_unload_scene(TbWorld *world, TbScene *scene) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAssetSystem);
 
   // Remove all components managed by the asset system from the scene
   // TODO: This doesn't handle the case of multiple scenes
