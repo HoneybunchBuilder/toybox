@@ -963,7 +963,6 @@ void tb_register_ocean_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbAudioSystem);
   ECS_COMPONENT(ecs, TbOceanSystem);
   ECS_COMPONENT(ecs, TbOceanComponent);
-  ECS_COMPONENT(ecs, TbCameraComponent);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   TbRenderPipelineSystem *rp_sys =

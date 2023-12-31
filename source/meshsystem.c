@@ -1166,7 +1166,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbMeshComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
@@ -1489,7 +1488,6 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbMeshComponent);
   ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbAssetSystem);
 

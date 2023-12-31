@@ -10,7 +10,7 @@
 #include "viewsystem.h"
 #include "world.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbCameraComponent);
 
 bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
                              const char *source_path, const cgltf_node *node,
@@ -19,7 +19,6 @@ bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
   (void)extra;
 
   ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbCameraComponent);
 
   bool ret = true;
   if (node->camera) {
@@ -34,10 +33,8 @@ bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
           .fov = persp->yfov,
           .near = persp->znear,
           .far = persp->zfar,
-          .width =
-              (float)view_sys->rnd_sys->render_thread->swapchain.width,
-          .height =
-              (float)view_sys->rnd_sys->render_thread->swapchain.height,
+          .width = (float)view_sys->rnd_sys->render_thread->swapchain.width,
+          .height = (float)view_sys->rnd_sys->render_thread->swapchain.height,
       };
       ecs_set_ptr(ecs, e, TbCameraComponent, &comp);
     } else {
@@ -51,7 +48,6 @@ bool create_camera_component(ecs_world_t *ecs, ecs_entity_t e,
 
 void destroy_camera_components(ecs_world_t *ecs) {
   ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbCameraComponent);
 
   // Remove camera component from entities
   ecs_filter_t *filter =
@@ -76,7 +72,26 @@ void destroy_camera_components(ecs_world_t *ecs) {
 void tb_register_camera_component(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbAssetSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbCameraComponent);
   ECS_TAG(ecs, TbCameraSystem);
+
+  // Metadata for transform component
+  {
+    ecs_struct(ecs,
+               {
+                   .entity = ecs_id(TbCameraComponent),
+                   .members =
+                       {
+                           {.name = "view_id", .type = ecs_id(ecs_i32_t)},
+                           {.name = "aspect_ratio", .type = ecs_id(ecs_f32_t)},
+                           {.name = "fov", .type = ecs_id(ecs_f32_t)},
+                           {.name = "near", .type = ecs_id(ecs_f32_t)},
+                           {.name = "far", .type = ecs_id(ecs_f32_t)},
+                           {.name = "width", .type = ecs_id(ecs_f32_t)},
+                           {.name = "height", .type = ecs_id(ecs_f32_t)},
+                       },
+               });
+  }
 
   // Add an asset system to handle loading cameras
   TbAssetSystem asset = {

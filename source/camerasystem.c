@@ -72,14 +72,12 @@ void camera_update_tick(ecs_iter_t *it) {
 
 void tb_register_camera_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbCameraComponent);
+
   ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbAssetSystem);
 
   ECS_SYSTEM(ecs, camera_update_tick, EcsOnUpdate, TbCameraComponent,
              TbTransformComponent);
-
-  tb_register_camera_component(world);
 }
 
 void tb_unregister_camera_sys(TbWorld *world) { (void)world; }

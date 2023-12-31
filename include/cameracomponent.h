@@ -4,6 +4,8 @@
 
 #include "simd.h"
 
+#include <flecs.h>
+
 typedef struct TbWorld TbWorld;
 typedef uint32_t TbViewId;
 
@@ -16,5 +18,6 @@ typedef struct TbCameraComponent {
   float width;
   float height;
 } TbCameraComponent;
+extern ECS_COMPONENT_DECLARE(TbCameraComponent);
 
 void tb_register_camera_component(TbWorld *world);

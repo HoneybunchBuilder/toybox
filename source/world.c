@@ -88,6 +88,8 @@ ECS_COMPONENT_DECLARE(TbTransformComponent);
 
 TbCreateWorldSystemsFn tb_create_default_world =
     ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
+      tb_register_camera_component(world);
+
       tb_register_physics_sys(world);
       tb_register_light_sys(world);
       tb_register_audio_sys(world);

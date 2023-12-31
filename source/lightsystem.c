@@ -60,7 +60,6 @@ void tb_register_light_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbAssetSystem);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
   ECS_COMPONENT(ecs, TbTransformComponent);
-  ECS_COMPONENT(ecs, TbCameraComponent);
 
   TbLightSystem sys = {
       .dir_light_query =

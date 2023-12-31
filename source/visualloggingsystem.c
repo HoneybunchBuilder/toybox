@@ -339,9 +339,8 @@ TbVisualLoggingSystem create_visual_logging_system(
                 view_sys->set_layout,
             },
     };
-    err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                        "Primitive Pipeline Layout",
-                                        &sys.pipe_layout);
+    err = tb_rnd_create_pipeline_layout(
+        rnd_sys, &create_info, "Primitive Pipeline Layout", &sys.pipe_layout);
     TB_VK_CHECK(err, "Failed to create primitive pipeline layout");
   }
 
@@ -349,19 +348,16 @@ TbVisualLoggingSystem create_visual_logging_system(
     uint32_t attach_count = 0;
     VkFormat color_format = VK_FORMAT_UNDEFINED;
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    tb_render_pipeline_get_attachments(
-        rp_sys, rp_sys->transparent_color_pass,
-        &attach_count, NULL);
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->transparent_color_pass,
+                                       &attach_count, NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
     TbPassAttachment attach_info[2] = {0};
-    tb_render_pipeline_get_attachments(
-        rp_sys, rp_sys->transparent_color_pass,
-        &attach_count, attach_info);
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->transparent_color_pass,
+                                       &attach_count, attach_info);
 
     for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
-      VkFormat format =
-          tb_render_target_get_format(rp_sys->rt_sys,
-                                      attach_info[attach_idx].attachment);
+      VkFormat format = tb_render_target_get_format(
+          rp_sys->rt_sys, attach_info[attach_idx].attachment);
       if (format == VK_FORMAT_D32_SFLOAT) {
         depth_format = format;
       } else {
@@ -380,8 +376,7 @@ TbVisualLoggingSystem create_visual_logging_system(
         .draw_fn = vlog_draw_record,
         .pass_id = rp_sys->transparent_color_pass,
     };
-    sys.draw_ctx =
-        tb_render_pipeline_register_draw_context(rp_sys, &desc);
+    sys.draw_ctx = tb_render_pipeline_register_draw_context(rp_sys, &desc);
   }
 
   return sys;
@@ -452,8 +447,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
         ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
       }
 
-      tb_render_pipeline_issue_draw_batch(sys->rp_sys,
-                                          sys->draw_ctx, 1, batch);
+      tb_render_pipeline_issue_draw_batch(sys->rp_sys, sys->draw_ctx, 1, batch);
     }
   }
 
@@ -538,7 +532,6 @@ void tb_register_visual_logging_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbCoreUISystem);
-  ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbVisualLoggingSystem);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);

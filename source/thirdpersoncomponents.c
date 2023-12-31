@@ -96,7 +96,6 @@ void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
   ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
   ECS_TAG(ecs, TbThirdPersonCameraComponent);
   ECS_COMPONENT(ecs, TbTransformComponent);
-  ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbRigidbodyComponent);
   tb_auto movement = ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
   tb_auto trans = ecs_get(ecs, e, TbTransformComponent);
