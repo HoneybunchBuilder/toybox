@@ -6,27 +6,6 @@
 
 #include <flecs.h>
 
-const TbTransformComponent *
-tb_transform_get_parent(ecs_world_t *ecs, const TbTransformComponent *self) {
-  ECS_COMPONENT(ecs, TbTransformComponent);
-  const TbTransformComponent *parent_comp = NULL;
-  if (self->parent) {
-    parent_comp = ecs_get(ecs, self->parent, TbTransformComponent);
-  }
-  return parent_comp;
-}
-
-TbTransformComponent *
-tb_transform_get_parent_mut(ecs_world_t *ecs,
-                            const TbTransformComponent *self) {
-  ECS_COMPONENT(ecs, TbTransformComponent);
-  TbTransformComponent *parent_comp = NULL;
-  if (self->parent) {
-    parent_comp = ecs_get_mut(ecs, self->parent, TbTransformComponent);
-  }
-  return parent_comp;
-}
-
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
                                        TbTransformComponent *self) {
   TracyCZoneNC(ctx, "TbTransform Get World Matrix", TracyCategoryColorCore,
@@ -36,18 +15,18 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs,
   if (self->dirty) {
     self->world_matrix = tb_transform_to_matrix(&self->transform);
     // If we have a parent, look up its world transform and combine it with this
-    ecs_entity_t parent = self->parent;
+    tb_auto parent = ecs_get_parent(ecs, self->entity);
     while (parent != TbInvalidEntityId) {
-      TbTransformComponent *parent_comp =
-          ecs_get_mut(ecs, parent, TbTransformComponent);
+      tb_auto parent_comp = ecs_get_mut(ecs, parent, TbTransformComponent);
       if (!parent_comp) {
         break;
       }
 
-      float4x4 parent_mat = tb_transform_to_matrix(&parent_comp->transform);
+      tb_auto parent_mat = tb_transform_to_matrix(&parent_comp->transform);
       self->world_matrix = tb_mulf44f44(parent_mat, self->world_matrix);
-      parent = parent_comp->parent;
+      parent = ecs_get_parent(ecs, parent_comp->entity);
     }
+    ecs_modified(ecs, self->entity, TbTransformComponent);
     self->dirty = false;
   }
 
@@ -61,19 +40,16 @@ TbTransform tb_transform_get_world_trans(ecs_world_t *ecs,
                true);
   ECS_COMPONENT(ecs, TbTransformComponent);
 
-  TbTransform world = self->transform;
+  tb_auto world = self->transform;
 
-  ecs_entity_t parent = self->parent;
+  tb_auto parent = ecs_get_parent(ecs, self->entity);
   while (parent != TbInvalidEntityId) {
-    TbTransformComponent *parent_comp =
-        ecs_get_mut(ecs, parent, TbTransformComponent);
+    tb_auto parent_comp = ecs_get_mut(ecs, parent, TbTransformComponent);
     if (!parent_comp) {
       break;
     }
-
-    TbTransform parent_trans = parent_comp->transform;
-    world = tb_transform_combine(&world, &parent_trans);
-    parent = parent_comp->parent;
+    world = tb_transform_combine(&world, &parent_comp->transform);
+    parent = ecs_get_parent(ecs, parent_comp->entity);
   }
 
   TracyCZoneEnd(ctx);
@@ -84,11 +60,15 @@ void tb_transform_mark_dirty(ecs_world_t *ecs, TbTransformComponent *self) {
   TracyCZoneNC(ctx, "TbTransform Set Dirty", TracyCategoryColorCore, true);
   ECS_COMPONENT(ecs, TbTransformComponent);
   self->dirty = true;
-  for (uint32_t i = 0; i < self->child_count; ++i) {
-    TbTransformComponent *child_comp =
-        ecs_get_mut(ecs, self->children[i], TbTransformComponent);
-    tb_transform_mark_dirty(ecs, child_comp);
+  tb_auto child_it = ecs_children(ecs, self->entity);
+  while (ecs_children_next(&child_it)) {
+    for (int i = 0; i < child_it.count; i++) {
+      tb_auto child_comp =
+          ecs_get_mut(ecs, child_it.entities[i], TbTransformComponent);
+      tb_transform_mark_dirty(ecs, child_comp);
+    }
   }
+  ecs_modified(ecs, self->entity, TbTransformComponent);
   TracyCZoneEnd(ctx);
 }
 
@@ -107,21 +87,21 @@ void tb_transform_set_world(ecs_world_t *ecs, TbTransformComponent *self,
   ECS_COMPONENT(ecs, TbTransformComponent);
 
   // If the current, final transform and the given transform match, do nothing
-  float4x4 current = tb_transform_get_world_matrix(ecs, self);
-  float4x4 world = tb_transform_to_matrix(trans);
+  tb_auto current = tb_transform_get_world_matrix(ecs, self);
+  tb_auto world = tb_transform_to_matrix(trans);
   if (tb_f44_eq(&current, &world)) {
     return;
   }
 
   // Walk the lineage of transforms and collect the inverse of all of them
-  TbTransform inv = tb_trans_identity();
+  tb_auto inv = tb_trans_identity();
   {
-    ecs_entity_t p = self->parent;
-    while (p != TbInvalidEntityId) {
-      TbTransformComponent *c = ecs_get_mut(ecs, p, TbTransformComponent);
-      TbTransform local_inv = tb_inv_trans(c->transform);
+    tb_auto parent = ecs_get_parent(ecs, self->entity);
+    while (parent != TbInvalidEntityId) {
+      tb_auto trans_comp = ecs_get_mut(ecs, parent, TbTransformComponent);
+      tb_auto local_inv = tb_inv_trans(trans_comp->transform);
       inv = tb_transform_combine(&local_inv, &inv);
-      p = c->parent;
+      parent = ecs_get_parent(ecs, trans_comp->entity);
     }
   }
 

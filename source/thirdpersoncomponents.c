@@ -98,33 +98,35 @@ void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
   ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbCameraComponent);
   ECS_COMPONENT(ecs, TbRigidbodyComponent);
-  TbThirdPersonMovementComponent *movement =
-      ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
-  const TbTransformComponent *trans = ecs_get(ecs, e, TbTransformComponent);
+  tb_auto movement = ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
+  tb_auto trans = ecs_get(ecs, e, TbTransformComponent);
 
   TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
-  TB_CHECK(trans->parent != TbInvalidEntityId, "Expected a valid parent");
+
+  tb_auto parent = ecs_get_parent(ecs, trans->entity);
+  if (parent != TbInvalidEntityId) {
+    bool parent_body = ecs_has(ecs, parent, TbRigidbodyComponent);
+    if (parent_body) {
+      movement->body = parent;
+    }
+    TB_CHECK(parent_body, "Didn't find parent that has rigidbody");
+  }
   {
     bool sibling_camera = false;
-    const TbTransformComponent *parent = tb_transform_get_parent(ecs, trans);
-    for (uint32_t i = 0; i < parent->child_count; ++i) {
-      ecs_entity_t sibling = parent->children[i];
-      if (ecs_has(ecs, sibling, TbThirdPersonCameraComponent) &&
-          ecs_has(ecs, sibling, TbCameraComponent)) {
-        movement->camera = sibling;
-        sibling_camera = true;
-        break;
+    tb_auto child_it = ecs_children(ecs, parent);
+    while (ecs_children_next(&child_it)) {
+      for (int32_t i = 0; i < child_it.count; ++i) {
+        tb_auto sibling = child_it.entities[i];
+        if (ecs_has(ecs, sibling, TbThirdPersonCameraComponent) &&
+            ecs_has(ecs, sibling, TbCameraComponent)) {
+          movement->camera = sibling;
+          sibling_camera = true;
+          break;
+        }
       }
     }
     TB_CHECK(sibling_camera, "Didn't find sibling that has camera");
-  }
-  {
-    bool parent_body = ecs_has(ecs, trans->parent, TbRigidbodyComponent);
-    if (parent_body) {
-      movement->body = trans->parent;
-    }
-    TB_CHECK(parent_body, "Didn't find parent that has rigidbody");
   }
 }
 
@@ -170,8 +172,7 @@ void remove_third_person_components(ecs_world_t *ecs) {
 
     ecs_iter_t it = ecs_filter_iter(ecs, filter);
     while (ecs_filter_next(&it)) {
-      TbThirdPersonMovementComponent *comps =
-          ecs_field(&it, TbThirdPersonMovementComponent, 1);
+      tb_auto *comps = ecs_field(&it, TbThirdPersonMovementComponent, 1);
 
       for (int32_t i = 0; i < it.count; ++i) {
         comps[i] = (TbThirdPersonMovementComponent){0};

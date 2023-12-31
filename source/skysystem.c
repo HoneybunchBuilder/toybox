@@ -62,9 +62,9 @@ typedef struct PrefilterBatch {
   uint64_t vertex_offset;
 } PrefilterBatch;
 
-VkResult create_sky_pipeline(TbRenderSystem *rnd_sys,
-                             VkFormat color_format, VkFormat depth_format,
-                             VkPipelineLayout layout, VkPipeline *pipeline) {
+VkResult create_sky_pipeline(TbRenderSystem *rnd_sys, VkFormat color_format,
+                             VkFormat depth_format, VkPipelineLayout layout,
+                             VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Load Shaders
@@ -209,14 +209,12 @@ VkResult create_env_capture_pipeline(TbRenderSystem *rnd_sys,
 
     create_info.codeSize = sizeof(sky_cube_vert);
     create_info.pCode = (const uint32_t *)sky_cube_vert;
-    tb_rnd_create_shader(rnd_sys, &create_info, "env capture vert",
-                         &vert_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "env capture vert", &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load env capture vert shader module", err);
 
     create_info.codeSize = sizeof(sky_cube_frag);
     create_info.pCode = (const uint32_t *)sky_cube_frag;
-    tb_rnd_create_shader(rnd_sys, &create_info, "env capture frag",
-                         &frag_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "env capture frag", &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load env capture frag shader module", err);
   }
 
@@ -346,14 +344,12 @@ VkResult create_irradiance_pipeline(TbRenderSystem *rnd_sys,
 
     create_info.codeSize = sizeof(irradiance_vert);
     create_info.pCode = (const uint32_t *)irradiance_vert;
-    tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance vert",
-                         &vert_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance vert", &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load irradiance vert shader module", err);
 
     create_info.codeSize = sizeof(irradiance_frag);
     create_info.pCode = (const uint32_t *)irradiance_frag;
-    tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance frag",
-                         &frag_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance frag", &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load irradiance frag shader module", err);
   }
 
@@ -483,15 +479,13 @@ VkResult create_prefilter_pipeline(TbRenderSystem *rnd_sys,
 
     create_info.codeSize = sizeof(env_filter_vert);
     create_info.pCode = (const uint32_t *)env_filter_vert;
-    tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter vert",
-                         &vert_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter vert", &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load env prefilter vert shader module",
                     err);
 
     create_info.codeSize = sizeof(env_filter_frag);
     create_info.pCode = (const uint32_t *)env_filter_frag;
-    tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter frag",
-                         &frag_mod);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter frag", &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load env prefilter frag shader module",
                     err);
   }
@@ -757,8 +751,8 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
         .maxLod = FILTERED_ENV_MIPS,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
-    err = tb_rnd_create_sampler(rnd_sys, &create_info,
-                                "Irradiance Sampler", &sys.irradiance_sampler);
+    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Irradiance Sampler",
+                                &sys.irradiance_sampler);
     TB_VK_CHECK(err, "Failed to create irradiance sampler");
   }
 
@@ -773,8 +767,8 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                 VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
     };
-    err = tb_rnd_create_set_layout(rnd_sys, &create_info,
-                                   "Sky Set Layout", &sys.sky_set_layout);
+    err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Sky Set Layout",
+                                   &sys.sky_set_layout);
     TB_VK_CHECK(err, "Failed to create sky descriptor set layout");
   }
   {
@@ -790,9 +784,8 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                  &sys.irradiance_sampler},
             },
     };
-    err =
-        tb_rnd_create_set_layout(rnd_sys, &create_info,
-                                 "Irradiance Set Layout", &sys.irr_set_layout);
+    err = tb_rnd_create_set_layout(
+        rnd_sys, &create_info, "Irradiance Set Layout", &sys.irr_set_layout);
     TB_VK_CHECK(err, "Failed to irradiance sky descriptor set layout");
   }
 
@@ -810,9 +803,8 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
                 sizeof(TbSkyPushConstants),
             },
     };
-    err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                        "Sky Pipeline Layout",
-                                        &sys.sky_pipe_layout);
+    err = tb_rnd_create_pipeline_layout(
+        rnd_sys, &create_info, "Sky Pipeline Layout", &sys.sky_pipe_layout);
     TB_VK_CHECK(err, "Failed to create sky pipeline layout");
   }
   {
@@ -850,12 +842,12 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
 
     uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(rp_sys, sky_pass_id,
-                                       &attach_count, NULL);
+    tb_render_pipeline_get_attachments(rp_sys, sky_pass_id, &attach_count,
+                                       NULL);
     TB_CHECK(attach_count == 2, "Unexpected");
     TbPassAttachment attach_info[2] = {0};
-    tb_render_pipeline_get_attachments(rp_sys, sky_pass_id,
-                                       &attach_count, attach_info);
+    tb_render_pipeline_get_attachments(rp_sys, sky_pass_id, &attach_count,
+                                       attach_info);
 
     for (uint32_t attach_idx = 0; attach_idx < attach_count; ++attach_idx) {
       VkFormat format = tb_render_target_get_format(
@@ -877,17 +869,15 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
 
   {
     uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->env_cap_passes[0],
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->env_cap_passes[0],
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
     TbPassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->env_cap_passes[0],
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->env_cap_passes[0],
                                        &attach_count, &attach_info);
 
-    VkFormat color_format = tb_render_target_get_format(rt_sys,
-                                                        attach_info.attachment);
+    VkFormat color_format =
+        tb_render_target_get_format(rt_sys, attach_info.attachment);
     err = create_env_capture_pipeline(rnd_sys, color_format,
                                       sys.sky_pipe_layout, &sys.env_pipeline);
     TB_VK_CHECK(err, "Failed to create env capture pipeline");
@@ -896,19 +886,16 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   // Create irradiance pipeline
   {
     uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->irradiance_pass,
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->irradiance_pass,
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
     TbPassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->irradiance_pass,
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->irradiance_pass,
                                        &attach_count, &attach_info);
 
-    VkFormat color_format = tb_render_target_get_format(rt_sys,
-                                                        attach_info.attachment);
-    err = create_irradiance_pipeline(rnd_sys, color_format,
-                                     sys.irr_pipe_layout,
+    VkFormat color_format =
+        tb_render_target_get_format(rt_sys, attach_info.attachment);
+    err = create_irradiance_pipeline(rnd_sys, color_format, sys.irr_pipe_layout,
                                      &sys.irradiance_pipeline);
     TB_VK_CHECK(err, "Failed to create irradiance pipeline");
   }
@@ -916,17 +903,15 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   // Create prefilter pipeline
   {
     uint32_t attach_count = 0;
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->prefilter_passes[0],
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->prefilter_passes[0],
                                        &attach_count, NULL);
     TB_CHECK(attach_count == 1, "Unexepcted");
     TbPassAttachment attach_info = {0};
-    tb_render_pipeline_get_attachments(rp_sys,
-                                       rp_sys->prefilter_passes[0],
+    tb_render_pipeline_get_attachments(rp_sys, rp_sys->prefilter_passes[0],
                                        &attach_count, &attach_info);
 
-    VkFormat color_format = tb_render_target_get_format(rt_sys,
-                                                        attach_info.attachment);
+    VkFormat color_format =
+        tb_render_target_get_format(rt_sys, attach_info.attachment);
     err = create_prefilter_pipeline(rnd_sys, color_format,
                                     sys.prefilter_pipe_layout,
                                     &sys.prefilter_pipeline);
@@ -936,31 +921,29 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   // Register passes with the render system
   sys.sky_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(SkyDrawBatch),
-                              .draw_fn = record_sky,
-                              .pass_id = sky_pass_id,
-                          });
+                  .batch_size = sizeof(SkyDrawBatch),
+                  .draw_fn = record_sky,
+                  .pass_id = sky_pass_id,
+              });
   sys.irradiance_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(IrradianceBatch),
-                              .draw_fn = record_irradiance,
-                              .pass_id = irr_pass_id,
-                          });
+                  .batch_size = sizeof(IrradianceBatch),
+                  .draw_fn = record_irradiance,
+                  .pass_id = irr_pass_id,
+              });
   for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
     sys.env_capture_ctxs[i] = tb_render_pipeline_register_draw_context(
-        rp_sys,
-        &(TbDrawContextDescriptor){
-            .batch_size = sizeof(SkyDrawBatch),
-            .draw_fn = record_env_capture,
-            .pass_id = rp_sys->env_cap_passes[i],
-        });
+        rp_sys, &(TbDrawContextDescriptor){
+                    .batch_size = sizeof(SkyDrawBatch),
+                    .draw_fn = record_env_capture,
+                    .pass_id = rp_sys->env_cap_passes[i],
+                });
     sys.prefilter_ctxs[i] = tb_render_pipeline_register_draw_context(
-        rp_sys,
-        &(TbDrawContextDescriptor){
-            .batch_size = sizeof(PrefilterBatch),
-            .draw_fn = record_env_filter,
-            .pass_id = rp_sys->prefilter_passes[i],
-        });
+        rp_sys, &(TbDrawContextDescriptor){
+                    .batch_size = sizeof(PrefilterBatch),
+                    .draw_fn = record_env_filter,
+                    .pass_id = rp_sys->prefilter_passes[i],
+                });
   }
 
   // Create skydome geometry
@@ -995,8 +978,7 @@ void destroy_sky_system(TbSkySystem *self) {
   TbRenderSystem *rnd_sys = self->rnd_sys;
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(rnd_sys,
-                                   self->frame_states[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(rnd_sys, self->frame_states[i].set_pool);
   }
 
   vmaDestroyBuffer(rnd_sys->vma_alloc, self->sky_geom_gpu_buffer.buffer,
@@ -1124,7 +1106,7 @@ void sky_draw_tick(ecs_iter_t *it) {
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t offset = 0;
     err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbSkyData), 0x40, &data,
-                                     &offset);
+                                        &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
     *buffer_info = (VkDescriptorBufferInfo){
@@ -1146,8 +1128,7 @@ void sky_draw_tick(ecs_iter_t *it) {
 
     // Last write is for the irradiance pass
     VkImageView env_map_view = tb_render_target_get_view(
-        sky_sys->rt_sys, rnd_sys->frame_idx,
-        sky_sys->rt_sys->env_cube);
+        sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
     writes[1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = state->sets[1],

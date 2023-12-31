@@ -147,8 +147,6 @@ bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
   if (node->mesh) {
     ECS_COMPONENT(ecs, TbMeshSystem);
     ECS_COMPONENT(ecs, TbMaterialSystem);
-    ECS_COMPONENT(ecs, TbRenderObjectSystem);
-    ECS_COMPONENT(ecs, TbRenderObject);
     ECS_COMPONENT(ecs, TbMeshComponent);
 
     TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);

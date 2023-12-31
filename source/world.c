@@ -84,6 +84,8 @@ void *ecs_realloc(void *original, ecs_size_t size) {
   return ptr;
 }
 
+ECS_COMPONENT_DECLARE(TbTransformComponent);
+
 TbCreateWorldSystemsFn tb_create_default_world =
     ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
       tb_register_physics_sys(world);
@@ -210,15 +212,15 @@ void tb_destroy_world(TbWorld *world) {
   ecs_fini(ecs);
 }
 
-ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
-                         const cgltf_data *data, const char *root_scene_path,
-                         ecs_entity_t parent, const cgltf_node *node) {
+void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
+                 const cgltf_data *data, const char *root_scene_path,
+                 ecs_entity_t parent, const cgltf_node *node) {
   ecs_world_t *ecs = world->ecs;
-  ECS_TAG(ecs, NoTransform);
-  ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_TAG(ecs, EcsDisabled);
+  ECS_TAG(ecs, EcsPrefab);
+  ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbAssetSystem);
 
-  TbAllocator std_alloc = world->std_alloc;
   TbAllocator tmp_alloc = world->tmp_alloc;
 
   // Get extras
@@ -241,8 +243,39 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
     }
   }
 
+  // See if the entity is enabled or a prefab
+  bool enabled = true;
+  if (json) {
+    tb_auto enabled_obj = json_object_object_get(json, "enabled");
+    if (enabled_obj) {
+      enabled = (bool)json_object_get_boolean(enabled_obj);
+    }
+  }
+  // We inherit some properties from a parent
+  if (parent != TbInvalidEntityId) {
+    if (ecs_has(ecs, parent, EcsDisabled)) {
+      enabled = false;
+    }
+  }
+
+  const char *name = node->name;
+  if (name && ecs_lookup(ecs, node->name) != TbInvalidEntityId) {
+    name = NULL; // Name already exists
+  }
+
   // Create an entity
-  ecs_entity_t ent = ecs_new(ecs, 0);
+  ecs_entity_t ent = ecs_new_entity(ecs, 0);
+
+  if (name) {
+    ecs_set_name(ecs, ent, name);
+  }
+
+  // Express heirarchy via flecs
+  if (parent != TbInvalidEntityId) {
+    ecs_add_pair(ecs, ent, EcsChildOf, parent);
+  }
+
+  ecs_enable(ecs, ent, enabled);
 
   // Attempt to add a component for each asset system provided
   ecs_filter_t *asset_filter =
@@ -254,66 +287,35 @@ ecs_entity_t load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
     TbAssetSystem *asset_sys = ecs_field(&asset_it, TbAssetSystem, 1);
     for (int32_t i = 0; i < asset_it.count; ++i) {
       if (!asset_sys[i].add_fn(ecs, ent, root_scene_path, node, json)) {
-        TB_CHECK_RETURN(false, "Failed to handle component parsing", 0);
+        TB_CHECK(false, "Failed to handle component parsing");
       }
     }
   }
   ecs_filter_fini(asset_filter);
 
-  // See if the entity has any special tags
-  if (json) {
-    json_object_object_foreach(json, key, value) {
-      if (SDL_strcmp(key, "notransform") == 0) {
-        if (json_object_get_boolean(value) > 0) {
-          ecs_add_id(ecs, ent, NoTransform);
-        }
-      }
-    }
-  }
-
-  // If parent has no transform, we inherit that
-  if (parent != TbInvalidEntityId && ecs_has(ecs, parent, NoTransform)) {
-    ecs_add_id(ecs, ent, NoTransform);
-  }
-
-  // Add a transform component to the entity unless directed not to
-  // by some loaded component
-  if (!ecs_has(ecs, ent, NoTransform)) {
+  // Always add a transform
+  {
     TbTransformComponent trans = {
         .dirty = true,
-        .parent = parent,
-        .child_count = node->children_count,
+        .entity = ent,
         .transform = tb_transform_from_node(node),
     };
     ecs_set_ptr(ecs, ent, TbTransformComponent, &trans);
   }
 
-  if (node->name && ecs_lookup(ecs, node->name) == TbInvalidEntityId) {
-    ecs_set_name(ecs, ent, node->name);
-  }
-
   if (node->children_count > 0) {
-    TbTransformComponent *trans_comp =
-        ecs_get_mut(ecs, ent, TbTransformComponent);
+    tb_auto trans_comp = ecs_get_mut(ecs, ent, TbTransformComponent);
     // Make sure this entity actually has a transform
     if (trans_comp) {
-      trans_comp->children =
-          tb_alloc_nm_tp(std_alloc, node->children_count, ecs_entity_t);
-      ecs_entity_t *children = trans_comp->children;
-
       // Load all children
       for (uint32_t i = 0; i < node->children_count; ++i) {
-        const cgltf_node *child = node->children[i];
-        children[i] =
-            load_entity(world, scene, tok, data, root_scene_path, ent, child);
+        tb_auto child = node->children[i];
+        load_entity(world, scene, tok, data, root_scene_path, ent, child);
       }
-      ecs_modified(ecs, ent, TbTransformComponent);
     }
   }
 
   TB_DYN_ARR_APPEND(scene->entities, ent);
-
-  return ent;
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
@@ -333,10 +335,8 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
-    const cgltf_node *node = data->scene->nodes[i];
-    ecs_entity_t ent = load_entity(world, &scene, tok, data, scene_path,
-                                   TbInvalidEntityId, node);
-    TB_DYN_ARR_APPEND(scene.entities, ent);
+    tb_auto node = data->scene->nodes[i];
+    load_entity(world, &scene, tok, data, scene_path, TbInvalidEntityId, node);
   }
 
   TB_DYN_ARR_APPEND(world->scenes, scene);

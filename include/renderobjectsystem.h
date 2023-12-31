@@ -5,6 +5,8 @@
 #include "rendersystem.h"
 #include "tbrendercommon.h"
 
+#include <flecs.h>
+
 /*
   Next step:
     Every frame, collect the changed render object transforms and sphere bounds
@@ -29,6 +31,7 @@ typedef struct TbRenderObject {
   int32_t perm;
   int32_t index;
 } TbRenderObject;
+extern ECS_COMPONENT_DECLARE(TbRenderObject);
 
 typedef struct TbTransformsBuffer {
   int32_t obj_count;
@@ -48,6 +51,7 @@ typedef struct TbRenderObjectSystem {
 
   ecs_query_t *obj_query;
 } TbRenderObjectSystem;
+extern ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
 void tb_register_render_object_sys(TbWorld *world);
 VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys);

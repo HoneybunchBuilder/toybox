@@ -1,6 +1,8 @@
 #pragma once
 
 #include "allocator.h"
+#include "physicssystem.h"
+#include "rigidbodycomponent.h"
 
 namespace JPH {
 class PhysicsSystem;

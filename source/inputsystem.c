@@ -155,6 +155,14 @@ void input_update_tick(ecs_iter_t *it) {
         deadzone);
     ctl_state->right_trigger =
         get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+
+    ctl_state->buttons = 0;
+    if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A)) {
+      ctl_state->buttons |= TB_BUTTON_A;
+    }
+    if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_B)) {
+      ctl_state->buttons |= TB_BUTTON_B;
+    }
   }
 
   TracyCZoneEnd(ctx);

@@ -137,7 +137,6 @@ void physics_update_tick(flecs::iter it) {
   {
     flecs::query<TbRigidbodyComponent, TbTransformComponent> query(
         ecs, phys_sys->rigidbody_query);
-
     query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
                    TbTransformComponent &trans) {
       (void)e;
@@ -175,7 +174,8 @@ void tb_register_physics_sys(TbWorld *world) {
       .jolt_job_sys = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs,
                                                    JPH::cMaxPhysicsBarriers, 1),
       .rigidbody_query =
-          ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>().build(),
+          ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
+              .build(),
       .bpl_interface = new BPLayerInterfaceImpl(),
       .obp_filter = new ObjectVsBroadPhaseLayerFilterImpl(),
       .olp_filter = new ObjectLayerPairFilterImpl(),
@@ -203,4 +203,12 @@ void tb_unregister_physics_sys(TbWorld *world) {
   ecs.remove<TbPhysicsSystem>();
 
   JPH::UnregisterTypes();
+}
+
+void tb_phys_add_velocity(TbPhysicsSystem *phys_sys,
+                          const TbRigidbodyComponent *body, float3 vel) {
+  auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
+  auto body_id = (JPH::BodyID)body->body;
+  body_iface.SetLinearAndAngularVelocity(
+      body_id, JPH::Vec3(vel.x, vel.y, vel.z), JPH::Vec3(0, 0, 0));
 }

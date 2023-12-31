@@ -144,7 +144,6 @@ void tb_register_time_of_day_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbSkyComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbTransformComponent);
   ECS_COMPONENT(ecs, TbTimeOfDaySystem);
 
   TbTimeOfDaySystem sys = {

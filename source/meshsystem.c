@@ -1091,7 +1091,7 @@ void mesh_descriptor_update(ecs_iter_t *it) {
                   },
               },
       };
-      
+
       VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
           .sType =
               VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
@@ -1174,8 +1174,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
   ECS_COMPONENT(ecs, TbTextureSystem);
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderObject);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
 
   tb_auto *mesh_sys = ecs_field(it, TbMeshSystem, 1);

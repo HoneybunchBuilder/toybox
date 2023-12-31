@@ -123,6 +123,11 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
       accel += TB_RIGHT;
     }
 
+    if (input.controller_count > 0) {
+      float2 stick = input.controller_states[0].left_stick;
+      accel += tb_f3(stick.x, 0, stick.y);
+    }
+
     // Apply input as acceleration to the body's velocity
     if (tb_magsqf3(accel) != 0) {
       accel = tb_normf3(tb_qrotf3(move_rot, accel));
@@ -131,7 +136,12 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 
     // Jump
     if (move.jump) {
-      if (input.keyboard.key_space && SDL_fabsf(velocity.y) <= 0.001f) {
+      bool jump_input = input.keyboard.key_space;
+      if (input.controller_count > 0) {
+        jump_input = jump_input ||
+                     ((input.controller_states[0].buttons & TB_BUTTON_A) > 0);
+      }
+      if (jump_input && SDL_fabsf(velocity.y) <= 0.001f) {
         velocity += tb_f3(0, move.jump_velocity, 0);
       }
     }

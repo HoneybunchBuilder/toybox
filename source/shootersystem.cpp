@@ -2,14 +2,23 @@
 
 #include "assetsystem.h"
 #include "inputsystem.h"
+#include "meshcomponent.h"
 #include "physicssystem.hpp"
 #include "profiling.h"
+#include "rigidbodycomponent.h"
+#include "tbcommon.h"
 #include "transformcomponent.h"
 #include "world.h"
 
 #include <Jolt/Jolt.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Collision/Shape/Shape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+
+#include "physlayers.h"
 
 #include <flecs.h>
 #include <json.h>
@@ -24,53 +33,23 @@ bool create_shooter_components(ecs_world_t *world, ecs_entity_t e,
     return true;
   }
 
+  auto json_id = json_object_object_get(extra, "id");
+  if (!json_id) {
+    return true;
+  }
+
+  const char *id_str = json_object_get_string(json_id);
   auto ent = ecs.entity(e);
 
-  {
-    bool has_comp = false;
-
-    json_object_object_foreach(extra, key, value) {
-      if (SDL_strcmp(key, "id") == 0) {
-        const char *id_str = json_object_get_string(value);
-        if (SDL_strcmp(id_str, "shooter") == 0) {
-          has_comp = true;
-          break;
-        }
-      }
-    }
-
-    if (!has_comp) {
-      // no error, we just don't need to keep going
-      return true;
-    }
-
+  if (SDL_strcmp(id_str, "shooter") == 0) {
     ShooterComponent comp = {};
-    json_object_object_foreach(extra, key2, value2) {
-      if (SDL_strcmp(key2, "projectile") == 0) {
-        comp.prefab_name = json_object_get_string(value2);
+    if (auto proj_id = json_object_object_get(extra, "projectile")) {
+      if (auto name_id = json_object_object_get(proj_id, "name")) {
+        comp.prefab_name = json_object_get_string(name_id);
       }
     }
     ent.set<ShooterComponent>(comp);
-  }
-
-  {
-    bool has_comp = false;
-
-    json_object_object_foreach(extra, key, value) {
-      if (SDL_strcmp(key, "id") == 0) {
-        const char *id_str = json_object_get_string(value);
-        if (SDL_strcmp(id_str, "projectile") == 0) {
-          has_comp = true;
-          break;
-        }
-      }
-    }
-
-    if (!has_comp) {
-      // no error, we just don't need to keep going
-      return true;
-    }
-
+  } else if (SDL_strcmp(id_str, "projectile") == 0) {
     // Tag the entity as being a projectile
     ent.add<Projectile>();
   }
@@ -94,39 +73,89 @@ void remove_shooter_components(ecs_world_t *world) {
   ecs.remove_all<ShooterComponent>();
 }
 
-void shooter_tick(flecs::iter it) {
+void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
+                  TbTransformComponent *transforms) {
   ZoneScopedN("Shooter Update Tick");
   auto ecs = it.world();
 
   auto input_sys = ecs.get_mut<TbInputSystem>();
+  auto phys_sys = ecs.get_mut<TbPhysicsSystem>();
 
-  bool fire_input = false;
   float3 dir = {};
   // Determine if there was an input and if so what direction it should be
   // spawned relative to the player
   if (input_sys->mouse.left) {
-    fire_input = true;
     // TODO: How to convert mouse position into direction relative to player
   }
   if (input_sys->controller_count > 0) {
     auto controller = input_sys->controller_states[0];
-    if (controller.right_trigger > 0.15f) {
-      fire_input = true;
-      dir = controller.right_stick.xxy;
-      dir.x = 0;
-    }
+    dir = controller.right_stick.xxy;
+    dir.y = 0;
   }
-  if (!fire_input || tb_magf3(dir) == 0) {
+  if (tb_magf3(dir) < 0.0001f) {
     return;
   }
   dir = tb_normf3(dir);
 
-  // Spawn the projectile
+  static bool once = true;
+  if (once) {
+    once = false;
+  } else {
+    // return;
+  }
 
-  // Apply velocity
-  auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
-  auto &jolt = *phys_sys->jolt_phys;
-  auto &body_iface = jolt.GetBodyInterface();
+  for (auto i : it) {
+    auto &shooter = shooters[i];
+    auto &shooter_trans = transforms[i];
+
+    // Spawn the projectile by cloning the prefab entity
+    auto prefab = ecs.entity(shooter.projectile_prefab);
+    flecs::entity mesh;
+    prefab.children([&](flecs::entity child) {
+      if (child.has<TbMeshComponent>()) {
+        mesh = child;
+      }
+    });
+
+    auto proj = ecs.entity();
+
+    auto pos =
+        tb_transform_get_world_trans(ecs.c_ptr(), &shooter_trans).position;
+
+    // Must add a transform to the prefab
+    {
+      TbTransformComponent proj_trans = {};
+      proj_trans.dirty = true;
+      proj_trans.entity = proj;
+      proj_trans.transform = tb_trans_identity();
+      proj_trans.transform.position = pos;
+      proj.set<TbTransformComponent>(proj_trans);
+    }
+    // Must also add a rigidbody component manually
+    {
+      auto jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
+      auto &bodies = jolt->GetBodyInterface();
+
+      float radius = 0.25f;
+      auto shape = JPH::SphereShapeSettings(radius).Create().Get();
+
+      JPH::BodyCreationSettings settings(
+          shape, JPH::Vec3(pos.x, pos.y, pos.z), JPH::Quat::sIdentity(),
+          JPH::EMotionType::Dynamic, Layers::MOVING);
+
+      auto body = bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
+      TbRigidbodyComponent comp = {body.GetIndexAndSequenceNumber()};
+      proj.set<TbRigidbodyComponent>(comp);
+
+      // Now apply velocity manually
+      float3 vel = dir * 0.1f;
+      bodies.SetLinearAndAngularVelocity(body, JPH::Vec3(vel.x, vel.y, vel.z),
+                                         JPH::Vec3(0, 0, 0));
+    }
+
+    // Add a copy of the mesh entity as a child
+    mesh.clone().child_of(proj);
+  }
 }
 
 void tb_register_shooter_system(TbWorld *world) {

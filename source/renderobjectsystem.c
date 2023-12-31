@@ -7,11 +7,10 @@
 #include "tbcommon.h"
 #include "transformcomponent.h"
 
-#include <flecs.h>
-
 #include "blocks/Block.h"
 
-#define TB_CREATE_LAYOUT(layout)
+ECS_COMPONENT_DECLARE(TbRenderObject);
+ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
 TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
                                                  TbAllocator tmp_alloc,
@@ -62,8 +61,6 @@ void tick_render_object_system(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Object System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
   ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
-  ECS_COMPONENT(ecs, TbRenderObject);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
@@ -177,9 +174,9 @@ VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
 void tb_register_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
-  ECS_COMPONENT(ecs, TbRenderObject);
   ECS_COMPONENT(ecs, TbTransformComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbRenderObject);
+  ECS_COMPONENT_DEFINE(ecs, TbRenderObjectSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto sys =
       create_render_object_system(world->std_alloc, world->tmp_alloc, rnd_sys);
@@ -205,7 +202,6 @@ void tb_register_render_object_sys(TbWorld *world) {
 
 void tb_unregister_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
   tb_auto *sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   ecs_query_fini(sys->obj_query);
   destroy_render_object_system(sys);

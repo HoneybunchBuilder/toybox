@@ -203,14 +203,16 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
 void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   flecs::world ecs(world);
 
-  if (!ecs.entity(e).has<TbRigidbodyComponent>()) {
+  if (!ecs.entity(e).has<TbRigidbodyComponent>() ||
+      !ecs.entity(e).has<TbTransformComponent>()) {
     return;
   }
+
   auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
   auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
   auto &bodies = jolt->GetBodyInterface();
 
-  auto &rb = *ecs.entity(e).get_mut<TbRigidbodyComponent>();
+  auto rb = ecs.entity(e).get_mut<TbRigidbodyComponent>();
   auto trans = ecs.entity(e).get_mut<TbTransformComponent>();
 
   // Set the body position and rotation based on the final world transform
@@ -223,7 +225,7 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto position = JPH::Vec3(pos.x, pos.y, pos.z);
   auto rotation = JPH::Quat(rot.x, rot.y, rot.z, rot.w);
 
-  const auto body = (JPH::BodyID)rb.body;
+  const auto body = (JPH::BodyID)rb->body;
   bodies.SetPositionAndRotation(body, position, rotation,
                                 JPH::EActivation::Activate);
 }
@@ -245,6 +247,8 @@ void remove_rigidbody_components(ecs_world_t *world) {
 
 void tb_register_rigidbody_component(TbWorld *world) {
   flecs::world ecs(world->ecs);
+
+  // Create an observer to trigger when a component is added
 
   TbAssetSystem asset = {
       .add_fn = create_rigidbody_component,
