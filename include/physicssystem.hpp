@@ -18,6 +18,7 @@ typedef ecs_query_t query_t;
 class ObjectLayerPairFilterImpl;
 class BPLayerInterfaceImpl;
 class ObjectVsBroadPhaseLayerFilterImpl;
+class TbContactListener;
 
 struct TbPhysicsSystem {
   TbAllocator std_alloc;
@@ -32,4 +33,5 @@ struct TbPhysicsSystem {
   BPLayerInterfaceImpl *bpl_interface;
   ObjectVsBroadPhaseLayerFilterImpl *obp_filter;
   ObjectLayerPairFilterImpl *olp_filter;
+  TbContactListener *listener;
 };

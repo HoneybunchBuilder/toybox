@@ -23,12 +23,10 @@ void camera_update_tick(ecs_iter_t *it) {
   ecs_singleton_modified(ecs, TbViewSystem);
 
   tb_auto cameras = ecs_field(it, TbCameraComponent, 1);
-  tb_auto transforms = ecs_field(it, TbTransformComponent, 2);
 
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto entity = it->entities[i];
     tb_auto camera = &cameras[i];
-    tb_auto transform = &transforms[i];
 
     tb_auto cam_world = tb_transform_get_world_matrix(ecs, entity);
 

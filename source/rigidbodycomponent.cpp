@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -38,6 +39,11 @@ JPH::ShapeRefC create_sphere_shape(float radius) {
 
 JPH::ShapeRefC create_capsule_shape(float half_height, float radius) {
   JPH::CapsuleShapeSettings settings(half_height, radius);
+  return settings.Create().Get();
+}
+
+JPH::ShapeRefC create_cylinder_shape(float half_height, float radius) {
+  JPH::CylinderShapeSettings settings(half_height, radius);
   return settings.Create().Get();
 }
 
@@ -78,6 +84,13 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
             } else if (SDL_strcmp(shape_type_str, "capsule") == 0) {
               shape_type = JPH::EShapeSubType::Capsule;
               break;
+            } else if (SDL_strcmp(shape_type_str, "cylinder") == 0) {
+              shape_type = JPH::EShapeSubType::Cylinder;
+              break;
+            } else if (SDL_strcmp(shape_type_str, "mesh") == 0) {
+              // TODO
+              shape_type = JPH::EShapeSubType::Mesh;
+              break;
             }
           }
         }
@@ -117,10 +130,23 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
           }
         }
         shape = create_capsule_shape(half_height, radius);
+      } else if (shape_type == JPH::EShapeSubType::Cylinder) {
+        float half_height = 0.5f;
+        float radius = 0.0f;
+        json_object_object_foreach(extra, key, value) {
+          if (SDL_strcmp(key, "cylinder_half_height") == 0) {
+            radius = (float)json_object_get_double(value);
+          }
+          if (SDL_strcmp(key, "cylinder_radius") == 0) {
+            radius = (float)json_object_get_double(value);
+          }
+        }
+        shape = create_cylinder_shape(half_height, radius);
       } else {
         TB_CHECK(false, "Invalid physics shape");
       }
 
+      bool sensor = false;
       JPH::ObjectLayer layer = {};
       JPH::EMotionType motion = {};
       {
@@ -145,6 +171,8 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
             } else {
               TB_CHECK(false, "Invalid physics motion");
             }
+          } else if (SDL_strcmp(key, "sensor") == 0) {
+            sensor = (bool)json_object_get_boolean(value);
           }
         }
       }
@@ -189,6 +217,8 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
       JPH::BodyCreationSettings body_settings(
           shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
       body_settings.mAllowedDOFs = allowed_dofs;
+      body_settings.mIsSensor = sensor;
+      body_settings.mUserData = (uint64_t)e;
 
       JPH::BodyID body =
           bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);

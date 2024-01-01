@@ -106,7 +106,6 @@ void tick_render_object_system(ecs_iter_t *it) {
   {
     tb_auto obj_idx = 0ul;
     while (ecs_query_next(&obj_it)) {
-      tb_auto trans_comps = ecs_field(&obj_it, TbTransformComponent, 1);
       tb_auto rnd_objs = ecs_field(&obj_it, TbRenderObject, 2);
       for (tb_auto i = 0; i < obj_it.count; ++i) {
         tb_auto entity = obj_it.entities[i];

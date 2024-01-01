@@ -16,6 +16,10 @@ typedef struct ShooterComponent {
   float last_fire_time;
 } ShooterComponent;
 
+typedef struct Warp {
+  const char *target_name;
+} Warp;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

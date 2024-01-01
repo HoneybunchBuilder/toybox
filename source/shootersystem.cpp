@@ -23,6 +23,20 @@
 #include <flecs.h>
 #include <json.h>
 
+void warp_trigger_callback(ecs_world_t *world, ecs_entity_t user_e,
+                           ecs_entity_t other_e) {
+  flecs::world ecs(world);
+  if (ecs.entity(user_e).has<Warp>()) {
+    auto other = ecs.entity(other_e);
+    if (auto other_parent = other.parent()) {
+      if (other_parent.has<ShooterComponent>()) {
+        // YAY
+        // TODO: Unimplemented
+      }
+    }
+  }
+};
+
 bool create_shooter_components(ecs_world_t *world, ecs_entity_t e,
                                const char *source_path, const cgltf_node *node,
                                json_object *extra) {
@@ -43,9 +57,9 @@ bool create_shooter_components(ecs_world_t *world, ecs_entity_t e,
 
   if (SDL_strcmp(id_str, "shooter") == 0) {
     ShooterComponent comp = {};
-    if (auto proj_id = json_object_object_get(extra, "projectile")) {
-      if (auto name_id = json_object_object_get(proj_id, "name")) {
-        comp.prefab_name = json_object_get_string(name_id);
+    if (auto proj_obj = json_object_object_get(extra, "projectile")) {
+      if (auto name_obj = json_object_object_get(proj_obj, "name")) {
+        comp.prefab_name = json_object_get_string(name_obj);
       }
     }
     ent.set<ShooterComponent>(comp);
@@ -54,18 +68,31 @@ bool create_shooter_components(ecs_world_t *world, ecs_entity_t e,
     ent.add<Projectile>();
   }
 
+  if (auto warp_obj = json_object_object_get(extra, "shooter_tele_target")) {
+    if (auto warp_str = json_object_get_string(warp_obj)) {
+      Warp comp = {};
+      comp.target_name = warp_str;
+      ent.set<Warp>(comp);
+    }
+  }
+
   return true;
 }
 
 void post_load_shooter_components(ecs_world_t *world, ecs_entity_t e) {
+
   flecs::world ecs(world);
 
-  if (!ecs.entity(e).has<ShooterComponent>()) {
-    return;
-  }
+  auto phys_sys = ecs.get_mut<TbPhysicsSystem>();
+  auto entity = ecs.entity(e);
 
-  auto shooter = ecs.entity(e).get_mut<ShooterComponent>();
-  shooter->projectile_prefab = ecs.lookup(shooter->prefab_name);
+  if (entity.has<ShooterComponent>()) {
+    auto shooter = entity.get_mut<ShooterComponent>();
+    shooter->projectile_prefab = ecs.lookup(shooter->prefab_name);
+  }
+  if (entity.has<Warp>()) {
+    tb_phys_add_contact_callback(phys_sys, e, warp_trigger_callback);
+  }
 }
 
 void remove_shooter_components(ecs_world_t *world) {
@@ -75,6 +102,7 @@ void remove_shooter_components(ecs_world_t *world) {
 
 void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
                   TbTransformComponent *transforms) {
+  (void)transforms;
   ZoneScopedN("Shooter Update Tick");
   auto ecs = it.world();
 
@@ -102,7 +130,6 @@ void shooter_tick(flecs::iter &it, ShooterComponent *shooters,
   for (auto i : it) {
     auto entity = it.entity(i);
     auto &shooter = shooters[i];
-    auto &shooter_trans = transforms[i];
 
     if (timer - shooter.last_fire_time >= 0.1f) {
       shooter.last_fire_time = timer;

@@ -1,5 +1,6 @@
 #include "physicssystem.h"
 
+#include "dynarray.h"
 #include "physicssystem.hpp"
 #include "profiling.h"
 #include "rigidbodycomponent.h"
@@ -121,6 +122,61 @@ public:
   }
 };
 
+struct TbContactCallback {
+  ecs_entity_t user_e;
+  tb_contact_fn fn;
+};
+
+class TbContactListener : public JPH::ContactListener {
+public:
+  TbContactListener(TbWorld *world) {
+    ecs = world->ecs;
+    TB_DYN_ARR_RESET(callbacks, world->std_alloc, 16);
+  }
+
+  void AddCallback(TbContactCallback callback) {
+    TB_DYN_ARR_APPEND(callbacks, callback);
+  }
+
+  virtual void OnContactAdded(const JPH::Body &inBody1,
+                              const JPH::Body &inBody2,
+                              const JPH::ContactManifold &inManifold,
+                              JPH::ContactSettings &ioSettings) override {
+    (void)inManifold;
+    (void)ioSettings;
+    // Report this to toybox listeners
+    ecs_entity_t e1 = (ecs_entity_t)inBody1.GetUserData();
+    ecs_entity_t e2 = (ecs_entity_t)inBody2.GetUserData();
+
+    TB_DYN_ARR_FOREACH(callbacks, i) {
+      auto &callback = TB_DYN_ARR_AT(callbacks, i);
+
+      ecs_entity_t user_e = callback.user_e;
+      ecs_entity_t other = 0;
+      if (user_e == e1) {
+        other = e2;
+      } else if (user_e == e2) {
+        other = e1;
+      } else {
+        return;
+      }
+
+      callback.fn(ecs, user_e, other);
+    }
+  }
+
+  virtual void OnContactPersisted(const JPH::Body &inBody1,
+                                  const JPH::Body &inBody2,
+                                  const JPH::ContactManifold &inManifold,
+                                  JPH::ContactSettings &ioSettings) override {
+    OnContactAdded(inBody1, inBody2, inManifold, ioSettings);
+  }
+
+private:
+  ecs_world_t *ecs;
+  TB_DYN_ARR_OF(TbContactCallback) callbacks;
+};
+
 void physics_update_tick(flecs::iter it) {
   ZoneScopedN("Physics Update Tick");
   auto ecs = it.world();
@@ -179,9 +235,11 @@ void tb_register_physics_sys(TbWorld *world) {
       .bpl_interface = new BPLayerInterfaceImpl(),
       .obp_filter = new ObjectVsBroadPhaseLayerFilterImpl(),
       .olp_filter = new ObjectLayerPairFilterImpl(),
+      .listener = new TbContactListener(world),
   };
   sys.jolt_phys->Init(1024, 0, 1024, 1024, *sys.bpl_interface, *sys.obp_filter,
                       *sys.olp_filter);
+  sys.jolt_phys->SetContactListener(sys.listener);
 
   ecs.set<TbPhysicsSystem>(sys);
 
@@ -205,10 +263,17 @@ void tb_unregister_physics_sys(TbWorld *world) {
   JPH::UnregisterTypes();
 }
 
+extern "C" {
 void tb_phys_add_velocity(TbPhysicsSystem *phys_sys,
                           const TbRigidbodyComponent *body, float3 vel) {
   auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
   auto body_id = (JPH::BodyID)body->body;
   body_iface.SetLinearAndAngularVelocity(
       body_id, JPH::Vec3(vel.x, vel.y, vel.z), JPH::Vec3(0, 0, 0));
+}
+
+void tb_phys_add_contact_callback(TbPhysicsSystem *phys_sys,
+                                  ecs_entity_t user_e, tb_contact_fn cb) {
+  phys_sys->listener->AddCallback({user_e, cb});
+}
 }
