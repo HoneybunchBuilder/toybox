@@ -37,7 +37,6 @@
 #include "rotatorsystem.h"
 #include "settings.h"
 #include "shadowsystem.h"
-#include "shootersystem.h"
 #include "skysystem.h"
 #include "texturesystem.h"
 #include "thirdpersonsystems.h"
@@ -176,7 +175,6 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_time_of_day_sys(world);
       tb_register_rotator_sys(world);
       tb_register_third_person_systems(world);
-      tb_register_shooter_system(world);
     };
 
 TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
@@ -249,7 +247,6 @@ void tb_destroy_world(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
-  tb_unregister_shooter_system(world);
   tb_unregister_physics_sys(world);
   tb_unregister_rotator_sys(world);
   tb_unregister_time_of_day_sys(world);
