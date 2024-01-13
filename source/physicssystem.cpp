@@ -7,6 +7,8 @@
 #include "transformcomponent.h"
 #include "world.h"
 
+#include <SDL2/SDL_mutex.h>
+
 #include <Jolt/Jolt.h>
 
 #include <Jolt/Core/Factory.h>
@@ -123,8 +125,8 @@ public:
 };
 
 struct TbContactCallback {
-  ecs_entity_t user_e;
   tb_contact_fn fn;
+  ecs_entity_t user_e;
 };
 
 class TbContactListener : public JPH::ContactListener {
@@ -142,11 +144,12 @@ public:
                               const JPH::Body &inBody2,
                               const JPH::ContactManifold &inManifold,
                               JPH::ContactSettings &ioSettings) override {
+    ZoneScopedN("Physics On Contact");
     (void)inManifold;
     (void)ioSettings;
     // Report this to toybox listeners
-    ecs_entity_t e1 = (ecs_entity_t)inBody1.GetUserData();
-    ecs_entity_t e2 = (ecs_entity_t)inBody2.GetUserData();
+    auto e1 = (ecs_entity_t)inBody1.GetUserData();
+    auto e2 = (ecs_entity_t)inBody2.GetUserData();
 
     TB_DYN_ARR_FOREACH(callbacks, i) {
       auto &callback = TB_DYN_ARR_AT(callbacks, i);
@@ -158,7 +161,7 @@ public:
       } else if (user_e == e2) {
         other = e1;
       } else {
-        return;
+        continue;
       }
 
       callback.fn(ecs, user_e, other);
@@ -243,7 +246,7 @@ void tb_register_physics_sys(TbWorld *world) {
 
   ecs.set<TbPhysicsSystem>(sys);
 
-  ecs.system("Physics").kind(EcsPreUpdate).iter(physics_update_tick);
+  ecs.system("PhysicsUpdate").kind(EcsPreUpdate).iter(physics_update_tick);
 
   tb_register_rigidbody_component(world);
 }
@@ -274,6 +277,6 @@ void tb_phys_add_velocity(TbPhysicsSystem *phys_sys,
 
 void tb_phys_add_contact_callback(TbPhysicsSystem *phys_sys,
                                   ecs_entity_t user_e, tb_contact_fn cb) {
-  phys_sys->listener->AddCallback({user_e, cb});
+  phys_sys->listener->AddCallback({cb, user_e});
 }
 }

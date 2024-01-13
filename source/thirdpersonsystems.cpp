@@ -129,9 +129,14 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     }
 
     // Apply input as acceleration to the body's velocity
-    if (tb_magsqf3(accel) != 0) {
+    auto sq_accel_mag = tb_magsqf3(accel);
+    if (sq_accel_mag > 0) {
+      auto accel_mag = SDL_sqrtf(sq_accel_mag);
+      accel *= delta_time;
       accel = tb_normf3(tb_qrotf3(move_rot, accel));
-      velocity += accel * move.speed;
+      auto accel_alpha = tb_clampf(accel_mag, 0.0f, 1.0f);
+      auto speed = tb_lerpf(0.0f, move.speed, accel_alpha);
+      velocity += accel * speed;
     }
 
     // Jump
@@ -154,7 +159,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
         velocity = tb_f3(v.x, velocity.y, v.y);
       }
 
-      velocity.xz *= 0.97f; // Drag
+      velocity.xz *= 0.90f; // Drag
     }
 
     body_iface.SetLinearAndAngularVelocity(
