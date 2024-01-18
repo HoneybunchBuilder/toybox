@@ -12,6 +12,8 @@ TB_POS_SET(space6);
 TB_NORM_SET(space7);
 TB_TAN_SET(space8);
 TB_UV0_SET(space9);
+TB_JOINT_SET(space10);
+TB_WEIGHT_SET(space11);
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;

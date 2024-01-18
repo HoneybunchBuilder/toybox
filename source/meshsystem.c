@@ -558,7 +558,7 @@ TbMeshSystem create_mesh_system_internal(
 
     // Create pipeline layouts
     {
-      const uint32_t layout_count = 10;
+      const uint32_t layout_count = 12;
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = layout_count,
@@ -569,6 +569,8 @@ TbMeshSystem create_mesh_system_internal(
                   sys.draw_set_layout,
                   ro_sys->set_layout,
                   tex_sys->set_layout,
+                  sys.mesh_set_layout,
+                  sys.mesh_set_layout,
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
@@ -672,8 +674,8 @@ uint32_t find_mesh_by_id(TbMeshSystem *self, uint64_t id) {
 
 // Based on an example from this cgltf commit message:
 // https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
-static cgltf_result decompress_buffer_view(TbAllocator alloc,
-                                           cgltf_buffer_view *view) {
+cgltf_result decompress_buffer_view(TbAllocator alloc,
+                                    cgltf_buffer_view *view) {
   if (view->data != NULL) {
     // Already decoded
     return cgltf_result_success;
@@ -866,9 +868,11 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
   {
     uint64_t idx_offset = 0;
     uint64_t vertex_count = 0;
+    cgltf_size attr_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < mesh->primitives_count;
          ++prim_idx) {
       cgltf_primitive *prim = &mesh->primitives[prim_idx];
+
       {
         cgltf_accessor *indices = prim->indices;
         cgltf_buffer_view *view = indices->buffer_view;
@@ -887,16 +891,15 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
       }
 
       // Determine the order of attributes
-      cgltf_size attr_order[4] = {0};
+      cgltf_size attr_order[6] = {0};
       {
-        const cgltf_attribute_type req_order[4] = {
-            cgltf_attribute_type_position,
-            cgltf_attribute_type_normal,
-            cgltf_attribute_type_tangent,
-            cgltf_attribute_type_texcoord,
+        const cgltf_attribute_type req_order[6] = {
+            cgltf_attribute_type_position, cgltf_attribute_type_normal,
+            cgltf_attribute_type_tangent,  cgltf_attribute_type_texcoord,
+            cgltf_attribute_type_joints,   cgltf_attribute_type_weights,
         };
         cgltf_size attr_target_idx = 0;
-        for (uint32_t i = 0; i < 4; ++i) {
+        for (uint32_t i = 0; i < 6; ++i) {
           bool found = false;
           for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
                ++attr_idx) {
@@ -904,6 +907,9 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             if (attr->type == req_order[i]) {
               attr_order[attr_target_idx] = attr_idx;
               attr_target_idx++;
+              if (prim_idx == 0) {
+                attr_count++;
+              }
               found = true;
             }
             if (found) {
@@ -913,8 +919,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
         }
       }
 
-      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
-           ++attr_idx) {
+      for (cgltf_size attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
         cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
         cgltf_accessor *accessor = attr->data;
         cgltf_buffer_view *view = accessor->buffer_view;
@@ -941,10 +946,14 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
     {
       static const VkFormat
           attr_formats_per_type[cgltf_attribute_type_max_enum] = {
-              VK_FORMAT_UNDEFINED,      VK_FORMAT_R16G16B16A16_SINT,
-              VK_FORMAT_R8G8B8A8_SNORM, VK_FORMAT_R8G8B8A8_SNORM,
-              VK_FORMAT_R16G16_SINT,
+              VK_FORMAT_UNDEFINED,         VK_FORMAT_R16G16B16A16_SINT,
+              VK_FORMAT_R8G8B8A8_SNORM,    VK_FORMAT_R8G8B8A8_SNORM,
+              VK_FORMAT_R16G16_SINT,       VK_FORMAT_R8G8B8A8_SRGB,
+              VK_FORMAT_R16G16B16A16_SINT, VK_FORMAT_R8G8B8A8_SINT,
           };
+      static const int32_t attr_idx_per_type[cgltf_attribute_type_max_enum] = {
+          -1, 0, 1, 2, 3, -1, 5, 6, -1,
+      };
 
       // Create one buffer view for indices
       {
@@ -963,8 +972,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
                                   "Mesh Index View", &tb_mesh->index_view);
       }
 
-      for (size_t attr_idx = 0; attr_idx < mesh->primitives[0].attributes_count;
-           ++attr_idx) {
+      for (size_t attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
         cgltf_attribute *attr = &mesh->primitives[0].attributes[attr_idx];
 
         // Create a buffer view per attribute
@@ -975,9 +983,9 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             .range = VK_WHOLE_SIZE,
             .format = attr_formats_per_type[attr->type],
         };
-        tb_rnd_create_buffer_view(self->rnd_sys, &create_info,
-                                  "Mesh Attribute View",
-                                  &tb_mesh->attr_views[attr->type - 1]);
+        tb_rnd_create_buffer_view(
+            self->rnd_sys, &create_info, "Mesh Attribute View",
+            &tb_mesh->attr_views[attr_idx_per_type[attr->type]]);
       }
     }
 
@@ -1099,9 +1107,11 @@ void mesh_descriptor_update(ecs_iter_t *it) {
           .pDescriptorCounts =
               (uint32_t[view_count]){incoming_mesh_count, incoming_mesh_count,
                                      incoming_mesh_count, incoming_mesh_count,
+                                     incoming_mesh_count, incoming_mesh_count,
                                      incoming_mesh_count},
       };
       VkDescriptorSetLayout layouts[view_count] = {
+          mesh_sys->mesh_set_layout, mesh_sys->mesh_set_layout,
           mesh_sys->mesh_set_layout, mesh_sys->mesh_set_layout,
           mesh_sys->mesh_set_layout, mesh_sys->mesh_set_layout,
           mesh_sys->mesh_set_layout};

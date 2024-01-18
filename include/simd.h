@@ -49,10 +49,10 @@ typedef uint32_t __attribute__((ext_vector_type(4))) uint4;
 typedef uint32_t __attribute__((ext_vector_type(3))) uint3;
 typedef uint32_t __attribute__((ext_vector_type(2))) uint2;
 
-typedef __fp16 __attribute__((ext_vector_type(4))) half4;
-typedef __fp16 __attribute__((ext_vector_type(3))) half3;
-typedef __fp16 __attribute__((ext_vector_type(2))) half2;
-typedef __fp16 half;
+typedef _Float16 __attribute__((ext_vector_type(4))) half4;
+typedef _Float16 __attribute__((ext_vector_type(3))) half3;
+typedef _Float16 __attribute__((ext_vector_type(2))) half2;
+typedef _Float16 half;
 
 typedef int16_t __attribute__((ext_vector_type(4))) int16_t4;
 typedef int16_t __attribute__((ext_vector_type(3))) int16_t3;
@@ -284,6 +284,8 @@ TbTransform tb_trans_lerp(TbTransform t0, TbTransform t1, float a);
 
 float tb_clampf(float v, float min, float max);
 float3 tb_clampf3(float3 v, float3 min, float3 max);
+
+float tb_f16tof32(int16_t i);
 
 #endif
 

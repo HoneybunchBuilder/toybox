@@ -65,6 +65,10 @@ TbCommonObjectData;
   RWBuffer<float4> norm_buffers[] : register(u0, space);
 #define TB_TAN_SET(space) RWBuffer<float4> tan_buffers[] : register(u0, space);
 #define TB_UV0_SET(space) RWBuffer<int2> uv0_buffers[] : register(u0, space);
+#define TB_JOINT_SET(space)                                                    \
+  RWBuffer<int4> joint_buffers[] : register(u0, space);
+#define TB_WEIGHT_SET(space)                                                   \
+  RWBuffer<int4> weight_buffers[] : register(u0, space);
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000
@@ -72,7 +76,9 @@ TbCommonObjectData;
 #define TB_INPUT_PERM_NORMAL 0x00000002
 #define TB_INPUT_PERM_TEXCOORD0 0x00000004
 #define TB_INPUT_PERM_TANGENT 0x00000008
-#define TB_INPUT_PERM_COUNT 4
+#define TB_INPUT_PERM_JOINT 0x00000010
+#define TB_INPUT_PERM_WEIGHT 0x00000020
+#define TB_INPUT_PERM_COUNT 6
 
 // If a shader, provide some helper functions
 #ifdef __HLSL_VERSION

@@ -1,6 +1,7 @@
 #include "rigidbodycomponent.h"
 
 #include "assetsystem.h"
+#include "meshsystem.h"
 #include "physicssystem.hpp"
 #include "simd.h"
 #include "tbcommon.h"
@@ -15,6 +16,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -23,6 +25,10 @@
 
 #include <flecs.h>
 #include <json-c/json.h>
+
+// From meshsystem.c
+extern "C" cgltf_result decompress_buffer_view(TbAllocator alloc,
+                                               cgltf_buffer_view *view);
 
 ECS_COMPONENT_DECLARE(TbRigidbodyComponent);
 
@@ -44,6 +50,95 @@ JPH::ShapeRefC create_capsule_shape(float half_height, float radius) {
 
 JPH::ShapeRefC create_cylinder_shape(float half_height, float radius) {
   JPH::CylinderShapeSettings settings(half_height, radius);
+  return settings.Create().Get();
+}
+
+JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node) {
+  JPH::VertexList phys_verts = {};
+  JPH::IndexedTriangleList phys_tris = {};
+
+  // Making some assumptions
+  TB_CHECK(node->children_count == 1, "Expecting child node");
+  const auto *mesh_node = node->children[0];
+
+  // Need the mesh node's transform for dequantization
+  auto trans = tb_transform_from_node(mesh_node);
+  auto dequant_mat = tb_transform_to_matrix(&trans);
+
+  // Read all indices and positions for this mesh
+  TB_CHECK(mesh_node->mesh, "Expecting mesh");
+  const auto *mesh = mesh_node->mesh;
+
+  // All primitive geometry will be merged
+  for (cgltf_size i = 0; i < mesh->primitives_count; ++i) {
+    const auto &primitive = mesh->primitives[i];
+    // Indices
+    {
+      auto *indices = primitive.indices;
+      auto *view = indices->buffer_view;
+
+      auto res = decompress_buffer_view(gp_alloc, view);
+      TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+      auto stride = indices->stride;
+      auto tri_count = indices->count / 3;
+      phys_tris.reserve(phys_tris.size() + tri_count);
+
+      // Physics system always wants 32-bit indexed triangles
+      auto *data = (uint8_t *)view->data + indices->offset;
+      for (cgltf_size t = 0; t < indices->count; t += 3) {
+        if (stride == 2) {
+          auto t0 = (uint32_t)(*((uint16_t *)(data + ((t + 0) * stride))));
+          auto t1 = (uint32_t)(*((uint16_t *)(data + ((t + 1) * stride))));
+          auto t2 = (uint32_t)(*((uint16_t *)(data + ((t + 2) * stride))));
+          phys_tris.push_back({t0, t1, t2});
+        } else if (stride == 4) {
+          auto t0 = *((uint32_t *)(data + ((t + 0) * stride)));
+          auto t1 = *((uint32_t *)(data + ((t + 1) * stride)));
+          auto t2 = *((uint32_t *)(data + ((t + 2) * stride)));
+          phys_tris.push_back({t0, t1, t2});
+        } else {
+          TB_CHECK(false, "Unexpected");
+        }
+      }
+    }
+    // Vertices
+    {
+      uint32_t pos_idx = SDL_MAX_UINT32;
+      for (cgltf_size i = 0; i < primitive.attributes_count; ++i) {
+        if (primitive.attributes[i].type == cgltf_attribute_type_position) {
+          pos_idx = i;
+          break;
+        }
+      }
+      TB_CHECK(pos_idx != SDL_MAX_UINT32, "Failed to find position");
+
+      auto &positions = primitive.attributes[pos_idx].data;
+      auto *view = positions->buffer_view;
+
+      auto res = decompress_buffer_view(gp_alloc, view);
+      TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+      auto vert_count = positions->count;
+      phys_verts.reserve(phys_verts.size() + vert_count);
+
+      auto *data = (uint8_t *)view->data + positions->offset;
+      for (cgltf_size i = 0; i < vert_count; ++i) {
+        int16_t4 *pos_ptr = (int16_t4 *)(data + (i * view->stride));
+        int16_t4 quant_pos = *pos_ptr;
+
+        float4 position = {(float)quant_pos.x, (float)quant_pos.y,
+                           (float)quant_pos.z, 1};
+        float3 dequant_pos = tb_f4tof3(tb_mulf44f4(dequant_mat, position));
+
+        JPH::Float3 vertex(dequant_pos.x, dequant_pos.y, dequant_pos.z);
+        // Must dequantize value in buffer with node's matrix
+        phys_verts.push_back(vertex);
+      }
+    }
+  }
+
+  JPH::MeshShapeSettings settings(phys_verts, phys_tris);
   return settings.Create().Get();
 }
 
@@ -88,7 +183,6 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
               shape_type = JPH::EShapeSubType::Cylinder;
               break;
             } else if (SDL_strcmp(shape_type_str, "mesh") == 0) {
-              // TODO
               shape_type = JPH::EShapeSubType::Mesh;
               break;
             }
@@ -142,6 +236,11 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
           }
         }
         shape = create_cylinder_shape(half_height, radius);
+      } else if (shape_type == JPH::EShapeSubType::Mesh) {
+        // HACK:
+        // This is stupid.. get the standard allocator from some singleton
+        auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
+        shape = create_mesh_shape(mesh_sys->std_alloc, node);
       } else {
         TB_CHECK(false, "Invalid physics shape");
       }
@@ -185,7 +284,7 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
             if (!json_object_get_boolean(value)) {
               allowed_dofs &= ~JPH::EAllowedDOFs::TranslationX;
             }
-          } else if (SDL_strcmp(key, "tranx_y") == 0) {
+          } else if (SDL_strcmp(key, "trans_y") == 0) {
             if (!json_object_get_boolean(value)) {
               allowed_dofs &= ~JPH::EAllowedDOFs::TranslationY;
             }
@@ -219,6 +318,7 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
       body_settings.mAllowedDOFs = allowed_dofs;
       body_settings.mIsSensor = sensor;
       body_settings.mUserData = (uint64_t)e;
+      body_settings.GetMassProperties();
 
       JPH::BodyID body =
           bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
@@ -234,9 +334,9 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
 
 void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   flecs::world ecs(world);
+  flecs::entity ent = ecs.entity(e);
 
-  if (!ecs.entity(e).has<TbRigidbodyComponent>() ||
-      !ecs.entity(e).has<TbTransformComponent>()) {
+  if (!ent.has<TbRigidbodyComponent>() || !ent.has<TbTransformComponent>()) {
     return;
   }
 
@@ -244,7 +344,7 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
   auto &bodies = jolt->GetBodyInterface();
 
-  auto rb = ecs.entity(e).get_mut<TbRigidbodyComponent>();
+  auto rb = ent.get_mut<TbRigidbodyComponent>();
 
   // Set the body position and rotation based on the final world transform
   // of the entity.
@@ -280,8 +380,6 @@ void tb_register_rigidbody_component(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
   ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyComponent);
-
-  // Create an observer to trigger when a component is added
 
   TbAssetSystem asset = {
       .add_fn = create_rigidbody_component,
