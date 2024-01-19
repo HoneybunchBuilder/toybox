@@ -817,40 +817,4 @@ float3 tb_clampf3(float3 v, float3 min, float3 max) {
   };
 }
 
-// https://gist.github.com/rygorous/2156668
-
-typedef union FP32 {
-  uint32_t u;
-  float f;
-  struct {
-    uint32_t Mantissa : 23;
-    uint32_t Exponent : 8;
-    uint32_t Sign : 1;
-  };
-} FP32;
-
-typedef union FP16 {
-  uint16_t u;
-  struct {
-    uint32_t Mantissa : 10;
-    uint32_t Exponent : 5;
-    uint32_t Sign : 1;
-  };
-} FP16;
-
-float tb_f16tof32(int16_t i) {
-  FP16 h = {.u = i};
-
-  static const FP32 magic = {(254 - 15) << 23};
-  static const FP32 was_infnan = {(127 + 16) << 23};
-  FP32 o;
-
-  o.u = (h.u & 0x7fff) << 13; // exponent/mantissa bits
-  o.f *= magic.f;             // exponent adjust
-  if (o.f >= was_infnan.f)    // make sure Inf/NaN survive
-    o.u |= 255 << 23;
-  o.u |= (h.u & 0x8000) << 16; // sign bit
-  return o.f;
-}
-
 #pragma clang diagnostic pop

@@ -285,8 +285,6 @@ TbTransform tb_trans_lerp(TbTransform t0, TbTransform t1, float a);
 float tb_clampf(float v, float min, float max);
 float3 tb_clampf3(float3 v, float3 min, float3 max);
 
-float tb_f16tof32(int16_t i);
-
 #endif
 
 #pragma clang diagnostic pop

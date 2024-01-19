@@ -122,18 +122,14 @@ JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node) {
       auto vert_count = positions->count;
       phys_verts.reserve(phys_verts.size() + vert_count);
 
-      auto *data = (uint8_t *)view->data + positions->offset;
+      // Use the node's matrix to dequantize the position into something
+      // the physics system can understand
+      auto *data = (int16_t4 *)(&((uint8_t *)view->data)[positions->offset]);
       for (cgltf_size i = 0; i < vert_count; ++i) {
-        int16_t4 *pos_ptr = (int16_t4 *)(data + (i * view->stride));
-        int16_t4 quant_pos = *pos_ptr;
-
-        float4 position = {(float)quant_pos.x, (float)quant_pos.y,
-                           (float)quant_pos.z, 1};
-        float3 dequant_pos = tb_f4tof3(tb_mulf44f4(dequant_mat, position));
-
-        JPH::Float3 vertex(dequant_pos.x, dequant_pos.y, dequant_pos.z);
-        // Must dequantize value in buffer with node's matrix
-        phys_verts.push_back(vertex);
+        int16_t4 quant_pos = data[i];
+        float4 quant_posf = tb_f4(quant_pos.x, quant_pos.y, quant_pos.z, 1);
+        float3 pos = tb_mulf44f4(dequant_mat, quant_posf).xyz;
+        phys_verts.push_back(JPH::Float3(pos.x, pos.y, pos.z));
       }
     }
   }
