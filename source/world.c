@@ -224,7 +224,7 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
   const TbInputSystem *in_sys = ecs_singleton_get(ecs, TbInputSystem);
   if (in_sys) {
     for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {
-      if (in_sys->events[event_idx].type == SDL_QUIT) {
+      if (in_sys->events[event_idx].type == SDL_EVENT_QUIT) {
         TracyCZoneEnd(ctx);
         return false;
       }

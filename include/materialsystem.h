@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SDL2/SDL_stdinc.h"
+#include "SDL3/SDL_stdinc.h"
 #include "allocator.h"
 #include "dynarray.h"
 #include "rendersystem.h"

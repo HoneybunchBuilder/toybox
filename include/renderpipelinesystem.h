@@ -8,7 +8,7 @@
 #include "rendertargetsystem.h"
 #include "skysystem.h"
 #include "tbrendercommon.h"
-#include <SDL2/SDL_stdinc.h>
+#include <SDL3/SDL_stdinc.h>
 
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
 

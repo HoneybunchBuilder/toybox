@@ -84,18 +84,17 @@ else()
     set(toybox_install ${CMAKE_INSTALL_PREFIX})
 endif()
 
-# Clang & GNU only for now
+# Clang only for now
 if(NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang" AND
-   NOT ${CMAKE_C_COMPILER_ID} MATCHES "AppleClang" AND
-   NOT ${CMAKE_C_COMPILER_ID} MATCHES "GNU")
-  message(FATAL_ERROR "${CMAKE_C_COMPILER_ID} Unsupported - Clang & GNU only")
+   NOT ${CMAKE_C_COMPILER_ID} MATCHES "AppleClang")
+  message(FATAL_ERROR "${CMAKE_C_COMPILER_ID} Unsupported - Clang only")
 endif()
 
 if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES android)
   set(STATIC ON)
 endif()
 
-find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -134,7 +133,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;SDL2::SDL2main;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer;unofficial::joltphysics::Jolt")
+set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer;unofficial::joltphysics::Jolt")
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
@@ -349,6 +348,8 @@ if(WIN32)
     target_compile_options(toybox PUBLIC -Wno-documentation)
   endif()
 
+  # Annoying warning in C++ when having to use flecs C macros
+  target_compile_options(toybox PUBLIC -Wno-missing-field-initializers)
   # Folding VLAs to constant arrays is desired
   target_compile_options(toybox PUBLIC -Wno-gnu-folding-constant)
   # We use anonymous structs 
@@ -363,10 +364,6 @@ elseif(ANDROID)
   elseif(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "x86")
     target_link_libraries(toybox PUBLIC KTX::astcenc-avx2-static)
   endif()
-endif()
-
-if(NOT WIN32)
-  target_sources(toybox PRIVATE "${CMAKE_CURRENT_LIST_DIR}/source/posix/entry.c")
 endif()
 
 if(isMultiConfig)
@@ -403,10 +400,10 @@ if(FINAL)
 endif()
 
 if(STATIC)
-  target_link_libraries(toybox PUBLIC SDL2::SDL2-static)
+  target_link_libraries(toybox PUBLIC SDL3::SDL3-static)
   set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
-  target_link_libraries(toybox PUBLIC SDL2::SDL2)
+  target_link_libraries(toybox PUBLIC SDL3::SDL3)
 endif()
 
 target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)

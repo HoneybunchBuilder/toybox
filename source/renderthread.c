@@ -36,13 +36,13 @@ bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
 void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Signaling Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
-  SDL_SemPost(thread->frame_states[frame_idx].wait_sem);
+  SDL_PostSemaphore(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Waiting for render thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
-  SDL_SemWait(thread->frame_states[frame_idx].signal_sem);
+  SDL_WaitSemaphore(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
@@ -52,7 +52,7 @@ void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
 void tb_wait_thread_initialized(TbRenderThread *thread) {
   // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER,
   //              "Waiting for render thread to initialize");
-  SDL_SemWait(thread->initialized);
+  SDL_WaitSemaphore(thread->initialized);
 }
 
 void tb_stop_render_thread(TbRenderThread *thread) {
@@ -118,7 +118,7 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
                         VkLayerProperties *layers) {
   bool found = false;
   for (uint32_t i = 0; i < layer_count; i++) {
-    if (!strcmp(check_name, layers[i].layerName)) {
+    if (!SDL_strcmp(check_name, layers[i].layerName)) {
       found = true;
       break;
     }
@@ -149,15 +149,14 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   // Helper for breaking when encountering a non-info message
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    SDL_TriggerBreakpoint();
+    // SDL_TriggerBreakpoint();
   }
 
   return false;
 }
 #endif
 
-bool init_instance(SDL_Window *window, TbAllocator tmp_alloc,
-                   const VkAllocationCallbacks *vk_alloc,
+bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                    VkInstance *instance) {
   VkResult err = VK_SUCCESS;
 
@@ -199,10 +198,12 @@ bool init_instance(SDL_Window *window, TbAllocator tmp_alloc,
     // Query SDL for required extensions
     uint32_t ext_count = 0;
     const char *ext_names[MAX_EXT_COUNT] = {0};
-    SDL_Vulkan_GetInstanceExtensions(window, &ext_count, NULL);
-
-    SDL_assert(ext_count < MAX_EXT_COUNT);
-    SDL_Vulkan_GetInstanceExtensions(window, &ext_count, ext_names);
+    {
+      tb_auto sdl_ext_names = SDL_Vulkan_GetInstanceExtensions(&ext_count);
+      for (uint32_t i = 0; i < ext_count; ++i) {
+        ext_names[i] = sdl_ext_names[i];
+      }
+    }
 
 // Add debug ext
 #ifdef VALIDATION
@@ -567,14 +568,6 @@ bool init_gpu(VkInstance instance, TbAllocator std_alloc, TbAllocator tmp_alloc,
   return true;
 }
 
-bool init_surface(VkInstance instance, SDL_Window *window,
-                  VkSurfaceKHR *surface) {
-  // SDL subsystems will clean up this surface on their own
-  TB_CHECK_RETURN(SDL_Vulkan_CreateSurface(window, instance, surface),
-                  "Failed to create surface", false);
-  return true;
-}
-
 bool find_queue_families(TbAllocator tmp_alloc, VkPhysicalDevice gpu,
                          VkSurfaceKHR surface, uint32_t queue_family_count,
                          const VkQueueFamilyProperties *queue_props,
@@ -901,7 +894,7 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
                     TbSwapchain *swapchain) {
   int32_t width = 0;
   int32_t height = 0;
-  SDL_Vulkan_GetDrawableSize(window, &width, &height);
+  SDL_GetWindowSizeInPixels(window, &width, &height);
 
   uint32_t format_count = 0;
   VkResult err =
@@ -1080,9 +1073,8 @@ bool init_render_thread(TbRenderThread *thread) {
   TbAllocator tmp_alloc = thread->render_arena.alloc;
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
 
-  TB_CHECK_RETURN(
-      init_instance(thread->window, tmp_alloc, vk_alloc, &thread->instance),
-      "Failed to create instance", false);
+  TB_CHECK_RETURN(init_instance(tmp_alloc, vk_alloc, &thread->instance),
+                  "Failed to create instance", false);
 
   TB_CHECK_RETURN(init_debug_messenger(thread->instance, vk_alloc,
                                        &thread->debug_utils_messenger),
@@ -1094,9 +1086,9 @@ bool init_render_thread(TbRenderThread *thread) {
                            &thread->gpu_features, &thread->gpu_mem_props),
                   "Failed to select gpu", false)
 
-  TB_CHECK_RETURN(
-      init_surface(thread->instance, thread->window, &thread->surface),
-      "Failed to create surface", false);
+  TB_CHECK_RETURN(SDL_Vulkan_CreateSurface(thread->window, thread->instance,
+                                           vk_alloc, &thread->surface),
+                  "Failed to create surface", false);
 
   TB_CHECK_RETURN(find_queue_families(tmp_alloc, thread->gpu, thread->surface,
                                       thread->queue_family_count,
@@ -1246,7 +1238,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         break;
       } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
         // If the surface was lost we could re-create it.
-        // But the surface is owned by SDL2
+        // But the surface is owned by SDL3
         SDL_assert(err == VK_SUCCESS);
       } else if (err == VK_NOT_READY) {
       } else {
@@ -1679,7 +1671,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       // correctly.
     } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
       // If the surface was lost we could re-create it.
-      // But the surface is owned by SDL2
+      // But the surface is owned by SDL3
       SDL_assert(err == VK_SUCCESS);
     } else {
       SDL_assert(err == VK_SUCCESS);
@@ -1702,7 +1694,7 @@ int32_t render_thread(void *data) {
                   -1);
   TracyCSetThreadName("Render Thread");
 
-  SDL_SemPost(thread->initialized);
+  SDL_PostSemaphore(thread->initialized);
 
   // Main thread loop
   while (true) {
@@ -1724,7 +1716,7 @@ int32_t render_thread(void *data) {
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
       TracyCZoneNC(resize_ctx, "Resize", TracyCategoryColorWait, true);
-      SDL_SemWait(thread->resized);
+      SDL_WaitSemaphore(thread->resized);
 
       thread->frame_count = 0;
       thread->frame_idx = 0;
@@ -1740,7 +1732,7 @@ int32_t render_thread(void *data) {
       TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
       TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
 
-      SDL_SemWait(frame_state->wait_sem);
+      SDL_WaitSemaphore(frame_state->wait_sem);
 
       TracyCZoneEnd(wait_ctx);
     }
@@ -1750,7 +1742,7 @@ int32_t render_thread(void *data) {
     tick_render_thread(thread, frame_state);
 
     // Signal frame done
-    SDL_SemPost(frame_state->signal_sem);
+    SDL_PostSemaphore(frame_state->signal_sem);
 
     // Increment frame count when done
     thread->frame_count++;

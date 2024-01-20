@@ -1,6 +1,6 @@
 #include "simd.h"
 
-#include <SDL2/SDL_stdinc.h>
+#include <SDL3/SDL_stdinc.h>
 
 #define _USE_MATH_DEFINES
 #include <SDL_assert.h>

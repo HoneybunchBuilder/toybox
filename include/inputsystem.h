@@ -4,10 +4,10 @@
 #include "simd.h"
 #include "world.h"
 
-#include <SDL2/SDL_events.h>
+#include <SDL3/SDL_events.h>
 
 typedef struct SDL_Window SDL_Window;
-typedef struct _SDL_GameController SDL_GameController;
+typedef struct SDL_Gamepad SDL_Gamepad;
 typedef struct TbWorld TbWorld;
 
 #define TB_MAX_GAME_CONTROLLERS 4
@@ -100,7 +100,7 @@ typedef struct TbInputSystem {
   TbMouse mouse;
 
   uint32_t controller_count;
-  SDL_GameController *controllers[TB_MAX_GAME_CONTROLLERS];
+  SDL_Gamepad *controllers[TB_MAX_GAME_CONTROLLERS];
   TbGameControllerState controller_states[TB_MAX_GAME_CONTROLLERS];
 } TbInputSystem;
 

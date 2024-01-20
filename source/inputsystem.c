@@ -7,9 +7,8 @@
 #include <flecs.h>
 
 // Get axis from an SDL controller in a 0 to 1 range
-float get_axis_float(SDL_GameController *controller,
-                     SDL_GameControllerAxis axis) {
-  float raw_axis = (float)SDL_GameControllerGetAxis(controller, axis);
+float get_axis_float(SDL_Gamepad *controller, SDL_GamepadAxis axis) {
+  float raw_axis = (float)SDL_GetGamepadAxis(controller, axis);
   return raw_axis / (float)SDL_MAX_SINT16;
 }
 
@@ -47,11 +46,8 @@ void input_update_tick(ecs_iter_t *it) {
     SDL_Event event = self->events[event_idx];
     // Translate keyboard events into input events that we care about
     {
-      if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-        bool value = false;
-        if (event.type == SDL_KEYDOWN) {
-          value = true;
-        }
+      if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        bool value = event.type == SDL_EVENT_KEY_DOWN;
 
         const SDL_Keysym *keysym = &event.key.keysym;
         SDL_Scancode scancode = keysym->scancode;
@@ -69,27 +65,25 @@ void input_update_tick(ecs_iter_t *it) {
         }
       }
 
-      if (event.type == SDL_MOUSEMOTION) {
+      if (event.type == SDL_EVENT_MOUSE_MOTION) {
         const SDL_MouseMotionEvent *mouse_motion = &event.motion;
         self->mouse.axis = (float2){
             (float)mouse_motion->xrel / 5,
             (float)mouse_motion->yrel / 5,
         };
       }
-      if (event.type == SDL_MOUSEWHEEL) {
+      if (event.type == SDL_EVENT_MOUSE_WHEEL) {
 
         if (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-          self->mouse.wheel =
-              (float2){event.wheel.preciseX, event.wheel.preciseY};
+          self->mouse.wheel = (float2){event.wheel.x, event.wheel.y};
         } else {
-          self->mouse.wheel =
-              (float2){-event.wheel.preciseX, -event.wheel.preciseY};
+          self->mouse.wheel = (float2){-event.wheel.x, -event.wheel.y};
         }
       }
-      if (event.type == SDL_MOUSEBUTTONDOWN ||
-          event.type == SDL_MOUSEBUTTONUP) {
+      if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+          event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
         bool value = false;
-        if (event.type == SDL_MOUSEBUTTONDOWN) {
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
           value = true;
         }
         if (event.button.button == 1) {
@@ -106,20 +100,19 @@ void input_update_tick(ecs_iter_t *it) {
 
     // Controller events
     {
-      if (event.type == SDL_CONTROLLERDEVICEADDED) {
-        if (self->controllers[event.cdevice.which] == NULL) {
-          SDL_GameController *controller =
-              SDL_GameControllerOpen(event.cdevice.which);
-          self->controllers[event.cdevice.which] = controller;
+      if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+        if (self->controllers[event.gdevice.which] == NULL) {
+          SDL_Gamepad *controller = SDL_OpenGamepad(event.gdevice.which);
+          self->controllers[event.gdevice.which] = controller;
           self->controller_count++;
         }
       }
 
-      if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
-        SDL_GameController *controller = self->controllers[event.cdevice.which];
+      if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+        SDL_Gamepad *controller = self->controllers[event.gdevice.which];
         if (controller != NULL) {
-          SDL_GameControllerClose(controller);
-          self->controllers[event.cdevice.which] = NULL;
+          SDL_CloseGamepad(controller);
+          self->controllers[event.gdevice.which] = NULL;
           self->controller_count--;
         }
       }
@@ -134,7 +127,7 @@ void input_update_tick(ecs_iter_t *it) {
 
   // Query game controller state and apply it to the component
   for (uint32_t ctl_idx = 0; ctl_idx < TB_MAX_GAME_CONTROLLERS; ++ctl_idx) {
-    SDL_GameController *controller = self->controllers[ctl_idx];
+    SDL_Gamepad *controller = self->controllers[ctl_idx];
 
     if (controller == NULL) {
       continue;
@@ -143,24 +136,24 @@ void input_update_tick(ecs_iter_t *it) {
     float deadzone = 0.075f; // TODO: Make configurable?
 
     TbGameControllerState *ctl_state = &self->controller_states[ctl_idx];
-    ctl_state->left_stick = axis_deadzone(
-        tb_f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTX),
-              get_axis_float(controller, SDL_CONTROLLER_AXIS_LEFTY)),
-        deadzone);
+    ctl_state->left_stick =
+        axis_deadzone(tb_f2(get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFTX),
+                            get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFTY)),
+                      deadzone);
     ctl_state->left_trigger =
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
+        get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
     ctl_state->right_stick = axis_deadzone(
-        tb_f2(get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTX),
-              get_axis_float(controller, SDL_CONTROLLER_AXIS_RIGHTY)),
+        tb_f2(get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHTX),
+              get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHTY)),
         deadzone);
     ctl_state->right_trigger =
-        get_axis_float(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
+        get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
 
     ctl_state->buttons = 0;
-    if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A)) {
+    if (SDL_GetGamepadButton(controller, SDL_GAMEPAD_BUTTON_SOUTH)) {
       ctl_state->buttons |= TB_BUTTON_A;
     }
-    if (SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_B)) {
+    if (SDL_GetGamepadButton(controller, SDL_GAMEPAD_BUTTON_EAST)) {
       ctl_state->buttons |= TB_BUTTON_B;
     }
   }

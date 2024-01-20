@@ -163,7 +163,7 @@ TbRenderSystem create_render_system(TbAllocator std_alloc,
 
         data = tb_alloc(sys.tmp_alloc, data_size);
 
-        SDL_RWread(cache_file, data, data_size, 1);
+        SDL_RWread(cache_file, data, data_size);
         SDL_RWclose(cache_file);
       }
       VkPipelineCacheCreateInfo create_info = {
@@ -202,7 +202,7 @@ void destroy_render_system(TbRenderSystem *self) {
       if (err == VK_SUCCESS) {
         SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb");
         if (cache_file != NULL) {
-          SDL_RWwrite(cache_file, cache, cache_size, 1);
+          SDL_RWwrite(cache_file, cache, cache_size);
           SDL_RWclose(cache_file);
         }
       }

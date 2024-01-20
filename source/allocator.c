@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <string.h>
 
-#include <SDL2/SDL_assert.h>
+#include <SDL3/SDL_assert.h>
 #include <mimalloc.h>
 
 #include "profiling.h"

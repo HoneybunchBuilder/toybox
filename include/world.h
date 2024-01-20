@@ -6,7 +6,7 @@
 
 #include "blocks/Block.h"
 
-#include <SDL2/SDL_stdinc.h>
+#include <SDL3/SDL_stdinc.h>
 
 typedef struct ecs_world_t ecs_world_t;
 

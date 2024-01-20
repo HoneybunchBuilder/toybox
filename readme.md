@@ -37,7 +37,7 @@ To build the dependency `ktx` you will need to have bash installed. The bash fro
 
 #### Android
 NOT PRIORITY
-Android's vulkan device story is pretty lame these days and it doesn't look like it's getting any shiny new features that I care about such as mesh shaders. So while CI builds android to verify that the code can build properly, the tools to package apks and produce a proper application have been stripped as they had rotted. A downstream project can get an Android build made through gradle without too much trouble just make sure to include the java from the SDL2 version you are using. You'll have to go get that manually.
+Android's vulkan device story is pretty lame these days and it doesn't look like it's getting any shiny new features that I care about such as mesh shaders. So while CI builds android to verify that the code can build properly, the tools to package apks and produce a proper application have been stripped as they had rotted. A downstream project can get an Android build made through gradle without too much trouble just make sure to include the java from the SDL3 version you are using. You'll have to go get that manually.
 
 If you still feel like being brave:
 

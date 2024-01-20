@@ -3,7 +3,7 @@
 #include "allocator.h"
 #include "dynarray.h"
 #include "tbvk.h"
-#include <SDL2/SDL_stdinc.h>
+#include <SDL3/SDL_stdinc.h>
 
 #define TB_SHADOW_MAP_DIM 4096
 

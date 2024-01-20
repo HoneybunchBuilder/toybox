@@ -50,11 +50,12 @@
 
 #include "renderthread.h"
 
-int32_t SDL_main(int32_t argc, char *argv[]) {
+#include <SDL3/SDL_main.h>
+int32_t main(int32_t argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  SDL_Log("%s", "Entered SDL_main");
+  SDL_Log("%s", "Entered main");
   {
     const char *app_info = "Debug";
     size_t app_info_len = strlen(app_info);
@@ -83,8 +84,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   {
     // This hint must be set before init for xbox controllers to work
     SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
-    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER |
-                           SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC);
+    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMEPAD |
+                           SDL_INIT_HAPTIC);
     if (res != 0) {
       const char *msg = SDL_GetError();
       SDL_Log("Failed to initialize SDL with error: %s", msg);
@@ -96,8 +97,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   SDL_Window *window = SDL_CreateWindow(
-      "Toybox Sample", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1920,
-      1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+      "Toybox Sample", 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     const char *msg = SDL_GetError();
     SDL_Log("Failed to open window with error: %s", msg);

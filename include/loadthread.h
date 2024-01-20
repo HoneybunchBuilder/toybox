@@ -27,7 +27,7 @@
 #include "allocator.h"
 
 typedef struct SDL_Thread SDL_Thread;
-typedef struct SDL_semaphore SDL_semaphore;
+typedef struct SDL_Semaphore SDL_Semaphore;
 typedef struct SDL_mutex SDL_mutex;
 
 typedef struct TbWorld TbWorld;

@@ -338,8 +338,7 @@ VkResult ui_context_init(TbRenderSystem *rnd_sys, ImFontAtlas *atlas,
             },
     };
     err = vkCreateImageView(rnd_sys->render_thread->device, &create_info,
-                            &rnd_sys->vk_host_alloc_cb,
-                            &context->atlas_view);
+                            &rnd_sys->vk_host_alloc_cb, &context->atlas_view);
     TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", err);
     SET_VK_NAME(rnd_sys->render_thread->device, context->atlas_view,
                 VK_OBJECT_TYPE_IMAGE_VIEW, "ImGui Atlas");
@@ -363,13 +362,11 @@ void ui_context_destroy(TbRenderSystem *rnd_sys, TbUIContext *context) {
   *context = (TbUIContext){0};
 }
 
-TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                                  uint32_t context_count,
-                                  ImFontAtlas **context_atlases,
-                                  TbRenderSystem *rnd_sys,
-                                  TbRenderPipelineSystem *rp_sys,
-                                  TbRenderTargetSystem *rt_sys,
-                                  TbInputSystem *input_system) {
+TbImGuiSystem
+create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+                    uint32_t context_count, ImFontAtlas **context_atlases,
+                    TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
+                    TbRenderTargetSystem *rt_sys, TbInputSystem *input_system) {
   TbImGuiSystem sys = {
       .rnd_sys = rnd_sys,
       .rp_sys = rp_sys,
@@ -395,12 +392,11 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   TbRenderPassId ui_pass_id = rp_sys->ui_pass;
 
   uint32_t attach_count = 0;
-  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id,
-                                     &attach_count, NULL);
+  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count, NULL);
   TB_CHECK(attach_count == 1, "Unexpected");
   TbPassAttachment ui_info = {0};
-  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id,
-                                     &attach_count, &ui_info);
+  tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count,
+                                     &ui_info);
 
   VkFormat ui_target_format =
       tb_render_target_get_format(rt_sys, ui_info.attachment);
@@ -428,16 +424,16 @@ TbImGuiSystem create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   // Create imgui pipeline
   err = create_imgui_pipeline(
       rnd_sys->render_thread->device, &rnd_sys->vk_host_alloc_cb,
-      rnd_sys->pipeline_cache, sys.sampler, ui_target_format,
-      &sys.pipe_layout, &sys.set_layout, &sys.pipeline);
+      rnd_sys->pipeline_cache, sys.sampler, ui_target_format, &sys.pipe_layout,
+      &sys.set_layout, &sys.pipeline);
   TB_VK_CHECK(err, "Failed to create imgui pipeline");
 
   sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
-                              .batch_size = sizeof(ImGuiDrawBatch),
-                              .draw_fn = imgui_pass_record,
-                              .pass_id = ui_pass_id,
-                          });
+                  .batch_size = sizeof(ImGuiDrawBatch),
+                  .draw_fn = imgui_pass_record,
+                  .pass_id = ui_pass_id,
+              });
 
   return sys;
 }
@@ -450,8 +446,7 @@ void destroy_imgui_system(TbImGuiSystem *self) {
   }
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(rnd_sys,
-                                   self->frame_states[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(rnd_sys, self->frame_states[i].set_pool);
   }
 
   tb_rnd_destroy_sampler(rnd_sys, self->sampler);
@@ -556,16 +551,14 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
-    ImGuiDrawBatch *imgui_batches =
-        tb_alloc_nm_tp(sys->rnd_sys->render_thread
-                           ->frame_states[sys->rnd_sys->frame_idx]
-                           .tmp_alloc.alloc,
-                       sys->context_count, ImGuiDrawBatch);
-    TbDrawBatch *batches =
-        tb_alloc_nm_tp(sys->rnd_sys->render_thread
-                           ->frame_states[sys->rnd_sys->frame_idx]
-                           .tmp_alloc.alloc,
-                       sys->context_count, TbDrawBatch);
+    ImGuiDrawBatch *imgui_batches = tb_alloc_nm_tp(
+        sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
+            .tmp_alloc.alloc,
+        sys->context_count, ImGuiDrawBatch);
+    TbDrawBatch *batches = tb_alloc_nm_tp(
+        sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
+            .tmp_alloc.alloc,
+        sys->context_count, TbDrawBatch);
 
     for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
       const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
@@ -580,19 +573,22 @@ void imgui_draw_tick(ecs_iter_t *it) {
         const SDL_Event *event = &sys->input->events[event_idx];
 
         // Feed event to imgui
-        if (event->type == SDL_MOUSEMOTION) {
+        if (event->type == SDL_EVENT_MOUSE_MOTION) {
           io->MousePos = (ImVec2){
               (float)event->motion.x,
               (float)event->motion.y,
           };
-        } else if (event->type == SDL_MOUSEBUTTONDOWN ||
-                   event->type == SDL_MOUSEBUTTONUP) {
+        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                   event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
           if (event->button.button == SDL_BUTTON_LEFT) {
-            io->MouseDown[0] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            io->MouseDown[0] =
+                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
           } else if (event->button.button == SDL_BUTTON_RIGHT) {
-            io->MouseDown[1] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            io->MouseDown[1] =
+                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
           } else if (event->button.button == SDL_BUTTON_MIDDLE) {
-            io->MouseDown[2] = event->type == SDL_MOUSEBUTTONDOWN ? 1 : 0;
+            io->MouseDown[2] =
+                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
           }
         }
       }
@@ -632,9 +628,9 @@ void imgui_draw_tick(ecs_iter_t *it) {
           // to the gpu every frame
           uint64_t tmp_offset = 0;
           void *tmp_ptr = NULL;
-          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->rnd_sys, imgui_size,
-                                            0x40, &tmp_offset,
-                                            &tmp_ptr) != VK_SUCCESS) {
+          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->rnd_sys, imgui_size, 0x40,
+                                             &tmp_offset,
+                                             &tmp_ptr) != VK_SUCCESS) {
             TracyCZoneEnd(ctx);
             return;
           }
@@ -682,8 +678,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
           // Send the render system a batch to draw
           {
-            VkBuffer gpu_tmp_buffer =
-                tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys);
+            VkBuffer gpu_tmp_buffer = tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys);
 
             const float width = draw_data->DisplaySize.x;
             const float height = draw_data->DisplaySize.y;
@@ -747,8 +742,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
       }
 
       // Issue draw batches
-      tb_render_pipeline_issue_draw_batch(
-          sys->rp_sys, sys->imgui_draw_ctx, batch_count, batches);
+      tb_render_pipeline_issue_draw_batch(sys->rp_sys, sys->imgui_draw_ctx,
+                                          batch_count, batches);
 
       igNewFrame();
     }

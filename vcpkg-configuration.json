@@ -8,12 +8,12 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "d61db1ec98715e77dd26736e95231ca615911215",
+      "baseline": "d11ac842a330062f28a2bcc674da68ed1862d643",
       "repository": "https://github.com/Honeybunch/vcpkg",
       "packages": [
-        "joltphysics"
+        "sdl3"
       ],
-      "reference": "jolt"
+      "reference": "sdl3"
     }
   ]
 }

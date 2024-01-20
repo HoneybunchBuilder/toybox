@@ -14,7 +14,7 @@ sdl_read_glb(const struct cgltf_memory_options *memory_options,
   void *mem = memory_options->alloc_func(memory_options->user_data, file_size);
   TB_CHECK_RETURN(mem, "clgtf out of memory.", cgltf_result_out_of_memory);
 
-  TB_CHECK_RETURN(SDL_RWread(file, mem, file_size, 1) != 0, "clgtf io error.",
+  TB_CHECK_RETURN(SDL_RWread(file, mem, file_size) != 0, "clgtf io error.",
                   cgltf_result_io_error);
 
   *size = file_size;

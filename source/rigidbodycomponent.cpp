@@ -314,7 +314,9 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
       body_settings.mAllowedDOFs = allowed_dofs;
       body_settings.mIsSensor = sensor;
       body_settings.mUserData = (uint64_t)e;
-      body_settings.GetMassProperties();
+      body_settings.mOverrideMassProperties =
+          JPH::EOverrideMassProperties::CalculateInertia;
+      body_settings.mMassPropertiesOverride.mMass = 1.0f;
 
       JPH::BodyID body =
           bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);

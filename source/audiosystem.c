@@ -39,12 +39,12 @@ void tb_register_audio_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbAudioSystem);
 
   int32_t ret = Mix_Init(MIX_INIT_OGG);
-  TB_CHECK(ret != 0, "Failed to initialize SDL2 Mixer");
+  TB_CHECK(ret != 0, "Failed to initialize SDL3 Mixer");
 
   // Default to 44khz 16-bit stereo for now
   // But allow the mixer to change these if the device wants something specific
-  ret = Mix_OpenAudioDevice(44100, AUDIO_S16SYS, 2, TB_AUDIO_CHUNK_SIZE, NULL,
-                            SDL_AUDIO_ALLOW_ANY_CHANGE);
+  ret = Mix_OpenAudioDevice(44100, SDL_AUDIO_S16, 2, TB_AUDIO_CHUNK_SIZE, NULL,
+                            0);
   TB_CHECK(ret == 0, "Failed to open default audio device");
 
   int32_t freq = 0;
@@ -119,7 +119,8 @@ void tb_audio_system_release_music_ref(TbAudioSystem *self, TbMusicId id) {
   }
 }
 
-void tb_audio_system_release_effect_ref(TbAudioSystem *self, TbSoundEffectId id) {
+void tb_audio_system_release_effect_ref(TbAudioSystem *self,
+                                        TbSoundEffectId id) {
   TbSoundEffect *effect = &TB_DYN_ARR_AT(self->sfx, id);
   TB_CHECK(
       effect->ref_count > 0,

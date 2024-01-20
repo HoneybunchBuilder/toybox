@@ -7,7 +7,7 @@
 #include "transformcomponent.h"
 #include "world.h"
 
-#include <SDL2/SDL_mutex.h>
+#include <SDL3/SDL_mutex.h>
 
 #include <Jolt/Jolt.h>
 

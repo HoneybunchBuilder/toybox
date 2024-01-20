@@ -9,7 +9,7 @@
 
 typedef struct SDL_Window SDL_Window;
 typedef struct SDL_Thread SDL_Thread;
-typedef struct SDL_semaphore SDL_semaphore;
+typedef struct SDL_Semaphore SDL_Semaphore;
 typedef struct SDL_mutex SDL_mutex;
 
 typedef struct mi_heap_s mi_heap_t;
@@ -77,8 +77,8 @@ typedef struct TbDispatchContext {
 #define TB_MAX_COMMAND_BUFFERS 64
 
 typedef struct TbFrameState {
-  SDL_semaphore *wait_sem;
-  SDL_semaphore *signal_sem;
+  SDL_Semaphore *wait_sem;
+  SDL_Semaphore *signal_sem;
 
   VkCommandPool command_pool;
   VkCommandBuffer base_command_buffers[2];
@@ -130,8 +130,8 @@ typedef struct TbRenderExtensionSupport {
 typedef struct TbRenderThread {
   SDL_Window *window;
   SDL_Thread *thread;
-  SDL_semaphore *initialized;
-  SDL_semaphore *resized;
+  SDL_Semaphore *initialized;
+  SDL_Semaphore *resized;
 
   TbGeneralAllocator std_alloc;
   TbArenaAllocator render_arena;
