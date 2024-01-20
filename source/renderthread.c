@@ -1048,8 +1048,6 @@ bool init_render_thread(TbRenderThread *thread) {
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
 
-  VkResult err = VK_SUCCESS;
-
   // Create renderer allocators
   {
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
@@ -1059,8 +1057,8 @@ bool init_render_thread(TbRenderThread *thread) {
     tb_create_gen_alloc(&thread->std_alloc, "Render Std Alloc");
   }
 
-  err = volkInitialize();
-  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to initialize volk", false);
+  tb_auto fn = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
+  volkInitializeCustom(fn);
 
   // Create vulkan allocator
   thread->vk_alloc = (VkAllocationCallbacks){
