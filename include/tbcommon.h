@@ -2,6 +2,12 @@
 
 #include "tbsdl.h"
 
+#include "allocator.h"
+#include "profiling.h"
+#include "settings.h"
+#include "shadercommon.h"
+#include "simd.h"
+
 // Leaning in to clang language extensions
 // __auto_type is really cool
 #pragma clang diagnostic ignored "-Wgnu-auto-type"

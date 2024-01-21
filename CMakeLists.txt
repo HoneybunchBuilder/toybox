@@ -408,14 +408,14 @@ endif()
 
 target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
 
-target_compile_features(toybox PUBLIC c_std_11)
-target_compile_features(toybox PUBLIC cxx_std_20)
-
 # Turn on warnings
 target_compile_options(toybox PUBLIC
   $<$<CXX_COMPILER_ID:MSVC>:/W4>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
 )
+
+target_compile_features(toybox PUBLIC c_std_11)
+target_compile_features(toybox PUBLIC cxx_std_20)
 
 # Cook engine shaders
 cook_shaders(tb_engine_shader_sources tb_engine_shader_headers)
@@ -461,6 +461,10 @@ function(tb_add_app target_name source)
       add_executable(${target_name} ${source})
     endif()
   endif()
+
+  # Set known language version requirements
+  target_compile_features(${target_name} PRIVATE c_std_11)
+  target_compile_features(${target_name} PRIVATE cxx_std_20)
 
   # Turn on warnings
   target_compile_options(${target_name} PRIVATE

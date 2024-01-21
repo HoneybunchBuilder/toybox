@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <mimalloc.h>
+
 typedef struct mi_heap_s mi_heap_t;
 
 typedef void *tb_alloc_fn(void *user_data, size_t size);
