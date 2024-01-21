@@ -6,13 +6,14 @@
 
 #include <flecs.h>
 
-// Get axis from an SDL controller in a 0 to 1 range
-float get_axis_float(SDL_Gamepad *controller, SDL_GamepadAxis axis) {
-  float raw_axis = (float)SDL_GetGamepadAxis(controller, axis);
+// Get axis from an SDL gamepad in a 0 to 1 range
+float get_axis_float(SDL_Gamepad *gamepad, SDL_GamepadAxis axis) {
+  float raw_axis = (float)SDL_GetGamepadAxis(gamepad, axis);
   return raw_axis / (float)SDL_MAX_SINT16;
 }
 
 float2 axis_deadzone(float2 axis, float deadzone) {
+  return axis;
   float mag = tb_magf2(axis);
   if (mag < deadzone) {
     return tb_f2(0, 0);
@@ -28,7 +29,7 @@ void input_update_tick(ecs_iter_t *it) {
   self->mouse.axis = (float2){0}; // Must always clear axes
   self->mouse.wheel = (float2){0};
   for (uint32_t i = 0; i < TB_MAX_GAME_CONTROLLERS; ++i) {
-    self->controller_states[i] = (TbGameControllerState){0};
+    self->gamepad_states[i] = (TbGameControllerState){0};
   }
 
   // Read up-to InputSystemMaxEvents events from SDL and store them
@@ -101,19 +102,21 @@ void input_update_tick(ecs_iter_t *it) {
     // Controller events
     {
       if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
-        if (self->controllers[event.gdevice.which] == NULL) {
-          SDL_Gamepad *controller = SDL_OpenGamepad(event.gdevice.which);
-          self->controllers[event.gdevice.which] = controller;
-          self->controller_count++;
+        if (self->gamepad[event.gdevice.which] == NULL) {
+          SDL_Gamepad *gamepad = SDL_OpenGamepad(event.gdevice.which);
+          int32_t player_idx = SDL_GetGamepadPlayerIndex(gamepad);
+          self->gamepad[player_idx] = gamepad;
+          self->gamepad_count++;
         }
       }
 
       if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
-        SDL_Gamepad *controller = self->controllers[event.gdevice.which];
-        if (controller != NULL) {
-          SDL_CloseGamepad(controller);
-          self->controllers[event.gdevice.which] = NULL;
-          self->controller_count--;
+        SDL_Gamepad *gamepad = self->gamepad[event.gdevice.which];
+        if (gamepad != NULL) {
+          int32_t player_idx = SDL_GetGamepadPlayerIndex(gamepad);
+          SDL_CloseGamepad(gamepad);
+          self->gamepad[player_idx] = NULL;
+          self->gamepad_count--;
         }
       }
     }
@@ -125,35 +128,35 @@ void input_update_tick(ecs_iter_t *it) {
   // could be a neat feature to be able to filter input based on player at
   // this level?
 
-  // Query game controller state and apply it to the component
+  // Query game gamepad state and apply it to the component
   for (uint32_t ctl_idx = 0; ctl_idx < TB_MAX_GAME_CONTROLLERS; ++ctl_idx) {
-    SDL_Gamepad *controller = self->controllers[ctl_idx];
+    SDL_Gamepad *gamepad = self->gamepad[ctl_idx];
 
-    if (controller == NULL) {
+    if (gamepad == NULL) {
       continue;
     }
 
     float deadzone = 0.075f; // TODO: Make configurable?
 
-    TbGameControllerState *ctl_state = &self->controller_states[ctl_idx];
+    TbGameControllerState *ctl_state = &self->gamepad_states[ctl_idx];
     ctl_state->left_stick =
-        axis_deadzone(tb_f2(get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFTX),
-                            get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFTY)),
+        axis_deadzone(tb_f2(get_axis_float(gamepad, SDL_GAMEPAD_AXIS_LEFTX),
+                            get_axis_float(gamepad, SDL_GAMEPAD_AXIS_LEFTY)),
                       deadzone);
     ctl_state->left_trigger =
-        get_axis_float(controller, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
-    ctl_state->right_stick = axis_deadzone(
-        tb_f2(get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHTX),
-              get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHTY)),
-        deadzone);
+        get_axis_float(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+    ctl_state->right_stick =
+        axis_deadzone(tb_f2(get_axis_float(gamepad, SDL_GAMEPAD_AXIS_RIGHTX),
+                            get_axis_float(gamepad, SDL_GAMEPAD_AXIS_RIGHTY)),
+                      deadzone);
     ctl_state->right_trigger =
-        get_axis_float(controller, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+        get_axis_float(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
 
     ctl_state->buttons = 0;
-    if (SDL_GetGamepadButton(controller, SDL_GAMEPAD_BUTTON_SOUTH)) {
+    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) {
       ctl_state->buttons |= TB_BUTTON_A;
     }
-    if (SDL_GetGamepadButton(controller, SDL_GAMEPAD_BUTTON_EAST)) {
+    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST)) {
       ctl_state->buttons |= TB_BUTTON_B;
     }
   }

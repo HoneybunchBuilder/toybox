@@ -52,11 +52,11 @@ void noclip_update_tick(ecs_iter_t *it) {
       }
     }
 
-    // Go through game controller input
-    // Just controller 0 for now but only if keyboard input wasn't
+    // Go through game gamepad input
+    // Just gamepad 0 for now but only if keyboard input wasn't
     // specified
     {
-      const TbGameControllerState *ctl_state = &input->controller_states[0];
+      const TbGameControllerState *ctl_state = &input->gamepad_states[0];
       if (look_axis.x == 0 && look_axis.y == 0) {
         look_axis = -ctl_state->right_stick;
       }

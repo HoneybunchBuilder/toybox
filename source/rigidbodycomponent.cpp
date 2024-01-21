@@ -377,7 +377,11 @@ void remove_rigidbody_components(ecs_world_t *world) {
 void tb_register_rigidbody_component(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
+  // Is there a better way to avoid having to use this macro in C++?
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
   ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyComponent);
+#pragma clang diagnostic pop
 
   TbAssetSystem asset = {
       .add_fn = create_rigidbody_component,

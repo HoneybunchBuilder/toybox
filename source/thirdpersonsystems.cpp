@@ -30,7 +30,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     // camera is the local space vector from the body to the camera
     auto body_to_cam = tb_normf3(camera_trans.position);
 
-    // Read mouse/controller input to rotate the vector to determine the
+    // Read mouse/gamepad input to rotate the vector to determine the
     // direction we want the camera to live at
 
     if (move.fixed_rotation)
@@ -49,8 +49,8 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
         auto look_axis = input.mouse.axis;
         look_yaw = -look_axis.x * delta_time * look_speed;
         look_pitch = -look_axis.y * delta_time * look_speed;
-      } else if (input.controller_count > 0) {
-        const auto *ctl_state = &input.controller_states[0];
+      } else if (input.gamepad_count > 0) {
+        const auto *ctl_state = &input.gamepad_states[0];
         auto look_axis = ctl_state->right_stick;
         auto deadzone = 0.15f;
         if (look_axis.x > -deadzone && look_axis.x < deadzone) {
@@ -123,8 +123,8 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
       accel += TB_RIGHT;
     }
 
-    if (input.controller_count > 0) {
-      float2 stick = input.controller_states[0].left_stick;
+    if (input.gamepad_count > 0) {
+      float2 stick = input.gamepad_states[0].left_stick;
       accel += tb_f3(stick.x, 0, stick.y);
     }
 
@@ -142,9 +142,9 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     // Jump
     if (move.jump) {
       bool jump_input = input.keyboard.key_space;
-      if (input.controller_count > 0) {
+      if (input.gamepad_count > 0) {
         jump_input = jump_input ||
-                     ((input.controller_states[0].buttons & TB_BUTTON_A) > 0);
+                     ((input.gamepad_states[0].buttons & TB_BUTTON_A) > 0);
       }
       if (jump_input && SDL_fabsf(velocity.y) <= 0.001f) {
         velocity += tb_f3(0, move.jump_velocity, 0);

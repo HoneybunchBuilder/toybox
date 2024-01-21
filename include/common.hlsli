@@ -3,6 +3,10 @@
 #ifndef TB_COMMON_H
 #define TB_COMMON_H
 
+#ifdef __cplusplus
+#define _Static_assert static_assert
+#endif
+
 #include "pi.h"
 #include "simd.h"
 

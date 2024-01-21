@@ -99,9 +99,9 @@ typedef struct TbInputSystem {
   TbKeyboard keyboard;
   TbMouse mouse;
 
-  uint32_t controller_count;
-  SDL_Gamepad *controllers[TB_MAX_GAME_CONTROLLERS];
-  TbGameControllerState controller_states[TB_MAX_GAME_CONTROLLERS];
+  uint32_t gamepad_count;
+  SDL_Gamepad *gamepad[TB_MAX_GAME_CONTROLLERS];
+  TbGameControllerState gamepad_states[TB_MAX_GAME_CONTROLLERS];
 } TbInputSystem;
 
 void tb_register_input_sys(TbWorld *world, SDL_Window *window);
