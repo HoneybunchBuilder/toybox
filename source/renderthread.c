@@ -733,15 +733,6 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 #endif
   }
 
-  float queue_priorities[1] = {0.0};
-  VkDeviceQueueCreateInfo queues[2];
-  queues[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queues[0].pNext = NULL;
-  queues[0].queueFamilyIndex = graphics_queue_family_index;
-  queues[0].queueCount = 1;
-  queues[0].pQueuePriorities = queue_priorities;
-  queues[0].flags = 0;
-
   VkPhysicalDeviceRobustness2FeaturesEXT vk_rob2_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
       .nullDescriptor = VK_TRUE,
@@ -788,24 +779,37 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .shaderImageGatherExtended = VK_TRUE,
   };
 
-  VkDeviceCreateInfo create_info = {0};
-  create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_info.pNext = (const void *)&vk_11_features;
-  create_info.queueCreateInfoCount = 1;
-  create_info.pQueueCreateInfos = queues;
-  create_info.enabledExtensionCount = device_ext_count;
-  create_info.ppEnabledExtensionNames = device_ext_names;
-  create_info.pEnabledFeatures = &vk_features;
-
+  float queue_priorities[1] = {0.0};
+  uint32_t queue_count = 1;
+  VkDeviceQueueCreateInfo queues[2] = {{0}, {0}};
+  queues[0] = (VkDeviceQueueCreateInfo){
+      .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+      .pNext = NULL,
+      .queueFamilyIndex = graphics_queue_family_index,
+      .queueCount = 1,
+      .pQueuePriorities = queue_priorities,
+      .flags = 0,
+  };
   if (present_queue_family_index != graphics_queue_family_index) {
-    queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queues[1].pNext = NULL;
-    queues[1].queueFamilyIndex = present_queue_family_index;
-    queues[1].queueCount = 1;
-    queues[1].pQueuePriorities = queue_priorities;
-    queues[1].flags = 0;
-    create_info.queueCreateInfoCount = 2;
+    queues[1] = (VkDeviceQueueCreateInfo){
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext = NULL,
+        .queueFamilyIndex = present_queue_family_index,
+        .queueCount = 1,
+        .pQueuePriorities = queue_priorities,
+        .flags = 0,
+    };
+    queue_count++;
   }
+  VkDeviceCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+      .pNext = (const void *)&vk_11_features,
+      .queueCreateInfoCount = queue_count,
+      .pQueueCreateInfos = queues,
+      .enabledExtensionCount = device_ext_count,
+      .ppEnabledExtensionNames = device_ext_names,
+      .pEnabledFeatures = &vk_features,
+  };
 
   err = vkCreateDevice(gpu, &create_info, vk_alloc, device);
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create device", false);
