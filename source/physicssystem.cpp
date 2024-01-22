@@ -129,15 +129,31 @@ struct TbContactCallback {
   ecs_entity_t user_e;
 };
 
+struct TbContactEvent {
+  TbContactCallback callback;
+  ecs_entity_t other_e;
+};
+
 class TbContactListener : public JPH::ContactListener {
 public:
   TbContactListener(TbWorld *world) {
     ecs = world->ecs;
     TB_DYN_ARR_RESET(callbacks, world->std_alloc, 16);
+    TB_DYN_ARR_RESET(event_queue, world->std_alloc, 1024);
+
+    callback_mut = SDL_CreateMutex();
+    queue_mut = SDL_CreateMutex();
+  }
+
+  ~TbContactListener() {
+    SDL_DestroyMutex(queue_mut);
+    SDL_DestroyMutex(callback_mut);
   }
 
   void AddCallback(TbContactCallback callback) {
+    SDL_LockMutex(callback_mut);
     TB_DYN_ARR_APPEND(callbacks, callback);
+    SDL_UnlockMutex(callback_mut);
   }
 
   virtual void OnContactAdded(const JPH::Body &inBody1,
@@ -151,6 +167,7 @@ public:
     auto e1 = (ecs_entity_t)inBody1.GetUserData();
     auto e2 = (ecs_entity_t)inBody2.GetUserData();
 
+    SDL_LockMutex(callback_mut);
     TB_DYN_ARR_FOREACH(callbacks, i) {
       auto &callback = TB_DYN_ARR_AT(callbacks, i);
 
@@ -164,8 +181,12 @@ public:
         continue;
       }
 
-      callback.fn(ecs, user_e, other);
+      SDL_LockMutex(queue_mut);
+      TbContactEvent event = {callback, other};
+      TB_DYN_ARR_APPEND(event_queue, event);
+      SDL_UnlockMutex(queue_mut);
     }
+    SDL_UnlockMutex(callback_mut);
   }
 
   virtual void OnContactPersisted(const JPH::Body &inBody1,
@@ -175,9 +196,24 @@ public:
     OnContactAdded(inBody1, inBody2, inManifold, ioSettings);
   }
 
+  void ResolveCallbacks() {
+    SDL_LockMutex(queue_mut);
+    TB_DYN_ARR_FOREACH(event_queue, i) {
+      auto &event = TB_DYN_ARR_AT(event_queue, i);
+      event.callback.fn(ecs, event.callback.user_e, event.other_e);
+    }
+    TB_DYN_ARR_CLEAR(event_queue);
+    SDL_UnlockMutex(queue_mut);
+  }
+
 private:
   ecs_world_t *ecs;
+
+  SDL_Mutex *callback_mut;
   TB_DYN_ARR_OF(TbContactCallback) callbacks;
+
+  SDL_Mutex *queue_mut;
+  TB_DYN_ARR_OF(TbContactEvent) event_queue;
 };
 
 void physics_update_tick(flecs::iter it) {
@@ -189,6 +225,8 @@ void physics_update_tick(flecs::iter it) {
 
   jolt.Update(it.delta_time(), 1, phys_sys->jolt_tmp_alloc,
               phys_sys->jolt_job_sys);
+
+  phys_sys->listener->ResolveCallbacks();
 
   // Iterate through query of every rigidbody and update the entity transform
   // based on the result from the physics sim
