@@ -3,13 +3,13 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "db0473513e5dc73ec6b6f431ff05d2f398eea042"
+    "baseline": "7032c5759f823fc8699a5c37d5f7072464ccb9a8"
   },
   "registries": [
     {
       "kind": "git",
-      "baseline": "d11ac842a330062f28a2bcc674da68ed1862d643",
       "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "d11ac842a330062f28a2bcc674da68ed1862d643",
       "packages": [
         "sdl3"
       ],

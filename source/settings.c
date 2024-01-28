@@ -114,7 +114,7 @@ void tb_register_settings_system(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);
 
-  ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings))
+  ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
 }
 
 void tb_unregister_settings_system(TbWorld *world) {

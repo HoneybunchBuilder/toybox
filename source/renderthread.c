@@ -149,7 +149,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   // Helper for breaking when encountering a non-info message
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    // SDL_TriggerBreakpoint();
+    SDL_TriggerBreakpoint();
   }
 
   return false;
@@ -770,11 +770,14 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .shaderDrawParameters = VK_TRUE,
   };
 
+  // fragmentStoresAndAtomics Must enable to avoid false positive in validation layers
+  // Should be fixed by this PR: https://github.com/KhronosGroup/Vulkan-ValidationLayers/pull/7393
   VkPhysicalDeviceFeatures vk_features = {
       .samplerAnisotropy = VK_TRUE,
       .depthClamp = VK_TRUE,
       .shaderInt16 = VK_TRUE,
       .vertexPipelineStoresAndAtomics = VK_TRUE,
+      .fragmentStoresAndAtomics = VK_TRUE,
       .multiDrawIndirect = VK_TRUE,
       .shaderImageGatherExtended = VK_TRUE,
   };

@@ -102,7 +102,7 @@ void tb_register_noclip_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbNoClipComponent);
 
   ECS_SYSTEM(ecs, noclip_update_tick,
-             EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent)
+             EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
 
   tb_register_noclip_component(ecs);
 }

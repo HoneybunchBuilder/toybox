@@ -3248,10 +3248,10 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
               &sys);
 
   ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
-             TbRenderPipelineSystem(TbRenderPipelineSystem))
+             TbRenderPipelineSystem(TbRenderPipelineSystem));
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
-             TbRenderPipelineSystem(TbRenderPipelineSystem))
+             TbRenderPipelineSystem(TbRenderPipelineSystem));
 }
 
 void tb_unregister_render_pipeline_sys(TbWorld *world) {
