@@ -89,10 +89,10 @@ void tick_settings_ui(ecs_iter_t *it) {
                     4.0f, "%.0f", 0);
       igSliderFloat("Search Threshold", &fxaa->settings.search_threshold, 0.0f,
                     0.5f, "%.4f", 0);
-      igEndChild();
     }
-    igEnd();
+    igEndChild();
   }
+  igEnd();
 }
 
 void tb_register_settings_system(TbWorld *world) {
