@@ -25,6 +25,7 @@
 #include "imguisystem.h"
 #include "inputsystem.h"
 #include "lightsystem.h"
+#include "logsystem.h"
 #include "materialsystem.h"
 #include "meshsystem.h"
 #include "noclipcontrollersystem.h"
@@ -168,6 +169,7 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_imgui_sys(world);
       tb_register_noclip_sys(world);
       tb_register_core_ui_sys(world);
+      tb_register_log_sys(world);
       tb_register_visual_logging_sys(world);
       tb_register_ocean_sys(world);
       tb_register_camera_sys(world);
@@ -255,6 +257,7 @@ void tb_destroy_world(TbWorld *world) {
   tb_unregister_visual_logging_sys(world);
   tb_unregister_ocean_sys(world);
   tb_unregister_sky_sys(world);
+  tb_unregister_log_sys(world);
   tb_unregister_core_ui_sys(world);
   tb_unregister_imgui_sys(world);
   tb_unregister_mesh_sys(world);

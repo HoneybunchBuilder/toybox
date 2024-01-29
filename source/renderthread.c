@@ -8,6 +8,7 @@
 
 #include "tbcommon.h"
 #include "tbengineconfig.h"
+#include "tblog.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvkalloc.h"
@@ -23,7 +24,6 @@ int32_t render_thread(void *data);
 
 bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
                             TbRenderThread *thread) {
-  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Starting Render Thread");
   TB_CHECK_RETURN(desc, "Invalid TbRenderThreadDescriptor", false);
   thread->window = desc->window;
   thread->initialized = SDL_CreateSemaphore(0);
@@ -34,24 +34,28 @@ bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
 }
 
 void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
-  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Signaling Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_PostSemaphore(thread->frame_states[frame_idx].wait_sem);
+  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+               "+++Signaled render thread frame %d+++", frame_idx);
 }
 
 void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
-  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "Waiting for render thread");
+  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+               "~~~Waiting for GPU to frame %d~~~", frame_idx);
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_WaitSemaphore(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
+  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+               "---Done waiting for GPU on frame %d---", frame_idx);
   TracyCZoneEnd(gpu_ctx);
 }
 
 void tb_wait_thread_initialized(TbRenderThread *thread) {
-  // SDL_LogDebug(SDL_LOG_CATEGORY_RENDER,
-  //              "Waiting for render thread to initialize");
+  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
+               "~~~Waiting for render thread to initialize~~~");
   SDL_WaitSemaphore(thread->initialized);
 }
 
@@ -135,16 +139,16 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   (void)pUserData;
 
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-    SDL_LogVerbose(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+    TB_LOG_VERBOSE(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+    TB_LOG_INFO(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   } else if (messageSeverity &
              VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-    SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+    TB_LOG_WARN(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+    TB_LOG_ERROR(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   } else {
-    SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+    TB_LOG_DEBUG(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   }
 
   // Helper for breaking when encountering a non-info message
@@ -637,13 +641,13 @@ void required_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
                          uint32_t prop_count, const char *ext_name) {
   if (device_supports_ext(props, prop_count, ext_name)) {
     SDL_assert((*out_ext_count + 1) < MAX_EXT_COUNT);
-    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading required extension: %s",
+    TB_LOG_INFO(SDL_LOG_CATEGORY_RENDER, "Loading required extension: %s",
                 ext_name);
     out_ext_names[(*out_ext_count)++] = ext_name;
     return;
   }
 
-  SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Missing required extension: %s",
+  TB_LOG_ERROR(SDL_LOG_CATEGORY_RENDER, "Missing required extension: %s",
                ext_name);
   SDL_TriggerBreakpoint();
 }
@@ -653,13 +657,13 @@ bool optional_device_ext(const char **out_ext_names, uint32_t *out_ext_count,
                          uint32_t prop_count, const char *ext_name) {
   if (device_supports_ext(props, prop_count, ext_name)) {
     SDL_assert((*out_ext_count + 1) < MAX_EXT_COUNT);
-    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "Loading optional extension: %s",
+    TB_LOG_INFO(SDL_LOG_CATEGORY_RENDER, "Loading optional extension: %s",
                 ext_name);
     out_ext_names[(*out_ext_count)++] = ext_name;
     return true;
   }
 
-  SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "Optional extension not supported: %s",
+  TB_LOG_WARN(SDL_LOG_CATEGORY_RENDER, "Optional extension not supported: %s",
               ext_name);
   return false;
 }
@@ -770,8 +774,9 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .shaderDrawParameters = VK_TRUE,
   };
 
-  // fragmentStoresAndAtomics Must enable to avoid false positive in validation layers
-  // Should be fixed by this PR: https://github.com/KhronosGroup/Vulkan-ValidationLayers/pull/7393
+  // fragmentStoresAndAtomics Must enable to avoid false positive in validation
+  // layers Should be fixed by this PR:
+  // https://github.com/KhronosGroup/Vulkan-ValidationLayers/pull/7393
   VkPhysicalDeviceFeatures vk_features = {
       .samplerAnisotropy = VK_TRUE,
       .depthClamp = VK_TRUE,

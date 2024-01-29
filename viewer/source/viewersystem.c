@@ -60,7 +60,6 @@ void viewer_update_tick(ecs_iter_t *it) {
 void tb_register_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbViewerSystem);
-  ECS_COMPONENT(ecs, TbCoreUISystem);
 
   TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 

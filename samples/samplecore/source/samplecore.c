@@ -55,7 +55,6 @@ int32_t main(int32_t argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  SDL_Log("%s", "Entered main");
   {
     const char *app_info = "Debug";
     size_t app_info_len = strlen(app_info);
@@ -67,16 +66,12 @@ int32_t main(int32_t argc, char *argv[]) {
   // Create Temporary Arena Allocator
   TbArenaAllocator arena = {0};
   {
-    SDL_Log("%s", "Creating Arena Allocator");
     const size_t arena_alloc_size = 1024ull * 1024ull * 512ull; // 512 MB
     tb_create_arena_alloc("Main Arena", &arena, arena_alloc_size);
   }
 
   TbGeneralAllocator gp_alloc = {0};
-  {
-    SDL_Log("%s", "Creating Standard Allocator");
-    tb_create_gen_alloc(&gp_alloc, "std_alloc");
-  }
+  tb_create_gen_alloc(&gp_alloc, "std_alloc");
 
   TbAllocator std_alloc = gp_alloc.alloc;
   TbAllocator tmp_alloc = arena.alloc;
@@ -87,20 +82,14 @@ int32_t main(int32_t argc, char *argv[]) {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMEPAD |
                            SDL_INIT_HAPTIC);
     if (res != 0) {
-      const char *msg = SDL_GetError();
-      SDL_Log("Failed to initialize SDL with error: %s", msg);
       SDL_TriggerBreakpoint();
       return -1;
     }
-
-    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
   SDL_Window *window = SDL_CreateWindow(
       "Toybox Sample", 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
-    const char *msg = SDL_GetError();
-    SDL_Log("Failed to open window with error: %s", msg);
     SDL_Quit();
     SDL_TriggerBreakpoint();
     return -1;

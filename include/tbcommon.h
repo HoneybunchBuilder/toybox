@@ -5,6 +5,7 @@
 #include "allocator.h"
 #include "profiling.h"
 #include "settings.h"
+#include "tblog.h"
 #include "shadercommon.h"
 #include "simd.h"
 
@@ -15,12 +16,12 @@
 
 #define TB_CHECK(expr, message)                                                \
   if (!(expr)) {                                                               \
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
     SDL_TriggerBreakpoint();                                                   \
   }
 #define TB_CHECK_RETURN(expr, message, ret)                                    \
   if (!(expr)) {                                                               \
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
     SDL_TriggerBreakpoint();                                                   \
     return (ret);                                                              \
   }

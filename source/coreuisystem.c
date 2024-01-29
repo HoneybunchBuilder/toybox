@@ -6,7 +6,7 @@
 #include "tbengineconfig.h"
 #include "tbimgui.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbCoreUISystem);
 
 typedef struct TbCoreUIMenu {
   bool *active;
@@ -88,7 +88,7 @@ void destroy_core_ui_sys(ecs_iter_t *it) {
 void tb_register_core_ui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbImGuiSystem);
-  ECS_COMPONENT(ecs, TbCoreUISystem);
+  ECS_COMPONENT_DEFINE(ecs, TbCoreUISystem);
 
   TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
   TbCoreUISystem sys =
@@ -103,7 +103,6 @@ void tb_register_core_ui_sys(TbWorld *world) {
 
 void tb_unregister_core_ui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbCoreUISystem);
   TbCoreUISystem *sys = ecs_singleton_get_mut(ecs, TbCoreUISystem);
   *sys = (TbCoreUISystem){0};
   ecs_singleton_remove(ecs, TbCoreUISystem);

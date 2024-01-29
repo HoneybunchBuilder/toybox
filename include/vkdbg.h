@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simd.h"
+#include "tblog.h"
 #include "tbsdl.h"
 
 #ifndef FINAL
@@ -24,12 +25,12 @@ void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
 
 #define TB_VK_CHECK(err, message)                                              \
   if ((err) != VK_SUCCESS) {                                                   \
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_RENDER, "%s", (message));                 \
     SDL_TriggerBreakpoint();                                                   \
   }
 #define TB_VK_CHECK_RET(err, message, ret)                                     \
   if ((err) != VK_SUCCESS) {                                                   \
-    SDL_LogError(SDL_LOG_CATEGORY_RENDER, (message));                          \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_RENDER, "%s", (message));                 \
     SDL_TriggerBreakpoint();                                                   \
     return (ret);                                                              \
   }

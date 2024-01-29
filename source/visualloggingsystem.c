@@ -531,15 +531,13 @@ void tb_register_visual_logging_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbCoreUISystem);
   ECS_COMPONENT(ecs, TbVisualLoggingSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
   TbVisualLoggingSystem sys =
       create_visual_logging_system(world->std_alloc, world->tmp_alloc, rnd_sys,
