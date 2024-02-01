@@ -16,8 +16,10 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
   if (sys->enabled) {
     // Min of 32 characters to ensure space for formatting
     tb_auto msg_size = (SDL_strlen(message) + 32);
-    tb_auto msg = tb_alloc_nm_tp(sys->log_alloc, msg_size, char);
+    tb_auto msg = (char *)mi_malloc(msg_size);
     SDL_snprintf(msg, msg_size, "%s", message);
+
+    TracyCMessage(msg, SDL_strlen(msg));
 
     TbLogMessage tb_msg = {tb_log_time, category, priority, msg};
     TB_DYN_ARR_APPEND(sys->messages, tb_msg);
@@ -157,7 +159,7 @@ void tb_unregister_log_sys(TbWorld *world) {
 
   TB_DYN_ARR_FOREACH(sys->messages, i) {
     tb_auto message = TB_DYN_ARR_AT(sys->messages, i);
-    tb_free(sys->log_alloc, message.message);
+    mi_free(message.message);
   }
 
   TB_DYN_ARR_DESTROY(sys->messages);

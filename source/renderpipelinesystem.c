@@ -3202,29 +3202,29 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
   TbRenderSystem *rnd_sys = rp_sys->rnd_sys;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
     TracyCZoneN(resize_ctx, "Resize", true);
-    tb_rnd_on_swapchain_resize(rp_sys);
 
-    rnd_sys->frame_idx = 0;
-
-    // Re-create all render thread semaphores
     for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-      SDL_DestroySemaphore(
-          rnd_sys->render_thread->frame_states[frame_idx].wait_sem);
-      rnd_sys->render_thread->frame_states[frame_idx].wait_sem =
-          SDL_CreateSemaphore(1);
-
+      tb_auto frame_state = &rnd_sys->render_thread->frame_states[frame_idx];
+      // GPU must be finished with resources before we resize
+      VkDevice device = rnd_sys->render_thread->device;
+      if (vkGetFenceStatus(device, frame_state->fence) == VK_NOT_READY) {
+        vkWaitForFences(device, 1, &frame_state->fence, VK_TRUE,
+                        SDL_MAX_UINT64);
+      }
       // Clear out any in flight descriptor updates since this resize will
       // invalidate them
-      TB_DYN_ARR_CLEAR(
-          rnd_sys->render_thread->frame_states[frame_idx].set_write_queue);
+      TB_DYN_ARR_CLEAR(frame_state->set_write_queue);
     }
+
+    tb_rnd_on_swapchain_resize(rp_sys);
 
     // Let the render thread know we're done handling the resize on the
     // main thread
     SDL_PostSemaphore(rnd_sys->render_thread->resized);
 
-    // Let the render thread process frame index 0
-    tb_wait_render(rnd_sys->render_thread, rnd_sys->frame_idx);
+    // Reset back to frame 0
+    rnd_sys->frame_idx = 0;
+
     TracyCZoneEnd(resize_ctx);
   }
 }

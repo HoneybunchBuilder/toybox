@@ -55,7 +55,7 @@ void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
 
 void tb_wait_thread_initialized(TbRenderThread *thread) {
   TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
-               "~~~Waiting for render thread to initialize~~~");
+               "Waiting for render thread to initialize");
   SDL_WaitSemaphore(thread->initialized);
 }
 
@@ -1290,74 +1290,76 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       };
       err = vkBeginCommandBuffer(start_buffer, &begin_info);
       TB_VK_CHECK(err, "Failed to begin command buffer");
-      TracyCVkCollect(gpu_ctx, start_buffer);
     }
 
     // Upload
     {
-      TracyCZoneN(up_ctx, "Record Upload", true);
-      TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1, true);
-      // Upload all buffer requests
-      if (TB_DYN_ARR_SIZE(state->buf_copy_queue) > 0) {
-        TB_DYN_ARR_FOREACH(state->buf_copy_queue, i) {
-          const TbBufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
-          vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
-        }
-        TB_DYN_ARR_CLEAR(state->buf_copy_queue);
-      }
-
-      // Upload all buffer to image requests
-      if (TB_DYN_ARR_SIZE(state->buf_img_copy_queue) > 0) {
-        TB_DYN_ARR_FOREACH(state->buf_img_copy_queue, i) {
-          const TbBufferImageCopy *up =
-              &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
-
-          // Issue an upload command only if the src buffer exists
-          // If it doesn't, assume that we want to only do a transition but
-          // no copy
-          if (up->src != VK_NULL_HANDLE) {
-            VkImageMemoryBarrier barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange = up->range,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .image = up->dst,
-            };
-            vkCmdPipelineBarrier(start_buffer,
-                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0,
-                                 NULL, 1, &barrier);
-
-            // Perform the copy
-            vkCmdCopyBufferToImage(start_buffer, up->src, up->dst,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                   &up->region);
+      {
+        TracyCZoneN(up_ctx, "Record Upload", true);
+        TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1,
+                          true);
+        // Upload all buffer requests
+        if (TB_DYN_ARR_SIZE(state->buf_copy_queue) > 0) {
+          TB_DYN_ARR_FOREACH(state->buf_copy_queue, i) {
+            const TbBufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
+            vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
           }
-
-          // Transition to readable layout
-          {
-            VkImageMemoryBarrier barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange = up->range,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .image = up->dst,
-            };
-            vkCmdPipelineBarrier(start_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                                 NULL, 0, NULL, 1, &barrier);
-          }
+          TB_DYN_ARR_CLEAR(state->buf_copy_queue);
         }
 
-        TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
-      }
+        // Upload all buffer to image requests
+        if (TB_DYN_ARR_SIZE(state->buf_img_copy_queue) > 0) {
+          TB_DYN_ARR_FOREACH(state->buf_img_copy_queue, i) {
+            const TbBufferImageCopy *up =
+                &TB_DYN_ARR_AT(state->buf_img_copy_queue, i);
 
-      TracyCVkZoneEnd(upload_scope);
-      TracyCZoneEnd(up_ctx);
+            // Issue an upload command only if the src buffer exists
+            // If it doesn't, assume that we want to only do a transition but
+            // no copy
+            if (up->src != VK_NULL_HANDLE) {
+              VkImageMemoryBarrier barrier = {
+                  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                  .subresourceRange = up->range,
+                  .srcAccessMask = 0,
+                  .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                  .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                  .image = up->dst,
+              };
+              vkCmdPipelineBarrier(start_buffer,
+                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
+                                   0, NULL, 1, &barrier);
+
+              // Perform the copy
+              vkCmdCopyBufferToImage(start_buffer, up->src, up->dst,
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                     &up->region);
+            }
+
+            // Transition to readable layout
+            {
+              VkImageMemoryBarrier barrier = {
+                  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                  .subresourceRange = up->range,
+                  .srcAccessMask = 0,
+                  .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                  .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .image = up->dst,
+              };
+              vkCmdPipelineBarrier(start_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                                   NULL, 0, NULL, 1, &barrier);
+            }
+          }
+
+          TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
+        }
+
+        TracyCVkZoneEnd(upload_scope);
+        TracyCZoneEnd(up_ctx);
+      }
 
       // Transition swapchain image to color attachment output
       {
@@ -1391,7 +1393,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
     // End upload record
     {
-      TracyCVkCollect(gpu_ctx, start_buffer);
       err = vkEndCommandBuffer(start_buffer);
       TB_VK_CHECK(err, "Failed to end upload command buffer");
     }
@@ -1437,7 +1438,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       TracyCZoneN(pass_ctx, "Record Passes", true);
       pre_final_sem = render_complete_sem;
       uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
-      void *cmd_scope = NULL;
       TB_DYN_ARR_FOREACH(state->pass_contexts, pass_idx) {
         TbPassContext *pass = &TB_DYN_ARR_AT(state->pass_contexts, pass_idx);
 
@@ -1446,9 +1446,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         if (pass->command_buffer_index != last_pass_buffer_idx) {
           // Submit previous command buffer
           if (last_pass_buffer_idx != 0xFFFFFFFF) {
-            if (cmd_scope != NULL) {
-              TracyCVkZoneEnd(cmd_scope);
-            }
             vkEndCommandBuffer(
                 state->pass_command_buffers[last_pass_buffer_idx]);
 
@@ -1491,11 +1488,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
               .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
           };
           vkBeginCommandBuffer(pass_buffer, &begin_info);
-          // TracyCVkNamedZone(gpu_ctx, scope, pass_buffer, "Command Buffer", 1,
-          //                   true);
-#ifdef TRACY_VK_C_ENABLE
-          // cmd_scope = scope;
-#endif
         }
 
         void *pass_scope = record_pass_begin(pass_buffer, gpu_ctx, pass);
@@ -1526,11 +1518,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
         last_pass_buffer_idx = pass->command_buffer_index;
       }
-      if (cmd_scope != NULL) {
-        //  TracyCVkZoneEnd(cmd_scope);
-      }
-      TracyCVkCollect(gpu_ctx,
-                      state->pass_command_buffers[last_pass_buffer_idx]);
       vkEndCommandBuffer(state->pass_command_buffers[last_pass_buffer_idx]);
 
       // Submit last pass work
@@ -1592,7 +1579,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
           end_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
           VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
 
-      TracyCVkCollect(gpu_ctx, end_buffer);
       vkEndCommandBuffer(end_buffer);
 
       TracyCZoneEnd(swap_trans_e);
@@ -1728,35 +1714,48 @@ int32_t render_thread(void *data) {
       TracyCZoneNC(resize_ctx, "Resize", TracyCategoryColorWait, true);
       SDL_WaitSemaphore(thread->resized);
 
+      // Signal frame done before resetting frame_idx
+      TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
+      SDL_PostSemaphore(frame_state->signal_sem);
+
       thread->frame_count = 0;
       thread->frame_idx = 0;
 
+      // Reset all frame state semaphores
+      for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
+        TbFrameState *state = &thread->frame_states[i];
+        SDL_DestroySemaphore(state->wait_sem);
+        SDL_DestroySemaphore(state->signal_sem);
+        state->wait_sem = SDL_CreateSemaphore(0);
+        state->signal_sem = SDL_CreateSemaphore(1);
+      }
+
       thread->swapchain_resize_signal = 0;
       TracyCZoneEnd(resize_ctx);
-    }
+    } else {
+      {
+        // Wait for signal from main thread that there's a frame ready to
+        // process
+        TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
 
-    {
-      // Wait for signal from main thread that there's a frame ready to process
+        TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
+        TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+
+        SDL_WaitSemaphore(frame_state->wait_sem);
+
+        TracyCZoneEnd(wait_ctx);
+      }
+
       TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
+      tick_render_thread(thread, frame_state);
 
-      TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
-      TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
+      // Signal frame done
+      SDL_PostSemaphore(frame_state->signal_sem);
 
-      SDL_WaitSemaphore(frame_state->wait_sem);
-
-      TracyCZoneEnd(wait_ctx);
+      // Increment frame count when done
+      thread->frame_count++;
+      thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
     }
-
-    TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
-
-    tick_render_thread(thread, frame_state);
-
-    // Signal frame done
-    SDL_PostSemaphore(frame_state->signal_sem);
-
-    // Increment frame count when done
-    thread->frame_count++;
-    thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
 
     TracyCZoneEnd(ctx);
   }

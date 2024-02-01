@@ -81,7 +81,6 @@ int32_t main(int32_t argc, char *argv[]) {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMEPAD |
                            SDL_INIT_HAPTIC);
     if (res != 0) {
-      const char *msg = SDL_GetError();
       SDL_TriggerBreakpoint();
       return -1;
     }
@@ -92,7 +91,6 @@ int32_t main(int32_t argc, char *argv[]) {
   SDL_Window *window = SDL_CreateWindow(
       "Toybox Viewer", 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
-    const char *msg = SDL_GetError();
     SDL_Quit();
     SDL_TriggerBreakpoint();
     return -1;
