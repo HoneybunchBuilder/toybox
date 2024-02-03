@@ -132,18 +132,18 @@ void tb_register_log_sys(TbWorld *world) {
 
   tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
-  TbLogSystem sys = {
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbLogSystem);
+  *sys = (TbLogSystem){
       .log_alloc = world->std_alloc,
       .ui = tb_coreui_register_menu(coreui, "Log"),
       .enabled = true,
       .autoscroll = true,
   };
 
-  SDL_LogGetOutputFunction((SDL_LogOutputFunction *)&sys.orig_log_fn,
-                           &sys.orig_userdata);
+  SDL_LogGetOutputFunction((SDL_LogOutputFunction *)sys->orig_log_fn,
+                           &sys->orig_userdata);
 
-  TB_DYN_ARR_RESET(sys.messages, sys.log_alloc, 1024);
-  ecs_singleton_set_ptr(ecs, TbLogSystem, &sys);
+  TB_DYN_ARR_RESET(sys->messages, sys->log_alloc, 1024);
   ECS_SYSTEM(ecs, log_ui_tick, EcsPreUpdate, TbLogSystem(TbLogSystem));
 
   SDL_LogSetOutputFunction(tb_log_hook,
