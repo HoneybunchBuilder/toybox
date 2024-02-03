@@ -688,7 +688,24 @@ void tb_reimport_swapchain(TbRenderTargetSystem *self) {
         self, &TB_DYN_ARR_AT(self->render_targets, self->bloom_mip_chain),
         &rt_desc);
   }
-
+  // LDR target that tonemapping outputs to
+  {
+    TbRenderTargetDescriptor rt_desc = {
+        .name = "LDR Target",
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent =
+            {
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },
+        .mip_count = 1,
+        .layer_count = 1,
+        .view_type = VK_IMAGE_VIEW_TYPE_2D,
+    };
+    resize_render_target(
+        self, &TB_DYN_ARR_AT(self->render_targets, self->ldr_target), &rt_desc);
+  }
   // Finally reimport swapchain
   {
     TbRenderTargetDescriptor rt_desc = {

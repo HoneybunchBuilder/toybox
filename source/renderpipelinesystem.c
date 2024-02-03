@@ -3331,6 +3331,8 @@ void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self) {
     reimport_render_pass(self, self->transparent_color_pass);
     reimport_render_pass(self, self->brightness_pass);
     reimport_render_pass(self, self->bloom_blur_pass);
+    reimport_render_pass(self, self->bloom_downsample_pass);
+    reimport_render_pass(self, self->bloom_upsample_pass);
     reimport_render_pass(self, self->tonemap_pass);
     reimport_render_pass(self, self->fxaa_pass);
     reimport_render_pass(self, self->ui_pass);
