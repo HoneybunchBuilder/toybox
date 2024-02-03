@@ -63,11 +63,15 @@ public:
   virtual bool ShouldCollide(JPH::ObjectLayer inObject1,
                              JPH::ObjectLayer inObject2) const override {
     switch (inObject1) {
-    case Layers::NON_MOVING:
-      return inObject2 ==
-             Layers::MOVING; // Non moving only collides with moving
+    case Layers::STATIC:
+      return inObject2 == Layers::MOVING || inObject2 == Layers::MOVING_MESH;
+    case Layers::STATIC_MESH:
+      return inObject2 == Layers::MOVING;
     case Layers::MOVING:
       return true; // Moving collides with everything
+    case Layers::MOVING_MESH: // Moving mesh may not interact with any other mesh type
+      return inObject2 != Layers::MOVING_MESH &&
+             inObject2 != Layers::STATIC_MESH;
     default:
       return false;
     }
@@ -80,8 +84,10 @@ class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
 public:
   BPLayerInterfaceImpl() {
     // Create a mapping table from object to broad phase layer
-    obj_to_broad_phase[Layers::NON_MOVING] = BroadPhaseLayers::NON_MOVING;
+    obj_to_broad_phase[Layers::STATIC] = BroadPhaseLayers::NON_MOVING;
+    obj_to_broad_phase[Layers::STATIC_MESH] = BroadPhaseLayers::NON_MOVING;
     obj_to_broad_phase[Layers::MOVING] = BroadPhaseLayers::MOVING;
+    obj_to_broad_phase[Layers::MOVING_MESH] = BroadPhaseLayers::MOVING;
   }
 
   uint32_t GetNumBroadPhaseLayers() const override {
@@ -114,9 +120,11 @@ public:
   virtual bool ShouldCollide(JPH::ObjectLayer layer_1,
                              JPH::BroadPhaseLayer layer_2) const override {
     switch (layer_1) {
-    case Layers::NON_MOVING:
+    case Layers::STATIC:
+    case Layers::STATIC_MESH:
       return layer_2 == BroadPhaseLayers::MOVING;
     case Layers::MOVING:
+    case Layers::MOVING_MESH:
       return true;
     default:
       return false;

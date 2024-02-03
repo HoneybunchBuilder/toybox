@@ -249,9 +249,17 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
           if (SDL_strcmp(key, "layer") == 0) {
             const char *layer_str = json_object_get_string(value);
             if (SDL_strcmp(layer_str, "moving") == 0) {
-              layer = Layers::MOVING;
-            } else if (SDL_strcmp(layer_str, "non_moving") == 0) {
-              layer = Layers::NON_MOVING;
+              if (shape->GetType() == JPH::EShapeType::Mesh) {
+                layer = Layers::MOVING_MESH;
+              } else {
+                layer = Layers::MOVING;
+              }
+            } else if (SDL_strcmp(layer_str, "static") == 0 || SDL_strcmp(layer_str, "non_moving") == 0) {
+              if (shape->GetType() == JPH::EShapeType::Mesh) {
+                layer = Layers::STATIC_MESH;
+              } else {
+                layer = Layers::STATIC;
+              }
             } else {
               TB_CHECK(false, "Invalid physics layer");
             }

@@ -11,9 +11,12 @@
 // could have a layer for high detail collision (which is not used by the
 // physics simulation but only if you do collision testing).
 namespace Layers {
-static constexpr JPH::ObjectLayer NON_MOVING = 0;
+	// In this case we distinguish meshes in their own layers so that mesh objects do not collide with each other as that is unsupported
+static constexpr JPH::ObjectLayer STATIC = 0;
 static constexpr JPH::ObjectLayer MOVING = 1;
-static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+static constexpr JPH::ObjectLayer STATIC_MESH = 2;
+static constexpr JPH::ObjectLayer MOVING_MESH = 3;
+static constexpr JPH::ObjectLayer NUM_LAYERS = 4;
 }; // namespace Layers
 
 // Each broadphase layer results in a separate bounding volume tree in the
