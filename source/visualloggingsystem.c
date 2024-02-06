@@ -261,12 +261,12 @@ VkResult create_primitive_pipeline(TbRenderSystem *rnd_sys,
 }
 
 TbVisualLoggingSystem create_visual_logging_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+    TbAllocator gp_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
     TbViewSystem *view_sys, TbRenderPipelineSystem *rp_sys,
     TbMeshSystem *mesh_system, TbCoreUISystem *coreui) {
   TbVisualLoggingSystem sys = {
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .rnd_sys = rnd_sys,
       .view_sys = view_sys,
       .rp_sys = rp_sys,
@@ -274,7 +274,7 @@ TbVisualLoggingSystem create_visual_logging_system(
       .ui = tb_coreui_register_menu(coreui, "Visual Logger"),
   };
 
-  TB_DYN_ARR_RESET(sys.frames, std_alloc, 128);
+  TB_DYN_ARR_RESET(sys.frames, gp_alloc, 128);
 
   // Load some default meshes, load some simple shader pipelines
   VkResult err = VK_SUCCESS;
@@ -285,16 +285,16 @@ TbVisualLoggingSystem create_visual_logging_system(
     char *asset_path = tb_resolve_asset_path(tmp_alloc, "scenes/Sphere.glb");
 
     // Load glb off disk
-    cgltf_data *data = tb_read_glb(std_alloc, asset_path);
+    cgltf_data *data = tb_read_glb(gp_alloc, asset_path);
     TB_CHECK(data, "Failed to load glb");
 
     // Parse expected mesh from glbs
     {
       cgltf_mesh *sphere_mesh = &data->meshes[0];
-      // Must put mesh name on std_alloc for proper cleanup
+      // Must put mesh name on gp_alloc for proper cleanup
       {
         const char *static_name = "TbSphere";
-        char *name = tb_alloc_nm_tp(std_alloc, sizeof(static_name) + 1, char);
+        char *name = tb_alloc_nm_tp(gp_alloc, sizeof(static_name) + 1, char);
         SDL_snprintf(name, sizeof(static_name) + 1, "%s", static_name);
         sphere_mesh->name = name;
       }
@@ -540,7 +540,7 @@ void tb_register_visual_logging_sys(TbWorld *world) {
   tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
   TbVisualLoggingSystem sys =
-      create_visual_logging_system(world->std_alloc, world->tmp_alloc, rnd_sys,
+      create_visual_logging_system(world->gp_alloc, world->tmp_alloc, rnd_sys,
                                    view_sys, rp_sys, mesh_sys, coreui);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbVisualLoggingSystem), TbVisualLoggingSystem, &sys);

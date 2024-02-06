@@ -23,7 +23,7 @@ typedef struct TbWorld TbWorld;
 
 typedef struct TbVisualLoggingSystem {
   TbAllocator tmp_alloc;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
 
   TbRenderSystem *rnd_sys;
   TbViewSystem *view_sys;

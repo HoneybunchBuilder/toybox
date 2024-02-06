@@ -19,7 +19,7 @@ typedef struct TbRenderSystemFrameState {
 } TbRenderSystemFrameState;
 
 typedef struct TbRenderSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
   TbRenderThread *render_thread;
 

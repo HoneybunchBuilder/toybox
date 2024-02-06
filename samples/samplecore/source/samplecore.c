@@ -13,6 +13,7 @@
 #include "tbengineconfig.h"
 #include "world.h"
 
+#include "infomode.h"
 #include "tbcommon.h"
 #include "tbsdl.h"
 #include "tbvk.h"
@@ -71,9 +72,9 @@ int32_t main(int32_t argc, char *argv[]) {
   }
 
   TbGeneralAllocator gp_alloc = {0};
-  tb_create_gen_alloc(&gp_alloc, "std_alloc");
+  tb_create_gen_alloc(&gp_alloc, "gp_alloc");
 
-  TbAllocator std_alloc = gp_alloc.alloc;
+  TbAllocator alloc = gp_alloc.alloc;
   TbAllocator tmp_alloc = arena.alloc;
 
   {
@@ -87,30 +88,28 @@ int32_t main(int32_t argc, char *argv[]) {
     }
   }
 
+  const char *app_name = "Toybox Sample";
+
   SDL_Window *window = SDL_CreateWindow(
-      "Toybox Sample", 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+      app_name, 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     SDL_Quit();
     SDL_TriggerBreakpoint();
     return -1;
   }
 
-  // Must create render thread on the heap like this
-  TbRenderThread *render_thread = tb_alloc_tp(gp_alloc.alloc, TbRenderThread);
-  TbRenderThreadDescriptor render_thread_desc = {
+  TbWorldDesc world_desc = {
+      .name = app_name,
+      .argc = argc,
+      .argv = argv,
+      .gp_alloc = alloc,
+      .tmp_alloc = tmp_alloc,
       .window = window,
   };
-  TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
-           "Failed to start render thread");
+  TbWorld world = tb_create_world(&world_desc);
 
-  // Do not go initializing anything until we know the render thread is ready
-  tb_wait_thread_initialized(render_thread);
-
-  TbWorld world =
-      tb_create_world(std_alloc, tmp_alloc, NULL, render_thread, window);
   tb_sample_on_start(&world);
 
-  // Main loop
   bool running = true;
 
   uint64_t time = 0;
@@ -146,16 +145,8 @@ int32_t main(int32_t argc, char *argv[]) {
   // This doesn't quite work yet
   tb_clear_world(&world);
 
-  // Stop the render thread before we start destroying render objects
-  tb_stop_render_thread(render_thread);
-
+  // This will also close the window that was provded
   tb_destroy_world(&world);
-
-  // Destroying the render thread will also close the window
-  tb_destroy_render_thread(render_thread);
-  tb_free(gp_alloc.alloc, render_thread);
-  render_thread = NULL;
-  window = NULL;
 
   SDL_Quit();
 

@@ -240,12 +240,12 @@ TbTextureId tb_tex_system_create_texture_ktx2(TbTextureSystem *self,
   return id;
 }
 
-TbTextureSystem create_texture_system(TbAllocator std_alloc,
+TbTextureSystem create_texture_system(TbAllocator gp_alloc,
                                       TbAllocator tmp_alloc,
                                       TbRenderSystem *rnd_sys) {
   TbTextureSystem sys = {
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .rnd_sys = rnd_sys,
       .default_color_tex = TbInvalidTextureId,
       .default_normal_tex = TbInvalidTextureId,
@@ -287,7 +287,7 @@ TbTextureSystem create_texture_system(TbAllocator std_alloc,
   }
 
   // Init textures dyn array
-  TB_DYN_ARR_RESET(sys.textures, sys.std_alloc, 4);
+  TB_DYN_ARR_RESET(sys.textures, sys.gp_alloc, 4);
 
   // All white 2x2 RGBA image
   {
@@ -447,7 +447,7 @@ void tb_register_texture_sys(TbWorld *world) {
   ecs_singleton_modified(ecs, TbRenderSystem);
 
   TbTextureSystem sys =
-      create_texture_system(world->std_alloc, world->tmp_alloc, rnd_sys);
+      create_texture_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
 
   ECS_SYSTEM(ecs, tick_texture_system, EcsOnUpdate,
              TbTextureSystem(TbTextureSystem));

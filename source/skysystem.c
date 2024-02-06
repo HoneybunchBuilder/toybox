@@ -717,7 +717,7 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+TbSkySystem create_sky_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                               TbRenderSystem *rnd_sys,
                               TbRenderPipelineSystem *rp_sys,
                               TbRenderTargetSystem *rt_sys,
@@ -728,7 +728,7 @@ TbSkySystem create_sky_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
       .rt_sys = rt_sys,
       .view_sys = view_sys,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
   };
 
   VkResult err = VK_SUCCESS;
@@ -1064,7 +1064,7 @@ void sky_draw_tick(ecs_iter_t *it) {
                     "Failed to create sky system frame state descriptor pool");
 
         state->set_count = write_count;
-        state->sets = tb_realloc_nm_tp(sky_sys->std_alloc, state->sets,
+        state->sets = tb_realloc_nm_tp(sky_sys->gp_alloc, state->sets,
                                        state->set_count, VkDescriptorSet);
       } else {
         vkResetDescriptorPool(rnd_sys->render_thread->device, state->set_pool,
@@ -1292,7 +1292,7 @@ void tb_register_sky_sys(TbWorld *world) {
       ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
   TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
-  TbSkySystem sys = create_sky_system(world->std_alloc, world->tmp_alloc,
+  TbSkySystem sys = create_sky_system(world->gp_alloc, world->tmp_alloc,
                                       rnd_sys, rp_sys, rt_sys, view_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},

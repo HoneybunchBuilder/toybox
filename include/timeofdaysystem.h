@@ -5,7 +5,7 @@
 typedef struct TbWorld TbWorld;
 
 typedef struct TbTimeOfDaySystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
   float time;
 } TbTimeOfDaySystem;

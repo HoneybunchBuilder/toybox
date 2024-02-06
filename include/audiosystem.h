@@ -14,7 +14,7 @@ typedef struct TbMusic TbMusic;
 typedef struct TbSoundEffect TbSoundEffect;
 
 typedef struct TbAudioSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   int32_t frequency;

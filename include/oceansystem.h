@@ -35,7 +35,7 @@ typedef struct TbOceanSystem {
   TbVisualLoggingSystem *vlog;
   TbAudioSystem *audio_system;
   TbAllocator tmp_alloc;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
 
   ecs_query_t *ocean_query;
 

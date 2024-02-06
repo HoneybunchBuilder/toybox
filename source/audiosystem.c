@@ -58,14 +58,14 @@ void tb_register_audio_sys(TbWorld *world) {
   TB_CHECK(ret != 0, "Failed to allocate tracks for audio device");
 
   TbAudioSystem sys = {
-      .std_alloc = world->std_alloc,
+      .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .frequency = freq,
       .format = format,
       .channels = channels,
   };
-  TB_DYN_ARR_RESET(sys.music, sys.std_alloc, 8);
-  TB_DYN_ARR_RESET(sys.sfx, sys.std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.music, sys.gp_alloc, 8);
+  TB_DYN_ARR_RESET(sys.sfx, sys.gp_alloc, 8);
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbAudioSystem), TbAudioSystem, &sys);

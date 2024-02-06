@@ -10,7 +10,7 @@ typedef struct TbCoreUIMenu TbCoreUIMenu;
 typedef struct TbWorld TbWorld;
 
 typedef struct TbCoreUISystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   TbImGuiSystem *imgui;

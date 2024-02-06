@@ -21,7 +21,7 @@ typedef uint32_t TbMaterialPerm;
 static const TbMaterialId InvalidMaterialId = {SDL_MAX_UINT64, SDL_MAX_UINT32};
 
 typedef struct TbMaterialSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   TbRenderSystem *rnd_sys;

@@ -26,7 +26,7 @@ typedef struct TbSkySystem {
   TbRenderPipelineSystem *rp_sys;
   TbRenderTargetSystem *rt_sys;
   TbViewSystem *view_sys;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   ecs_query_t *camera_query;

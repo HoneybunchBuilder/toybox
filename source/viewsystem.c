@@ -12,7 +12,7 @@
 
 #include <flecs.h>
 
-TbViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                 TbRenderSystem *rnd_sys,
                                 TbRenderTargetSystem *rt_sys,
                                 TbTextureSystem *tex_sys) {
@@ -21,10 +21,10 @@ TbViewSystem create_view_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
       .rt_sys = rt_sys,
       .texture_system = tex_sys,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
   };
 
-  TB_DYN_ARR_RESET(sys.views, sys.std_alloc, 1);
+  TB_DYN_ARR_RESET(sys.views, sys.gp_alloc, 1);
 
   VkResult err = VK_SUCCESS;
 
@@ -204,7 +204,7 @@ void view_update_tick(ecs_iter_t *it) {
       TB_VK_CHECK(err,
                   "Failed to create view system frame state descriptor pool");
       state->set_count = view_count;
-      state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
+      state->sets = tb_realloc_nm_tp(sys->gp_alloc, state->sets,
                                      state->set_count, VkDescriptorSet);
     } else {
       vkResetDescriptorPool(rnd_sys->render_thread->device, state->set_pool, 0);
@@ -367,7 +367,7 @@ void tb_register_view_sys(TbWorld *world) {
       ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
   TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
-  TbViewSystem sys = create_view_system(world->std_alloc, world->tmp_alloc,
+  TbViewSystem sys = create_view_system(world->gp_alloc, world->tmp_alloc,
                                         rnd_sys, rt_sys, tex_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);

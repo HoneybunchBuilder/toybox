@@ -35,7 +35,7 @@ typedef struct TbViewSystem {
   TbRenderSystem *rnd_sys;
   TbRenderTargetSystem *rt_sys;
   TbTextureSystem *texture_system;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   VkSampler brdf_sampler;

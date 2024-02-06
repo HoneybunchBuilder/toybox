@@ -13,13 +13,13 @@
 ECS_COMPONENT_DECLARE(TbRenderObject);
 ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
-TbRenderObjectSystem create_render_object_system(TbAllocator std_alloc,
+TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
                                                  TbAllocator tmp_alloc,
                                                  TbRenderSystem *rnd_sys) {
   tb_auto sys = (TbRenderObjectSystem){
       .rnd_sys = rnd_sys,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
   };
 
   // Create render object descriptor set layout
@@ -189,7 +189,7 @@ void tb_register_render_object_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto sys =
-      create_render_object_system(world->std_alloc, world->tmp_alloc, rnd_sys);
+      create_render_object_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
   sys.obj_query =
       ecs_query(ecs, {
                          .filter.terms =

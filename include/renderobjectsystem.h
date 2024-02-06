@@ -41,7 +41,7 @@ typedef struct TbTransformsBuffer {
 
 typedef struct TbRenderObjectSystem {
   TbRenderSystem *rnd_sys;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   VkDescriptorSetLayout set_layout;

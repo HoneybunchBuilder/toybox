@@ -14,7 +14,7 @@ typedef struct ecs_world_t ecs_world_t;
 typedef struct ecs_query_t ecs_query_t;
 
 typedef struct TbShadowSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   TbDrawContextId draw_ctxs[TB_CASCADE_COUNT];

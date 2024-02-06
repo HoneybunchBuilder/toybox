@@ -243,15 +243,15 @@ void reimport_render_target(TbRenderTargetSystem *self, TbRenderTargetId target,
 }
 
 TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
-                                                 TbAllocator std_alloc,
+                                                 TbAllocator gp_alloc,
                                                  TbAllocator tmp_alloc) {
   TbRenderTargetSystem sys = {
       .rnd_sys = rnd_sys,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
   };
 
-  TB_DYN_ARR_RESET(sys.render_targets, sys.std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.render_targets, sys.gp_alloc, 8);
 
   // Create some default render targets
   {
@@ -540,7 +540,7 @@ void tb_register_render_target_sys(TbWorld *world) {
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   TbRenderTargetSystem sys =
-      create_render_target_system(rnd_sys, world->std_alloc, world->tmp_alloc);
+      create_render_target_system(rnd_sys, world->gp_alloc, world->tmp_alloc);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderTargetSystem), TbRenderTargetSystem, &sys);
 }

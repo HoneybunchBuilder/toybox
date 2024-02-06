@@ -35,7 +35,7 @@ typedef struct TbWorld TbWorld;
 typedef struct TbLoadThread {
   SDL_Thread *thread;
 
-  TbGeneralAllocator std_alloc;
+  TbGeneralAllocator gp_alloc;
   TbArenaAllocator loading_arena;
 } TbLoadThread;
 

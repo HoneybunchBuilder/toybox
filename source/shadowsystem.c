@@ -408,7 +408,7 @@ void tb_register_shadow_sys(TbWorld *world) {
   tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbShadowSystem sys = {
-      .std_alloc = world->std_alloc,
+      .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .dir_light_query =
           ecs_query(ecs, {.filter.terms =

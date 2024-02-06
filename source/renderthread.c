@@ -86,13 +86,13 @@ void tb_destroy_render_thread(TbRenderThread *thread) {
   TB_CHECK(thread, "Invalid thread");
 
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
-  TbAllocator std_alloc = thread->std_alloc.alloc;
+  TbAllocator gp_alloc = thread->gp_alloc.alloc;
 
   vmaDestroyAllocator(thread->vma_alloc);
 
   vkDestroyDevice(thread->device, vk_alloc);
 
-  tb_free(std_alloc, thread->queue_props);
+  tb_free(gp_alloc, thread->queue_props);
 
   // Destroy debug messenger
 #ifdef VALIDATION
@@ -488,7 +488,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
   }
 }
 
-bool init_gpu(VkInstance instance, TbAllocator std_alloc, TbAllocator tmp_alloc,
+bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
               VkPhysicalDevice *gpu, VkPhysicalDeviceProperties2 *gpu_props,
               VkPhysicalDeviceDriverProperties *driver_props,
               uint32_t *queue_family_count,
@@ -556,7 +556,7 @@ bool init_gpu(VkInstance instance, TbAllocator std_alloc, TbAllocator tmp_alloc,
   vkGetPhysicalDeviceQueueFamilyProperties(*gpu, queue_family_count, NULL);
 
   (*queue_props) =
-      tb_alloc_nm_tp(std_alloc, *queue_family_count, VkQueueFamilyProperties);
+      tb_alloc_nm_tp(gp_alloc, *queue_family_count, VkQueueFamilyProperties);
   TB_CHECK_RETURN(queue_props, "Failed to allocate queue props", false);
   vkGetPhysicalDeviceQueueFamilyProperties(*gpu, queue_family_count,
                                            (*queue_props));
@@ -1066,7 +1066,7 @@ bool init_render_thread(TbRenderThread *thread) {
     tb_create_arena_alloc("Render Arena", &thread->render_arena,
                           arena_alloc_size);
 
-    tb_create_gen_alloc(&thread->std_alloc, "Render Std Alloc");
+    tb_create_gen_alloc(&thread->gp_alloc, "Render Std Alloc");
   }
 
   tb_auto fn = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
@@ -1079,7 +1079,7 @@ bool init_render_thread(TbRenderThread *thread) {
       .pfnFree = tb_vk_free_fn,
   };
 
-  TbAllocator std_alloc = thread->std_alloc.alloc;
+  TbAllocator gp_alloc = thread->gp_alloc.alloc;
   TbAllocator tmp_alloc = thread->render_arena.alloc;
   const VkAllocationCallbacks *vk_alloc = &thread->vk_alloc;
 
@@ -1090,7 +1090,7 @@ bool init_render_thread(TbRenderThread *thread) {
                                        &thread->debug_utils_messenger),
                   "Failed to create debug messenger", false);
 
-  TB_CHECK_RETURN(init_gpu(thread->instance, std_alloc, tmp_alloc, &thread->gpu,
+  TB_CHECK_RETURN(init_gpu(thread->instance, gp_alloc, tmp_alloc, &thread->gpu,
                            &thread->gpu_props, &thread->driver_props,
                            &thread->queue_family_count, &thread->queue_props,
                            &thread->gpu_features, &thread->gpu_mem_props),

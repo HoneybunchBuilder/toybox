@@ -21,7 +21,7 @@ class ObjectVsBroadPhaseLayerFilterImpl;
 class TbContactListener;
 
 struct TbPhysicsSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   JPH::PhysicsSystem *jolt_phys;

@@ -30,6 +30,10 @@
 extern "C" cgltf_result decompress_buffer_view(TbAllocator alloc,
                                                cgltf_buffer_view *view);
 
+ECS_COMPONENT_DECLARE(TbPhysLayer);
+ECS_COMPONENT_DECLARE(TbPhysMotionType);
+ECS_COMPONENT_DECLARE(TbShapeType);
+ECS_COMPONENT_DECLARE(TbRigidbodyDescriptor);
 ECS_COMPONENT_DECLARE(TbRigidbodyComponent);
 
 JPH::ShapeRefC create_box_shape(float3 half_extents) {
@@ -236,7 +240,7 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
         // HACK:
         // This is stupid.. get the standard allocator from some singleton
         auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
-        shape = create_mesh_shape(mesh_sys->std_alloc, node);
+        shape = create_mesh_shape(mesh_sys->gp_alloc, node);
       } else {
         TB_CHECK(false, "Invalid physics shape");
       }
@@ -254,7 +258,8 @@ bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
               } else {
                 layer = Layers::MOVING;
               }
-            } else if (SDL_strcmp(layer_str, "static") == 0 || SDL_strcmp(layer_str, "non_moving") == 0) {
+            } else if (SDL_strcmp(layer_str, "static") == 0 ||
+                       SDL_strcmp(layer_str, "non_moving") == 0) {
               if (shape->GetType() == JPH::EShapeType::Mesh) {
                 layer = Layers::STATIC_MESH;
               } else {
@@ -388,6 +393,10 @@ void tb_register_rigidbody_component(TbWorld *world) {
   // Is there a better way to avoid having to use this macro in C++?
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
+  ECS_COMPONENT_DEFINE(world->ecs, TbPhysLayer);
+  ECS_COMPONENT_DEFINE(world->ecs, TbPhysMotionType);
+  ECS_COMPONENT_DEFINE(world->ecs, TbShapeType);
+  ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyDescriptor);
   ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyComponent);
 #pragma clang diagnostic pop
 
@@ -399,4 +408,63 @@ void tb_register_rigidbody_component(TbWorld *world) {
 
   // Sets the TbAssetSystem component on the TbPhysicsSystem singleton entity
   ecs.entity<TbPhysicsSystem>().set<TbAssetSystem>(asset);
+
+// Register descriptor with the reflection system
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Waddress-of-temporary"
+#pragma clang diagnostic ignored "-Wc99-extensions"
+  ecs_enum(ecs.c_ptr(),
+           {.entity = ecs_id(TbPhysLayer),
+            .constants = {
+                {.name = "static", .value = TB_PHYS_LAYER_STATIC},
+                {.name = "static_mesh", .value = TB_PHYS_LAYER_STATIC_MESH},
+                {.name = "moving", .value = TB_PHYS_LAYER_MOVING},
+                {.name = "moving_mesh", .value = TB_PHYS_LAYER_MOVING_MESH},
+            }});
+  ecs_enum(ecs.c_ptr(),
+           {.entity = ecs_id(TbPhysMotionType),
+            .constants = {
+                {.name = "static", .value = TB_PHYS_MOTION_STATIC},
+                {.name = "kinematic", .value = TB_PHYS_MOTION_KINEMATIC},
+                {.name = "dynamic", .value = TB_PHYS_MOTION_DYNAMIC},
+            }});
+  ecs_enum(ecs.c_ptr(),
+           {.entity = ecs_id(TbShapeType),
+            .constants = {
+                {.name = "box", .value = TB_PHYS_SHAPE_BOX},
+                {.name = "capsule", .value = TB_PHYS_SHAPE_CAPSULE},
+                {.name = "cylinder", .value = TB_PHYS_SHAPE_CYLINDER},
+                {.name = "mesh", .value = TB_PHYS_SHAPE_MESH},
+            }});
+
+  ecs_struct(ecs.c_ptr(),
+             {.entity = ecs_id(TbRigidbodyDescriptor),
+              .members = {
+                  {.name = "layer", .type = ecs_id(TbPhysLayer)},
+                  {.name = "motion_type", .type = ecs_id(TbPhysMotionType)},
+                  {.name = "shape_type", .type = ecs_id(TbShapeType)},
+                  {.name = "sensor", .type = ecs_id(ecs_bool_t)},
+                  {.name = "rot_x", .type = ecs_id(ecs_bool_t)},
+                  {.name = "rot_y", .type = ecs_id(ecs_bool_t)},
+                  {.name = "rot_z", .type = ecs_id(ecs_bool_t)},
+                  {.name = "trans_x", .type = ecs_id(ecs_bool_t)},
+                  {.name = "trans_y", .type = ecs_id(ecs_bool_t)},
+                  {.name = "trans_z", .type = ecs_id(ecs_bool_t)},
+                  {.name = "radius",
+                   .type = ecs_id(ecs_f32_t),
+                   .range = {0.0f, FLT_MAX}},
+                  {.name = "half_height",
+                   .type = ecs_id(ecs_f32_t),
+                   .range = {0.0f, FLT_MAX}},
+                  {.name = "extent_x",
+                   .type = ecs_id(ecs_f32_t),
+                   .range = {0.0f, FLT_MAX}},
+                  {.name = "extent_y",
+                   .type = ecs_id(ecs_f32_t),
+                   .range = {0.0f, FLT_MAX}},
+                  {.name = "extent_z",
+                   .type = ecs_id(ecs_f32_t),
+                   .range = {0.0f, FLT_MAX}},
+              }});
+#pragma clang diagnostic pop
 }

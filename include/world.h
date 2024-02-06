@@ -9,28 +9,41 @@
 #include <SDL3/SDL_stdinc.h>
 
 typedef struct ecs_world_t ecs_world_t;
+typedef struct TbWorld TbWorld;
+typedef struct TbRenderThread TbRenderThread;
+typedef struct SDL_Window SDL_Window;
 
 static const uint32_t TbInvalidEntityId = 0;
 static const uint32_t TbInvalidComponentId = 0;
 
+typedef void (^TbCreateWorldSystemsFn)(TbWorld *, TbRenderThread *,
+                                       SDL_Window *);
+extern TbCreateWorldSystemsFn tb_create_default_world;
+
+typedef void (^TbCreateSystemFn)(TbWorld *, SDL_Window *);
+typedef void (^TbDestroySystemFn)(TbWorld *);
+extern void tb_register_system(const char *name, TbCreateSystemFn create_fn,
+                               TbDestroySystemFn destroy_fn);
+
+typedef struct TbWorldDesc {
+  const char *name;
+  int32_t argc;
+  char **argv;
+  SDL_Window *window;
+  TbAllocator gp_alloc;
+  TbAllocator tmp_alloc;
+  TbCreateWorldSystemsFn create_fn;
+} TbWorldDesc;
+
 typedef struct TbWorld {
   ecs_world_t *ecs;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
+  TbRenderThread *render_thread;
   TB_DYN_ARR_OF(TbScene) scenes;
 } TbWorld;
 
-typedef struct TbRenderThread TbRenderThread;
-typedef struct SDL_Window SDL_Window;
-
-typedef void (^TbCreateWorldSystemsFn)(TbWorld *, TbRenderThread *,
-                                       SDL_Window *);
-
-extern TbCreateWorldSystemsFn tb_create_default_world;
-
-TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                        TbCreateWorldSystemsFn create_fn,
-                        TbRenderThread *render_thread, SDL_Window *window);
+TbWorld tb_create_world(const TbWorldDesc *desc);
 bool tb_tick_world(TbWorld *world, float delta_seconds);
 void tb_clear_world(TbWorld *world);
 void tb_destroy_world(TbWorld *world);

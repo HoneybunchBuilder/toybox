@@ -455,11 +455,11 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 TbMeshSystem create_mesh_system_internal(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+    TbAllocator gp_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
     TbMaterialSystem *mat_sys, TbTextureSystem *tex_sys, TbViewSystem *view_sys,
     TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
       .material_system = mat_sys,
@@ -467,7 +467,7 @@ TbMeshSystem create_mesh_system_internal(
       .render_object_system = ro_sys,
       .rp_sys = rp_sys,
   };
-  TB_DYN_ARR_RESET(sys.meshes, std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.meshes, gp_alloc, 8);
   TbRenderPassId prepass_id = rp_sys->opaque_depth_normal_pass;
   TbRenderPassId opaque_pass_id = rp_sys->opaque_color_pass;
   TbRenderPassId transparent_pass_id = rp_sys->transparent_color_pass;
@@ -881,7 +881,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
             tb_calc_aligned_size(indices->count, indices->stride, 16);
 
         // Decode the buffer
-        cgltf_result res = decompress_buffer_view(self->std_alloc, view);
+        cgltf_result res = decompress_buffer_view(self->gp_alloc, view);
         TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
         void *src = ((uint8_t *)view->data) + indices->offset;
@@ -931,7 +931,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
         size_t src_size = accessor->stride * accessor->count;
 
         // Decode the buffer
-        cgltf_result res = decompress_buffer_view(self->std_alloc, view);
+        cgltf_result res = decompress_buffer_view(self->gp_alloc, view);
         TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
         void *src = ((uint8_t *)view->data) + accessor->offset;
@@ -1505,7 +1505,7 @@ void tb_register_mesh_sys(TbWorld *world) {
   tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
   tb_auto sys =
-      create_mesh_system_internal(world->std_alloc, world->tmp_alloc, rnd_sys,
+      create_mesh_system_internal(world->gp_alloc, world->tmp_alloc, rnd_sys,
                                   mat_sys, tex_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},

@@ -31,18 +31,18 @@ uint32_t find_mat_by_hash(TbMaterialSystem *self, uint64_t id) {
   return SDL_MAX_UINT32;
 }
 
-TbMaterialSystem create_material_system(TbAllocator std_alloc,
+TbMaterialSystem create_material_system(TbAllocator gp_alloc,
                                         TbAllocator tmp_alloc,
                                         TbRenderSystem *rnd_sys,
                                         TbTextureSystem *tex_sys) {
   TbMaterialSystem sys = {
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
       .texture_system = tex_sys,
   };
 
-  TB_DYN_ARR_RESET(sys.materials, std_alloc, 1);
+  TB_DYN_ARR_RESET(sys.materials, gp_alloc, 1);
 
   // Create immutable sampler for materials
   {
@@ -121,7 +121,7 @@ TbMaterialSystem create_material_system(TbAllocator std_alloc,
   // It uses the metallic roughness flow
   // it does not supply textures, those will be provided by default since
   // it is marked to use pbr metal rough but provides no texture views
-  cgltf_material *default_mat = tb_alloc_tp(std_alloc, cgltf_material);
+  cgltf_material *default_mat = tb_alloc_tp(gp_alloc, cgltf_material);
   *default_mat = (cgltf_material){
       .name = "default",
       .has_pbr_metallic_roughness = true,
@@ -140,7 +140,7 @@ TbMaterialSystem create_material_system(TbAllocator std_alloc,
 void destroy_material_system(TbMaterialSystem *self) {
   TbRenderSystem *rnd_sys = self->rnd_sys;
 
-  tb_free(self->std_alloc, (void *)self->default_material);
+  tb_free(self->gp_alloc, (void *)self->default_material);
 
   tb_rnd_destroy_set_layout(rnd_sys, self->set_layout);
   tb_rnd_destroy_sampler(rnd_sys, self->sampler);
@@ -241,7 +241,7 @@ void tb_register_material_sys(TbWorld *world) {
   TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
   TbMaterialSystem sys = create_material_system(
-      world->std_alloc, world->tmp_alloc, rnd_sys, tex_sys);
+      world->gp_alloc, world->tmp_alloc, rnd_sys, tex_sys);
 
   ECS_SYSTEM(ecs, tick_material_system, EcsOnUpdate,
              TbMaterialSystem(TbMaterialSystem));

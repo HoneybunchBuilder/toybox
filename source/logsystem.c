@@ -134,7 +134,7 @@ void tb_register_log_sys(TbWorld *world) {
 
   tb_auto sys = ecs_singleton_get_mut(ecs, TbLogSystem);
   *sys = (TbLogSystem){
-      .log_alloc = world->std_alloc,
+      .log_alloc = world->gp_alloc,
       .ui = tb_coreui_register_menu(coreui, "Log"),
       .enabled = true,
       .autoscroll = true,

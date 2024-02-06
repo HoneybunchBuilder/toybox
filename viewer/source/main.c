@@ -70,9 +70,9 @@ int32_t main(int32_t argc, char *argv[]) {
   }
 
   TbGeneralAllocator gp_alloc = {0};
-  tb_create_gen_alloc(&gp_alloc, "std_alloc");
+  tb_create_gen_alloc(&gp_alloc, "gp_alloc");
 
-  TbAllocator std_alloc = gp_alloc.alloc;
+  TbAllocator alloc = gp_alloc.alloc;
   TbAllocator tmp_alloc = arena.alloc;
 
   {
@@ -88,24 +88,15 @@ int32_t main(int32_t argc, char *argv[]) {
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
+  const char *app_name = "Toybox Viewer";
+
   SDL_Window *window = SDL_CreateWindow(
-      "Toybox Viewer", 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+      app_name, 1920, 1080, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     SDL_Quit();
     SDL_TriggerBreakpoint();
     return -1;
   }
-
-  // Must create render thread on the heap like this
-  TbRenderThread *render_thread = tb_alloc_tp(std_alloc, TbRenderThread);
-  TbRenderThreadDescriptor render_thread_desc = {
-      .window = window,
-  };
-  TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
-           "Failed to start render thread");
-
-  // Do not go initializing anything until we know the render thread is ready
-  tb_wait_thread_initialized(render_thread);
 
   // Create the world with the additional viewer system
   tb_auto create_world =
@@ -113,8 +104,16 @@ int32_t main(int32_t argc, char *argv[]) {
         tb_create_default_world(world, thread, window);
         tb_register_viewer_sys(world);
       };
-  TbWorld world = tb_create_world(std_alloc, tmp_alloc, create_world,
-                                  render_thread, window);
+  TbWorldDesc world_desc = {
+      .name = app_name,
+      .argc = argc,
+      .argv = argv,
+      .gp_alloc = alloc,
+      .tmp_alloc = tmp_alloc,
+      .window = window,
+      .create_fn = create_world,
+  };
+  TbWorld world = tb_create_world(&world_desc);
 
   // Main loop
   bool running = true;
@@ -175,19 +174,7 @@ int32_t main(int32_t argc, char *argv[]) {
 
   tb_clear_world(&world);
 
-  // Stop the render thread before we start destroying render objects
-  tb_stop_render_thread(render_thread);
-
-  // Unregister app specific systems
-  tb_unregister_viewer_sys(&world);
-
   tb_destroy_world(&world);
-
-  // Destroying the render thread will also close the window
-  tb_destroy_render_thread(render_thread);
-  tb_free(std_alloc, render_thread);
-  render_thread = NULL;
-  window = NULL;
 
   SDL_Quit();
 

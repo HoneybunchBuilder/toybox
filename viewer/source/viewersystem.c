@@ -64,7 +64,7 @@ void tb_register_viewer_sys(TbWorld *world) {
   TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
   TbViewerSystem sys = {
-      .std_alloc = world->std_alloc,
+      .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .viewer_menu = tb_coreui_register_menu(coreui, "Viewer"),
       .selected_scene = 0,

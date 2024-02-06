@@ -44,7 +44,7 @@ char *tb_resolve_asset_path(TbAllocator tmp_alloc, const char *source_name) {
   return asset_path;
 }
 
-cgltf_data *tb_read_glb(TbAllocator std_alloc, const char *path) {
+cgltf_data *tb_read_glb(TbAllocator gp_alloc, const char *path) {
   cgltf_data *data = NULL;
 
   SDL_RWops *glb_file = SDL_RWFromFile(path, "rb");
@@ -53,9 +53,9 @@ cgltf_data *tb_read_glb(TbAllocator std_alloc, const char *path) {
   cgltf_options options = {.type = cgltf_file_type_glb,
                            .memory =
                                {
-                                   .user_data = std_alloc.user_data,
-                                   .alloc_func = std_alloc.alloc,
-                                   .free_func = std_alloc.free,
+                                   .user_data = gp_alloc.user_data,
+                                   .alloc_func = gp_alloc.alloc,
+                                   .free_func = gp_alloc.free,
                                },
                            .file = {
                                .read = sdl_read_glb,

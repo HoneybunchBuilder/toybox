@@ -48,7 +48,7 @@ typedef struct TbDispatchContextDescriptor {
 typedef struct TbDispatchContext TbDispatchContext;
 
 typedef struct TbRenderPipelineSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   TbRenderSystem *rnd_sys;

@@ -974,7 +974,7 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
       VkRenderingAttachmentInfo *depth_attachment = NULL;
       VkRenderingAttachmentInfo *stencil_attachment = NULL;
       VkRenderingAttachmentInfo *color_attachments = tb_alloc_nm_tp(
-          self->std_alloc, TB_MAX_ATTACHMENTS, VkRenderingAttachmentInfo);
+          self->gp_alloc, TB_MAX_ATTACHMENTS, VkRenderingAttachmentInfo);
 
       for (uint32_t rt_idx = 0; rt_idx < pass->attach_count; ++rt_idx) {
         const TbAttachmentInfo *attachment = &create_info->attachments[rt_idx];
@@ -989,7 +989,7 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
 
         if (format == VK_FORMAT_D32_SFLOAT) {
           depth_attachment =
-              tb_alloc_tp(self->std_alloc, VkRenderingAttachmentInfo);
+              tb_alloc_tp(self->gp_alloc, VkRenderingAttachmentInfo);
           info = depth_attachment;
           layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         } else {
@@ -1023,18 +1023,18 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
 }
 
 TbRenderPipelineSystem create_render_pipeline_system(
-    TbAllocator std_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+    TbAllocator gp_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
     TbRenderTargetSystem *rt_sys, TbViewSystem *view_sys) {
   TbRenderPipelineSystem sys = {
       .rnd_sys = rnd_sys,
       .rt_sys = rt_sys,
       .view_sys = view_sys,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
   };
 
   // Initialize the render pass array
-  TB_DYN_ARR_RESET(sys.render_passes, sys.std_alloc, 8);
+  TB_DYN_ARR_RESET(sys.render_passes, sys.gp_alloc, 8);
 
   // Create some default passes
   {
@@ -2226,7 +2226,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
 
   // Calculate pass order
   const uint32_t pass_count = TB_DYN_ARR_SIZE(sys.render_passes);
-  sys.pass_order = tb_alloc_nm_tp(sys.std_alloc, pass_count, uint32_t);
+  sys.pass_order = tb_alloc_nm_tp(sys.gp_alloc, pass_count, uint32_t);
 
   sort_pass_graph(&sys);
 
@@ -2643,7 +2643,7 @@ void destroy_render_pipeline_system(TbRenderPipelineSystem *self) {
   }
 
   TB_DYN_ARR_DESTROY(self->render_passes);
-  tb_free(self->std_alloc, self->pass_order);
+  tb_free(self->gp_alloc, self->pass_order);
 
   *self = (TbRenderPipelineSystem){0};
 }
@@ -3242,7 +3242,7 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
   TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbRenderPipelineSystem sys = create_render_pipeline_system(
-      world->std_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
+      world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderPipelineSystem), TbRenderPipelineSystem,
               &sys);
@@ -3451,10 +3451,10 @@ void tb_render_pipeline_issue_draw_batch(TbRenderPipelineSystem *self,
     const uint32_t new_max = new_count * 2;
     // We want to realloc the user batches first because their pointers
     // changing is what we have to fix up
-    ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
+    ctx->user_batches = tb_realloc(self->gp_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
     ctx->batches =
-        tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max, TbDrawBatch);
+        tb_realloc_nm_tp(self->gp_alloc, ctx->batches, new_max, TbDrawBatch);
     ctx->batch_max = new_max;
 
     // Pointer Fixup
@@ -3475,7 +3475,7 @@ void tb_render_pipeline_issue_draw_batch(TbRenderPipelineSystem *self,
     // Must always copy draw data
     void *draws = write_batch->draws;
     if (batch->draw_count > write_batch->draw_max) {
-      draws = tb_realloc(self->std_alloc, draws,
+      draws = tb_realloc(self->gp_alloc, draws,
                          batch->draw_count * batch->draw_size);
     }
     SDL_memcpy(draws, batch->draws, batch->draw_count * batch->draw_size);
@@ -3510,9 +3510,9 @@ void tb_render_pipeline_issue_dispatch_batch(TbRenderPipelineSystem *self,
     const uint32_t new_max = new_count * 2;
     // We want to realloc the user batches first because their pointers
     // changing is what we have to fix up
-    ctx->user_batches = tb_realloc(self->std_alloc, ctx->user_batches,
+    ctx->user_batches = tb_realloc(self->gp_alloc, ctx->user_batches,
                                    new_max * ctx->user_batch_size);
-    ctx->batches = tb_realloc_nm_tp(self->std_alloc, ctx->batches, new_max,
+    ctx->batches = tb_realloc_nm_tp(self->gp_alloc, ctx->batches, new_max,
                                     TbDispatchBatch);
     // Pointer Fixup
     for (uint32_t i = 0; i < batch_count; ++i) {

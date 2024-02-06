@@ -6,7 +6,7 @@ typedef struct TbWorld TbWorld;
 
 typedef struct TbViewerSystem {
   TbAllocator tmp_alloc;
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
 
   bool *viewer_menu;
   bool load_scene_signal;

@@ -26,7 +26,7 @@ typedef enum TbTextureUsage {
 } TbTextureUsage;
 
 typedef struct TbTextureSystem {
-  TbAllocator std_alloc;
+  TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
   TbRenderSystem *rnd_sys;

@@ -146,8 +146,8 @@ class TbContactListener : public JPH::ContactListener {
 public:
   TbContactListener(TbWorld *world) {
     ecs = world->ecs;
-    TB_DYN_ARR_RESET(callbacks, world->std_alloc, 16);
-    TB_DYN_ARR_RESET(event_queue, world->std_alloc, 1024);
+    TB_DYN_ARR_RESET(callbacks, world->gp_alloc, 16);
+    TB_DYN_ARR_RESET(event_queue, world->gp_alloc, 1024);
 
     callback_mut = SDL_CreateMutex();
     queue_mut = SDL_CreateMutex();
@@ -272,7 +272,7 @@ void tb_register_physics_sys(TbWorld *world) {
   JPH::RegisterTypes();
 
   TbPhysicsSystem sys = {
-      .std_alloc = world->std_alloc,
+      .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .jolt_phys = new JPH::PhysicsSystem(),
       .jolt_tmp_alloc = new JPH::TempAllocatorImpl(10 * 1024 * 1024),

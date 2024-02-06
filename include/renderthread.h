@@ -133,7 +133,7 @@ typedef struct TbRenderThread {
   SDL_Semaphore *initialized;
   SDL_Semaphore *resized;
 
-  TbGeneralAllocator std_alloc;
+  TbGeneralAllocator gp_alloc;
   TbArenaAllocator render_arena;
 
   mi_heap_t *vk_heap;

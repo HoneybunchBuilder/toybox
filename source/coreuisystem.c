@@ -13,16 +13,16 @@ typedef struct TbCoreUIMenu {
   const char *name;
 } TbCoreUIMenu;
 
-TbCoreUISystem create_coreui_system(TbAllocator std_alloc,
+TbCoreUISystem create_coreui_system(TbAllocator gp_alloc,
                                     TbAllocator tmp_alloc,
                                     TbImGuiSystem *imgui_system) {
   TbCoreUISystem sys = {
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .imgui = imgui_system,
   };
 
-  TB_DYN_ARR_RESET(sys.menu_registry, std_alloc, 1);
+  TB_DYN_ARR_RESET(sys.menu_registry, gp_alloc, 1);
 
   sys.metrics = tb_coreui_register_menu(&sys, "Metrics");
   sys.about = tb_coreui_register_menu(&sys, "About");
@@ -34,7 +34,7 @@ void destroy_coreui_system(TbCoreUISystem *self) {
   // Clean up registry
   TB_DYN_ARR_FOREACH(self->menu_registry, i) {
     TbCoreUIMenu menu = TB_DYN_ARR_AT(self->menu_registry, i);
-    tb_free(self->std_alloc, menu.active);
+    tb_free(self->gp_alloc, menu.active);
   }
   TB_DYN_ARR_DESTROY(self->menu_registry);
   *self = (TbCoreUISystem){0};
@@ -92,7 +92,7 @@ void tb_register_core_ui_sys(TbWorld *world) {
 
   TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
   TbCoreUISystem sys =
-      create_coreui_system(world->std_alloc, world->tmp_alloc, imgui_sys);
+      create_coreui_system(world->gp_alloc, world->tmp_alloc, imgui_sys);
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbCoreUISystem), TbCoreUISystem, &sys);
@@ -110,7 +110,7 @@ void tb_unregister_core_ui_sys(TbWorld *world) {
 
 bool *tb_coreui_register_menu(TbCoreUISystem *self, const char *name) {
   // Store the bool on the heap so it survives registry resizes
-  bool *active = tb_alloc_tp(self->std_alloc, bool);
+  bool *active = tb_alloc_tp(self->gp_alloc, bool);
   TbCoreUIMenu menu = {
       .active = active,
       .name = name,

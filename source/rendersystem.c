@@ -37,13 +37,13 @@ void tb_flush_alloc(TbRenderSystem *self, VmaAllocation alloc) {
   }
 }
 
-TbRenderSystem create_render_system(TbAllocator std_alloc,
+TbRenderSystem create_render_system(TbAllocator gp_alloc,
                                     TbAllocator tmp_alloc,
                                     TbRenderThread *thread) {
   TB_CHECK(thread, "Invalid TbRenderThread");
 
   TbRenderSystem sys = {
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .render_thread = thread,
   };
@@ -54,9 +54,9 @@ TbRenderSystem create_render_system(TbAllocator std_alloc,
   // sloppy
   for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     TbFrameState *state = &sys.render_thread->frame_states[state_idx];
-    TB_DYN_ARR_RESET(state->pass_contexts, sys.std_alloc, 1);
-    TB_DYN_ARR_RESET(state->draw_contexts, sys.std_alloc, 1);
-    TB_DYN_ARR_RESET(state->dispatch_contexts, sys.std_alloc, 1);
+    TB_DYN_ARR_RESET(state->pass_contexts, sys.gp_alloc, 1);
+    TB_DYN_ARR_RESET(state->draw_contexts, sys.gp_alloc, 1);
+    TB_DYN_ARR_RESET(state->dispatch_contexts, sys.gp_alloc, 1);
   }
 
   // Should be safe to assume that the render thread is initialized by now
@@ -124,9 +124,9 @@ TbRenderSystem create_render_system(TbAllocator std_alloc,
     for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
       TbRenderSystemFrameState *state = &sys.frame_states[state_idx];
 
-      TB_DYN_ARR_RESET(state->set_write_queue, sys.std_alloc, 1);
-      TB_DYN_ARR_RESET(state->buf_copy_queue, sys.std_alloc, 1);
-      TB_DYN_ARR_RESET(state->buf_img_copy_queue, sys.std_alloc, 1);
+      TB_DYN_ARR_RESET(state->set_write_queue, sys.gp_alloc, 1);
+      TB_DYN_ARR_RESET(state->buf_copy_queue, sys.gp_alloc, 1);
+      TB_DYN_ARR_RESET(state->buf_img_copy_queue, sys.gp_alloc, 1);
 
       // Allocate tmp host buffer
       {
@@ -336,7 +336,7 @@ void tb_register_render_sys(TbWorld *world, TbRenderThread *render_thread) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
   TbRenderSystem sys =
-      create_render_system(world->std_alloc, world->tmp_alloc, render_thread);
+      create_render_system(world->gp_alloc, world->tmp_alloc, render_thread);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderSystem), TbRenderSystem, &sys);
 
@@ -938,7 +938,7 @@ VkResult tb_rnd_frame_desc_pool_tick(
         tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->set_pool);
     TB_VK_CHECK(err, "Failed to create pool");
     pool->set_count = set_count;
-    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->set_count,
+    pool->sets = tb_realloc_nm_tp(self->gp_alloc, pool->sets, pool->set_count,
                                   VkDescriptorSet);
   } else {
     vkResetDescriptorPool(self->render_thread->device, pool->set_pool, 0);
@@ -981,7 +981,7 @@ VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
     err = tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->pool);
     TB_VK_CHECK(err, "Failed to create pool");
     pool->count = set_count;
-    pool->sets = tb_realloc_nm_tp(self->std_alloc, pool->sets, pool->count,
+    pool->sets = tb_realloc_nm_tp(self->gp_alloc, pool->sets, pool->count,
                                   VkDescriptorSet);
   } else {
     vkResetDescriptorPool(self->render_thread->device, pool->pool, 0);

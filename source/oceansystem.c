@@ -311,13 +311,13 @@ VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
 }
 
 TbOceanSystem
-create_ocean_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+create_ocean_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
                     TbMeshSystem *mesh_system, TbViewSystem *view_sys,
                     TbRenderTargetSystem *rt_sys, TbVisualLoggingSystem *vlog,
                     TbAudioSystem *audio_system) {
   TbOceanSystem sys = {
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
       .rp_sys = rp_sys,
@@ -351,16 +351,16 @@ create_ocean_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
   char *asset_path = tb_resolve_asset_path(sys.tmp_alloc, "scenes/Ocean.glb");
 
   // Load glb off disk
-  cgltf_data *data = tb_read_glb(sys.std_alloc, asset_path);
+  cgltf_data *data = tb_read_glb(sys.gp_alloc, asset_path);
   TB_CHECK(data, "Failed to load glb");
 
   // Parse expected mesh from glb
   {
     cgltf_mesh *ocean_mesh = &data->meshes[0];
-    // Must put mesh name on std_alloc for proper cleanup
+    // Must put mesh name on gp_alloc for proper cleanup
     {
       const char *static_name = "Ocean";
-      char *name = tb_alloc_nm_tp(sys.std_alloc, sizeof(static_name) + 1, char);
+      char *name = tb_alloc_nm_tp(sys.gp_alloc, sizeof(static_name) + 1, char);
       SDL_snprintf(name, sizeof(static_name), "%s", static_name);
       ocean_mesh->name = name;
     }
@@ -976,7 +976,7 @@ void tb_register_ocean_sys(TbWorld *world) {
   TbAudioSystem *aud_sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
 
   TbOceanSystem sys =
-      create_ocean_system(world->std_alloc, world->tmp_alloc, rnd_sys, rp_sys,
+      create_ocean_system(world->gp_alloc, world->tmp_alloc, rnd_sys, rp_sys,
                           mesh_sys, view_sys, rt_sys, vlog, aud_sys);
 
   // Create ocean query for the draw

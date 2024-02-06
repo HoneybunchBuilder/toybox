@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "assets.h"
 #include "assetsystem.h"
+#include "infomode.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -48,6 +49,16 @@
 #include <flecs.h>
 #include <json.h>
 #include <mimalloc.h>
+
+typedef struct TbSystemRegistry {
+  char **names;
+  int32_t sys_count;
+  TbCreateSystemFn *create_fns;
+  TbDestroySystemFn *destroy_fns;
+} TbSystemRegistry;
+
+void tb_register_system(const char *name, TbCreateSystemFn create_fn,
+                        TbDestroySystemFn destroy_fn);
 
 void *ecs_malloc(ecs_size_t size) {
   TracyCZone(ctx, true);
@@ -179,9 +190,36 @@ TbCreateWorldSystemsFn tb_create_default_world =
       tb_register_third_person_systems(world);
     };
 
-TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
-                        TbCreateWorldSystemsFn create_fn,
-                        TbRenderThread *render_thread, SDL_Window *window) {
+static TbSystemRegistry s_sys_reg = {0};
+
+void tb_register_system(const char *name, TbCreateSystemFn create_fn,
+                        TbDestroySystemFn destroy_fn) {
+  int32_t index = s_sys_reg.sys_count;
+  int32_t next_count = ++s_sys_reg.sys_count;
+  size_t create_size = next_count * sizeof(TbCreateSystemFn);
+  size_t destroy_size = next_count * sizeof(TbDestroySystemFn);
+  size_t name_len = SDL_strlen(name);
+  size_t name_size = next_count * sizeof(char const *);
+  s_sys_reg.names = mi_realloc((void *)s_sys_reg.names, name_size);
+  s_sys_reg.create_fns = mi_realloc(s_sys_reg.create_fns, create_size);
+  s_sys_reg.destroy_fns = mi_realloc(s_sys_reg.destroy_fns, destroy_size);
+  s_sys_reg.create_fns[index] = create_fn;
+  s_sys_reg.destroy_fns[index] = destroy_fn;
+  s_sys_reg.names[index] = mi_malloc(name_len + 1);
+  SDL_strlcpy(s_sys_reg.names[index], name, name_len);
+}
+
+TbWorld tb_create_world(const TbWorldDesc *desc) {
+  TbAllocator gp_alloc = desc->gp_alloc;
+  // Must create render thread on the heap like this
+  TbRenderThread *render_thread = tb_alloc_tp(gp_alloc, TbRenderThread);
+  TbRenderThreadDescriptor render_thread_desc = {.window = desc->window};
+  TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
+           "Failed to start render thread");
+
+  // Do not go initializing anything until we know the render thread is ready
+  tb_wait_thread_initialized(render_thread);
+
   // Ensure the instrumented allocator is used
   ecs_os_set_api_defaults();
   ecs_os_api_t os_api = ecs_os_api;
@@ -193,21 +231,31 @@ TbWorld tb_create_world(TbAllocator std_alloc, TbAllocator tmp_alloc,
 
   TbWorld world = {
       .ecs = ecs_init(),
-      .std_alloc = std_alloc,
-      .tmp_alloc = tmp_alloc,
+      .render_thread = render_thread,
+      .gp_alloc = gp_alloc,
+      .tmp_alloc = desc->tmp_alloc,
   };
-  TB_DYN_ARR_RESET(world.scenes, std_alloc, 1);
+  TB_DYN_ARR_RESET(world.scenes, gp_alloc, 1);
 
+  tb_auto create_fn = desc->create_fn;
   if (!create_fn) {
     create_fn = tb_create_default_world;
   }
-  create_fn(&world, render_thread, window);
+  create_fn(&world, render_thread, desc->window);
+
+  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+    s_sys_reg.create_fns[i](&world, desc->window);
+  }
 
 // By setting this singleton we allow the application to connect to the
 // flecs explorer
 #ifndef FINAL
   ecs_singleton_set(world.ecs, EcsRest, {0});
   ECS_IMPORT(world.ecs, FlecsMonitor);
+
+  // Run optional info mode
+  int32_t ret = tb_info_mode((desc->argc), (desc->argv), (&world));
+  TB_CHECK(ret == 0, "Info Mode Failed");
 #endif
 
   return world;
@@ -248,6 +296,11 @@ void tb_destroy_world(TbWorld *world) {
   // Clean up singletons
   ecs_world_t *ecs = world->ecs;
 
+  tb_clear_world(world);
+
+  // Stop the render thread before we start destroying render objects
+  tb_stop_render_thread(world->render_thread);
+
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
   tb_unregister_physics_sys(world);
   tb_unregister_rotator_sys(world);
@@ -271,6 +324,14 @@ void tb_destroy_world(TbWorld *world) {
   tb_unregister_render_target_sys(world);
   tb_unregister_render_sys(world);
   tb_unregister_light_sys(world);
+
+  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+    s_sys_reg.destroy_fns[i](world);
+  }
+
+  // Destroying the render thread will also close the window
+  tb_destroy_render_thread(world->render_thread);
+  tb_free(world->gp_alloc, world->render_thread);
 
   ecs_fini(ecs);
 }
@@ -397,13 +458,13 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
   // Load glb off disk
-  cgltf_data *data = tb_read_glb(world->std_alloc, asset_path);
+  cgltf_data *data = tb_read_glb(world->gp_alloc, asset_path);
   TB_CHECK_RETURN(data, "Failed to load glb", false);
 
   json_tokener *tok = json_tokener_new();
 
   TbScene scene = {0};
-  TB_DYN_ARR_RESET(scene.entities, world->std_alloc, data->scene->nodes_count);
+  TB_DYN_ARR_RESET(scene.entities, world->gp_alloc, data->scene->nodes_count);
 
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {

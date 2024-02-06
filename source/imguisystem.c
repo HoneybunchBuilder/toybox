@@ -363,7 +363,7 @@ void ui_context_destroy(TbRenderSystem *rnd_sys, TbUIContext *context) {
 }
 
 TbImGuiSystem
-create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
+create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     uint32_t context_count, ImFontAtlas **context_atlases,
                     TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
                     TbRenderTargetSystem *rt_sys, TbInputSystem *input_system) {
@@ -373,7 +373,7 @@ create_imgui_system(TbAllocator std_alloc, TbAllocator tmp_alloc,
       .rt_sys = rt_sys,
       .input = input_system,
       .tmp_alloc = tmp_alloc,
-      .std_alloc = std_alloc,
+      .gp_alloc = gp_alloc,
       .context_count = context_count,
   };
 
@@ -494,7 +494,7 @@ void imgui_draw_tick(ecs_iter_t *it) {
             err, "Failed to create imgui system frame state descriptor pool");
 
         state->set_count = sys->context_count;
-        state->sets = tb_realloc_nm_tp(sys->std_alloc, state->sets,
+        state->sets = tb_realloc_nm_tp(sys->gp_alloc, state->sets,
                                        state->set_count, VkDescriptorSet);
       } else {
         vkResetDescriptorPool(sys->rnd_sys->render_thread->device,
@@ -768,7 +768,7 @@ void tb_register_imgui_sys(TbWorld *world) {
   TbInputSystem *in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
-  TbImGuiSystem sys = create_imgui_system(world->std_alloc, world->tmp_alloc, 1,
+  TbImGuiSystem sys = create_imgui_system(world->gp_alloc, world->tmp_alloc, 1,
                                           (ImFontAtlas *[1]){NULL}, rnd_sys,
                                           rp_sys, rt_sys, in_sys);
   // Sets a singleton based on the value at a pointer
