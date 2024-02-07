@@ -38,7 +38,7 @@ int32_t main(int32_t argc, char *argv[]) {
   TbGeneralAllocator gp_alloc = {0};
   tb_create_gen_alloc(&gp_alloc, "gp_alloc");
 
-  TbAllocator alloc = gp_alloc.alloc;
+  TbAllocator std_alloc = gp_alloc.alloc;
   TbAllocator tmp_alloc = arena.alloc;
 
   {
@@ -68,7 +68,7 @@ int32_t main(int32_t argc, char *argv[]) {
       .name = app_name,
       .argc = argc,
       .argv = argv,
-      .gp_alloc = alloc,
+      .gp_alloc = std_alloc,
       .tmp_alloc = tmp_alloc,
       .window = window,
   };

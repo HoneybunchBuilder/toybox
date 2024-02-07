@@ -4,6 +4,8 @@
 
 #include "ocean.hlsli" // Must include simd.h before shader includes
 
+#include <flecs.h>
+
 #define TbOceanComponentIdStr "0xBAD22222"
 
 typedef uint64_t ecs_entity_t;
@@ -16,6 +18,7 @@ typedef struct TbOceanComponent {
   uint32_t wave_count;
   TbOceanWave waves[TB_WAVE_MAX];
 } TbOceanComponent;
+extern ECS_COMPONENT_DECLARE(TbOceanComponent);
 
 typedef struct TbOceanSample {
   float3 pos;

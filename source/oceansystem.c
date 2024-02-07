@@ -44,6 +44,50 @@ typedef struct OceanDrawBatch {
   uint64_t pos_offset;
 } OceanDrawBatch;
 
+#define TB_OCEAN_SFX_COUNT 4
+
+typedef struct TbOceanSystem {
+  TbRenderSystem *rnd_sys;
+  TbRenderPipelineSystem *rp_sys;
+  TbMeshSystem *mesh_system;
+  TbViewSystem *view_sys;
+  TbRenderTargetSystem *rt_sys;
+  TbVisualLoggingSystem *vlog;
+  TbAudioSystem *audio_system;
+  TbAllocator tmp_alloc;
+  TbAllocator gp_alloc;
+
+  ecs_query_t *ocean_query;
+
+  TbMusicId music;
+  TbSoundEffectId wave_sounds[TB_OCEAN_SFX_COUNT];
+  float wave_sound_timer;
+
+  TbMeshId ocean_patch_mesh;
+  TbTransform ocean_transform;
+  float tile_width;
+  float tile_depth;
+  uint32_t ocean_index_type;
+  uint32_t ocean_index_count;
+  uint64_t ocean_pos_offset;
+  uint64_t ocean_uv_offset;
+  VkBuffer ocean_geom_buffer;
+
+  VkSampler sampler;
+  VkSampler shadow_sampler;
+
+  TbDrawContextId trans_depth_draw_ctx;
+  TbDrawContextId trans_color_draw_ctx;
+
+  TbFrameDescriptorPool ocean_pools[TB_MAX_FRAME_STATES];
+
+  VkDescriptorSetLayout set_layout;
+  VkPipelineLayout pipe_layout;
+  VkPipeline prepass_pipeline;
+  VkPipeline pipeline;
+} TbOceanSystem;
+ECS_COMPONENT_DECLARE(TbOceanSystem);
+
 void tb_register_ocean_sys(TbWorld *world);
 void tb_unregister_ocean_sys(TbWorld *world);
 
@@ -959,27 +1003,25 @@ void ocean_draw_tick(ecs_iter_t *it) {
 
 void tb_register_ocean_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT_DEFINE(ecs, TbOceanSystem);
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbRenderTargetSystem);
   ECS_COMPONENT(ecs, TbAudioSystem);
-  ECS_COMPONENT(ecs, TbOceanSystem);
-  ECS_COMPONENT(ecs, TbOceanComponent);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  TbRenderTargetSystem *rt_sys =
-      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  TbVisualLoggingSystem *vlog =
-      ecs_singleton_get_mut(ecs, TbVisualLoggingSystem);
-  TbAudioSystem *aud_sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
+  tb_register_ocean_component(world);
 
-  TbOceanSystem sys =
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto vlog = ecs_singleton_get_mut(ecs, TbVisualLoggingSystem);
+  tb_auto aud_sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
+
+  tb_auto sys =
       create_ocean_system(world->gp_alloc, world->tmp_alloc, rnd_sys, rp_sys,
                           mesh_sys, view_sys, rt_sys, vlog, aud_sys);
 
@@ -994,13 +1036,10 @@ void tb_register_ocean_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_draw_tick, EcsPostUpdate, TbCameraComponent);
-
-  tb_register_ocean_component(world);
 }
 
 void tb_unregister_ocean_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbOceanSystem);
   TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
   ecs_query_fini(sys->ocean_query);
   destroy_ocean_system(sys);

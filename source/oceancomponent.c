@@ -9,6 +9,8 @@
 #include <flecs.h>
 #include <json.h>
 
+ECS_COMPONENT_DECLARE(TbOceanComponent);
+
 float4 make_wave(float2 dir, float steepness, float wavelength) {
   return tb_f4(dir.x, dir.y, steepness, wavelength);
 }
@@ -81,7 +83,7 @@ void destroy_ocean_components(ecs_world_t *ecs) {
 
 void tb_register_ocean_component(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbOceanSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbOceanComponent);
 
   // Register asset system for parsing ocean components
   TbAssetSystem asset = {
