@@ -5,6 +5,9 @@ extern "C" {
 #endif
 
 #include "simd.h"
+#include "tbsystempriority.h"
+
+#define TB_PHYS_SYS_PRIO TB_SYSTEM_HIGH
 
 typedef struct TbPhysicsSystem TbPhysicsSystem;
 typedef struct TbWorld TbWorld;

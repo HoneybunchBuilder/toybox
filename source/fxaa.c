@@ -16,6 +16,11 @@
 #include "fxaa_vert.h"
 #pragma clang diagnostic pop
 
+void tb_register_fxaa_sys(TbWorld *world);
+void tb_unregister_fxaa_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, fxaa, TB_FXAA_SYS_PRIO)
+
 typedef struct FXAABatch {
   VkDescriptorSet set;
   TbFXAAPushConstants consts;
@@ -122,7 +127,7 @@ void tick_fxaa_draw(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_fxaa_system(TbWorld *world) {
+void tb_register_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
   ECS_COMPONENT(ecs, TbRenderPipelineSystem);
@@ -197,7 +202,7 @@ void tb_register_fxaa_system(TbWorld *world) {
       tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Frag", &frag_mod);
     }
 
-const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
+    const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
     const VkFormat swap_format = swapchain->format;
 
     VkGraphicsPipelineCreateInfo create_info = {
@@ -206,8 +211,7 @@ const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
             &(VkPipelineRenderingCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                 .colorAttachmentCount = 1,
-                .pColorAttachmentFormats =
-                    (VkFormat[1]){swap_format},
+                .pColorAttachmentFormats = (VkFormat[1]){swap_format},
             },
         .stageCount = 2,
         .pStages =
@@ -312,7 +316,7 @@ const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
   ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnUpdate, TbFXAASystem(TbFXAASystem));
 }
 
-void tb_unregister_fxaa_system(TbWorld *world) {
+void tb_unregister_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbFXAASystem);
   ECS_COMPONENT(ecs, TbRenderSystem);

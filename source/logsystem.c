@@ -10,6 +10,11 @@ ECS_COMPONENT_DECLARE(TbLogSystem);
 
 static float tb_log_time = 0.0f;
 
+void tb_register_log_sys(TbWorld *world);
+void tb_unregister_log_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, log, TB_LOG_SYS_PRIO)
+
 void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
                  const char *message) {
   tb_auto sys = (TbLogSystem *)(userdata);

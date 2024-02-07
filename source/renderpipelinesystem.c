@@ -27,6 +27,11 @@
 
 #define BLUR_BATCH_COUNT (TB_BLOOM_MIPS - 1)
 
+void tb_register_render_pipeline_sys(TbWorld *world);
+void tb_unregister_render_pipeline_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, render_pipeline, TB_RP_SYS_PRIO)
+
 typedef struct PassTransition {
   TbRenderTargetId render_target;
   TbImageTransition barrier;

@@ -33,6 +33,11 @@ typedef struct ImGuiDrawBatch {
   VkDescriptorSet atlas_set;
 } ImGuiDrawBatch;
 
+void tb_register_imgui_sys(TbWorld *world);
+void tb_unregister_imgui_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, imgui, TB_IMGUI_SYS_PRIO)
+
 VkResult
 create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
                       VkPipelineCache cache, VkSampler sampler,
@@ -774,7 +779,7 @@ void tb_register_imgui_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbImGuiSystem), TbImGuiSystem, &sys);
 
-  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnUpdate, TbImGuiSystem(TbImGuiSystem));
+  ECS_SYSTEM(ecs, imgui_draw_tick, EcsPostUpdate, TbImGuiSystem(TbImGuiSystem));
 }
 
 void tb_unregister_imgui_sys(TbWorld *world) {

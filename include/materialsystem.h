@@ -6,6 +6,9 @@
 #include "rendersystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
+#include "texturesystem.h"
+
+#define TB_MAT_SYS_PRIO (TB_TEX_SYS_PRIO + 1)
 
 typedef struct cgltf_material cgltf_material;
 typedef struct TbWorld TbWorld;
@@ -40,9 +43,6 @@ typedef struct TbMaterialSystem {
   // normal and pbr textures
   TbDescriptorPool mat_pool;
 } TbMaterialSystem;
-
-void tb_register_material_sys(TbWorld *world);
-void tb_unregister_material_sys(TbWorld *world);
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self);
 

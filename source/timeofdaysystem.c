@@ -32,6 +32,11 @@
   a Sky component attached but misconfiguration seems hard to message to a user.
 */
 
+void tb_register_time_of_day_sys(TbWorld *world);
+void tb_unregister_time_of_day_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, time_of_day, TB_TOD_SYS_PRIO)
+
 void destroy_time_of_day_system(TbTimeOfDaySystem *self) {
   *self = (TbTimeOfDaySystem){0};
 }

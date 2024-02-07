@@ -10,21 +10,17 @@
 
 static const char *info_mode_str = "--info";
 
-int32_t tb_info_mode(int32_t argc, char *const *argv, TbWorld *world) {
-  // Parse arguments and determine if we should write metadata to stdout
-  bool info_mode = false;
+int32_t tb_check_info_mode(int32_t argc, char *const *argv) {
   for (int32_t i = 0; i < argc; ++i) {
     const char *argument = argv[i];
     if (SDL_strncmp(argument, info_mode_str, SDL_strlen(info_mode_str)) == 0) {
-      info_mode = true;
-      break;
+      return 1;
     }
   }
+  return 0;
+}
 
-  if (!info_mode) {
-    // Report back that the application can continue as normal
-    return 0;
-  }
+void tb_write_info(TbWorld *world) {
   json_tokener *tok = json_tokener_new();
 
   ecs_world_t *ecs = world->ecs;
@@ -43,6 +39,4 @@ int32_t tb_info_mode(int32_t argc, char *const *argv, TbWorld *world) {
   json_object_put(reflection);
 
   json_tokener_free(tok);
-
-  return 1;
 }

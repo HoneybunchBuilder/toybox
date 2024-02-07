@@ -6,6 +6,11 @@
 
 #include <flecs.h>
 
+void tb_register_input_sys(TbWorld *world);
+void tb_unregister_input_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, input, TB_INPUT_SYS_PRIO)
+
 // Get axis from an SDL gamepad in a 0 to 1 range
 float get_axis_float(SDL_Gamepad *gamepad, SDL_GamepadAxis axis) {
   float raw_axis = (float)SDL_GetGamepadAxis(gamepad, axis);
@@ -164,14 +169,20 @@ void input_update_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_register_input_sys(TbWorld *world, SDL_Window *window) {
+void tb_register_input_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbInputSystem);
   ecs_singleton_set(ecs, TbInputSystem,
                     {
                         .tmp_alloc = world->tmp_alloc,
-                        .window = window,
+                        .window = world->window,
                     });
   ECS_SYSTEM(ecs, input_update_tick, EcsPreUpdate,
              TbInputSystem(TbInputSystem));
+}
+
+void tb_unregister_input_sys(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT(ecs, TbInputSystem);
+  ecs_singleton_remove(ecs, TbInputSystem);
 }

@@ -1,0 +1,6 @@
+#pragma once
+
+#define TB_SYSTEM_HIGHEST 0
+#define TB_SYSTEM_HIGH 250
+#define TB_SYSTEM_NORMAL 500
+#define TB_SYSTEM_LOW 1000

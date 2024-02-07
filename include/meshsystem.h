@@ -9,6 +9,9 @@
 #include "rendertargetsystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
+#include "viewsystem.h"
+
+#define TB_MESH_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbMaterialSystem TbMaterialSystem;

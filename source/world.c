@@ -12,50 +12,37 @@
 #include "cameracomponent.h"
 #include "lightcomponent.h"
 #include "meshcomponent.h"
-#include "noclipcomponent.h"
-#include "oceancomponent.h"
-#include "rigidbodycomponent.h"
-#include "skycomponent.h"
 #include "transformcomponent.h"
 #include "transformercomponents.h"
 
-#include "audiosystem.h"
-#include "camerasystem.h"
-#include "coreuisystem.h"
-#include "fxaa.h"
-#include "imguisystem.h"
 #include "inputsystem.h"
-#include "lightsystem.h"
-#include "logsystem.h"
-#include "materialsystem.h"
-#include "meshsystem.h"
-#include "noclipcontrollersystem.h"
-#include "oceansystem.h"
-#include "physicssystem.h"
-#include "renderobjectsystem.h"
-#include "renderpipelinesystem.h"
-#include "rendersystem.h"
-#include "rendertargetsystem.h"
-#include "rotatorsystem.h"
-#include "settings.h"
-#include "shadowsystem.h"
-#include "skysystem.h"
-#include "texturesystem.h"
-#include "thirdpersonsystems.h"
-#include "timeofdaysystem.h"
-#include "viewsystem.h"
-#include "visualloggingsystem.h"
 
 #include <flecs.h>
 #include <json.h>
 #include <mimalloc.h>
 
+typedef struct TbSystemEntry {
+  char *name;
+  int32_t priority;
+  TbCreateSystemFn create_fn;
+  TbDestroySystemFn destroy_fn;
+} TbSystemEntry;
+
 typedef struct TbSystemRegistry {
-  char **names;
   int32_t sys_count;
-  TbCreateSystemFn *create_fns;
-  TbDestroySystemFn *destroy_fns;
+  TbSystemEntry *entries;
 } TbSystemRegistry;
+
+typedef struct TbComponentEntry {
+  char *name;
+  // TbCreateSystemFn create_fn;
+  // TbDestroySystemFn destroy_fn;
+} TbComponentEntry;
+
+typedef struct TbComponentRegistry {
+  int32_t count;
+  TbComponentEntry *entries;
+} TbComponentRegistry;
 
 void *ecs_malloc(ecs_size_t size) {
   TracyCZone(ctx, true);
@@ -100,121 +87,48 @@ ECS_COMPONENT_DECLARE(TbTransform);
 ECS_COMPONENT_DECLARE(TbTransformComponent);
 ECS_COMPONENT_DECLARE(TbAssetSystem);
 
-TbCreateWorldSystemsFn tb_create_default_world =
-    ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
-      ecs_world_t *ecs = world->ecs;
-
-      // Define some components that no one else will
-      ECS_COMPONENT_DEFINE(ecs, float3);
-      ECS_COMPONENT_DEFINE(ecs, float4);
-      ECS_COMPONENT_DEFINE(ecs, float4x4);
-      ECS_COMPONENT_DEFINE(ecs, TbTransform);
-      ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
-      ECS_COMPONENT_DEFINE(ecs, TbAssetSystem);
-
-      // Register components from other modules
-      // TODO: use flecs modules
-      tb_register_rigidbody_component(world);
-      tb_register_mesh_component(world);
-      tb_register_camera_component(world);
-
-      // Metadata for transform component
-      {
-        ecs_struct(ecs, {.entity = ecs_id(float3),
-                         .members = {
-                             {.name = "x", .type = ecs_id(ecs_f32_t)},
-                             {.name = "y", .type = ecs_id(ecs_f32_t)},
-                             {.name = "z", .type = ecs_id(ecs_f32_t)},
-                         }});
-        ecs_struct(ecs, {.entity = ecs_id(float4),
-                         .members = {
-                             {.name = "x", .type = ecs_id(ecs_f32_t)},
-                             {.name = "y", .type = ecs_id(ecs_f32_t)},
-                             {.name = "z", .type = ecs_id(ecs_f32_t)},
-                             {.name = "w", .type = ecs_id(ecs_f32_t)},
-                         }});
-        ecs_struct(ecs, {.entity = ecs_id(float4x4),
-                         .members = {
-                             {.name = "col0", .type = ecs_id(float4)},
-                             {.name = "col1", .type = ecs_id(float4)},
-                             {.name = "col2", .type = ecs_id(float4)},
-                             {.name = "col3", .type = ecs_id(float4)},
-                         }});
-        ecs_struct(ecs, {.entity = ecs_id(TbTransform),
-                         .members = {
-                             {.name = "position", .type = ecs_id(float3)},
-                             {.name = "scale", .type = ecs_id(float3)},
-                             {.name = "rotation", .type = ecs_id(float4)},
-                         }});
-        ecs_struct(
-            ecs, {
-                     .entity = ecs_id(TbTransformComponent),
-                     .members =
-                         {
-                             {.name = "dirty", .type = ecs_id(ecs_bool_t)},
-                             {.name = "world_matrix", .type = ecs_id(float4x4)},
-                             {.name = "transform", .type = ecs_id(TbTransform)},
-                             {.name = "entity", .type = ecs_id(ecs_entity_t)},
-                         },
-                 });
-      }
-
-      tb_register_light_sys(world);
-      tb_register_audio_sys(world);
-      tb_register_render_sys(world, thread);
-      tb_register_input_sys(world, window);
-      tb_register_render_target_sys(world);
-      tb_register_texture_sys(world);
-      tb_register_view_sys(world);
-      tb_register_render_object_sys(world);
-      tb_register_render_pipeline_sys(world);
-      tb_register_fxaa_system(world);
-      tb_register_settings_system(world);
-      tb_register_material_sys(world);
-      tb_register_mesh_sys(world);
-      tb_register_sky_sys(world);
-      tb_register_imgui_sys(world);
-      tb_register_noclip_sys(world);
-      tb_register_core_ui_sys(world);
-      tb_register_log_sys(world);
-      tb_register_visual_logging_sys(world);
-      tb_register_ocean_sys(world);
-      tb_register_camera_sys(world);
-      tb_register_shadow_sys(world);
-      tb_register_time_of_day_sys(world);
-      tb_register_rotator_sys(world);
-      tb_register_third_person_systems(world);
-    };
-
 static TbSystemRegistry s_sys_reg = {0};
 
-void tb_register_system(const char *name, TbCreateSystemFn create_fn,
+int32_t tb_sys_cmp(const void *a, const void *b) {
+  tb_auto sys_a = (const TbSystemEntry *)a;
+  tb_auto sys_b = (const TbSystemEntry *)b;
+  return sys_a->priority - sys_b->priority;
+}
+
+void tb_register_system(const char *name, int32_t priority,
+                        TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn) {
   int32_t index = s_sys_reg.sys_count;
   int32_t next_count = ++s_sys_reg.sys_count;
-  size_t create_size = next_count * sizeof(TbCreateSystemFn);
-  size_t destroy_size = next_count * sizeof(TbDestroySystemFn);
+  size_t entry_size = next_count * sizeof(TbSystemEntry);
   size_t name_len = SDL_strlen(name);
-  size_t name_size = next_count * sizeof(char const *);
-  s_sys_reg.names = mi_realloc((void *)s_sys_reg.names, name_size);
-  s_sys_reg.create_fns = mi_realloc(s_sys_reg.create_fns, create_size);
-  s_sys_reg.destroy_fns = mi_realloc(s_sys_reg.destroy_fns, destroy_size);
-  s_sys_reg.create_fns[index] = create_fn;
-  s_sys_reg.destroy_fns[index] = destroy_fn;
-  s_sys_reg.names[index] = mi_malloc(name_len + 1);
-  SDL_strlcpy(s_sys_reg.names[index], name, name_len);
+
+  s_sys_reg.entries = mi_realloc(s_sys_reg.entries, entry_size);
+  tb_auto entry = &s_sys_reg.entries[index];
+  entry->priority = priority;
+  entry->create_fn = create_fn;
+  entry->destroy_fn = destroy_fn;
+  entry->name = mi_malloc(name_len + 1);
+  SDL_strlcpy(entry->name, name, name_len);
 }
 
-TbWorld tb_create_world(const TbWorldDesc *desc) {
+bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
+  int32_t info_mode = tb_check_info_mode(desc->argc, desc->argv);
+
   TbAllocator gp_alloc = desc->gp_alloc;
+
   // Must create render thread on the heap like this
   TbRenderThread *render_thread = tb_alloc_tp(gp_alloc, TbRenderThread);
-  TbRenderThreadDescriptor render_thread_desc = {.window = desc->window};
-  TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
-           "Failed to start render thread");
 
-  // Do not go initializing anything until we know the render thread is ready
-  tb_wait_thread_initialized(render_thread);
+  // No render thread in info mode
+  if (info_mode == 0) {
+    TbRenderThreadDescriptor render_thread_desc = {.window = desc->window};
+    TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
+             "Failed to start render thread");
+
+    // Do not go initializing anything until we know the render thread is ready
+    tb_wait_thread_initialized(render_thread);
+  }
 
   // Ensure the instrumented allocator is used
   ecs_os_set_api_defaults();
@@ -225,41 +139,97 @@ TbWorld tb_create_world(const TbWorldDesc *desc) {
   os_api.realloc_ = ecs_realloc;
   ecs_os_set_api(&os_api);
 
-  TbWorld world = {
+  *world = (TbWorld){
       .ecs = ecs_init(),
-      .render_thread = render_thread,
       .window = desc->window,
+      .render_thread = render_thread,
       .gp_alloc = gp_alloc,
       .tmp_alloc = desc->tmp_alloc,
   };
-  TB_DYN_ARR_RESET(world.scenes, gp_alloc, 1);
+  TB_DYN_ARR_RESET(world->scenes, gp_alloc, 1);
 
-  // Create all registered systems
-  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
-    tb_auto fn = s_sys_reg.create_fns[i];
-    if (fn) {
-      fn(&world);
+  tb_auto ecs = world->ecs;
+
+  // Define some components that no one else will
+  ECS_COMPONENT_DEFINE(ecs, float3);
+  ECS_COMPONENT_DEFINE(ecs, float4);
+  ECS_COMPONENT_DEFINE(ecs, float4x4);
+  ECS_COMPONENT_DEFINE(ecs, TbTransform);
+  ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbAssetSystem);
+
+  // Register components from other modules
+  tb_register_mesh_component(world);
+  tb_register_camera_component(world);
+
+  // Metadata for transform component
+  {
+    ecs_struct(ecs, {.entity = ecs_id(float3),
+                     .members = {
+                         {.name = "x", .type = ecs_id(ecs_f32_t)},
+                         {.name = "y", .type = ecs_id(ecs_f32_t)},
+                         {.name = "z", .type = ecs_id(ecs_f32_t)},
+                     }});
+    ecs_struct(ecs, {.entity = ecs_id(float4),
+                     .members = {
+                         {.name = "x", .type = ecs_id(ecs_f32_t)},
+                         {.name = "y", .type = ecs_id(ecs_f32_t)},
+                         {.name = "z", .type = ecs_id(ecs_f32_t)},
+                         {.name = "w", .type = ecs_id(ecs_f32_t)},
+                     }});
+    ecs_struct(ecs, {.entity = ecs_id(float4x4),
+                     .members = {
+                         {.name = "col0", .type = ecs_id(float4)},
+                         {.name = "col1", .type = ecs_id(float4)},
+                         {.name = "col2", .type = ecs_id(float4)},
+                         {.name = "col3", .type = ecs_id(float4)},
+                     }});
+    ecs_struct(ecs, {.entity = ecs_id(TbTransform),
+                     .members = {
+                         {.name = "position", .type = ecs_id(float3)},
+                         {.name = "scale", .type = ecs_id(float3)},
+                         {.name = "rotation", .type = ecs_id(float4)},
+                     }});
+    ecs_struct(ecs,
+               {
+                   .entity = ecs_id(TbTransformComponent),
+                   .members =
+                       {
+                           {.name = "dirty", .type = ecs_id(ecs_bool_t)},
+                           {.name = "world_matrix", .type = ecs_id(float4x4)},
+                           {.name = "transform", .type = ecs_id(TbTransform)},
+                           {.name = "entity", .type = ecs_id(ecs_entity_t)},
+                       },
+               });
+  }
+
+  // Create all registered systems after sorting by priority
+  {
+    const int32_t sys_count = s_sys_reg.sys_count;
+    SDL_qsort(s_sys_reg.entries, sys_count, sizeof(TbSystemEntry), tb_sys_cmp);
+
+    for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+      tb_auto fn = s_sys_reg.entries[i].create_fn;
+      if (fn) {
+        fn(world);
+      }
     }
   }
 
-  tb_auto create_fn = desc->create_fn;
-  if (!create_fn) {
-    create_fn = tb_create_default_world;
-  }
-  create_fn(&world, render_thread, desc->window);
-
-// By setting this singleton we allow the application to connect to the
-// flecs explorer
 #ifndef FINAL
-  ecs_singleton_set(world.ecs, EcsRest, {0});
-  ECS_IMPORT(world.ecs, FlecsMonitor);
-
   // Run optional info mode
-  int32_t ret = tb_info_mode((desc->argc), (desc->argv), (&world));
-  TB_CHECK(ret == 0, "Info Mode Failed");
+  if (info_mode) {
+    tb_write_info(world);
+    return false; // do not continue in info mode
+  }
+
+  // By setting this singleton we allow the application to connect to the
+  // flecs explorer
+  ecs_singleton_set(ecs, EcsRest, {0});
+  ECS_IMPORT(ecs, FlecsMonitor);
 #endif
 
-  return world;
+  return true;
 }
 
 bool tb_tick_world(TbWorld *world, float delta_seconds) {
@@ -302,35 +272,13 @@ void tb_destroy_world(TbWorld *world) {
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(world->render_thread);
 
-  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
-    tb_auto fn = s_sys_reg.destroy_fns[i];
+  // Destroy systems in reverse order
+  for (int32_t i = s_sys_reg.sys_count - 1; i >= 0; --i) {
+    tb_auto fn = s_sys_reg.entries[i].destroy_fn;
     if (fn) {
       fn(world);
     }
   }
-
-  // Unregister systems so that they will be cleaned up by observers in ecs_fini
-  tb_unregister_rotator_sys(world);
-  tb_unregister_time_of_day_sys(world);
-  tb_unregister_camera_sys(world);
-  tb_unregister_shadow_sys(world);
-  tb_unregister_visual_logging_sys(world);
-  tb_unregister_ocean_sys(world);
-  tb_unregister_sky_sys(world);
-  tb_unregister_log_sys(world);
-  tb_unregister_core_ui_sys(world);
-  tb_unregister_imgui_sys(world);
-  tb_unregister_mesh_sys(world);
-  tb_unregister_material_sys(world);
-  tb_unregister_fxaa_system(world);
-  tb_unregister_settings_system(world);
-  tb_unregister_render_pipeline_sys(world);
-  tb_unregister_render_object_sys(world);
-  tb_unregister_view_sys(world);
-  tb_unregister_texture_sys(world);
-  tb_unregister_render_target_sys(world);
-  tb_unregister_render_sys(world);
-  tb_unregister_light_sys(world);
 
   // Destroying the render thread will also close the window
   tb_destroy_render_thread(world->render_thread);

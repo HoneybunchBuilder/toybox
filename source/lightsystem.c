@@ -10,6 +10,8 @@
 
 #include <flecs.h>
 
+TB_REGISTER_SYS(tb, light, TB_LIGHT_SYS_PRIO)
+
 void light_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Light System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;

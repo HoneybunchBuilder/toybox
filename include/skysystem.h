@@ -1,6 +1,11 @@
 #pragma once
 
+#define PREFILTER_PASS_COUNT 10
+
 #include "tbrendercommon.h"
+#include "viewsystem.h"
+
+#define TB_SKY_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
@@ -18,8 +23,6 @@ typedef struct TbSkySystemFrameState {
   VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
 } TbSkySystemFrameState;
-
-#define PREFILTER_PASS_COUNT 10
 
 typedef struct TbSkySystem {
   TbRenderSystem *rnd_sys;
@@ -52,6 +55,3 @@ typedef struct TbSkySystem {
 
   TbBuffer sky_geom_gpu_buffer;
 } TbSkySystem;
-
-void tb_register_sky_sys(TbWorld* world);
-void tb_unregister_sky_sys(TbWorld* world);

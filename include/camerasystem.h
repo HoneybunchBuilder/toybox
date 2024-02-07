@@ -1,6 +1,5 @@
 #pragma once
 
-typedef struct TbWorld TbWorld;
+#include "tbsystempriority.h"
 
-void tb_register_camera_sys(TbWorld *world);
-void tb_unregister_camera_sys(TbWorld *world);
+#define TB_CAMERA_SYS_PRIO TB_SYSTEM_NORMAL

@@ -18,6 +18,11 @@ typedef struct TbTexture {
   VkImageView image_view;
 } TBTexture;
 
+void tb_register_texture_sys(TbWorld *world);
+void tb_unregister_texture_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
+
 uint32_t find_tex_by_id(TbTextureSystem *self, TbTextureId id) {
   TB_DYN_ARR_FOREACH(self->textures, i) {
     if (TB_DYN_ARR_AT(self->textures, i).id == id) {

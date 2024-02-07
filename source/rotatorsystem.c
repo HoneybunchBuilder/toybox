@@ -1,12 +1,8 @@
-#include "rotatorsystem.h"
-
 #include "profiling.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
 #include "transformercomponents.h"
 #include "world.h"
-
-#include <SDL3/SDL_stdinc.h>
 
 #include <flecs.h>
 
@@ -31,12 +27,13 @@ void rotator_system_tick(ecs_iter_t *it) {
 
 void tb_register_rotator_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRotatorComponent);
+
+  tb_register_rotator_component(world);
 
   ECS_SYSTEM(ecs, rotator_system_tick,
              EcsOnUpdate, [in] TbRotatorComponent, [out] TbTransformComponent);
-
-  tb_register_rotator_component(world);
 }
 
 void tb_unregister_rotator_sys(TbWorld *world) { (void)world; }
+
+TB_REGISTER_SYS(tb, rotator, TB_SYSTEM_NORMAL)

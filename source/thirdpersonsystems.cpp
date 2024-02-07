@@ -1,5 +1,3 @@
-#include "thirdpersonsystems.h"
-
 #include "cameracomponent.h"
 #include "inputsystem.h"
 #include "physicssystem.hpp"
@@ -143,8 +141,8 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     if (move.jump) {
       bool jump_input = input.keyboard.key_space;
       if (input.gamepad_count > 0) {
-        jump_input = jump_input ||
-                     ((input.gamepad_states[0].buttons & TB_BUTTON_A) > 0);
+        jump_input =
+            jump_input || ((input.gamepad_states[0].buttons & TB_BUTTON_A) > 0);
       }
       if (jump_input && SDL_fabsf(velocity.y) <= 0.001f) {
         velocity += tb_f3(0, move.jump_velocity, 0);
@@ -177,7 +175,8 @@ void tp_movement_update_tick(flecs::iter &it,
   }
 }
 
-void tb_register_third_person_systems(TbWorld *world) {
+extern "C" {
+void tb_register_third_person_sys(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
   ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")
@@ -185,4 +184,9 @@ void tb_register_third_person_systems(TbWorld *world) {
       .iter(tp_movement_update_tick);
 
   tb_register_third_person_components(world);
+}
+
+void tb_unregister_third_person_sys(TbWorld *world) { (void)world; }
+
+TB_REGISTER_SYS(tb, third_person, TB_SYSTEM_NORMAL)
 }

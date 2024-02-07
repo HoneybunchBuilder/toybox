@@ -13,6 +13,11 @@
 
 #include <flecs.h>
 
+void tb_register_camera_sys(TbWorld *world);
+void tb_unregister_camera_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, camera, TB_CAMERA_SYS_PRIO)
+
 void camera_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Camera Update System", TracyCategoryColorCore, true);
 
@@ -72,7 +77,7 @@ void camera_update_tick(ecs_iter_t *it) {
 void tb_register_camera_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  ECS_SYSTEM(ecs, camera_update_tick, EcsOnUpdate, TbCameraComponent,
+  ECS_SYSTEM(ecs, camera_update_tick, EcsPreUpdate, TbCameraComponent,
              TbTransformComponent);
 }
 

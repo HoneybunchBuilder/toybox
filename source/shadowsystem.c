@@ -26,6 +26,24 @@
 // NOLINTEND
 #pragma clang diagnostic pop
 
+typedef struct TbShadowSystem {
+  TbAllocator gp_alloc;
+  TbAllocator tmp_alloc;
+
+  TbDrawContextId draw_ctxs[TB_CASCADE_COUNT];
+  VkPipelineLayout pipe_layout;
+  VkPipeline pipeline;
+
+  ecs_query_t *dir_light_query;
+  TbFrameDescriptorPoolList desc_pool_list;
+} TbShadowSystem;
+ECS_COMPONENT_DECLARE(TbShadowSystem);
+
+void tb_register_shadow_sys(TbWorld *world);
+void tb_unregister_shadow_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, shadow, TB_SHADOW_SYS_PRIO)
+
 VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *pipeline) {
@@ -468,16 +486,16 @@ void tb_register_shadow_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbShadowSystem), TbShadowSystem, &sys);
 
-  ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, TbCameraComponent);
+  ECS_SYSTEM(ecs, shadow_update_tick, EcsPreUpdate, TbCameraComponent);
 
-  ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnUpdate,
+  ECS_SYSTEM(ecs, shadow_draw_tick, EcsPostUpdate,
              TbShadowSystem(TbShadowSystem));
 }
 
 void tb_unregister_shadow_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT_DEFINE(ecs, TbShadowSystem);
   ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbShadowSystem);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 

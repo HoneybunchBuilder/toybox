@@ -1,6 +1,9 @@
 #pragma once
 
 #include "lightcomponent.h"
+#include "tbsystempriority.h"
+
+#define TB_LIGHT_SYS_PRIO TB_SYSTEM_HIGH
 
 typedef struct ecs_query_t ecs_query_t;
 typedef struct TbWorld TbWorld;

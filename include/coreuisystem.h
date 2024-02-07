@@ -1,8 +1,11 @@
 #pragma once
 
 #include "dynarray.h"
+#include "imguisystem.h"
 #include "tbcommon.h"
 #include <flecs.h>
+
+#define TB_COREUI_SYS_PRIO (TB_IMGUI_SYS_PRIO + 1)
 
 typedef struct TbImGuiSystem TbImGuiSystem;
 typedef struct TbRenderThread TbRenderThread;
@@ -21,8 +24,5 @@ typedef struct TbCoreUISystem {
   bool *about;
 } TbCoreUISystem;
 extern ECS_COMPONENT_DECLARE(TbCoreUISystem);
-
-void tb_register_core_ui_sys(TbWorld *world);
-void tb_unregister_core_ui_sys(TbWorld *world);
 
 bool *tb_coreui_register_menu(TbCoreUISystem *self, const char *name);

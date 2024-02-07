@@ -1,5 +1,5 @@
 #pragma once
 
-typedef struct TbWorld TbWorld;
+#include "tbsystempriority.h"
 
-void tb_register_noclip_sys(TbWorld *world);
+#define TB_NOCLIP_SYS_PRIO TB_SYSTEM_NORMAL

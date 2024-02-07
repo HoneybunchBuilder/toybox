@@ -4,6 +4,9 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tbrendercommon.h"
+#include "visualloggingsystem.h"
+
+#define TB_OCEAN_SYS_PRIO (TB_VLOG_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
 typedef struct TbMeshSystem TbMeshSystem;
@@ -66,6 +69,3 @@ typedef struct TbOceanSystem {
   VkPipeline prepass_pipeline;
   VkPipeline pipeline;
 } TbOceanSystem;
-
-void tb_register_ocean_sys(TbWorld *world);
-void tb_unregister_ocean_sys(TbWorld *world);

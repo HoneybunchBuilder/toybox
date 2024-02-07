@@ -44,6 +44,11 @@ typedef struct OceanDrawBatch {
   uint64_t pos_offset;
 } OceanDrawBatch;
 
+void tb_register_ocean_sys(TbWorld *world);
+void tb_unregister_ocean_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, ocean, TB_OCEAN_SYS_PRIO)
+
 void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
                   const TbDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -959,7 +964,6 @@ void tb_register_ocean_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbMeshSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbVisualLoggingSystem);
   ECS_COMPONENT(ecs, TbAudioSystem);
   ECS_COMPONENT(ecs, TbOceanSystem);
   ECS_COMPONENT(ecs, TbOceanComponent);
@@ -989,7 +993,7 @@ void tb_register_ocean_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanComponent);
-  ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnUpdate, TbCameraComponent);
+  ECS_SYSTEM(ecs, ocean_draw_tick, EcsPostUpdate, TbCameraComponent);
 
   tb_register_ocean_component(world);
 }

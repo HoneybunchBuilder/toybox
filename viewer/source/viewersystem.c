@@ -11,6 +11,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbViewerSystem);
+
 void viewer_update_tick(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Viewer System Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
@@ -64,21 +66,22 @@ void tb_register_viewer_sys(TbWorld *world) {
   TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
   TbViewerSystem sys = {
-      .gp_alloc = world->gp_alloc,
-      .tmp_alloc = world->tmp_alloc,
       .viewer_menu = tb_coreui_register_menu(coreui, "Viewer"),
       .selected_scene = 0,
   };
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewerSystem), TbViewerSystem, &sys);
 
-  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate, TbViewerSystem(TbViewerSystem));
+  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate,
+             TbViewerSystem(TbViewerSystem));
 }
 
 void tb_unregister_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbViewerSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbViewerSystem);
   TbViewerSystem *sys = ecs_singleton_get_mut(ecs, TbViewerSystem);
   *sys = (TbViewerSystem){0};
   ecs_singleton_remove(ecs, TbViewerSystem);
 }
+
+TB_REGISTER_SYS(tb, viewer, TB_SYSTEM_NORMAL)

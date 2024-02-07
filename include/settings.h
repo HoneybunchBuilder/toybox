@@ -1,8 +1,11 @@
 #pragma once
 
+#include "imguisystem.h"
 #include <stdint.h>
 
 #include "fxaa.hlsli"
+
+#define TB_SETTINGS_SYS_PRIO (TB_IMGUI_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
 
@@ -52,6 +55,3 @@ typedef struct TbSettings {
   int32_t fxaa_option;
   TbFXAAPushConstants fxaa;
 } TbSettings;
-
-void tb_register_settings_system(TbWorld *world);
-void tb_unregister_settings_system(TbWorld *world);

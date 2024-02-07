@@ -4,4 +4,5 @@
 
 typedef struct TbWorld TbWorld;
 
-int32_t tb_info_mode(int32_t argc, char *const *argv, TbWorld *world);
+int32_t tb_check_info_mode(int32_t argc, char *const *argv);
+void tb_write_info(TbWorld *world);

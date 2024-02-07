@@ -8,6 +8,11 @@
 
 #include <flecs.h>
 
+void tb_register_render_target_sys(TbWorld *world);
+void tb_unregister_render_target_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, render_target, TB_RT_SYS_PRIO)
+
 typedef struct RenderTargetMipView {
   VkExtent3D extent;
   VkImageView views[TB_MAX_FRAME_STATES];

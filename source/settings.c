@@ -8,6 +8,11 @@
 
 #include <flecs.h>
 
+void tb_register_settings_sys(TbWorld *world);
+void tb_unregister_settings_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, settings, TB_SETTINGS_SYS_PRIO)
+
 static const TbFXAAPushConstants tb_fxaa_options[] = {
     {
         .on = false,
@@ -95,7 +100,7 @@ void tick_settings_ui(ecs_iter_t *it) {
   igEnd();
 }
 
-void tb_register_settings_system(TbWorld *world) {
+void tb_register_settings_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT(ecs, TbSettings);
   ECS_COMPONENT(ecs, TbFXAASystem);
@@ -117,7 +122,7 @@ void tb_register_settings_system(TbWorld *world) {
   ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
 }
 
-void tb_unregister_settings_system(TbWorld *world) {
+void tb_unregister_settings_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT(ecs, TbSettings);
   ecs_singleton_remove(ecs, TbSettings);

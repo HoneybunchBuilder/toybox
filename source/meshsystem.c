@@ -45,6 +45,9 @@ typedef struct TbMesh {
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 } TbMesh;
 
+// Helper macro to auto-register system
+TB_REGISTER_SYS(tb, mesh, TB_MESH_SYS_PRIO)
+
 VkResult create_prepass_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                                  VkPipelineLayout pipe_layout,
                                  VkPipeline *pipeline) {
@@ -1529,7 +1532,7 @@ void tb_register_mesh_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, mesh_descriptor_update, EcsOnUpdate,
              TbMeshSystem(TbMeshSystem));
-  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnUpdate, TbMeshSystem(TbMeshSystem));
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsPostUpdate, TbMeshSystem(TbMeshSystem));
 }
 
 void tb_unregister_mesh_sys(TbWorld *world) {

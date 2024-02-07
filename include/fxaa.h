@@ -1,7 +1,10 @@
 #pragma once
 
 #include "fxaa.hlsli"
+#include "renderpipelinesystem.h"
 #include "tbrendercommon.h"
+
+#define TB_FXAA_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
 typedef struct TbRenderSystem TbRenderSystem;
@@ -26,6 +29,3 @@ typedef struct TbFXAASystem {
 
   TbFrameDescriptorPoolList pools;
 } TbFXAASystem;
-
-void tb_register_fxaa_system(TbWorld *world);
-void tb_unregister_fxaa_system(TbWorld *world);

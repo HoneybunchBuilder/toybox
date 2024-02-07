@@ -18,6 +18,11 @@ typedef struct TbSoundEffect {
   Mix_Chunk *chunk;
 } TbSoundEffect;
 
+void tb_register_audio_sys(TbWorld *world);
+void tb_unregister_audio_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, audio, TB_AUDIO_SYS_PRIO)
+
 void destroy_audio_system(TbAudioSystem *self) {
   TB_DYN_ARR_FOREACH(self->music, i) {
     TB_CHECK(TB_DYN_ARR_AT(self->music, i).ref_count == 0, "Leaking music");

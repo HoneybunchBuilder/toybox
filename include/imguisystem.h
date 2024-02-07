@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderpipelinesystem.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 #include "world.h"
@@ -20,6 +21,8 @@ typedef uint32_t TbDrawContextId;
 typedef struct ImFontAtlas ImFontAtlas;
 typedef struct ImGuiContext ImGuiContext;
 typedef struct ImGuiIO ImGuiIO;
+
+#define TB_IMGUI_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 #define TB_MAX_UI_CONTEXTS 4
 
@@ -56,6 +59,3 @@ typedef struct TbImGuiSystem {
   uint32_t context_count;
   TbUIContext contexts[TB_MAX_UI_CONTEXTS];
 } TbImGuiSystem;
-
-void tb_register_imgui_sys(TbWorld *world);
-void tb_unregister_imgui_sys(TbWorld *world);

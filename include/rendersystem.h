@@ -2,8 +2,11 @@
 
 #include "allocator.h"
 #include "renderthread.h"
+#include "tbsystempriority.h"
 #include "tbvkalloc.h"
 #include "tbvma.h"
+
+#define TB_RND_SYS_PRIO TB_SYSTEM_HIGHEST
 
 #define TB_VMA_TMP_HOST_MB 256
 #define TB_MAX_LAYERS 16
@@ -31,9 +34,6 @@ typedef struct TbRenderSystem {
   uint32_t frame_idx;
   TbRenderSystemFrameState frame_states[3];
 } TbRenderSystem;
-
-void tb_register_render_sys(TbWorld *world, TbRenderThread *render_thread);
-void tb_unregister_render_sys(TbWorld *world);
 
 VkResult tb_rnd_sys_alloc_gpu_buffer(TbRenderSystem *self,
                                      const VkBufferCreateInfo *create_info,

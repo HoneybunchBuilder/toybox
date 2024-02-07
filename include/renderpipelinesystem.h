@@ -8,7 +8,10 @@
 #include "rendertargetsystem.h"
 #include "skysystem.h"
 #include "tbrendercommon.h"
+
 #include <SDL3/SDL_stdinc.h>
+
+#define TB_RP_SYS_PRIO (TB_RT_SYS_PRIO + 1)
 
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
 
@@ -113,9 +116,6 @@ typedef struct TbRenderPipelineSystem {
   TbFrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];
   TbFrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
 } TbRenderPipelineSystem;
-
-void tb_register_render_pipeline_sys(TbWorld *world);
-void tb_unregister_render_pipeline_sys(TbWorld *world);
 
 void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self);
 

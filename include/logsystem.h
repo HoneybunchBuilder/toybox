@@ -4,10 +4,13 @@
         An optional logging system that can be enabled if you want to display
    log messages through ImGui
 */
+#include "coreuisystem.h"
 #include "dynarray.h"
 #include "tblog.h"
 
 #include <flecs.h>
+
+#define TB_LOG_SYS_PRIO (TB_COREUI_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
 
@@ -28,6 +31,3 @@ typedef struct TbLogSystem {
   TB_DYN_ARR_OF(TbLogMessage) messages;
 } TbLogSystem;
 extern ECS_COMPONENT_DECLARE(TbLogSystem);
-
-void tb_register_log_sys(TbWorld *world);
-void tb_unregister_log_sys(TbWorld *world);

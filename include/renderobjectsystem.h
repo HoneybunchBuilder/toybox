@@ -7,6 +7,8 @@
 
 #include <flecs.h>
 
+#define TB_RND_OBJ_SYS_PRIO (TB_RND_SYS_PRIO + 1)
+
 /*
   Next step:
     Every frame, collect the changed render object transforms and sphere bounds
@@ -53,6 +55,4 @@ typedef struct TbRenderObjectSystem {
 } TbRenderObjectSystem;
 extern ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
-void tb_register_render_object_sys(TbWorld *world);
 VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys);
-void tb_unregister_render_object_sys(TbWorld *world);

@@ -1,51 +1,17 @@
 #include <mimalloc.h>
 
-#include "allocator.h"
-#include "pi.h"
 #include "profiling.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
-#include "tbengineconfig.h"
-#include "world.h"
-
 #include "tbcommon.h"
+#include "tbengineconfig.h"
 #include "tbsdl.h"
 #include "tbvk.h"
 #include "tbvma.h"
+#include "world.h"
 
-#include "cameracomponent.h"
-#include "lightcomponent.h"
-#include "meshcomponent.h"
-#include "noclipcomponent.h"
-#include "oceancomponent.h"
-#include "skycomponent.h"
-#include "transformcomponent.h"
-#include "transformercomponents.h"
-
-#include "audiosystem.h"
-#include "camerasystem.h"
-#include "coreuisystem.h"
-#include "imguisystem.h"
-#include "inputsystem.h"
-#include "materialsystem.h"
-#include "meshsystem.h"
-#include "noclipcontrollersystem.h"
-#include "oceansystem.h"
-#include "renderobjectsystem.h"
-#include "renderpipelinesystem.h"
-#include "rendersystem.h"
-#include "rendertargetsystem.h"
-#include "rotatorsystem.h"
-#include "shadowsystem.h"
-#include "skysystem.h"
-#include "texturesystem.h"
-#include "timeofdaysystem.h"
 #include "viewersystem.h"
-#include "viewsystem.h"
-#include "visualloggingsystem.h"
-
-#include "renderthread.h"
 
 #include <flecs.h>
 
@@ -98,12 +64,6 @@ int32_t main(int32_t argc, char *argv[]) {
     return -1;
   }
 
-  // Create the world with the additional viewer system
-  tb_auto create_world =
-      ^(TbWorld *world, TbRenderThread *thread, SDL_Window *window) {
-        tb_create_default_world(world, thread, window);
-        tb_register_viewer_sys(world);
-      };
   TbWorldDesc world_desc = {
       .name = app_name,
       .argc = argc,
@@ -111,9 +71,12 @@ int32_t main(int32_t argc, char *argv[]) {
       .gp_alloc = alloc,
       .tmp_alloc = tmp_alloc,
       .window = window,
-      .create_fn = create_world,
   };
-  TbWorld world = tb_create_world(&world_desc);
+  TbWorld world = {0};
+  bool ok = tb_create_world(&world_desc, &world);
+  if (!ok) {
+    return 1;
+  }
 
   // Main loop
   bool running = true;
@@ -128,8 +91,6 @@ int32_t main(int32_t argc, char *argv[]) {
     TracyCFrameMarkStart("Simulation Frame");
     TracyCZoneN(trcy_ctx, "Simulation Frame", true);
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
-
-    ECS_COMPONENT(world.ecs, TbViewerSystem);
 
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before

@@ -2,10 +2,13 @@
 
 #include "allocator.h"
 #include "dynarray.h"
+#include "rendersystem.h"
 #include "tbvk.h"
 #include <SDL3/SDL_stdinc.h>
 
 #define TB_SHADOW_MAP_DIM 4096
+
+#define TB_RT_SYS_PRIO (TB_RND_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbRenderTarget TbRenderTarget;
@@ -45,9 +48,6 @@ typedef struct TbRenderTargetSystem {
   TbRenderTargetId bloom_mip_chain;
   TbRenderTargetId ldr_target;
 } TbRenderTargetSystem;
-
-void tb_register_render_target_sys(TbWorld *world);
-void tb_unregister_render_target_sys(TbWorld *world);
 
 void tb_reimport_swapchain(TbRenderTargetSystem *self);
 

@@ -12,6 +12,11 @@
 
 #include <flecs.h>
 
+void tb_register_view_sys(TbWorld *world);
+void tb_unregister_view_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, view, TB_VIEW_SYS_PRIO)
+
 TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                 TbRenderSystem *rnd_sys,
                                 TbRenderTargetSystem *rt_sys,

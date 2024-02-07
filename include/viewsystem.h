@@ -3,7 +3,10 @@
 #include "allocator.h"
 #include "common.hlsli"
 #include "dynarray.h"
+#include "renderpipelinesystem.h"
 #include "tbrendercommon.h"
+
+#define TB_VIEW_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbTextureSystem TbTextureSystem;
@@ -45,9 +48,6 @@ typedef struct TbViewSystem {
 
   TB_DYN_ARR_OF(TbView) views;
 } TbViewSystem;
-
-void tb_register_view_sys(TbWorld *world);
-void tb_unregister_view_sys(TbWorld *world);
 
 TbViewId tb_view_system_create_view(TbViewSystem *self);
 void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,

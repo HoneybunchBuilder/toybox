@@ -62,6 +62,11 @@ typedef struct PrefilterBatch {
   uint64_t vertex_offset;
 } PrefilterBatch;
 
+void tb_register_sky_sys(TbWorld *world);
+void tb_unregister_sky_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, sky, TB_SKY_SYS_PRIO)
+
 VkResult create_sky_pipeline(TbRenderSystem *rnd_sys, VkFormat color_format,
                              VkFormat depth_format, VkPipelineLayout layout,
                              VkPipeline *pipeline) {
@@ -1302,7 +1307,7 @@ void tb_register_sky_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
-  ECS_SYSTEM(ecs, sky_draw_tick, EcsOnUpdate, TbSkyComponent);
+  ECS_SYSTEM(ecs, sky_draw_tick, EcsPostUpdate, TbSkyComponent);
 
   tb_register_sky_component(world);
 }

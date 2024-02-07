@@ -10,46 +10,10 @@
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
-#include "tbengineconfig.h"
-#include "world.h"
-
-#include "infomode.h"
 #include "tbcommon.h"
+#include "tbengineconfig.h"
 #include "tbsdl.h"
-#include "tbvk.h"
-#include "tbvma.h"
-
-#include "cameracomponent.h"
-#include "lightcomponent.h"
-#include "meshcomponent.h"
-#include "noclipcomponent.h"
-#include "oceancomponent.h"
-#include "skycomponent.h"
-#include "transformcomponent.h"
-#include "transformercomponents.h"
-
-#include "audiosystem.h"
-#include "camerasystem.h"
-#include "coreuisystem.h"
-#include "imguisystem.h"
-#include "inputsystem.h"
-#include "materialsystem.h"
-#include "meshsystem.h"
-#include "noclipcontrollersystem.h"
-#include "oceansystem.h"
-#include "renderobjectsystem.h"
-#include "renderpipelinesystem.h"
-#include "rendersystem.h"
-#include "rendertargetsystem.h"
-#include "rotatorsystem.h"
-#include "shadowsystem.h"
-#include "skysystem.h"
-#include "texturesystem.h"
-#include "timeofdaysystem.h"
-#include "viewsystem.h"
-#include "visualloggingsystem.h"
-
-#include "renderthread.h"
+#include "world.h"
 
 #include <SDL3/SDL_main.h>
 int32_t main(int32_t argc, char *argv[]) {
@@ -106,7 +70,12 @@ int32_t main(int32_t argc, char *argv[]) {
       .tmp_alloc = tmp_alloc,
       .window = window,
   };
-  TbWorld world = tb_create_world(&world_desc);
+  TbWorld world = {0};
+  bool ok = tb_create_world(&world_desc, &world);
+  if (!ok) {
+    SDL_Quit();
+    return 1;
+  }
 
   tb_sample_on_start(&world);
 

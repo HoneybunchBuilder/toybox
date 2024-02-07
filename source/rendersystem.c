@@ -8,6 +8,11 @@
 
 #include <flecs.h>
 
+void tb_register_render_sys(TbWorld *world);
+void tb_unregister_render_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, render, TB_RND_SYS_PRIO)
+
 bool try_map(VmaAllocator vma, VmaAllocation alloc, void **ptr) {
   VkMemoryPropertyFlags flags = 0;
   vmaGetAllocationMemoryProperties(vma, alloc, &flags);
@@ -37,8 +42,7 @@ void tb_flush_alloc(TbRenderSystem *self, VmaAllocation alloc) {
   }
 }
 
-TbRenderSystem create_render_system(TbAllocator gp_alloc,
-                                    TbAllocator tmp_alloc,
+TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                     TbRenderThread *thread) {
   TB_CHECK(thread, "Invalid TbRenderThread");
 
@@ -332,11 +336,11 @@ void render_frame_end(ecs_iter_t *it) {
   TracyCZoneEnd(tick_ctx);
 }
 
-void tb_register_render_sys(TbWorld *world, TbRenderThread *render_thread) {
+void tb_register_render_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT(ecs, TbRenderSystem);
-  TbRenderSystem sys =
-      create_render_system(world->gp_alloc, world->tmp_alloc, render_thread);
+  TbRenderSystem sys = create_render_system(world->gp_alloc, world->tmp_alloc,
+                                            world->render_thread);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderSystem), TbRenderSystem, &sys);
 

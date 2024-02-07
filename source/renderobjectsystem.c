@@ -10,6 +10,11 @@
 
 #include "blocks/Block.h"
 
+void tb_register_render_object_sys(TbWorld *world);
+void tb_unregister_render_object_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, render_object, TB_RND_OBJ_SYS_PRIO)
+
 ECS_COMPONENT_DECLARE(TbRenderObject);
 ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 

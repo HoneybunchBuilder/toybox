@@ -2,9 +2,12 @@
 
 #include "allocator.h"
 #include "simd.h"
+#include "tbsystempriority.h"
 #include "world.h"
 
 #include <SDL3/SDL_events.h>
+
+#define TB_INPUT_SYS_PRIO TB_SYSTEM_HIGHEST
 
 typedef struct SDL_Window SDL_Window;
 typedef struct SDL_Gamepad SDL_Gamepad;
@@ -103,5 +106,3 @@ typedef struct TbInputSystem {
   SDL_Gamepad *gamepad[TB_MAX_GAME_CONTROLLERS];
   TbGameControllerState gamepad_states[TB_MAX_GAME_CONTROLLERS];
 } TbInputSystem;
-
-void tb_register_input_sys(TbWorld *world, SDL_Window *window);

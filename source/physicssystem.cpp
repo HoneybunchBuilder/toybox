@@ -327,9 +327,6 @@ void tb_phys_add_contact_callback(TbPhysicsSystem *phys_sys,
   phys_sys->listener->AddCallback({cb, user_e});
 }
 
-// Registration function
-__attribute__((__constructor__)) void tb_construct_phys_sys(void) {
-  tb_register_system("Physics", &tb_register_physics_sys,
-                     &tb_unregister_physics_sys);
-}
+// Helper macro to auto-register system
+TB_REGISTER_SYS(tb, physics, TB_PHYS_SYS_PRIO);
 }

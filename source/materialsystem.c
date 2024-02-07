@@ -21,6 +21,11 @@ typedef struct TbMaterial {
   TbTextureId metal_rough_map;
 } TbMaterial;
 
+void tb_register_material_sys(TbWorld *world);
+void tb_unregister_material_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, material, TB_MAT_SYS_PRIO)
+
 uint32_t find_mat_by_hash(TbMaterialSystem *self, uint64_t id) {
   TB_DYN_ARR_FOREACH(self->materials, i) {
     if (TB_DYN_ARR_AT(self->materials, i).id.id == id) {
@@ -448,9 +453,9 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
           };
           // HACK: Known alignment for uniform buffers
-          err = tb_rnd_sys_create_gpu_buffer2_tmp(
-              self->rnd_sys, &create_info, &data, mat->name,
-              &material->gpu_buffer, 0x40);
+          err = tb_rnd_sys_create_gpu_buffer2_tmp(self->rnd_sys, &create_info,
+                                                  &data, mat->name,
+                                                  &material->gpu_buffer, 0x40);
           TB_VK_CHECK_RET(
               err,
               "Failed to allocate material uniform data in tmp host buffer",

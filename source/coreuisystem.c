@@ -13,8 +13,12 @@ typedef struct TbCoreUIMenu {
   const char *name;
 } TbCoreUIMenu;
 
-TbCoreUISystem create_coreui_system(TbAllocator gp_alloc,
-                                    TbAllocator tmp_alloc,
+void tb_register_core_ui_sys(TbWorld *world);
+void tb_unregister_core_ui_sys(TbWorld *world);
+
+TB_REGISTER_SYS(tb, core_ui, TB_COREUI_SYS_PRIO)
+
+TbCoreUISystem create_coreui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                     TbImGuiSystem *imgui_system) {
   TbCoreUISystem sys = {
       .gp_alloc = gp_alloc,
