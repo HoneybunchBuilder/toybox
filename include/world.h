@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "allocator.h"
 #include "dynarray.h"
 #include "scene.h"
@@ -20,10 +24,10 @@ typedef void (^TbCreateWorldSystemsFn)(TbWorld *, TbRenderThread *,
                                        SDL_Window *);
 extern TbCreateWorldSystemsFn tb_create_default_world;
 
-typedef void (^TbCreateSystemFn)(TbWorld *, SDL_Window *);
-typedef void (^TbDestroySystemFn)(TbWorld *);
-extern void tb_register_system(const char *name, TbCreateSystemFn create_fn,
-                               TbDestroySystemFn destroy_fn);
+typedef void (*TbCreateSystemFn)(TbWorld *);
+typedef void (*TbDestroySystemFn)(TbWorld *);
+void tb_register_system(const char *name, TbCreateSystemFn create_fn,
+                        TbDestroySystemFn destroy_fn);
 
 typedef struct TbWorldDesc {
   const char *name;
@@ -40,6 +44,7 @@ typedef struct TbWorld {
   TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
   TbRenderThread *render_thread;
+  SDL_Window *window;
   TB_DYN_ARR_OF(TbScene) scenes;
 } TbWorld;
 
@@ -50,3 +55,7 @@ void tb_destroy_world(TbWorld *world);
 
 bool tb_load_scene(TbWorld *world, const char *scene_path);
 void tb_unload_scene(TbWorld *world, TbScene *scene);
+
+#ifdef __cplusplus
+}
+#endif

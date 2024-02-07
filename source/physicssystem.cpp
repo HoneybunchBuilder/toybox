@@ -68,8 +68,9 @@ public:
     case Layers::STATIC_MESH:
       return inObject2 == Layers::MOVING;
     case Layers::MOVING:
-      return true; // Moving collides with everything
-    case Layers::MOVING_MESH: // Moving mesh may not interact with any other mesh type
+      return true;            // Moving collides with everything
+    case Layers::MOVING_MESH: // Moving mesh may not interact with any other
+                              // mesh type
       return inObject2 != Layers::MOVING_MESH &&
              inObject2 != Layers::STATIC_MESH;
     default:
@@ -324,5 +325,11 @@ void tb_phys_add_velocity(TbPhysicsSystem *phys_sys,
 void tb_phys_add_contact_callback(TbPhysicsSystem *phys_sys,
                                   ecs_entity_t user_e, tb_contact_fn cb) {
   phys_sys->listener->AddCallback({cb, user_e});
+}
+
+// Registration function
+__attribute__((__constructor__)) void tb_construct_phys_sys(void) {
+  tb_register_system("Physics", &tb_register_physics_sys,
+                     &tb_unregister_physics_sys);
 }
 }

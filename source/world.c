@@ -57,9 +57,6 @@ typedef struct TbSystemRegistry {
   TbDestroySystemFn *destroy_fns;
 } TbSystemRegistry;
 
-void tb_register_system(const char *name, TbCreateSystemFn create_fn,
-                        TbDestroySystemFn destroy_fn);
-
 void *ecs_malloc(ecs_size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
@@ -162,7 +159,6 @@ TbCreateWorldSystemsFn tb_create_default_world =
                  });
       }
 
-      tb_register_physics_sys(world);
       tb_register_light_sys(world);
       tb_register_audio_sys(world);
       tb_register_render_sys(world, thread);
@@ -232,20 +228,25 @@ TbWorld tb_create_world(const TbWorldDesc *desc) {
   TbWorld world = {
       .ecs = ecs_init(),
       .render_thread = render_thread,
+      .window = desc->window,
       .gp_alloc = gp_alloc,
       .tmp_alloc = desc->tmp_alloc,
   };
   TB_DYN_ARR_RESET(world.scenes, gp_alloc, 1);
+
+  // Create all registered systems
+  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+    tb_auto fn = s_sys_reg.create_fns[i];
+    if (fn) {
+      fn(&world);
+    }
+  }
 
   tb_auto create_fn = desc->create_fn;
   if (!create_fn) {
     create_fn = tb_create_default_world;
   }
   create_fn(&world, render_thread, desc->window);
-
-  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
-    s_sys_reg.create_fns[i](&world, desc->window);
-  }
 
 // By setting this singleton we allow the application to connect to the
 // flecs explorer
@@ -301,8 +302,14 @@ void tb_destroy_world(TbWorld *world) {
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(world->render_thread);
 
+  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+    tb_auto fn = s_sys_reg.destroy_fns[i];
+    if (fn) {
+      fn(world);
+    }
+  }
+
   // Unregister systems so that they will be cleaned up by observers in ecs_fini
-  tb_unregister_physics_sys(world);
   tb_unregister_rotator_sys(world);
   tb_unregister_time_of_day_sys(world);
   tb_unregister_camera_sys(world);
@@ -324,10 +331,6 @@ void tb_destroy_world(TbWorld *world) {
   tb_unregister_render_target_sys(world);
   tb_unregister_render_sys(world);
   tb_unregister_light_sys(world);
-
-  for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
-    s_sys_reg.destroy_fns[i](world);
-  }
 
   // Destroying the render thread will also close the window
   tb_destroy_render_thread(world->render_thread);
