@@ -294,8 +294,6 @@ void tb_register_physics_sys(TbWorld *world) {
   ecs.set<TbPhysicsSystem>(sys);
 
   ecs.system("PhysicsUpdate").kind(EcsPreUpdate).iter(physics_update_tick);
-
-  tb_register_rigidbody_component(world);
 }
 
 void tb_unregister_physics_sys(TbWorld *world) {

@@ -3,7 +3,6 @@
 #include "allocator.h"
 #include "assets.h"
 #include "assetsystem.h"
-#include "infomode.h"
 #include "profiling.h"
 #include "simd.h"
 #include "tbcommon.h"
@@ -20,6 +19,7 @@
 #include <flecs.h>
 #include <json.h>
 #include <mimalloc.h>
+#include <stdio.h>
 
 typedef struct TbSystemEntry {
   char *name;
@@ -29,20 +29,24 @@ typedef struct TbSystemEntry {
 } TbSystemEntry;
 
 typedef struct TbSystemRegistry {
-  int32_t sys_count;
+  int32_t count;
   TbSystemEntry *entries;
 } TbSystemRegistry;
 
 typedef struct TbComponentEntry {
   char *name;
-  // TbCreateSystemFn create_fn;
-  // TbDestroySystemFn destroy_fn;
+  TbRegisterComponentFn reg_fn;
+  TbCreateComponentFn create_fn;
+  TbDestroyComponentFn destroy_fn;
+  ecs_entity_t desc_id;
 } TbComponentEntry;
 
 typedef struct TbComponentRegistry {
   int32_t count;
   TbComponentEntry *entries;
 } TbComponentRegistry;
+
+ECS_COMPONENT_DECLARE(TbWorldRef);
 
 void *ecs_malloc(ecs_size_t size) {
   TracyCZone(ctx, true);
@@ -98,37 +102,86 @@ int32_t tb_sys_cmp(const void *a, const void *b) {
 void tb_register_system(const char *name, int32_t priority,
                         TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn) {
-  int32_t index = s_sys_reg.sys_count;
-  int32_t next_count = ++s_sys_reg.sys_count;
+  int32_t index = s_sys_reg.count;
+  int32_t next_count = ++s_sys_reg.count;
   size_t entry_size = next_count * sizeof(TbSystemEntry);
-  size_t name_len = SDL_strlen(name);
+  size_t name_len = SDL_strlen(name) + 1;
 
   s_sys_reg.entries = mi_realloc(s_sys_reg.entries, entry_size);
   tb_auto entry = &s_sys_reg.entries[index];
   entry->priority = priority;
   entry->create_fn = create_fn;
   entry->destroy_fn = destroy_fn;
-  entry->name = mi_malloc(name_len + 1);
+  entry->name = mi_malloc(name_len);
+  SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
 }
 
-bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
-  int32_t info_mode = tb_check_info_mode(desc->argc, desc->argv);
+static TbComponentRegistry s_comp_reg = {0};
 
+void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
+                           TbCreateComponentFn create_fn,
+                           TbDestroyComponentFn destroy_fn) {
+  int32_t index = s_comp_reg.count;
+  int32_t next_count = ++s_comp_reg.count;
+  size_t entry_size = next_count * sizeof(TbComponentEntry);
+  size_t name_len = SDL_strlen(name) + 1;
+
+  s_comp_reg.entries = mi_realloc(s_comp_reg.entries, entry_size);
+  tb_auto entry = &s_comp_reg.entries[index];
+  entry->reg_fn = reg_fn;
+  entry->create_fn = create_fn;
+  entry->destroy_fn = destroy_fn;
+  entry->name = mi_malloc(name_len);
+  SDL_memset(entry->name, 0, name_len);
+  SDL_strlcpy(entry->name, name, name_len);
+}
+
+#ifndef FINAL
+int32_t tb_check_info_mode(int32_t argc, char *const *argv) {
+  static const char *info_mode_str = "--info";
+  for (int32_t i = 0; i < argc; ++i) {
+    const char *argument = argv[i];
+    if (SDL_strncmp(argument, info_mode_str, SDL_strlen(info_mode_str)) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+void tb_write_info(TbWorld *world) {
+  json_tokener *tok = json_tokener_new();
+
+  ecs_world_t *ecs = world->ecs;
+
+  // Reflect all components
+  tb_auto reflection = json_object_new_object();
+
+  for (int32_t i = 0; i < s_comp_reg.count; ++i) {
+    const char *name = s_comp_reg.entries[i].name;
+    tb_auto desc_id = s_comp_reg.entries[i].desc_id;
+    if (desc_id) {
+      char *info = ecs_type_info_to_json(ecs, desc_id);
+      tb_auto parsed = json_tokener_parse_ex(tok, info, SDL_strlen(info) + 1);
+      if (parsed) {
+        json_object_object_add(reflection, name, parsed);
+      }
+      ecs_os_free(info);
+    }
+  }
+
+  const char *refl_json = json_object_to_json_string(reflection);
+  printf("%s\n", refl_json);
+  json_object_put(reflection);
+
+  json_tokener_free(tok);
+}
+#endif
+
+bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   TbAllocator gp_alloc = desc->gp_alloc;
 
-  // Must create render thread on the heap like this
-  TbRenderThread *render_thread = tb_alloc_tp(gp_alloc, TbRenderThread);
-
-  // No render thread in info mode
-  if (info_mode == 0) {
-    TbRenderThreadDescriptor render_thread_desc = {.window = desc->window};
-    TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
-             "Failed to start render thread");
-
-    // Do not go initializing anything until we know the render thread is ready
-    tb_wait_thread_initialized(render_thread);
-  }
+  tb_auto ecs = ecs_init();
 
   // Ensure the instrumented allocator is used
   ecs_os_set_api_defaults();
@@ -140,15 +193,17 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   ecs_os_set_api(&os_api);
 
   *world = (TbWorld){
-      .ecs = ecs_init(),
+      .ecs = ecs,
       .window = desc->window,
-      .render_thread = render_thread,
       .gp_alloc = gp_alloc,
       .tmp_alloc = desc->tmp_alloc,
   };
-  TB_DYN_ARR_RESET(world->scenes, gp_alloc, 1);
 
-  tb_auto ecs = world->ecs;
+  {
+    ECS_COMPONENT_DEFINE(ecs, TbWorldRef);
+    TbWorldRef ref = {world};
+    ecs_singleton_set_ptr(ecs, TbWorldRef, &ref);
+  }
 
   // Define some components that no one else will
   ECS_COMPONENT_DEFINE(ecs, float3);
@@ -157,6 +212,34 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbTransform);
   ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
   ECS_COMPONENT_DEFINE(ecs, TbAssetSystem);
+
+  // Register all components first so info mode can function
+  for (int32_t i = 0; i < s_comp_reg.count; ++i) {
+    tb_auto fn = s_comp_reg.entries[i].reg_fn;
+    if (fn) {
+      s_comp_reg.entries[i].desc_id = fn(world);
+    }
+  }
+
+// Run optional info mode in non-final builds only
+#ifndef FINAL
+  if (tb_check_info_mode(desc->argc, desc->argv) > 0) {
+    tb_write_info(world);
+    return false; // Do not continue
+  }
+#endif
+
+  // Must create render thread on the heap like this
+  TbRenderThread *render_thread = tb_alloc_tp(gp_alloc, TbRenderThread);
+  TbRenderThreadDescriptor render_thread_desc = {.window = desc->window};
+  TB_CHECK(tb_start_render_thread(&render_thread_desc, render_thread),
+           "Failed to start render thread");
+
+  // Do not go initializing anything until we know the render thread is ready
+  tb_wait_thread_initialized(render_thread);
+
+  world->render_thread = render_thread;
+  TB_DYN_ARR_RESET(world->scenes, gp_alloc, 1);
 
   // Register components from other modules
   tb_register_mesh_component(world);
@@ -205,10 +288,10 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 
   // Create all registered systems after sorting by priority
   {
-    const int32_t sys_count = s_sys_reg.sys_count;
-    SDL_qsort(s_sys_reg.entries, sys_count, sizeof(TbSystemEntry), tb_sys_cmp);
+    const int32_t count = s_sys_reg.count;
+    SDL_qsort(s_sys_reg.entries, count, sizeof(TbSystemEntry), tb_sys_cmp);
 
-    for (int32_t i = 0; i < s_sys_reg.sys_count; ++i) {
+    for (int32_t i = 0; i < s_sys_reg.count; ++i) {
       tb_auto fn = s_sys_reg.entries[i].create_fn;
       if (fn) {
         fn(world);
@@ -217,12 +300,6 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   }
 
 #ifndef FINAL
-  // Run optional info mode
-  if (info_mode) {
-    tb_write_info(world);
-    return false; // do not continue in info mode
-  }
-
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
   ecs_singleton_set(ecs, EcsRest, {0});
@@ -273,7 +350,7 @@ void tb_destroy_world(TbWorld *world) {
   tb_stop_render_thread(world->render_thread);
 
   // Destroy systems in reverse order
-  for (int32_t i = s_sys_reg.sys_count - 1; i >= 0; --i) {
+  for (int32_t i = s_sys_reg.count - 1; i >= 0; --i) {
     tb_auto fn = s_sys_reg.entries[i].destroy_fn;
     if (fn) {
       fn(world);

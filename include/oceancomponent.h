@@ -8,11 +8,6 @@
 
 #define TbOceanComponentIdStr "0xBAD22222"
 
-typedef uint64_t ecs_entity_t;
-typedef struct ecs_world_t ecs_world_t;
-typedef struct TbWorld TbWorld;
-typedef struct TbTransformComponent TbTransformComponent;
-
 typedef struct TbOceanComponent {
   float time;
   uint32_t wave_count;
@@ -25,8 +20,6 @@ typedef struct TbOceanSample {
   float3 tangent;
   float3 binormal;
 } TbOceanSample;
-
-void tb_register_ocean_component(TbWorld *world);
 
 TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
                               ecs_entity_t entity, float2 pos);

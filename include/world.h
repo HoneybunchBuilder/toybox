@@ -12,7 +12,8 @@ extern "C" {
 
 #include <SDL3/SDL_stdinc.h>
 
-typedef struct ecs_world_t ecs_world_t;
+#include <flecs.h>
+
 typedef struct TbWorld TbWorld;
 typedef struct TbRenderThread TbRenderThread;
 typedef struct SDL_Window SDL_Window;
@@ -25,17 +26,29 @@ typedef void (*TbDestroySystemFn)(TbWorld *);
 void tb_register_system(const char *name, int32_t priority,
                         TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn);
-
-// clang-format off
 #define TB_REGISTER_SYS(namespace, name, priority)                             \
-  __attribute__((__constructor__))                                             \
-  void namespace##_construct_##name##_sys(void) {                              \
-    tb_register_system(#name, (priority),                                      \
-                       &namespace##_register_##name##_sys,                     \
+  __attribute__((                                                              \
+      __constructor__)) void __##namespace##_construct_##name##_sys(void) {    \
+    tb_register_system(#name, (priority), &namespace##_register_##name##_sys,  \
                        &namespace##_unregister_##name##_sys);                  \
   }
 
-// clang-format on
+typedef struct json_object json_object;
+
+typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
+typedef bool (*TbCreateComponentFn)(TbWorld *world, ecs_entity_t ent,
+                                    json_object *json);
+typedef void (*TbDestroyComponentFn)(TbWorld *world, ecs_entity_t ent);
+void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
+                           TbCreateComponentFn create_fn,
+                           TbDestroyComponentFn destroy_fn);
+#define TB_REGISTER_COMP(namespace, name)                                      \
+  __attribute__((                                                              \
+      __constructor__)) void __##namespace##_register_##name##_comp(void) {    \
+    tb_register_component(#name, &namespace##_register_##name##_comp,          \
+                          &namespace##_create_##name##_comp,                   \
+                          &namespace##_destroy_##name##_comp);                 \
+  }
 
 typedef struct TbWorldDesc {
   const char *name;
@@ -54,6 +67,11 @@ typedef struct TbWorld {
   SDL_Window *window;
   TB_DYN_ARR_OF(TbScene) scenes;
 } TbWorld;
+
+typedef struct TbWorldRef {
+  TbWorld *world;
+} TbWorldRef;
+extern ECS_COMPONENT_DECLARE(TbWorldRef);
 
 bool tb_create_world(const TbWorldDesc *desc, TbWorld *world);
 bool tb_tick_world(TbWorld *world, float delta_seconds);

@@ -387,7 +387,8 @@ void remove_rigidbody_components(ecs_world_t *world) {
   ecs.remove_all<TbRigidbodyComponent>();
 }
 
-void tb_register_rigidbody_component(TbWorld *world) {
+extern "C" {
+ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
   // Is there a better way to avoid having to use this macro in C++?
@@ -467,4 +468,16 @@ void tb_register_rigidbody_component(TbWorld *world) {
                    .range = {0.0f, FLT_MAX}},
               }});
 #pragma clang diagnostic pop
+
+  return ecs_id(TbRigidbodyDescriptor);
+}
+
+bool tb_create_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
+                              json_object *object) {
+  return true;
+}
+
+void tb_destroy_rigidbody_comp(TbWorld *world, ecs_entity_t ent) {}
+
+TB_REGISTER_COMP(tb, rigidbody);
 }

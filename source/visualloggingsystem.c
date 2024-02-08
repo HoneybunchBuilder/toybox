@@ -65,35 +65,6 @@ typedef struct VLogDrawBatch {
   VLogShapeType type;
 } VLogDrawBatch;
 
-typedef struct TbVisualLoggingSystem {
-  TbAllocator tmp_alloc;
-  TbAllocator gp_alloc;
-
-  TbRenderSystem *rnd_sys;
-  TbViewSystem *view_sys;
-  TbRenderPipelineSystem *rp_sys;
-  TbMeshSystem *mesh_system;
-
-  bool *ui;
-
-  TbMeshId sphere_mesh;
-  uint32_t sphere_index_type;
-  uint32_t sphere_index_count;
-  uint32_t sphere_pos_offset;
-  float3 sphere_scale;
-  VkBuffer sphere_geom_buffer;
-
-  VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
-  TbDrawContextId draw_ctx;
-
-  bool logging;
-  int32_t log_frame_idx;
-
-  bool recording;
-  TB_DYN_ARR_OF(TbVLogFrame) frames;
-
-} TbVisualLoggingSystem;
 ECS_COMPONENT_DECLARE(TbVisualLoggingSystem);
 
 void tb_register_visual_logging_sys(TbWorld *world);

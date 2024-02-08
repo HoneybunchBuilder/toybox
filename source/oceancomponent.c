@@ -2,6 +2,7 @@
 
 #include "assetsystem.h"
 #include "oceansystem.h"
+#include "tbcommon.h"
 #include "transformcomponent.h"
 #include "world.h"
 
@@ -10,6 +11,11 @@
 #include <json.h>
 
 ECS_COMPONENT_DECLARE(TbOceanComponent);
+
+ECS_STRUCT(TbOceanDescriptor, {
+  int32_t wave_count;
+  TbOceanWave waves[8];
+});
 
 float4 make_wave(float2 dir, float steepness, float wavelength) {
   return tb_f4(dir.x, dir.y, steepness, wavelength);
@@ -81,18 +87,6 @@ void destroy_ocean_components(ecs_world_t *ecs) {
   ecs_filter_fini(filter);
 }
 
-void tb_register_ocean_component(TbWorld *world) {
-  ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT_DEFINE(ecs, TbOceanComponent);
-
-  // Register asset system for parsing ocean components
-  TbAssetSystem asset = {
-      .add_fn = create_ocean_component,
-      .rem_fn = destroy_ocean_components,
-  };
-  ecs_set_ptr(ecs, ecs_id(TbOceanSystem), TbAssetSystem, &asset);
-}
-
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and
 // bitangent
 TbOceanSample gerstner_wave(TbOceanWave wave, TbOceanSample sample,
@@ -144,3 +138,31 @@ TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
 
   return sample;
 }
+
+ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT_DEFINE(ecs, TbOceanComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbOceanDescriptor);
+
+  // Further reflect the ocean component descriptor
+
+  // Register asset system for parsing ocean components
+  TbAssetSystem asset = {
+      .add_fn = create_ocean_component,
+      .rem_fn = destroy_ocean_components,
+  };
+  ecs_set_ptr(ecs, ecs_id(TbOceanSystem), TbAssetSystem, &asset);
+
+  return ecs_id(TbOceanDescriptor);
+}
+
+bool tb_create_ocean_comp(TbWorld *world, ecs_entity_t ent, json_object *json) {
+  tb_auto ecs = world->ecs;
+  TbOceanComponent comp = {0};
+  // TODO: Parse JSON
+  ecs_set_ptr(ecs, ent, TbOceanComponent, &comp);
+}
+
+void tb_destroy_ocean_comp(TbWorld *world, ecs_entity_t ent) {}
+
+TB_REGISTER_COMP(tb, ocean)

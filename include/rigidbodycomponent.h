@@ -59,8 +59,6 @@ typedef struct TbRigidbodyComponent {
 } TbRigidbodyComponent;
 extern ECS_COMPONENT_DECLARE(TbRigidbodyComponent);
 
-void tb_register_rigidbody_component(TbWorld *world);
-
 #ifdef __cplusplus
 }
 #endif
