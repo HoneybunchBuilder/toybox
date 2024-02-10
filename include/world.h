@@ -34,20 +34,18 @@ void tb_register_system(const char *name, int32_t priority,
   }
 
 typedef struct json_object json_object;
+typedef struct cgltf_node cgltf_node;
 
 typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
-typedef bool (*TbCreateComponentFn)(TbWorld *world, ecs_entity_t ent,
-                                    json_object *json);
-typedef void (*TbDestroyComponentFn)(TbWorld *world, ecs_entity_t ent);
+typedef bool (*TbLoadComponentFn)(TbWorld *world, ecs_entity_t ent,
+                                  const cgltf_node *node, json_object *json);
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
-                           TbCreateComponentFn create_fn,
-                           TbDestroyComponentFn destroy_fn);
+                           TbLoadComponentFn load_fn);
 #define TB_REGISTER_COMP(namespace, name)                                      \
   __attribute__((                                                              \
       __constructor__)) void __##namespace##_register_##name##_comp(void) {    \
     tb_register_component(#name, &namespace##_register_##name##_comp,          \
-                          &namespace##_create_##name##_comp,                   \
-                          &namespace##_destroy_##name##_comp);                 \
+                          &namespace##_load_##name##_comp);                    \
   }
 
 typedef struct TbWorldDesc {

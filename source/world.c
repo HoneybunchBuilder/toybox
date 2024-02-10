@@ -36,8 +36,7 @@ typedef struct TbSystemRegistry {
 typedef struct TbComponentEntry {
   char *name;
   TbRegisterComponentFn reg_fn;
-  TbCreateComponentFn create_fn;
-  TbDestroyComponentFn destroy_fn;
+  TbLoadComponentFn load_fn;
   ecs_entity_t desc_id;
 } TbComponentEntry;
 
@@ -120,8 +119,7 @@ void tb_register_system(const char *name, int32_t priority,
 static TbComponentRegistry s_comp_reg = {0};
 
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
-                           TbCreateComponentFn create_fn,
-                           TbDestroyComponentFn destroy_fn) {
+                           TbLoadComponentFn load_fn) {
   int32_t index = s_comp_reg.count;
   int32_t next_count = ++s_comp_reg.count;
   size_t entry_size = next_count * sizeof(TbComponentEntry);
@@ -130,8 +128,7 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   s_comp_reg.entries = mi_realloc(s_comp_reg.entries, entry_size);
   tb_auto entry = &s_comp_reg.entries[index];
   entry->reg_fn = reg_fn;
-  entry->create_fn = create_fn;
-  entry->destroy_fn = destroy_fn;
+  entry->load_fn = load_fn;
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
@@ -471,6 +468,21 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
       for (uint32_t i = 0; i < node->children_count; ++i) {
         tb_auto child = node->children[i];
         load_entity(world, scene, tok, data, root_scene_path, ent, child);
+      }
+    }
+  }
+
+  // Add components as needed
+  if (json) {
+    json_object_object_foreach(json, component_name, component_obj) {
+      for (int32_t i = 0; i < s_comp_reg.count; ++i) {
+        tb_auto load_fn = s_comp_reg.entries[i].load_fn;
+        if (load_fn) {
+          const char *name = s_comp_reg.entries[i].name;
+          if (SDL_strcmp(component_name, name) == 0) {
+            load_fn(world, ent, node, component_obj);
+          }
+        }
       }
     }
   }

@@ -156,7 +156,8 @@ ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
   return ecs_id(TbOceanDescriptor);
 }
 
-bool tb_create_ocean_comp(TbWorld *world, ecs_entity_t ent, json_object *json) {
+bool tb_load_ocean_comp(TbWorld *world, ecs_entity_t ent,
+                        const cgltf_node *node, json_object *json) {
   tb_auto ecs = world->ecs;
   TbOceanComponent comp = {0};
   // TODO: Parse JSON

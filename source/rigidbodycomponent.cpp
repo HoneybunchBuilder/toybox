@@ -142,224 +142,23 @@ JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node) {
   return settings.Create().Get();
 }
 
-bool create_rigidbody_component(ecs_world_t *world, ecs_entity_t e,
-                                const char *source_path, const cgltf_node *node,
-                                json_object *extra) {
-  (void)source_path;
+extern "C" {
 
-  flecs::world ecs(world);
-  bool ret = true;
-  if (node && extra) {
-    bool rigidbody = false;
-    {
-      json_object_object_foreach(extra, key, value) {
-        if (SDL_strcmp(key, "id") == 0) {
-          const char *id_str = json_object_get_string(value);
-          if (SDL_strcmp(id_str, RigidbodyComponentIdStr) == 0) {
-            rigidbody = true;
-            break;
-          }
-        }
-      }
-    }
-
-    if (rigidbody) {
-
-      JPH::EShapeSubType shape_type = (JPH::EShapeSubType)-1;
-      {
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "shape_type") == 0) {
-            const char *shape_type_str = json_object_get_string(value);
-            if (SDL_strcmp(shape_type_str, "box") == 0) {
-              shape_type = JPH::EShapeSubType::Box;
-              break;
-            } else if (SDL_strcmp(shape_type_str, "sphere") == 0) {
-              shape_type = JPH::EShapeSubType::Sphere;
-              break;
-            } else if (SDL_strcmp(shape_type_str, "capsule") == 0) {
-              shape_type = JPH::EShapeSubType::Capsule;
-              break;
-            } else if (SDL_strcmp(shape_type_str, "cylinder") == 0) {
-              shape_type = JPH::EShapeSubType::Cylinder;
-              break;
-            } else if (SDL_strcmp(shape_type_str, "mesh") == 0) {
-              shape_type = JPH::EShapeSubType::Mesh;
-              break;
-            }
-          }
-        }
-      }
-
-      JPH::ShapeRefC shape = {};
-
-      if (shape_type == JPH::EShapeSubType::Box) {
-        float3 half_extents = {};
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "half_ext_x") == 0) {
-            half_extents.x = (float)json_object_get_double(value);
-          } else if (SDL_strcmp(key, "half_ext_y") == 0) {
-            half_extents.y = (float)json_object_get_double(value);
-          } else if (SDL_strcmp(key, "half_ext_z") == 0) {
-            half_extents.z = (float)json_object_get_double(value);
-          }
-        }
-        shape = create_box_shape(half_extents);
-      } else if (shape_type == JPH::EShapeSubType::Sphere) {
-        float radius = 0;
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "sphere_radius") == 0) {
-            radius = (float)json_object_get_double(value);
-          }
-        }
-        shape = create_sphere_shape(radius);
-      } else if (shape_type == JPH::EShapeSubType::Capsule) {
-        float half_height = 0.5f;
-        float radius = 0.0f;
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "capsule_half_height") == 0) {
-            radius = (float)json_object_get_double(value);
-          }
-          if (SDL_strcmp(key, "capsule_radius") == 0) {
-            radius = (float)json_object_get_double(value);
-          }
-        }
-        shape = create_capsule_shape(half_height, radius);
-      } else if (shape_type == JPH::EShapeSubType::Cylinder) {
-        float half_height = 0.5f;
-        float radius = 0.0f;
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "cylinder_half_height") == 0) {
-            radius = (float)json_object_get_double(value);
-          }
-          if (SDL_strcmp(key, "cylinder_radius") == 0) {
-            radius = (float)json_object_get_double(value);
-          }
-        }
-        shape = create_cylinder_shape(half_height, radius);
-      } else if (shape_type == JPH::EShapeSubType::Mesh) {
-        // HACK:
-        // This is stupid.. get the standard allocator from some singleton
-        auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
-        shape = create_mesh_shape(mesh_sys->gp_alloc, node);
-      } else {
-        TB_CHECK(false, "Invalid physics shape");
-      }
-
-      bool sensor = false;
-      JPH::ObjectLayer layer = {};
-      JPH::EMotionType motion = {};
-      {
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "layer") == 0) {
-            const char *layer_str = json_object_get_string(value);
-            if (SDL_strcmp(layer_str, "moving") == 0) {
-              if (shape->GetType() == JPH::EShapeType::Mesh) {
-                layer = Layers::MOVING_MESH;
-              } else {
-                layer = Layers::MOVING;
-              }
-            } else if (SDL_strcmp(layer_str, "static") == 0 ||
-                       SDL_strcmp(layer_str, "non_moving") == 0) {
-              if (shape->GetType() == JPH::EShapeType::Mesh) {
-                layer = Layers::STATIC_MESH;
-              } else {
-                layer = Layers::STATIC;
-              }
-            } else {
-              TB_CHECK(false, "Invalid physics layer");
-            }
-          } else if (SDL_strcmp(key, "motion") == 0) {
-            const char *motion_str = json_object_get_string(value);
-            if (SDL_strcmp(motion_str, "static") == 0) {
-              motion = JPH::EMotionType::Static;
-            } else if (SDL_strcmp(motion_str, "kinematic") == 0) {
-              motion = JPH::EMotionType::Kinematic;
-            } else if (SDL_strcmp(motion_str, "dynamic") == 0) {
-              motion = JPH::EMotionType::Dynamic;
-            } else {
-              TB_CHECK(false, "Invalid physics motion");
-            }
-          } else if (SDL_strcmp(key, "sensor") == 0) {
-            sensor = (bool)json_object_get_boolean(value);
-          }
-        }
-      }
-
-      // All degrees of freedom are allowed unless specified otherwise
-      JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::All;
-      {
-        json_object_object_foreach(extra, key, value) {
-          if (SDL_strcmp(key, "trans_x") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationX;
-            }
-          } else if (SDL_strcmp(key, "trans_y") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationY;
-            }
-          } else if (SDL_strcmp(key, "trans_z") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::TranslationZ;
-            }
-          } else if (SDL_strcmp(key, "rot_x") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::RotationX;
-            }
-          } else if (SDL_strcmp(key, "rot_y") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::RotationY;
-            }
-          } else if (SDL_strcmp(key, "rot_z") == 0) {
-            if (!json_object_get_boolean(value)) {
-              allowed_dofs &= ~JPH::EAllowedDOFs::RotationZ;
-            }
-          }
-        }
-      }
-
-      auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
-      auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
-      auto &bodies = jolt->GetBodyInterface();
-
-      // Position and rotation set in post load
-      JPH::BodyCreationSettings body_settings(
-          shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
-      body_settings.mAllowedDOFs = allowed_dofs;
-      body_settings.mIsSensor = sensor;
-      body_settings.mUserData = (uint64_t)e;
-      body_settings.mOverrideMassProperties =
-          JPH::EOverrideMassProperties::CalculateInertia;
-      body_settings.mMassPropertiesOverride.mMass = 1.0f;
-
-      JPH::BodyID body =
-          bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
-
-      TbRigidbodyComponent comp = {
-          body.GetIndexAndSequenceNumber(),
-      };
-      ecs.entity(e).set<TbRigidbodyComponent>(comp);
-    }
-  }
-  return ret;
-}
-
-void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
-  flecs::world ecs(world);
-  flecs::entity ent = ecs.entity(e);
-
+void tb_on_rigidbody_set(flecs::entity ent, TbRigidbodyComponent &rb) {
+  const auto &n = ent.name();
   if (!ent.has<TbRigidbodyComponent>() || !ent.has<TbTransformComponent>()) {
     return;
   }
+
+  flecs::world ecs = ent.world();
 
   auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
   auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
   auto &bodies = jolt->GetBodyInterface();
 
-  auto rb = ent.get_mut<TbRigidbodyComponent>();
-
   // Set the body position and rotation based on the final world transform
   // of the entity.
-  auto world_trans = tb_transform_get_world_trans(ecs.c_ptr(), e);
+  auto world_trans = tb_transform_get_world_trans(ecs.c_ptr(), ent);
   auto pos = world_trans.position;
   // This only works because we're assuming that there is no offset rotation
   auto rot = world_trans.rotation;
@@ -367,27 +166,26 @@ void post_load_rigidbody_component(ecs_world_t *world, ecs_entity_t e) {
   auto position = JPH::Vec3(pos.x, pos.y, pos.z);
   auto rotation = JPH::Quat(rot.x, rot.y, rot.z, rot.w);
 
-  const auto body = (JPH::BodyID)rb->body;
+  auto body = JPH::BodyID(rb.body);
   bodies.SetPositionAndRotation(body, position, rotation,
                                 JPH::EActivation::Activate);
 }
 
-void remove_rigidbody_components(ecs_world_t *world) {
-  flecs::world ecs(world);
+void tb_on_rigidbody_removed(flecs::entity ent, TbRigidbodyComponent &rb) {
+  if (!ent.has<TbRigidbodyComponent>()) {
+    return;
+  }
+
+  flecs::world ecs = ent.world();
 
   auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
   auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
   auto &bodies = jolt->GetBodyInterface();
 
-  // Remove rigidbody components from entities
-  auto f = ecs.filter<TbRigidbodyComponent>();
-  f.each([&](TbRigidbodyComponent &comp) {
-    bodies.RemoveBody(JPH::BodyID(comp.body));
-  });
-  ecs.remove_all<TbRigidbodyComponent>();
+  auto body = JPH::BodyID(rb.body);
+  bodies.RemoveBody(body);
 }
 
-extern "C" {
 ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
@@ -401,14 +199,9 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
   ECS_COMPONENT_DEFINE(world->ecs, TbRigidbodyComponent);
 #pragma clang diagnostic pop
 
-  TbAssetSystem asset = {
-      .add_fn = create_rigidbody_component,
-      .post_load_fn = post_load_rigidbody_component,
-      .rem_fn = remove_rigidbody_components,
-  };
-
-  // Sets the TbAssetSystem component on the TbPhysicsSystem singleton entity
-  ecs.entity<TbPhysicsSystem>().set<TbAssetSystem>(asset);
+  ecs.component<TbRigidbodyComponent>()
+      .on_set(tb_on_rigidbody_set)
+      .on_remove(tb_on_rigidbody_removed);
 
 // Register descriptor with the reflection system
 #pragma clang diagnostic push
@@ -472,12 +265,161 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
   return ecs_id(TbRigidbodyDescriptor);
 }
 
-bool tb_create_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
-                              json_object *object) {
+bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
+                            const cgltf_node *node, json_object *object) {
+  flecs::world ecs(world->ecs);
+
+  bool sensor = false;
+  JPH::EShapeSubType shape_type = (JPH::EShapeSubType)-1;
+  JPH::ObjectLayer layer = {};
+  JPH::EMotionType motion = {};
+  float3 extents = {};
+  float half_height = 0;
+  float radius = 0;
+  JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::All;
+
+  json_object_object_foreach(object, key, value) {
+    // Parse Shape type
+    if (SDL_strcmp(key, "shape_type") == 0) {
+      const char *shape_type_str = json_object_get_string(value);
+      if (SDL_strcmp(shape_type_str, "box") == 0) {
+        shape_type = JPH::EShapeSubType::Box;
+        break;
+      } else if (SDL_strcmp(shape_type_str, "sphere") == 0) {
+        shape_type = JPH::EShapeSubType::Sphere;
+        break;
+      } else if (SDL_strcmp(shape_type_str, "capsule") == 0) {
+        shape_type = JPH::EShapeSubType::Capsule;
+        break;
+      } else if (SDL_strcmp(shape_type_str, "cylinder") == 0) {
+        shape_type = JPH::EShapeSubType::Cylinder;
+        break;
+      } else if (SDL_strcmp(shape_type_str, "mesh") == 0) {
+        shape_type = JPH::EShapeSubType::Mesh;
+        break;
+      }
+    }
+    // Parse extents
+    else if (SDL_strcmp(key, "extent_x") == 0) {
+      extents.x = (float)json_object_get_double(value);
+    } else if (SDL_strcmp(key, "extent_y") == 0) {
+      extents.y = (float)json_object_get_double(value);
+    } else if (SDL_strcmp(key, "extent_z") == 0) {
+      extents.z = (float)json_object_get_double(value);
+    }
+    // Parse radius and half height
+    else if (SDL_strcmp(key, "radius") == 0) {
+      radius = (float)json_object_get_double(value);
+    } else if (SDL_strcmp(key, "half_height") == 0) {
+      radius = (float)json_object_get_double(value);
+    }
+    // Parse layer
+    else if (SDL_strcmp(key, "layer") == 0) {
+      const char *layer_str = json_object_get_string(value);
+      if (SDL_strcmp(layer_str, "moving") == 0) {
+        if (shape_type == JPH::EShapeSubType::Mesh) {
+          layer = Layers::MOVING_MESH;
+        } else {
+          layer = Layers::MOVING;
+        }
+      } else if (SDL_strcmp(layer_str, "static") == 0 ||
+                 SDL_strcmp(layer_str, "non_moving") == 0) {
+        if (shape_type == JPH::EShapeSubType::Mesh) {
+          layer = Layers::STATIC_MESH;
+        } else {
+          layer = Layers::STATIC;
+        }
+      } else {
+        TB_CHECK(false, "Invalid physics layer");
+      }
+    }
+    // Parse motion type
+    else if (SDL_strcmp(key, "motion_type") == 0) {
+      const char *motion_str = json_object_get_string(value);
+      if (SDL_strcmp(motion_str, "static") == 0) {
+        motion = JPH::EMotionType::Static;
+      } else if (SDL_strcmp(motion_str, "kinematic") == 0) {
+        motion = JPH::EMotionType::Kinematic;
+      } else if (SDL_strcmp(motion_str, "dynamic") == 0) {
+        motion = JPH::EMotionType::Dynamic;
+      } else {
+        TB_CHECK(false, "Invalid physics motion");
+      }
+    }
+    // Parse sensor
+    else if (SDL_strcmp(key, "sensor") == 0) {
+      sensor = (bool)json_object_get_boolean(value);
+    }
+    // Parse allowed degrees of freedom
+    if (SDL_strcmp(key, "trans_x") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::TranslationX;
+      }
+    } else if (SDL_strcmp(key, "trans_y") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::TranslationY;
+      }
+    } else if (SDL_strcmp(key, "trans_z") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::TranslationZ;
+      }
+    } else if (SDL_strcmp(key, "rot_x") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::RotationX;
+      }
+    } else if (SDL_strcmp(key, "rot_y") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::RotationY;
+      }
+    } else if (SDL_strcmp(key, "rot_z") == 0) {
+      if (!json_object_get_boolean(value)) {
+        allowed_dofs &= ~JPH::EAllowedDOFs::RotationZ;
+      }
+    }
+  }
+
+  JPH::ShapeRefC shape = {};
+  if (shape_type == JPH::EShapeSubType::Box) {
+    shape = create_box_shape(extents);
+  } else if (shape_type == JPH::EShapeSubType::Sphere) {
+    shape = create_sphere_shape(radius);
+  } else if (shape_type == JPH::EShapeSubType::Capsule) {
+    shape = create_capsule_shape(half_height, radius);
+  } else if (shape_type == JPH::EShapeSubType::Cylinder) {
+    shape = create_cylinder_shape(half_height, radius);
+  } else if (shape_type == JPH::EShapeSubType::Mesh) {
+    // HACK:
+    // This is stupid.. get the standard allocator from some singleton
+    auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
+    shape = create_mesh_shape(mesh_sys->gp_alloc, node);
+  } else {
+    TB_CHECK(false, "Invalid physics shape");
+  }
+
+  auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
+  auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
+  auto &bodies = jolt->GetBodyInterface();
+
+  // Position and rotation set in post load
+  JPH::BodyCreationSettings body_settings(
+      shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
+  body_settings.mAllowedDOFs = allowed_dofs;
+  body_settings.mIsSensor = sensor;
+  body_settings.mUserData = (uint64_t)ent;
+  body_settings.mOverrideMassProperties =
+      JPH::EOverrideMassProperties::CalculateInertia;
+  body_settings.mMassPropertiesOverride.mMass = 1.0f;
+
+  JPH::BodyID body =
+      bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
+
+  TbRigidbodyComponent comp = {
+      body.GetIndexAndSequenceNumber(),
+  };
+  ecs.entity(ent).set<TbRigidbodyComponent>(comp);
+
   return true;
 }
-
-void tb_destroy_rigidbody_comp(TbWorld *world, ecs_entity_t ent) {}
 
 TB_REGISTER_COMP(tb, rigidbody);
 }
