@@ -1287,15 +1287,12 @@ void tb_register_sky_sys(TbWorld *world) {
   ECS_COMPONENT(ecs, TbRenderTargetSystem);
   ECS_COMPONENT(ecs, TbViewSystem);
   ECS_COMPONENT(ecs, TbSkySystem);
-  ECS_COMPONENT(ecs, TbSkyComponent);
   ECS_COMPONENT(ecs, TbDirectionalLightComponent);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  TbRenderTargetSystem *rt_sys =
-      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto *rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbSkySystem sys = create_sky_system(world->gp_alloc, world->tmp_alloc,
                                       rnd_sys, rp_sys, rt_sys, view_sys);
@@ -1308,8 +1305,6 @@ void tb_register_sky_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
   ECS_SYSTEM(ecs, sky_draw_tick, EcsPostUpdate, TbSkyComponent);
-
-  tb_register_sky_component(world);
 }
 
 void tb_unregister_sky_sys(TbWorld *world) {

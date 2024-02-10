@@ -2,9 +2,13 @@
 
 #include "simd.h"
 
-#define TbSkyComponentIdStr "0xCAFEB0BA"
+#include <flecs.h>
 
-typedef struct TbWorld TbWorld;
+typedef struct TbSkyDescriptor {
+  float cirrus;
+  float cumulus;
+} TbSkyDescriptor;
+extern ECS_COMPONENT_DECLARE(TbSkyComponent);
 
 typedef struct TbSkyComponent {
   float time;
@@ -12,5 +16,4 @@ typedef struct TbSkyComponent {
   float cumulus;
   float3 sun_dir;
 } TbSkyComponent;
-
-void tb_register_sky_component(TbWorld *world);
+extern ECS_COMPONENT_DECLARE(TbSkyComponent);
