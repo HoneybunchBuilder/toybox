@@ -12,11 +12,6 @@
 
 #include <flecs.h>
 
-void tb_register_noclip_sys(TbWorld *world);
-void tb_unregister_noclip_sys(TbWorld *world);
-
-TB_REGISTER_SYS(tb, noclip, TB_NOCLIP_SYS_PRIO)
-
 void noclip_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
@@ -104,12 +99,11 @@ void noclip_update_tick(ecs_iter_t *it) {
 
 void tb_register_noclip_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbNoClipComponent);
 
   ECS_SYSTEM(ecs, noclip_update_tick,
              EcsPreUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
-
-  tb_register_noclip_component(ecs);
 }
 
 void tb_unregister_noclip_sys(TbWorld *world) { (void)world; }
+
+TB_REGISTER_SYS(tb, noclip, TB_NOCLIP_SYS_PRIO)
