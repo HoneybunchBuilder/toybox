@@ -21,7 +21,7 @@ jobs:
     runs-on: [macOS, ARM64, self-hosted]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Configure
       run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF
