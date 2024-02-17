@@ -95,7 +95,7 @@ if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES and
 endif()
 
 find_package(SDL3 CONFIG REQUIRED)
-find_package(SDL2_mixer CONFIG REQUIRED)
+find_package(SDL3_mixer CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc CONFIG REQUIRED)
@@ -406,7 +406,7 @@ else()
   target_link_libraries(toybox PUBLIC SDL3::SDL3)
 endif()
 
-target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
+target_link_libraries(toybox PUBLIC $<IF:$<TARGET_EXISTS:SDL3_mixer::SDL3_mixer>,SDL3_mixer::SDL3_mixer,SDL3_mixer::SDL3_mixer-static>)
 
 # Turn on warnings
 target_compile_options(toybox PUBLIC

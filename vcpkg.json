@@ -26,7 +26,7 @@
       ]
     },
     {
-      "name": "sdl2-mixer",
+      "name": "sdl3-mixer",
       "default-features": false
     },
     "tracy",
@@ -65,7 +65,11 @@
     },
     {
       "name": "sdl3",
-      "version": "3.0.0-8d25c2d"
+      "version": "3.0.0-534f753"
+    },
+    {
+      "name": "sdl3-mixer",
+      "version": "3.0.0-087004f"
     },
     {
       "name": "tracy",
@@ -81,7 +85,7 @@
     },
     {
       "name": "json-c",
-      "version": "2022-06-26"
+      "version": "2023-08-12"
     },
     {
       "name": "joltphysics",

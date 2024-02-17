@@ -6,7 +6,7 @@
 
 #include <flecs.h>
 
-#include <SDL2/SDL_mixer.h>
+#include <SDL3_mixer/SDL_mixer.h>
 
 typedef struct TbMusic {
   uint32_t ref_count;
@@ -46,16 +46,18 @@ void tb_register_audio_sys(TbWorld *world) {
   int32_t ret = Mix_Init(MIX_INIT_OGG);
   TB_CHECK(ret != 0, "Failed to initialize SDL3 Mixer");
 
-  // Default to 44khz 16-bit stereo for now
-  // But allow the mixer to change these if the device wants something specific
-  ret = Mix_OpenAudioDevice(44100, SDL_AUDIO_S16, 2, TB_AUDIO_CHUNK_SIZE, NULL,
-                            0);
+  // Open the first default device
+  SDL_AudioSpec audio_spec = {
+      .channels = MIX_DEFAULT_CHANNELS,
+      .format = MIX_DEFAULT_FORMAT,
+      .freq = MIX_DEFAULT_FREQUENCY,
+  };
+
+  ret = Mix_OpenAudio(0, &audio_spec);
   TB_CHECK(ret == 0, "Failed to open default audio device");
 
-  int32_t freq = 0;
-  uint16_t format = 0;
-  int32_t channels = 0;
-  ret = Mix_QuerySpec(&freq, &format, &channels);
+  ret =
+      Mix_QuerySpec(&audio_spec.freq, &audio_spec.format, &audio_spec.channels);
   TB_CHECK(ret == 1, "Failed to query audio device");
 
   // Set the number of audio tracks to 8 for starters
@@ -65,9 +67,9 @@ void tb_register_audio_sys(TbWorld *world) {
   TbAudioSystem sys = {
       .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
-      .frequency = freq,
-      .format = format,
-      .channels = channels,
+      .frequency = audio_spec.freq,
+      .format = audio_spec.format,
+      .channels = audio_spec.channels,
   };
   TB_DYN_ARR_RESET(sys.music, sys.gp_alloc, 8);
   TB_DYN_ARR_RESET(sys.sfx, sys.gp_alloc, 8);
