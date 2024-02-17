@@ -33,7 +33,8 @@
 #include <flecs.h>
 
 #define FILTERED_ENV_DIM 512
-#define FILTERED_ENV_MIPS ((uint32_t)(SDL_floorf(log2f(FILTERED_ENV_DIM))) + 1u)
+#define FILTERED_ENV_MIPS                                                      \
+  ((uint32_t)(SDL_floorf(SDL_logf(FILTERED_ENV_DIM))) + 1u)
 
 typedef struct SkyDrawBatch {
   VkPushConstantRange const_range;
