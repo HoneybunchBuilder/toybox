@@ -15,6 +15,15 @@
         "sdl3-mixer"
       ],
       "reference": "sdl3-mixer"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "6315abcd9392773ed8d1e01b81e1e20aa49dbc33",
+      "packages": [
+        "ktx"
+      ],
+      "reference": "ktx-4.3.1"
     }
   ]
 }
