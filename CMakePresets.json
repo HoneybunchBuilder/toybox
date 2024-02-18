@@ -21,6 +21,9 @@
         "FINAL": "OFF",
         "PROFILE_TRACY": "OFF"
       },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "PATH"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -39,6 +42,9 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "PATH"
       },
       "condition": {
         "type": "equals",
@@ -64,6 +70,9 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "PATH"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -88,6 +97,9 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "PATH"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -103,9 +115,12 @@
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-android",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
-        "ANDROID_PLATFORM": "android-29",
+        "ANDROID_PLATFORM": "android-31",
         "ANDROID_ABI": "arm64-v8a",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "JAVA_HOME;ANDROID_HOME;ANDROID_NDK_HOME"
       }
     },
     {
