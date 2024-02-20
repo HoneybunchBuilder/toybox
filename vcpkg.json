@@ -32,7 +32,6 @@
     "tracy",
     "volk",
     "vulkan-memory-allocator",
-    "vulkan-validationlayers",
     {
       "name": "ktx",
       "host": true,
