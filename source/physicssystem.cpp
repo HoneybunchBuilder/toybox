@@ -23,7 +23,7 @@
 
 #include <flecs.h>
 
-#include <cstdlib>
+#include <malloc.h>
 
 // Note: We don't use mimalloc here because
 // jolt will try to call alloc between threads
@@ -42,7 +42,7 @@ void *jolt_alloc_aligned(size_t size, size_t align) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
   void *ptr = _aligned_malloc(size, align);
 #else
-  void *ptr = std::aligned_alloc(align, size);
+  void *ptr = memalign(align, size);
 #endif
   TracyAllocN(ptr, size, "Physics");
   return ptr;

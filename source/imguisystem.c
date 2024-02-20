@@ -38,11 +38,11 @@ void tb_unregister_imgui_sys(TbWorld *world);
 
 TB_REGISTER_SYS(tb, imgui, TB_IMGUI_SYS_PRIO)
 
-VkResult
-create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                      VkPipelineCache cache, VkSampler sampler,
-                      VkFormat ui_target_format, VkPipelineLayout *pipe_layout,
-                      VkDescriptorSetLayout *set_layout, VkPipeline *pipeline) {
+VkResult create_imgui_pipeline(TbRenderSystem *rnd_sys, VkSampler sampler,
+                               VkFormat ui_target_format,
+                               VkPipelineLayout *pipe_layout,
+                               VkDescriptorSetLayout *set_layout,
+                               VkPipeline *pipeline) {
   VkResult err = VK_SUCCESS;
 
   // Create Descriptor Set Layout
@@ -61,11 +61,8 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
         .pBindings = bindings,
 
     };
-    err =
-        vkCreateDescriptorSetLayout(device, &create_info, vk_alloc, set_layout);
-    TB_VK_CHECK_RET(err, "Failed to create imgui descriptor set layout", err);
-    SET_VK_NAME(device, *set_layout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-                "ImGui DS Layout");
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "ImGUI Set Layout",
+                             set_layout);
   }
 
   // Create Pipeline Layout
@@ -82,10 +79,8 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
                 sizeof(TbImGuiPushConstants),
             },
     };
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc, pipe_layout);
-    TB_VK_CHECK_RET(err, "Failed to create imgui pipeline layout", err);
-    SET_VK_NAME(device, *pipe_layout, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-                "ImGui Pipeline Layout");
+    tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                  "ImGui Pipeline Layout", pipe_layout);
   }
 
   // Create ImGui Pipeline
@@ -100,17 +95,15 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
 
       create_info.codeSize = sizeof(imgui_vert);
       create_info.pCode = (const uint32_t *)imgui_vert;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
-      TB_VK_CHECK_RET(err, "Failed to load imgui vert shader module", err);
+      tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Vert", &vert_mod);
 
       create_info.codeSize = sizeof(imgui_frag);
       create_info.pCode = (const uint32_t *)imgui_frag;
-      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
-      TB_VK_CHECK_RET(err, "Failed to load imgui frag shader module", err);
+      tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Frag", &frag_mod);
     }
 
-#define STAGE_COUNT 2
-    VkPipelineShaderStageCreateInfo stages[STAGE_COUNT] = {
+    static const uint32_t stage_count = 2;
+    VkPipelineShaderStageCreateInfo stages[stage_count] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -210,7 +203,7 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
     VkGraphicsPipelineCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &rendering_info,
-        .stageCount = STAGE_COUNT,
+        .stageCount = stage_count,
         .pStages = stages,
         .pVertexInputState = &vert_input_state,
         .pInputAssemblyState = &input_assembly_state,
@@ -222,15 +215,12 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
         .pDynamicState = &dynamic_state,
         .layout = *pipe_layout,
     };
-#undef STAGE_COUNT
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
-                                    pipeline);
-    TB_VK_CHECK_RET(err, "Failed to create imgui pipeline", err);
-    SET_VK_NAME(device, *pipeline, VK_OBJECT_TYPE_PIPELINE, "ImGui Pipeline");
+    tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info, "ImGui Pipeline",
+                                     pipeline);
 
     // Can safely dispose of shader module objects
-    vkDestroyShaderModule(device, vert_mod, vk_alloc);
-    vkDestroyShaderModule(device, frag_mod, vk_alloc);
+    tb_rnd_destroy_shader(rnd_sys, vert_mod);
+    tb_rnd_destroy_shader(rnd_sys, frag_mod);
   }
 
   return err;
@@ -342,11 +332,8 @@ VkResult ui_context_init(TbRenderSystem *rnd_sys, ImFontAtlas *atlas,
                 1,
             },
     };
-    err = vkCreateImageView(rnd_sys->render_thread->device, &create_info,
-                            &rnd_sys->vk_host_alloc_cb, &context->atlas_view);
-    TB_VK_CHECK_RET(err, "Failed to create imgui atlas view", err);
-    SET_VK_NAME(rnd_sys->render_thread->device, context->atlas_view,
-                VK_OBJECT_TYPE_IMAGE_VIEW, "ImGui Atlas");
+    tb_rnd_create_image_view(rnd_sys, &create_info, "ImGui Atlas",
+                             &context->atlas_view);
   }
 
   // Setup basic display size
@@ -427,10 +414,8 @@ create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
   }
 
   // Create imgui pipeline
-  err = create_imgui_pipeline(
-      rnd_sys->render_thread->device, &rnd_sys->vk_host_alloc_cb,
-      rnd_sys->pipeline_cache, sys.sampler, ui_target_format, &sys.pipe_layout,
-      &sys.set_layout, &sys.pipeline);
+  err = create_imgui_pipeline(rnd_sys, sys.sampler, ui_target_format,
+                              &sys.pipe_layout, &sys.set_layout, &sys.pipeline);
   TB_VK_CHECK(err, "Failed to create imgui pipeline");
 
   sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(

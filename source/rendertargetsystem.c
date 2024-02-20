@@ -7,6 +7,7 @@
 #include "world.h"
 
 #include <flecs.h>
+#include <math.h>
 
 void tb_register_render_target_sys(TbWorld *world);
 void tb_unregister_render_target_sys(TbWorld *world);
@@ -356,7 +357,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
 
     // Create sky capture cube
     {
-      const uint32_t mip_count = (uint32_t)(SDL_floorf(SDL_logf(512.0f))) + 1u;
+      const uint32_t mip_count = (uint32_t)(SDL_floorf(log2f(512.0f))) + 1u;
       TbRenderTargetDescriptor rt_desc = {
           .name = "Sky Cubemap Capture",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
@@ -393,7 +394,7 @@ TbRenderTargetSystem create_render_target_system(TbRenderSystem *rnd_sys,
 
     // Create prefiltered env cubemap
     {
-      const uint32_t mip_count = (uint32_t)(SDL_floorf(SDL_logf(512.0f))) + 1u;
+      const uint32_t mip_count = (uint32_t)(SDL_floorf(log2f(512.0f))) + 1u;
       TbRenderTargetDescriptor rt_desc = {
           .name = "Prefiltered Environment Map",
           .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,

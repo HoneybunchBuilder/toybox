@@ -14,24 +14,13 @@ void tb_unregister_render_sys(TbWorld *world);
 TB_REGISTER_SYS(tb, render, TB_RND_SYS_PRIO)
 
 bool try_map(VmaAllocator vma, VmaAllocation alloc, void **ptr) {
-  VkMemoryPropertyFlags flags = 0;
-  vmaGetAllocationMemoryProperties(vma, alloc, &flags);
-
-  // If this buffer is host visible, just get the pointer to write to
-  if (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-    VmaAllocationInfo alloc_info = {0};
-    vmaGetAllocationInfo(vma, alloc, &alloc_info);
-    // If allocation wasn't mapped, map it
-    if (!alloc_info.pMappedData) {
-      VkResult err = vmaMapMemory(vma, alloc, ptr);
-      TB_VK_CHECK_RET(err, "Failed to map memory", false);
-    } else {
-      *ptr = alloc_info.pMappedData;
-    }
+  VmaAllocationInfo alloc_info = {0};
+  vmaGetAllocationInfo(vma, alloc, &alloc_info);
+  if (alloc_info.pMappedData) {
+    *ptr = alloc_info.pMappedData;
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 void tb_flush_alloc(TbRenderSystem *self, VmaAllocation alloc) {

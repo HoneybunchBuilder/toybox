@@ -153,7 +153,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   // Helper for breaking when encountering a non-info message
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    SDL_TriggerBreakpoint();
+    // SDL_TriggerBreakpoint();
   }
 
   return false;
@@ -283,6 +283,18 @@ bool init_debug_messenger(VkInstance instance,
   return true;
 }
 
+VkResult create_semaphore(VkDevice device,
+                          const VkAllocationCallbacks *vk_alloc,
+                          const char *name, VkSemaphore *sem) {
+  VkSemaphoreCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+  };
+  VkResult err = vkCreateSemaphore(device, &create_info, vk_alloc, sem);
+  TB_VK_CHECK_RET(err, "Failed to create semaphore", err);
+  SET_VK_NAME(device, *sem, VK_OBJECT_TYPE_SEMAPHORE, name);
+  return err;
+}
+
 bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        const TbSwapchain *swapchain, VkQueue graphics_queue,
                        uint32_t graphics_queue_family_index,
@@ -305,7 +317,11 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   VkImage swapchain_images[TB_MAX_FRAME_STATES] = {0};
   err = vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swap_img_count,
                                 swapchain_images);
-  TB_VK_CHECK_RET(err, "Failed to get swapchain images", false);
+  // HACK: Android can often want more than TB_MAX_FRAME_STATE images which
+  // means we get VK_INCOMPLETE back. Should we handle the case where the number
+  // of frames in the swapchain is different than the frames in flight?
+  TB_VK_CHECK_RET(err != VK_SUCCESS && err != VK_INCOMPLETE,
+                  "Failed to get swapchain images", false);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     TbFrameState *state = &states[i];
@@ -356,42 +372,17 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                   "Frame State TbSwapchain Image");
     }
 
-    {
-      VkSemaphoreCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      };
-
-      err = vkCreateSemaphore(device, &create_info, vk_alloc,
-                              &state->img_acquired_sem);
-      TB_VK_CHECK_RET(
-          err, "Failed to create swapchain image acquired semaphore", false);
-      SET_VK_NAME(device, state->img_acquired_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State TbSwapchain Image Acquired Sem");
-
-      err = vkCreateSemaphore(device, &create_info, vk_alloc,
-                              &state->swapchain_image_sem);
-      TB_VK_CHECK_RET(err, "Failed to create swapchain image semaphore", false);
-      SET_VK_NAME(device, state->swapchain_image_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State TbSwapchain Image Sem");
-
-      err = vkCreateSemaphore(device, &create_info, vk_alloc,
-                              &state->upload_complete_sem);
-      TB_VK_CHECK_RET(err, "Failed to create upload complete semaphore", false);
-      SET_VK_NAME(device, state->upload_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State Upload Complete Sem");
-
-      err = vkCreateSemaphore(device, &create_info, vk_alloc,
-                              &state->render_complete_sem);
-      TB_VK_CHECK_RET(err, "Failed to create render complete semaphore", false);
-      SET_VK_NAME(device, state->render_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State Render Complete Sem");
-
-      err = vkCreateSemaphore(device, &create_info, vk_alloc,
-                              &state->frame_complete_sem);
-      TB_VK_CHECK_RET(err, "Failed to create Frame complete semaphore", false);
-      SET_VK_NAME(device, state->frame_complete_sem, VK_OBJECT_TYPE_SEMAPHORE,
-                  "Frame State Frame Complete Sem");
-    }
+    create_semaphore(device, vk_alloc,
+                     "FrameState TbSwapchain Image Acquired Sem",
+                     &state->img_acquired_sem);
+    create_semaphore(device, vk_alloc, "Frame State TbSwapchain Image Sem",
+                     &state->swapchain_image_sem);
+    create_semaphore(device, vk_alloc, "Frame State Upload Complete Sem",
+                     &state->upload_complete_sem);
+    create_semaphore(device, vk_alloc, "Frame State Render Complete Sem",
+                     &state->render_complete_sem);
+    create_semaphore(device, vk_alloc, "Frame State Frame Complete Sem",
+                     &state->frame_complete_sem);
 
     {
       VkFenceCreateInfo create_info = {

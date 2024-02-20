@@ -14,8 +14,8 @@ sdl_read_glb(const struct cgltf_memory_options *memory_options,
   void *mem = memory_options->alloc_func(memory_options->user_data, file_size);
   TB_CHECK_RETURN(mem, "clgtf out of memory.", cgltf_result_out_of_memory);
 
-  TB_CHECK_RETURN(SDL_RWread(file, mem, file_size) != 0, "clgtf io error.",
-                  cgltf_result_io_error);
+  size_t err = SDL_RWread(file, mem, file_size);
+  TB_CHECK_RETURN(err != 0, "clgtf io error.", cgltf_result_io_error);
 
   *size = file_size;
   *data = mem;
@@ -30,7 +30,8 @@ static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
 
   memory_options->free_func(memory_options->user_data, data);
 
-  TB_CHECK(SDL_RWclose(file) == 0, "Failed to close glb file.");
+  bool ok = SDL_RWclose(file) == 0;
+  TB_CHECK(ok, "Failed to close glb file.");
 }
 
 char *tb_resolve_asset_path(TbAllocator tmp_alloc, const char *source_name) {

@@ -332,7 +332,22 @@ TbTextureSystem create_texture_system(TbAllocator gp_alloc,
     {
       ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
 
-      ktx_error_code_e err = ktxTexture2_CreateFromNamedFile(path, flags, &ktx);
+      // We need to open this file with SDL_RWops because on a platform like
+      // android where the asset lives in package storage, this is the best way
+      // to actually open the file you're looking for
+      SDL_RWops *tex_file = SDL_RWFromFile(path, "rb");
+      size_t tex_size = SDL_RWsize(tex_file);
+      // We never free this since the BRDF LUT texture is a once time
+      // importance
+      // We *could* construct a KTX stream that directly reads the file
+      // without reading to memory first but that's a lot of work for a single
+      // texture
+      uint8_t *tex_data = tb_alloc(sys.gp_alloc, tex_size);
+      SDL_RWread(tex_file, (void *)tex_data, tex_size);
+      SDL_RWclose(tex_file);
+
+      ktx_error_code_e err =
+          ktxTexture2_CreateFromMemory(tex_data, tex_size, flags, &ktx);
       TB_CHECK(err == KTX_SUCCESS, "Failed to create KTX texture from memory");
 
       bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
