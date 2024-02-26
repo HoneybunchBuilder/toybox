@@ -17,7 +17,6 @@ typedef struct TbWorld TbWorld;
 
 typedef struct TbThirdPersonMovementComponent {
   // Character movement configuration
-  ecs_entity_t body;
   float speed;
   bool jump;
   float jump_velocity;

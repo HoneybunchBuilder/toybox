@@ -1,9 +1,5 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "allocator.h"
 #include "dynarray.h"
 #include "scene.h"
@@ -13,6 +9,10 @@ extern "C" {
 #include <SDL3/SDL_stdinc.h>
 
 #include <flecs.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct TbWorld TbWorld;
 typedef struct TbRenderThread TbRenderThread;

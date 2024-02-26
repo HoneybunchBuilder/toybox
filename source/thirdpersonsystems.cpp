@@ -87,7 +87,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
   {
     const auto &phys_sys = ecs.get<TbPhysicsSystem>();
     auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
-    const auto &rb = *ecs.entity(move.body).get<TbRigidbodyComponent>();
+    const auto &rb = *entity.get<TbRigidbodyComponent>();
 
     TbQuaternion move_rot = {};
     {
