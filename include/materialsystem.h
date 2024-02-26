@@ -43,6 +43,7 @@ typedef struct TbMaterialSystem {
   // normal and pbr textures
   TbDescriptorPool mat_pool;
 } TbMaterialSystem;
+extern ECS_COMPONENT_DECLARE(TbMaterialSystem);
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self);
 

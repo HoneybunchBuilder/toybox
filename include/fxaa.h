@@ -4,6 +4,8 @@
 #include "renderpipelinesystem.h"
 #include "tbrendercommon.h"
 
+#include <flecs.h>
+
 #define TB_FXAA_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
@@ -29,3 +31,4 @@ typedef struct TbFXAASystem {
 
   TbFrameDescriptorPoolList pools;
 } TbFXAASystem;
+extern ECS_COMPONENT_DECLARE(TbFXAASystem);

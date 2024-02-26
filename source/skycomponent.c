@@ -1,6 +1,5 @@
 #include "skycomponent.h"
 
-#include "assetsystem.h"
 #include "skysystem.h"
 #include "world.h"
 
@@ -9,8 +8,9 @@
 ECS_COMPONENT_DECLARE(TbSkyDescriptor);
 ECS_COMPONENT_DECLARE(TbSkyComponent);
 
-bool tb_load_sky_comp(TbWorld *world, ecs_entity_t ent, const cgltf_node *node,
-                      json_object *object) {
+bool tb_load_sky_comp(TbWorld *world, ecs_entity_t ent, const char *source_path,
+                      const cgltf_node *node, json_object *object) {
+  (void)source_path;
   (void)node;
 
   TbSkyComponent sky = {0};

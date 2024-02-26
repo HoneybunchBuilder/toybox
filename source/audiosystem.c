@@ -4,9 +4,9 @@
 #include "tbcommon.h"
 #include "world.h"
 
-#include <flecs.h>
-
 #include <SDL3_mixer/SDL_mixer.h>
+
+ECS_COMPONENT_DECLARE(TbAudioSystem);
 
 typedef struct TbMusic {
   uint32_t ref_count;
@@ -41,7 +41,8 @@ void destroy_audio_system(TbAudioSystem *self) {
 
 void tb_register_audio_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAudioSystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbAudioSystem);
 
   int32_t ret = Mix_Init(MIX_INIT_OGG);
   TB_CHECK(ret != 0, "Failed to initialize SDL3 Mixer");
@@ -80,8 +81,8 @@ void tb_register_audio_sys(TbWorld *world) {
 
 void tb_unregister_audio_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbAudioSystem);
-  TbAudioSystem *sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
+
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
   destroy_audio_system(sys);
 }
 

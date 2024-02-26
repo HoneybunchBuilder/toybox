@@ -8,6 +8,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbRenderSystem);
+
 void tb_register_render_sys(TbWorld *world);
 void tb_unregister_render_sys(TbWorld *world);
 
@@ -327,7 +329,7 @@ void render_frame_end(ecs_iter_t *it) {
 
 void tb_register_render_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbRenderSystem);
   TbRenderSystem sys = create_render_system(world->gp_alloc, world->tmp_alloc,
                                             world->render_thread);
   // Sets a singleton based on the value at a pointer
@@ -341,7 +343,7 @@ void tb_register_render_sys(TbWorld *world) {
 
 void tb_unregister_render_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
+
   TbRenderSystem *sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   destroy_render_system(sys);
   ecs_singleton_remove(ecs, TbRenderSystem);

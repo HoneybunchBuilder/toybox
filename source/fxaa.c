@@ -8,7 +8,7 @@
 #include "tbimgui.h"
 #include "world.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbFXAASystem);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
@@ -57,10 +57,6 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void tick_fxaa_draw(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "FXAA Draw Tick", TracyCategoryColorRendering, true);
   tb_auto ecs = it->world;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbFXAASystem);
 
   tb_auto *self = ecs_field(it, TbFXAASystem, 1);
   tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
@@ -129,9 +125,8 @@ void tick_fxaa_draw(ecs_iter_t *it) {
 
 void tb_register_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbFXAASystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbFXAASystem);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -318,8 +313,7 @@ void tb_register_fxaa_sys(TbWorld *world) {
 
 void tb_unregister_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbFXAASystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
+
   tb_auto sys = ecs_singleton_get_mut(ecs, TbFXAASystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_rnd_destroy_set_layout(rnd_sys, sys->set_layout);

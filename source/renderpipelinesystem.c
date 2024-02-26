@@ -27,6 +27,8 @@
 
 #define BLUR_BATCH_COUNT (TB_BLOOM_MIPS - 1)
 
+ECS_COMPONENT_DECLARE(TbRenderPipelineSystem);
+
 void tb_register_render_pipeline_sys(TbWorld *world);
 void tb_unregister_render_pipeline_sys(TbWorld *world);
 
@@ -3236,15 +3238,12 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
 
 void tb_register_render_pipeline_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderTargetSystem *rt_sys =
-      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbRenderPipelineSystem);
+
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbRenderPipelineSystem sys = create_render_pipeline_system(
       world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
@@ -3261,7 +3260,7 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
 
 void tb_unregister_render_pipeline_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
+
   TbRenderPipelineSystem *sys =
       ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   destroy_render_pipeline_system(sys);

@@ -4,7 +4,7 @@
 #include "tbcommon.h"
 #include "tbsdl.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbInputSystem);
 
 void tb_register_input_sys(TbWorld *world);
 void tb_unregister_input_sys(TbWorld *world);
@@ -171,7 +171,8 @@ void input_update_tick(ecs_iter_t *it) {
 
 void tb_register_input_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbInputSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbInputSystem);
+
   ecs_singleton_set(ecs, TbInputSystem,
                     {
                         .tmp_alloc = world->tmp_alloc,
@@ -183,6 +184,6 @@ void tb_register_input_sys(TbWorld *world) {
 
 void tb_unregister_input_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbInputSystem);
+
   ecs_singleton_remove(ecs, TbInputSystem);
 }

@@ -534,10 +534,7 @@ void vlog_ui_tick(ecs_iter_t *it) {
 
 void tb_register_visual_logging_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbMeshSystem);
+
   ECS_COMPONENT_DEFINE(ecs, TbVisualLoggingSystem);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
@@ -560,7 +557,6 @@ void tb_register_visual_logging_sys(TbWorld *world) {
 
 void tb_unregister_visual_logging_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbVisualLoggingSystem);
   TbVisualLoggingSystem *sys =
       ecs_singleton_get_mut(ecs, TbVisualLoggingSystem);
   destroy_visual_logging_system(sys);

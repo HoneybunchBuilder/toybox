@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imguisystem.h"
-#include <stdint.h>
+#include <flecs.h>
 
 #include "fxaa.hlsli"
 
@@ -55,3 +55,4 @@ typedef struct TbSettings {
   int32_t fxaa_option;
   TbFXAAPushConstants fxaa;
 } TbSettings;
+extern ECS_COMPONENT_DECLARE(TbSettings);

@@ -66,7 +66,7 @@ void destroy_render_object_system(TbRenderObjectSystem *self) {
 void tick_render_object_system(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Object System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, TbRenderSystem);
+  
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
@@ -178,7 +178,7 @@ VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
 
 void tb_register_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
+  
   ECS_COMPONENT_DEFINE(ecs, TbRenderObject);
   ECS_COMPONENT_DEFINE(ecs, TbRenderObjectSystem);
 

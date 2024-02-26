@@ -182,8 +182,6 @@ void tb_register_third_person_sys(TbWorld *world) {
   ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")
       .kind(EcsPreUpdate)
       .iter(tp_movement_update_tick);
-
-  tb_register_third_person_components(world);
 }
 
 void tb_unregister_third_person_sys(TbWorld *world) { (void)world; }

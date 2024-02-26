@@ -13,6 +13,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbTimeOfDaySystem);
+
 /*
   HACK:
   This time of day system makes a few assumptions:
@@ -147,9 +149,8 @@ void time_of_day_tick(ecs_iter_t *it) {
 
 void tb_register_time_of_day_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbSkyComponent);
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbTimeOfDaySystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbTimeOfDaySystem);
 
   TbTimeOfDaySystem sys = {
       .time = 0.3f, // Start with some time so it's not pitch black
@@ -165,7 +166,6 @@ void tb_register_time_of_day_sys(TbWorld *world) {
 
 void tb_unregister_time_of_day_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbTimeOfDaySystem);
   TbTimeOfDaySystem *sys = ecs_singleton_get_mut(ecs, TbTimeOfDaySystem);
   destroy_time_of_day_system(sys);
   ecs_singleton_remove(ecs, TbTimeOfDaySystem);

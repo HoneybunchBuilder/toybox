@@ -7,6 +7,8 @@
 #include "tbcommon.h"
 #include "tbrendercommon.h"
 
+#include <flecs.h>
+
 #define TB_TEX_SYS_PRIO (TB_RND_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
@@ -43,6 +45,7 @@ typedef struct TbTextureSystem {
   TbTextureId default_metal_rough_tex;
   TbTextureId brdf_tex;
 } TbTextureSystem;
+extern ECS_COMPONENT_DECLARE(TbTextureSystem);
 
 VkDescriptorSet tb_tex_sys_get_set(TbTextureSystem *self);
 

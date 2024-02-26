@@ -11,6 +11,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbMaterialSystem);
+
 typedef struct TbMaterial {
   TbMaterialId id;
   uint32_t ref_count;
@@ -165,9 +167,6 @@ void destroy_material_system(TbMaterialSystem *self) {
 void tick_material_system(ecs_iter_t *it) {
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, TbMaterialSystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-
   tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
@@ -238,12 +237,11 @@ void tick_material_system(ecs_iter_t *it) {
 
 void tb_register_material_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbTextureSystem);
-  ECS_COMPONENT(ecs, TbMaterialSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbMaterialSystem);
+
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
   TbMaterialSystem sys = create_material_system(
       world->gp_alloc, world->tmp_alloc, rnd_sys, tex_sys);
@@ -257,7 +255,7 @@ void tb_register_material_sys(TbWorld *world) {
 
 void tb_unregister_material_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbMaterialSystem);
+
   TbMaterialSystem *sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   destroy_material_system(sys);
   ecs_singleton_remove(ecs, TbMaterialSystem);

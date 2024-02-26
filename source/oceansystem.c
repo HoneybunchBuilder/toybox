@@ -1029,8 +1029,8 @@ void tb_register_ocean_sys(TbWorld *world) {
              TbRenderPipelineSystem(TbRenderPipelineSystem),
              TbMeshSystem(TbMeshSystem), TbViewSystem(TbViewSystem),
              TbRenderTargetSystem(TbRenderTargetSystem),
-             TbVisualLoggingSystem(TbVisualLoggingSystem)
-                 TbAudioSystem(TbAudioSystem));
+             TbVisualLoggingSystem(TbVisualLoggingSystem),
+             TbAudioSystem(TbAudioSystem));
 
   ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem(TbOceanSystem),

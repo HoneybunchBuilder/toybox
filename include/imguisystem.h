@@ -5,6 +5,8 @@
 #include "tbrendercommon.h"
 #include "world.h"
 
+#include <flecs.h>
+
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
 typedef struct TbRenderTargetSystem TbRenderTargetSystem;
@@ -59,3 +61,4 @@ typedef struct TbImGuiSystem {
   uint32_t context_count;
   TbUIContext contexts[TB_MAX_UI_CONTEXTS];
 } TbImGuiSystem;
+extern ECS_COMPONENT_DECLARE(TbImGuiSystem);

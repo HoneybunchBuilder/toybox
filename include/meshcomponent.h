@@ -32,5 +32,3 @@ typedef struct TbMeshComponent {
   TbAABB local_aabb;
 } TbMeshComponent;
 extern ECS_COMPONENT_DECLARE(TbMeshComponent);
-
-void tb_register_mesh_component(TbWorld *world);

@@ -6,6 +6,8 @@
 #include "tbvkalloc.h"
 #include "tbvma.h"
 
+#include <flecs.h>
+
 #define TB_RND_SYS_PRIO TB_SYSTEM_HIGHEST
 
 #define TB_VMA_TMP_HOST_MB 256
@@ -34,6 +36,7 @@ typedef struct TbRenderSystem {
   uint32_t frame_idx;
   TbRenderSystemFrameState frame_states[3];
 } TbRenderSystem;
+extern ECS_COMPONENT_DECLARE(TbRenderSystem);
 
 VkResult tb_rnd_sys_alloc_gpu_buffer(TbRenderSystem *self,
                                      const VkBufferCreateInfo *create_info,

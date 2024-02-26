@@ -4,7 +4,9 @@
 #include "dynarray.h"
 #include "rendersystem.h"
 #include "tbvk.h"
+
 #include <SDL3/SDL_stdinc.h>
+#include <flecs.h>
 
 #define TB_SHADOW_MAP_DIM 4096
 
@@ -48,6 +50,7 @@ typedef struct TbRenderTargetSystem {
   TbRenderTargetId bloom_mip_chain;
   TbRenderTargetId ldr_target;
 } TbRenderTargetSystem;
+extern ECS_COMPONENT_DECLARE(TbRenderTargetSystem);
 
 void tb_reimport_swapchain(TbRenderTargetSystem *self);
 

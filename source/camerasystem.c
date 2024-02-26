@@ -1,6 +1,5 @@
 #include "camerasystem.h"
 
-#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "profiling.h"
@@ -22,7 +21,6 @@ void camera_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Camera Update System", TracyCategoryColorCore, true);
 
   tb_auto ecs = it->world;
-  ECS_COMPONENT(ecs, TbViewSystem);
 
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
   ecs_singleton_modified(ecs, TbViewSystem);

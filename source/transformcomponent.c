@@ -6,6 +6,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbTransformComponent);
+
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity) {
   TracyCZoneNC(ctx, "TbTransform Get World Matrix", TracyCategoryColorCore,
                true);
@@ -106,3 +108,68 @@ void tb_transform_set_world(ecs_world_t *ecs, ecs_entity_t entity,
   // Important so that the renderer knows we've updated the transform
   tb_transform_mark_dirty(ecs, entity);
 }
+
+bool tb_load_transform_comp(TbWorld *world, ecs_entity_t ent,
+                            const char *source_path, const cgltf_node *node,
+                            json_object *json) {
+  (void)source_path;
+  (void)json;
+  TbTransformComponent comp = {
+      .dirty = true,
+      .transform = tb_transform_from_node(node),
+  };
+  ecs_set_ptr(world->ecs, ent, TbTransformComponent, &comp);
+  return true;
+}
+
+ecs_entity_t tb_register_transform_comp(TbWorld *world) {
+  ecs_world_t *ecs = world->ecs;
+  ECS_COMPONENT_DEFINE(ecs, float3);
+  ECS_COMPONENT_DEFINE(ecs, float4);
+  ECS_COMPONENT_DEFINE(ecs, float4x4);
+  ECS_COMPONENT_DEFINE(ecs, TbTransform);
+  ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
+
+  ecs_struct(ecs, {.entity = ecs_id(float3),
+                   .members = {
+                       {.name = "x", .type = ecs_id(ecs_f32_t)},
+                       {.name = "y", .type = ecs_id(ecs_f32_t)},
+                       {.name = "z", .type = ecs_id(ecs_f32_t)},
+                   }});
+  ecs_struct(ecs, {.entity = ecs_id(float4),
+                   .members = {
+                       {.name = "x", .type = ecs_id(ecs_f32_t)},
+                       {.name = "y", .type = ecs_id(ecs_f32_t)},
+                       {.name = "z", .type = ecs_id(ecs_f32_t)},
+                       {.name = "w", .type = ecs_id(ecs_f32_t)},
+                   }});
+  ecs_struct(ecs, {.entity = ecs_id(float4x4),
+                   .members = {
+                       {.name = "col0", .type = ecs_id(float4)},
+                       {.name = "col1", .type = ecs_id(float4)},
+                       {.name = "col2", .type = ecs_id(float4)},
+                       {.name = "col3", .type = ecs_id(float4)},
+                   }});
+  ecs_struct(ecs, {.entity = ecs_id(TbTransform),
+                   .members = {
+                       {.name = "position", .type = ecs_id(float3)},
+                       {.name = "scale", .type = ecs_id(float3)},
+                       {.name = "rotation", .type = ecs_id(float4)},
+                   }});
+  ecs_struct(ecs,
+             {
+                 .entity = ecs_id(TbTransformComponent),
+                 .members =
+                     {
+                         {.name = "dirty", .type = ecs_id(ecs_bool_t)},
+                         {.name = "world_matrix", .type = ecs_id(float4x4)},
+                         {.name = "transform", .type = ecs_id(TbTransform)},
+                         {.name = "entity", .type = ecs_id(ecs_entity_t)},
+                     },
+             });
+
+  // Return 0 because we don't actually want to mark an id for UI schema export
+  return 0;
+}
+
+TB_REGISTER_COMP(tb, transform)

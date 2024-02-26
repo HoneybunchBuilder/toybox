@@ -11,6 +11,8 @@
 #include "tbrendercommon.h"
 #include "viewsystem.h"
 
+#include <flecs.h>
+
 #define TB_MESH_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
@@ -97,6 +99,7 @@ typedef struct TbMeshSystem {
   TbDescriptorPool mesh_pool;
   uint32_t mesh_desc_count;
 } TbMeshSystem;
+extern ECS_COMPONENT_DECLARE(TbMeshSystem);
 
 void tb_register_mesh_sys(TbWorld *world);
 void tb_unregister_mesh_sys(TbWorld *world);

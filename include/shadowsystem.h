@@ -7,7 +7,7 @@
 
 #include <flecs.h>
 
-#define TB_SHADOW_SYS_PRIO TB_SYSTEM_NORMAL
+#define TB_SHADOW_SYS_PRIO TB_SYSTEM_HIGH
 
 typedef struct TbWorld TbWorld;
 typedef uint32_t TbDrawContextId;

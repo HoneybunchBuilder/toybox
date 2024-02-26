@@ -6,6 +6,7 @@
 #include "world.h"
 
 #include <SDL3/SDL_events.h>
+#include <flecs.h>
 
 #define TB_INPUT_SYS_PRIO TB_SYSTEM_HIGHEST
 
@@ -106,3 +107,4 @@ typedef struct TbInputSystem {
   SDL_Gamepad *gamepad[TB_MAX_GAME_CONTROLLERS];
   TbGameControllerState gamepad_states[TB_MAX_GAME_CONTROLLERS];
 } TbInputSystem;
+extern ECS_COMPONENT_DECLARE(TbInputSystem);

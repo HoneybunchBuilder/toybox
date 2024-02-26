@@ -2,7 +2,6 @@
 
 #include "simd.h"
 
-#include "assetsystem.h"
 #include "common.hlsli"
 #include "json.h"
 #include "materialsystem.h"
@@ -140,90 +139,44 @@ void destroy_mesh_component_internal(TbMeshComponent *self,
   *self = (TbMeshComponent){0};
 }
 
-bool create_mesh_component(ecs_world_t *ecs, ecs_entity_t e,
-                           const char *source_path, const cgltf_node *node,
-                           json_object *extra) {
-  (void)extra;
-  bool ret = true;
-  if (node->mesh) {
-    ECS_COMPONENT(ecs, TbMeshSystem);
-    ECS_COMPONENT(ecs, TbMaterialSystem);
-
-    tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-    tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-
-    // Load mesh
-    tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
-
-    TbMeshComponent comp = {0};
-    ret = create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
-    ecs_set_ptr(ecs, e, TbMeshComponent, &comp);
-
-    // Mark this entity as a render object
-    ecs_set(ecs, e, TbRenderObject, {0});
-  }
-  return ret;
-}
-
-void destroy_mesh_component(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbMaterialSystem);
-
-  // Remove mesh component from entities
-  ecs_filter_t *filter =
-      ecs_filter(ecs, {
-                          .terms =
-                              {
-                                  {.id = ecs_id(TbMeshComponent)},
-                              },
-                      });
-
-  ecs_iter_t mesh_it = ecs_filter_iter(ecs, filter);
-  while (ecs_filter_next(&mesh_it)) {
-    TbMeshComponent *mesh = ecs_field(&mesh_it, TbMeshComponent, 1);
-    TbMeshSystem *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-    TbMaterialSystem *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-
-    for (int32_t i = 0; i < mesh_it.count; ++i) {
-      destroy_mesh_component_internal(&mesh[i], mesh_sys, mat_sys);
-    }
-
-    ecs_singleton_modified(ecs, TbMeshSystem);
-    ecs_singleton_modified(ecs, TbMaterialSystem);
-  }
-  ecs_filter_fini(filter);
-}
-
-void tb_register_mesh_component(TbWorld *world) {
+bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
+                       const char *source_path, const cgltf_node *node,
+                       json_object *json) {
+  (void)json;
   tb_auto ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbResourceId);
-  ECS_COMPONENT_DEFINE(ecs, TbMeshComponent);
-  ECS_COMPONENT(ecs, TbMeshSystem);
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
-  // Metadata for mesh component and helpers
-  ecs_struct(ecs, {
-                      .entity = ecs_id(TbResourceId),
-                      .members =
-                          {
-                              {.name = "id", .type = ecs_id(ecs_u64_t)},
-                              {.name = "idx", .type = ecs_id(ecs_u32_t)},
-                          },
-                  });
+  // Load mesh
+  tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
+
+  TbMeshComponent comp = {0};
+  bool ret =
+      create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
+  TB_CHECK(ret, "Failed to create mesh component");
+  ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
+
+  // Mark this entity as a render object
+  ecs_set(ecs, ent, TbRenderObject, {0});
+
+  return true;
+}
+
+ecs_entity_t tb_register_mesh_comp(TbWorld *world) {
+  tb_auto ecs = world->ecs;
+  ECS_COMPONENT_DEFINE(ecs, TbMeshComponent);
+
+  // Metadata for mesh component
   ecs_struct(ecs,
              {
                  .entity = ecs_id(TbMeshComponent),
                  .members =
                      {
-                         {.name = "mesh_id", .type = ecs_id(TbResourceId)},
                          {.name = "submesh_count", .type = ecs_id(ecs_u32_t)},
                      },
              });
 
-  // Mark the mesh system entity as also having an asset
-  // system that can parse and load mesh components
-  TbAssetSystem asset = {
-      .add_fn = create_mesh_component,
-      .rem_fn = destroy_mesh_component,
-  };
-  ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbAssetSystem, &asset);
+  return 0;
 }
+
+TB_REGISTER_COMP(tb, mesh)

@@ -9,9 +9,11 @@
 #include "skysystem.h"
 #include "tbrendercommon.h"
 
+#include <flecs.h>
+
 #include <SDL3/SDL_stdinc.h>
 
-#define TB_RP_SYS_PRIO (TB_RT_SYS_PRIO + 1)
+#define TB_RP_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
 
@@ -116,6 +118,7 @@ typedef struct TbRenderPipelineSystem {
   TbFrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];
   TbFrameDescriptorPool up_desc_pools[TB_MAX_FRAME_STATES];
 } TbRenderPipelineSystem;
+extern ECS_COMPONENT_DECLARE(TbRenderPipelineSystem);
 
 void tb_rnd_on_swapchain_resize(TbRenderPipelineSystem *self);
 

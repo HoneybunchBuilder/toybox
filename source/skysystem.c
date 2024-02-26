@@ -13,7 +13,6 @@
 #include "sky_vert.h"
 #pragma clang diagnostic pop
 
-#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "common.hlsli"
 #include "json.h"
@@ -35,6 +34,8 @@
 
 #define FILTERED_ENV_DIM 512
 #define FILTERED_ENV_MIPS ((uint32_t)(SDL_floorf(log2f(FILTERED_ENV_DIM))) + 1u)
+
+ECS_COMPONENT_DECLARE(TbSkySystem);
 
 typedef struct SkyDrawBatch {
   VkPushConstantRange const_range;
@@ -1007,31 +1008,26 @@ void destroy_sky_system(TbSkySystem *self) {
 void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, TbSkySystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbSkyComponent);
 
-  TbSkySystem *sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
+  tb_auto sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
   sky_sys->time += it->delta_time;
   ecs_singleton_modified(ecs, TbSkySystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   ecs_singleton_modified(ecs, TbRenderSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   ecs_singleton_modified(ecs, TbRenderPipelineSystem);
 
   // TODO: Make this less hacky
   const uint32_t width = rnd_sys->render_thread->swapchain.width;
   const uint32_t height = rnd_sys->render_thread->swapchain.height;
 
-  TbSkySystemFrameState *state = &sky_sys->frame_states[rnd_sys->frame_idx];
+  tb_auto state = &sky_sys->frame_states[rnd_sys->frame_idx];
 
   // Write descriptor sets for each sky
-  TbSkyComponent *skys = ecs_field(it, TbSkyComponent, 1);
+  tb_auto skys = ecs_field(it, TbSkyComponent, 1);
   for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
-    TbSkyComponent *sky = &skys[sky_idx];
+    tb_auto sky = &skys[sky_idx];
 
     VkResult err = VK_SUCCESS;
     VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
@@ -1078,8 +1074,8 @@ void sky_draw_tick(ecs_iter_t *it) {
         state->set_count = write_count;
       }
 
-      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          sky_sys->tmp_alloc, write_count, VkDescriptorSetLayout);
+      tb_auto layouts = tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count,
+                                       VkDescriptorSetLayout);
       layouts[0] = sky_sys->sky_set_layout;
       layouts[1] = sky_sys->irr_set_layout;
 
@@ -1095,9 +1091,9 @@ void sky_draw_tick(ecs_iter_t *it) {
     }
 
     // Just upload and write all views for now, they tend to be important anyway
-    VkWriteDescriptorSet *writes =
+    tb_auto writes =
         tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count, VkWriteDescriptorSet);
-    VkDescriptorBufferInfo *buffer_info =
+    tb_auto buffer_info =
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
 
     TbSkyData data = {
@@ -1131,7 +1127,7 @@ void sky_draw_tick(ecs_iter_t *it) {
     };
 
     // Last write is for the irradiance pass
-    VkImageView env_map_view = tb_render_target_get_view(
+    tb_auto env_map_view = tb_render_target_get_view(
         sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
     writes[1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1283,12 +1279,8 @@ void sky_draw_tick(ecs_iter_t *it) {
 
 void tb_register_sky_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbSkySystem);
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+
+  ECS_COMPONENT_DEFINE(ecs, TbSkySystem);
 
   tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -1310,7 +1302,7 @@ void tb_register_sky_sys(TbWorld *world) {
 
 void tb_unregister_sky_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbSkySystem);
+
   TbSkySystem *sys = ecs_singleton_get_mut(ecs, TbSkySystem);
   ecs_query_fini(sys->camera_query);
   destroy_sky_system(sys);

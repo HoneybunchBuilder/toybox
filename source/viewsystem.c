@@ -12,6 +12,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbViewSystem);
+
 void tb_register_view_sys(TbWorld *world);
 void tb_unregister_view_sys(TbWorld *world);
 
@@ -362,10 +364,8 @@ void view_update_tick(ecs_iter_t *it) {
 
 void tb_register_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbTextureSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
+
+    ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   TbRenderTargetSystem *rt_sys =
@@ -382,7 +382,7 @@ void tb_register_view_sys(TbWorld *world) {
 
 void tb_unregister_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbViewSystem);
+
   TbViewSystem *sys = ecs_singleton_get_mut(ecs, TbViewSystem);
   destroy_view_system(sys);
   ecs_singleton_remove(ecs, TbViewSystem);

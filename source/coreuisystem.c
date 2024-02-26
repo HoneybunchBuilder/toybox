@@ -91,7 +91,7 @@ void destroy_core_ui_sys(ecs_iter_t *it) {
 
 void tb_register_core_ui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbImGuiSystem);
+
   ECS_COMPONENT_DEFINE(ecs, TbCoreUISystem);
 
   TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);

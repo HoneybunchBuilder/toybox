@@ -38,6 +38,7 @@ typedef struct cgltf_node cgltf_node;
 
 typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
 typedef bool (*TbLoadComponentFn)(TbWorld *world, ecs_entity_t ent,
+                                  const char *source_path,
                                   const cgltf_node *node, json_object *json);
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
                            TbLoadComponentFn load_fn);
@@ -78,6 +79,11 @@ void tb_destroy_world(TbWorld *world);
 
 bool tb_load_scene(TbWorld *world, const char *scene_path);
 void tb_unload_scene(TbWorld *world, TbScene *scene);
+
+extern ECS_COMPONENT_DECLARE(float3);
+extern ECS_COMPONENT_DECLARE(float4);
+extern ECS_COMPONENT_DECLARE(float4x4);
+extern ECS_COMPONENT_DECLARE(TbTransform);
 
 #ifdef __cplusplus
 }

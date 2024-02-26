@@ -8,6 +8,8 @@
 
 #include <flecs.h>
 
+ECS_COMPONENT_DECLARE(TbSettings);
+
 void tb_register_settings_sys(TbWorld *world);
 void tb_unregister_settings_sys(TbWorld *world);
 
@@ -61,8 +63,6 @@ static const char *tb_fxaa_items[] = {
 
 void tick_settings_ui(ecs_iter_t *it) {
   tb_auto ecs = it->world;
-  ECS_COMPONENT(ecs, TbSettings);
-  ECS_COMPONENT(ecs, TbFXAASystem);
   tb_auto settings = ecs_field(it, TbSettings, 1);
 
   if (igBegin("Settings", NULL, 0)) {
@@ -102,8 +102,8 @@ void tick_settings_ui(ecs_iter_t *it) {
 
 void tb_register_settings_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbSettings);
-  ECS_COMPONENT(ecs, TbFXAASystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbSettings);
 
   TbSettings settings = {0};
   // TODO: Apply saved settings loaded from disk
@@ -124,6 +124,6 @@ void tb_register_settings_sys(TbWorld *world) {
 
 void tb_unregister_settings_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbSettings);
+
   ecs_singleton_remove(ecs, TbSettings);
 }

@@ -18,7 +18,7 @@
 #include "tbvma.h"
 #include "vkdbg.h"
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbImGuiSystem);
 
 typedef struct ImGuiDraw {
   VkBuffer geom_buffer;
@@ -450,7 +450,7 @@ void destroy_imgui_system(TbImGuiSystem *self) {
 void imgui_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "ImGui System", TracyCategoryColorUI, true);
 
-  TbImGuiSystem *sys = ecs_field(it, TbImGuiSystem, 1);
+  tb_auto sys = ecs_field(it, TbImGuiSystem, 1);
 
   VkResult err = VK_SUCCESS;
 
@@ -492,8 +492,8 @@ void imgui_draw_tick(ecs_iter_t *it) {
         state->set_count = sys->context_count;
       }
 
-      VkDescriptorSetLayout *layouts = tb_alloc_nm_tp(
-          sys->tmp_alloc, state->set_count, VkDescriptorSetLayout);
+      tb_auto layouts = tb_alloc_nm_tp(sys->tmp_alloc, state->set_count,
+                                       VkDescriptorSetLayout);
       for (uint32_t i = 0; i < state->set_count; ++i) {
         layouts[i] = sys->set_layout;
       }
@@ -511,10 +511,10 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
     // Just upload and write all atlases for now, they tend to be important
     // anyway
-    VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
-        sys->tmp_alloc, sys->context_count, VkWriteDescriptorSet);
-    VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
-        sys->tmp_alloc, sys->context_count, VkDescriptorImageInfo);
+    tb_auto writes = tb_alloc_nm_tp(sys->tmp_alloc, sys->context_count,
+                                    VkWriteDescriptorSet);
+    tb_auto image_info = tb_alloc_nm_tp(sys->tmp_alloc, sys->context_count,
+                                        VkDescriptorImageInfo);
     for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
       const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
 
@@ -541,17 +541,17 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
     // Allocate a max draw batch per entity
     uint32_t batch_count = 0;
-    ImGuiDrawBatch *imgui_batches = tb_alloc_nm_tp(
+    tb_auto imgui_batches = tb_alloc_nm_tp(
         sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
             .tmp_alloc.alloc,
         sys->context_count, ImGuiDrawBatch);
-    TbDrawBatch *batches = tb_alloc_nm_tp(
+    tb_auto batches = tb_alloc_nm_tp(
         sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
             .tmp_alloc.alloc,
         sys->context_count, TbDrawBatch);
 
     for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
-      const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
+      tb_auto ui_ctx = &sys->contexts[imgui_idx];
 
       igSetCurrentContext(ui_ctx->context);
 
@@ -744,18 +744,13 @@ void imgui_draw_tick(ecs_iter_t *it) {
 
 void tb_register_imgui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderTargetSystem);
-  ECS_COMPONENT(ecs, TbInputSystem);
-  ECS_COMPONENT(ecs, TbImGuiSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderPipelineSystem *rp_sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  TbRenderTargetSystem *rt_sys =
-      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  TbInputSystem *in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbImGuiSystem);
+
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
   TbImGuiSystem sys = create_imgui_system(world->gp_alloc, world->tmp_alloc, 1,
@@ -769,8 +764,8 @@ void tb_register_imgui_sys(TbWorld *world) {
 
 void tb_unregister_imgui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbImGuiSystem);
-  TbImGuiSystem *sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
   destroy_imgui_system(sys);
   ecs_singleton_remove(ecs, TbImGuiSystem);
 }

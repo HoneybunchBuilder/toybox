@@ -1,6 +1,5 @@
 #include "thirdpersoncomponents.h"
 
-#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "rigidbodycomponent.h"
 #include "tbcommon.h"
@@ -10,29 +9,61 @@
 #include <flecs.h>
 #include <json.h>
 
-bool try_attach_tp_move_comp(ecs_world_t *ecs, ecs_entity_t e,
-                             json_object *json) {
-  {
-    bool has_comp = false;
+ECS_COMPONENT_DECLARE(TbThirdPersonMovementComponent);
 
-    json_object_object_foreach(json, key, value) {
-      if (SDL_strcmp(key, "id") == 0) {
-        const char *id_str = json_object_get_string(value);
-        if (SDL_strcmp(id_str, ThirdPersonMovementComponentIdStr) == 0) {
-          has_comp = true;
+// Third person movement component wants to construct direction vectors to
+// the camera that is relevant to the control rig. We also want
+// to know what body we want to exert force on
+// Need the hierarchy to be constructed first so we look it up in post-load
+// Expecting the camera to be attached to some child entity
+void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto movement = ecs_get_mut(ecs, ent, TbThirdPersonMovementComponent);
+
+  TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
+  TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
+
+  tb_auto parent = ecs_get_parent(ecs, ent);
+  if (parent != TbInvalidEntityId) {
+    bool parent_body = ecs_has(ecs, parent, TbRigidbodyComponent);
+    if (parent_body) {
+      movement->body = parent;
+    }
+    TB_CHECK(parent_body, "Didn't find parent that has rigidbody");
+  }
+  {
+    bool sibling_camera = false;
+    tb_auto child_it = ecs_children(ecs, parent);
+    while (ecs_children_next(&child_it)) {
+      for (int32_t i = 0; i < child_it.count; ++i) {
+        tb_auto sibling = child_it.entities[i];
+        if (ecs_has(ecs, sibling, TbCameraComponent)) {
+          movement->camera = sibling;
+          sibling_camera = true;
           break;
         }
       }
     }
+    TB_CHECK(sibling_camera, "Didn't find sibling that has camera");
+  }
+}
 
-    if (!has_comp) {
-      // no error, we just don't need to keep going
-      return true;
+void third_person_move_on_set(ecs_iter_t *it) {
+  ecs_world_t *ecs = it->world;
+  for (int32_t i = 0; i < it->count; i++) {
+    ecs_entity_t ent = it->entities[i];
+    if (ecs_has(ecs, ent, TbThirdPersonMovementComponent)) {
+      post_load_tp_movement(ecs, ent);
     }
   }
+}
 
-  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
+bool tb_load_third_person_move_comp(TbWorld *world, ecs_entity_t ent,
+                                    const char *source_path,
+                                    const cgltf_node *node, json_object *json) {
+  (void)source_path;
+  (void)node;
 
+  ecs_world_t *ecs = world->ecs;
   TbThirdPersonMovementComponent comp = {0};
   json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "speed") == 0) {
@@ -55,139 +86,20 @@ bool try_attach_tp_move_comp(ecs_world_t *ecs, ecs_entity_t e,
       comp.distance = (float)json_object_get_double(value);
     }
   }
-  ecs_set_ptr(ecs, e, TbThirdPersonMovementComponent, &comp);
-
+  ecs_set_ptr(ecs, ent, TbThirdPersonMovementComponent, &comp);
   return true;
 }
 
-bool try_attach_tp_cam_comp(ecs_world_t *ecs, ecs_entity_t e,
-                            json_object *json) {
-  {
-    bool has_comp = false;
-
-    json_object_object_foreach(json, key, value) {
-      if (SDL_strcmp(key, "id") == 0) {
-        const char *id_str = json_object_get_string(value);
-        if (SDL_strcmp(id_str, ThirdPersonCameraComponentIdStr) == 0) {
-          has_comp = true;
-          break;
-        }
-      }
-    }
-
-    if (!has_comp) {
-      // no error, we just don't need to keep going
-      return true;
-    }
-  }
-
-  ECS_TAG(ecs, TbThirdPersonCameraComponent);
-  ecs_add(ecs, e, TbThirdPersonCameraComponent);
-
-  return true;
-}
-
-// Third person movement component wants to construct direction vectors to
-// the camera that is relevant to the control rig. We also want
-// to know what body we want to exert force on
-// Need the hierarchy to be constructed first so we look it up in post-load
-// Expecting the camera to be attached to some child entity
-void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t e) {
-  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
-  ECS_TAG(ecs, TbThirdPersonCameraComponent);
-  tb_auto movement = ecs_get_mut(ecs, e, TbThirdPersonMovementComponent);
-
-  TB_CHECK(movement->body == 0, "Didn't expect body to already be set");
-  TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
-
-  tb_auto parent = ecs_get_parent(ecs, e);
-  if (parent != TbInvalidEntityId) {
-    bool parent_body = ecs_has(ecs, parent, TbRigidbodyComponent);
-    if (parent_body) {
-      movement->body = parent;
-    }
-    TB_CHECK(parent_body, "Didn't find parent that has rigidbody");
-  }
-  {
-    bool sibling_camera = false;
-    tb_auto child_it = ecs_children(ecs, parent);
-    while (ecs_children_next(&child_it)) {
-      for (int32_t i = 0; i < child_it.count; ++i) {
-        tb_auto sibling = child_it.entities[i];
-        if (ecs_has(ecs, sibling, TbThirdPersonCameraComponent) &&
-            ecs_has(ecs, sibling, TbCameraComponent)) {
-          movement->camera = sibling;
-          sibling_camera = true;
-          break;
-        }
-      }
-    }
-    TB_CHECK(sibling_camera, "Didn't find sibling that has camera");
-  }
-}
-
-bool create_third_person_components(ecs_world_t *ecs, ecs_entity_t e,
-                                    const char *source_path,
-                                    const cgltf_node *node,
-                                    json_object *extra) {
-  (void)source_path;
-  (void)extra;
-
-  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
-  ECS_TAG(ecs, TbThirdPersonCameraComponent);
-
-  bool ret = true;
-  if (node && extra) {
-    ret &= try_attach_tp_move_comp(ecs, e, extra);
-    ret &= try_attach_tp_cam_comp(ecs, e, extra);
-  }
-  return ret;
-}
-
-void post_load_third_person_components(ecs_world_t *ecs, ecs_entity_t e) {
-  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
-
-  if (ecs_has(ecs, e, TbThirdPersonMovementComponent)) {
-    post_load_tp_movement(ecs, e);
-  }
-}
-
-void remove_third_person_components(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbThirdPersonMovementComponent);
-  ECS_TAG(ecs, TbThirdPersonCameraComponent);
-
-  // Remove movement from entities
-  {
-    ecs_filter_t *filter = ecs_filter(
-        ecs, {
-                 .terms =
-                     {
-                         {.id = ecs_id(TbThirdPersonMovementComponent)},
-                     },
-             });
-
-    ecs_iter_t it = ecs_filter_iter(ecs, filter);
-    while (ecs_filter_next(&it)) {
-      tb_auto *comps = ecs_field(&it, TbThirdPersonMovementComponent, 1);
-
-      for (int32_t i = 0; i < it.count; ++i) {
-        comps[i] = (TbThirdPersonMovementComponent){0};
-      }
-    }
-
-    ecs_filter_fini(filter);
-  }
-}
-
-void tb_register_third_person_components(TbWorld *world) {
+ecs_entity_t tb_register_third_person_move_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_TAG(ecs, ThirdPersonAssetSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbThirdPersonMovementComponent);
 
-  TbAssetSystem asset = {
-      .add_fn = create_third_person_components,
-      .post_load_fn = post_load_third_person_components,
-      .rem_fn = remove_third_person_components,
-  };
+  ecs_set_hooks(ecs, TbThirdPersonMovementComponent,
+                {
+                    .on_set = third_person_move_on_set,
+                });
 
-  ecs_set_ptr(ecs, ecs_id(ThirdPersonAssetSystem), TbAssetSystem, &asset);
+  return ecs_id(TbThirdPersonMovementComponent);
 }
+
+TB_REGISTER_COMP(tb, third_person_move)

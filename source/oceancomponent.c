@@ -1,6 +1,5 @@
 #include "oceancomponent.h"
 
-#include "assetsystem.h"
 #include "oceansystem.h"
 #include "tbcommon.h"
 #include "transformcomponent.h"
@@ -12,10 +11,11 @@
 
 ECS_COMPONENT_DECLARE(TbOceanComponent);
 
-ECS_STRUCT(TbOceanDescriptor, {
+typedef struct TbOceanDescriptor {
   int32_t wave_count;
   TbOceanWave waves[8];
-});
+} TbOceanDescriptor;
+ECS_COMPONENT_DECLARE(TbOceanDescriptor);
 
 float4 make_wave(float2 dir, float steepness, float wavelength) {
   return tb_f4(dir.x, dir.y, steepness, wavelength);
@@ -44,47 +44,6 @@ TbOceanComponent create_ocean_component_internal(void) {
   SDL_memcpy(comp.waves, waves, sizeof(TbOceanWave) * TB_WAVE_MAX);
 
   return comp;
-}
-
-bool create_ocean_component(ecs_world_t *ecs, ecs_entity_t e,
-                            const char *source_path, const cgltf_node *node,
-                            json_object *extra) {
-  (void)source_path;
-  (void)node;
-  if (extra) {
-    json_object_object_foreach(extra, key, value) {
-      if (SDL_strcmp(key, "id") == 0) {
-        const char *id_str = json_object_get_string(value);
-        if (SDL_strcmp(id_str, TbOceanComponentIdStr) == 0) {
-          ECS_COMPONENT(ecs, TbOceanComponent);
-          TbOceanComponent comp = create_ocean_component_internal();
-          ecs_set_ptr(ecs, e, TbOceanComponent, &comp);
-        }
-      }
-    }
-  }
-  return true;
-}
-
-void destroy_ocean_components(ecs_world_t *ecs) {
-  ECS_COMPONENT(ecs, TbOceanComponent);
-
-  ecs_filter_t *filter =
-      ecs_filter(ecs, {
-                          .terms =
-                              {
-                                  {.id = ecs_id(TbOceanComponent)},
-                              },
-                      });
-
-  ecs_iter_t it = ecs_filter_iter(ecs, filter);
-  while (ecs_filter_next(&it)) {
-    TbOceanComponent *comp = ecs_field(&it, TbOceanComponent, 1);
-    for (int32_t i = 0; i < it.count; ++i) {
-      *comp = (TbOceanComponent){0};
-    }
-  }
-  ecs_filter_fini(filter);
 }
 
 // Simplified from the one in ocean.hlsli to not bother wtih tangent and
@@ -146,24 +105,24 @@ ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
 
   // Further reflect the ocean component descriptor
 
-  // Register asset system for parsing ocean components
-  TbAssetSystem asset = {
-      .add_fn = create_ocean_component,
-      .rem_fn = destroy_ocean_components,
-  };
-  ecs_set_ptr(ecs, ecs_id(TbOceanSystem), TbAssetSystem, &asset);
-
   return ecs_id(TbOceanDescriptor);
 }
 
 bool tb_load_ocean_comp(TbWorld *world, ecs_entity_t ent,
-                        const cgltf_node *node, json_object *json) {
+                        const char *source_path, const cgltf_node *node,
+                        json_object *json) {
+  (void)source_path;
+  (void)node;
+  (void)json;
   tb_auto ecs = world->ecs;
-  TbOceanComponent comp = {0};
-  // TODO: Parse JSON
+  TbOceanComponent comp = create_ocean_component_internal();
   ecs_set_ptr(ecs, ent, TbOceanComponent, &comp);
+  return true;
 }
 
-void tb_destroy_ocean_comp(TbWorld *world, ecs_entity_t ent) {}
+void tb_destroy_ocean_comp(TbWorld *world, ecs_entity_t ent) {
+  (void)world;
+  (void)ent;
+}
 
 TB_REGISTER_COMP(tb, ocean)

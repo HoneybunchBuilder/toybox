@@ -1,6 +1,5 @@
 #include "lightsystem.h"
 
-#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "profiling.h"
 #include "tbgltf.h"
@@ -8,16 +7,11 @@
 #include "viewsystem.h"
 #include "world.h"
 
-#include <flecs.h>
-
-TB_REGISTER_SYS(tb, light, TB_LIGHT_SYS_PRIO)
+ECS_COMPONENT_DECLARE(TbLightSystem);
 
 void light_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Light System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-
-  ECS_COMPONENT(ecs, TbLightSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
 
   const TbLightSystem *light_sys = ecs_singleton_get(ecs, TbLightSystem);
   TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
@@ -59,8 +53,7 @@ void light_update_tick(ecs_iter_t *it) {
 
 void tb_register_light_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbLightSystem);
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbLightSystem);
 
   TbLightSystem sys = {
       .dir_light_query =
@@ -73,14 +66,14 @@ void tb_register_light_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbLightSystem), TbLightSystem, &sys);
 
   ECS_SYSTEM(ecs, light_update_tick, EcsOnUpdate, [in] TbCameraComponent);
-
-  tb_register_light_component(ecs);
 }
 
 void tb_unregister_light_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbLightSystem);
+
   TbLightSystem *sys = ecs_singleton_get_mut(ecs, TbLightSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_singleton_remove(ecs, TbLightSystem);
 }
+
+TB_REGISTER_SYS(tb, light, TB_LIGHT_SYS_PRIO)

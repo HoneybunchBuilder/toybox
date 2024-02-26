@@ -1,6 +1,5 @@
 #include "meshsystem.h"
 
-#include "assetsystem.h"
 #include "cameracomponent.h"
 #include "cgltf.h"
 #include "common.hlsli"
@@ -32,6 +31,8 @@
 #include "opaque_prepass_frag.h"
 #include "opaque_prepass_vert.h"
 #pragma clang diagnostic pop
+
+ECS_COMPONENT_DECLARE(TbMeshSystem);
 
 typedef struct VkBufferView_T *VkBufferView;
 
@@ -1072,9 +1073,6 @@ VkDescriptorSet tb_mesh_system_get_uv0_set(TbMeshSystem *self) {
 void mesh_descriptor_update(ecs_iter_t *it) {
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
@@ -1179,13 +1177,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbMaterialSystem);
-  ECS_COMPONENT(ecs, TbTextureSystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
   tb_auto *mesh_sys = ecs_field(it, TbMeshSystem, 1);
   tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
@@ -1491,14 +1483,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
 void tb_register_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbMaterialSystem);
-  ECS_COMPONENT(ecs, TbTextureSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbMeshSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
   tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
@@ -1537,7 +1522,7 @@ void tb_register_mesh_sys(TbWorld *world) {
 
 void tb_unregister_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbMeshSystem);
+
   TbMeshSystem *sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_query_fini(sys->mesh_query);

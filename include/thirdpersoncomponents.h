@@ -3,6 +3,7 @@
 #include "simd.h"
 
 #include <SDL3/SDL_stdinc.h>
+#include <flecs.h>
 
 #define ThirdPersonMovementComponentIdStr "0xBAD44444"
 #define ThirdPersonCameraComponentIdStr "0xBAD55555"
@@ -27,8 +28,7 @@ typedef struct TbThirdPersonMovementComponent {
   float angle;
   float distance;
 } TbThirdPersonMovementComponent;
-
-void tb_register_third_person_components(TbWorld *world);
+extern ECS_COMPONENT_DECLARE(TbThirdPersonMovementComponent);
 
 #ifdef __cplusplus
 }

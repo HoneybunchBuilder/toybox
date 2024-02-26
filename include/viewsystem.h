@@ -5,8 +5,11 @@
 #include "dynarray.h"
 #include "renderpipelinesystem.h"
 #include "tbrendercommon.h"
+#include "texturesystem.h"
 
-#define TB_VIEW_SYS_PRIO (TB_RP_SYS_PRIO + 1)
+#include <flecs.h>
+
+#define TB_VIEW_SYS_PRIO (TB_TEX_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbTextureSystem TbTextureSystem;
@@ -48,6 +51,7 @@ typedef struct TbViewSystem {
 
   TB_DYN_ARR_OF(TbView) views;
 } TbViewSystem;
+extern ECS_COMPONENT_DECLARE(TbViewSystem);
 
 TbViewId tb_view_system_create_view(TbViewSystem *self);
 void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,

@@ -4,6 +4,8 @@
 #include "dynarray.h"
 #include "tbsystempriority.h"
 
+#include <flecs.h>
+
 #define TB_AUDIO_SYS_PRIO TB_SYSTEM_HIGH
 
 #define TB_AUDIO_CHUNK_SIZE 2048
@@ -27,6 +29,7 @@ typedef struct TbAudioSystem {
   TB_DYN_ARR_OF(TbMusic) music;
   TB_DYN_ARR_OF(TbSoundEffect) sfx;
 } TbAudioSystem;
+extern ECS_COMPONENT_DECLARE(TbAudioSystem);
 
 TbMusicId tb_audio_system_load_music(TbAudioSystem *self, const char *path);
 TbSoundEffectId tb_audio_system_load_effect(TbAudioSystem *self,

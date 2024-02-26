@@ -5,6 +5,8 @@
 #include "tbrendercommon.h"
 #include "viewsystem.h"
 
+#include <flecs.h>
+
 #define TB_SKY_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
@@ -55,3 +57,4 @@ typedef struct TbSkySystem {
 
   TbBuffer sky_geom_gpu_buffer;
 } TbSkySystem;
+extern ECS_COMPONENT_DECLARE(TbSkySystem);

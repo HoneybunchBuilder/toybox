@@ -5,8 +5,6 @@
 
 #include <flecs.h>
 
-#define TransformComponentId 0xDEADBEEF
-
 #ifdef __cplusplus
 extern "C" {
 #endif

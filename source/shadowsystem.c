@@ -204,19 +204,18 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void shadow_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Update", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  ECS_COMPONENT(ecs, TbShadowSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
 
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
+
   ecs_singleton_modified(ecs, TbViewSystem);
-  TbShadowSystem *shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
   ecs_singleton_modified(ecs, TbShadowSystem);
 
   // For each camera, evaluate each light and calculate any necessary shadow
   // info
-  const TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 1);
+  tb_auto cameras = ecs_field(it, TbCameraComponent, 1);
   for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
-    const TbCameraComponent *camera = &cameras[cam_idx];
+    tb_auto camera = &cameras[cam_idx];
 
     const float near = camera->near;
     const float far = camera->far;
@@ -351,13 +350,6 @@ void shadow_update_tick(ecs_iter_t *it) {
 void shadow_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
   tb_auto *ecs = it->world;
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbShadowSystem);
-  ECS_COMPONENT(ecs, TbMaterialSystem);
-  ECS_COMPONENT(ecs, TbMeshSystem);
-  ECS_COMPONENT(ecs, TbViewSystem);
 
   tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto *shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
@@ -411,13 +403,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
 
 void tb_register_shadow_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT(ecs, TbViewSystem);
-  ECS_COMPONENT(ecs, TbShadowSystem);
-  ECS_COMPONENT(ecs, TbDirectionalLightComponent);
-  ECS_COMPONENT(ecs, TbRenderSystem);
-  ECS_COMPONENT(ecs, TbRenderPipelineSystem);
-  ECS_COMPONENT(ecs, TbRenderObjectSystem);
-  ECS_COMPONENT(ecs, TbMeshSystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbShadowSystem);
 
   tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -494,14 +481,13 @@ void tb_register_shadow_sys(TbWorld *world) {
 
 void tb_unregister_shadow_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  ECS_COMPONENT_DEFINE(ecs, TbShadowSystem);
-  ECS_COMPONENT(ecs, TbRenderSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
 
-  TbShadowSystem *sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
   tb_rnd_destroy_pipeline(rnd_sys, sys->pipeline);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
+
   ecs_query_fini(sys->dir_light_query);
   *sys = (TbShadowSystem){0};
 
