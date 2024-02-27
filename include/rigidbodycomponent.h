@@ -2,8 +2,6 @@
 
 #include <flecs.h>
 
-#define RigidbodyComponentIdStr "0xBAD33333"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

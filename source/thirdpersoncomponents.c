@@ -28,28 +28,23 @@ ECS_COMPONENT_DECLARE(TbThirdPersonMovementComponent);
 // Expecting the camera to be attached to some child entity
 void post_load_tp_movement(ecs_world_t *ecs, ecs_entity_t ent) {
 
-  tb_auto parent = ecs_get_parent(ecs, ent);
-  if (parent == 0) {
-    return;
-  }
-
   tb_auto movement = ecs_get_mut(ecs, ent, TbThirdPersonMovementComponent);
 
   TB_CHECK(movement->camera == 0, "Didn't expect camera to already be set");
 
-  bool sibling_camera = false;
-  tb_auto child_it = ecs_children(ecs, parent);
+  bool child_camera = false;
+  tb_auto child_it = ecs_children(ecs, ent);
   while (ecs_children_next(&child_it)) {
     for (int32_t i = 0; i < child_it.count; ++i) {
-      tb_auto sibling = child_it.entities[i];
-      if (ecs_has(ecs, sibling, TbCameraComponent)) {
-        movement->camera = sibling;
-        sibling_camera = true;
+      tb_auto child = child_it.entities[i];
+      if (ecs_has(ecs, child, TbCameraComponent)) {
+        movement->camera = child;
+        child_camera = true;
         break;
       }
     }
   }
-  TB_CHECK(sibling_camera, "Didn't find sibling that has camera");
+  TB_CHECK(child_camera, "Didn't find child that has camera");
 }
 
 void third_person_move_on_set(ecs_iter_t *it) {

@@ -6,8 +6,6 @@
 
 #include <flecs.h>
 
-#define TbOceanComponentIdStr "0xBAD22222"
-
 typedef struct TbOceanComponent {
   float time;
   uint32_t wave_count;

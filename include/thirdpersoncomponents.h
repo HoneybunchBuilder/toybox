@@ -5,9 +5,6 @@
 #include <SDL3/SDL_stdinc.h>
 #include <flecs.h>
 
-#define ThirdPersonMovementComponentIdStr "0xBAD44444"
-#define ThirdPersonCameraComponentIdStr "0xBAD55555"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
