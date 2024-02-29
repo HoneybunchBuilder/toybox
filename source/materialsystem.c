@@ -246,7 +246,7 @@ void tb_register_material_sys(TbWorld *world) {
   TbMaterialSystem sys = create_material_system(
       world->gp_alloc, world->tmp_alloc, rnd_sys, tex_sys);
 
-  ECS_SYSTEM(ecs, tick_material_system, EcsOnUpdate,
+  ECS_SYSTEM(ecs, tick_material_system, EcsPreStore,
              TbMaterialSystem(TbMaterialSystem));
 
   // Sets a singleton based on the value at a pointer

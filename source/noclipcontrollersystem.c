@@ -1,6 +1,5 @@
 #include "noclipcontrollersystem.h"
 
-
 #include "inputsystem.h"
 #include "json.h"
 #include "noclipcomponent.h"
@@ -15,7 +14,6 @@
 void noclip_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
-  
 
   TbInputSystem *input = ecs_singleton_get_mut(ecs, TbInputSystem);
 
@@ -101,7 +99,7 @@ void tb_register_noclip_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
   ECS_SYSTEM(ecs, noclip_update_tick,
-             EcsPreUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
+             EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
 }
 
 void tb_unregister_noclip_sys(TbWorld *world) { (void)world; }

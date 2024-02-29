@@ -1035,7 +1035,7 @@ void tb_register_ocean_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem(TbOceanSystem),
              TbOceanComponent);
-  ECS_SYSTEM(ecs, ocean_draw_tick, EcsPostUpdate, TbOceanSystem(TbOceanSystem),
+  ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem(TbOceanSystem),
              TbCameraComponent);
 }
 

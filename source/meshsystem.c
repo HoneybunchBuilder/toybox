@@ -1515,9 +1515,9 @@ void tb_register_mesh_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbMeshSystem, &sys);
 
-  ECS_SYSTEM(ecs, mesh_descriptor_update, EcsOnUpdate,
+  ECS_SYSTEM(ecs, mesh_descriptor_update, EcsPreStore,
              TbMeshSystem(TbMeshSystem));
-  ECS_SYSTEM(ecs, mesh_draw_tick, EcsPostUpdate, TbMeshSystem(TbMeshSystem));
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem(TbMeshSystem));
 }
 
 void tb_unregister_mesh_sys(TbWorld *world) {

@@ -159,7 +159,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbTimeOfDaySystem), TbTimeOfDaySystem, &sys);
 
-  ECS_SYSTEM(ecs, time_of_day_tick, EcsPreUpdate,
+  ECS_SYSTEM(ecs, time_of_day_tick, EcsOnUpdate,
              TbTimeOfDaySystem(TbTimeOfDaySystem), [inout] TbSkyComponent,
              [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
 }

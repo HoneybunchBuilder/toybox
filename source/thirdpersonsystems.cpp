@@ -180,7 +180,7 @@ void tb_register_third_person_sys(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
   ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")
-      .kind(EcsPreUpdate)
+      .kind(EcsOnUpdate)
       .iter(tp_movement_update_tick);
 }
 

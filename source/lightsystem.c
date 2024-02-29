@@ -65,7 +65,7 @@ void tb_register_light_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbLightSystem), TbLightSystem, &sys);
 
-  ECS_SYSTEM(ecs, light_update_tick, EcsOnUpdate, [in] TbCameraComponent);
+  ECS_SYSTEM(ecs, light_update_tick, EcsPreStore, [in] TbCameraComponent);
 }
 
 void tb_unregister_light_sys(TbWorld *world) {

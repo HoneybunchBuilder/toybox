@@ -473,10 +473,9 @@ void tb_register_shadow_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbShadowSystem), TbShadowSystem, &sys);
 
-  ECS_SYSTEM(ecs, shadow_update_tick, EcsPreUpdate, TbCameraComponent);
+  ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, TbCameraComponent);
 
-  ECS_SYSTEM(ecs, shadow_draw_tick, EcsPostUpdate,
-             TbShadowSystem(TbShadowSystem));
+  ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnStore, TbShadowSystem(TbShadowSystem));
 }
 
 void tb_unregister_shadow_sys(TbWorld *world) {

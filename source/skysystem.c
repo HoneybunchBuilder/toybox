@@ -1297,7 +1297,7 @@ void tb_register_sky_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
-  ECS_SYSTEM(ecs, sky_draw_tick, EcsPostUpdate, TbSkyComponent);
+  ECS_SYSTEM(ecs, sky_draw_tick, EcsOnStore, TbSkyComponent);
 }
 
 void tb_unregister_sky_sys(TbWorld *world) {

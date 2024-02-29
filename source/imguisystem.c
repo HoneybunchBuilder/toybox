@@ -759,7 +759,7 @@ void tb_register_imgui_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbImGuiSystem), TbImGuiSystem, &sys);
 
-  ECS_SYSTEM(ecs, imgui_draw_tick, EcsPostUpdate, TbImGuiSystem(TbImGuiSystem));
+  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnStore, TbImGuiSystem(TbImGuiSystem));
 }
 
 void tb_unregister_imgui_sys(TbWorld *world) {

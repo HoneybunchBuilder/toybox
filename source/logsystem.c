@@ -149,7 +149,7 @@ void tb_register_log_sys(TbWorld *world) {
                            &sys->orig_userdata);
 
   TB_DYN_ARR_RESET(sys->messages, sys->log_alloc, 1024);
-  ECS_SYSTEM(ecs, log_ui_tick, EcsPreUpdate, TbLogSystem(TbLogSystem));
+  ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem(TbLogSystem));
 
   SDL_LogSetOutputFunction(tb_log_hook,
                            ecs_singleton_get_mut(ecs, TbLogSystem));

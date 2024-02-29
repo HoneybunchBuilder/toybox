@@ -365,7 +365,7 @@ void view_update_tick(ecs_iter_t *it) {
 void tb_register_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-    ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
 
   TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   TbRenderTargetSystem *rt_sys =
@@ -377,7 +377,7 @@ void tb_register_view_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
-  ECS_SYSTEM(ecs, view_update_tick, EcsOnUpdate, TbViewSystem(TbViewSystem));
+  ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem(TbViewSystem));
 }
 
 void tb_unregister_view_sys(TbWorld *world) {

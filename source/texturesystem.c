@@ -469,7 +469,7 @@ void tb_register_texture_sys(TbWorld *world) {
   TbTextureSystem sys =
       create_texture_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
 
-  ECS_SYSTEM(ecs, tick_texture_system, EcsOnUpdate,
+  ECS_SYSTEM(ecs, tick_texture_system, EcsPreStore,
              TbTextureSystem(TbTextureSystem));
 
   // Sets a singleton based on the value at a pointer

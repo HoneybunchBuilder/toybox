@@ -308,7 +308,7 @@ void tb_register_fxaa_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
 
-  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnUpdate, TbFXAASystem(TbFXAASystem));
+  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem(TbFXAASystem));
 }
 
 void tb_unregister_fxaa_sys(TbWorld *world) {

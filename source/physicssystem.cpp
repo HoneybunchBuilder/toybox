@@ -293,7 +293,7 @@ void tb_register_physics_sys(TbWorld *world) {
 
   ecs.set<TbPhysicsSystem>(sys);
 
-  ecs.system("PhysicsUpdate").kind(EcsPreUpdate).iter(physics_update_tick);
+  ecs.system("PhysicsUpdate").kind(EcsPostUpdate).iter(physics_update_tick);
 }
 
 void tb_unregister_physics_sys(TbWorld *world) {
