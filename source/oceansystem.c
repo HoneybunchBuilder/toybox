@@ -96,9 +96,8 @@ TB_REGISTER_SYS(tb, ocean, TB_OCEAN_SYS_PRIO)
 void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
                   const TbDrawBatch *batches) {
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
-    const TbDrawBatch *batch = &batches[batch_idx];
-    const OceanDrawBatch *ocean_batch =
-        (const OceanDrawBatch *)batch->user_batch;
+    tb_auto batch = &batches[batch_idx];
+    tb_auto ocean_batch = (const OceanDrawBatch *)batch->user_batch;
     VkPipelineLayout layout = batch->layout;
     VkBuffer geom_buffer = ocean_batch->geom_buffer;
 

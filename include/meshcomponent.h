@@ -8,7 +8,6 @@
 
 typedef struct TbWorld TbWorld;
 
-#define TB_SUBMESH_MAX 8
 #define TB_VERTEX_BINDING_MAX 4
 
 typedef TbResourceId TbMeshId;
@@ -27,8 +26,7 @@ typedef struct TbSubMesh {
 
 typedef struct TbMeshComponent {
   TbMeshId mesh_id;
-  uint32_t submesh_count;
-  TbSubMesh submeshes[TB_SUBMESH_MAX];
+  TB_DYN_ARR_OF(TbSubMesh) submeshes;
   TbAABB local_aabb;
 } TbMeshComponent;
 extern ECS_COMPONENT_DECLARE(TbMeshComponent);

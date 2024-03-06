@@ -15,16 +15,17 @@
 ECS_COMPONENT_DECLARE(TbMeshComponent);
 
 bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
+                                    TbAllocator gp_alloc,
                                     const char *source_path,
                                     const cgltf_node *node,
                                     TbMaterialSystem *mat_system) {
   const uint32_t submesh_count = node->mesh->primitives_count;
-  TB_CHECK_RETURN(submesh_count <= TB_SUBMESH_MAX, "Too many submeshes", false);
 
   *self = (TbMeshComponent){
       .mesh_id = id,
-      .submesh_count = submesh_count,
   };
+  TB_DYN_ARR_RESET(self->submeshes, gp_alloc, submesh_count);
+  TB_DYN_ARR_RESIZE(self->submeshes, submesh_count);
 
   // Retrieve info about how to draw this mesh
   uint64_t offset = 0;
@@ -34,15 +35,17 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
       const cgltf_primitive *prim = &node->mesh->primitives[prim_idx];
       const cgltf_accessor *indices = prim->indices;
 
+      tb_auto submesh = &TB_DYN_ARR_AT(self->submeshes, prim_idx);
+
       VkIndexType index_type = VK_INDEX_TYPE_UINT16;
       if (indices->stride > 2) {
         index_type = VK_INDEX_TYPE_UINT32;
       }
 
-      self->submeshes[prim_idx].index_type = index_type;
-      self->submeshes[prim_idx].index_count = indices->count;
-      self->submeshes[prim_idx].index_offset = offset;
-      self->submeshes[prim_idx].vertex_count = prim->attributes[0].data->count;
+      submesh->index_type = index_type;
+      submesh->index_count = indices->count;
+      submesh->index_offset = offset;
+      submesh->vertex_count = prim->attributes[0].data->count;
 
       // If no material is provided we use a default
       const cgltf_material *material = prim->material;
@@ -51,10 +54,9 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
       }
 
       // Load materials
-      self->submeshes[prim_idx].material =
+      submesh->material =
           tb_mat_system_load_material(mat_system, source_path, material);
-      TB_CHECK_RETURN(self->submeshes[prim_idx].material.id,
-                      "Failed to load material", false);
+      TB_CHECK_RETURN(submesh->material.id, "Failed to load material", false);
 
       // calculate the aligned size
       size_t index_size =
@@ -71,8 +73,9 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
     uint32_t vertex_offset = 0;
     for (uint32_t prim_idx = 0; prim_idx < submesh_count; ++prim_idx) {
       const cgltf_primitive *prim = &node->mesh->primitives[prim_idx];
+      tb_auto submesh = &TB_DYN_ARR_AT(self->submeshes, prim_idx);
 
-      self->submeshes[prim_idx].vertex_offset = vertex_offset;
+      submesh->vertex_offset = vertex_offset;
       vertex_offset += prim->attributes[0].data->count;
 
       // Determine input permutation and attribute count
@@ -97,7 +100,7 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
           }
         }
       }
-      self->submeshes[prim_idx].vertex_perm = vertex_attributes;
+      submesh->vertex_perm = vertex_attributes;
 
       // Read AABB from gltf
       {
@@ -131,9 +134,11 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
 void destroy_mesh_component_internal(TbMeshComponent *self,
                                      TbMeshSystem *mesh_system,
                                      TbMaterialSystem *mat_system) {
-  for (uint32_t i = 0; i < self->submesh_count; ++i) {
-    tb_mat_system_release_material_ref(mat_system, self->submeshes[i].material);
+  TB_DYN_ARR_FOREACH(self->submeshes, i) {
+    tb_mat_system_release_material_ref(
+        mat_system, TB_DYN_ARR_AT(self->submeshes, i).material);
   }
+  TB_DYN_ARR_DESTROY(self->submeshes);
   tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
 
   *self = (TbMeshComponent){0};
@@ -151,8 +156,8 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
   TbMeshComponent comp = {0};
-  bool ret =
-      create_mesh_component_internal(&comp, id, source_path, node, mat_sys);
+  bool ret = create_mesh_component_internal(&comp, id, world->gp_alloc,
+                                            source_path, node, mat_sys);
   TB_CHECK(ret, "Failed to create mesh component");
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
 

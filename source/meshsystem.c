@@ -952,7 +952,7 @@ TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
           attr_formats_per_type[cgltf_attribute_type_max_enum] = {
               VK_FORMAT_UNDEFINED,         VK_FORMAT_R16G16B16A16_SINT,
               VK_FORMAT_R8G8B8A8_SNORM,    VK_FORMAT_R8G8B8A8_SNORM,
-              VK_FORMAT_R16G16_SINT,       VK_FORMAT_R8G8B8A8_SRGB,
+              VK_FORMAT_R16G16_SINT,       VK_FORMAT_R8G8B8A8_UNORM,
               VK_FORMAT_R16G16B16A16_SINT, VK_FORMAT_R8G8B8A8_SINT,
           };
       static const int32_t attr_idx_per_type[cgltf_attribute_type_max_enum] = {
@@ -1209,15 +1209,15 @@ void mesh_draw_tick(ecs_iter_t *it) {
         for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
           tb_auto *mesh = &meshes[mesh_idx];
 
-          for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
-               ++submesh_idx) {
-            tb_auto *sm = &mesh->submeshes[submesh_idx];
+          for (uint32_t submesh_idx = 0;
+               submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
+            tb_auto *sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
             tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
             if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
-              trans_draw_count += mesh->submesh_count;
+              trans_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
             } else {
-              opaque_draw_count += mesh->submesh_count;
+              opaque_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
             }
           }
         }
@@ -1304,9 +1304,9 @@ void mesh_draw_tick(ecs_iter_t *it) {
           tb_auto entity = mesh_it.entities[mesh_idx];
           tb_auto *ro = ecs_get_mut(ecs, entity, TbRenderObject);
 
-          for (uint32_t submesh_idx = 0; submesh_idx < mesh->submesh_count;
-               ++submesh_idx) {
-            tb_auto *sm = &mesh->submeshes[submesh_idx];
+          for (uint32_t submesh_idx = 0;
+               submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
+            tb_auto *sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
             tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
             // Deduce whether to write to opaque or transparent data

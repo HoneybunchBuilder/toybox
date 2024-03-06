@@ -118,12 +118,12 @@ void log_ui_tick(ecs_iter_t *it) {
           if (sys->autoscroll && sys->enabled) {
             igSetScrollHereY(1.0f);
           }
+          igEndTable();
         }
-        igEndTable();
+        igEndChild();
       }
-      igEndChild();
+      igEnd();
     }
-    igEnd();
   }
 
   TracyCZoneEnd(ctx);
