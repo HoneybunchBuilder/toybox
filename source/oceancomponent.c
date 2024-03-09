@@ -11,6 +11,7 @@
 
 ECS_COMPONENT_DECLARE(TbOceanComponent);
 
+ECS_COMPONENT_DECLARE(TbOceanWave);
 typedef struct TbOceanDescriptor {
   int32_t wave_count;
   TbOceanWave waves[8];
@@ -101,10 +102,29 @@ TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
 ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbOceanComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbOceanWave);
   ECS_COMPONENT_DEFINE(ecs, TbOceanDescriptor);
 
-  // Further reflect the ocean component descriptor
-
+  ecs_struct(ecs, {
+                      .entity = ecs_id(TbOceanWave),
+                      .members =
+                          {
+                              {.name = "dir_x", .type = ecs_id(ecs_f32_t)},
+                              {.name = "dir_y", .type = ecs_id(ecs_f32_t)},
+                              {.name = "steepness", .type = ecs_id(ecs_f32_t)},
+                              {.name = "wavelength", .type = ecs_id(ecs_f32_t)},
+                          },
+                  });
+  ecs_struct(
+      ecs, {
+               .entity = ecs_id(TbOceanDescriptor),
+               .members =
+                   {
+                       {.name = "wave_count", .type = ecs_id(ecs_u32_t)},
+                       {.name = "waves",
+                        .type = ecs_vector(ecs, {.type = ecs_id(TbOceanWave)})},
+                   },
+           });
   return ecs_id(TbOceanDescriptor);
 }
 
@@ -121,8 +141,7 @@ bool tb_load_ocean_comp(TbWorld *world, ecs_entity_t ent,
 }
 
 void tb_destroy_ocean_comp(TbWorld *world, ecs_entity_t ent) {
-  (void)world;
-  (void)ent;
+  ecs_remove(world->ecs, ent, TbOceanComponent);
 }
 
 TB_REGISTER_COMP(tb, ocean)

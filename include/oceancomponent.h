@@ -6,6 +6,8 @@
 
 #include <flecs.h>
 
+extern ECS_COMPONENT_DECLARE(TbOceanWave);
+
 typedef struct TbOceanComponent {
   float time;
   uint32_t wave_count;
