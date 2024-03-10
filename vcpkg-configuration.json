@@ -3,7 +3,7 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "7032c5759f823fc8699a5c37d5f7072464ccb9a8"
+    "baseline": "db19a19ba88b8e750ffe3642dc0f80821260083d"
   },
   "registries": [
     {
@@ -15,15 +15,6 @@
         "sdl3-mixer"
       ],
       "reference": "sdl3-mixer"
-    },
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "091260f8e9aee0823274616c5ab56e59d62429c5",
-      "packages": [
-        "ktx"
-      ],
-      "reference": "ktx-4.3.1"
     }
   ]
 }
