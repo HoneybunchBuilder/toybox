@@ -60,6 +60,7 @@ typedef struct TbWorldDesc {
 
 typedef struct TbWorld {
   ecs_world_t *ecs;
+  double time;
   TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
   TbRenderThread *render_thread;

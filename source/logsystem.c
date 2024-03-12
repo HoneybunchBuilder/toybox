@@ -41,11 +41,11 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
 void log_ui_tick(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Log System UI Tick", true);
   TracyCZoneColor(ctx, TracyCategoryColorUI);
+  TbWorld *world = ecs_singleton_get_mut(it->world, TbWorldRef)->world;
   tb_auto sys = ecs_field(it, TbLogSystem, 1);
 
+  tb_log_time = world->time;
   const int32_t log_cols = 4;
-
-  tb_log_time += it->delta_time;
 
   // Some helper blocks for formatting
   tb_auto prio_to_str = ^const char *(SDL_LogPriority prio) {

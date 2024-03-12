@@ -9,39 +9,17 @@
 #include "viewsystem.h"
 #include "world.h"
 
+#include <flecs.h>
+#include <json.h>
 #include <math.h>
 
-#include <flecs.h>
+ECS_COMPONENT_DECLARE(TbTimeOfDayComponent);
 
-ECS_COMPONENT_DECLARE(TbTimeOfDaySystem);
-
-/*
-  HACK:
-  This time of day system makes a few assumptions:
-  1) That the scene has one entity with a Directional Light and TbTransform
-  component attached and one entity with a Sky component attached. Otherwise it
-  will not work as intended. Note that the time of day system doesn't require
-  any explicit dependency on the lighting or sky systems.
-  2) That there is only one of each of these entities in the scene.
-  3) That this system ticks before any other system that derives state; the Sky
-  system implictly needs to tick after this otherwise the directional light
-  transform will be a frame behind.
-
-  I dislike that the coupling with the sky system is so detached that the
-  intended behavior cannot be enforced. The decoupling is neat in theory but
-  seems like a gap where a user could make an unnecessary mistake. The only
-  mechanism that hints at this coupling is the requirement on the entity to have
-  a Sky component attached but misconfiguration seems hard to message to a user.
-*/
-
-void tb_register_time_of_day_sys(TbWorld *world);
-void tb_unregister_time_of_day_sys(TbWorld *world);
-
-TB_REGISTER_SYS(tb, time_of_day, TB_TOD_SYS_PRIO)
-
-void destroy_time_of_day_system(TbTimeOfDaySystem *self) {
-  *self = (TbTimeOfDaySystem){0};
-}
+typedef struct TbTimeOfDayDescriptor {
+  float start_time;
+  float time_scale;
+} TbTimeOfDayDescriptor;
+ECS_COMPONENT_DECLARE(TbTimeOfDayDescriptor);
 
 float3 lookup_sun_color(float norm) {
   // Convert normalized time of day into a color temp
@@ -115,58 +93,78 @@ float3 lookup_sun_color(float norm) {
 
   return color;
 }
-
 void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
-  TbTimeOfDaySystem *sys = ecs_field(it, TbTimeOfDaySystem, 1);
-  sys->time +=
-      it->delta_time * 0.002f; // go a litte slower than everything else
-
-  TbSkyComponent *skys = ecs_field(it, TbSkyComponent, 2);
-  TbDirectionalLightComponent *lights =
-      ecs_field(it, TbDirectionalLightComponent, 3);
-  TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 4);
+  TbWorld *world = ecs_singleton_get_mut(it->world, TbWorldRef)->world;
+  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 1);
+  tb_auto skys = ecs_field(it, TbSkyComponent, 2);
+  tb_auto lights = ecs_field(it, TbDirectionalLightComponent, 3);
+  tb_auto transforms = ecs_field(it, TbTransformComponent, 4);
 
   for (int32_t i = 0; i < it->count; ++i) {
-    TbSkyComponent *sky = &skys[i];
-    TbDirectionalLightComponent *light = &lights[i];
-    TbTransformComponent *trans = &transforms[i];
+    tb_auto tod = &tods[i];
+    tb_auto sky = &skys[i];
+    tb_auto light = &lights[i];
+    tb_auto trans = &transforms[i];
+    (void)sky; // Sky is unused but required
+
+    tod->time = world->time * tod->time_scale;
 
     const float time_norm =
-        (sys->time > TB_TAU ? sys->time - TB_TAU : sys->time) / TB_TAU;
+        (tod->time > TB_TAU ? tod->time - TB_TAU : tod->time) / TB_TAU;
     trans->transform.rotation =
-        tb_angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, sys->time});
+        tb_angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, tod->time});
     light->color = lookup_sun_color(time_norm);
-
-    float3 sun_dir = -tb_transform_get_forward(&trans->transform);
-
-    // Update sky component's time and sun direction
-    sky->time = sys->time;
-    sky->sun_dir = sun_dir;
   }
   TracyCZoneEnd(ctx);
 }
 
 void tb_register_time_of_day_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-
-  ECS_COMPONENT_DEFINE(ecs, TbTimeOfDaySystem);
-
-  TbTimeOfDaySystem sys = {
-      .time = 0.3f, // Start with some time so it's not pitch black
-  };
-
-  // Sets a singleton by ptr
-  ecs_set_ptr(ecs, ecs_id(TbTimeOfDaySystem), TbTimeOfDaySystem, &sys);
-
-  ECS_SYSTEM(ecs, time_of_day_tick, EcsOnUpdate,
-             TbTimeOfDaySystem(TbTimeOfDaySystem), [inout] TbSkyComponent,
+  ECS_SYSTEM(ecs, time_of_day_tick,
+             EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
              [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
 }
+void tb_unregister_time_of_day_sys(TbWorld *world) { (void)world; }
 
-void tb_unregister_time_of_day_sys(TbWorld *world) {
+TB_REGISTER_SYS(tb, time_of_day, TB_TOD_SYS_PRIO)
+
+ecs_entity_t tb_register_time_of_day_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  TbTimeOfDaySystem *sys = ecs_singleton_get_mut(ecs, TbTimeOfDaySystem);
-  destroy_time_of_day_system(sys);
-  ecs_singleton_remove(ecs, TbTimeOfDaySystem);
+  ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayComponent);
+  ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayDescriptor);
+
+  ecs_struct(ecs, {.entity = ecs_id(TbTimeOfDayDescriptor),
+                   .members = {
+                       {.name = "start_time", .type = ecs_id(ecs_f32_t)},
+                       {.name = "time_scale", .type = ecs_id(ecs_f32_t)},
+                   }});
+
+  return ecs_id(TbTimeOfDayDescriptor);
 }
+
+bool tb_load_time_of_day_comp(TbWorld *world, ecs_entity_t ent,
+                              const char *source_path, const cgltf_node *node,
+                              json_object *object) {
+  (void)source_path;
+  (void)node;
+
+  TbTimeOfDayComponent comp = {0};
+  json_object_object_foreach(object, key, value) {
+    if (SDL_strcmp(key, "start_time") == 0) {
+      comp.time = (float)json_object_get_double(value);
+    }
+    if (SDL_strcmp(key, "time_scale") == 0) {
+      comp.time_scale = (float)json_object_get_double(value);
+    }
+  }
+  ecs_set_ptr(world->ecs, ent, TbTimeOfDayComponent, &comp);
+
+  return true;
+}
+
+void tb_destroy_time_of_day_comp(TbWorld *world, ecs_entity_t ent) {
+  ecs_remove(world->ecs, ent, TbTimeOfDayComponent);
+}
+
+TB_REGISTER_COMP(tb, time_of_day)

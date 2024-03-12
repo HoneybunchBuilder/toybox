@@ -655,17 +655,6 @@ void destroy_ocean_system(TbOceanSystem *self) {
   *self = (TbOceanSystem){0};
 }
 
-void ocean_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Ocean Update System", TracyCategoryColorCore, true);
-  TbOceanComponent *oceans = ecs_field(it, TbOceanComponent, 1);
-  // Update time on all ocean components
-  for (int32_t i = 0; i < it->count; ++i) {
-    TbOceanComponent *ocean = &oceans[i];
-    ocean->time += it->delta_time;
-  }
-  TracyCZoneEnd(ctx);
-}
-
 void ocean_audio_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Ocean Audio System", TracyCategoryColorAudio, true);
 
@@ -690,6 +679,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
+  double time = ecs_singleton_get(it->world, TbWorldRef)->world->time;
   tb_auto sys = ecs_field(it, TbOceanSystem, 1);
   tb_auto cameras = ecs_field(it, TbCameraComponent, 2);
 
@@ -851,7 +841,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
               SDL_max(ocean_comp->wave_count, TB_WAVE_MAX);
 
           OceanData data = {
-              .time_waves = tb_f4(ocean_comp->time, wave_count, 0, 0),
+              .time_waves = tb_f4(time, wave_count, 0, 0),
           };
           SDL_memcpy(data.wave, ocean_comp->waves,
                      wave_count * sizeof(TbOceanWave));
@@ -1031,7 +1021,6 @@ void tb_register_ocean_sys(TbWorld *world) {
              TbVisualLoggingSystem(TbVisualLoggingSystem),
              TbAudioSystem(TbAudioSystem));
 
-  ECS_SYSTEM(ecs, ocean_update_tick, EcsOnUpdate, TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem(TbOceanSystem),
              TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem(TbOceanSystem),

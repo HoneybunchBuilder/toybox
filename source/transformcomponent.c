@@ -164,7 +164,6 @@ ecs_entity_t tb_register_transform_comp(TbWorld *world) {
                          {.name = "dirty", .type = ecs_id(ecs_bool_t)},
                          {.name = "world_matrix", .type = ecs_id(float4x4)},
                          {.name = "transform", .type = ecs_id(TbTransform)},
-                         {.name = "entity", .type = ecs_id(ecs_entity_t)},
                      },
              });
 

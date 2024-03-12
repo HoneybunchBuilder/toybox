@@ -78,6 +78,7 @@ TbOceanSample gerstner_wave(TbOceanWave wave, TbOceanSample sample,
 
 TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
                               ecs_entity_t entity, float2 pos) {
+  double time = ecs_singleton_get(ecs, TbWorldRef)->world->time;
   float4x4 mat = tb_transform_get_world_matrix(ecs, entity);
 
   uint32_t wave_count = ocean->wave_count;
@@ -91,7 +92,7 @@ TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
       .binormal = TB_FORWARD,
   };
   for (uint32_t i = 0; i < wave_count; ++i) {
-    sample = gerstner_wave(ocean->waves[i], sample, ocean->time);
+    sample = gerstner_wave(ocean->waves[i], sample, time);
   }
   sample.tangent = tb_normf3(sample.tangent);
   sample.binormal = tb_normf3(sample.binormal);

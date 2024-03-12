@@ -1009,8 +1009,9 @@ void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
 
+  TbWorld *world = ecs_singleton_get_mut(ecs, TbWorldRef)->world;
+
   tb_auto sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
-  sky_sys->time += it->delta_time;
   ecs_singleton_modified(ecs, TbSkySystem);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
@@ -1026,8 +1027,12 @@ void sky_draw_tick(ecs_iter_t *it) {
 
   // Write descriptor sets for each sky
   tb_auto skys = ecs_field(it, TbSkyComponent, 1);
+  tb_auto trans = ecs_field(it, TbTransformComponent, 2);
   for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
     tb_auto sky = &skys[sky_idx];
+    tb_auto transform = &trans[sky_idx];
+
+    float3 sun_dir = -tb_transform_get_forward(&transform->transform);
 
     VkResult err = VK_SUCCESS;
     VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
@@ -1097,10 +1102,10 @@ void sky_draw_tick(ecs_iter_t *it) {
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
 
     TbSkyData data = {
-        .time = sky_sys->time,
+        .time = (float)world->time,
         .cirrus = sky->cirrus,
         .cumulus = sky->cumulus,
-        .sun_dir = sky->sun_dir,
+        .sun_dir = sun_dir,
     };
 
     // Write view data into the tmp buffer we know will wind up on the GPU
@@ -1147,12 +1152,11 @@ void sky_draw_tick(ecs_iter_t *it) {
 
   ecs_iter_t cam_it = ecs_query_iter(ecs, sky_sys->camera_query);
   while (ecs_query_next(&cam_it)) {
-    TbCameraComponent *cameras = ecs_field(&cam_it, TbCameraComponent, 1);
-    TbTransformComponent *transforms =
-        ecs_field(&cam_it, TbTransformComponent, 2);
+    tb_auto cameras = ecs_field(&cam_it, TbCameraComponent, 1);
+    tb_auto transforms = ecs_field(&cam_it, TbTransformComponent, 2);
     for (int32_t cam_idx = 0; cam_idx < cam_it.count; ++cam_idx) {
-      TbCameraComponent *camera = &cameras[cam_idx];
-      TbTransformComponent *transform = &transforms[cam_idx];
+      tb_auto camera = &cameras[cam_idx];
+      tb_auto transform = &transforms[cam_idx];
 
       // Need to manually calculate this here
       float4x4 vp = {.col0 = {0}};
@@ -1165,7 +1169,7 @@ void sky_draw_tick(ecs_iter_t *it) {
       }
 
       for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
-        SkyDrawBatch *sky_batch = tb_alloc_tp(sky_sys->tmp_alloc, SkyDrawBatch);
+        tb_auto sky_batch = tb_alloc_tp(sky_sys->tmp_alloc, SkyDrawBatch);
         *sky_batch = (SkyDrawBatch){
             .const_range =
                 (VkPushConstantRange){
@@ -1181,8 +1185,7 @@ void sky_draw_tick(ecs_iter_t *it) {
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
         };
-        TbDrawBatch *sky_draw_batch =
-            tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
+        tb_auto sky_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
         *sky_draw_batch = (TbDrawBatch){
             .layout = sky_sys->sky_pipe_layout,
             .pipeline = sky_sys->sky_pipeline,
@@ -1191,7 +1194,7 @@ void sky_draw_tick(ecs_iter_t *it) {
             .user_batch = sky_batch,
         };
 
-        TbDrawBatch *env_draw_batches = tb_alloc_nm_tp(
+        tb_auto env_draw_batches = tb_alloc_nm_tp(
             sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, TbDrawBatch);
 
         // We need to capture the environment once per
@@ -1209,9 +1212,8 @@ void sky_draw_tick(ecs_iter_t *it) {
         }
 
         // Generate the batch for the irradiance pass
-        TbDrawBatch *irr_draw_batch =
-            tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
-        IrradianceBatch *irradiance_batch =
+        tb_auto irr_draw_batch = tb_alloc_tp(sky_sys->tmp_alloc, TbDrawBatch);
+        tb_auto irradiance_batch =
             tb_alloc_tp(sky_sys->tmp_alloc, IrradianceBatch);
         {
           *irr_draw_batch = (TbDrawBatch){
@@ -1230,9 +1232,9 @@ void sky_draw_tick(ecs_iter_t *it) {
         }
 
         // Generate batch for prefiltering the environment map
-        TbDrawBatch *pre_draw_batches = tb_alloc_nm_tp(
+        tb_auto pre_draw_batches = tb_alloc_nm_tp(
             sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, TbDrawBatch);
-        PrefilterBatch *prefilter_batches = tb_alloc_nm_tp(
+        tb_auto prefilter_batches = tb_alloc_nm_tp(
             sky_sys->tmp_alloc, PREFILTER_PASS_COUNT, PrefilterBatch);
         {
           for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
@@ -1262,7 +1264,6 @@ void sky_draw_tick(ecs_iter_t *it) {
 
         tb_render_pipeline_issue_draw_batch(rp_sys, sky_sys->sky_draw_ctx, 1,
                                             sky_draw_batch);
-
         tb_render_pipeline_issue_draw_batch(rp_sys, sky_sys->irradiance_ctx, 1,
                                             irr_draw_batch);
         for (uint32_t i = 0; i < PREFILTER_PASS_COUNT; ++i) {
@@ -1297,7 +1298,8 @@ void tb_register_sky_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
-  ECS_SYSTEM(ecs, sky_draw_tick, EcsOnStore, TbSkyComponent);
+  ECS_SYSTEM(ecs, sky_draw_tick,
+             EcsOnStore, [inout] TbSkyComponent, [in] TbTransformComponent);
 }
 
 void tb_unregister_sky_sys(TbWorld *world) {

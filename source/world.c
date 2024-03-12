@@ -251,6 +251,8 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
   TracyCZoneNC(ctx, "World Tick", TracyCategoryColorCore, true);
   ecs_world_t *ecs = world->ecs;
 
+  world->time += (double)delta_seconds;
+
   // Tick with flecs
   if (!ecs_progress(ecs, delta_seconds)) {
     return false;

@@ -14,6 +14,5 @@ typedef struct TbSkyComponent {
   float time;
   float cirrus;
   float cumulus;
-  float3 sun_dir;
 } TbSkyComponent;
 extern ECS_COMPONENT_DECLARE(TbSkyComponent);

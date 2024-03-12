@@ -102,11 +102,11 @@ ecs_entity_t tb_register_third_person_move_comp(TbWorld *world) {
 
   ecs_struct(ecs, {.entity = ecs_id(TbThirdPersonMovementComponentDesc),
                    .members = {
-                       {.name = "jump", .type = ecs_id(ecs_bool_t)},
-                       {.name = "jump_velocity", .type = ecs_id(ecs_f32_t)},
                        {.name = "speed", .type = ecs_id(ecs_f32_t)},
+                       {.name = "jump_velocity", .type = ecs_id(ecs_f32_t)},
                        {.name = "distance", .type = ecs_id(ecs_f32_t)},
                        {.name = "angle", .type = ecs_id(ecs_f32_t)},
+                       {.name = "jump", .type = ecs_id(ecs_bool_t)},
                        {.name = "fixed_rotation", .type = ecs_id(ecs_bool_t)},
                    }});
 

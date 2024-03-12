@@ -1,5 +1,6 @@
 #include "skycomponent.h"
 
+#include "lightcomponent.h"
 #include "skysystem.h"
 #include "world.h"
 
@@ -21,6 +22,7 @@ bool tb_load_sky_comp(TbWorld *world, ecs_entity_t ent, const char *source_path,
       sky.cumulus = (float)json_object_get_double(value);
     }
   }
+
   ecs_set_ptr(world->ecs, ent, TbSkyComponent, &sky);
 
   return true;

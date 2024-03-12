@@ -1,6 +1,5 @@
 #pragma once
 
-#include "allocator.h"
 #include "tbsystempriority.h"
 
 #include <flecs.h>
@@ -9,9 +8,8 @@
 
 typedef struct TbWorld TbWorld;
 
-typedef struct TbTimeOfDaySystem {
-  TbAllocator gp_alloc;
-  TbAllocator tmp_alloc;
+typedef struct TbTimeOfDayComponent {
   float time;
-} TbTimeOfDaySystem;
-extern ECS_COMPONENT_DECLARE(TbTimeOfDaySystem);
+  float time_scale;
+} TbTimeOfDayComponent;
+extern ECS_COMPONENT_DECLARE(TbTimeOfDayComponent);
