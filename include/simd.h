@@ -41,13 +41,21 @@ typedef double __attribute__((ext_vector_type(4))) double4;
 typedef double __attribute__((ext_vector_type(3))) double3;
 typedef double __attribute__((ext_vector_type(2))) double2;
 
-typedef int32_t __attribute__((ext_vector_type(4))) int4;
-typedef int32_t __attribute__((ext_vector_type(3))) int3;
-typedef int32_t __attribute__((ext_vector_type(2))) int2;
+typedef int32_t __attribute__((ext_vector_type(4))) int32_t4;
+typedef int32_t __attribute__((ext_vector_type(3))) int32_t3;
+typedef int32_t __attribute__((ext_vector_type(2))) int32_t2;
 
-typedef uint32_t __attribute__((ext_vector_type(4))) uint4;
-typedef uint32_t __attribute__((ext_vector_type(3))) uint3;
-typedef uint32_t __attribute__((ext_vector_type(2))) uint2;
+typedef int32_t4 int4;
+typedef int32_t3 int3;
+typedef int32_t2 int2;
+
+typedef uint32_t __attribute__((ext_vector_type(4))) uint32_t4;
+typedef uint32_t __attribute__((ext_vector_type(3))) uint32_t3;
+typedef uint32_t __attribute__((ext_vector_type(2))) uint32_t2;
+
+typedef uint32_t4 uint4;
+typedef uint32_t3 uint3;
+typedef uint32_t2 uint2;
 
 typedef _Float16 __attribute__((ext_vector_type(4))) half4;
 typedef _Float16 __attribute__((ext_vector_type(3))) half3;

@@ -65,39 +65,43 @@ void tick_settings_ui(ecs_iter_t *it) {
   tb_auto ecs = it->world;
   tb_auto settings = ecs_field(it, TbSettings, 1);
 
-  if (igBegin("Settings", NULL, 0)) {
-    tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
+  if (settings->coreui && *settings->coreui) {
+    if (igBegin("Settings", settings->coreui, 0)) {
+      tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
 
-    if (igCombo_Str_arr("FXAA", &settings->fxaa_option, tb_fxaa_items, 5, 5)) {
-      fxaa->settings = tb_fxaa_options[settings->fxaa_option];
+      if (igCombo_Str_arr("FXAA", &settings->fxaa_option, tb_fxaa_items, 5,
+                          5)) {
+        fxaa->settings = tb_fxaa_options[settings->fxaa_option];
+      }
+
+      if (igBeginChild_Str("FXAA Values", (ImVec2){0}, true, 0)) {
+        igSliderFloat("Edge Threshold", &fxaa->settings.edge_threshold, 0.25f,
+                      1.0f, "%.4f", 0);
+        igSliderFloat("Edge Threshold Min", &fxaa->settings.edge_threshold_min,
+                      1.0f / 32.0f, 1.0f / 12.0f, "%.4f", 0);
+        igSeparator();
+
+        igSliderInt("Subpixel", &fxaa->settings.subpixel, 0, 2, "%d", 0);
+        igSliderFloat("Subpixel Trim", &fxaa->settings.subpixel_trim, 0.0f,
+                      0.5f, "%.4f", 0);
+        igSliderFloat("Subpixel Trim Scale",
+                      &fxaa->settings.subpixel_trim_scale, 0.0f, 10.0f, "%.4f",
+                      0);
+        igSliderFloat("Subpixel Cap", &fxaa->settings.subpixel_cap, 0.0f, 1.0f,
+                      "%4f", 0);
+        igSeparator();
+
+        igSliderFloat("Search Steps", &fxaa->settings.search_steps, 1.0f,
+                      128.0f, "%.0f", 0);
+        igSliderFloat("Search Acceleration", &fxaa->settings.search_accel, 1.0f,
+                      4.0f, "%.0f", 0);
+        igSliderFloat("Search Threshold", &fxaa->settings.search_threshold,
+                      0.0f, 0.5f, "%.4f", 0);
+      }
+      igEndChild();
     }
-
-    if (igBeginChild_Str("FXAA Values", (ImVec2){0}, true, 0)) {
-      igSliderFloat("Edge Threshold", &fxaa->settings.edge_threshold, 0.25f,
-                    1.0f, "%.4f", 0);
-      igSliderFloat("Edge Threshold Min", &fxaa->settings.edge_threshold_min,
-                    1.0f / 32.0f, 1.0f / 12.0f, "%.4f", 0);
-      igSeparator();
-
-      igSliderInt("Subpixel", &fxaa->settings.subpixel, 0, 2, "%d", 0);
-      igSliderFloat("Subpixel Trim", &fxaa->settings.subpixel_trim, 0.0f, 0.5f,
-                    "%.4f", 0);
-      igSliderFloat("Subpixel Trim Scale", &fxaa->settings.subpixel_trim_scale,
-                    0.0f, 10.0f, "%.4f", 0);
-      igSliderFloat("Subpixel Cap", &fxaa->settings.subpixel_cap, 0.0f, 1.0f,
-                    "%4f", 0);
-      igSeparator();
-
-      igSliderFloat("Search Steps", &fxaa->settings.search_steps, 1.0f, 128.0f,
-                    "%.0f", 0);
-      igSliderFloat("Search Acceleration", &fxaa->settings.search_accel, 1.0f,
-                    4.0f, "%.0f", 0);
-      igSliderFloat("Search Threshold", &fxaa->settings.search_threshold, 0.0f,
-                    0.5f, "%.4f", 0);
-    }
-    igEndChild();
+    igEnd();
   }
-  igEnd();
 }
 
 void tb_register_settings_sys(TbWorld *world) {
@@ -115,6 +119,9 @@ void tb_register_settings_sys(TbWorld *world) {
   // registered
   tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
   fxaa->settings = settings.fxaa;
+
+  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  settings.coreui = tb_coreui_register_menu(coreui, "Settings");
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);

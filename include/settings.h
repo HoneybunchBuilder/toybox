@@ -1,11 +1,11 @@
 #pragma once
 
-#include "imguisystem.h"
+#include "coreuisystem.h"
 #include <flecs.h>
 
 #include "fxaa.hlsli"
 
-#define TB_SETTINGS_SYS_PRIO (TB_IMGUI_SYS_PRIO + 1)
+#define TB_SETTINGS_SYS_PRIO (TB_COREUI_SYS_PRIO + 1)
 
 typedef struct TbWorld TbWorld;
 
@@ -54,5 +54,6 @@ typedef struct TbSettings {
   float resolution_scale;
   int32_t fxaa_option;
   TbFXAAPushConstants fxaa;
+  bool *coreui;
 } TbSettings;
 extern ECS_COMPONENT_DECLARE(TbSettings);
