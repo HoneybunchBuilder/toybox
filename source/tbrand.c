@@ -58,7 +58,7 @@ float tb_randf(void) { return (float)tb_rand() / (float)SDL_MAX_UINT64; }
 
 uint64_t tb_rand_range(uint64_t min, uint64_t max) {
   uint64_t rnd = tb_rand();
-  return min + rnd * (max - min);
+  return min + (rnd % (max - min));
 }
 
 float tb_rand_rangef(float min, float max) {

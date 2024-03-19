@@ -30,20 +30,18 @@
   }
 
 #define TB_QUEUE_POP(queue, out)                                               \
-  _Pragma("clang diagnostic push");                                            \
-  _Pragma("clang diagnostic ignored \"-Wgnu-statement-expression\"");          \
   ({                                                                           \
-    if (TB_DYN_ARR_SIZE(queue.storage) == 0) {                                 \
-      false;                                                                   \
-    }                                                                          \
+    _Pragma("clang diagnostic push");                                          \
+    _Pragma("clang diagnostic ignored \"-Wgnu-statement-expression\"");        \
+    bool ret = false;                                                          \
     if (SDL_TryLockMutex(queue.mutex) == 0) {                                  \
       (*out) = *TB_DYN_ARR_BACKPTR(queue.storage);                             \
       TB_DYN_ARR_POP(queue.storage);                                           \
-      true;                                                                    \
-    } else {                                                                   \
-      false;                                                                   \
+      ret = true;                                                              \
     }                                                                          \
-  }) _Pragma("clang diagnostic pop");
+    _Pragma("clang diagnostic pop");                                           \
+    ret;                                                                       \
+  })
 
 #define TB_QUEUE_CLEAR(queue)                                                  \
   while (TB_QUEUE_POP(queue)) {                                                \
