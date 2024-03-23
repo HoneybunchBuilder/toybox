@@ -159,7 +159,7 @@ void tb_audio_play_effect(TbAudioSystem *self, TbSoundEffectId id) {
   TB_CHECK(effect->ref_count > 0,
            "Trying to play effect that has no reference holders");
 
-  Mix_PlayChannel(-1, effect->chunk, 1);
+  Mix_PlayChannel(-1, effect->chunk, 0);
 
   TracyCZoneEnd(ctx);
 }

@@ -36,26 +36,26 @@ bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
 void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_PostSemaphore(thread->frame_states[frame_idx].wait_sem);
-  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-               "+++Signaled render thread frame %d+++", frame_idx);
+  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+  //              "+++Signaled render thread frame %d+++", frame_idx);
 }
 
 void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
-  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-               "~~~Waiting for GPU to frame %d~~~", frame_idx);
+  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+  //              "~~~Waiting for GPU to frame %d~~~", frame_idx);
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_WaitSemaphore(thread->frame_states[frame_idx].signal_sem);
   TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
-  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-               "---Done waiting for GPU on frame %d---", frame_idx);
+  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+  //              "---Done waiting for GPU on frame %d---", frame_idx);
   TracyCZoneEnd(gpu_ctx);
 }
 
 void tb_wait_thread_initialized(TbRenderThread *thread) {
-  TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
-               "Waiting for render thread to initialize");
+  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
+  //              "Waiting for render thread to initialize");
   SDL_WaitSemaphore(thread->initialized);
 }
 

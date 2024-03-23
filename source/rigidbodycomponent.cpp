@@ -1,6 +1,5 @@
 #include "rigidbodycomponent.h"
 
-
 #include "meshsystem.h"
 #include "physicssystem.hpp"
 #include "simd.h"
@@ -206,6 +205,7 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
 // Register descriptor with the reflection system
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Waddress-of-temporary"
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #pragma clang diagnostic ignored "-Wc99-extensions"
   ecs_enum(ecs.c_ptr(),
            {.entity = ecs_id(TbPhysLayer),
