@@ -63,6 +63,7 @@ void coreui_update_tick(ecs_iter_t *it) {
     igSetCurrentContext(ui_ctx->context);
 
     if (igBeginMainMenuBar()) {
+      igBringWindowToDisplayFront(igGetCurrentWindow());
       TB_DYN_ARR_FOREACH(sys->menu_registry, i) {
         TbCoreUIMenu *menu = &TB_DYN_ARR_AT(sys->menu_registry, i);
         if (igBeginMenu(menu->name, true)) {
