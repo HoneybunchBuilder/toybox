@@ -893,21 +893,21 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
 
     const tb_auto desc_count = write->descriptorCount;
     if (write->pBufferInfo != NULL) {
-      tb_auto *info = tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count,
-                                     VkDescriptorBufferInfo);
+      tb_auto info = tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count,
+                                    VkDescriptorBufferInfo);
       SDL_memcpy(info, write->pBufferInfo,
                  sizeof(VkDescriptorBufferInfo) * desc_count);
       write->pBufferInfo = info;
     }
     if (write->pImageInfo != NULL) {
-      tb_auto *info =
+      tb_auto info =
           tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkDescriptorImageInfo);
       SDL_memcpy(info, write->pImageInfo,
                  sizeof(VkDescriptorImageInfo) * desc_count);
       write->pImageInfo = info;
     }
     if (write->pTexelBufferView != NULL) {
-      tb_auto *info =
+      tb_auto info =
           tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkBufferView);
       SDL_memcpy(info, write->pTexelBufferView,
                  sizeof(VkBufferView) * desc_count);

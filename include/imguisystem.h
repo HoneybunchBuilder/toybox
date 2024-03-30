@@ -34,22 +34,11 @@ typedef struct TbUIContext {
   VkImageView atlas_view;
 } TbUIContext;
 
-typedef struct TbImGuiFrameState {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
-  VkDescriptorSet *sets;
-} TbImGuiFrameState;
-
 typedef struct TbImGuiSystem {
   TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
-  TbRenderSystem *rnd_sys;
-  TbRenderPipelineSystem *rp_sys;
-  TbRenderTargetSystem *rt_sys;
-  TbInputSystem *input;
-
-  TbImGuiFrameState frame_states[TB_MAX_FRAME_STATES];
+  TbFrameDescriptorPool desc_pools[TB_MAX_FRAME_STATES];
 
   TbDrawContextId imgui_draw_ctx;
 

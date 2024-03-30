@@ -420,29 +420,24 @@ VkResult ui_context_init(TbRenderSystem *rnd_sys, ImFontAtlas *atlas,
   io->DeltaTime = 0.1666667f;
 
   igSetCurrentContext(context->context);
-  igNewFrame();
 
   return err;
 }
 
 void ui_context_destroy(TbRenderSystem *rnd_sys, TbUIContext *context) {
   tb_rnd_free_gpu_image(rnd_sys, &context->atlas);
-  vkDestroyImageView(rnd_sys->render_thread->device, context->atlas_view,
-                     &rnd_sys->vk_host_alloc_cb);
+  tb_rnd_destroy_image_view(rnd_sys, context->atlas_view);
   igDestroyContext(context->context);
   *context = (TbUIContext){0};
 }
 
-TbImGuiSystem
-create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
-                    uint32_t context_count, ImFontAtlas **context_atlases,
-                    TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
-                    TbRenderTargetSystem *rt_sys, TbInputSystem *input_system) {
+TbImGuiSystem create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
+                                  uint32_t context_count,
+                                  ImFontAtlas **context_atlases,
+                                  TbRenderSystem *rnd_sys,
+                                  TbRenderPipelineSystem *rp_sys,
+                                  TbRenderTargetSystem *rt_sys) {
   TbImGuiSystem sys = {
-      .rnd_sys = rnd_sys,
-      .rp_sys = rp_sys,
-      .rt_sys = rt_sys,
-      .input = input_system,
       .tmp_alloc = tmp_alloc,
       .gp_alloc = gp_alloc,
       .context_count = context_count,
@@ -507,15 +502,13 @@ create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
   return sys;
 }
 
-void destroy_imgui_system(TbImGuiSystem *self) {
-  TbRenderSystem *rnd_sys = self->rnd_sys;
-
+void destroy_imgui_system(TbImGuiSystem *self, TbRenderSystem *rnd_sys) {
   for (uint32_t i = 0; i < self->context_count; ++i) {
-    ui_context_destroy(self->rnd_sys, &self->contexts[i]);
+    ui_context_destroy(rnd_sys, &self->contexts[i]);
   }
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(rnd_sys, self->frame_states[i].set_pool);
+    tb_rnd_destroy_descriptor_pool(rnd_sys, self->desc_pools[i].set_pool);
   }
 
   tb_rnd_destroy_sampler(rnd_sys, self->sampler);
@@ -526,296 +519,317 @@ void destroy_imgui_system(TbImGuiSystem *self) {
   *self = (TbImGuiSystem){0};
 }
 
-void imgui_draw_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "ImGui System", TracyCategoryColorUI, true);
+void imgui_input_sys(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "ImGui Input System", TracyCategoryColorUI, true);
 
-  tb_auto sys = ecs_field(it, TbImGuiSystem, 1);
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
+  tb_auto input_sys = ecs_field(it, TbInputSystem, 2);
+  tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 3);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 4);
 
-  VkResult err = VK_SUCCESS;
+  if (ig_sys->context_count == 0 || it->delta_time == 0) {
+    return;
+  }
 
-  if (sys->context_count > 0 && it->delta_time > 0) {
-    TbRenderSystem *rnd_sys = sys->rnd_sys;
+  for (uint32_t imgui_idx = 0; imgui_idx < ig_sys->context_count; ++imgui_idx) {
+    tb_auto ui_ctx = &ig_sys->contexts[imgui_idx];
 
-    TbImGuiFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
-    // Allocate all the descriptor sets for this frame
-    {
-      // Resize the pool
-      if (state->set_count < sys->context_count) {
-        if (state->set_pool) {
-          tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
-        }
+    igSetCurrentContext(ui_ctx->context);
 
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = sys->context_count * 8,
-            .poolSizeCount = 1,
-            .pPoolSizes =
-                &(VkDescriptorPoolSize){
-                    .descriptorCount = sys->context_count * 8,
-                    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                },
-            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+    igNewFrame();
+
+    ImGuiIO *io = igGetIO();
+
+    // Apply this frame's input
+    for (uint32_t event_idx = 0; event_idx < input_sys->event_count;
+         ++event_idx) {
+      const SDL_Event *event = &input_sys->events[event_idx];
+
+      // Feed event to imgui
+      if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        io->MousePos = (ImVec2){
+            (float)event->motion.x,
+            (float)event->motion.y,
         };
-        err = tb_rnd_create_descriptor_pool(
-            rnd_sys, &create_info, "ImGui System Frame State Descriptor Pool",
-            &state->set_pool);
-        TB_VK_CHECK(
-            err, "Failed to create imgui system frame state descriptor pool");
-
-        state->set_count = sys->context_count;
-        state->sets = tb_realloc_nm_tp(sys->gp_alloc, state->sets,
-                                       state->set_count, VkDescriptorSet);
-      } else {
-        vkResetDescriptorPool(sys->rnd_sys->render_thread->device,
-                              state->set_pool, 0);
-        state->set_count = sys->context_count;
-      }
-
-      tb_auto layouts = tb_alloc_nm_tp(sys->tmp_alloc, state->set_count,
-                                       VkDescriptorSetLayout);
-      for (uint32_t i = 0; i < state->set_count; ++i) {
-        layouts[i] = sys->set_layout;
-      }
-
-      VkDescriptorSetAllocateInfo alloc_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-          .descriptorSetCount = state->set_count,
-          .descriptorPool = state->set_pool,
-          .pSetLayouts = layouts,
-      };
-      err = vkAllocateDescriptorSets(rnd_sys->render_thread->device,
-                                     &alloc_info, state->sets);
-      TB_VK_CHECK(err, "Failed to re-allocate view descriptor sets");
-    }
-
-    // Just upload and write all atlases for now, they tend to be important
-    // anyway
-    tb_auto writes = tb_alloc_nm_tp(sys->tmp_alloc, sys->context_count,
-                                    VkWriteDescriptorSet);
-    tb_auto image_info = tb_alloc_nm_tp(sys->tmp_alloc, sys->context_count,
-                                        VkDescriptorImageInfo);
-    for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
-      const TbUIContext *ui_ctx = &sys->contexts[imgui_idx];
-
-      // Get the descriptor we want to write to
-      VkDescriptorSet atlas_set = state->sets[imgui_idx];
-
-      image_info[imgui_idx] = (VkDescriptorImageInfo){
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = ui_ctx->atlas_view,
-      };
-
-      // Construct a write descriptor
-      writes[imgui_idx] = (VkWriteDescriptorSet){
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .dstSet = atlas_set,
-          .dstBinding = 0,
-          .dstArrayElement = 0,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .pImageInfo = &image_info[imgui_idx],
-      };
-    }
-    tb_rnd_update_descriptors(sys->rnd_sys, sys->context_count, writes);
-
-    // Allocate a max draw batch per entity
-    uint32_t batch_count = 0;
-    tb_auto imgui_batches = tb_alloc_nm_tp(
-        sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
-            .tmp_alloc.alloc,
-        sys->context_count, ImGuiDrawBatch);
-    tb_auto batches = tb_alloc_nm_tp(
-        sys->rnd_sys->render_thread->frame_states[sys->rnd_sys->frame_idx]
-            .tmp_alloc.alloc,
-        sys->context_count, TbDrawBatch);
-
-    for (uint32_t imgui_idx = 0; imgui_idx < sys->context_count; ++imgui_idx) {
-      tb_auto ui_ctx = &sys->contexts[imgui_idx];
-
-      igSetCurrentContext(ui_ctx->context);
-
-      ImGuiIO *io = igGetIO();
-
-      // Apply this frame's input
-      for (uint32_t event_idx = 0; event_idx < sys->input->event_count;
-           ++event_idx) {
-        const SDL_Event *event = &sys->input->events[event_idx];
-
-        // Feed event to imgui
-        if (event->type == SDL_EVENT_MOUSE_MOTION) {
-          io->MousePos = (ImVec2){
-              (float)event->motion.x,
-              (float)event->motion.y,
-          };
-        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                   event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
-          if (event->button.button == SDL_BUTTON_LEFT) {
-            io->MouseDown[0] =
-                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
-          } else if (event->button.button == SDL_BUTTON_RIGHT) {
-            io->MouseDown[1] =
-                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
-          } else if (event->button.button == SDL_BUTTON_MIDDLE) {
-            io->MouseDown[2] =
-                event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
-          }
+      } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                 event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        if (event->button.button == SDL_BUTTON_LEFT) {
+          io->MouseDown[0] = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
+        } else if (event->button.button == SDL_BUTTON_RIGHT) {
+          io->MouseDown[1] = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
+        } else if (event->button.button == SDL_BUTTON_MIDDLE) {
+          io->MouseDown[2] = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
         }
       }
+    }
 
-      // Apply basic IO
-      io->DeltaTime = it->delta_time; // Note that ImGui expects seconds
-      io->DisplaySize = (ImVec2){
-          (float)sys->rnd_sys->render_thread->swapchain.width,
-          (float)sys->rnd_sys->render_thread->swapchain.height,
-      };
+    TbRenderPassId ui_pass_id = rp_sys->ui_pass;
 
-      igRender();
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexpected");
+    TbPassAttachment ui_info = {0};
+    tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count,
+                                       &ui_info);
 
-      ImDrawData *draw_data = igGetDrawData();
-      TB_CHECK(draw_data, "Failed to retrieve draw data");
+    tb_auto target_ext =
+        tb_render_target_get_extent(rt_sys, ui_info.attachment);
 
-      // Send to render thread
-      if (draw_data->Valid) {
-        // Calculate how big the draw data is
-        size_t imgui_size = 0;
+    // Apply basic IO
+    io->DeltaTime = it->delta_time; // Note that ImGui expects seconds
+    io->DisplaySize = (ImVec2){
+        (float)target_ext.width,
+        (float)target_ext.height,
+    };
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
+void imgui_descriptor_sys(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "ImGui Descritor System", TracyCategoryColorRendering,
+               true);
+
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+
+  if (ig_sys->context_count == 0 || it->delta_time == 0) {
+    return;
+  }
+
+  const uint32_t set_count = ig_sys->context_count;
+
+  // Manage the pool
+  {
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = set_count * 8,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            &(VkDescriptorPoolSize){
+                .descriptorCount = set_count * 8,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            },
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+    };
+
+    tb_auto layouts =
+        tb_alloc_nm_tp(ig_sys->tmp_alloc, set_count, VkDescriptorSetLayout);
+    for (uint32_t i = 0; i < set_count; ++i) {
+      layouts[i] = ig_sys->set_layout;
+    }
+
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
+                                ig_sys->desc_pools, set_count);
+  }
+
+  tb_auto tmp_alloc = ig_sys->tmp_alloc;
+
+  // Just upload and write all atlases for now, they tend to be important
+  // anyway
+  tb_auto writes = tb_alloc_nm_tp(tmp_alloc, set_count, VkWriteDescriptorSet);
+  tb_auto image_info =
+      tb_alloc_nm_tp(tmp_alloc, set_count, VkDescriptorImageInfo);
+  for (uint32_t imgui_idx = 0; imgui_idx < set_count; ++imgui_idx) {
+    const TbUIContext *ui_ctx = &ig_sys->contexts[imgui_idx];
+
+    // Get the descriptor we want to write to
+    tb_auto atlas_set =
+        tb_rnd_frame_desc_pool_get_set(rnd_sys, ig_sys->desc_pools, imgui_idx);
+
+    image_info[imgui_idx] = (VkDescriptorImageInfo){
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView = ui_ctx->atlas_view,
+    };
+
+    // Construct a write descriptor
+    writes[imgui_idx] = (VkWriteDescriptorSet){
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = atlas_set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .pImageInfo = &image_info[imgui_idx],
+    };
+  }
+  tb_rnd_update_descriptors(rnd_sys, ig_sys->context_count, writes);
+
+  TracyCZoneEnd(ctx);
+}
+
+void imgui_draw_sys(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "ImGui Draw System", TracyCategoryColorRendering, true);
+
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 3);
+
+  if (ig_sys->context_count == 0 || it->delta_time == 0) {
+    return;
+  }
+
+  const uint32_t frame_idx = rnd_sys->frame_idx;
+  const uint32_t ctx_count = ig_sys->context_count;
+
+  tb_auto rnd_thread = rnd_sys->render_thread;
+  tb_auto rnd_thread_tmp_alloc =
+      rnd_thread->frame_states[frame_idx].tmp_alloc.alloc;
+
+  // Allocate a max draw batch per entity
+  uint32_t batch_count = 0;
+  tb_auto imgui_batches =
+      tb_alloc_nm_tp(rnd_thread_tmp_alloc, ctx_count, ImGuiDrawBatch);
+  tb_auto batches =
+      tb_alloc_nm_tp(rnd_thread_tmp_alloc, ctx_count, TbDrawBatch);
+
+  for (uint32_t imgui_idx = 0; imgui_idx < ctx_count; ++imgui_idx) {
+    tb_auto ui_ctx = &ig_sys->contexts[imgui_idx];
+
+    igSetCurrentContext(ui_ctx->context);
+
+    igRender();
+
+    ImDrawData *draw_data = igGetDrawData();
+    TB_CHECK(draw_data, "Failed to retrieve draw data");
+
+    // Send to render thread
+    if (draw_data->Valid) {
+      // Calculate how big the draw data is
+      size_t imgui_size = 0;
+      {
+        const size_t idx_size =
+            (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+        const size_t vtx_size =
+            (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
+        // We know to use 8 for the alignment because the vertex
+        // attribute layout starts with a float2
+        const size_t alignment = 8;
+        const size_t align_padding = idx_size % alignment;
+
+        imgui_size = idx_size + align_padding + vtx_size;
+      }
+
+      if (imgui_size > 0) {
+        // Make space for this on the next frame. For the host and the device
+        // Note that we can rely on the tmp host buffer to be uploaded
+        // to the gpu every frame
+        uint64_t tmp_offset = 0;
+        void *tmp_ptr = NULL;
+        if (tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, imgui_size, 0x40,
+                                           &tmp_offset,
+                                           &tmp_ptr) != VK_SUCCESS) {
+          TracyCZoneEnd(ctx);
+          return;
+        }
+        const uint32_t imgui_draw_count = draw_data->CmdListsCount;
+
+        size_t vtx_offset = 0;
+
+        // Copy imgui mesh to the gpu driver controlled host buffer
         {
-          const size_t idx_size =
+          size_t idx_size =
               (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-          const size_t vtx_size =
-              (size_t)draw_data->TotalVtxCount * sizeof(ImDrawVert);
+
+          size_t test_offset = 0;
+
           // We know to use 8 for the alignment because the vertex
           // attribute layout starts with a float2
           const size_t alignment = 8;
-          const size_t align_padding = idx_size % alignment;
+          size_t align_padding = idx_size % alignment;
 
-          imgui_size = idx_size + align_padding + vtx_size;
+          vtx_offset = idx_size + align_padding;
+
+          uint8_t *idx_dst = (uint8_t *)tmp_ptr;
+          uint8_t *vtx_dst = idx_dst + vtx_offset;
+
+          // Organize all mesh data into a single cpu-side buffer
+          for (uint32_t i = 0; i < imgui_draw_count; ++i) {
+            const ImDrawList *cmd_list = draw_data->CmdLists.Data[i];
+
+            size_t idx_byte_count =
+                (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+            size_t vtx_byte_count =
+                (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+
+            SDL_memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
+            SDL_memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
+
+            test_offset += idx_byte_count;
+            test_offset += vtx_byte_count;
+            TB_CHECK(test_offset <= imgui_size, "Writing past buffer");
+
+            idx_dst += idx_byte_count;
+            vtx_dst += vtx_byte_count;
+          }
         }
 
-        if (imgui_size > 0) {
-          // Make space for this on the next frame. For the host and the device
-          // Note that we can rely on the tmp host buffer to be uploaded
-          // to the gpu every frame
-          uint64_t tmp_offset = 0;
-          void *tmp_ptr = NULL;
-          if (tb_rnd_sys_copy_to_tmp_buffer2(sys->rnd_sys, imgui_size, 0x40,
-                                             &tmp_offset,
-                                             &tmp_ptr) != VK_SUCCESS) {
-            TracyCZoneEnd(ctx);
-            return;
-          }
-          const uint32_t imgui_draw_count = draw_data->CmdListsCount;
+        // Send the render system a batch to draw
+        {
+          VkBuffer gpu_tmp_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
-          size_t vtx_offset = 0;
+          const float width = draw_data->DisplaySize.x;
+          const float height = draw_data->DisplaySize.y;
 
-          // Copy imgui mesh to the gpu driver controlled host buffer
+          const float scale_x = 2.0f / width;
+          const float scale_y = 2.0f / height;
+
+          tb_auto draws =
+              tb_alloc_nm_tp(rnd_thread_tmp_alloc, imgui_draw_count, ImGuiDraw);
           {
-            size_t idx_size =
-                (size_t)draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+            uint64_t cmd_index_offset = tmp_offset;
+            uint64_t cmd_vertex_offset = tmp_offset;
 
-            size_t test_offset = 0;
+            for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
+                 ++draw_idx) {
+              const ImDrawList *cmd_list = draw_data->CmdLists.Data[draw_idx];
+              const uint32_t index_count = cmd_list->IdxBuffer.Size;
 
-            // We know to use 8 for the alignment because the vertex
-            // attribute layout starts with a float2
-            const size_t alignment = 8;
-            size_t align_padding = idx_size % alignment;
+              draws[draw_idx] = (ImGuiDraw){
+                  .geom_buffer = gpu_tmp_buffer,
+                  .index_count = index_count,
+                  .index_offset = cmd_index_offset,
+                  .vertex_offset = vtx_offset + cmd_vertex_offset,
+              };
 
-            vtx_offset = idx_size + align_padding;
-
-            uint8_t *idx_dst = (uint8_t *)tmp_ptr;
-            uint8_t *vtx_dst = idx_dst + vtx_offset;
-
-            // Organize all mesh data into a single cpu-side buffer
-            for (uint32_t i = 0; i < imgui_draw_count; ++i) {
-              const ImDrawList *cmd_list = draw_data->CmdLists.Data[i];
-
-              size_t idx_byte_count =
-                  (size_t)cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
-              size_t vtx_byte_count =
-                  (size_t)cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
-
-              SDL_memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
-              SDL_memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
-
-              test_offset += idx_byte_count;
-              test_offset += vtx_byte_count;
-              TB_CHECK(test_offset <= imgui_size, "Writing past buffer");
-
-              idx_dst += idx_byte_count;
-              vtx_dst += vtx_byte_count;
+              cmd_index_offset += index_count * sizeof(ImDrawIdx);
+              cmd_vertex_offset +=
+                  cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
             }
           }
 
-          // Send the render system a batch to draw
-          {
-            VkBuffer gpu_tmp_buffer = tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys);
-
-            const float width = draw_data->DisplaySize.x;
-            const float height = draw_data->DisplaySize.y;
-
-            const float scale_x = 2.0f / width;
-            const float scale_y = 2.0f / height;
-
-            ImGuiDraw *draws =
-                tb_alloc_nm_tp(sys->rnd_sys->render_thread
-                                   ->frame_states[sys->rnd_sys->frame_idx]
-                                   .tmp_alloc.alloc,
-                               imgui_draw_count, ImGuiDraw);
-            {
-              uint64_t cmd_index_offset = tmp_offset;
-              uint64_t cmd_vertex_offset = tmp_offset;
-
-              for (uint32_t draw_idx = 0; draw_idx < imgui_draw_count;
-                   ++draw_idx) {
-                const ImDrawList *cmd_list = draw_data->CmdLists.Data[draw_idx];
-                const uint32_t index_count = cmd_list->IdxBuffer.Size;
-
-                draws[draw_idx] = (ImGuiDraw){
-                    .geom_buffer = gpu_tmp_buffer,
-                    .index_count = index_count,
-                    .index_offset = cmd_index_offset,
-                    .vertex_offset = vtx_offset + cmd_vertex_offset,
-                };
-
-                cmd_index_offset += index_count * sizeof(ImDrawIdx);
-                cmd_vertex_offset +=
-                    cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
-              }
-            }
-
-            batches[batch_count] = (TbDrawBatch){
-                .layout = sys->pipe_layout,
-                .pipeline = sys->pipeline,
-                .viewport = {0, 0, width, height, 0, 1},
-                .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
-                .user_batch = &imgui_batches[batch_count],
-                .draw_count = imgui_draw_count,
-                .draw_size = sizeof(ImGuiDrawBatch),
-                .draws = draws,
-            };
-            imgui_batches[batch_count] = (ImGuiDrawBatch){
-                .const_range =
-                    (VkPushConstantRange){
-                        .size = sizeof(TbImGuiPushConstants),
-                        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                    },
-                .consts =
-                    {
-                        .scale = {scale_x, scale_y},
-                        .translation = {-1.0f, -1.0f},
-                    },
-                .atlas_set = state->sets[batch_count],
-            };
-            batch_count++;
-          }
+          batches[batch_count] = (TbDrawBatch){
+              .layout = ig_sys->pipe_layout,
+              .pipeline = ig_sys->pipeline,
+              .viewport = {0, 0, width, height, 0, 1},
+              .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
+              .user_batch = &imgui_batches[batch_count],
+              .draw_count = imgui_draw_count,
+              .draw_size = sizeof(ImGuiDrawBatch),
+              .draws = draws,
+          };
+          imgui_batches[batch_count] = (ImGuiDrawBatch){
+              .const_range =
+                  (VkPushConstantRange){
+                      .size = sizeof(TbImGuiPushConstants),
+                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                  },
+              .consts =
+                  {
+                      .scale = {scale_x, scale_y},
+                      .translation = {-1.0f, -1.0f},
+                  },
+              .atlas_set = tb_rnd_frame_desc_pool_get_set(
+                  rnd_sys, ig_sys->desc_pools, imgui_idx),
+          };
+          batch_count++;
         }
       }
-
-      // Issue draw batches
-      tb_render_pipeline_issue_draw_batch(sys->rp_sys, sys->imgui_draw_ctx,
-                                          batch_count, batches);
-
-      igNewFrame();
     }
+
+    // Issue draw batches
+    tb_render_pipeline_issue_draw_batch(rp_sys, ig_sys->imgui_draw_ctx,
+                                        batch_count, batches);
   }
 
   TracyCZoneEnd(ctx);
@@ -829,22 +843,32 @@ void tb_register_imgui_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  tb_auto in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
-  TbImGuiSystem sys = create_imgui_system(world->gp_alloc, world->tmp_alloc, 1,
-                                          (ImFontAtlas *[1]){NULL}, rnd_sys,
-                                          rp_sys, rt_sys, in_sys);
+  TbImGuiSystem sys =
+      create_imgui_system(world->gp_alloc, world->tmp_alloc, 1,
+                          (ImFontAtlas *[1]){NULL}, rnd_sys, rp_sys, rt_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbImGuiSystem), TbImGuiSystem, &sys);
 
-  ECS_SYSTEM(ecs, imgui_draw_tick, EcsOnStore, TbImGuiSystem(TbImGuiSystem));
+  ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem(TbImGuiSystem),
+             TbInputSystem(TbInputSystem),
+             TbRenderTargetSystem(TbRenderTargetSystem),
+             TbRenderPipelineSystem(TbRenderPipelineSystem));
+
+  ECS_SYSTEM(ecs, imgui_descriptor_sys, EcsPreStore,
+             TbImGuiSystem(TbImGuiSystem), TbRenderSystem(TbRenderSystem));
+
+  ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem(TbImGuiSystem),
+             TbRenderSystem(TbRenderSystem),
+             TbRenderPipelineSystem(TbRenderPipelineSystem));
 }
 
 void tb_unregister_imgui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
-  destroy_imgui_system(sys);
+  tb_auto ig_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  destroy_imgui_system(ig_sys, rnd_sys);
   ecs_singleton_remove(ecs, TbImGuiSystem);
 }
