@@ -289,7 +289,7 @@ TbVisualLoggingSystem create_visual_logging_system(
   {
     // Load the known glb that has the sphere mesh
     // Get qualified path to scene asset
-    char *asset_path = tb_resolve_asset_path(tmp_alloc, "scenes/Sphere.glb");
+    char *asset_path = tb_resolve_asset_path(tmp_alloc, "scenes/sphere.glb");
 
     // Load glb off disk
     cgltf_data *data = tb_read_glb(gp_alloc, asset_path);

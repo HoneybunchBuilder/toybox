@@ -137,6 +137,9 @@ set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_s
 
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
+
+  set(engine_shader_include_dir "${PROJECT_SOURCE_DIR}/include")
+
   # Compile Shaders
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
   file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli" "${shader_include_dir}/*.h")
@@ -153,8 +156,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
+        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -175,8 +178,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
+        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -196,7 +199,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
+        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -204,8 +207,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
   endforeach()
   list(APPEND shader_sources ${compute_shader_files})
 
-  set(${out_shader_sources} ${shader_sources} PARENT_SCOPE)
-  set(${out_shader_headers} ${shader_headers} PARENT_SCOPE)
+  set("${out_shader_sources}" "${shader_sources}" PARENT_SCOPE)
+  set("${out_shader_headers}" "${shader_headers}" PARENT_SCOPE)
 endfunction()
 
 # Helper function to cook assets
@@ -239,7 +242,7 @@ function(cook_assets target_name out_assets_path)
     add_custom_command(
       OUTPUT ${packed_scene}
       COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-      COMMAND ${GLTFPACK} -cc -mi -kn -km -ke -tc -i ${scene} -o ${packed_scene}
+      COMMAND ${GLTFPACK} -cc -kn -km -ke -tc -i ${scene} -o ${packed_scene}
       MAIN_DEPENDENCY ${scene}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
     )
@@ -430,6 +433,42 @@ if(COOK_ASSETS)
   cook_assets(toybox engine_assets_path)
 endif()
 
+function(tb_new_addon target_name source)
+  add_library(${target_name} OBJECT ${source})
+
+  message("Found Addon: ${target_name}")
+
+  # Set known language version requirements
+  target_compile_features(${target_name} PRIVATE c_std_11)
+  target_compile_features(${target_name} PRIVATE cxx_std_20)
+
+  # Turn on warnings
+  target_compile_options(${target_name} PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+    )
+
+  if(FINAL)
+    target_compile_definitions(${target_name} PRIVATE "-DFINAL")
+  endif()
+
+  
+  cook_shaders(${target_name}_shader_sources ${target_name}_shader_headers)
+
+  add_custom_target(${target_name}_shaders ALL DEPENDS "${${target_name}_shader_headers}")
+  target_sources(${target_name}_shaders PRIVATE "${${target_name}_shader_sources}")
+  add_dependencies(${target_name} ${target_name}_shaders)
+
+  if(COOK_ASSETS)
+    cook_assets(${target_name} ${target_name}_assets_path)
+  endif()
+
+  target_link_libraries(${target_name} PUBLIC ${library_list})
+  target_link_libraries(${target_name} PUBLIC toybox)
+  target_include_directories(${target_name} SYSTEM PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/shaders")
+  target_include_directories(${target_name} PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+endfunction()
+
 # Helper to describe applications that depend on toybox
 function(tb_add_app target_name source)
   if(WIN32)
@@ -512,7 +551,19 @@ function(tb_add_app target_name source)
   # Some helpers for Visual Studio
   set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${target_name})
   set_property(TARGET ${target_name} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+endfunction()
 
+function(tb_use_addon target addon)
+  target_link_libraries(${target} PUBLIC ${addon})
+
+  set(addon_asset_path "$<TARGET_PROPERTY:${addon},BINARY_DIR>/$<CONFIG>/assets")
+
+  # Add a target to copy assets
+  add_custom_target(${addon}_assets 
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${addon_asset_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
+  )
+  add_dependencies(${addon}_assets toybox)
+  add_dependencies(${target} ${addon}_assets)
 endfunction()
 
 if(TB_BUILD_SAMPLES)
@@ -522,3 +573,5 @@ endif()
 if(TB_BUILD_VIEWER)
   add_subdirectory(viewer)
 endif()
+
+add_subdirectory(addons)

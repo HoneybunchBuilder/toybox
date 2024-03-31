@@ -384,17 +384,12 @@ void init_ocean_system(TbOceanSystem *sys, TbAllocator gp_alloc,
       sys->wave_sounds[i] =
           tb_audio_system_load_effect(sys->audio_system, wave_path);
     }
-    // And music
-    /*
-    char *mus_path = tb_resolve_asset_path(sys->tmp_alloc, "audio/test.ogg");
-    sys->music = tb_audio_system_load_music(sys->audio_system, mus_path);
-    tb_audio_play_music(sys->audio_system, sys->music);
-    */
   }
 
   // Load the known glb that has the ocean mesh
   // Get qualified path to scene asset
-  char *asset_path = tb_resolve_asset_path(sys->tmp_alloc, "scenes/Ocean.glb");
+  char *asset_path =
+      tb_resolve_asset_path(sys->tmp_alloc, "scenes/ocean_patch.glb");
 
   // Load glb off disk
   cgltf_data *data = tb_read_glb(sys->gp_alloc, asset_path);
