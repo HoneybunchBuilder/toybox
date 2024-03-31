@@ -13,7 +13,7 @@
 
 #include <flecs.h>
 
-#define TB_MESH_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
+#define TB_MESH_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
 typedef struct TbMaterialSystem TbMaterialSystem;

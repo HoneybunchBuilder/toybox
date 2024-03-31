@@ -135,10 +135,10 @@ find_program(GLTFPACK gltfpack
 # The list of all external targets to link
 set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer;unofficial::joltphysics::Jolt")
 
+set(engine_shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
+
 # Helper function to cook shaders
 function(cook_shaders out_shader_sources out_shader_headers)
-
-  set(engine_shader_include_dir "${PROJECT_SOURCE_DIR}/include")
 
   # Compile Shaders
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
@@ -452,7 +452,6 @@ function(tb_new_addon target_name source)
     target_compile_definitions(${target_name} PRIVATE "-DFINAL")
   endif()
 
-  
   cook_shaders(${target_name}_shader_sources ${target_name}_shader_headers)
 
   add_custom_target(${target_name}_shaders ALL DEPENDS "${${target_name}_shader_headers}")
@@ -574,4 +573,4 @@ if(TB_BUILD_VIEWER)
   add_subdirectory(viewer)
 endif()
 
-add_subdirectory(addons)
+include(${CMAKE_CURRENT_LIST_DIR}/addons/CMakeLists.txt)
