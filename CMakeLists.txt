@@ -558,11 +558,13 @@ function(tb_use_addon target addon)
   set(addon_asset_path "$<TARGET_PROPERTY:${addon},BINARY_DIR>/$<CONFIG>/assets")
 
   # Add a target to copy assets
-  add_custom_target(${addon}_assets 
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${addon_asset_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
-  )
-  add_dependencies(${addon}_assets toybox)
-  add_dependencies(${target} ${addon}_assets)
+  if(COOK_ASSETS)
+    add_custom_target(${addon}_assets 
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${addon_asset_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
+    )
+    add_dependencies(${addon}_assets toybox)
+    add_dependencies(${target} ${addon}_assets)
+  endif()
 endfunction()
 
 if(TB_BUILD_SAMPLES)
