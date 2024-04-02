@@ -70,17 +70,14 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
 }
 
 float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
-                   float2 brdf, float3 albedo, float metallic, float roughness,
-                   float shadow) {
-  float s = max(shadow, 0.3);
-  float3 F = fresnel_schlick_roughness(NdotV, F0, roughness) * s;
+                   float2 brdf, float3 albedo, float metallic, float roughness) {
+  float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
 
-  float3 kd = lerp(1.0f - F, 0.0f, metallic * s);
+  float3 kd = lerp(1.0f - F, 0.0f, metallic);
 
   float3 diffuse_ibl = kd * albedo * irradiance;
 
-  // No specular component if shadowed
-  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection * shadow;
+  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
 
   return diffuse_ibl + specular_ibl;
 }
@@ -103,7 +100,7 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
   float NdotV = max(dot(N, V), 0);
 
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
-                               metallic, roughness, shadow) *
+                               metallic, roughness) *
                    ao;
   float3 direct =
       pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);

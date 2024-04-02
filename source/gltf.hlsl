@@ -63,9 +63,13 @@ Interpolators vert(VertexIn i) {
   o.clip_pos = clip_pos;
   o.world_pos = world_pos.xyz;
   o.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
-  o.normal = normalize(mul(orientation, normal)); // convert to world-space
-  o.tangent = normalize(mul(orientation, tangent.xyz));
-  o.binormal = normalize(cross(o.tangent, o.normal) * tangent.w);
+  if ((vert_perm & TB_INPUT_PERM_NORMAL) > 0) {
+    o.normal = normalize(mul(orientation, normal)); // convert to world-space
+  }
+  if ((vert_perm & TB_INPUT_PERM_TANGENT) > 0) {
+    o.tangent = normalize(mul(orientation, tangent.xyz));
+    o.binormal = normalize(cross(o.tangent, o.normal) * tangent.w);
+  }
   o.uv = uv_transform(uv0, gltf.tex_transform);
   o.mat_idx = mat_idx;
   return o;

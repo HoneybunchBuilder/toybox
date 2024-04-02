@@ -5,7 +5,7 @@
 #include "tbcommon.h"
 #include "tbimgui.h"
 #ifdef TB_COOKED
-#include "toybox_assetmanifest.h"
+#include "tb_viewer_assetmanifest.h"
 #endif
 #include "world.h"
 

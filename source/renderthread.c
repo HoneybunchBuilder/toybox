@@ -704,6 +704,10 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+    // Required for null descriptors
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
+
     // Required for relaxed vertex shader writes not being used by some frag
     // permutations
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
