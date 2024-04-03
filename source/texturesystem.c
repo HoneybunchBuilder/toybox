@@ -395,8 +395,8 @@ void tick_texture_system(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   const uint64_t incoming_tex_count = TB_DYN_ARR_SIZE(tex_sys->textures);
-  if (incoming_tex_count > tex_sys->set_pool.capacity) {
-    tex_sys->set_pool.capacity = incoming_tex_count + 128;
+  if (incoming_tex_count != tex_sys->set_pool.capacity) {
+    tex_sys->set_pool.capacity = incoming_tex_count;
     const uint64_t desc_count = tex_sys->set_pool.capacity;
 
     // Re-create pool and allocate the one set that everything will be bound to
@@ -423,9 +423,6 @@ void tick_texture_system(ecs_iter_t *it) {
       tb_rnd_resize_desc_pool(rnd_sys, &create_info, &tex_sys->set_layout,
                               &alloc_info, &tex_sys->set_pool, 1);
     }
-  } else {
-    // Nothing to do :)
-    return;
   }
 
   // Write all textures into the descriptor set table
