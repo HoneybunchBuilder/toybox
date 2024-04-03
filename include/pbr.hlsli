@@ -9,14 +9,6 @@
 static const float3 Fdielectric = 0.04;
 static const float Epsilon = 0.00001;
 
-// The following equation models the Fresnel reflectance term of the spec
-// equation (aka F())
-float3 specular_reflection(float3 reflectance_0, float3 reflectance_90,
-                           float VdotH) {
-  return reflectance_0 +
-         (reflectance_90, -reflectance_0) * pow(clamp(1.0 - VdotH, 0, 1), 5);
-}
-
 float3 fresnel_schlick(float cos_theta, float3 f0) {
   return f0 + (1.0 - f0) * pow(saturate(1.0 - cos_theta), 5.0);
 }
@@ -34,7 +26,7 @@ float3 prefiltered_reflection(TextureCube map, SamplerState s, float3 R,
   float lodc = ceil(lod);
   float3 a = map.SampleLevel(s, R, lodf).rgb;
   float3 b = map.SampleLevel(s, R, lodc).rgb;
-  return lerp(a, b, lod - lodf);
+  return lerp(a, b, saturate(lod - lodf));
 }
 
 // This calculates the specular geometric attenuation (aka G()),

@@ -38,8 +38,10 @@ float4 frag(Interpolators i) : SV_TARGET {
   float3 irradiance = float3(0, 0, 0);
   for (float phi = 0.0f; phi < TB_TAU; phi += phi_delta) {
     for (float theta = 0.0f; theta < TB_PI_2; theta += theta_delta) {
-      float3 tmp_vec = cos(phi) * right + sin(phi) * up;
-      float3 sample_vec = cos(theta) * normal + sin(theta) * tmp_vec;
+      float3 tan_sample =
+          float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+      float3 sample_vec =
+          tan_sample.x * right + tan_sample.y * up + tan_sample.z * normal;
 
       // Clamp each sample to 1 to avoid blowout
       irradiance += min(env_map.Sample(material_sampler, sample_vec).rgb, 1) *

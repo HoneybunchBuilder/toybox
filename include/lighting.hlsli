@@ -2,8 +2,6 @@
 
 #include "pbr.hlsli"
 
-#define AMBIENT 0.3
-
 struct TbView {
   TextureCube irradiance_map;
   TextureCube prefiltered_map;
@@ -61,23 +59,24 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
     float3 diffuse = kd * albedo;
 
     // Cook-Torrance specular BRDF
-    float3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, 0.0001);
+    float3 specular = (F * D * G) / max(4.0 * NdotV * NdotL, Epsilon);
 
-    direct += (diffuse + specular) * radiance * NdotL;
+    direct += (diffuse / TB_PI + specular) * radiance * NdotL;
   }
 
   return direct;
 }
 
 float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
-                   float2 brdf, float3 albedo, float metallic, float roughness) {
+                   float2 brdf, float3 albedo, float metallic,
+                   float roughness) {
   float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
 
   float3 kd = lerp(1.0f - F, 0.0f, metallic);
 
   float3 diffuse_ibl = kd * albedo * irradiance;
 
-  float3 specular_ibl = (F0 * brdf.x + brdf.y) * reflection;
+  float3 specular_ibl = (F * brdf.x + brdf.y) * reflection;
 
   return diffuse_ibl + specular_ibl;
 }
@@ -96,7 +95,7 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
     return 0;
   }
 
-  float3 F0 = lerp(0.04, albedo, metallic);
+  float3 F0 = lerp(Fdielectric, albedo, metallic);
   float NdotV = max(dot(N, V), 0);
 
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
@@ -278,10 +277,9 @@ float shadow_visibility(Light l, Surface s) {
     }
   }
 
-  const float3 cascade_colors[TB_CASCADE_COUNT] = { float3(1.0f, 0.0, 0.0f),
-                                                    float3(0.0f, 1.0f, 0.0f),
-                                                    float3(0.0f, 0.0f, 1.0f),
-                                                    float3(1.0f, 1.0f, 0.0f) };
+  const float3 cascade_colors[TB_CASCADE_COUNT] = {
+      float3(1.0f, 0.0, 0.0f), float3(0.0f, 1.0f, 0.0f),
+      float3(0.0f, 0.0f, 1.0f), float3(1.0f, 1.0f, 0.0f)};
 
   // return cascade_colors[cascade_idx];
 

@@ -1,11 +1,13 @@
 #include "common.hlsli"
 
 #include "cube_view_lut.hlsli"
+#include "pbr.hlsli"
 
 TextureCube env_texture : register(t0, space0);  // Fragment Stage Only
 SamplerState env_sampler : register(s1, space0); // Fragment Stage Only
 
-[[vk::push_constant]] ConstantBuffer<TbEnvFilterConstants> consts
+[[vk::push_constant]]
+ConstantBuffer<TbEnvFilterConstants> consts
     : register(b1, space0); // Fragment Stage Only
 
 struct VertexIn {
@@ -57,7 +59,7 @@ float2 hammersley_2d(uint i, uint N) {
 float3 importance_sample_ggx(float2 Xi, float roughness, float3 normal) {
   // Maps a 2D point to a hemisphere with spread based on roughness
   float alpha = roughness * roughness;
-  float phi = 2.0 * TB_PI * Xi.x + random(normal.xz) * 0.1;
+  float phi = TB_TAU * Xi.x + random(normal.xz) * 0.1;
   float cos_theta = sqrt((1.0 - Xi.y) / (1.0 + (alpha * alpha - 1.0) * Xi.y));
   float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
   float3 H = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
@@ -80,7 +82,7 @@ float d_ggx(float dot_NH, float roughness) {
   return (alpha2) / (TB_PI * denom * denom);
 }
 
-float3 prefilter_env_map(float3 R, float roughness) {
+float3 prefilter_env_map(float3 R, float roughness, uint sample_count) {
   float3 N = R;
   float3 V = R;
   float3 color = float3(0.0, 0.0, 0.0);
@@ -88,28 +90,27 @@ float3 prefilter_env_map(float3 R, float roughness) {
   int2 env_map_dims;
   env_texture.GetDimensions(env_map_dims.x, env_map_dims.y);
   float env_map_dim = float(env_map_dims.x);
-  for (uint i = 0u; i < consts.sample_count; i++) {
-    float2 Xi = hammersley_2d(i, consts.sample_count);
+  for (uint i = 0u; i < sample_count; i++) {
+    float2 Xi = hammersley_2d(i, sample_count);
     float3 H = importance_sample_ggx(Xi, roughness, N);
-    float3 L = 2.0 * dot(V, H) * H - V;
-    float dot_NL = clamp(dot(N, L), 0.0, 1.0);
+    float3 L = normalize(2.0 * dot(V, H) * H - V);
+    float dot_NL = max(dot(N, L), 0.0);
     if (dot_NL > 0.0) {
       // Filtering based on
       // https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 
-      float dot_NH = clamp(dot(N, H), 0.0, 1.0);
-      float dot_VH = clamp(dot(V, H), 0.0, 1.0);
+      float dot_NH = max(dot(N, H), 0.0);
+      float dot_VH = max(dot(V, H), 0.0);
 
       // Probability Distribution Function
-      float pdf = d_ggx(dot_NH, roughness) * dot_NH / (4.0 * dot_VH) + 0.0001;
+      float pdf = d_ggx(dot_NH, roughness) * dot_NH / (4.0 * dot_VH) + Epsilon;
       // Slid angle of current smple
-      float omega_s = 1.0 / (float(consts.sample_count) * pdf);
+      float omega_s = 1.0 / (float(sample_count) * pdf + Epsilon);
       // Solid angle of 1 pixel across all cube faces
       float omega_p = 4.0 * TB_PI / (6.0 * env_map_dim * env_map_dim);
       // Biased (+1.0) mip level for better result
-      float mip_level = roughness == 0.0
-                            ? 0.0
-                            : max(0.5 * log2(omega_s / omega_p) + 1.0, 0.0f);
+      float mip_level =
+          roughness == 0.0 ? 0.0 : max(0.5 * log2(omega_s / omega_p), 0.0f);
       color += env_texture.SampleLevel(env_sampler, L, mip_level).rgb * dot_NL;
       total_weight += dot_NL;
     }
@@ -119,5 +120,7 @@ float3 prefilter_env_map(float3 R, float roughness) {
 
 float4 frag(Interpolators i) : SV_TARGET {
   float3 N = normalize(i.view_pos);
-  return float4(prefilter_env_map(N, consts.roughness), 1.0);
+  float3 prefiltered_color =
+      prefilter_env_map(N, consts.roughness, consts.sample_count);
+  return float4(prefiltered_color, 1.0);
 }
