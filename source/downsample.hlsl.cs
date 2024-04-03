@@ -2,7 +2,7 @@
 
 Texture2D input : register(t0, space0);
 RWTexture2D<float4> output : register(u1, space0);
-sampler s : register(s2, space0);
+SamplerState s : register(s2, space0);
 
 [numthreads(16, 16, 1)]
 void comp(int3 group_thread_id: SV_GroupThreadID,
@@ -13,10 +13,11 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   float2 out_res;
   output.GetDimensions(out_res.x, out_res.y);
 
-  float2 uv = dispatch_thread_id.xy / out_res;
+  float2 uv = float2(dispatch_thread_id.xy) / out_res;
   float2 texel_size = 1 / in_res;
   float x = texel_size.x;
   float y = texel_size.y;
+  uv += texel_size / 2.0f;
 
   // Downsample with box filter
   float4 a = input.SampleLevel(s, uv + float2(-2 * x, 2 * y), 0);
