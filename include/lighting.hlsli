@@ -37,7 +37,7 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
   // TODO: For each light
   {
     float3 H = normalize(V + L);
-    float distance = 1.0f; // TODO: account for attenuation
+    float distance = 0.5f; // TODO: account for attenuation
     float attenuation = 1.0f / (distance * distance);
     float3 radiance = light_radiance * attenuation;
 
@@ -53,7 +53,8 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
     float G = geometric_occlusion(NdotL, NdotV, roughness);
 
     // Diffuse scattering
-    float3 kd = lerp(1 - F, 0, metallic);
+    float3 kd = 1.0f - F;
+    kd *= 1.0 - metallic;
 
     // Lambert diffuse brdf
     float3 diffuse = kd * albedo;
@@ -70,15 +71,22 @@ float3 pbr_direct(float NdotV, float3 F0, float3 N, float3 V, float3 L,
 float3 pbr_ambient(float NdotV, float3 F0, float3 irradiance, float3 reflection,
                    float2 brdf, float3 albedo, float metallic,
                    float roughness) {
+
   float3 F = fresnel_schlick_roughness(NdotV, F0, roughness);
+  float3 specular = F * brdf.x + brdf.y;
+  float3 radiance = reflection;
 
-  float3 kd = lerp(1.0f - F, 0.0f, metallic);
+  // Account for multiple scattering.
+  // Based on A Multiple-Scattering Microfacet Model for Real-Time Image-based
+  // Lighting, C. J. Fdez-Agüera, JCGT, 2019.
+  float scatter = (1.0 - (brdf.x + brdf.y));
+  float3 Favg = F0 + (1.0 - F0) / 21.0;
+  float3 multi = scatter * specular * Favg / (1.0 - Favg * scatter);
+  // Diffuse contribution. Metallic materials have no diffuse contribution.
+  float3 single = (1.0 - metallic) * albedo * (1.0 - F0);
+  float3 diffuse = single * (1.0 - specular - multi) + multi;
 
-  float3 diffuse_ibl = kd * albedo * irradiance;
-
-  float3 specular_ibl = (F * brdf.x + brdf.y) * reflection;
-
-  return diffuse_ibl + specular_ibl;
+  return (diffuse * irradiance) + (specular * radiance);
 }
 
 float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
@@ -99,12 +107,11 @@ float3 pbr_lighting(float shadow, float ao, float3 albedo, float metallic,
   float NdotV = max(dot(N, V), 0);
 
   float3 ambient = pbr_ambient(NdotV, F0, irradiance, reflection, brdf, albedo,
-                               metallic, roughness) *
-                   ao;
+                               metallic, roughness);
   float3 direct =
       pbr_direct(NdotV, F0, N, V, L, light_color, albedo, metallic, roughness);
 
-  return (direct * shadow) + ambient;
+  return (direct * shadow) + (ambient * ao);
 }
 
 float2 compute_plane_depth_bias(float3 dx, float3 dy) {

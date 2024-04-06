@@ -1,10 +1,12 @@
 #include "timeofdaysystem.h"
 
 #include "common.hlsli"
+#include "coreuisystem.h"
 #include "lightcomponent.h"
 #include "profiling.h"
 #include "skycomponent.h"
 #include "tbcommon.h"
+#include "tbimgui.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "world.h"
@@ -93,9 +95,9 @@ float3 lookup_sun_color(float norm) {
 
   return color;
 }
+
 void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
-  TbWorld *world = ecs_singleton_get_mut(it->world, TbWorldRef)->world;
   tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 1);
   tb_auto skys = ecs_field(it, TbSkyComponent, 2);
   tb_auto lights = ecs_field(it, TbDirectionalLightComponent, 3);
@@ -108,7 +110,7 @@ void time_of_day_tick(ecs_iter_t *it) {
     tb_auto trans = &transforms[i];
     (void)sky; // Sky is unused but required
 
-    tod->time = world->time * tod->time_scale;
+    tod->time += (it->delta_time * (tod->time_scale * 0.01f));
 
     const float time_norm =
         (tod->time > TB_TAU ? tod->time - TB_TAU : tod->time) / TB_TAU;
@@ -119,13 +121,67 @@ void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+#ifndef FINAL
+typedef struct TbTimeOfDayContext {
+  bool *coreui;
+} TbTimeOfDayContext;
+ECS_COMPONENT_DECLARE(TbTimeOfDayContext);
+
+void time_of_day_ui_sys(ecs_iter_t *it) {
+  tb_auto tod_ctx = ecs_field(it, TbTimeOfDayContext, 1);
+  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 2);
+
+  if (tod_ctx == NULL || tod_ctx->coreui == NULL) {
+    return;
+  }
+
+  if (igBegin("Time Of Day", tod_ctx->coreui, 0)) {
+    for (int32_t i = 0; i < it->count; ++i) {
+      tb_auto tod = &tods[i];
+
+      if (tod->time_scale != 1.0f) {
+        if (igButton("Reset", (ImVec2){0})) {
+          tod->time_scale = 1.0f;
+        }
+      } else {
+        if (igButton("Pause", (ImVec2){0})) {
+          tod->time_scale = 0.0f;
+        }
+      }
+
+      if (igButton("Fast Forward", (ImVec2){0})) {
+        tod->time_scale = 5.0f;
+      }
+      if (igButton("Rewind", (ImVec2){0})) {
+        tod->time_scale = -5.0f;
+      }
+    }
+    igEnd();
+  }
+}
+#endif
+
 void tb_register_time_of_day_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_SYSTEM(ecs, time_of_day_tick,
              EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
              [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
+#ifndef FINAL
+  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+
+  ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayContext);
+  ecs_singleton_set(ecs, TbTimeOfDayContext,
+                    {tb_coreui_register_menu(coreui, "Time Of Day")});
+  ECS_SYSTEM(ecs, time_of_day_ui_sys,
+             EcsOnUpdate, [inout] TbTimeOfDayContext(TbTimeOfDayContext),
+             [inout] TbTimeOfDayComponent);
+#endif
 }
-void tb_unregister_time_of_day_sys(TbWorld *world) { (void)world; }
+void tb_unregister_time_of_day_sys(TbWorld *world) {
+#ifndef FINAL
+  ecs_singleton_remove(world->ecs, TbTimeOfDayContext);
+#endif
+}
 
 TB_REGISTER_SYS(tb, time_of_day, TB_TOD_SYS_PRIO)
 
