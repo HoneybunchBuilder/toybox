@@ -828,3 +828,178 @@ void tb_tex_system_release_texture_ref(TbTextureSystem *self, TbTextureId tex) {
     *view = VK_NULL_HANDLE;
   }
 }
+
+typedef struct TbTextureSysCtx {
+  ecs_entity_t ctx_ent;
+  VkDescriptorSetLayout set_layout;
+  TbFrameDescriptorPoolList frame_pools;
+} TbTextureSysCtx;
+ECS_COMPONENT_DECLARE(TbTextureSysCtx);
+
+// Describes the creation of a texture resource of a particular size from raw
+// RGBA8 bytes
+typedef struct TbTextureCreateRequest {
+  TbTextureUsage usage;
+  uint32_t width;
+  uint32_t height;
+  const uint8_t *pixels;
+  uint64_t size;
+} TbTextureCreateRequest;
+ECS_COMPONENT_DECLARE(TbTextureCreateRequest);
+
+// Describes the creation of a texture from a cgltf texture pointer
+typedef struct TbTextureGLTFLoadRequest {
+  const char *path;
+  const char *mat_name; // TODO: Should be an entity id
+  TbTextureUsage usage;
+} TbTextureGLTFLoadRequest;
+ECS_COMPONENT_DECLARE(TbTextureGLTFLoadRequest);
+
+ECS_TAG_DECLARE(TbTextureLoaded);
+ECS_TAG_DECLARE(TbTextureReady);
+ECS_TAG_DECLARE(TbNeedTexDescUpdate);
+
+ecs_entity_t tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
+                                     const char *mat_name,
+                                     TbTextureUsage usage) {
+  tb_auto sys_ctx = ecs_singleton_get(ecs, TbTextureSysCtx);
+
+  // Create a texture entity
+  ecs_entity_t tex_ent = ecs_new_entity(ecs, 0);
+
+  // GLTFpack strips image names so we have to synthesize something
+  {
+    const uint32_t image_name_max = 100;
+    char image_name[image_name_max] = {0};
+
+    switch (usage) {
+    case TB_TEX_USAGE_BRDF:
+    default:
+      TB_CHECK(false,
+               "Material textures should have Color, Metal or Normal usage");
+      break;
+    case TB_TEX_USAGE_COLOR:
+      SDL_snprintf(image_name, image_name_max, "%s_color", mat_name);
+      break;
+    case TB_TEX_USAGE_METAL_ROUGH:
+      SDL_snprintf(image_name, image_name_max, "%s_metal", mat_name);
+      break;
+    case TB_TEX_USAGE_NORMAL:
+      SDL_snprintf(image_name, image_name_max, "%s_normal", mat_name);
+      break;
+    }
+
+    ecs_set_name(ecs, tex_ent, image_name);
+  }
+
+  // It is a child of the texture system context singleton
+  ecs_entity_t ctx_ent = sys_ctx->ctx_ent;
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ctx_ent);
+
+  // Append a texture load request onto the entity to schedule loading
+  // Or do we create a task pinned on the loading thread?
+  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path, mat_name, usage});
+
+  return tex_ent;
+}
+
+void tb_load_mat_textures_sys(ecs_iter_t *it) {
+  tb_auto tex_ctx = ecs_field(it, TbTextureSysCtx, 1);
+  tb_auto load_tasks = ecs_field(it, TbTextureGLTFLoadRequest, 2);
+
+  // Iterate texture load tasks
+  for (int32_t i = 0; i < it->count; ++i) {
+    tb_auto load_task = load_tasks[i];
+    (void)load_task;
+    tb_auto tex_ent = it->entities[i];
+
+    // If a texture load task is completed we take the resulting texture data
+    // and put it in an ecs component
+    if (true /*load_task_completed*/) {
+      // We can now mark the texture entity as loaded
+      ecs_remove(it->world, tex_ent, TbTextureGLTFLoadRequest);
+      ecs_add(it->world, tex_ent, TbTextureLoaded);
+      ecs_add(it->world, tex_ctx->ctx_ent, TbNeedTexDescUpdate);
+    }
+  }
+}
+
+void tb_tex_sys_update_descriptors(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Texture Descriptor Update System",
+               TracyCategoryColorRendering, true);
+  tb_auto world = ecs_field(it, TbWorldRef, 1)->world;
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto tex_ctx = ecs_field(it, TbTextureSysCtx, 3);
+
+  tb_auto textures = ecs_field(it, TbTexture, 4);
+
+  const uint64_t tex_count = it->count;
+
+  // Update the descriptor pool
+  {
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .maxSets = 4,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorCount = tex_count * 4,
+                },
+            },
+    };
+    tb_auto layouts =
+        tb_alloc_nm_tp(world->tmp_alloc, tex_count, VkDescriptorSetLayout);
+    for (uint64_t i = 0; i < tex_count; ++i) {
+      layouts[i] = tex_ctx->set_layout;
+    }
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
+                                tex_ctx->frame_pools.pools, tex_count);
+  }
+
+  // Write descriptor updates
+  {
+    // Write all textures into the descriptor set table
+    TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+    TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
+    tb_auto image_info =
+        tb_alloc_nm_tp(world->tmp_alloc, tex_count, VkDescriptorImageInfo);
+
+    for (uint64_t i = 0; i < tex_count; ++i) {
+      tb_auto texture = &textures[i];
+
+      image_info[i] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = texture->image_view,
+      };
+
+      tb_auto write = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .dstSet = tb_rnd_frame_desc_pool_get_set(
+              rnd_sys, tex_ctx->frame_pools.pools, 0),
+          .dstArrayElement = i,
+          .pImageInfo = &image_info[i],
+      };
+      TB_DYN_ARR_APPEND(writes, write);
+
+      // Mark the texture as ready to be used now that its in the texture
+      // descriptor pool
+      ecs_add(it->world, it->entities[i], TbTextureReady);
+    }
+
+    tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+  }
+
+  // All done, remove the tag that signaled this system to run
+  ecs_remove(it->world, tex_ctx->ctx_ent, TbNeedTexDescUpdate);
+
+  TracyCZoneEnd(ctx);
+}
+
+bool tb_is_tex_loaded(ecs_world_t *ecs, ecs_entity_t tex_ent) {
+  return ecs_has(ecs, tex_ent, TbTextureLoaded);
+}
