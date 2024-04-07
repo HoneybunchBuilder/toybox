@@ -40,7 +40,8 @@
         "tools"
       ]
     },
-    "json-c"
+    "json-c",
+    "enkits"
   ],
   "overrides": [
     {
@@ -90,6 +91,11 @@
     {
       "name": "joltphysics",
       "version": "4.0.0"
+    },
+    {
+      "name": "enkits",
+      "version": "1.11",
+      "port-version": 2
     }
   ]
 }

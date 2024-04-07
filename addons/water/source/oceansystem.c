@@ -12,6 +12,8 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tb_shader_system.h"
+#include "tb_task_scheduler.h"
 #include "tbcommon.h"
 #include "tbrand.h"
 #include "tbutil.h"
@@ -83,8 +85,9 @@ typedef struct TbOceanSystem {
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline prepass_pipeline;
-  VkPipeline pipeline;
+
+  ecs_entity_t ocean_pass_shader;
+  ecs_entity_t ocean_prepass_shader;
 } TbOceanSystem;
 ECS_COMPONENT_DECLARE(TbOceanSystem);
 
@@ -149,18 +152,22 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
-                                VkFormat depth_format,
-                                VkPipelineLayout pipe_layout,
-                                VkPipeline *prepass_pipeline,
-                                VkPipeline *pipeline) {
+typedef struct TbOceanPipelineArgs {
+  TbRenderSystem *rnd_sys;
+  VkFormat color_format;
+  VkFormat depth_format;
+  VkPipelineLayout pipe_layout;
+} TbOceanPipelineArgs;
+
+VkPipeline create_ocean_prepass_shader(const TbOceanPipelineArgs *args) {
   VkResult err = VK_SUCCESS;
 
-  VkShaderModule oceanprepass_vert_mod = VK_NULL_HANDLE;
-  VkShaderModule oceanprepass_frag_mod = VK_NULL_HANDLE;
+  tb_auto rnd_sys = args->rnd_sys;
+  tb_auto depth_format = args->depth_format;
+  tb_auto pipe_layout = args->pipe_layout;
 
-  VkShaderModule ocean_vert_mod = VK_NULL_HANDLE;
-  VkShaderModule ocean_frag_mod = VK_NULL_HANDLE;
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
 
   {
     VkShaderModuleCreateInfo create_info = {
@@ -170,28 +177,146 @@ VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
     create_info.codeSize = sizeof(oceanprepass_vert);
     create_info.pCode = (const uint32_t *)oceanprepass_vert;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepass Vert",
-                               &oceanprepass_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ocean prepass vert shader module",
-                    err);
+                               &vert_mod);
+    TB_VK_CHECK(err, "Failed to load ocean vert shader module");
 
     create_info.codeSize = sizeof(oceanprepass_frag);
     create_info.pCode = (const uint32_t *)oceanprepass_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepass Frag",
-                               &oceanprepass_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ocean prepass frag shader module",
-                    err);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepss Frag",
+                               &frag_mod);
+    TB_VK_CHECK(err, "Failed to load ocean frag shader module");
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+              .vertexBindingDescriptionCount = 2,
+              .pVertexBindingDescriptions =
+                  (VkVertexInputBindingDescription[2]){
+                      {0, sizeof(uint16_t) * 4, VK_VERTEX_INPUT_RATE_VERTEX},
+                      {1, sizeof(float4), VK_VERTEX_INPUT_RATE_INSTANCE},
+                  },
+              .vertexAttributeDescriptionCount = 2,
+              .pVertexAttributeDescriptions =
+                  (VkVertexInputAttributeDescription[2]){
+                      {0, 0, VK_FORMAT_R16G16B16A16_SINT, 0},
+                      {1, 1, VK_FORMAT_R32G32B32A32_SFLOAT, 0},
+                  },
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS,
+#endif
+              .maxDepthBounds = 1.0f,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                         "Ocean Prepass Pipeline", &pipeline);
+  TB_VK_CHECK(err, "Failed to create ocean prepass pipeline");
+
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
+}
+
+VkPipeline create_ocean_pass_shader(const TbOceanPipelineArgs *args) {
+  VkResult err = VK_SUCCESS;
+
+  tb_auto rnd_sys = args->rnd_sys;
+  tb_auto color_format = args->color_format;
+  tb_auto depth_format = args->depth_format;
+  tb_auto pipe_layout = args->pipe_layout;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
 
     create_info.codeSize = sizeof(ocean_vert);
     create_info.pCode = (const uint32_t *)ocean_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Vert",
-                               &ocean_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ocean vert shader module", err);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Vert", &vert_mod);
+    TB_VK_CHECK(err, "Failed to load ocean vert shader module");
 
     create_info.codeSize = sizeof(ocean_frag);
     create_info.pCode = (const uint32_t *)ocean_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Frag",
-                               &ocean_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load ocean frag shader module", err);
+    err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Frag", &frag_mod);
+    TB_VK_CHECK(err, "Failed to load ocean frag shader module");
   }
 
   VkGraphicsPipelineCreateInfo create_info = {
@@ -209,13 +334,13 @@ VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = ocean_vert_mod,
+                  .module = vert_mod,
                   .pName = "vert",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = ocean_frag_mod,
+                  .module = frag_mod,
                   .pName = "frag",
               },
           },
@@ -306,61 +431,20 @@ VkResult create_ocean_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
           },
       .layout = pipe_layout,
   };
+  VkPipeline pipeline = VK_NULL_HANDLE;
   err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Ocean Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create ocean pipeline", err);
+                                         "Ocean Pipeline", &pipeline);
+  TB_VK_CHECK(err, "Failed to create ocean pipeline");
 
-  create_info.pNext = &(VkPipelineRenderingCreateInfo){
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-      .depthAttachmentFormat = depth_format,
-  };
-  create_info.pStages =
-      (VkPipelineShaderStageCreateInfo[2]){
-          {
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_VERTEX_BIT,
-              .module = oceanprepass_vert_mod,
-              .pName = "vert",
-          },
-          {
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-              .module = oceanprepass_frag_mod,
-              .pName = "frag",
-          },
-      },
-  create_info.pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-  };
-  create_info.pDepthStencilState =
-      &(VkPipelineDepthStencilStateCreateInfo){
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-          .depthTestEnable = VK_TRUE,
-          .depthWriteEnable = VK_TRUE,
-#ifdef TB_USE_INVERSE_DEPTH
-          .depthCompareOp = VK_COMPARE_OP_GREATER,
-#else
-          .depthCompareOp = VK_COMPARE_OP_LESS,
-#endif
-          .maxDepthBounds = 1.0f,
-      },
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
-  err = tb_rnd_create_graphics_pipelines(
-      rnd_sys, 1, &create_info, "Ocean Prepass Pipeline", prepass_pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create ocean prepass pipeline", err);
-
-  tb_rnd_destroy_shader(rnd_sys, oceanprepass_vert_mod);
-  tb_rnd_destroy_shader(rnd_sys, oceanprepass_frag_mod);
-
-  tb_rnd_destroy_shader(rnd_sys, ocean_vert_mod);
-  tb_rnd_destroy_shader(rnd_sys, ocean_frag_mod);
-
-  return err;
+  return pipeline;
 }
 
-void init_ocean_system(TbOceanSystem *sys, TbAllocator gp_alloc,
-                       TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
-                       TbRenderPipelineSystem *rp_sys,
+void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
+                       TbAllocator gp_alloc, TbAllocator tmp_alloc,
+                       TbRenderSystem *rnd_sys, TbRenderPipelineSystem *rp_sys,
                        TbMeshSystem *mesh_system, TbViewSystem *view_sys,
                        TbRenderTargetSystem *rt_sys,
                        TbVisualLoggingSystem *vlog,
@@ -570,6 +654,7 @@ void init_ocean_system(TbOceanSystem *sys, TbAllocator gp_alloc,
   TbRenderPassId depth_id = sys->rp_sys->transparent_depth_pass;
   TbRenderPassId color_id = sys->rp_sys->transparent_color_pass;
 
+  // Create shader pipelines
   {
     uint32_t attach_count = 0;
     tb_render_pipeline_get_attachments(
@@ -601,10 +686,21 @@ void init_ocean_system(TbOceanSystem *sys, TbAllocator gp_alloc,
       }
     }
 
-    err = create_ocean_pipelines(rnd_sys, color_format, depth_format,
-                                 sys->pipe_layout, &sys->prepass_pipeline,
-                                 &sys->pipeline);
-    TB_VK_CHECK(err, "Failed to create ocean pipeline");
+    // Async load shaders
+    {
+      TbOceanPipelineArgs args = {
+          .rnd_sys = rnd_sys,
+          .color_format = color_format,
+          .depth_format = depth_format,
+          .pipe_layout = sys->pipe_layout,
+      };
+      sys->ocean_pass_shader =
+          tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_pass_shader,
+                         (void *)&args, sizeof(TbOceanPipelineArgs));
+      sys->ocean_prepass_shader =
+          tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_prepass_shader,
+                         (void *)&args, sizeof(TbOceanPipelineArgs));
+    }
   }
 
   sys->trans_depth_draw_ctx = tb_render_pipeline_register_draw_context(
@@ -641,9 +737,6 @@ void destroy_ocean_system(TbOceanSystem *self) {
   tb_rnd_destroy_sampler(self->rnd_sys, self->sampler);
   tb_rnd_destroy_sampler(self->rnd_sys, self->shadow_sampler);
 
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->prepass_pipeline);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->pipeline);
-
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->pipe_layout);
   tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
 
@@ -677,6 +770,13 @@ void ocean_draw_tick(ecs_iter_t *it) {
   double time = ecs_singleton_get(it->world, TbWorldRef)->world->time;
   tb_auto sys = ecs_field(it, TbOceanSystem, 1);
   tb_auto cameras = ecs_field(it, TbCameraComponent, 2);
+
+  // If system pipelines aren't ready just bail
+  if (!tb_is_shader_ready(ecs, sys->ocean_pass_shader) ||
+      !tb_is_shader_ready(ecs, sys->ocean_prepass_shader)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
 
   for (int32_t i = 0; i < it->count; ++i) {
     TbCameraComponent *camera = &cameras[i];
@@ -934,14 +1034,15 @@ void ocean_draw_tick(ecs_iter_t *it) {
               sys->rnd_sys, sys->ocean_pools, ocean_idx);
 
           ocean_draw_batches[batch_count] = (TbDrawBatch){
-              .pipeline = sys->pipeline,
+              .pipeline = tb_shader_get_pipeline(ecs, sys->ocean_pass_shader),
               .layout = sys->pipe_layout,
               .viewport = {0, height, width, -(float)height, 0, 1},
               .scissor = {{0, 0}, {width, height}},
               .user_batch = &ocean_batches[batch_count],
           };
           prepass_draw_batches[batch_count] = (TbDrawBatch){
-              .pipeline = sys->prepass_pipeline,
+              .pipeline =
+                  tb_shader_get_pipeline(ecs, sys->ocean_prepass_shader),
               .layout = sys->pipe_layout,
               .viewport = {0, height, width, -(float)height, 0, 1},
               .scissor = {{0, 0}, {width, height}},
@@ -990,7 +1091,7 @@ void ocean_on_start(ecs_iter_t *it) {
   tb_auto world = ecs_singleton_get(ecs, TbWorldRef)->world;
   tb_auto ocean_sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
 
-  init_ocean_system(ocean_sys, world->gp_alloc, world->tmp_alloc, rnd_sys,
+  init_ocean_system(ecs, ocean_sys, world->gp_alloc, world->tmp_alloc, rnd_sys,
                     rp_sys, mesh_sys, view_sys, rt_sys, vlog, aud_sys);
 
   ecs_singleton_modified(ecs, TbOceanSystem);
@@ -1027,5 +1128,9 @@ void tb_unregister_ocean_sys(TbWorld *world) {
   TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
   ecs_query_fini(sys->ocean_query);
   destroy_ocean_system(sys);
+
+  tb_shader_destroy(ecs, sys->ocean_pass_shader);
+  tb_shader_destroy(ecs, sys->ocean_prepass_shader);
+
   ecs_singleton_remove(ecs, TbOceanSystem);
 }

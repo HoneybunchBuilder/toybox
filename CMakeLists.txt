@@ -114,6 +114,7 @@ if(UNIX)
 endif()
 find_package(json-c CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
+find_package(enkiTS CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -133,7 +134,17 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 # The list of all external targets to link
-set(library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;json-c::json-c;meshoptimizer::meshoptimizer;unofficial::joltphysics::Jolt")
+list(APPEND library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>")
+list(APPEND library_list "volk::volk")
+list(APPEND library_list "volk::volk_headers")
+list(APPEND library_list "imgui::imgui")
+list(APPEND library_list "mimalloc")
+list(APPEND library_list "mimalloc-static")
+list(APPEND library_list "KTX::ktx")
+list(APPEND library_list "json-c::json-c")
+list(APPEND library_list "meshoptimizer::meshoptimizer")
+list(APPEND library_list "unofficial::joltphysics::Jolt")
+list(APPEND library_list "enkiTS::enkiTS")
 
 set(engine_shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
 

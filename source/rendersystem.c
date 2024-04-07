@@ -861,7 +861,7 @@ void tb_rnd_destroy_shader(TbRenderSystem *self, VkShaderModule shader) {
                         &self->vk_host_alloc_cb);
 }
 
-void tb_rnd_destroy_pipeline(TbRenderSystem *self, VkPipeline pipeline) {
+void tb_rnd_destroy_pipeline(const TbRenderSystem *self, VkPipeline pipeline) {
   vkDestroyPipeline(self->render_thread->device, pipeline,
                     &self->vk_host_alloc_cb);
 }

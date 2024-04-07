@@ -15,6 +15,15 @@
         "sdl3-mixer"
       ],
       "reference": "sdl3-mixer"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "94dba6403db9376920d7d1903ace714439ff145d",
+      "packages": [
+        "enkits"
+      ],
+      "reference": "enkits"
     }
   ]
 }

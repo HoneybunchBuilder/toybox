@@ -153,7 +153,7 @@ void tb_rnd_destroy_set_layout(TbRenderSystem *self,
 void tb_rnd_destroy_pipe_layout(TbRenderSystem *self,
                                 VkPipelineLayout pipe_layout);
 void tb_rnd_destroy_shader(TbRenderSystem *self, VkShaderModule shader);
-void tb_rnd_destroy_pipeline(TbRenderSystem *self, VkPipeline pipeline);
+void tb_rnd_destroy_pipeline(const TbRenderSystem *self, VkPipeline pipeline);
 void tb_rnd_destroy_descriptor_pool(TbRenderSystem *self,
                                     VkDescriptorPool pool);
 
