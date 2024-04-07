@@ -4,6 +4,7 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tb_shader_system.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
 #include "world.h"
@@ -58,10 +59,16 @@ void tick_fxaa_draw(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "FXAA Draw Tick", TracyCategoryColorRendering, true);
   tb_auto ecs = it->world;
 
-  tb_auto *self = ecs_field(it, TbFXAASystem, 1);
-  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto *rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto self = ecs_field(it, TbFXAASystem, 1);
+
+  if (!tb_is_shader_ready(ecs, self->shader)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
 
   // Descriptor set writes
   {
@@ -112,7 +119,7 @@ void tick_fxaa_draw(ecs_iter_t *it) {
     };
     TbDrawBatch batch = {
         .layout = self->pipe_layout,
-        .pipeline = self->pipeline,
+        .pipeline = tb_shader_get_pipeline(ecs, self->shader),
         .viewport = {0, height, width, -(float)height, 0, 1},
         .scissor = {{0, 0}, {width, height}},
         .user_batch = &fxaa_batch,
@@ -121,6 +128,129 @@ void tick_fxaa_draw(ecs_iter_t *it) {
   }
 
   TracyCZoneEnd(ctx);
+}
+
+typedef struct TbFXAAPipelineArgs {
+  TbRenderSystem *rnd_sys;
+  VkPipelineLayout pipe_layout;
+} TbFXAAPipelineArgs;
+
+VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
+  tb_auto rnd_sys = args->rnd_sys;
+  tb_auto pipe_layout = args->pipe_layout;
+
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(fxaa_vert),
+        .pCode = (const uint32_t *)fxaa_vert,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Vert", &vert_mod);
+  }
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(fxaa_frag),
+        .pCode = (const uint32_t *)fxaa_frag,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Frag", &frag_mod);
+  }
+
+  const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
+  const VkFormat swap_format = swapchain->format;
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){swap_format},
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  &(VkPipelineColorBlendAttachmentState){
+                      .blendEnable = VK_FALSE,
+                      .colorWriteMask =
+                          VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                  },
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info, "FXAA Pipeline",
+                                   &pipeline);
+
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
 }
 
 void tb_register_fxaa_sys(TbWorld *world) {
@@ -176,123 +306,6 @@ void tb_register_fxaa_sys(TbWorld *world) {
     tb_rnd_create_pipeline_layout(rnd_sys, &create_info, "FXAA Pipeline Layout",
                                   &sys.pipe_layout);
   }
-  // Create Pipeline
-  {
-    VkShaderModule vert_mod = VK_NULL_HANDLE;
-    {
-      VkShaderModuleCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-          .codeSize = sizeof(fxaa_vert),
-          .pCode = (const uint32_t *)fxaa_vert,
-      };
-      tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Vert", &vert_mod);
-    }
-    VkShaderModule frag_mod = VK_NULL_HANDLE;
-    {
-      VkShaderModuleCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-          .codeSize = sizeof(fxaa_frag),
-          .pCode = (const uint32_t *)fxaa_frag,
-      };
-      tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Frag", &frag_mod);
-    }
-
-    const TbSwapchain *swapchain = &rnd_sys->render_thread->swapchain;
-    const VkFormat swap_format = swapchain->format;
-
-    VkGraphicsPipelineCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext =
-            &(VkPipelineRenderingCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-                .colorAttachmentCount = 1,
-                .pColorAttachmentFormats = (VkFormat[1]){swap_format},
-            },
-        .stageCount = 2,
-        .pStages =
-            (VkPipelineShaderStageCreateInfo[2]){
-                {
-                    .sType =
-                        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                    .module = vert_mod,
-                    .pName = "vert",
-                },
-                {
-                    .sType =
-                        VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .module = frag_mod,
-                    .pName = "frag",
-                },
-            },
-        .pVertexInputState =
-            &(VkPipelineVertexInputStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            },
-        .pInputAssemblyState =
-            &(VkPipelineInputAssemblyStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-            },
-        .pViewportState =
-            &(VkPipelineViewportStateCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .viewportCount = 1,
-                .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
-                .scissorCount = 1,
-                .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
-            },
-        .pRasterizationState =
-            &(VkPipelineRasterizationStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .polygonMode = VK_POLYGON_MODE_FILL,
-                .cullMode = VK_CULL_MODE_NONE,
-                .lineWidth = 1.0f,
-            },
-        .pMultisampleState =
-            &(VkPipelineMultisampleStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-            },
-        .pColorBlendState =
-            &(VkPipelineColorBlendStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                .attachmentCount = 1,
-                .pAttachments =
-                    &(VkPipelineColorBlendAttachmentState){
-                        .blendEnable = VK_FALSE,
-                        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                          VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT |
-                                          VK_COLOR_COMPONENT_A_BIT,
-                    },
-            },
-        .pDepthStencilState =
-            &(VkPipelineDepthStencilStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-            },
-        .pDynamicState =
-            &(VkPipelineDynamicStateCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount = 2,
-                .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
-                                                      VK_DYNAMIC_STATE_SCISSOR},
-            },
-        .layout = sys.pipe_layout,
-    };
-    tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info, "FXAA Pipeline",
-                                     &sys.pipeline);
-
-    tb_rnd_destroy_shader(rnd_sys, vert_mod);
-    tb_rnd_destroy_shader(rnd_sys, frag_mod);
-  }
   // Register draw context
   {
     TbDrawContextDescriptor desc = {
@@ -309,6 +322,16 @@ void tb_register_fxaa_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
 
   ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem(TbFXAASystem));
+
+  // Create Pipeline afterwards because we depend on the FXAA system being
+  // in the ecs already before we can call tb_shader_load
+  {
+    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbFXAASystem);
+    TbFXAAPipelineArgs args = {rnd_sys, sys.pipe_layout};
+    sys_ptr->shader =
+        tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
+                       sizeof(TbFXAAPipelineArgs));
+  }
 }
 
 void tb_unregister_fxaa_sys(TbWorld *world) {
@@ -318,6 +341,6 @@ void tb_unregister_fxaa_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_rnd_destroy_set_layout(rnd_sys, sys->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
-  tb_rnd_destroy_pipeline(rnd_sys, sys->pipeline);
+  tb_shader_destroy(ecs, sys->shader);
   ecs_singleton_remove(ecs, TbFXAASystem);
 }

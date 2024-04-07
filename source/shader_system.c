@@ -74,7 +74,6 @@ ecs_entity_t tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
       (TbShaderCompileTaskArgs){ecs, shader, compile_fn, compile_args};
   tb_async_task(ecs, tb_shader_compile_task, &task_args,
                 sizeof(TbShaderCompileTaskArgs), &task);
-  tb_wait_task_set(ecs, task);
 
   TracyCZoneEnd(ctx);
   return shader;

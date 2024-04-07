@@ -26,7 +26,7 @@ typedef struct TbFXAASystem {
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+  ecs_entity_t shader;
   TbDrawContextId draw_ctx;
 
   TbFrameDescriptorPoolList pools;
