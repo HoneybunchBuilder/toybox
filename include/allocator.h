@@ -30,6 +30,11 @@ typedef void tb_free_fn(void *user_data, void *ptr);
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
 #define tb_free(a, ptr) (a).free((a).user_data, (ptr))
 
+#define tb_global_alloc(size) mi_malloc((size))
+#define tb_global_alloc_tp(T) (T *)mi_malloc(sizeof(T))
+#define tb_global_alloc_nm_tp(num, T) (T *)mi_malloc(sizeof(T) * (num))
+#define tb_global_free(ptr) mi_free((ptr))
+
 typedef struct TbAllocator {
   void *user_data;
   tb_alloc_fn *alloc;

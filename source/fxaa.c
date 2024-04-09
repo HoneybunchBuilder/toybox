@@ -330,7 +330,7 @@ void tb_register_fxaa_sys(TbWorld *world) {
     TbFXAAPipelineArgs args = {rnd_sys, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
-                       sizeof(TbFXAAPipelineArgs));
+                       sizeof(TbFXAAPipelineArgs), NULL);
   }
 }
 

@@ -240,8 +240,8 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 #ifndef FINAL
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
-  ecs_singleton_set(ecs, EcsRest, {0});
-  ECS_IMPORT(ecs, FlecsMonitor);
+  // ecs_singleton_set(ecs, EcsRest, {0});
+  // ECS_IMPORT(ecs, FlecsMonitor);
 #endif
 
   return true;

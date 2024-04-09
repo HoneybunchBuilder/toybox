@@ -45,7 +45,9 @@ typedef struct TbImGuiSystem {
   VkSampler sampler;
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+
+  ecs_entity_t shader;
+  ecs_entity_t shader_task;
 
   uint32_t context_count;
   TbUIContext contexts[TB_MAX_UI_CONTEXTS];

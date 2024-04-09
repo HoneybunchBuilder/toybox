@@ -696,10 +696,10 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
       };
       sys->ocean_pass_shader =
           tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_pass_shader,
-                         (void *)&args, sizeof(TbOceanPipelineArgs));
+                         (void *)&args, sizeof(TbOceanPipelineArgs), NULL);
       sys->ocean_prepass_shader =
           tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_prepass_shader,
-                         (void *)&args, sizeof(TbOceanPipelineArgs));
+                         (void *)&args, sizeof(TbOceanPipelineArgs), NULL);
     }
   }
 

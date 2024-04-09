@@ -17,6 +17,8 @@ void tb_ts_free(void *ptr) {
   TracyCFreeN(ptr, "Task Alloc");
 }
 
+#define tb_ts_alloc_tp(T) (T *)tb_ts_alloc(sizeof(T))
+
 ECS_COMPONENT_DECLARE(TbTaskScheduler);
 
 typedef struct enkiTaskSet *TbTask;
@@ -36,6 +38,25 @@ typedef struct TbTaskCompleteCleanupArgs {
   ecs_entity_t task_ent;
 } TbTaskCompleteCleanupArgs;
 
+TbAsyncTaskArgs *tb_alloc_task_args(TbAsyncFn fn, void *args, size_t size) {
+  tb_auto fn_args = NULL;
+  if (args && size > 0) {
+    fn_args = tb_ts_alloc(size);
+    SDL_memcpy(fn_args, args, size);
+  }
+  // Always alloc the task args wrapper
+  tb_auto task_args = tb_ts_alloc_tp(TbAsyncTaskArgs);
+  *task_args = (TbAsyncTaskArgs){fn, fn_args};
+
+  return task_args;
+}
+
+void tb_free_task_args(TbAsyncTaskArgs *args) {
+  tb_ts_free(args->args);
+  args->args = NULL;
+  tb_ts_free(args);
+}
+
 void tb_async_task_complete(void *args, uint32_t threadnum) {
   (void)threadnum;
   tb_auto task_args = (TbTaskCompleteCleanupArgs *)args;
@@ -47,11 +68,7 @@ void tb_async_task_complete(void *args, uint32_t threadnum) {
   tb_ts_free(args);
 }
 
-void tb_task_exec(const TbAsyncTaskArgs *args) {
-  args->fn(args->args);
-  // Free up task arguments since we own this copy of what the user provided
-  tb_ts_free(args->args);
-}
+void tb_task_exec(const TbAsyncTaskArgs *args) { args->fn(args->args); }
 
 void tb_async_task_exec(uint32_t start, uint32_t end, uint32_t threadnum,
                         void *args) {
@@ -59,34 +76,31 @@ void tb_async_task_exec(uint32_t start, uint32_t end, uint32_t threadnum,
   (void)start;
   (void)end;
   (void)threadnum;
-  tb_auto task_args = (const TbAsyncTaskArgs *)args;
+  tb_auto task_args = (TbAsyncTaskArgs *)args;
   tb_task_exec(task_args);
-  tb_ts_free(args);
+  tb_free_task_args(task_args);
   TracyCZoneEnd(ctx);
 }
 
 void tb_pinned_task_exec(void *args) {
   TracyCZoneN(ctx, "Pinned Task", true);
-  tb_auto task_args = (const TbAsyncTaskArgs *)args;
+  tb_auto task_args = (TbAsyncTaskArgs *)args;
   tb_task_exec(task_args);
-  tb_ts_free(args);
+  tb_free_task_args(task_args);
   TracyCZoneEnd(ctx);
 }
 
 ecs_entity_t tb_async_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
                            size_t args_size, enkiTaskSet **out_task) {
   TracyCZoneN(ctx, "Launch Async Task", true);
+  ecs_defer_begin(ecs);
 
   tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
 
   tb_auto task = enkiCreateTaskSet(enki, tb_async_task_exec);
 
   // Arguments need to be on the correct mimalloc heap so we copy them
-  tb_auto fn_args = tb_ts_alloc(args_size);
-  SDL_memcpy(fn_args, args, args_size);
-
-  tb_auto task_args = (TbAsyncTaskArgs *)tb_ts_alloc(sizeof(TbAsyncTaskArgs));
-  *task_args = (TbAsyncTaskArgs){fn, fn_args};
+  tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsTaskSet(task, task_args);
 
   tb_auto on_complete =
@@ -97,8 +111,7 @@ ecs_entity_t tb_async_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
   ecs_set(ecs, task_ent, TbTask, {task});
   ecs_set(ecs, task_ent, TbCompleteAction, {(TbCompleteAction)on_complete});
 
-  tb_auto on_complete_args = (TbTaskCompleteCleanupArgs *)tb_ts_alloc(
-      sizeof(TbTaskCompleteCleanupArgs));
+  tb_auto on_complete_args = tb_ts_alloc_tp(TbTaskCompleteCleanupArgs);
   *on_complete_args = (TbTaskCompleteCleanupArgs){ecs, task_ent};
   tb_auto on_complete_params = (struct enkiParamsCompletionAction){
       NULL,
@@ -114,23 +127,21 @@ ecs_entity_t tb_async_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
   // Launch task
   enkiAddTaskSet(enki, task);
 
+  ecs_defer_end(ecs);
   TracyCZoneEnd(ctx);
   return task_ent;
 }
 
-ecs_entity_t tb_main_thread_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
-                                 size_t args_size, enkiPinnedTask **out_task) {
-  TracyCZoneN(ctx, "Launch Main Task", true);
+ecs_entity_t tb_create_pinned_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
+                                   size_t args_size,
+                                   enkiPinnedTask **out_task) {
+  TracyCZoneN(ctx, "Create Main Task", true);
   tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
 
   tb_auto task = enkiCreatePinnedTask(enki, tb_pinned_task_exec, 0);
 
   // Arguments need to be on the correct mimalloc heap so we copy them
-  tb_auto fn_args = tb_ts_alloc(args_size);
-  SDL_memcpy(fn_args, args, args_size);
-
-  tb_auto task_args = (TbAsyncTaskArgs *)tb_ts_alloc(sizeof(TbAsyncTaskArgs));
-  *task_args = (TbAsyncTaskArgs){fn, fn_args};
+  tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsPinnedTask(task, task_args);
 
   tb_auto on_complete =
@@ -142,8 +153,7 @@ ecs_entity_t tb_main_thread_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
   ecs_set(ecs, task_ent, TbCompleteAction, {(TbCompleteAction)on_complete});
   ecs_add_id(ecs, task_ent, TbTaskPinned);
 
-  tb_auto on_complete_args = (TbTaskCompleteCleanupArgs *)tb_ts_alloc(
-      sizeof(TbTaskCompleteCleanupArgs));
+  tb_auto on_complete_args = tb_ts_alloc_tp(TbTaskCompleteCleanupArgs);
   *on_complete_args = (TbTaskCompleteCleanupArgs){ecs, task_ent};
   tb_auto on_complete_params = (struct enkiParamsCompletionAction){
       NULL,
@@ -156,16 +166,45 @@ ecs_entity_t tb_main_thread_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
     *out_task = task;
   }
 
-  enkiAddPinnedTask(enki, task);
   TracyCZoneEnd(ctx);
 
   return task_ent;
 }
 
+void tb_launch_pinned_task(enkiTaskScheduler *enki, enkiPinnedTask *task) {
+  // If task was given args on creation we will not override them
+  tb_launch_pinned_task_args(enki, task, NULL, 0);
+}
+
+void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
+                                void *args, size_t size) {
+  tb_auto task_args = (TbAsyncTaskArgs *)enkiGetParamsPinnedTask(task).pArgs;
+
+  if (args && size > 0) {
+    // If args were provided free previous args and allocate new ones
+    if (task_args->args) {
+      tb_ts_free(task_args->args);
+    }
+    task_args->args = tb_ts_alloc(size);
+    SDL_memcpy(task_args->args, args, size);
+  }
+
+  enkiAddPinnedTaskArgs(enki, task, task_args);
+}
+
 void tb_task_wait(ecs_world_t *ecs, ecs_entity_t ent) {
   tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
-  tb_auto task = *ecs_get(ecs, ent, TbTask);
-  enkiWaitForTaskSet(enki, task);
+  tb_auto task = ecs_get(ecs, ent, TbTask);
+  if (task) {
+    if (ecs_has(ecs, ent, TbTaskComplete)) {
+      return;
+    }
+    if (ecs_has(ecs, ent, TbTaskPinned)) {
+      enkiWaitForPinnedTask(enki, (enkiPinnedTask *)*task);
+    } else {
+      enkiWaitForTaskSet(enki, *task);
+    }
+  }
 }
 
 void tb_run_pinned_tasks_sys(ecs_iter_t *it) {

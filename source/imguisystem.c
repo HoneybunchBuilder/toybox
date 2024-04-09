@@ -13,6 +13,8 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "shadercommon.h"
+#include "tb_shader_system.h"
+#include "tb_task_scheduler.h"
 #include "tbcommon.h"
 #include "tbimgui.h"
 #include "tbvma.h"
@@ -38,192 +40,156 @@ void tb_unregister_imgui_sys(TbWorld *world);
 
 TB_REGISTER_SYS(tb, imgui, TB_IMGUI_SYS_PRIO)
 
-VkResult create_imgui_pipeline(TbRenderSystem *rnd_sys, VkSampler sampler,
-                               VkFormat ui_target_format,
-                               VkPipelineLayout *pipe_layout,
-                               VkDescriptorSetLayout *set_layout,
-                               VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+typedef struct TbImGuiPipelineArgs {
+  TbRenderSystem *rnd_sys;
+  VkFormat ui_target_format;
+  VkPipelineLayout pipe_layout;
+} TbImGuiPipelineArgs;
 
-  // Create Descriptor Set Layout
+VkPipeline create_imgui_pipeline(const TbImGuiPipelineArgs *args) {
+  tb_auto rnd_sys = args->rnd_sys;
+  tb_auto ui_target_format = args->ui_target_format;
+  tb_auto pipe_layout = args->pipe_layout;
+
+  // Load Shaders
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
   {
-    VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         NULL},
-        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         &sampler},
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-        .bindingCount = 2,
-        .pBindings = bindings,
+    create_info.codeSize = sizeof(imgui_vert);
+    create_info.pCode = (const uint32_t *)imgui_vert;
+    tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Vert", &vert_mod);
 
-    };
-    tb_rnd_create_set_layout(rnd_sys, &create_info, "ImGUI Set Layout",
-                             set_layout);
+    create_info.codeSize = sizeof(imgui_frag);
+    create_info.pCode = (const uint32_t *)imgui_frag;
+    tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Frag", &frag_mod);
   }
 
-  // Create Pipeline Layout
-  {
-    VkPipelineLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges =
-            &(VkPushConstantRange){
-                VK_SHADER_STAGE_VERTEX_BIT,
-                0,
-                sizeof(TbImGuiPushConstants),
-            },
-    };
-    tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                  "ImGui Pipeline Layout", pipe_layout);
-  }
+  static const uint32_t stage_count = 2;
+  VkPipelineShaderStageCreateInfo stages[stage_count] = {
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_VERTEX_BIT,
+          .module = vert_mod,
+          .pName = "vert",
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+          .module = frag_mod,
+          .pName = "frag",
+      },
+  };
+  VkVertexInputBindingDescription vert_bindings[1] = {
+      {0, sizeof(float2) + sizeof(float2) + sizeof(uint32_t),
+       VK_VERTEX_INPUT_RATE_VERTEX},
+  };
+  VkVertexInputAttributeDescription vert_attrs[3] = {
+      {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+      {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float2)},
+      {2, 0, VK_FORMAT_R8G8B8A8_UNORM, sizeof(float2) * 2},
+  };
+  VkPipelineVertexInputStateCreateInfo vert_input_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = vert_bindings,
+      .vertexAttributeDescriptionCount = 3,
+      .pVertexAttributeDescriptions = vert_attrs,
+  };
 
-  // Create ImGui Pipeline
-  {
-    // Load Shaders
-    VkShaderModule vert_mod = VK_NULL_HANDLE;
-    VkShaderModule frag_mod = VK_NULL_HANDLE;
-    {
-      VkShaderModuleCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      };
+  VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+  };
 
-      create_info.codeSize = sizeof(imgui_vert);
-      create_info.pCode = (const uint32_t *)imgui_vert;
-      tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Vert", &vert_mod);
+  VkViewport viewport = {0, 600.0f, 800.0f, -600.0f, 0, 1};
+  VkRect2D scissor = {{0, 0}, {800, 600}};
+  VkPipelineViewportStateCreateInfo viewport_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+      .viewportCount = 1,
+      .pViewports = &viewport,
+      .scissorCount = 1,
+      .pScissors = &scissor,
+  };
 
-      create_info.codeSize = sizeof(imgui_frag);
-      create_info.pCode = (const uint32_t *)imgui_frag;
-      tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Frag", &frag_mod);
-    }
+  VkPipelineRasterizationStateCreateInfo raster_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .polygonMode = VK_POLYGON_MODE_FILL,
+      .cullMode = VK_CULL_MODE_NONE,
+      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+      .lineWidth = 1.0f,
+  };
 
-    static const uint32_t stage_count = 2;
-    VkPipelineShaderStageCreateInfo stages[stage_count] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = vert_mod,
-            .pName = "vert",
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = frag_mod,
-            .pName = "frag",
-        },
-    };
-    VkVertexInputBindingDescription vert_bindings[1] = {
-        {0, sizeof(float2) + sizeof(float2) + sizeof(uint32_t),
-         VK_VERTEX_INPUT_RATE_VERTEX},
-    };
-    VkVertexInputAttributeDescription vert_attrs[3] = {
-        {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
-        {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float2)},
-        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, sizeof(float2) * 2},
-    };
-    VkPipelineVertexInputStateCreateInfo vert_input_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = vert_bindings,
-        .vertexAttributeDescriptionCount = 3,
-        .pVertexAttributeDescriptions = vert_attrs,
-    };
+  VkPipelineMultisampleStateCreateInfo multisample_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+  };
 
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    };
+  VkPipelineColorBlendAttachmentState attachment_state = {
+      .blendEnable = VK_TRUE,
+      .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+      .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .colorBlendOp = VK_BLEND_OP_ADD,
+      .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .alphaBlendOp = VK_BLEND_OP_ADD,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
 
-    VkViewport viewport = {0, 600.0f, 800.0f, -600.0f, 0, 1};
-    VkRect2D scissor = {{0, 0}, {800, 600}};
-    VkPipelineViewportStateCreateInfo viewport_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .pViewports = &viewport,
-        .scissorCount = 1,
-        .pScissors = &scissor,
-    };
+  VkPipelineColorBlendStateCreateInfo color_blend_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      .attachmentCount = 1,
+      .pAttachments = &attachment_state,
+  };
 
-    VkPipelineRasterizationStateCreateInfo raster_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_NONE,
-        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        .lineWidth = 1.0f,
-    };
+  VkPipelineDepthStencilStateCreateInfo depth_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+  };
 
-    VkPipelineMultisampleStateCreateInfo multisample_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-    };
+  VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
+                                 VK_DYNAMIC_STATE_SCISSOR};
+  VkPipelineDynamicStateCreateInfo dynamic_state = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+      .dynamicStateCount = 2,
+      .pDynamicStates = dyn_states,
+  };
 
-    VkPipelineColorBlendAttachmentState attachment_state = {
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .alphaBlendOp = VK_BLEND_OP_ADD,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-    };
+  // We're using direct rendering instead of render passes
+  // We don't supply a render pass so we have to supply rendering info
+  VkPipelineRenderingCreateInfo rendering_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = (VkFormat[1]){ui_target_format},
+  };
 
-    VkPipelineColorBlendStateCreateInfo color_blend_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &attachment_state,
-    };
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext = &rendering_info,
+      .stageCount = stage_count,
+      .pStages = stages,
+      .pVertexInputState = &vert_input_state,
+      .pInputAssemblyState = &input_assembly_state,
+      .pViewportState = &viewport_state,
+      .pRasterizationState = &raster_state,
+      .pMultisampleState = &multisample_state,
+      .pColorBlendState = &color_blend_state,
+      .pDepthStencilState = &depth_state,
+      .pDynamicState = &dynamic_state,
+      .layout = pipe_layout,
+  };
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info, "ImGui Pipeline",
+                                   &pipeline);
 
-    VkPipelineDepthStencilStateCreateInfo depth_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-    };
+  // Can safely dispose of shader module objects
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
-    VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                   VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = 2,
-        .pDynamicStates = dyn_states,
-    };
-
-    // We're using direct rendering instead of render passes
-    // We don't supply a render pass so we have to supply rendering info
-    VkPipelineRenderingCreateInfo rendering_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = (VkFormat[1]){ui_target_format},
-    };
-
-    VkGraphicsPipelineCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &rendering_info,
-        .stageCount = stage_count,
-        .pStages = stages,
-        .pVertexInputState = &vert_input_state,
-        .pInputAssemblyState = &input_assembly_state,
-        .pViewportState = &viewport_state,
-        .pRasterizationState = &raster_state,
-        .pMultisampleState = &multisample_state,
-        .pColorBlendState = &color_blend_state,
-        .pDepthStencilState = &depth_state,
-        .pDynamicState = &dynamic_state,
-        .layout = *pipe_layout,
-    };
-    tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info, "ImGui Pipeline",
-                                     pipeline);
-
-    // Can safely dispose of shader module objects
-    tb_rnd_destroy_shader(rnd_sys, vert_mod);
-    tb_rnd_destroy_shader(rnd_sys, frag_mod);
-  }
-
-  return err;
+  return pipeline;
 }
 
 void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -235,30 +201,31 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
     const TbDrawBatch *batch = &batches[batch_idx];
     const ImGuiDrawBatch *imgui_batch = (ImGuiDrawBatch *)batches->user_batch;
-    if (batch->draw_count > 0) {
-      vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        batch->pipeline);
+    if (batch->draw_count == 0) {
+      continue;
+    }
 
-      vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
-      vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
-      VkPushConstantRange range = imgui_batch->const_range;
-      const TbImGuiPushConstants *consts = &imgui_batch->consts;
-      vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
-                         range.size, consts);
+    vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
+    vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              batch->layout, 0, 1, &imgui_batch->atlas_set, 0,
-                              NULL);
+    VkPushConstantRange range = imgui_batch->const_range;
+    const TbImGuiPushConstants *consts = &imgui_batch->consts;
+    vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
+                       range.size, consts);
 
-      for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-        const ImGuiDraw *draw = &((const ImGuiDraw *)batch->draws)[draw_idx];
-        vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
-                             VK_INDEX_TYPE_UINT16);
-        vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
-                               &draw->vertex_offset);
-        vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
-      }
+    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            batch->layout, 0, 1, &imgui_batch->atlas_set, 0,
+                            NULL);
+
+    for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
+      const ImGuiDraw *draw = &((const ImGuiDraw *)batch->draws)[draw_idx];
+      vkCmdBindIndexBuffer(buffer, draw->geom_buffer, draw->index_offset,
+                           VK_INDEX_TYPE_UINT16);
+      vkCmdBindVertexBuffers(buffer, 0, 1, &draw->geom_buffer,
+                             &draw->vertex_offset);
+      vkCmdDrawIndexed(buffer, draw->index_count, 1, 0, 0, 0);
     }
   }
 
@@ -435,8 +402,7 @@ TbImGuiSystem create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                   uint32_t context_count,
                                   ImFontAtlas **context_atlases,
                                   TbRenderSystem *rnd_sys,
-                                  TbRenderPipelineSystem *rp_sys,
-                                  TbRenderTargetSystem *rt_sys) {
+                                  TbRenderPipelineSystem *rp_sys) {
   TbImGuiSystem sys = {
       .tmp_alloc = tmp_alloc,
       .gp_alloc = gp_alloc,
@@ -464,9 +430,6 @@ TbImGuiSystem create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
   tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count,
                                      &ui_info);
 
-  VkFormat ui_target_format =
-      tb_render_target_get_format(rt_sys, ui_info.attachment);
-
   // Create Immutable Sampler
   {
     VkSamplerCreateInfo create_info = {
@@ -487,10 +450,43 @@ TbImGuiSystem create_imgui_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
     TB_VK_CHECK(err, "Failed to create imgui sampler");
   }
 
-  // Create imgui pipeline
-  err = create_imgui_pipeline(rnd_sys, sys.sampler, ui_target_format,
-                              &sys.pipe_layout, &sys.set_layout, &sys.pipeline);
-  TB_VK_CHECK(err, "Failed to create imgui pipeline");
+  // Create Descriptor Set Layout
+  {
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &sys.sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .bindingCount = 2,
+        .pBindings = bindings,
+
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "ImGUI Set Layout",
+                             &sys.set_layout);
+  }
+
+  // Create Pipeline Layout
+  {
+    VkPipelineLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &sys.set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges =
+            &(VkPushConstantRange){
+                VK_SHADER_STAGE_VERTEX_BIT,
+                0,
+                sizeof(TbImGuiPushConstants),
+            },
+    };
+    tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                  "ImGui Pipeline Layout", &sys.pipe_layout);
+  }
 
   sys.imgui_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
@@ -514,7 +510,6 @@ void destroy_imgui_system(TbImGuiSystem *self, TbRenderSystem *rnd_sys) {
   tb_rnd_destroy_sampler(rnd_sys, self->sampler);
   tb_rnd_destroy_set_layout(rnd_sys, self->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, self->pipe_layout);
-  tb_rnd_destroy_pipeline(rnd_sys, self->pipeline);
 
   *self = (TbImGuiSystem){0};
 }
@@ -523,6 +518,7 @@ void imgui_input_sys(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "ImGui Input System", TracyCategoryColorUI, true);
 
   tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
+
   tb_auto input_sys = ecs_field(it, TbInputSystem, 2);
   tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 3);
   tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 4);
@@ -666,11 +662,18 @@ void imgui_draw_sys(ecs_iter_t *it) {
   tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 3);
 
   if (ig_sys->context_count == 0 || it->delta_time == 0) {
+    TracyCZoneEnd(ctx);
     return;
+  }
+  const uint32_t ctx_count = ig_sys->context_count;
+
+  if (!tb_is_shader_ready(it->world, ig_sys->shader)) {
+    // we *require* the imgui shader be ready by this point
+    // so wait for it if necessary
+    tb_task_wait(it->world, ig_sys->shader_task);
   }
 
   const uint32_t frame_idx = rnd_sys->frame_idx;
-  const uint32_t ctx_count = ig_sys->context_count;
 
   tb_auto rnd_thread = rnd_sys->render_thread;
   tb_auto rnd_thread_tmp_alloc =
@@ -800,7 +803,7 @@ void imgui_draw_sys(ecs_iter_t *it) {
 
           batches[batch_count] = (TbDrawBatch){
               .layout = ig_sys->pipe_layout,
-              .pipeline = ig_sys->pipeline,
+              .pipeline = tb_shader_get_pipeline(it->world, ig_sys->shader),
               .viewport = {0, 0, width, height, 0, 1},
               .scissor = {{0, 0}, {(uint32_t)width, (uint32_t)height}},
               .user_batch = &imgui_batches[batch_count],
@@ -847,9 +850,29 @@ void tb_register_imgui_sys(TbWorld *world) {
   // HACK: This sucks. Do we even care about custom atlases anymore?
   TbImGuiSystem sys =
       create_imgui_system(world->gp_alloc, world->tmp_alloc, 1,
-                          (ImFontAtlas *[1]){NULL}, rnd_sys, rp_sys, rt_sys);
+                          (ImFontAtlas *[1]){NULL}, rnd_sys, rp_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbImGuiSystem), TbImGuiSystem, &sys);
+
+  // Create imgui pipeline after system is added
+  {
+    TbRenderPassId ui_pass_id = rp_sys->ui_pass;
+
+    uint32_t attach_count = 0;
+    tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count, NULL);
+    TB_CHECK(attach_count == 1, "Unexpected");
+    TbPassAttachment ui_info = {0};
+    tb_render_pipeline_get_attachments(rp_sys, ui_pass_id, &attach_count,
+                                       &ui_info);
+    VkFormat ui_target_format =
+        tb_render_target_get_format(rt_sys, ui_info.attachment);
+
+    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+    TbImGuiPipelineArgs args = {rnd_sys, ui_target_format, sys.pipe_layout};
+    sys_ptr->shader =
+        tb_shader_load(ecs, (TbShaderCompileFn)&create_imgui_pipeline, &args,
+                       sizeof(TbImGuiPipelineArgs), &sys_ptr->shader_task);
+  }
 
   ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem(TbImGuiSystem),
              TbInputSystem(TbInputSystem),
@@ -869,6 +892,10 @@ void tb_unregister_imgui_sys(TbWorld *world) {
 
   tb_auto ig_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
+  tb_shader_destroy(ecs, ig_sys->shader);
+
   destroy_imgui_system(ig_sys, rnd_sys);
+
   ecs_singleton_remove(ecs, TbImGuiSystem);
 }

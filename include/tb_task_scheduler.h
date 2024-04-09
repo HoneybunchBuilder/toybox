@@ -9,6 +9,8 @@ typedef void (*TbAsyncFn)(const void *args);
 typedef struct enkiTaskScheduler *TbTaskScheduler;
 extern ECS_COMPONENT_DECLARE(TbTaskScheduler);
 
+typedef struct TbAsyncTaskArgs TbAsyncTaskArgs;
+
 // Run a given function on any available thread.
 // Args will be copied to a thread-safe heap
 // out_task is an optional out variable in case you want to interact
@@ -20,8 +22,13 @@ ecs_entity_t tb_async_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
 // Args will be copied to a thread-safe heap
 // out_task is an optional out variable in case you want to interact
 // with the enki pinned task directly
-ecs_entity_t tb_main_thread_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
-                                 size_t args_size, enkiPinnedTask **out_task);
+// Task will not run until manually launched
+ecs_entity_t tb_create_pinned_task(ecs_world_t *ecs, TbAsyncFn fn, void *args,
+                                   size_t args_size, enkiPinnedTask **out_task);
+
+void tb_launch_pinned_task(enkiTaskScheduler *enki, enkiPinnedTask *task);
+void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
+                                void *args, size_t size);
 
 // For waiting on a task via the ECS interface. This isn't usable
 // if you just launched a task. Use `tb_wait_task_set` or `tb_wait_pinned_task`.

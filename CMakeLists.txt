@@ -573,7 +573,13 @@ function(tb_use_addon target addon)
     add_custom_target(${addon}_assets 
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${addon_asset_path} ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
     )
+
     add_dependencies(${addon}_assets toybox)
+    add_dependencies(${target}_scenes ${addon}_scenes)
+    add_dependencies(${target}_textures ${addon}_textures)
+    add_dependencies(${target}_audio ${addon}_audio)
+    add_dependencies(${target}_asset_manifest ${addon}_asset_manifest)
+    add_dependencies(${target}_engine_assets ${addon}_assets)
     add_dependencies(${target} ${addon}_assets)
   endif()
 endfunction()
