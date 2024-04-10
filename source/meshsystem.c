@@ -1482,6 +1482,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 }
 
 void tb_register_mesh_sys(TbWorld *world) {
+  TracyCZoneNC(ctx, "Register Mesh Sys", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
@@ -1518,6 +1519,8 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, mesh_descriptor_update, EcsPreStore,
              TbMeshSystem(TbMeshSystem));
   ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem(TbMeshSystem));
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_mesh_sys(TbWorld *world) {

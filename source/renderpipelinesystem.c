@@ -87,6 +87,7 @@ void sort_passes_recursive(PassNode *node, uint32_t *pass_order,
 }
 
 void sort_pass_graph(TbRenderPipelineSystem *self) {
+  TracyCZoneN(ctx, "Sort Pass Graph", true);
   // Build a graph of pass nodes to determine ordering
   const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
   PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, pass_count, PassNode);
@@ -119,6 +120,8 @@ void sort_pass_graph(TbRenderPipelineSystem *self) {
   // A pre-order traversal of the graph should get us a reasonable pass order
   uint32_t pass_idx = 0;
   sort_passes_recursive(&nodes[0], self->pass_order, &pass_idx);
+
+  TracyCZoneEnd(ctx);
 }
 
 VkResult create_depth_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
@@ -831,6 +834,7 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
                    TbRenderPassId id, uint32_t *command_buffers,
                    uint32_t command_buffer_count) {
+  TracyCZoneN(ctx, "Register Pass", true);
   TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     TbFrameState *state = &thread->frame_states[frame_idx];
@@ -890,6 +894,7 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
 
     TB_DYN_ARR_APPEND(state->pass_contexts, pass_context);
   }
+  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbAttachmentInfo {
@@ -1045,6 +1050,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
 
   // Create some default passes
   {
+    TracyCZoneN(ctx, "Create Default Passes", true);
     // Look up the render targets we know will be needed
     const TbRenderTargetId env_cube = rt_sys->env_cube;
     const TbRenderTargetId irradiance_map = rt_sys->irradiance_map;
@@ -2229,6 +2235,8 @@ TbRenderPipelineSystem create_render_pipeline_system(
       TB_CHECK(id != InvalidRenderPassId, "Failed to create ui pass");
       sys.ui_pass = id;
     }
+
+    TracyCZoneEnd(ctx);
   }
 
   // Calculate pass order
@@ -2242,6 +2250,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
   // Every time we return to the top of the pipeline, we want to keep track
   // so we can use a different command buffer.
   {
+    TracyCZoneN(ctx, "Register Passes", true);
     uint32_t command_buffer_count = 0; // Treated as an index while builiding
     // Worst case each pass needs its own command buffer
     uint32_t *command_buffer_indices =
@@ -2267,6 +2276,7 @@ TbRenderPipelineSystem create_render_pipeline_system(
                       command_buffer_indices, command_buffer_count);
       }
     }
+    TracyCZoneEnd(ctx);
   }
 
   // Construct additional objects for handling draws that this system is
@@ -3237,6 +3247,8 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
 }
 
 void tb_register_render_pipeline_sys(TbWorld *world) {
+  TracyCZoneNC(ctx, "Register Render Pipeline Sys", TracyCategoryColorRendering,
+               true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbRenderPipelineSystem);
@@ -3256,6 +3268,7 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
              TbRenderPipelineSystem(TbRenderPipelineSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_pipeline_sys(TbWorld *world) {

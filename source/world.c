@@ -95,6 +95,7 @@ int32_t tb_sys_cmp(const void *a, const void *b) {
 void tb_register_system(const char *name, int32_t priority,
                         TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn) {
+  TracyCZoneN(ctx, "Register System", true);
   int32_t index = s_sys_reg.count;
   int32_t next_count = ++s_sys_reg.count;
   size_t entry_size = next_count * sizeof(TbSystemEntry);
@@ -108,12 +109,14 @@ void tb_register_system(const char *name, int32_t priority,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
+  TracyCZoneEnd(ctx);
 }
 
 static TbComponentRegistry s_comp_reg = {0};
 
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
                            TbLoadComponentFn load_fn) {
+  TracyCZoneN(ctx, "Register Component", true);
   int32_t index = s_comp_reg.count;
   int32_t next_count = ++s_comp_reg.count;
   size_t entry_size = next_count * sizeof(TbComponentEntry);
@@ -126,6 +129,7 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
+  TracyCZoneEnd(ctx);
 }
 
 #ifndef FINAL
@@ -170,6 +174,7 @@ void tb_write_info(TbWorld *world) {
 #endif
 
 bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
+  TracyCZoneN(ctx, "Create World", true);
   TbAllocator gp_alloc = desc->gp_alloc;
 
   tb_auto ecs = ecs_init();
@@ -208,6 +213,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 #ifndef FINAL
   if (tb_check_info_mode(desc->argc, desc->argv) > 0) {
     tb_write_info(world);
+    TracyCZoneEnd(ctx);
     return false; // Do not continue
   }
 #endif
@@ -226,6 +232,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 
   // Create all registered systems after sorting by priority
   {
+    TracyCZoneNC(ctx, "Create Systems", TracyCategoryColorCore, true);
     const int32_t count = s_sys_reg.count;
     SDL_qsort(s_sys_reg.entries, count, sizeof(TbSystemEntry), tb_sys_cmp);
 
@@ -235,15 +242,17 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
         fn(world);
       }
     }
+    TracyCZoneEnd(ctx);
   }
 
 #ifndef FINAL
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
-  // ecs_singleton_set(ecs, EcsRest, {0});
-  // ECS_IMPORT(ecs, FlecsMonitor);
+  ecs_singleton_set(ecs, EcsRest, {0});
+  ECS_IMPORT(ecs, FlecsMonitor);
 #endif
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -307,6 +316,7 @@ void tb_destroy_world(TbWorld *world) {
 void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
                  const cgltf_data *data, const char *root_scene_path,
                  ecs_entity_t parent, const cgltf_node *node) {
+  TracyCZoneN(ctx, "Load Entity", true);
   ecs_world_t *ecs = world->ecs;
   ECS_TAG(ecs, EcsDisabled);
   ECS_TAG(ecs, EcsPrefab);
@@ -423,9 +433,12 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
   ecs_enable(ecs, ent, enabled);
 
   TB_DYN_ARR_APPEND(scene->entities, ent);
+
+  TracyCZoneEnd(ctx);
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
+  TracyCZoneN(ctx, "Load Scene", true);
   // Get qualified path to scene asset
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
@@ -451,6 +464,7 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   // Clean up gltf file now that it's parsed
   cgltf_free(data);
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 

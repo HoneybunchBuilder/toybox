@@ -147,6 +147,7 @@ void destroy_mesh_component_internal(TbMeshComponent *self,
 bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
                        const char *source_path, const cgltf_node *node,
                        json_object *json) {
+  TracyCZoneN(ctx, "Load Mesh Component", true);
   (void)json;
   tb_auto ecs = world->ecs;
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
@@ -164,6 +165,7 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   // Mark this entity as a render object
   ecs_set(ecs, ent, TbRenderObject, {0});
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 

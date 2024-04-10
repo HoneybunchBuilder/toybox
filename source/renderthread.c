@@ -54,9 +54,12 @@ void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
 }
 
 void tb_wait_thread_initialized(TbRenderThread *thread) {
+  TracyCZoneNC(ctx, "Wait Render Thread Initialize", TracyCategoryColorWait,
+               true);
   // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
   //              "Waiting for render thread to initialize");
   SDL_WaitSemaphore(thread->initialized);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_stop_render_thread(TbRenderThread *thread) {
@@ -166,6 +169,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
 bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                    VkInstance *instance) {
+  TracyCZoneN(ctx, "Initialize Instance", true);
   VkResult err = VK_SUCCESS;
 
   // Create vulkan instance
@@ -258,12 +262,15 @@ bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
   }
 
   volkLoadInstance(*instance);
+
+  TracyCZoneEnd(ctx);
   return true;
 }
 
 bool init_debug_messenger(VkInstance instance,
                           const VkAllocationCallbacks *vk_alloc,
                           VkDebugUtilsMessengerEXT *debug) {
+  TracyCZoneN(ctx, "Initialize Debug Messenger", true);
   // Load debug callback
 #ifdef VALIDATION
   VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
@@ -284,6 +291,7 @@ bool init_debug_messenger(VkInstance instance,
   (void)vk_alloc;
   (void)debug;
 #endif
+  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -305,6 +313,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        TbFrameState *states) {
+  TracyCZoneN(ctx, "Initialize Frame States", true);
   TB_CHECK_RETURN(states, "Invalid states", false);
   VkResult err = VK_SUCCESS;
 
@@ -437,6 +446,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     }
   }
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -490,6 +500,7 @@ bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
               VkQueueFamilyProperties **queue_props,
               VkPhysicalDeviceFeatures *gpu_features,
               VkPhysicalDeviceMemoryProperties *gpu_mem_props) {
+  TracyCZoneN(ctx, "Initialize GPU", true);
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to enumerate gpu count", false);
@@ -564,6 +575,7 @@ bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
   vkGetPhysicalDeviceFormatProperties(*gpu, VK_FORMAT_R16G16B16A16_SINT,
                                       &props);
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -1056,6 +1068,7 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
 }
 
 bool init_render_thread(TbRenderThread *thread) {
+  TracyCZoneNC(ctx, "Render Thread Init", TracyCategoryColorRendering, true);
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
 
@@ -1133,6 +1146,7 @@ bool init_render_thread(TbRenderThread *thread) {
                                     thread->frame_states),
                   "Failed to init frame states", false);
 
+  TracyCZoneEnd(ctx);
   return true;
 }
 

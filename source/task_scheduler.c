@@ -55,22 +55,6 @@ TbAsyncTaskArgs *tb_alloc_task_args(TbAsyncFn fn, void *args, size_t size) {
   return task_args;
 }
 
-void tb_task_complete(void *args, uint32_t threadnum) {
-  (void)threadnum;
-  tb_auto task_args = (TbTaskCompleteCleanupArgs *)args;
-  // enkiDeleteTaskSet(task_args->enki, task_args->task);
-  // enkiDeleteCompletionAction(task_args->enki, task_args->complete);
-  tb_ts_free(args);
-}
-
-void tb_pinned_task_complete(void *args, uint32_t threadnum) {
-  (void)threadnum;
-  tb_auto task_args = (TbPinnedTaskCompleteCleanupArgs *)args;
-  // enkiDeletePinnedTask(task_args->enki, task_args->task);
-  // enkiDeleteCompletionAction(task_args->enki, task_args->complete);
-  tb_ts_free(args);
-}
-
 void tb_task_exec(const TbAsyncTaskArgs *args) {
   args->fn(args->args);
   tb_ts_free(args->args);
@@ -105,19 +89,6 @@ TbTask tb_create_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
   tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsTaskSet(task, task_args);
 
-  tb_auto on_complete =
-      enkiCreateCompletionAction(enki, NULL, tb_task_complete);
-
-  tb_auto on_complete_args = tb_ts_alloc_tp(TbTaskCompleteCleanupArgs);
-  *on_complete_args =
-      (TbTaskCompleteCleanupArgs){enki, task, task_args, on_complete};
-  tb_auto on_complete_params = (struct enkiParamsCompletionAction){
-      NULL,
-      on_complete_args,
-      enkiGetCompletableFromTaskSet(task),
-  };
-  enkiSetParamsCompletionAction(on_complete, on_complete_params);
-
   TracyCZoneEnd(ctx);
   return task;
 }
@@ -142,19 +113,6 @@ TbPinnedTask tb_create_pinned_task(TbTaskScheduler enki, TbAsyncFn fn,
   // Arguments need to be on the correct mimalloc heap so we copy them
   tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsPinnedTask(task, task_args);
-
-  tb_auto on_complete =
-      enkiCreateCompletionAction(enki, NULL, tb_pinned_task_complete);
-
-  tb_auto on_complete_args = tb_ts_alloc_tp(TbPinnedTaskCompleteCleanupArgs);
-  *on_complete_args =
-      (TbPinnedTaskCompleteCleanupArgs){enki, task, task_args, on_complete};
-  tb_auto on_complete_params = (struct enkiParamsCompletionAction){
-      NULL,
-      on_complete_args,
-      enkiGetCompletableFromPinnedTask(task),
-  };
-  enkiSetParamsCompletionAction(on_complete, on_complete_params);
 
   TracyCZoneEnd(ctx);
   return task;
@@ -182,19 +140,25 @@ void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
 }
 
 void tb_run_pinned_tasks_sys(ecs_iter_t *it) {
+  TracyCZoneNC(ctx, "Run Pinned Tasks Sys", TracyCategoryColorCore, true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   enkiRunPinnedTasks(enki);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_wait_task(TbTaskScheduler enki, enkiTaskSet *task) {
   if (!enkiIsTaskSetComplete(enki, task)) {
+    TracyCZoneNC(ctx, "Wait for Task", TracyCategoryColorWait, true);
     enkiWaitForTaskSet(enki, task);
+    TracyCZoneEnd(ctx);
   }
 }
 
 void tb_wait_pinned_task(TbTaskScheduler enki, enkiPinnedTask *task) {
   if (!enkiIsPinnedTaskComplete(enki, task)) {
+    TracyCZoneNC(ctx, "Wait for Pinned Task", TracyCategoryColorWait, true);
     enkiWaitForPinnedTask(enki, task);
+    TracyCZoneEnd(ctx);
   }
 }
 

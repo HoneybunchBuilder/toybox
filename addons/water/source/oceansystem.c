@@ -1078,6 +1078,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
 }
 
 void ocean_on_start(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Ocean On Start Sys", true);
   tb_auto ecs = it->world;
 
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
@@ -1095,9 +1096,12 @@ void ocean_on_start(ecs_iter_t *it) {
                     rp_sys, mesh_sys, view_sys, rt_sys, vlog, aud_sys);
 
   ecs_singleton_modified(ecs, TbOceanSystem);
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_register_ocean_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Ocean Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbOceanSystem);
 
@@ -1121,6 +1125,7 @@ void tb_register_ocean_sys(TbWorld *world) {
              TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem(TbOceanSystem),
              TbCameraComponent);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_ocean_sys(TbWorld *world) {
