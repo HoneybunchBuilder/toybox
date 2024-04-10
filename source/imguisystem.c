@@ -667,10 +667,22 @@ void imgui_draw_sys(ecs_iter_t *it) {
   }
   const uint32_t ctx_count = ig_sys->context_count;
 
-  if (!tb_is_shader_ready(it->world, ig_sys->shader)) {
-    // we *require* the imgui shader be ready by this point
-    // so wait for it if necessary
-    tb_task_wait(it->world, ig_sys->shader_task);
+  // we *require* the imgui shader be ready by this point
+  // so wait for it if necessary
+  {
+    static bool ready = false;
+    if (!ready && !tb_is_shader_ready(it->world, ig_sys->shader)) {
+      // we *require* the imgui shader be ready by this point
+      // so wait for it if necessary
+      // If we get a false back that means we couldn't verify
+      // the task has completed and we have to continue
+      ready = tb_wait_shader_ready(it->world, ig_sys->shader);
+    }
+
+    if (!ready) {
+      TracyCZoneEnd(ctx);
+      return;
+    }
   }
 
   const uint32_t frame_idx = rnd_sys->frame_idx;
@@ -871,7 +883,7 @@ void tb_register_imgui_sys(TbWorld *world) {
     TbImGuiPipelineArgs args = {rnd_sys, ui_target_format, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_imgui_pipeline, &args,
-                       sizeof(TbImGuiPipelineArgs), &sys_ptr->shader_task);
+                       sizeof(TbImGuiPipelineArgs));
   }
 
   ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem(TbImGuiSystem),

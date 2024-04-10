@@ -35,7 +35,8 @@ void tb_shader_complete_task(const void *args) {
 typedef struct TbShaderCompileTaskArgs {
   ecs_world_t *ecs;
   ecs_entity_t ent;
-  enkiPinnedTask *main_thread_task;
+  TbTaskScheduler enki;
+  TbPinnedTask main_thread_task;
   TbShaderCompileFn compile_fn;
   void *compile_args;
 } TbShaderCompileTaskArgs;
@@ -46,12 +47,10 @@ void tb_shader_compile_task(const void *args) {
   tb_auto task_args = (TbShaderCompileTaskArgs *)args;
   VkPipeline pipe = task_args->compile_fn(task_args->compile_args);
 
-  tb_auto ecs = task_args->ecs;
-
-  tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
+  tb_auto enki = task_args->enki;
 
   // Manually launch pinned task with override args
-  TbShaderCompleteArgs complete_args = {ecs, task_args->ent, pipe};
+  TbShaderCompleteArgs complete_args = {task_args->ecs, task_args->ent, pipe};
   tb_launch_pinned_task_args(enki, task_args->main_thread_task, &complete_args,
                              sizeof(TbShaderCompleteArgs));
 
@@ -61,9 +60,10 @@ void tb_shader_compile_task(const void *args) {
 }
 
 ecs_entity_t tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
-                            void *args, size_t args_size,
-                            ecs_entity_t *out_task_ent) {
+                            void *args, size_t args_size) {
   TracyCZoneN(ctx, "Create Shader Load task", true);
+
+  tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
 
   ecs_entity_t ent = ecs_new_entity(ecs, 0);
   ecs_set(ecs, ent, TbShader, {0});
@@ -76,19 +76,17 @@ ecs_entity_t tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
   // Pass the enki task to the compile task
   // It will launch the task with the correct args when necessary
   // Avoids needing to interact with the ecs to launch a task
-  enkiPinnedTask *complete_task = NULL;
-  tb_create_pinned_task(ecs, tb_shader_complete_task, NULL, 0, &complete_task);
+  tb_auto complete_task =
+      tb_create_pinned_task(enki, tb_shader_complete_task, NULL, 0);
 
   // Launch an async task
   // Attach task related components *to* the shader entity
-  tb_auto task_args = (TbShaderCompileTaskArgs){ecs, ent, complete_task,
-                                                compile_fn, compile_args};
-  ecs_entity_t task_ent = tb_async_task(ecs, tb_shader_compile_task, &task_args,
-                                        sizeof(TbShaderCompileTaskArgs), NULL);
+  tb_auto task_args = (TbShaderCompileTaskArgs){
+      ecs, ent, enki, complete_task, compile_fn, compile_args};
+  tb_auto task = tb_async_task(enki, tb_shader_compile_task, &task_args,
+                               sizeof(TbShaderCompileTaskArgs));
 
-  if (out_task_ent) {
-    *out_task_ent = task_ent;
-  }
+  ecs_set(ecs, ent, TbTask, {task});
 
   TracyCZoneEnd(ctx);
   return ent;
@@ -108,6 +106,20 @@ void tb_shader_destroy(ecs_world_t *ecs, ecs_entity_t shader) {
 bool tb_is_shader_ready(ecs_world_t *ecs, ecs_entity_t shader) {
   return ecs_has_id(ecs, shader, TbShaderCompiled) &&
          tb_shader_get_pipeline(ecs, shader) != VK_NULL_HANDLE;
+}
+
+bool tb_wait_shader_ready(ecs_world_t *ecs, ecs_entity_t shader) {
+  if (!tb_is_shader_ready(ecs, shader)) {
+    // we *require* the imgui shader be ready by this point
+    // so wait for it if necessary
+    if (ecs_has(ecs, shader, TbTask)) {
+      tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
+      tb_auto task = *ecs_get(ecs, shader, TbTask);
+      tb_wait_task(enki, task);
+      return true;
+    }
+  }
+  return false;
 }
 
 VkPipeline tb_shader_get_pipeline(ecs_world_t *ecs, ecs_entity_t ent) {
