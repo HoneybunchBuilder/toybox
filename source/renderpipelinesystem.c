@@ -2550,10 +2550,10 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                                   sys.bloom_upsample_pass, &sys.upsample_work);
 
     // Compute Luminance Histogram and Average work
-    err = tb_create_lum_hist_work(sys.rnd_sys, &sys, sys.sampler,
-                                  sys.luminance_pass, &sys.lum_hist_work);
-    err = tb_create_lum_avg_work(sys.rnd_sys, &sys, sys.luminance_pass,
-                                 &sys.lum_avg_work);
+    tb_create_lum_hist_work(ecs, sys.rnd_sys, &sys, sys.sampler,
+                            sys.luminance_pass, &sys.lum_hist_work);
+    tb_create_lum_avg_work(ecs, sys.rnd_sys, &sys, sys.luminance_pass,
+                           &sys.lum_avg_work);
 
     // Brightness
     {
@@ -2651,8 +2651,8 @@ void destroy_render_pipeline_system(ecs_world_t *ecs,
   tb_destroy_downsample_work(ecs, self->rnd_sys, &self->downsample_work);
   tb_destroy_upsample_work(ecs, self->rnd_sys, &self->upsample_work);
 
-  tb_destroy_lum_avg_work(self->rnd_sys, &self->lum_avg_work);
-  tb_destroy_lum_hist_work(self->rnd_sys, &self->lum_hist_work);
+  tb_destroy_lum_avg_work(ecs, self->rnd_sys, &self->lum_avg_work);
+  tb_destroy_lum_hist_work(ecs, self->rnd_sys, &self->lum_hist_work);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->rnd_sys,
@@ -3094,7 +3094,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       tb_render_pipeline_issue_draw_batch(self, self->color_copy_ctx, 1,
                                           &batch);
     }
-    {
+    if (tb_is_shader_ready(it->world, self->lum_hist_work.shader) &&
+        tb_is_shader_ready(it->world, self->lum_avg_work.shader)) {
       // Configurables
       float min_log_lum = -5.0f;
       float max_log_lum = 10.0f;
@@ -3109,7 +3110,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         };
         TbDispatchBatch batch = {
             .layout = self->lum_hist_work.pipe_layout,
-            .pipeline = self->lum_hist_work.pipeline,
+            .pipeline =
+                tb_shader_get_pipeline(it->world, self->lum_hist_work.shader),
             .user_batch = &lum_batch,
             .group_count = 1,
             .groups[0] = {group_x, group_y, 1},
@@ -3127,7 +3129,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         };
         TbDispatchBatch batch = {
             .layout = self->lum_avg_work.pipe_layout,
-            .pipeline = self->lum_avg_work.pipeline,
+            .pipeline =
+                tb_shader_get_pipeline(it->world, self->lum_avg_work.shader),
             .user_batch = &lum_batch,
             .group_count = 1,
             .groups[0] = {1, 1, 1},

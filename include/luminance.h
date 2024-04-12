@@ -12,6 +12,9 @@ _Static_assert(sizeof(TbLuminancePushConstants) <= PUSH_CONSTANT_BYTES,
 
 #include "tbrendercommon.h"
 
+typedef uint64_t ecs_entity_t;
+typedef struct ecs_world_t ecs_world_t;
+
 typedef uint32_t TbRenderPassId;
 typedef uint32_t TbDispatchContextId;
 typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
@@ -27,7 +30,7 @@ typedef struct TbLumHistRenderWork {
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+  ecs_entity_t shader;
   TbDispatchContextId ctx;
 } TbLumHistRenderWork;
 
@@ -36,21 +39,19 @@ typedef struct TbLumAvgRenderWork {
 
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+  ecs_entity_t shader;
   TbDispatchContextId ctx;
 } TbLumAvgRenderWork;
 
-VkResult tb_create_lum_hist_work(TbRenderSystem *rnd_sys,
-                                 TbRenderPipelineSystem *rp_sys,
-                                 VkSampler sampler, TbRenderPassId pass,
-                                 TbLumHistRenderWork *work);
-
-void tb_destroy_lum_hist_work(TbRenderSystem *rnd_sys,
+void tb_create_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
+                             TbRenderPipelineSystem *rp_sys, VkSampler sampler,
+                             TbRenderPassId pass, TbLumHistRenderWork *work);
+void tb_destroy_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                               TbLumHistRenderWork *work);
 
-VkResult tb_create_lum_avg_work(TbRenderSystem *rnd_sys,
-                                TbRenderPipelineSystem *rp_sys,
-                                TbRenderPassId pass, TbLumAvgRenderWork *work);
-void tb_destroy_lum_avg_work(TbRenderSystem *rnd_sys,
+void tb_create_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
+                            TbRenderPipelineSystem *rp_sys, TbRenderPassId pass,
+                            TbLumAvgRenderWork *work);
+void tb_destroy_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                              TbLumAvgRenderWork *work);
 #endif

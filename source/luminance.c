@@ -3,6 +3,7 @@
 #include "profiling.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
+#include "tb_shader_system.h"
 #include "tbcommon.h"
 
 #pragma clang diagnostic push
@@ -10,6 +11,11 @@
 #include "lumavg_comp.h"
 #include "lumhist_comp.h"
 #pragma clang diagnostic pop
+
+typedef struct TbLumShaderArgs {
+  TbRenderSystem *rnd_sys;
+  VkPipelineLayout layout;
+} TbLumShaderArgs;
 
 void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
                        const TbDispatchBatch *batches) {
@@ -48,9 +54,8 @@ void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_lum_gather_set_layout(TbRenderSystem *rnd_sys,
-                                      VkSampler sampler,
-                                      VkDescriptorSetLayout *layout) {
+void create_lum_gather_set_layout(TbRenderSystem *rnd_sys, VkSampler sampler,
+                                  VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 3,
@@ -77,15 +82,13 @@ VkResult create_lum_gather_set_layout(TbRenderSystem *rnd_sys,
               },
           },
   };
-  VkResult err = tb_rnd_create_set_layout(rnd_sys, &create_info,
-                                          "Lum Gather Set Layout", layout);
-  TB_VK_CHECK(err, "Failed to create lum gather descriptor set layout");
-  return err;
+  tb_rnd_create_set_layout(rnd_sys, &create_info, "Lum Gather Set Layout",
+                           layout);
 }
 
-VkResult create_lum_gather_pipe_layout(TbRenderSystem *rnd_sys,
-                                       VkDescriptorSetLayout set_layout,
-                                       VkPipelineLayout *layout) {
+void create_lum_gather_pipe_layout(TbRenderSystem *rnd_sys,
+                                   VkDescriptorSetLayout set_layout,
+                                   VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,
@@ -103,28 +106,25 @@ VkResult create_lum_gather_pipe_layout(TbRenderSystem *rnd_sys,
               },
           },
   };
-  VkResult err = tb_rnd_create_pipeline_layout(
-      rnd_sys, &create_info, "Lum Gather Pipeline Layout", layout);
-  TB_VK_CHECK(err, "Failed to create lum gather pipeline layout");
-  return err;
+  tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                "Lum Gather Pipeline Layout", layout);
 }
 
-VkResult create_lum_gather_pipeline(TbRenderSystem *rnd_sys,
-                                    VkPipelineLayout layout,
-                                    VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-  VkShaderModule lumhist_comp_mod = VK_NULL_HANDLE;
+VkPipeline create_lum_gather_pipeline(void *args) {
+  TracyCZoneN(ctx, "Compile Lum Avg Shader", true);
+  tb_auto shader_args = (TbLumShaderArgs *)args;
+  tb_auto rnd_sys = shader_args->rnd_sys;
+  tb_auto layout = shader_args->layout;
 
+  VkShaderModule comp_mod = VK_NULL_HANDLE;
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
     create_info.codeSize = sizeof(lumhist_comp);
     create_info.pCode = (const uint32_t *)lumhist_comp;
-    err = tb_rnd_create_shader(rnd_sys, &create_info,
-                               "Luminance Histogram Comp", &lumhist_comp_mod);
-    TB_VK_CHECK_RET(
-        err, "Failed to load luminance histogram compute shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Luminance Histogram Comp",
+                         &comp_mod);
   }
 
   VkComputePipelineCreateInfo create_info = {
@@ -133,31 +133,29 @@ VkResult create_lum_gather_pipeline(TbRenderSystem *rnd_sys,
           (VkPipelineShaderStageCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = lumhist_comp_mod,
+              .module = comp_mod,
               .pName = "comp",
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(
-      rnd_sys, 1, &create_info, "Luminance Histogram Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create lum hist pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
+                                  "Luminance Histogram Pipeline", &pipeline);
 
-  tb_rnd_destroy_shader(rnd_sys, lumhist_comp_mod);
-
-  return err;
+  tb_rnd_destroy_shader(rnd_sys, comp_mod);
+  TracyCZoneEnd(ctx);
+  return pipeline;
 }
 
-VkResult tb_create_lum_hist_work(TbRenderSystem *rnd_sys,
-                                 TbRenderPipelineSystem *rp_sys,
-                                 VkSampler sampler, TbRenderPassId pass,
-                                 TbLumHistRenderWork *work) {
-  VkResult err = VK_SUCCESS;
-  err = create_lum_gather_set_layout(rnd_sys, sampler, &work->set_layout);
+void tb_create_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
+                             TbRenderPipelineSystem *rp_sys, VkSampler sampler,
+                             TbRenderPassId pass, TbLumHistRenderWork *work) {
+  create_lum_gather_set_layout(rnd_sys, sampler, &work->set_layout);
+  create_lum_gather_pipe_layout(rnd_sys, work->set_layout, &work->pipe_layout);
 
-  err = create_lum_gather_pipe_layout(rnd_sys, work->set_layout,
-                                      &work->pipe_layout);
-
-  err = create_lum_gather_pipeline(rnd_sys, work->pipe_layout, &work->pipeline);
+  TbLumShaderArgs args = {rnd_sys, work->pipe_layout};
+  work->shader = tb_shader_load(ecs, create_lum_gather_pipeline, &args,
+                                sizeof(TbLumShaderArgs));
 
   // Create histogram buffer
   {
@@ -166,9 +164,8 @@ VkResult tb_create_lum_hist_work(TbRenderSystem *rnd_sys,
         .size = sizeof(uint32_t) * 256,
         .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    err = tb_rnd_sys_alloc_gpu_buffer(
-        rnd_sys, &create_info, "Luminance Histogram", &work->lum_histogram);
-    TB_VK_CHECK(err, "Failed to create luminance histogram buffer");
+    tb_rnd_sys_alloc_gpu_buffer(rnd_sys, &create_info, "Luminance Histogram",
+                                &work->lum_histogram);
   }
 
   TbDispatchContextDescriptor desc = {
@@ -179,14 +176,13 @@ VkResult tb_create_lum_hist_work(TbRenderSystem *rnd_sys,
   work->ctx = tb_render_pipeline_register_dispatch_context(rp_sys, &desc);
   TB_CHECK(work->ctx != InvalidDispatchContextId,
            "Failed to create lum gather dispatch context");
-  return err;
 }
 
-void tb_destroy_lum_hist_work(TbRenderSystem *rnd_sys,
+void tb_destroy_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                               TbLumHistRenderWork *work) {
   tb_rnd_destroy_set_layout(rnd_sys, work->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, work->pipe_layout);
-  tb_rnd_destroy_pipeline(rnd_sys, work->pipeline);
+  tb_shader_destroy(ecs, work->shader);
   tb_rnd_free_gpu_buffer(rnd_sys, &work->lum_histogram);
 }
 
@@ -206,8 +202,8 @@ void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_lum_avg_set_layout(TbRenderSystem *rnd_sys,
-                                   VkDescriptorSetLayout *layout) {
+void create_lum_avg_set_layout(TbRenderSystem *rnd_sys,
+                               VkDescriptorSetLayout *layout) {
   VkDescriptorSetLayoutCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 2,
@@ -227,28 +223,25 @@ VkResult create_lum_avg_set_layout(TbRenderSystem *rnd_sys,
               },
           },
   };
-  VkResult err = tb_rnd_create_set_layout(rnd_sys, &create_info,
-                                          "Lum Average Set Layout", layout);
-  TB_VK_CHECK(err, "Failed to create lum average descriptor set layout");
-  return err;
+  tb_rnd_create_set_layout(rnd_sys, &create_info, "Lum Average Set Layout",
+                           layout);
 }
 
-VkResult create_lum_avg_pipeline(TbRenderSystem *rnd_sys,
-                                 VkPipelineLayout layout,
-                                 VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+VkPipeline create_lum_avg_pipeline(void *args) {
+  TracyCZoneN(ctx, "Compile Lum Avg Shader", true);
+  tb_auto shader_args = (TbLumShaderArgs *)args;
+  tb_auto rnd_sys = shader_args->rnd_sys;
+  tb_auto layout = shader_args->layout;
 
-  VkShaderModule lumavg_comp_mod = VK_NULL_HANDLE;
+  VkShaderModule comp_mod = VK_NULL_HANDLE;
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
     create_info.codeSize = sizeof(lumavg_comp);
     create_info.pCode = (const uint32_t *)lumavg_comp;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Luminance Average Comp",
-                               &lumavg_comp_mod);
-    TB_VK_CHECK_RET(
-        err, "Failed to load luminance average compute shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Luminance Average Comp",
+                         &comp_mod);
   }
 
   VkComputePipelineCreateInfo create_info = {
@@ -257,23 +250,23 @@ VkResult create_lum_avg_pipeline(TbRenderSystem *rnd_sys,
           (VkPipelineShaderStageCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = lumavg_comp_mod,
+              .module = comp_mod,
               .pName = "comp",
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
-                                        "Luminance Average Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create lum avg pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
+                                  "Luminance Average Pipeline", &pipeline);
 
-  tb_rnd_destroy_shader(rnd_sys, lumavg_comp_mod);
-
-  return err;
+  tb_rnd_destroy_shader(rnd_sys, comp_mod);
+  TracyCZoneEnd(ctx);
+  return pipeline;
 }
 
-VkResult create_lum_avg_pipe_layout(TbRenderSystem *rnd_sys,
-                                    VkDescriptorSetLayout set_layout,
-                                    VkPipelineLayout *layout) {
+void create_lum_avg_pipe_layout(TbRenderSystem *rnd_sys,
+                                VkDescriptorSetLayout set_layout,
+                                VkPipelineLayout *layout) {
   VkPipelineLayoutCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,
@@ -291,22 +284,19 @@ VkResult create_lum_avg_pipe_layout(TbRenderSystem *rnd_sys,
               },
           },
   };
-  VkResult err = tb_rnd_create_pipeline_layout(
-      rnd_sys, &create_info, "Lum Average Pipeline Layout", layout);
-  TB_VK_CHECK(err, "Failed to create lum average pipeline layout");
-  return err;
+  tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                "Lum Average Pipeline Layout", layout);
 }
 
-VkResult tb_create_lum_avg_work(TbRenderSystem *rnd_sys,
-                                TbRenderPipelineSystem *rp_sys,
-                                TbRenderPassId pass, TbLumAvgRenderWork *work) {
-  VkResult err = VK_SUCCESS;
-  err = create_lum_avg_set_layout(rnd_sys, &work->set_layout);
+void tb_create_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
+                            TbRenderPipelineSystem *rp_sys, TbRenderPassId pass,
+                            TbLumAvgRenderWork *work) {
+  create_lum_avg_set_layout(rnd_sys, &work->set_layout);
+  create_lum_avg_pipe_layout(rnd_sys, work->set_layout, &work->pipe_layout);
 
-  err =
-      create_lum_avg_pipe_layout(rnd_sys, work->set_layout, &work->pipe_layout);
-
-  err = create_lum_avg_pipeline(rnd_sys, work->pipe_layout, &work->pipeline);
+  TbLumShaderArgs args = {rnd_sys, work->pipe_layout};
+  work->shader = tb_shader_load(ecs, create_lum_avg_pipeline, &args,
+                                sizeof(TbLumShaderArgs));
 
   // Create luminance average buffer
   {
@@ -315,9 +305,8 @@ VkResult tb_create_lum_avg_work(TbRenderSystem *rnd_sys,
         .size = sizeof(float),
         .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    err = tb_rnd_sys_alloc_gpu_buffer(rnd_sys, &create_info,
-                                      "Luminance Average", &work->lum_avg);
-    TB_VK_CHECK(err, "Failed to create luminance average buffer");
+    tb_rnd_sys_alloc_gpu_buffer(rnd_sys, &create_info, "Luminance Average",
+                                &work->lum_avg);
   }
 
   TbDispatchContextDescriptor desc = {
@@ -328,13 +317,12 @@ VkResult tb_create_lum_avg_work(TbRenderSystem *rnd_sys,
   work->ctx = tb_render_pipeline_register_dispatch_context(rp_sys, &desc);
   TB_CHECK(work->ctx != InvalidDispatchContextId,
            "Failed to create lum average dispatch context");
-  return err;
 }
 
-void tb_destroy_lum_avg_work(TbRenderSystem *rnd_sys,
+void tb_destroy_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                              TbLumAvgRenderWork *work) {
   tb_rnd_destroy_set_layout(rnd_sys, work->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, work->pipe_layout);
-  tb_rnd_destroy_pipeline(rnd_sys, work->pipeline);
+  tb_shader_destroy(ecs, work->shader);
   tb_rnd_free_gpu_buffer(rnd_sys, &work->lum_avg);
 }

@@ -1074,15 +1074,21 @@ bool init_render_thread(TbRenderThread *thread) {
 
   // Create renderer allocators
   {
+    TracyCZoneN(ctx, "Initialize Render Thread Allocators", true);
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
     tb_create_arena_alloc("Render Arena", &thread->render_arena,
                           arena_alloc_size);
 
     tb_create_gen_alloc(&thread->gp_alloc, "Render Std Alloc");
+    TracyCZoneEnd(ctx);
   }
 
   tb_auto fn = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
-  volkInitializeCustom(fn);
+  {
+    TracyCZoneN(ctx, "Initialize Volk", true);
+    volkInitializeCustom(fn);
+    TracyCZoneEnd(ctx);
+  }
 
   // Create vulkan allocator
   thread->vk_alloc = (VkAllocationCallbacks){
