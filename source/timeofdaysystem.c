@@ -178,6 +178,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
 #endif
 }
 void tb_unregister_time_of_day_sys(TbWorld *world) {
+  (void)world;
 #ifndef FINAL
   ecs_singleton_remove(world->ecs, TbTimeOfDayContext);
 #endif

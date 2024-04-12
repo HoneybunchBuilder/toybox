@@ -4,6 +4,7 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "shadercommon.h"
+#include "tb_shader_system.h"
 #include "tbcommon.h"
 #include "viewsystem.h"
 #include "world.h"
@@ -1034,9 +1035,11 @@ TbRenderPassId create_render_pass(TbRenderPipelineSystem *self,
   return id;
 }
 
-TbRenderPipelineSystem create_render_pipeline_system(
-    TbAllocator gp_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
-    TbRenderTargetSystem *rt_sys, TbViewSystem *view_sys) {
+TbRenderPipelineSystem
+create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
+                              TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
+                              TbRenderTargetSystem *rt_sys,
+                              TbViewSystem *view_sys) {
   TbRenderPipelineSystem sys = {
       .rnd_sys = rnd_sys,
       .rt_sys = rt_sys,
@@ -2540,10 +2543,10 @@ TbRenderPipelineSystem create_render_pipeline_system(
     }
 
     // Create bloom work
-    err = tb_create_downsample_work(sys.rnd_sys, &sys, sys.sampler,
+    err = tb_create_downsample_work(ecs, sys.rnd_sys, &sys, sys.sampler,
                                     sys.bloom_downsample_pass,
                                     &sys.downsample_work);
-    err = tb_create_upsample_work(sys.rnd_sys, &sys, sys.sampler,
+    err = tb_create_upsample_work(ecs, sys.rnd_sys, &sys, sys.sampler,
                                   sys.bloom_upsample_pass, &sys.upsample_work);
 
     // Compute Luminance Histogram and Average work
@@ -2626,7 +2629,8 @@ TbRenderPipelineSystem create_render_pipeline_system(
   return sys;
 }
 
-void destroy_render_pipeline_system(TbRenderPipelineSystem *self) {
+void destroy_render_pipeline_system(ecs_world_t *ecs,
+                                    TbRenderPipelineSystem *self) {
   tb_rnd_destroy_sampler(self->rnd_sys, self->sampler);
   tb_rnd_destroy_sampler(self->rnd_sys, self->noise_sampler);
   tb_rnd_destroy_set_layout(self->rnd_sys, self->copy_set_layout);
@@ -2644,8 +2648,8 @@ void destroy_render_pipeline_system(TbRenderPipelineSystem *self) {
   tb_rnd_destroy_pipeline(self->rnd_sys, self->brightness_pipe);
   tb_rnd_destroy_pipeline(self->rnd_sys, self->tonemap_pipe);
 
-  tb_destroy_downsample_work(self->rnd_sys, &self->downsample_work);
-  tb_destroy_upsample_work(self->rnd_sys, &self->upsample_work);
+  tb_destroy_downsample_work(ecs, self->rnd_sys, &self->downsample_work);
+  tb_destroy_upsample_work(ecs, self->rnd_sys, &self->upsample_work);
 
   tb_destroy_lum_avg_work(self->rnd_sys, &self->lum_avg_work);
   tb_destroy_lum_hist_work(self->rnd_sys, &self->lum_hist_work);
@@ -3148,7 +3152,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
                                           &batch);
     }
     // Blur passes
-    {
+    if (!tb_is_shader_ready(it->world, self->downsample_work.shader) ||
+        !tb_is_shader_ready(it->world, self->upsample_work.shader)) {
       DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {0};
       TbDispatchBatch down_batches[BLUR_BATCH_COUNT] = {0};
       for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {
@@ -3162,7 +3167,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         downsample_batches[i] = (DownsampleBatch){.set = downsample_sets[i]};
         down_batches[i] = (TbDispatchBatch){
             .layout = self->downsample_work.pipe_layout,
-            .pipeline = self->downsample_work.pipeline,
+            .pipeline =
+                tb_shader_get_pipeline(it->world, self->downsample_work.shader),
             .user_batch = &downsample_batches[i],
             .group_count = 1,
             .groups[0] = {group_width, group_height, 1},
@@ -3183,8 +3189,9 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
         }
         upsample_batches[i] = (UpsampleBatch){.set = upsample_sets[i]};
         up_batches[i] = (TbDispatchBatch){
-            .layout = self->downsample_work.pipe_layout,
-            .pipeline = self->downsample_work.pipeline,
+            .layout = self->upsample_work.pipe_layout,
+            .pipeline =
+                tb_shader_get_pipeline(it->world, self->upsample_work.shader),
             .user_batch = &upsample_batches[i],
             .group_count = 1,
             .groups[0] = {group_width, group_height, 1},
@@ -3258,7 +3265,7 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbRenderPipelineSystem sys = create_render_pipeline_system(
-      world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
+      world->ecs, world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderPipelineSystem), TbRenderPipelineSystem,
               &sys);
@@ -3274,9 +3281,8 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
 void tb_unregister_render_pipeline_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbRenderPipelineSystem *sys =
-      ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  destroy_render_pipeline_system(sys);
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  destroy_render_pipeline_system(ecs, sys);
   ecs_singleton_remove(ecs, TbRenderPipelineSystem);
 }
 
