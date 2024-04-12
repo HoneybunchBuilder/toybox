@@ -30,6 +30,7 @@ struct Interpolators {
   float3 binormal : BINORMAL0;
   float2 uv : TEXCOORD0;
   uint32_t mat_idx : TEXCOORD1;
+  float3x3 tbn : TEXCOORD2;
 };
 
 Interpolators vert(VertexIn i) {
@@ -70,6 +71,11 @@ Interpolators vert(VertexIn i) {
     o.tangent = normalize(mul(orientation, tangent.xyz));
     o.binormal = normalize(cross(o.tangent, o.normal) * tangent.w);
   }
+  if ((mat_perm & GLTF_PERM_NORMAL_MAP) > 0) {
+    // Construct TBN
+    o.tbn = transpose(float3x3(normalize(o.tangent), normalize(o.binormal),
+                               normalize(o.normal)));
+  }
   o.uv = uv_transform(uv0, gltf.tex_transform);
   o.mat_idx = mat_idx;
   return o;
@@ -83,16 +89,12 @@ float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
   // World-space normal
   float3 N = normalize(i.normal);
   if ((gltf.perm & GLTF_PERM_NORMAL_MAP) > 0) {
-    // Construct TBN
-    float3x3 tbn = float3x3(normalize(i.binormal), normalize(i.tangent),
-                            normalize(i.normal));
-
     // Convert from tangent space to world space
     float3 tangent_space_normal = tb_get_texture(gltf.normal_idx, gltf_textures)
                                       .Sample(material_sampler, i.uv)
                                       .xyz;
     tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
-    N = normalize(mul(tangent_space_normal, tbn));
+    N = normalize(mul(i.tbn, tangent_space_normal));
   }
   N = front_face ? N : -N;
 
