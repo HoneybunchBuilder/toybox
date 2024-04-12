@@ -3152,8 +3152,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
                                           &batch);
     }
     // Blur passes
-    if (!tb_is_shader_ready(it->world, self->downsample_work.shader) ||
-        !tb_is_shader_ready(it->world, self->upsample_work.shader)) {
+    if (tb_is_shader_ready(it->world, self->downsample_work.shader) &&
+        tb_is_shader_ready(it->world, self->upsample_work.shader)) {
       DownsampleBatch downsample_batches[BLUR_BATCH_COUNT] = {0};
       TbDispatchBatch down_batches[BLUR_BATCH_COUNT] = {0};
       for (int32_t i = 0; i < BLUR_BATCH_COUNT; ++i) {

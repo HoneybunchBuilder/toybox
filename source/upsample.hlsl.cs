@@ -14,6 +14,10 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   output.GetDimensions(out_res.x, out_res.y);
 
   float2 uv = dispatch_thread_id.xy / out_res;
+  // float2 texel_size = 1 / in_res;
+  // float x = texel_size.x;
+  // float y = texel_size.y;
+  // uv += texel_size / 2.0f;
 
   // Upsample with tent filter
   float r = 0.005;
@@ -33,5 +37,5 @@ void comp(int3 group_thread_id: SV_GroupThreadID,
   upsample += (a + c + g + i);
   upsample *= 1.0f / 16.0f;
 
-  output[dispatch_thread_id.xy] += upsample;
+  output[dispatch_thread_id.xy] = upsample;
 }
