@@ -163,6 +163,7 @@ void tb_wait_pinned_task(TbTaskScheduler enki, enkiPinnedTask *task) {
 }
 
 void tb_register_task_scheduler_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Task Scheduler Sys", true);
   ECS_COMPONENT_DEFINE(world->ecs, TbTask);
   ECS_COMPONENT_DEFINE(world->ecs, TbPinnedTask);
   ECS_COMPONENT_DEFINE(world->ecs, TbTaskScheduler);
@@ -174,6 +175,7 @@ void tb_register_task_scheduler_sys(TbWorld *world) {
 
   ECS_SYSTEM(world->ecs, tb_run_pinned_tasks_sys,
              EcsPostLoad, [inout] TbTaskScheduler(TbTaskScheduler));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_task_scheduler_sys(TbWorld *world) {

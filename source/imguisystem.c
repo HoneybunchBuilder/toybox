@@ -851,6 +851,7 @@ void imgui_draw_sys(ecs_iter_t *it) {
 }
 
 void tb_register_imgui_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register ImGUI Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbImGuiSystem);
@@ -897,6 +898,8 @@ void tb_register_imgui_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem(TbImGuiSystem),
              TbRenderSystem(TbRenderSystem),
              TbRenderPipelineSystem(TbRenderPipelineSystem));
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_imgui_sys(TbWorld *world) {

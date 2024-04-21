@@ -533,6 +533,7 @@ void vlog_ui_tick(ecs_iter_t *it) {
 }
 
 void tb_register_visual_logging_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Vlog Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbVisualLoggingSystem);
@@ -553,6 +554,8 @@ void tb_register_visual_logging_sys(TbWorld *world) {
              TbVisualLoggingSystem(TbVisualLoggingSystem), TbCameraComponent);
   ECS_SYSTEM(ecs, vlog_ui_tick, EcsOnUpdate,
              TbVisualLoggingSystem(TbVisualLoggingSystem));
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_visual_logging_sys(TbWorld *world) {

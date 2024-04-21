@@ -130,6 +130,7 @@ void log_ui_tick(ecs_iter_t *it) {
 }
 
 void tb_register_log_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Log Sys", true);
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLogSystem);
 
@@ -153,6 +154,7 @@ void tb_register_log_sys(TbWorld *world) {
 
   SDL_LogSetOutputFunction(tb_log_hook,
                            ecs_singleton_get_mut(ecs, TbLogSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_log_sys(TbWorld *world) {

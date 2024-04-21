@@ -254,6 +254,7 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
 }
 
 void tb_register_fxaa_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register FXAA Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbFXAASystem);
@@ -332,6 +333,7 @@ void tb_register_fxaa_sys(TbWorld *world) {
         tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
                        sizeof(TbFXAAPipelineArgs));
   }
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_fxaa_sys(TbWorld *world) {

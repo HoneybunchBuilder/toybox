@@ -132,8 +132,10 @@ VkPipeline tb_shader_get_pipeline(ecs_world_t *ecs, ecs_entity_t ent) {
 }
 
 void tb_register_shader_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Shader Sys", true);
   ECS_COMPONENT_DEFINE(world->ecs, TbShader);
   ECS_TAG_DEFINE(world->ecs, TbShaderCompiled);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_shader_sys(TbWorld *world) { (void)world; }

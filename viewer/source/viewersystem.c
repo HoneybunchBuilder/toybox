@@ -60,6 +60,7 @@ void viewer_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_viewer_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Viewer Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbViewerSystem);
 
@@ -74,6 +75,7 @@ void tb_register_viewer_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate,
              TbViewerSystem(TbViewerSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_viewer_sys(TbWorld *world) {

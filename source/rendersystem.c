@@ -328,6 +328,7 @@ void render_frame_end(ecs_iter_t *it) {
 }
 
 void tb_register_render_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Render Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderSystem);
   TbRenderSystem sys = create_render_system(world->gp_alloc, world->tmp_alloc,
@@ -339,6 +340,7 @@ void tb_register_render_sys(TbWorld *world) {
              TbRenderSystem(TbRenderSystem));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame,
              TbRenderSystem(TbRenderSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_sys(TbWorld *world) {

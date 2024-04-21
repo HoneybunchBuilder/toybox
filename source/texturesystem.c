@@ -456,6 +456,7 @@ void tick_texture_system(ecs_iter_t *it) {
 }
 
 void tb_register_texture_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Texture Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbTextureSystem);
@@ -471,6 +472,7 @@ void tb_register_texture_sys(TbWorld *world) {
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbTextureSystem), TbTextureSystem, &sys);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_texture_sys(TbWorld *world) {

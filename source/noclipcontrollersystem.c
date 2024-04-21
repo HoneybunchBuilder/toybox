@@ -96,10 +96,12 @@ void noclip_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_noclip_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Noclip Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_SYSTEM(ecs, noclip_update_tick,
              EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_noclip_sys(TbWorld *world) { (void)world; }

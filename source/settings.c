@@ -105,6 +105,7 @@ void tick_settings_ui(ecs_iter_t *it) {
 }
 
 void tb_register_settings_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Settings Sys", true);
   tb_auto ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbSettings);
@@ -127,6 +128,8 @@ void tb_register_settings_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);
 
   ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_settings_sys(TbWorld *world) {

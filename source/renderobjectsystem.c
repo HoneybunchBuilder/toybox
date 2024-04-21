@@ -176,6 +176,7 @@ VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
 }
 
 void tb_register_render_object_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Render Object Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbRenderObject);
@@ -212,11 +213,12 @@ void tb_register_render_object_sys(TbWorld *world) {
   // Register a tick function
   ECS_SYSTEM(ecs, tick_render_object_system, EcsPreStore,
              TbRenderObjectSystem(TbRenderObjectSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  tb_auto *sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   ecs_query_fini(sys->obj_query);
   destroy_render_object_system(sys);
   ecs_singleton_remove(ecs, TbRenderObjectSystem);

@@ -170,6 +170,7 @@ void input_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_input_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Input Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbInputSystem);
 
@@ -179,6 +180,7 @@ void tb_register_input_sys(TbWorld *world) {
                         .window = world->window,
                     });
   ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem(TbInputSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_input_sys(TbWorld *world) {

@@ -177,6 +177,7 @@ void tp_movement_update_tick(flecs::iter &it,
 
 extern "C" {
 void tb_register_third_person_sys(TbWorld *world) {
+  ZoneScopedN("Register Third Person Sys");
   flecs::world ecs(world->ecs);
 
   ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")

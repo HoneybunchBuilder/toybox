@@ -73,10 +73,13 @@ void camera_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_camera_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Camera Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_SYSTEM(ecs, camera_update_tick, EcsPostUpdate, TbCameraComponent,
              TbTransformComponent);
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_camera_sys(TbWorld *world) { (void)world; }

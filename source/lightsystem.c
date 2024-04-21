@@ -52,6 +52,7 @@ void light_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_light_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Light Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLightSystem);
 
@@ -66,6 +67,7 @@ void tb_register_light_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbLightSystem), TbLightSystem, &sys);
 
   ECS_SYSTEM(ecs, light_update_tick, EcsPreStore, [in] TbCameraComponent);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_light_sys(TbWorld *world) {

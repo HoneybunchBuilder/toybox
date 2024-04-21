@@ -91,6 +91,7 @@ void destroy_core_ui_sys(ecs_iter_t *it) {
 }
 
 void tb_register_core_ui_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Core UI Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbCoreUISystem);
@@ -104,6 +105,7 @@ void tb_register_core_ui_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate,
              TbCoreUISystem(TbCoreUISystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_core_ui_sys(TbWorld *world) {

@@ -402,15 +402,16 @@ void shadow_draw_tick(ecs_iter_t *it) {
 }
 
 void tb_register_shadow_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Shadow Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbShadowSystem);
 
-  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   TbShadowSystem sys = {
       .gp_alloc = world->gp_alloc,
@@ -474,8 +475,9 @@ void tb_register_shadow_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbShadowSystem), TbShadowSystem, &sys);
 
   ECS_SYSTEM(ecs, shadow_update_tick, EcsOnUpdate, TbCameraComponent);
-
   ECS_SYSTEM(ecs, shadow_draw_tick, EcsOnStore, TbShadowSystem(TbShadowSystem));
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_shadow_sys(TbWorld *world) {

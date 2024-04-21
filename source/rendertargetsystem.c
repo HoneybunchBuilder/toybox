@@ -540,21 +540,22 @@ void destroy_render_target_system(TbRenderTargetSystem *self) {
 }
 
 void tb_register_render_target_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Render Target Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderTargetSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-
-  TbRenderTargetSystem sys =
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys =
       create_render_target_system(rnd_sys, world->gp_alloc, world->tmp_alloc);
-  // Sets a singleton based on the value at a pointer
-  ecs_set_ptr(ecs, ecs_id(TbRenderTargetSystem), TbRenderTargetSystem, &sys);
+  ecs_singleton_set_ptr(ecs, TbRenderTargetSystem, &sys);
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_target_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbRenderTargetSystem *sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
   destroy_render_target_system(sys);
   ecs_singleton_remove(ecs, TbRenderTargetSystem);
 }

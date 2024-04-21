@@ -363,6 +363,7 @@ void view_update_tick(ecs_iter_t *it) {
 }
 
 void tb_register_view_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register View Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
@@ -378,6 +379,7 @@ void tb_register_view_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
   ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem(TbViewSystem));
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_view_sys(TbWorld *world) {

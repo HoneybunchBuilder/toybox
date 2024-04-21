@@ -40,6 +40,7 @@ void destroy_audio_system(TbAudioSystem *self) {
 }
 
 void tb_register_audio_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Audio Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbAudioSystem);
@@ -77,6 +78,7 @@ void tb_register_audio_sys(TbWorld *world) {
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbAudioSystem), TbAudioSystem, &sys);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_audio_sys(TbWorld *world) {

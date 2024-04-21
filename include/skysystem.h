@@ -50,10 +50,11 @@ typedef struct TbSkySystem {
   VkDescriptorSetLayout irr_set_layout;
   VkPipelineLayout irr_pipe_layout;
   VkPipelineLayout prefilter_pipe_layout;
-  VkPipeline sky_pipeline;
-  VkPipeline env_pipeline;
-  VkPipeline irradiance_pipeline;
-  VkPipeline prefilter_pipeline;
+
+  ecs_entity_t sky_shader;
+  ecs_entity_t env_shader;
+  ecs_entity_t irradiance_shader;
+  ecs_entity_t prefilter_shader;
 
   TbBuffer sky_geom_gpu_buffer;
 } TbSkySystem;

@@ -236,6 +236,7 @@ void tick_material_system(ecs_iter_t *it) {
 }
 
 void tb_register_material_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Material Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbMaterialSystem);
@@ -251,6 +252,7 @@ void tb_register_material_sys(TbWorld *world) {
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbMaterialSystem), TbMaterialSystem, &sys);
+  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_material_sys(TbWorld *world) {

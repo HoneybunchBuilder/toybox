@@ -162,6 +162,7 @@ void time_of_day_ui_sys(ecs_iter_t *it) {
 #endif
 
 void tb_register_time_of_day_sys(TbWorld *world) {
+  TracyCZoneN(ctx, "Register Time of Day Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_SYSTEM(ecs, time_of_day_tick,
              EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
@@ -176,6 +177,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
              EcsOnUpdate, [inout] TbTimeOfDayContext(TbTimeOfDayContext),
              [inout] TbTimeOfDayComponent);
 #endif
+  TracyCZoneEnd(ctx);
 }
 void tb_unregister_time_of_day_sys(TbWorld *world) {
   (void)world;

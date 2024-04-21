@@ -260,6 +260,7 @@ void physics_update_tick(flecs::iter it) {
 }
 
 void tb_register_physics_sys(TbWorld *world) {
+  ZoneScopedN("Register Physics Sys");
   flecs::world ecs(world->ecs);
 
   // Override JPH allocator functions
