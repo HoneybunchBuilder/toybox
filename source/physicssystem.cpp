@@ -58,7 +58,12 @@ void jolt_free_aligned(void *ptr) {
 #endif
 }
 
-/// Jolt job system impl backed by enkiTS
+/*
+Jolt job system impl backed by enkiTS
+
+Currently slower than jolts own thread pool job system
+Probably due to the way work is queued?
+*/
 class TbJobSystem : public JPH::JobSystemWithBarrier {
 public:
   JPH_OVERRIDE_NEW_DELETE
@@ -70,14 +75,18 @@ public:
   static void tb_phys_task(const void *args) {
     ZoneScoped;
     auto job = ((const TbPhysTaskArgs *)args)->job;
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
     const char *job_name = job->GetName();
     ZoneName(job_name, SDL_strlen(job_name));
+#endif
     job->Execute();
     job->Release();
   }
 
   explicit TbJobSystem(TbTaskScheduler enki)
-      : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {}
+      : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {
+    jobs.Init(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsJobs);
+  }
 
   int32_t GetMaxConcurrency() const override {
     return (int32_t)enkiGetNumTaskThreads(enki);
@@ -86,7 +95,19 @@ public:
                            const JPH::JobSystem::JobFunction &job_fn,
                            uint32_t dep_count = 0) override {
     ZoneScopedN("Create Physics Job");
-    auto job = new JPH::JobSystem::Job(name, color, this, job_fn, dep_count);
+    // Loop until we can get a job from the free list
+    uint32_t index =
+        JPH::FixedSizeFreeList<JPH::JobSystem::Job>::cInvalidObjectIndex;
+    for (;;) {
+      index = jobs.ConstructObject(name, color, this, job_fn, dep_count);
+      if (index !=
+          JPH::FixedSizeFreeList<JPH::JobSystem::Job>::cInvalidObjectIndex)
+        break;
+      JPH_ASSERT(false, "No jobs available!");
+      std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+
+    Job *job = &jobs.Get(index);
     auto handle = JPH::JobHandle(job);
 
     // Immediately queue job if it has no dependencies
@@ -108,10 +129,12 @@ public:
     }
   }
 
-  void FreeJob(JPH::JobSystem::Job *job) override { delete job; }
+  void FreeJob(JPH::JobSystem::Job *job) override { jobs.DestructObject(job); }
 
 private:
   TbTaskScheduler enki;
+
+  JPH::FixedSizeFreeList<JPH::JobSystem::Job> jobs;
 };
 
 /// Class that determines if two object layers can collide
@@ -289,8 +312,11 @@ void physics_update_tick(flecs::iter it) {
   auto &jolt = *phys_sys->jolt_phys;
   auto &body_iface = jolt.GetBodyInterface();
 
-  jolt.Update(it.delta_time(), 1, phys_sys->jolt_tmp_alloc,
-              phys_sys->jolt_job_sys);
+  {
+    ZoneScopedN("Jolt Internal Update");
+    jolt.Update(it.delta_time(), 1, phys_sys->jolt_tmp_alloc,
+                phys_sys->jolt_job_sys);
+  }
 
   phys_sys->listener->ResolveCallbacks();
 
@@ -331,14 +357,16 @@ void tb_register_physics_sys(TbWorld *world) {
   JPH::RegisterTypes();
 
   // Use C api because TbTaskScheduler is a pointer to an incomplete type
-  auto enki = *ecs_singleton_get(world->ecs, TbTaskScheduler);
+  // Only used by custom job system which isn't in use because it's slower
+  // auto enki = *ecs_singleton_get(world->ecs, TbTaskScheduler);
 
   TbPhysicsSystem sys = {
       .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .jolt_phys = new JPH::PhysicsSystem(),
       .jolt_tmp_alloc = new JPH::TempAllocatorImpl(10 * 1024 * 1024),
-      .jolt_job_sys = new TbJobSystem(enki),
+      .jolt_job_sys = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs,
+                                                   JPH::cMaxPhysicsBarriers, 1),
       .rigidbody_query =
           ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
               .build(),

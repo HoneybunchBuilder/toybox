@@ -7,7 +7,7 @@
 namespace JPH {
 class PhysicsSystem;
 class TempAllocator;
-class JobSystemThreadPool;
+class JobSystem;
 } // namespace JPH
 
 struct ecs_query_t;
@@ -15,7 +15,6 @@ namespace flecs {
 typedef ecs_query_t query_t;
 } // namespace flecs
 
-class TbJobSystem;
 class ObjectLayerPairFilterImpl;
 class BPLayerInterfaceImpl;
 class ObjectVsBroadPhaseLayerFilterImpl;
@@ -27,7 +26,7 @@ struct TbPhysicsSystem {
 
   JPH::PhysicsSystem *jolt_phys;
   JPH::TempAllocator *jolt_tmp_alloc;
-  TbJobSystem *jolt_job_sys;
+  JPH::JobSystem *jolt_job_sys;
 
   flecs::query_t *rigidbody_query;
 
