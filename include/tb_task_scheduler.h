@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <flecs.h>
 
 #include <TaskScheduler_c.h>
@@ -9,6 +13,7 @@ typedef void (*TbAsyncFn)(const void *args);
 typedef struct enkiTaskSet *TbTask;
 typedef struct enkiPinnedTask *TbPinnedTask;
 typedef struct enkiTaskScheduler *TbTaskScheduler;
+
 extern ECS_COMPONENT_DECLARE(TbTask);
 extern ECS_COMPONENT_DECLARE(TbPinnedTask);
 extern ECS_COMPONENT_DECLARE(TbTaskScheduler);
@@ -43,3 +48,7 @@ void tb_wait_task(TbTaskScheduler enki, TbTask task);
 // Since pinned tasks are pumped manually by threads you will deadlock
 // if you try to wait on a task pinned to the thread that must wait.
 void tb_wait_pinned_task(TbTaskScheduler enki, TbPinnedTask task);
+
+#ifdef __cplusplus
+}
+#endif

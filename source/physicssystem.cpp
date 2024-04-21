@@ -4,6 +4,7 @@
 #include "physicssystem.hpp"
 #include "profiling.h"
 #include "rigidbodycomponent.h"
+#include "tb_task_scheduler.h"
 #include "transformcomponent.h"
 #include "world.h"
 
@@ -56,6 +57,62 @@ void jolt_free_aligned(void *ptr) {
   free(ptr);
 #endif
 }
+
+/// Jolt job system impl backed by enkiTS
+class TbJobSystem : public JPH::JobSystemWithBarrier {
+public:
+  JPH_OVERRIDE_NEW_DELETE
+
+  struct TbPhysTaskArgs {
+    JPH::JobSystem::Job *job;
+  };
+
+  static void tb_phys_task(const void *args) {
+    ZoneScoped;
+    auto job = ((const TbPhysTaskArgs *)args)->job;
+    const char *job_name = job->GetName();
+    ZoneName(job_name, SDL_strlen(job_name));
+    job->Execute();
+    job->Release();
+  }
+
+  explicit TbJobSystem(TbTaskScheduler enki)
+      : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {}
+
+  int32_t GetMaxConcurrency() const override {
+    return (int32_t)enkiGetNumTaskThreads(enki);
+  }
+  JPH::JobHandle CreateJob(const char *name, JPH::ColorArg color,
+                           const JPH::JobSystem::JobFunction &job_fn,
+                           uint32_t dep_count = 0) override {
+    ZoneScopedN("Create Physics Job");
+    auto job = new JPH::JobSystem::Job(name, color, this, job_fn, dep_count);
+    auto handle = JPH::JobHandle(job);
+
+    // Immediately queue job if it has no dependencies
+    if (dep_count == 0) {
+      QueueJob(job);
+    }
+    return handle;
+  }
+
+  void QueueJob(JPH::JobSystem::Job *job) override {
+    job->AddRef();
+    TbPhysTaskArgs args{job};
+    tb_async_task(enki, tb_phys_task, &args, sizeof(TbPhysTaskArgs));
+  }
+
+  void QueueJobs(JPH::JobSystem::Job **jobs, uint32_t job_count) override {
+    for (uint32_t i = 0; i < job_count; ++i) {
+      QueueJob(jobs[i]);
+    }
+  }
+
+  void FreeJob(JPH::JobSystem::Job *job) override { delete job; }
+
+private:
+  TbTaskScheduler enki;
+};
 
 /// Class that determines if two object layers can collide
 class ObjectLayerPairFilterImpl : public JPH::ObjectLayerPairFilter {
@@ -273,13 +330,15 @@ void tb_register_physics_sys(TbWorld *world) {
 
   JPH::RegisterTypes();
 
+  // Use C api because TbTaskScheduler is a pointer to an incomplete type
+  auto enki = *ecs_singleton_get(world->ecs, TbTaskScheduler);
+
   TbPhysicsSystem sys = {
       .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .jolt_phys = new JPH::PhysicsSystem(),
       .jolt_tmp_alloc = new JPH::TempAllocatorImpl(10 * 1024 * 1024),
-      .jolt_job_sys = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs,
-                                                   JPH::cMaxPhysicsBarriers, 1),
+      .jolt_job_sys = new TbJobSystem(enki),
       .rigidbody_query =
           ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
               .build(),
