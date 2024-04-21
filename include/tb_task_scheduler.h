@@ -9,6 +9,7 @@ extern "C" {
 #include <TaskScheduler_c.h>
 
 typedef void (*TbAsyncFn)(const void *args);
+typedef enkiTaskExecuteRange TbAsyncFn2;
 
 typedef struct enkiTaskSet *TbTask;
 typedef struct enkiPinnedTask *TbPinnedTask;
@@ -18,6 +19,8 @@ extern ECS_COMPONENT_DECLARE(TbTask);
 extern ECS_COMPONENT_DECLARE(TbPinnedTask);
 extern ECS_COMPONENT_DECLARE(TbTaskScheduler);
 
+#define TbMainThreadId 0
+
 typedef struct TbAsyncTaskArgs TbAsyncTaskArgs;
 
 // Create a task that runs a given function on any available thread.
@@ -25,8 +28,17 @@ typedef struct TbAsyncTaskArgs TbAsyncTaskArgs;
 // Task must be launched to begin execution
 TbTask tb_create_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
                       size_t args_size);
+
+// Create a task that runs a given function on any available thread.
+// Args will be passed directly to task
+// Task must be launched to begin execution
+TbTask tb_create_task2(TbTaskScheduler enki, TbAsyncFn2 fn, void *args);
+
 // Begin execution of an already created task
 void tb_launch_task(TbTaskScheduler enki, TbTask task);
+
+// Begin execution of an already created task and also pass along arguments
+void tb_launch_task2(TbTaskScheduler enki, TbTask task, void *args);
 
 // Run a given function on any available thread.
 // Args will be copied to a thread-safe heap

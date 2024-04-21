@@ -34,9 +34,9 @@
     _Pragma("clang diagnostic push");                                          \
     _Pragma("clang diagnostic ignored \"-Wgnu-statement-expression\"");        \
     bool ret = false;                                                          \
-    if (SDL_TryLockMutex(queue.mutex) == 0) {                                  \
-      (*out) = *TB_DYN_ARR_BACKPTR(queue.storage);                             \
-      TB_DYN_ARR_POP(queue.storage);                                           \
+    if (SDL_TryLockMutex((queue).mutex) == 0) {                                \
+      (*out) = *TB_DYN_ARR_BACKPTR((queue).storage);                           \
+      TB_DYN_ARR_POP((queue).storage);                                         \
       ret = true;                                                              \
     }                                                                          \
     _Pragma("clang diagnostic pop");                                           \

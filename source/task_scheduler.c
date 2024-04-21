@@ -93,9 +93,23 @@ TbTask tb_create_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
   return task;
 }
 
+TbTask tb_create_task2(TbTaskScheduler enki, TbAsyncFn2 fn, void *args) {
+  TracyCZoneN(ctx, "Create Async Task2", true);
+
+  tb_auto task = enkiCreateTaskSet(enki, fn);
+  enkiSetArgsTaskSet(task, args);
+
+  TracyCZoneEnd(ctx);
+  return task;
+}
+
 void tb_launch_task(TbTaskScheduler enki, TbTask task) {
-  // Launch task
   enkiAddTaskSet(enki, task);
+}
+
+void tb_launch_task2(TbTaskScheduler enki, TbTask task, void *args) {
+  enkiSetArgsTaskSet(task, args);
+  tb_launch_task(enki, task);
 }
 
 TbTask tb_async_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
