@@ -21,7 +21,7 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
   if (sys->enabled) {
     // Min of 32 characters to ensure space for formatting
     tb_auto msg_size = (SDL_strlen(message) + 32);
-    tb_auto msg = (char *)mi_malloc(msg_size);
+    tb_auto msg = tb_alloc_nm_tp(tb_global_alloc, msg_size, char);
     SDL_snprintf(msg, msg_size, "%s", message);
 
     TracyCMessage(msg, SDL_strlen(msg));
@@ -140,7 +140,6 @@ void tb_register_log_sys(TbWorld *world) {
 
   tb_auto sys = ecs_singleton_get_mut(ecs, TbLogSystem);
   *sys = (TbLogSystem){
-      .log_alloc = world->gp_alloc,
       .ui = tb_coreui_register_menu(coreui, "Log"),
       .enabled = true,
       .autoscroll = true,
@@ -149,7 +148,7 @@ void tb_register_log_sys(TbWorld *world) {
   SDL_LogGetOutputFunction((SDL_LogOutputFunction *)sys->orig_log_fn,
                            &sys->orig_userdata);
 
-  TB_DYN_ARR_RESET(sys->messages, sys->log_alloc, 1024);
+  TB_DYN_ARR_RESET(sys->messages, tb_global_alloc, 1024);
   ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem(TbLogSystem));
 
   SDL_LogSetOutputFunction(tb_log_hook,
@@ -166,7 +165,7 @@ void tb_unregister_log_sys(TbWorld *world) {
 
   TB_DYN_ARR_FOREACH(sys->messages, i) {
     tb_auto message = TB_DYN_ARR_AT(sys->messages, i);
-    mi_free(message.message);
+    tb_free(tb_global_alloc, message.message);
   }
 
   TB_DYN_ARR_DESTROY(sys->messages);

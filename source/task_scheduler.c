@@ -104,6 +104,24 @@ TbTask tb_create_task2(TbTaskScheduler enki, TbAsyncFn2 fn, void *args) {
 }
 
 void tb_launch_task(TbTaskScheduler enki, TbTask task) {
+  tb_launch_task_args(enki, task, NULL, 0);
+}
+
+void tb_launch_task_args(TbTaskScheduler enki, TbTask task, void *args,
+                         size_t size) {
+  if (args && size > 0) {
+    tb_auto task_args = (TbAsyncTaskArgs *)enkiGetParamsTaskSet(task).pArgs;
+
+    // If args were provided free previous args and allocate new ones
+    if (task_args->args) {
+      tb_ts_free(task_args->args);
+    }
+    task_args->args = tb_ts_alloc(size);
+    SDL_memcpy(task_args->args, args, size);
+
+    enkiSetArgsTaskSet(task, task_args);
+  }
+
   enkiAddTaskSet(enki, task);
 }
 

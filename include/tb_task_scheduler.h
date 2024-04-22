@@ -37,6 +37,9 @@ TbTask tb_create_task2(TbTaskScheduler enki, TbAsyncFn2 fn, void *args);
 // Begin execution of an already created task
 void tb_launch_task(TbTaskScheduler enki, TbTask task);
 
+void tb_launch_task_args(TbTaskScheduler enki, TbTask task, void *args,
+                         size_t args_size);
+
 // Begin execution of an already created task and also pass along arguments
 void tb_launch_task2(TbTaskScheduler enki, TbTask task, void *args);
 

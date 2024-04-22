@@ -22,7 +22,6 @@ typedef struct TbLogMessage {
 } TbLogMessage;
 
 typedef struct TbLogSystem {
-  TbAllocator log_alloc;
   bool *ui;
   bool enabled;
   bool autoscroll;

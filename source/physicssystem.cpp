@@ -6,6 +6,7 @@
 #include "rigidbodycomponent.h"
 #include "tb_task_scheduler.h"
 #include "tbcommon.h"
+#include "tblog.h"
 #include "tbqueue.h"
 #include "transformcomponent.h"
 #include "world.h"
@@ -61,49 +62,99 @@ void jolt_free_aligned(void *ptr) {
 #endif
 }
 
-/*
-Jolt job system impl backed by enkiTS
-
-Currently slower than jolts own thread pool job system
-Probably due to the way work is queued?
-*/
+// Jolt job system impl backed by enkiTS
 class TbJobSystem : public JPH::JobSystemWithBarrier {
 public:
   JPH_OVERRIDE_NEW_DELETE
 
-  static void tb_phys_task(uint32_t start, uint32_t end, uint32_t threadnum,
-                           void *args) {
-    (void)start;
-    (void)end;
-    (void)threadnum;
-    ZoneScopedC(TracyCategoryColorPhysics);
-    auto job = (JPH::JobSystem::Job *)args;
-    TB_CHECK(job, "Job should not be nullptr");
+  using TbJobQueue = TB_QUEUE_OF(JPH::JobSystem::Job *);
 
+  struct TbPhysWorkerArgs {
+    TbTaskScheduler enki;
+    SDL_AtomicInt *quit;
+    SDL_Semaphore *semaphore;
+    TbJobQueue *job_queue;
+  };
+
+  static void tb_phys_task(const void *args) {
+    auto task_args = (const TbPhysWorkerArgs *)args;
+    auto job_queue = task_args->job_queue;
+
+    JPH::JobSystem::Job *job = nullptr;
+
+    while (true) {
+      ZoneScopedNC("Phys Worker Job", TracyCategoryColorPhysics);
+      if (SDL_AtomicGet(task_args->quit) != 0) {
+        break;
+      }
+
+      {
+        ZoneScopedNC("Wait for Physics Work", TracyCategoryColorWait);
+        SDL_WaitSemaphore(task_args->semaphore);
+      }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-statement-expression"
+      while (TB_QUEUE_POP(*job_queue, &job)) {
+        ZoneScopedC(TracyCategoryColorPhysics);
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-    const char *job_name = job->GetName();
-    ZoneName(job_name, SDL_strlen(job_name));
+        const char *job_name = job->GetName();
+        ZoneName(job_name, SDL_strlen(job_name));
 #endif
-    job->Execute();
-    job->Release();
-  }
-
-  explicit TbJobSystem(TbTaskScheduler enki, TbAllocator std_alloc)
-      : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {
-    jobs.Init(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsJobs);
-    TB_DYN_ARR_RESET(tasks, std_alloc, JPH::cMaxPhysicsJobs);
-
-    // Create task for each job
-    for (int32_t i = 0; i < JPH::cMaxPhysicsJobs; ++i) {
-      auto task = tb_create_task2(enki, tb_phys_task, NULL);
-      TB_DYN_ARR_APPEND(tasks, task);
+        job->Execute();
+      }
+#pragma clang diagnostic pop
     }
   }
 
-  ~TbJobSystem() {}
+  explicit TbJobSystem(TbTaskScheduler enki, TbAllocator std_alloc,
+                       int32_t thread_count)
+      : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {
+    jobs.Init(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsJobs);
+
+    SDL_AtomicSet(&quit, 0);
+    semaphore = SDL_CreateSemaphore(0);
+
+    // Create a pinned task per thread
+    if (thread_count <= 0) {
+      thread_count = 1; // Need at least one thread
+    }
+
+    job_queue = {};
+    TB_QUEUE_RESET(job_queue, tb_global_alloc, JPH::cMaxPhysicsJobs);
+    TB_DYN_ARR_RESET(job_tasks, std_alloc, thread_count);
+
+    for (int32_t i = 0; i < thread_count; ++i) {
+      TbPhysWorkerArgs args = {
+          enki,
+          &quit,
+          semaphore,
+          &job_queue,
+      };
+      auto task =
+          tb_create_task(enki, tb_phys_task, &args, sizeof(TbPhysWorkerArgs));
+      TB_DYN_ARR_APPEND(job_tasks, task);
+      tb_launch_task(enki, task);
+    }
+  }
+
+  ~TbJobSystem() {
+    // Destroy pinned tasks
+    SDL_AtomicSet(&quit, 1);
+    TB_DYN_ARR_FOREACH(job_tasks, i) {
+      (void)i;
+      SDL_PostSemaphore(semaphore);
+    }
+    TB_DYN_ARR_FOREACH(job_tasks, i) {
+      tb_wait_task(enki, TB_DYN_ARR_AT(job_tasks, i));
+    }
+    TB_QUEUE_DESTROY(job_queue);
+    TB_DYN_ARR_DESTROY(job_tasks);
+    SDL_DestroySemaphore(semaphore);
+  }
 
   int32_t GetMaxConcurrency() const override {
-    return (int32_t)enkiGetNumTaskThreads(enki);
+    return (int32_t)TB_DYN_ARR_SIZE(job_tasks);
   }
 
   JPH::JobHandle CreateJob(const char *name, JPH::ColorArg color,
@@ -115,12 +166,11 @@ public:
         JPH::FixedSizeFreeList<JPH::JobSystem::Job>::cInvalidObjectIndex;
     for (;;) {
       index = jobs.ConstructObject(name, color, this, job_fn, dep_count);
-      auto task = TB_DYN_ARR_AT(tasks, index);
-      if (index != JPH::FixedSizeFreeList<
-                       JPH::JobSystem::Job>::cInvalidObjectIndex &&
-          enkiIsTaskSetComplete(enki, task))
+      if (index !=
+          JPH::FixedSizeFreeList<JPH::JobSystem::Job>::cInvalidObjectIndex)
         break;
-      JPH_ASSERT(false, "No jobs available!");
+      TB_CHECK(false, "Out of jobs!");
+      std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
 
     Job *job = &jobs.Get(index);
@@ -134,11 +184,9 @@ public:
   }
 
   void QueueJob(JPH::JobSystem::Job *job) override {
-    job->AddRef();
-    TbTask task = 0;
-    const bool found_task = FindTask(job, task);
-    TB_CHECK(found_task, "Failed to queue job");
-    tb_launch_task2(enki, task, job);
+    // Add job to queue and signal task semaphore to pick up this work
+    TB_QUEUE_PUSH(job_queue, job);
+    SDL_PostSemaphore(semaphore);
   }
 
   void QueueJobs(JPH::JobSystem::Job **jobs, uint32_t job_count) override {
@@ -149,21 +197,14 @@ public:
 
   void FreeJob(JPH::JobSystem::Job *job) override { jobs.DestructObject(job); }
 
-  bool FindTask(JPH::JobSystem::Job *job_ptr, TbTask &task) {
-    for (uint32_t i = 0; i < JPH::cMaxPhysicsJobs; ++i) {
-      auto &job = jobs.Get(i);
-      if (&job == job_ptr) {
-        task = TB_DYN_ARR_AT(tasks, i);
-        return true;
-      }
-    }
-    return false;
-  }
-
 private:
   TbTaskScheduler enki;
+
   JPH::FixedSizeFreeList<JPH::JobSystem::Job> jobs;
-  TB_DYN_ARR_OF(TbTask) tasks;
+  TB_DYN_ARR_OF(TbTask) job_tasks;
+  SDL_AtomicInt quit;
+  SDL_Semaphore *semaphore;
+  TbJobQueue job_queue;
 };
 
 /// Class that determines if two object layers can collide
@@ -349,8 +390,8 @@ void physics_update_tick(flecs::iter it) {
 
   phys_sys->listener->ResolveCallbacks();
 
-  // Iterate through query of every rigidbody and update the entity transform
-  // based on the result from the physics sim
+  // Iterate through query of every rigidbody and update the entity
+  // transform based on the result from the physics sim
   // TODO: Only do this for rigidbodies with transforms marked movable
   {
     flecs::query<TbRigidbodyComponent, TbTransformComponent> query(
@@ -387,13 +428,14 @@ void tb_register_physics_sys(TbWorld *world) {
 
   // Use C api because TbTaskScheduler is a pointer to an incomplete type
   auto enki = *ecs_singleton_get(world->ecs, TbTaskScheduler);
+  static constexpr int32_t phys_thread_count = 4;
 
   TbPhysicsSystem sys = {
       .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .jolt_phys = new JPH::PhysicsSystem(),
       .jolt_tmp_alloc = new JPH::TempAllocatorImpl(10 * 1024 * 1024),
-      .jolt_job_sys = new TbJobSystem(enki, world->gp_alloc),
+      .jolt_job_sys = new TbJobSystem(enki, world->gp_alloc, phys_thread_count),
       .rigidbody_query =
           ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
               .build(),

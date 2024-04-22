@@ -8,6 +8,67 @@
 
 #include "profiling.h"
 
+static void *global_alloc(void *user_data, size_t size) {
+  (void)user_data;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  void *ptr = mi_recalloc(NULL, 1, size);
+  TracyCAllocN(ptr, size, "Global Alloc");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+static void *global_alloc_aligned(void *user_data, size_t size,
+                                  size_t alignment) {
+  (void)user_data;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  void *ptr = mi_calloc_aligned(1, size, alignment);
+  TracyCAllocN(ptr, size, "Global Alloc");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+static void *global_realloc(void *user_data, void *original, size_t size) {
+  (void)user_data;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(original, "Global Alloc");
+  void *ptr = mi_recalloc(original, 1, size);
+  TracyCAllocN(ptr, size, "Global Alloc");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+static void *global_realloc_aligned(void *user_data, void *original,
+                                    size_t size, size_t alignment) {
+  (void)user_data;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(original, "Global Alloc");
+  void *ptr = mi_recalloc_aligned(original, 1, size, alignment);
+  TracyCAllocN(ptr, size, "Global Alloc");
+  TracyCZoneEnd(ctx);
+  return ptr;
+}
+
+static void global_free(void *user_data, void *ptr) {
+  (void)user_data;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TracyCFreeN(ptr, "Global Alloc");
+  mi_free(ptr);
+  TracyCZoneEnd(ctx);
+}
+
+TbAllocator tb_global_alloc = {
+    .alloc = global_alloc,
+    .alloc_aligned = global_alloc_aligned,
+    .realloc = global_realloc,
+    .realloc_aligned = global_realloc_aligned,
+    .free = global_free,
+};
+
 static void *arena_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
