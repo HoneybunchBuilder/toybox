@@ -127,7 +127,8 @@ endif()
 # but on linux a dxc on the default path will probably have spirv codegen
 # so *shrug*
 find_program(DXC dxc
-  PATHS $ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}
+  PATHS "$ENV{VULKAN_SDK}/${VULKAN_BIN_PATH}"
+  NO_DEFAULT_PATH
   REQUIRED)
 find_program(GLTFPACK gltfpack
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
