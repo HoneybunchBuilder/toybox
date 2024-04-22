@@ -63,57 +63,44 @@ void jolt_free_aligned(void *ptr) {
 }
 
 // Jolt job system impl backed by enkiTS
-class TbJobSystem : public JPH::JobSystemWithBarrier {
+class TbJobSystem final : public JPH::JobSystemWithBarrier {
 public:
   JPH_OVERRIDE_NEW_DELETE
 
   using TbJobQueue = TB_QUEUE_OF(JPH::JobSystem::Job *);
 
   struct TbPhysWorkerArgs {
-    TbTaskScheduler enki;
-    SDL_AtomicInt *quit;
-    SDL_Semaphore *semaphore;
     TbJobQueue *job_queue;
   };
 
-  static void tb_phys_task(const void *args) {
+  static void tb_phys_task(uint32_t start, uint32_t end, uint32_t threadnum,
+                           void *args) {
+    (void)start;
+    (void)end;
+    (void)threadnum;
+    ZoneScopedC(TracyCategoryColorPhysics);
     auto task_args = (const TbPhysWorkerArgs *)args;
     auto job_queue = task_args->job_queue;
 
     JPH::JobSystem::Job *job = nullptr;
 
-    while (true) {
-      ZoneScopedNC("Phys Worker Job", TracyCategoryColorPhysics);
-      if (SDL_AtomicGet(task_args->quit) != 0) {
-        break;
-      }
-
-      {
-        ZoneScopedNC("Wait for Physics Work", TracyCategoryColorWait);
-        SDL_WaitSemaphore(task_args->semaphore);
-      }
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-statement-expression"
-      while (TB_QUEUE_POP(*job_queue, &job)) {
-        ZoneScopedC(TracyCategoryColorPhysics);
+    while (TB_QUEUE_POP(*job_queue, &job)) {
+      ZoneScopedC(TracyCategoryColorPhysics);
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-        const char *job_name = job->GetName();
-        ZoneName(job_name, SDL_strlen(job_name));
+      const char *job_name = job->GetName();
+      ZoneName(job_name, SDL_strlen(job_name));
 #endif
-        job->Execute();
-      }
-#pragma clang diagnostic pop
+      job->Execute();
     }
+#pragma clang diagnostic pop
   }
 
   explicit TbJobSystem(TbTaskScheduler enki, TbAllocator std_alloc,
                        int32_t thread_count)
       : JPH::JobSystemWithBarrier(JPH::cMaxPhysicsBarriers), enki(enki) {
     jobs.Init(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsJobs);
-
-    SDL_AtomicSet(&quit, 0);
-    semaphore = SDL_CreateSemaphore(0);
 
     // Create a pinned task per thread
     if (thread_count <= 0) {
@@ -123,34 +110,45 @@ public:
     job_queue = {};
     TB_QUEUE_RESET(job_queue, tb_global_alloc, JPH::cMaxPhysicsJobs);
     TB_DYN_ARR_RESET(job_tasks, std_alloc, thread_count);
+    TB_DYN_ARR_RESET(relaunch_tasks, std_alloc, thread_count);
 
     for (int32_t i = 0; i < thread_count; ++i) {
-      TbPhysWorkerArgs args = {
-          enki,
-          &quit,
-          semaphore,
+      auto task = enkiCreateTaskSet(enki, tb_phys_task);
+      auto args = tb_alloc_tp(tb_global_alloc, TbPhysWorkerArgs);
+      *args = {
           &job_queue,
       };
-      auto task =
-          tb_create_task(enki, tb_phys_task, &args, sizeof(TbPhysWorkerArgs));
+      enkiSetArgsTaskSet(task, args);
+
       TB_DYN_ARR_APPEND(job_tasks, task);
-      tb_launch_task(enki, task);
+
+      // Launch task
+      enkiAddTaskSet(enki, task);
     }
   }
 
   ~TbJobSystem() {
-    // Destroy pinned tasks
-    SDL_AtomicSet(&quit, 1);
+    // Destroy tasks
     TB_DYN_ARR_FOREACH(job_tasks, i) {
-      (void)i;
-      SDL_PostSemaphore(semaphore);
-    }
-    TB_DYN_ARR_FOREACH(job_tasks, i) {
-      tb_wait_task(enki, TB_DYN_ARR_AT(job_tasks, i));
+      auto task = TB_DYN_ARR_AT(job_tasks, i);
+      tb_wait_task(enki, task);
+      auto params = enkiGetParamsTaskSet(task);
+      tb_free(tb_global_alloc, params.pArgs);
+      enkiDeleteTaskSet(enki, task);
     }
     TB_QUEUE_DESTROY(job_queue);
     TB_DYN_ARR_DESTROY(job_tasks);
-    SDL_DestroySemaphore(semaphore);
+  }
+
+  void PumpTasks() {
+    ZoneScopedN("Launching phys job tasks");
+    TB_DYN_ARR_FOREACH(job_tasks, i) {
+      ZoneScopedN("Launching Task");
+      auto task = TB_DYN_ARR_AT(job_tasks, i);
+      if (enkiIsTaskSetComplete(enki, task)) {
+        enkiAddTaskSet(enki, task);
+      }
+    }
   }
 
   int32_t GetMaxConcurrency() const override {
@@ -184,9 +182,8 @@ public:
   }
 
   void QueueJob(JPH::JobSystem::Job *job) override {
-    // Add job to queue and signal task semaphore to pick up this work
+    // Adding to queue is thread safe
     TB_QUEUE_PUSH(job_queue, job);
-    SDL_PostSemaphore(semaphore);
   }
 
   void QueueJobs(JPH::JobSystem::Job **jobs, uint32_t job_count) override {
@@ -202,8 +199,7 @@ private:
 
   JPH::FixedSizeFreeList<JPH::JobSystem::Job> jobs;
   TB_DYN_ARR_OF(TbTask) job_tasks;
-  SDL_AtomicInt quit;
-  SDL_Semaphore *semaphore;
+  TB_DYN_ARR_OF(TbPinnedTask) relaunch_tasks;
   TbJobQueue job_queue;
 };
 
@@ -381,6 +377,8 @@ void physics_update_tick(flecs::iter it) {
   auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
   auto &jolt = *phys_sys->jolt_phys;
   auto &body_iface = jolt.GetBodyInterface();
+
+  phys_sys->jolt_job_sys->PumpTasks();
 
   {
     ZoneScopedN("Jolt Internal Update");

@@ -19,6 +19,7 @@ class ObjectLayerPairFilterImpl;
 class BPLayerInterfaceImpl;
 class ObjectVsBroadPhaseLayerFilterImpl;
 class TbContactListener;
+class TbJobSystem;
 
 struct TbPhysicsSystem {
   TbAllocator gp_alloc;
@@ -26,7 +27,7 @@ struct TbPhysicsSystem {
 
   JPH::PhysicsSystem *jolt_phys;
   JPH::TempAllocator *jolt_tmp_alloc;
-  JPH::JobSystem *jolt_job_sys;
+  TbJobSystem *jolt_job_sys;
 
   flecs::query_t *rigidbody_query;
 
