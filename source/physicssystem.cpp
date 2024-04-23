@@ -378,13 +378,13 @@ void physics_update_tick(flecs::iter it) {
   auto &jolt = *phys_sys->jolt_phys;
   auto &body_iface = jolt.GetBodyInterface();
 
-  phys_sys->jolt_job_sys->PumpTasks();
-
   {
     ZoneScopedN("Jolt Internal Update");
     jolt.Update(it.delta_time(), 1, phys_sys->jolt_tmp_alloc,
                 phys_sys->jolt_job_sys);
   }
+
+  phys_sys->jolt_job_sys->PumpTasks();
 
   phys_sys->listener->ResolveCallbacks();
 

@@ -45,7 +45,8 @@ typedef struct TbVisualLoggingSystem {
   VkBuffer sphere_geom_buffer;
 
   VkPipelineLayout pipe_layout;
-  VkPipeline pipeline;
+  ecs_entity_t shader;
+
   TbDrawContextId draw_ctx;
 
   bool logging;
