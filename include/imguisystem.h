@@ -16,7 +16,6 @@ typedef struct TbWorld TbWorld;
 typedef struct VkSampler_T *VkSampler;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
-typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkFramebuffer_T *VkFramebuffer;
 typedef uint32_t TbDrawContextId;
 

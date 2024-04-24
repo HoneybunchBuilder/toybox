@@ -12,8 +12,5 @@
 typedef struct TbWorld TbWorld;
 typedef uint32_t TbDrawContextId;
 
-typedef struct VkPipelineLayout_T *VkPipelineLayout;
-typedef struct VkPipeline_T *VkPipeline;
-
 typedef struct TbShadowSystem TbShadowSystem;
 extern ECS_COMPONENT_DECLARE(TbShadowSystem);

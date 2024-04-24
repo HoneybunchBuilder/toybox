@@ -19,7 +19,6 @@ typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
 typedef struct TbMeshSystem TbMeshSystem;
 
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
-typedef struct VkPipeline_T *VkPipeline;
 typedef struct VkBuffer_T *VkBuffer;
 typedef uint32_t TbDrawContextId;
 typedef TbResourceId TbMeshId;

@@ -83,11 +83,11 @@ typedef struct TbMeshSystem {
   VkDescriptorSetLayout mesh_set_layout;
   VkDescriptorSetLayout draw_set_layout;
   VkPipelineLayout pipe_layout;
-  VkPipeline opaque_pipeline;
-  VkPipeline transparent_pipeline;
-
   VkPipelineLayout prepass_layout;
-  VkPipeline prepass_pipe;
+
+  ecs_entity_t opaque_shader;
+  ecs_entity_t transparent_shader;
+  ecs_entity_t prepass_shader;
 
   // Re-used by shadows
   TbDrawBatch *opaque_batch;

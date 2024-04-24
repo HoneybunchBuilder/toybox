@@ -13,6 +13,7 @@
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tb_shader_system.h"
 #include "tbutil.h"
 #include "texturesystem.h"
 #include "transformcomponent.h"
@@ -49,10 +50,18 @@ typedef struct TbMesh {
 // Helper macro to auto-register system
 TB_REGISTER_SYS(tb, mesh, TB_MESH_SYS_PRIO)
 
-VkResult create_prepass_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
-                                 VkPipelineLayout pipe_layout,
-                                 VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+typedef struct TbMeshShaderArgs {
+  TbRenderSystem *rnd_sys;
+  VkFormat depth_format;
+  VkFormat color_format;
+  VkPipelineLayout pipe_layout;
+} TbMeshShaderArgs;
+
+VkPipeline create_prepass_pipeline(void *args) {
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
   VkShaderModule vert_mod = VK_NULL_HANDLE;
   VkShaderModule frag_mod = VK_NULL_HANDLE;
@@ -63,17 +72,13 @@ VkResult create_prepass_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
     };
     create_info.codeSize = sizeof(opaque_prepass_vert);
     create_info.pCode = (const uint32_t *)opaque_prepass_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Vert",
-                               &vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load opaque prepass vert shader module",
-                    err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Vert",
+                         &vert_mod);
 
     create_info.codeSize = sizeof(opaque_prepass_frag);
     create_info.pCode = (const uint32_t *)opaque_prepass_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag",
-                               &frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load opaque prepass frag shader module",
-                    err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag",
+                         &frag_mod);
   }
 
   VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -172,22 +177,22 @@ VkResult create_prepass_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Opaque Prepass Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create opaque prepass pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Opaque Prepass Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, vert_mod);
   tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
-  return err;
+  return pipeline;
 }
 
-VkResult create_mesh_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
-                               VkFormat depth_format,
-                               VkPipelineLayout pipe_layout,
-                               VkPipeline *opaque_pipe,
-                               VkPipeline *transparent_pipe) {
-  VkResult err = VK_SUCCESS;
+VkPipeline create_opaque_mesh_pipeline(void *args) {
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto color_format = pipe_args->color_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
   // Load Shader Modules
   VkShaderModule vert_mod = VK_NULL_HANDLE;
@@ -198,8 +203,7 @@ VkResult create_mesh_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
         .codeSize = sizeof(gltf_vert),
         .pCode = (const uint32_t *)gltf_vert,
     };
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
   }
   {
     VkShaderModuleCreateInfo create_info = {
@@ -207,11 +211,10 @@ VkResult create_mesh_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
         .codeSize = sizeof(gltf_frag),
         .pCode = (const uint32_t *)gltf_frag,
     };
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to create shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
   }
 
-  VkGraphicsPipelineCreateInfo create_info_base = {
+  VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext =
           &(VkPipelineRenderingCreateInfo){
@@ -305,41 +308,151 @@ VkResult create_mesh_pipelines(TbRenderSystem *rnd_sys, VkFormat color_format,
       .layout = pipe_layout,
   };
 
-  VkGraphicsPipelineCreateInfo opaque_ci = create_info_base;
-  VkGraphicsPipelineCreateInfo trans_ci = create_info_base;
-  trans_ci.pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-      .attachmentCount = 1,
-      .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
-          .blendEnable = VK_TRUE,
-          .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-          .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-          .colorBlendOp = VK_BLEND_OP_ADD,
-          .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-          .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-          .alphaBlendOp = VK_BLEND_OP_ADD,
-          .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                            VK_COLOR_COMPONENT_G_BIT |
-                            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-      }},
-  };
-
-  // Create pipelines
-  {
-    err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &opaque_ci,
-                                           "Opaque Mesh Pipeline", opaque_pipe);
-    TB_VK_CHECK_RET(err, "Failed to create opaque pipeline", err);
-
-    err = tb_rnd_create_graphics_pipelines(
-        rnd_sys, 1, &trans_ci, "Transparent Mesh Pipeline", transparent_pipe);
-    TB_VK_CHECK_RET(err, "Failed to create trans pipeline", err);
-  }
+  // Create pipeline
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Opaque Mesh Pipeline", &pipeline);
 
   // Can destroy shader moduless
   tb_rnd_destroy_shader(rnd_sys, vert_mod);
   tb_rnd_destroy_shader(rnd_sys, frag_mod);
 
-  return err;
+  return pipeline;
+}
+
+VkPipeline create_transparent_mesh_pipeline(void *args) {
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto color_format = pipe_args->color_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
+
+  // Load Shader Modules
+  VkShaderModule vert_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_vert),
+        .pCode = (const uint32_t *)gltf_vert,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
+  }
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_frag),
+        .pCode = (const uint32_t *)gltf_frag,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                  .module = vert_mod,
+                  .pName = "vert",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "frag",
+              }},
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = (VkViewport[1]){{0, 600.0f, 800.0f, -600.0f, 0, 1}},
+              .scissorCount = 1,
+              .pScissors = (VkRect2D[1]){{{0, 0}, {800, 600}}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+#endif
+              .maxDepthBounds = 1.0f,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
+                  .blendEnable = VK_TRUE,
+                  .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                  .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                  .colorBlendOp = VK_BLEND_OP_ADD,
+                  .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                  .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                  .alphaBlendOp = VK_BLEND_OP_ADD,
+                  .colorWriteMask =
+                      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+              }}},
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+
+  // Create pipeline
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Transparent Mesh Pipeline", &pipeline);
+
+  // Can destroy shader moduless
+  tb_rnd_destroy_shader(rnd_sys, vert_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
 }
 
 void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -459,8 +572,9 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 }
 
 TbMeshSystem create_mesh_system_internal(
-    TbAllocator gp_alloc, TbAllocator tmp_alloc, TbRenderSystem *rnd_sys,
-    TbMaterialSystem *mat_sys, TbTextureSystem *tex_sys, TbViewSystem *view_sys,
+    ecs_world_t *ecs, TbAllocator gp_alloc, TbAllocator tmp_alloc,
+    TbRenderSystem *rnd_sys, TbMaterialSystem *mat_sys,
+    TbTextureSystem *tex_sys, TbViewSystem *view_sys,
     TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
       .gp_alloc = gp_alloc,
@@ -555,9 +669,14 @@ TbMeshSystem create_mesh_system_internal(
     // Create prepass pipeline
     {
       VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-      err = create_prepass_pipeline(sys.rnd_sys, depth_format,
-                                    sys.prepass_layout, &sys.prepass_pipe);
-      TB_VK_CHECK(err, "Failed to create opaque prepass pipeline");
+
+      TbMeshShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .depth_format = depth_format,
+          .pipe_layout = sys.prepass_layout,
+      };
+      sys.prepass_shader = tb_shader_load(ecs, create_prepass_pipeline, &args,
+                                          sizeof(TbMeshShaderArgs));
     }
 
     // Create pipeline layouts
@@ -598,10 +717,13 @@ TbMeshSystem create_mesh_system_internal(
                                          sys.rp_sys->opaque_depth_normal_pass,
                                          &attach_count, &depth_info);
 
-      VkFormat depth_format = tb_render_target_get_format(
-          sys.rp_sys->rt_sys, depth_info.attachment);
+      TbMeshShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .depth_format = tb_render_target_get_format(sys.rp_sys->rt_sys,
+                                                      depth_info.attachment),
+          .pipe_layout = sys.pipe_layout,
+      };
 
-      VkFormat color_format = VK_FORMAT_UNDEFINED;
       tb_render_pipeline_get_attachments(
           sys.rp_sys, sys.rp_sys->opaque_color_pass, &attach_count, NULL);
       TB_CHECK(attach_count == 2, "Unexpected");
@@ -614,14 +736,16 @@ TbMeshSystem create_mesh_system_internal(
         VkFormat format = tb_render_target_get_format(
             sys.rp_sys->rt_sys, attach_info[i].attachment);
         if (format != VK_FORMAT_D32_SFLOAT) {
-          color_format = format;
+          args.color_format = format;
           break;
         }
       }
-      err = create_mesh_pipelines(sys.rnd_sys, color_format, depth_format,
-                                  sys.pipe_layout, &sys.opaque_pipeline,
-                                  &sys.transparent_pipeline);
-      TB_VK_CHECK(err, "Failed to create mesh pipelines");
+
+      sys.opaque_shader = tb_shader_load(ecs, create_opaque_mesh_pipeline,
+                                         &args, sizeof(TbMeshShaderArgs));
+      sys.transparent_shader =
+          tb_shader_load(ecs, create_transparent_mesh_pipeline, &args,
+                         sizeof(TbMeshShaderArgs));
     }
   }
   // Register drawing with the pipelines
@@ -646,12 +770,12 @@ TbMeshSystem create_mesh_system_internal(
   return sys;
 }
 
-void destroy_mesh_system(TbMeshSystem *self) {
+void destroy_mesh_system(ecs_world_t *ecs, TbMeshSystem *self) {
   TbRenderSystem *rnd_sys = self->rnd_sys;
 
-  tb_rnd_destroy_pipeline(rnd_sys, self->opaque_pipeline);
-  tb_rnd_destroy_pipeline(rnd_sys, self->transparent_pipeline);
-  tb_rnd_destroy_pipeline(rnd_sys, self->prepass_pipe);
+  tb_shader_destroy(ecs, self->opaque_shader);
+  tb_shader_destroy(ecs, self->transparent_shader);
+  tb_shader_destroy(ecs, self->prepass_shader);
   tb_rnd_destroy_pipe_layout(rnd_sys, self->pipe_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, self->prepass_layout);
 
@@ -1179,20 +1303,28 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
-  tb_auto *mesh_sys = ecs_field(it, TbMeshSystem, 1);
-  tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
-  tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
+  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+
+  // If any shaders aren't ready just bail
+  if (!tb_is_shader_ready(ecs, mesh_sys->opaque_shader) ||
+      !tb_is_shader_ready(ecs, mesh_sys->transparent_shader) ||
+      !tb_is_shader_ready(ecs, mesh_sys->prepass_shader)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
 
   // For each camera
   tb_auto camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
   while (ecs_query_next(&camera_it)) {
-    tb_auto *cameras = ecs_field(&camera_it, TbCameraComponent, 1);
+    tb_auto cameras = ecs_field(&camera_it, TbCameraComponent, 1);
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
-      tb_auto *camera = &cameras[cam_idx];
+      tb_auto camera = &cameras[cam_idx];
       tb_auto view_set =
           tb_view_system_get_descriptor(view_sys, camera->view_id);
 
@@ -1205,13 +1337,13 @@ void mesh_draw_tick(ecs_iter_t *it) {
       uint32_t opaque_draw_count = 0;
       uint32_t trans_draw_count = 0;
       while (ecs_query_next(&mesh_it)) {
-        tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          tb_auto *mesh = &meshes[mesh_idx];
+          tb_auto mesh = &meshes[mesh_idx];
 
           for (uint32_t submesh_idx = 0;
                submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
-            tb_auto *sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
+            tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
             tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
             if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
@@ -1298,15 +1430,15 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
-        tb_auto *meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          tb_auto *mesh = &meshes[mesh_idx];
+          tb_auto mesh = &meshes[mesh_idx];
           tb_auto entity = mesh_it.entities[mesh_idx];
-          tb_auto *ro = ecs_get_mut(ecs, entity, TbRenderObject);
+          tb_auto ro = ecs_get_mut(ecs, entity, TbRenderObject);
 
           for (uint32_t submesh_idx = 0;
                submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
-            tb_auto *sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
+            tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
             tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
 
             // Deduce whether to write to opaque or transparent data
@@ -1375,7 +1507,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       *mesh_sys->opaque_batch = (TbDrawBatch){
           .layout = mesh_sys->pipe_layout,
-          .pipeline = mesh_sys->opaque_pipeline,
+          .pipeline = tb_shader_get_pipeline(ecs, mesh_sys->opaque_shader),
           .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = opaque_prim_batch,
@@ -1387,7 +1519,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       TbDrawBatch trans_batch = {
           .layout = mesh_sys->pipe_layout,
-          .pipeline = mesh_sys->transparent_pipeline,
+          .pipeline = tb_shader_get_pipeline(ecs, mesh_sys->transparent_shader),
           .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch =
@@ -1418,7 +1550,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
       // Prepass batch is the same as opaque but with different pipeline
       tb_auto prepass_batch = *mesh_sys->opaque_batch;
       {
-        prepass_batch.pipeline = mesh_sys->prepass_pipe;
+        prepass_batch.pipeline =
+            tb_shader_get_pipeline(ecs, mesh_sys->prepass_shader);
         prepass_batch.layout = mesh_sys->prepass_layout;
       }
 
@@ -1486,16 +1619,16 @@ void tb_register_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
-  tb_auto *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto *mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-  tb_auto *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
-  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto *ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
+  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
-  tb_auto sys =
-      create_mesh_system_internal(world->gp_alloc, world->tmp_alloc, rnd_sys,
-                                  mat_sys, tex_sys, view_sys, ro_sys, rp_sys);
+  tb_auto sys = create_mesh_system_internal(ecs, world->gp_alloc,
+                                            world->tmp_alloc, rnd_sys, mat_sys,
+                                            tex_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});
@@ -1530,6 +1663,6 @@ void tb_unregister_mesh_sys(TbWorld *world) {
   ecs_query_fini(sys->dir_light_query);
   ecs_query_fini(sys->mesh_query);
   ecs_query_fini(sys->camera_query);
-  destroy_mesh_system(sys);
+  destroy_mesh_system(ecs, sys);
   ecs_singleton_remove(ecs, TbMeshSystem);
 }
