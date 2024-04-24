@@ -49,9 +49,9 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
   // sloppy
   for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
     TbFrameState *state = &sys.render_thread->frame_states[state_idx];
-    TB_DYN_ARR_RESET(state->pass_contexts, sys.gp_alloc, 1);
-    TB_DYN_ARR_RESET(state->draw_contexts, sys.gp_alloc, 1);
-    TB_DYN_ARR_RESET(state->dispatch_contexts, sys.gp_alloc, 1);
+    TB_DYN_ARR_RESET(state->pass_contexts, sys.gp_alloc, 128);
+    TB_DYN_ARR_RESET(state->draw_contexts, sys.gp_alloc, 128);
+    TB_DYN_ARR_RESET(state->dispatch_contexts, sys.gp_alloc, 128);
   }
 
   // Should be safe to assume that the render thread is initialized by now

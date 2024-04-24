@@ -13,8 +13,6 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "blur_h_comp.h"
-#include "blur_v_comp.h"
 #include "brightness_frag.h"
 #include "brightness_vert.h"
 #include "colorcopy_frag.h"
@@ -125,10 +123,17 @@ void sort_pass_graph(TbRenderPipelineSystem *self) {
   TracyCZoneEnd(ctx);
 }
 
-VkResult create_depth_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
-                               VkPipelineLayout pipe_layout,
-                               VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+typedef struct TbPipeShaderArgs {
+  TbRenderSystem *rnd_sys;
+  VkFormat format;
+  VkPipelineLayout pipe_layout;
+} TbPipeShaderArgs;
+
+VkPipeline create_depth_pipeline(void *args) {
+  tb_auto pipe_args = (const TbPipeShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
   VkShaderModule depth_vert_mod = VK_NULL_HANDLE;
   VkShaderModule depth_frag_mod = VK_NULL_HANDLE;
@@ -139,15 +144,13 @@ VkResult create_depth_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
     };
     create_info.codeSize = sizeof(depthcopy_vert);
     create_info.pCode = (const uint32_t *)depthcopy_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Vert",
-                               &depth_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load depth copy vert shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Vert",
+                         &depth_vert_mod);
 
     create_info.codeSize = sizeof(depthcopy_frag);
     create_info.pCode = (const uint32_t *)depthcopy_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Frag",
-                               &depth_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load depth copy frag shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Frag",
+                         &depth_frag_mod);
   }
 
   VkGraphicsPipelineCreateInfo create_info = {
@@ -232,21 +235,21 @@ VkResult create_depth_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Depth Copy Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create depth copy pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Depth Copy Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, depth_vert_mod);
   tb_rnd_destroy_shader(rnd_sys, depth_frag_mod);
 
-  return err;
+  return pipeline;
 }
 
-VkResult create_color_copy_pipeline(TbRenderSystem *rnd_sys,
-                                    VkFormat color_format,
-                                    VkPipelineLayout pipe_layout,
-                                    VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+VkPipeline create_color_copy_pipeline(void *args) {
+  tb_auto pipe_args = (const TbPipeShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto color_format = pipe_args->format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
   VkShaderModule color_vert_mod = VK_NULL_HANDLE;
   VkShaderModule color_frag_mod = VK_NULL_HANDLE;
@@ -257,15 +260,13 @@ VkResult create_color_copy_pipeline(TbRenderSystem *rnd_sys,
     };
     create_info.codeSize = sizeof(colorcopy_vert);
     create_info.pCode = (const uint32_t *)colorcopy_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Vert",
-                               &color_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load color copy vert shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Vert",
+                         &color_vert_mod);
 
     create_info.codeSize = sizeof(colorcopy_frag);
     create_info.pCode = (const uint32_t *)colorcopy_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Frag",
-                               &color_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load color copy frag shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Frag",
+                         &color_frag_mod);
   }
 
   VkGraphicsPipelineCreateInfo create_info = {
@@ -350,31 +351,29 @@ VkResult create_color_copy_pipeline(TbRenderSystem *rnd_sys,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Color Copy Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create color copy pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Color Copy Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, color_vert_mod);
   tb_rnd_destroy_shader(rnd_sys, color_frag_mod);
 
-  return err;
+  return pipeline;
 }
 
-VkResult create_comp_copy_pipeline(TbRenderSystem *rnd_sys,
-                                   VkPipelineLayout layout,
-                                   VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
-  VkShaderModule copy_comp_mod = VK_NULL_HANDLE;
+VkPipeline create_comp_copy_pipeline(void *args) {
+  tb_auto pipe_args = (const TbPipeShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto layout = pipe_args->pipe_layout;
 
+  VkShaderModule copy_comp_mod = VK_NULL_HANDLE;
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
     create_info.codeSize = sizeof(copy_comp);
     create_info.pCode = (const uint32_t *)copy_comp;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Copy Comp",
-                               &copy_comp_mod);
-    TB_VK_CHECK_RET(err, "Failed to load copy compute shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Copy Comp", &copy_comp_mod);
   }
 
   VkComputePipelineCreateInfo create_info = {
@@ -388,106 +387,36 @@ VkResult create_comp_copy_pipeline(TbRenderSystem *rnd_sys,
           },
       .layout = layout,
   };
-  err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
-                                        "Compute Copy Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create compute copy pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
+                                  "Compute Copy Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, copy_comp_mod);
 
-  return err;
+  return pipeline;
 }
 
-VkResult create_blur_pipelines(TbRenderSystem *rnd_sys, VkPipelineLayout layout,
-                               VkPipeline *h_pipe, VkPipeline *v_pipe) {
-  VkResult err = VK_SUCCESS;
-  VkShaderModule blur_h_comp_mod = VK_NULL_HANDLE;
-  VkShaderModule blur_v_comp_mod = VK_NULL_HANDLE;
+VkPipeline create_brightness_pipeline(void *args) {
+  tb_auto pipe_args = (const TbPipeShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto color_format = pipe_args->format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(blur_h_comp);
-    create_info.pCode = (const uint32_t *)blur_h_comp;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Blur H Comp",
-                               &blur_h_comp_mod);
-    TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
-  }
-
-  {
-    VkShaderModuleCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    };
-    create_info.codeSize = sizeof(blur_v_comp);
-    create_info.pCode = (const uint32_t *)blur_v_comp;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Blur V Comp",
-                               &blur_v_comp_mod);
-    TB_VK_CHECK_RET(err, "Failed to load blur compute shader module", err);
-  }
-
-  {
-    VkComputePipelineCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .stage =
-            (VkPipelineShaderStageCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                .module = blur_h_comp_mod,
-                .pName = "comp",
-            },
-        .layout = layout,
-    };
-    err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
-                                          "Blur H Pipeline", h_pipe);
-    TB_VK_CHECK_RET(err, "Failed to create horizontal blur pipeline", err);
-  }
-
-  {
-    VkComputePipelineCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .stage =
-            (VkPipelineShaderStageCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                .module = blur_v_comp_mod,
-                .pName = "comp",
-            },
-        .layout = layout,
-    };
-    err = tb_rnd_create_compute_pipelines(rnd_sys, 1, &create_info,
-                                          "Blur V Pipeline", v_pipe);
-    TB_VK_CHECK_RET(err, "Failed to create vertical blur pipeline", err);
-  }
-
-  tb_rnd_destroy_shader(rnd_sys, blur_h_comp_mod);
-  tb_rnd_destroy_shader(rnd_sys, blur_v_comp_mod);
-
-  return err;
-}
-
-VkResult create_brightness_pipeline(TbRenderSystem *rnd_sys,
-                                    VkFormat color_format,
-                                    VkPipelineLayout pipe_layout,
-                                    VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
   VkShaderModule brightness_vert_mod = VK_NULL_HANDLE;
   VkShaderModule brightness_frag_mod = VK_NULL_HANDLE;
-
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
     create_info.codeSize = sizeof(brightness_vert);
     create_info.pCode = (const uint32_t *)brightness_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Vert",
-                               &brightness_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load brightness vert shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Vert",
+                         &brightness_vert_mod);
 
     create_info.codeSize = sizeof(brightness_frag);
     create_info.pCode = (const uint32_t *)brightness_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Frag",
-                               &brightness_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load brightness frag shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Frag",
+                         &brightness_frag_mod);
   }
 
   VkGraphicsPipelineCreateInfo create_info = {
@@ -572,40 +501,37 @@ VkResult create_brightness_pipeline(TbRenderSystem *rnd_sys,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Brightness Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create brightness pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Brightness Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, brightness_vert_mod);
   tb_rnd_destroy_shader(rnd_sys, brightness_frag_mod);
 
-  return err;
+  return pipeline;
 }
 
-VkResult create_tonemapping_pipeline(TbRenderSystem *rnd_sys,
-                                     VkFormat swap_target_format,
-                                     VkPipelineLayout pipe_layout,
-                                     VkPipeline *pipeline) {
-  VkResult err = VK_SUCCESS;
+VkPipeline create_tonemapping_pipeline(void *args) {
+  tb_auto pipe_args = (const TbPipeShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto swap_target_format = pipe_args->format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
 
   VkShaderModule tonemap_vert_mod = VK_NULL_HANDLE;
   VkShaderModule tonemap_frag_mod = VK_NULL_HANDLE;
-
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
     create_info.codeSize = sizeof(tonemap_vert);
     create_info.pCode = (const uint32_t *)tonemap_vert;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Vert",
-                               &tonemap_vert_mod);
-    TB_VK_CHECK_RET(err, "Failed to load tonemapping vert shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Vert",
+                         &tonemap_vert_mod);
 
     create_info.codeSize = sizeof(tonemap_frag);
     create_info.pCode = (const uint32_t *)tonemap_frag;
-    err = tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Frag",
-                               &tonemap_frag_mod);
-    TB_VK_CHECK_RET(err, "Failed to load tonemapping frag shader module", err);
+    tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Frag",
+                         &tonemap_frag_mod);
   }
 
   VkGraphicsPipelineCreateInfo create_info = {
@@ -690,14 +616,14 @@ VkResult create_tonemapping_pipeline(TbRenderSystem *rnd_sys,
           },
       .layout = pipe_layout,
   };
-  err = tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
-                                         "Tonmapping Pipeline", pipeline);
-  TB_VK_CHECK_RET(err, "Failed to create tonemapping pipeline", err);
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Tonmapping Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, tonemap_vert_mod);
   tb_rnd_destroy_shader(rnd_sys, tonemap_frag_mod);
 
-  return err;
+  return pipeline;
 }
 
 void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -2472,12 +2398,14 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
         tb_render_pipeline_get_attachments(&sys, sys.depth_copy_pass,
                                            &attach_count, &depth_info);
 
-        VkFormat depth_format =
-            tb_render_target_get_format(sys.rt_sys, depth_info.attachment);
-
-        err = create_depth_pipeline(sys.rnd_sys, depth_format,
-                                    sys.copy_pipe_layout, &sys.depth_copy_pipe);
-        TB_VK_CHECK(err, "Failed to create depth copy pipeline");
+        TbPipeShaderArgs args = {
+            .rnd_sys = rnd_sys,
+            .format =
+                tb_render_target_get_format(sys.rt_sys, depth_info.attachment),
+            .pipe_layout = sys.copy_pipe_layout,
+        };
+        sys.depth_copy_shader = tb_shader_load(ecs, create_depth_pipeline,
+                                               &args, sizeof(TbPipeShaderArgs));
       }
 
       {
@@ -2503,13 +2431,14 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
       tb_render_pipeline_get_attachments(&sys, sys.color_copy_pass,
                                          &attach_count, &attach_info);
 
-      VkFormat color_format =
-          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
-
-      err = create_color_copy_pipeline(sys.rnd_sys, color_format,
-                                       sys.copy_pipe_layout,
-                                       &sys.color_copy_pipe);
-      TB_VK_CHECK(err, "Failed to create color copy pipeline");
+      TbPipeShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .format =
+              tb_render_target_get_format(sys.rt_sys, attach_info.attachment),
+          .pipe_layout = sys.copy_pipe_layout,
+      };
+      sys.color_copy_shader = tb_shader_load(ecs, create_color_copy_pipeline,
+                                             &args, sizeof(TbPipeShaderArgs));
 
       {
         TbDrawContextDescriptor desc = {
@@ -2526,9 +2455,12 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
 
     // Compute Copy
     {
-      err = create_comp_copy_pipeline(sys.rnd_sys, sys.comp_copy_pipe_layout,
-                                      &sys.comp_copy_pipe);
-      TB_VK_CHECK(err, "Failed to create compute copy pipeline");
+      TbPipeShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .pipe_layout = sys.comp_copy_pipe_layout,
+      };
+      sys.comp_copy_shader = tb_shader_load(ecs, create_comp_copy_pipeline,
+                                            &args, sizeof(TbPipeShaderArgs));
 
       // Contexts for specific copy operations
       TbDispatchContextDescriptor desc = {
@@ -2565,13 +2497,14 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
       tb_render_pipeline_get_attachments(&sys, sys.brightness_pass,
                                          &attach_count, &attach_info);
 
-      VkFormat color_format =
-          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
-
-      err = create_brightness_pipeline(sys.rnd_sys, color_format,
-                                       sys.copy_pipe_layout,
-                                       &sys.brightness_pipe);
-      TB_VK_CHECK(err, "Failed to create brightness pipeline");
+      TbPipeShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .format =
+              tb_render_target_get_format(sys.rt_sys, attach_info.attachment),
+          .pipe_layout = sys.copy_pipe_layout,
+      };
+      sys.brightness_shader = tb_shader_load(ecs, create_brightness_pipeline,
+                                             &args, sizeof(TbPipeShaderArgs));
 
       TbDrawContextDescriptor desc = {
           .batch_size = sizeof(TbFullscreenBatch),
@@ -2607,13 +2540,14 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
       tb_render_pipeline_get_attachments(&sys, sys.tonemap_pass, &attach_count,
                                          &attach_info);
 
-      VkFormat swap_target_format =
-          tb_render_target_get_format(sys.rt_sys, attach_info.attachment);
-
-      err = create_tonemapping_pipeline(sys.rnd_sys, swap_target_format,
-                                        sys.tonemap_pipe_layout,
-                                        &sys.tonemap_pipe);
-      TB_VK_CHECK(err, "Failed to create tonemapping pipeline");
+      TbPipeShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .format =
+              tb_render_target_get_format(sys.rt_sys, attach_info.attachment),
+          .pipe_layout = sys.tonemap_pipe_layout,
+      };
+      sys.tonemap_shader = tb_shader_load(ecs, create_tonemapping_pipeline,
+                                          &args, sizeof(TbPipeShaderArgs));
 
       TbDrawContextDescriptor desc = {
           .batch_size = sizeof(TbFullscreenBatch),
@@ -2636,17 +2570,14 @@ void destroy_render_pipeline_system(ecs_world_t *ecs,
   tb_rnd_destroy_set_layout(self->rnd_sys, self->copy_set_layout);
   tb_rnd_destroy_set_layout(self->rnd_sys, self->comp_copy_set_layout);
   tb_rnd_destroy_set_layout(self->rnd_sys, self->tonemap_set_layout);
-  tb_rnd_destroy_pipe_layout(self->rnd_sys, self->blur_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->comp_copy_pipe_layout);
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->tonemap_pipe_layout);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->blur_h_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->blur_v_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->depth_copy_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->color_copy_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->comp_copy_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->brightness_pipe);
-  tb_rnd_destroy_pipeline(self->rnd_sys, self->tonemap_pipe);
+  tb_shader_destroy(ecs, self->depth_copy_shader);
+  tb_shader_destroy(ecs, self->color_copy_shader);
+  tb_shader_destroy(ecs, self->comp_copy_shader);
+  tb_shader_destroy(ecs, self->brightness_shader);
+  tb_shader_destroy(ecs, self->tonemap_shader);
 
   tb_destroy_downsample_work(ecs, self->rnd_sys, &self->downsample_work);
   tb_destroy_upsample_work(ecs, self->rnd_sys, &self->upsample_work);
@@ -3028,7 +2959,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
                true);
 
-  tb_auto *self = ecs_field(it, TbRenderPipelineSystem, 1);
+  tb_auto self = ecs_field(it, TbRenderPipelineSystem, 1);
 
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
@@ -3065,13 +2996,14 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
     const uint32_t height = self->rnd_sys->render_thread->swapchain.height;
 
     // Depth copy pass
-    {
+    if (tb_is_shader_ready(it->world, self->color_copy_shader)) {
       TbFullscreenBatch fs_batch = {
           .set = depth_set,
       };
       TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
-          .pipeline = self->depth_copy_pipe,
+          .pipeline =
+              tb_shader_get_pipeline(it->world, self->depth_copy_shader),
           .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &fs_batch,
@@ -3080,13 +3012,14 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
                                           &batch);
     }
     // Color copy pass
-    {
+    if (tb_is_shader_ready(it->world, self->color_copy_shader)) {
       TbFullscreenBatch fs_batch = {
           .set = color_set,
       };
       TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
-          .pipeline = self->color_copy_pipe,
+          .pipeline =
+              tb_shader_get_pipeline(it->world, self->color_copy_shader),
           .viewport = {0, 0, width, height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &fs_batch,
@@ -3120,7 +3053,7 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
                                                 1, &batch);
       }
       // Luminance average pass
-      {
+      if (tb_is_shader_ready(it->world, self->lum_avg_work.shader)) {
         float time = tb_clampf(1.f - SDL_expf(-it->delta_time * 1.1f), 0, 1);
         TbLuminanceBatch lum_batch = {
             .set = lum_avg_set,
@@ -3140,13 +3073,14 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       }
     }
     // Brightness pass
-    {
+    if (tb_is_shader_ready(it->world, self->brightness_shader)) {
       TbFullscreenBatch fs_batch = {
           .set = color_set,
       };
       TbDrawBatch batch = {
           .layout = self->copy_pipe_layout,
-          .pipeline = self->brightness_pipe,
+          .pipeline =
+              tb_shader_get_pipeline(it->world, self->brightness_shader),
           .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &fs_batch,
@@ -3206,13 +3140,13 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
     }
 
     // Tonemapping pass
-    {
+    if (tb_is_shader_ready(it->world, self->downsample_work.shader)) {
       TbFullscreenBatch fs_batch = {
           .set = tonemap_set,
       };
       TbDrawBatch batch = {
           .layout = self->tonemap_pipe_layout,
-          .pipeline = self->tonemap_pipe,
+          .pipeline = tb_shader_get_pipeline(it->world, self->tonemap_shader),
           .viewport = {0, height, width, -(float)height, 0, 1},
           .scissor = {{0, 0}, {width, height}},
           .user_batch = &fs_batch,

@@ -102,17 +102,14 @@ typedef struct TbRenderPipelineSystem {
   VkDescriptorSetLayout copy_set_layout;
   VkDescriptorSetLayout comp_copy_set_layout;
   VkDescriptorSetLayout tonemap_set_layout;
-  VkPipelineLayout blur_pipe_layout;
   VkPipelineLayout copy_pipe_layout;
   VkPipelineLayout comp_copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
-  VkPipeline blur_h_pipe;
-  VkPipeline blur_v_pipe;
-  VkPipeline depth_copy_pipe;
-  VkPipeline color_copy_pipe;
-  VkPipeline brightness_pipe;
-  VkPipeline comp_copy_pipe;
-  VkPipeline tonemap_pipe;
+  ecs_entity_t depth_copy_shader;
+  ecs_entity_t color_copy_shader;
+  ecs_entity_t brightness_shader;
+  ecs_entity_t comp_copy_shader;
+  ecs_entity_t tonemap_shader;
 
   TbFrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
   TbFrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];

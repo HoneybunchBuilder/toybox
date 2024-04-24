@@ -419,6 +419,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
 
   // Require shader to be loaded
   if (!tb_is_shader_ready(it->world, sys->shader)) {
+    TracyCZoneEnd(ctx);
     return;
   }
 
