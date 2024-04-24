@@ -19,11 +19,13 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "94dba6403db9376920d7d1903ace714439ff145d",
+      "baseline": "6b90a3b1f9be118f8e4430dcd2db0552ee62c3da",
       "packages": [
-        "enkits"
+        "steam-audio",
+        "libmysofa",
+        "flatbuffers"
       ],
-      "reference": "enkits"
+      "reference": "steam-audio"
     }
   ]
 }

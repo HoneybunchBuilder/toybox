@@ -115,6 +115,7 @@ endif()
 find_package(json-c CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(enkiTS CONFIG REQUIRED)
+find_package(steam-audio CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -144,6 +145,7 @@ list(APPEND library_list "json-c::json-c")
 list(APPEND library_list "meshoptimizer::meshoptimizer")
 list(APPEND library_list "unofficial::joltphysics::Jolt")
 list(APPEND library_list "enkiTS::enkiTS")
+list(APPEND library_list "steam-audio::phonon")
 
 set(engine_shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
 
