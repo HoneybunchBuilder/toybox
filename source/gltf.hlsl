@@ -96,6 +96,11 @@ float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
     tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
     N = normalize(mul(i.tbn, tangent_space_normal));
   }
+  if ((gltf.perm & GLTF_PERM_DOUBLE_SIDED) == 0) {
+    if (!front_face) {
+      discard;
+    }
+  }
   N = front_face ? N : -N;
 
   float3 V = normalize(camera_data.view_pos - i.world_pos);

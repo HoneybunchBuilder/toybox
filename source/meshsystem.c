@@ -132,7 +132,7 @@ VkPipeline create_prepass_pipeline(void *args) {
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .cullMode = VK_CULL_MODE_NONE, // We cull in the shader
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
@@ -262,7 +262,7 @@ VkPipeline create_opaque_mesh_pipeline(void *args) {
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .cullMode = VK_CULL_MODE_NONE,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
@@ -395,7 +395,7 @@ VkPipeline create_transparent_mesh_pipeline(void *args) {
               .sType =
                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
               .polygonMode = VK_POLYGON_MODE_FILL,
-              .cullMode = VK_CULL_MODE_BACK_BIT,
+              .cullMode = VK_CULL_MODE_NONE,
               .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
               .lineWidth = 1.0f,
           },
