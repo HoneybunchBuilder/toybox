@@ -398,6 +398,7 @@ TbVisualLoggingSystem create_visual_logging_system(
 
 void destroy_visual_logging_system(ecs_world_t *ecs,
                                    TbVisualLoggingSystem *self) {
+  (void)ecs;
 #ifndef FINAL
   tb_mesh_system_release_mesh_ref(self->mesh_system, self->sphere_mesh);
 
