@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/Shape.h>
@@ -56,7 +57,8 @@ JPH::ShapeRefC create_cylinder_shape(float half_height, float radius) {
   return settings.Create().Get();
 }
 
-JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node) {
+JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node,
+                                 float3 scale) {
   JPH::VertexList phys_verts = {};
   JPH::IndexedTriangleList phys_tris = {};
 
@@ -132,12 +134,100 @@ JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node) {
         int16_t4 quant_pos = data[i];
         float4 quant_posf = tb_f4(quant_pos.x, quant_pos.y, quant_pos.z, 1);
         float3 pos = tb_mulf44f4(dequant_mat, quant_posf).xyz;
+        pos *= scale;
         phys_verts.push_back(JPH::Float3(pos.x, pos.y, pos.z));
       }
     }
   }
 
   JPH::MeshShapeSettings settings(phys_verts, phys_tris);
+  return settings.Create().Get();
+}
+
+JPH::ShapeRefC create_convex_hull_shape(TbAllocator gp_alloc,
+                                        const cgltf_node *node, float3 scale) {
+  JPH::Array<JPH::Vec3> phys_verts = {};
+  JPH::IndexedTriangleList phys_tris = {};
+
+  // Making some assumptions
+  TB_CHECK(node->children_count == 1, "Expecting child node");
+  const auto *mesh_node = node->children[0];
+
+  // Need the mesh node's transform for dequantization
+  auto trans = tb_transform_from_node(mesh_node);
+  auto dequant_mat = tb_transform_to_matrix(&trans);
+
+  // Read all indices and positions for this mesh
+  TB_CHECK(mesh_node->mesh, "Expecting mesh");
+  const auto *mesh = mesh_node->mesh;
+
+  // All primitive geometry will be merged
+  for (cgltf_size i = 0; i < mesh->primitives_count; ++i) {
+    const auto &primitive = mesh->primitives[i];
+    // Indices
+    {
+      auto *indices = primitive.indices;
+      auto *view = indices->buffer_view;
+
+      auto res = decompress_buffer_view(gp_alloc, view);
+      TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+      auto stride = indices->stride;
+      auto tri_count = indices->count / 3;
+      phys_tris.reserve(phys_tris.size() + tri_count);
+
+      // Physics system always wants 32-bit indexed triangles
+      auto *data = (uint8_t *)view->data + indices->offset;
+      for (cgltf_size t = 0; t < indices->count; t += 3) {
+        if (stride == 2) {
+          auto t0 = (uint32_t)(*((uint16_t *)(data + ((t + 0) * stride))));
+          auto t1 = (uint32_t)(*((uint16_t *)(data + ((t + 1) * stride))));
+          auto t2 = (uint32_t)(*((uint16_t *)(data + ((t + 2) * stride))));
+          phys_tris.push_back({t0, t1, t2});
+        } else if (stride == 4) {
+          auto t0 = *((uint32_t *)(data + ((t + 0) * stride)));
+          auto t1 = *((uint32_t *)(data + ((t + 1) * stride)));
+          auto t2 = *((uint32_t *)(data + ((t + 2) * stride)));
+          phys_tris.push_back({t0, t1, t2});
+        } else {
+          TB_CHECK(false, "Unexpected");
+        }
+      }
+    }
+    // Vertices
+    {
+      uint32_t pos_idx = SDL_MAX_UINT32;
+      for (cgltf_size i = 0; i < primitive.attributes_count; ++i) {
+        if (primitive.attributes[i].type == cgltf_attribute_type_position) {
+          pos_idx = i;
+          break;
+        }
+      }
+      TB_CHECK(pos_idx != SDL_MAX_UINT32, "Failed to find position");
+
+      auto &positions = primitive.attributes[pos_idx].data;
+      auto *view = positions->buffer_view;
+
+      auto res = decompress_buffer_view(gp_alloc, view);
+      TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+      auto vert_count = positions->count;
+      phys_verts.reserve(phys_verts.size() + vert_count);
+
+      // Use the node's matrix to dequantize the position into something
+      // the physics system can understand
+      auto *data = (int16_t4 *)(&((uint8_t *)view->data)[positions->offset]);
+      for (cgltf_size i = 0; i < vert_count; ++i) {
+        int16_t4 quant_pos = data[i];
+        float4 quant_posf = tb_f4(quant_pos.x, quant_pos.y, quant_pos.z, 1);
+        float3 pos = tb_mulf44f4(dequant_mat, quant_posf).xyz;
+        pos *= scale;
+        phys_verts.push_back(JPH::Vec3(pos.x, pos.y, pos.z));
+      }
+    }
+  }
+
+  JPH::ConvexHullShapeSettings settings(phys_verts);
   return settings.Create().Get();
 }
 
@@ -280,6 +370,11 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
   float radius = 0;
   JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::All;
 
+  auto shape_trans = tb_transform_from_node(node);
+  const float3 shape_scale = shape_trans.scale;
+  const float max_scale =
+      SDL_max(shape_scale.x, SDL_max(shape_scale.y, shape_scale.z));
+
   json_object_object_foreach(object, key, value) {
     // Parse Shape type
     if (SDL_strcmp(key, "shape_type") == 0) {
@@ -298,6 +393,9 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
         break;
       } else if (SDL_strcmp(shape_type_str, "mesh") == 0) {
         shape_type = JPH::EShapeSubType::Mesh;
+        break;
+      } else if (SDL_strcmp(shape_type_str, "convex_hull") == 0) {
+        shape_type = JPH::EShapeSubType::ConvexHull;
         break;
       }
     }
@@ -382,18 +480,23 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
 
   JPH::ShapeRefC shape = {};
   if (shape_type == JPH::EShapeSubType::Box) {
-    shape = create_box_shape(extents);
+    shape = create_box_shape(extents * shape_scale);
   } else if (shape_type == JPH::EShapeSubType::Sphere) {
-    shape = create_sphere_shape(radius);
+    shape = create_sphere_shape(radius * max_scale);
   } else if (shape_type == JPH::EShapeSubType::Capsule) {
-    shape = create_capsule_shape(half_height, radius);
+    shape =
+        create_capsule_shape(half_height * shape_scale.y, radius * max_scale);
   } else if (shape_type == JPH::EShapeSubType::Cylinder) {
-    shape = create_cylinder_shape(half_height, radius);
+    shape =
+        create_cylinder_shape(half_height * shape_scale.y, radius * max_scale);
   } else if (shape_type == JPH::EShapeSubType::Mesh) {
     // HACK:
     // This is stupid.. get the standard allocator from some singleton
     auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
-    shape = create_mesh_shape(mesh_sys->gp_alloc, node);
+    shape = create_mesh_shape(mesh_sys->gp_alloc, node, shape_scale);
+  } else if (shape_type == JPH::EShapeSubType::ConvexHull) {
+    auto *mesh_sys = ecs.get_mut<TbMeshSystem>();
+    shape = create_convex_hull_shape(mesh_sys->gp_alloc, node, shape_scale);
   } else {
     TB_CHECK(false, "Invalid physics shape");
   }
