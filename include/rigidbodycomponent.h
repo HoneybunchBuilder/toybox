@@ -52,9 +52,8 @@ typedef struct TbRigidbodyDescriptor {
 } TbRigidbodyDescriptor;
 extern ECS_COMPONENT_DECLARE(TbRigidbodyDescriptor);
 
-typedef struct TbRigidbodyComponent {
-  uint32_t body; // Actually a JPH::BodyId
-} TbRigidbodyComponent;
+// Actually a JPH::BodyId
+typedef uint32_t TbRigidbodyComponent;
 extern ECS_COMPONENT_DECLARE(TbRigidbodyComponent);
 
 #ifdef __cplusplus

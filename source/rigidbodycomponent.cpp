@@ -255,7 +255,7 @@ void tb_on_rigidbody_set(flecs::entity ent, TbRigidbodyComponent &rb) {
   auto position = JPH::Vec3(pos.x, pos.y, pos.z);
   auto rotation = JPH::Quat(rot.x, rot.y, rot.z, rot.w);
 
-  auto body = JPH::BodyID(rb.body);
+  auto body = JPH::BodyID(rb);
   bodies.SetPositionAndRotation(body, position, rotation,
                                 JPH::EActivation::Activate);
 }
@@ -271,7 +271,7 @@ void tb_on_rigidbody_removed(flecs::entity ent, TbRigidbodyComponent &rb) {
   auto *jolt = (JPH::PhysicsSystem *)(phys_sys->jolt_phys);
   auto &bodies = jolt->GetBodyInterface();
 
-  auto body = JPH::BodyID(rb.body);
+  auto body = JPH::BodyID(rb);
   bodies.RemoveBody(body);
 }
 

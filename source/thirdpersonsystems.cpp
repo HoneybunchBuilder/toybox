@@ -104,7 +104,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
 
     float3 accel = {0};
 
-    JPH::BodyID body = (JPH::BodyID)rb.body;
+    JPH::BodyID body = JPH::BodyID(rb);
     JPH::Vec3 jph_vel = body_iface.GetLinearVelocity(body);
     float3 velocity = tb_f3(jph_vel.GetX(), jph_vel.GetY(), jph_vel.GetZ());
 

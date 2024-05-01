@@ -19,7 +19,16 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/Shape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
@@ -61,6 +70,8 @@ void jolt_free_aligned(void *ptr) {
   free(ptr);
 #endif
 }
+
+ECS_COMPONENT_DECLARE(TbPhysicsSystem);
 
 // Jolt job system impl backed by enkiTS
 class TbJobSystem final : public JPH::JobSystemWithBarrier {
@@ -397,7 +408,7 @@ void physics_update_tick(flecs::iter it) {
     query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
                    TbTransformComponent &trans) {
       (void)e;
-      auto id = (JPH::BodyID)rigidbody.body;
+      auto id = JPH::BodyID(rigidbody);
       JPH::Vec3 pos = body_iface.GetPosition(id);
       JPH::Quat rot = body_iface.GetRotation(id);
       TbTransform updated = {
@@ -413,6 +424,11 @@ void physics_update_tick(flecs::iter it) {
 void tb_register_physics_sys(TbWorld *world) {
   ZoneScopedN("Register Physics Sys");
   flecs::world ecs(world->ecs);
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+  ECS_COMPONENT_DEFINE(world->ecs, TbPhysicsSystem);
+#pragma clang diagnostic pop
 
   // Override JPH allocator functions
   JPH::Allocate = jolt_alloc;
@@ -467,12 +483,32 @@ void tb_unregister_physics_sys(TbWorld *world) {
 }
 
 extern "C" {
-void tb_phys_add_velocity(TbPhysicsSystem *phys_sys,
-                          const TbRigidbodyComponent *body, float3 vel) {
+TbRigidbodyComponent tb_phys_copy_body(TbPhysicsSystem *phys_sys,
+                                       ecs_entity_t ent,
+                                       TbRigidbodyComponent body) {
   auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
-  auto body_id = (JPH::BodyID)body->body;
-  body_iface.SetLinearAndAngularVelocity(
-      body_id, JPH::Vec3(vel.x, vel.y, vel.z), JPH::Vec3(0, 0, 0));
+  auto body_id = JPH::BodyID(body);
+
+  auto shape = body_iface.GetShape(body_id);
+  auto motion = body_iface.GetMotionType(body_id);
+  auto layer = body_iface.GetObjectLayer(body_id);
+
+  JPH::BodyCreationSettings body_settings(
+      shape, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), motion, layer);
+  body_settings.mUserData = (uint64_t)ent;
+  body_settings.mOverrideMassProperties =
+      JPH::EOverrideMassProperties::CalculateInertia;
+  body_settings.mMassPropertiesOverride.mMass = 1.0f;
+
+  auto copy = body_iface.CreateBody(body_settings);
+  return (TbRigidbodyComponent)copy->GetID().GetIndexAndSequenceNumber();
+}
+
+void tb_phys_set_velocity(TbPhysicsSystem *phys_sys, TbRigidbodyComponent body,
+                          float3 vel) {
+  auto &body_iface = phys_sys->jolt_phys->GetBodyInterface();
+  auto body_id = (JPH::BodyID)body;
+  body_iface.SetLinearVelocity(body_id, JPH::Vec3(vel.x, vel.y, vel.z));
 }
 
 void tb_phys_add_contact_callback(TbPhysicsSystem *phys_sys,
