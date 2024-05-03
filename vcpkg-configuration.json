@@ -26,6 +26,15 @@
         "flatbuffers"
       ],
       "reference": "steam-audio"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "d545d3b9232019da6f00347e21e796dfe73f5d16",
+      "packages": [
+        "enkits"
+      ],
+      "reference": "enkits"
     }
   ]
 }
