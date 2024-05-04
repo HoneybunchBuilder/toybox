@@ -30,7 +30,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "d545d3b9232019da6f00347e21e796dfe73f5d16",
+      "baseline": "e0a6a4cb96848a2e6d52346f2bca8218d6581149",
       "packages": [
         "enkits"
       ],
