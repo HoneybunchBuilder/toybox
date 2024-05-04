@@ -16,8 +16,6 @@ jobs:
         toolsets: [
           {preset: x64-windows-ninja-llvm},
           {preset: x64-windows-static-ninja-llvm},
-          {preset: x64-windows-vs2022-llvm},
-          {preset: x64-windows-static-vs2022-llvm},
         ]
 
     name: ${{matrix.toolsets.preset}} on Windows}
