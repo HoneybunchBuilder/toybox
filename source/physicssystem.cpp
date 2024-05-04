@@ -99,7 +99,8 @@ public:
 #pragma clang diagnostic ignored "-Wgnu-statement-expression"
     while (TB_QUEUE_POP(*job_queue, &job)) {
       ZoneScopedC(TracyCategoryColorPhysics);
-#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+#if (defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)) &&         \
+    TRACY_ENABLE
       const char *job_name = job->GetName();
       ZoneName(job_name, SDL_strlen(job_name));
 #endif
