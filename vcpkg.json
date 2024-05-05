@@ -11,6 +11,10 @@
     "json-c",
     "ktx",
     {
+      "name": "shader-slang",
+      "host": true
+    },
+    {
       "name": "ktx",
       "host": true,
       "features": [
@@ -66,7 +70,8 @@
     },
     {
       "name": "ktx",
-      "version": "4.3.1"
+      "version": "4.3.1",
+      "port-version": 1
     },
     {
       "name": "meshoptimizer",
