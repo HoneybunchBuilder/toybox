@@ -137,7 +137,7 @@ find_program(GLTFPACK gltfpack
   REQUIRED)
 
 find_program(SLANG slangc 
-  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/slang
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/shader-slang
   REQUIRED)
 
 # The list of all external targets to link
