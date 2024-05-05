@@ -39,7 +39,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "4191469bb325e2d594450fa4a26bd6cd402a5fea",
+      "baseline": "7c791c2450528ecbf64fdfa5acb36f8a887f6980",
       "packages": [
         "ktx"
       ],
