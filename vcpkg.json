@@ -11,10 +11,6 @@
     "json-c",
     "ktx",
     {
-      "name": "shader-slang",
-      "host": true
-    },
-    {
       "name": "ktx",
       "host": true,
       "features": [
