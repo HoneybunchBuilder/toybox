@@ -168,8 +168,10 @@ function(cook_shaders out_shader_sources out_shader_headers)
     get_filename_component(filename ${shader} NAME_WLE)
     set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
 
-    set(vert_out_path "${shader_out_path}/${filename}_vert.spv")
-    set(frag_out_path "${shader_out_path}/${filename}_frag.spv")
+    # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(vert_out_path "${filename}_vert")
+    set(frag_out_path "${filename}_frag")
     set(out_paths "${vert_out_path};${frag_out_path}")
 
     add_custom_command(
@@ -184,14 +186,19 @@ function(cook_shaders out_shader_sources out_shader_headers)
     set(vert_header "${shader_out_path}/${filename}_vert.h")
     set(frag_header "${shader_out_path}/${filename}_frag.h")
 
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
     add_custom_command(
         OUTPUT ${vert_header}
-        COMMAND xxd -n ${filename}_vert -i ${vert_out_path} ${vert_header}
+        COMMAND xxd -i ${vert_out_path} ${filename}_vert
+        COMMAND ${CMAKE_COMMAND} -E rename ${filename}_vert ${vert_header}
         MAIN_DEPENDENCY ${vert_out_path}
     )
     add_custom_command(
         OUTPUT ${frag_header}
-        COMMAND xxd -n ${filename}_frag -i ${frag_out_path} ${frag_header}
+        COMMAND xxd -i ${frag_out_path} ${filename}_frag
+        COMMAND ${CMAKE_COMMAND} -E rename ${filename}_frag ${frag_header}
         MAIN_DEPENDENCY ${frag_out_path}
     )
 
