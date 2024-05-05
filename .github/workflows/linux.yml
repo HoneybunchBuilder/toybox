@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -38,6 +37,7 @@ jobs:
   notify:
     needs: build
     name: Notify
+    if: github.ref == 'refs/heads/main' # Only notify on commits to the main branch
     runs-on: [Linux, X64, self-hosted]
     steps:
       - name: Notify TheHighSeas
