@@ -14,6 +14,9 @@
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-win-llvm",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "FINAL": "OFF",
         "PROFILE_TRACY": "OFF"
@@ -36,6 +39,9 @@
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-win-llvm-static",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "environment": {
