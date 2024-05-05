@@ -35,6 +35,15 @@
         "enkits"
       ],
       "reference": "enkits"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "6299ab48e5febca40ff436d13d8a6e1cbc083520",
+      "packages": [
+        "ktx"
+      ],
+      "reference": "ktx"
     }
   ]
 }
