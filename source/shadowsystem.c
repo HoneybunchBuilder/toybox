@@ -349,12 +349,12 @@ void shadow_update_tick(ecs_iter_t *it) {
 
 void shadow_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
-  tb_auto *ecs = it->world;
+  tb_auto ecs = it->world;
 
-  tb_auto *rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto *shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
-  tb_auto *mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  tb_auto *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto shadow_sys = ecs_singleton_get_mut(ecs, TbShadowSystem);
+  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   // The shadow batch is just the opaque batch but with a different pipeline
   if (!mesh_sys->opaque_batch) {
@@ -383,8 +383,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto view_set = tb_view_system_get_descriptor(
             view_sys, light->cascade_views[cascade_idx]);
 
-        tb_auto *batch = &shadow_batch;
-        tb_auto *prim_batch = (TbPrimitiveBatch *)batch->user_batch;
+        tb_auto batch = &shadow_batch;
+        tb_auto prim_batch = (TbPrimitiveBatch *)batch->user_batch;
 
         prim_batch->view_set = view_set;
         const float dim = TB_SHADOW_MAP_DIM;
