@@ -37,12 +37,18 @@ jobs:
 
   notify:
     needs: build
-    name: Notify TheHighSeas
+    name: Notify
     runs-on: [Linux, X64, self-hosted]
     steps:
-      - name: Notify
+      - name: Notify TheHighSeas
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.PAT }}
           repository: HoneybunchBuilder/thehighseas
+          event-type: linux-engine
+      - name: Notify Upland
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT }}
+          repository: HoneybunchBuilder/upland
           event-type: linux-engine
