@@ -4,8 +4,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 # Determine version from the vcpkg json manifest
 file(READ vcpkg.json VCPKG_MANIFEST)
 string(JSON VCPKG_VERSION GET ${VCPKG_MANIFEST} "version")
@@ -424,6 +422,7 @@ endif()
 
 if(STATIC)
   target_link_libraries(toybox PUBLIC SDL3::SDL3-static)
+  set_property(TARGET toybox PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(toybox PUBLIC SDL3::SDL3)
 endif()
@@ -517,6 +516,10 @@ function(tb_add_app target_name source)
     else()
       add_executable(${target_name} ${source})
     endif()
+  endif()
+
+  if(${VCPKG_TARGET_TRIPLET} MATCHES static OR ${VCPKG_TARGET_TRIPLET} MATCHES android)
+    set_property(TARGET ${target_name} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()
 
   # Set known language version requirements
