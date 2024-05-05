@@ -7,6 +7,9 @@ struct Interpolators
     float2 uv0 : TEXCOORD0;
 };
 
+#ifdef TB_SHADER
+[shader("vertex")]
+#endif
 Interpolators vert(uint i : SV_VERTEXID)
 {
     Interpolators o;

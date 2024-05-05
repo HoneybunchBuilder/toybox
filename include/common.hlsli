@@ -12,23 +12,66 @@
 
 #define PUSH_CONSTANT_BYTES 128
 
+#define TB_CASCADE_COUNT 4
+
+#ifdef TB_SHADER
+
+struct TbSkyPushConstants {
+  float4x4 vp;
+};
+
+struct TbEnvFilterConstants {
+  float roughness;
+  uint32_t sample_count;
+};
+
+struct TbPrimitivePushConstants {
+  float3 position;
+  float3 scale;
+  float4 color;
+};
+
+// Constant per-view Camera Data
+struct TbCommonViewData {
+  float4x4 v;
+  float4x4 p;
+  float4x4 vp;
+  float4x4 inv_vp;
+  float4x4 inv_proj;
+  float3 view_pos;
+  float4 proj_params;
+};
+
+// Constant per-view Light Data
+
+struct TbCommonLightData {
+  float3 color;
+  float3 light_dir;
+  float4 cascade_splits;
+  float4x4 cascade_vps[TB_CASCADE_COUNT];
+};
+
+// Per-instance object data
+struct TbCommonObjectData {
+  float4x4 m;
+};
+
+#else
+
 typedef struct TB_GPU_STRUCT TbSkyPushConstants {
   float4x4 vp;
-}
-TbSkyPushConstants;
+} TbSkyPushConstants;
 
 typedef struct TB_GPU_STRUCT TbEnvFilterConstants {
   float roughness;
   uint32_t sample_count;
-}
-TbEnvFilterConstants;
+} TbEnvFilterConstants;
 
 typedef struct TB_GPU_STRUCT TbPrimitivePushConstants {
   float3 position;
   float3 scale;
   float4 color;
-}
-TbPrimitivePushConstants;
+} TbPrimitivePushConstants;
 
 // Constant per-view Camera Data
 typedef struct TB_GPU_STRUCT TbCommonViewData {
@@ -39,24 +82,22 @@ typedef struct TB_GPU_STRUCT TbCommonViewData {
   float4x4 inv_proj;
   float3 view_pos;
   float4 proj_params;
-}
-TbCommonViewData;
+} TbCommonViewData;
 
 // Constant per-view Light Data
-#define TB_CASCADE_COUNT 4
 typedef struct TB_GPU_STRUCT TbCommonLightData {
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
   float4x4 cascade_vps[TB_CASCADE_COUNT];
-}
-TbCommonLightData;
+} TbCommonLightData;
 
 // Per-instance object data
 typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
-}
-TbCommonObjectData;
+} TbCommonObjectData;
+
+#endif
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables

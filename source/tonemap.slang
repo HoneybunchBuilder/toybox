@@ -48,6 +48,7 @@ Texture2D bloom_map : register(t1, space0);
 RWStructuredBuffer<float> lum_avg : register(u2, space0);
 SamplerState static_sampler : register(s3, space0);
 
+[shader("fragment")]
 float4 frag(Interpolators i) : SV_TARGET {
   float lum = lum_avg[0];
 
