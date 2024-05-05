@@ -191,14 +191,14 @@ function(cook_shaders out_shader_sources out_shader_headers)
     # '-n' flag to rename the C variable
     add_custom_command(
         OUTPUT ${vert_header}
-        COMMAND xxd -i ${vert_out_path} ${filename}_vert
-        COMMAND ${CMAKE_COMMAND} -E rename ${filename}_vert ${vert_header}
+        COMMAND xxd -i ${vert_out_path} ${vert_header}
+        COMMAND ${CMAKE_COMMAND} -E remove ${vert_out_path}
         MAIN_DEPENDENCY ${vert_out_path}
     )
     add_custom_command(
         OUTPUT ${frag_header}
-        COMMAND xxd -i ${frag_out_path} ${filename}_frag
-        COMMAND ${CMAKE_COMMAND} -E rename ${filename}_frag ${frag_header}
+        COMMAND xxd -i ${frag_out_path} ${frag_header}
+        COMMAND ${CMAKE_COMMAND} -E remove ${frag_out_path}
         MAIN_DEPENDENCY ${frag_out_path}
     )
 
