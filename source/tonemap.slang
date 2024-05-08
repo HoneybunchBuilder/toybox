@@ -43,9 +43,13 @@ float3 yxy_to_rgb(float3 yxy) { return xyz_to_rgb(yxy_to_xyz(yxy)); }
 
 float3 tonemap_unreal(float3 rgb) { return rgb / (rgb + 0.155) * 1.019; }
 
+[[vk::binding(0, 0)]]
 Texture2D color_map : register(t0, space0);
+[[vk::binding(1, 0)]]
 Texture2D bloom_map : register(t1, space0);
+[[vk::binding(2, 0)]]
 RWStructuredBuffer<float> lum_avg : register(u2, space0);
+[[vk::binding(3, 0)]]
 SamplerState static_sampler : register(s3, space0);
 
 [shader("fragment")]

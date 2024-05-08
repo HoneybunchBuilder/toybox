@@ -18,24 +18,68 @@
 #define GLTF_PERM_ALPHA_BLEND 0x00002000
 #define GLTF_PERM_DOUBLE_SIDED 0x00004000
 
+#ifdef TB_SHADER
+
+// Omitting texture rotation because it's not widely used
+struct TextureTransform {
+  float2 offset;
+  float2 scale;
+};
+
+struct PBRMetallicRoughness {
+  float4 base_color_factor;
+  float4 metal_rough_factors;
+};
+
+struct PBRSpecularGlossiness {
+  float4 diffuse_factor;
+  float4 spec_gloss_factors;
+};
+
+struct TbGLTFMaterialData {
+  TextureTransform tex_transform;
+  PBRMetallicRoughness pbr_metallic_roughness;
+  PBRSpecularGlossiness pbr_specular_glossiness;
+  float4 specular;
+  float4 sheen_alpha; // alpha cutoff packed into w
+  float4 attenuation_params;
+  float4 thickness_factor;
+  float4 emissives;
+  int32_t perm;
+  uint32_t color_idx;
+  uint32_t normal_idx;
+  uint32_t pbr_idx;
+};
+
+// Per-draw lookup table
+struct TbGLTFDrawData {
+  int32_t perm; // Input layout permutation
+  uint32_t obj_idx;
+  uint32_t mesh_idx;
+  uint32_t mat_idx;
+  uint32_t index_offset;
+  uint32_t vertex_offset;
+  uint32_t pad0;
+  uint32_t pad1;
+};
+
+#else
+
 // Omitting texture rotation because it's not widely used
 typedef struct TB_GPU_STRUCT TextureTransform {
   float2 offset;
   float2 scale;
-}
-TextureTransform;
+} TextureTransform;
 
 typedef struct TB_GPU_STRUCT PBRMetallicRoughness {
   float4 base_color_factor;
   float4 metal_rough_factors;
-}
-PBRMetallicRoughness;
+} PBRMetallicRoughness;
 
 typedef struct TB_GPU_STRUCT PBRSpecularGlossiness {
   float4 diffuse_factor;
   float4 spec_gloss_factors;
-}
-PBRSpecularGlossiness;
+} PBRSpecularGlossiness;
 
 typedef struct TB_GPU_STRUCT TbGLTFMaterialData {
   TextureTransform tex_transform;
@@ -50,8 +94,7 @@ typedef struct TB_GPU_STRUCT TbGLTFMaterialData {
   uint32_t color_idx;
   uint32_t normal_idx;
   uint32_t pbr_idx;
-}
-TbGLTFMaterialData;
+} TbGLTFMaterialData;
 
 // Per-draw lookup table
 typedef struct TB_GPU_STRUCT TbGLTFDrawData {
@@ -63,13 +106,18 @@ typedef struct TB_GPU_STRUCT TbGLTFDrawData {
   uint32_t vertex_offset;
   uint32_t pad0;
   uint32_t pad1;
-}
-TbGLTFDrawData;
+} TbGLTFDrawData;
+
+#endif
 
 #define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
+#if defined(__HLSL_VERSION) && !defined(TB_SHADER)
+#define TB_SHADER 1
+#endif
+
 // If a shader, provide some helper functions and macros
-#ifdef __HLSL_VERSION
+#if defined(TB_SHADER)
 float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   // Must dequantize UV from integer to float before applying the transform
   float2 uv = float2(quant_uv) / 65535.0f;
@@ -81,23 +129,23 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 // Macros for declaring access to GLTF specific descriptor sets managed
 // by specific systems
 
-#define GLTF_MATERIAL_SET(space)                                               \
-  SamplerState material_sampler : register(s0, space);                         \
-  SamplerComparisonState shadow_sampler : register(s1, space);                 \
-  StructuredBuffer<TbGLTFMaterialData> gltf_data[] : register(t2, space);
+#define GLTF_MATERIAL_SET(b)                                                   \
+  [[vk::binding(b, 0)]] SamplerState material_sampler;                         \
+  [[vk::binding(b, 1)]] SamplerComparisonState shadow_sampler;                 \
+  [[vk::binding(b, 2)]] StructuredBuffer<TbGLTFMaterialData> gltf_data[];
 
-#define GLTF_DRAW_SET(space)                                                   \
-  StructuredBuffer<TbGLTFDrawData> draw_data : register(t0, space);
+#define GLTF_DRAW_SET(b)                                                       \
+  [[vk::binding(b, 0)]] StructuredBuffer<TbGLTFDrawData> draw_data;
 
-#define GLTF_VIEW_SET(space)                                                   \
-  ConstantBuffer<TbCommonViewData> camera_data : register(b0, space);          \
-  TextureCube irradiance_map : register(t1, space);                            \
-  TextureCube prefiltered_map : register(t2, space);                           \
-  Texture2D brdf_lut : register(t3, space);                                    \
-  ConstantBuffer<TbCommonLightData> light_data : register(b4, space);          \
-  Texture2DArray shadow_map : register(t5, space);                             \
-  SamplerState filtered_env_sampler : register(s7, space);                     \
-  SamplerState brdf_sampler : register(s8, space);
+#define GLTF_VIEW_SET(b)                                                       \
+  [[vk::binding(b, 0)]] ConstantBuffer<TbCommonViewData> camera_data;          \
+  [[vk::binding(b, 1)]] TextureCube irradiance_map;                            \
+  [[vk::binding(b, 2)]] TextureCube prefiltered_map;                           \
+  [[vk::binding(b, 3)]] Texture2D brdf_lut;                                    \
+  [[vk::binding(b, 4)]] ConstantBuffer<TbCommonLightData> light_data;          \
+  [[vk::binding(b, 5)]] Texture2DArray shadow_map;                             \
+  [[vk::binding(b, 6)]] SamplerState filtered_env_sampler;                     \
+  [[vk::binding(b, 7)]] SamplerState brdf_sampler;
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \
@@ -131,7 +179,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 
 TbGLTFDrawData tb_get_gltf_draw_data(int32_t draw,
                                      StructuredBuffer<TbGLTFDrawData> data) {
-  return data[NonUniformResourceIndex(draw)];
+  return data[draw];
 }
 
 TbGLTFMaterialData

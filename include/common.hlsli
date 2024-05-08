@@ -101,19 +101,16 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables
-#define TB_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
-#define TB_OBJECT_SET(space)                                                   \
-  StructuredBuffer<TbCommonObjectData> object_data[] : register(t0, space);
-#define TB_IDX_SET(space) RWBuffer<int32_t> idx_buffers[] : register(u0, space);
-#define TB_POS_SET(space) RWBuffer<int4> pos_buffers[] : register(u0, space);
-#define TB_NORM_SET(space)                                                     \
-  RWBuffer<float4> norm_buffers[] : register(u0, space);
-#define TB_TAN_SET(space) RWBuffer<float4> tan_buffers[] : register(u0, space);
-#define TB_UV0_SET(space) RWBuffer<int2> uv0_buffers[] : register(u0, space);
-#define TB_JOINT_SET(space)                                                    \
-  RWBuffer<int4> joint_buffers[] : register(u0, space);
-#define TB_WEIGHT_SET(space)                                                   \
-  RWBuffer<int4> weight_buffers[] : register(u0, space);
+#define TB_TEXTURE_SET(b) [[vk::binding(b, 0)]] Texture2D gltf_textures[];
+#define TB_OBJECT_SET(b)                                                       \
+  [[vk::binding(b, 0)]] StructuredBuffer<TbCommonObjectData> object_data[];
+#define TB_IDX_SET(b) [[vk::binding(b, 0)]] RWBuffer<int32_t> idx_buffers[];
+#define TB_POS_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> pos_buffers[];
+#define TB_NORM_SET(b) [[vk::binding(b, 0)]] RWBuffer<float4> norm_buffers[];
+#define TB_TAN_SET(b) [[vk::binding(b, 0)]] RWBuffer<float4> tan_buffers[];
+#define TB_UV0_SET(b) [[vk::binding(b, 0)]] RWBuffer<int2> uv0_buffers[];
+#define TB_JOINT_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> joint_buffers[];
+#define TB_WEIGHT_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> weight_buffers[];
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000
@@ -134,17 +131,17 @@ tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffers[]) {
 }
 
 Texture2D tb_get_texture(int32_t tex, Texture2D textures[]) {
-  return textures[NonUniformResourceIndex(tex)];
+  return textures[tex];
 }
 
 int32_t tb_get_idx(int32_t vertex, int32_t mesh, RWBuffer<int32_t> buffers[]) {
-  return buffers[NonUniformResourceIndex(mesh)][vertex];
+  return buffers[mesh][vertex];
 }
 
 int3 tb_vert_get_local_pos(int32_t perm, int32_t index, int32_t mesh,
                            RWBuffer<int4> buffers[]) {
   if ((perm & TB_INPUT_PERM_POSITION) > 0) {
-    return buffers[NonUniformResourceIndex(mesh)][index].xyz;
+    return buffers[mesh][index].xyz;
   }
   return 0;
 }
@@ -152,7 +149,7 @@ int3 tb_vert_get_local_pos(int32_t perm, int32_t index, int32_t mesh,
 float3 tb_vert_get_normal(int32_t perm, int32_t index, int32_t mesh,
                           RWBuffer<float4> buffers[]) {
   if ((perm & TB_INPUT_PERM_NORMAL) > 0) {
-    return buffers[NonUniformResourceIndex(mesh)][index].xyz;
+    return buffers[mesh][index].xyz;
   }
   return 0;
 }
@@ -160,7 +157,7 @@ float3 tb_vert_get_normal(int32_t perm, int32_t index, int32_t mesh,
 float4 tb_vert_get_tangent(int32_t perm, int32_t index, int32_t mesh,
                            RWBuffer<float4> buffers[]) {
   if ((perm & TB_INPUT_PERM_TANGENT) > 0) {
-    return buffers[NonUniformResourceIndex(mesh)][index].xyzw;
+    return buffers[mesh][index].xyzw;
   }
   return 0;
 }
@@ -168,7 +165,7 @@ float4 tb_vert_get_tangent(int32_t perm, int32_t index, int32_t mesh,
 int2 tb_vert_get_uv0(int32_t perm, int32_t index, int32_t mesh,
                      RWBuffer<int2> buffers[]) {
   if ((perm & TB_INPUT_PERM_TEXCOORD0) > 0) {
-    return buffers[NonUniformResourceIndex(mesh)][index];
+    return buffers[mesh][index];
   }
   return 0;
 }
