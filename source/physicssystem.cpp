@@ -575,6 +575,7 @@ void physics_update_tick(flecs::iter it) {
   }
 }
 
+#ifdef JPH_DEBUG_RENDERER
 void physics_debug_render_tick(flecs::iter it) {
   ZoneScopedN("Physics Update Tick");
   auto ecs = it.world();
@@ -584,6 +585,7 @@ void physics_debug_render_tick(flecs::iter it) {
   JPH::BodyManager::DrawSettings draw_settings = {};
   phys_sys->jolt_phys->DrawBodies(draw_settings, dbg_rnd);
 }
+#endif
 
 void tb_register_physics_sys(TbWorld *world) {
   ZoneScopedN("Register Physics Sys");
