@@ -9,6 +9,7 @@
 #include "tblog.h"
 #include "tbqueue.h"
 #include "transformcomponent.h"
+#include "visualloggingsystem.h"
 #include "world.h"
 
 #include <SDL3/SDL_atomic.h>
@@ -32,6 +33,10 @@
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
+
+#ifdef JPH_DEBUG_RENDERER
+#include <Jolt/Renderer/DebugRenderer.h>
+#endif
 
 #include "physlayers.h"
 
@@ -383,6 +388,154 @@ private:
   TB_DYN_ARR_OF(TbContactEvent) event_queue;
 };
 
+// Renderer impl that will bridge the jolt bodies visualization with the
+// toybox renderer
+#ifdef JPH_DEBUG_RENDERER
+class TbJoltRenderer : public JPH::DebugRenderer {
+public:
+  JPH_OVERRIDE_NEW_DELETE
+
+  TbJoltRenderer() {}
+
+  void Init(TbVisualLoggingSystem *vlog) {
+    Initialize();
+    this->vlog = vlog;
+  }
+
+  void SetCameraPos(JPH::RVec3Arg inCameraPos) {
+    mCameraPos = inCameraPos;
+    mCameraPosSet = true;
+  }
+
+  void DrawLine(JPH::RVec3Arg inFrom, JPH::RVec3Arg inTo,
+                JPH::ColorArg inColor) override {
+    ZoneScopedN("TbJoltRenderer::DrawLine");
+    (void)inFrom;
+    (void)inTo;
+    (void)inColor;
+    tb_vlog_line(vlog, tb_f3(inFrom.GetX(), inFrom.GetY(), inFrom.GetZ()),
+                 tb_f3(inTo.GetX(), inTo.GetY(), inTo.GetZ()),
+                 tb_f3((float)inColor.r / (float)0xFF,
+                       (float)inColor.g / (float)0xFF,
+                       (float)inColor.b / (float)0xFF));
+  }
+
+  void DrawTriangle(JPH::RVec3Arg inV1, JPH::RVec3Arg inV2, JPH::RVec3Arg inV3,
+                    JPH::ColorArg inColor, ECastShadow inCastShadow) override {
+    (void)inCastShadow;
+    // Just draw a triangle with three lines
+    // Maybe later render a filled in triangle
+    DrawLine(inV1, inV2, inColor);
+    DrawLine(inV2, inV3, inColor);
+    DrawLine(inV3, inV1, inColor);
+  }
+
+  void DrawText3D(JPH::RVec3Arg inPosition, const std::string_view &inString,
+                  JPH::ColorArg inColor, float inHeight) override {
+    (void)inPosition;
+    (void)inString;
+    (void)inColor;
+    (void)inHeight;
+  }
+
+protected:
+  Batch CreateTriangleBatch(const Triangle *inTriangles,
+                            int inTriangleCount) override {
+    ZoneScopedN("TbJoltRenderer::CreateTriangleBatch");
+    BatchImpl *batch = new BatchImpl;
+    if (inTriangles == nullptr || inTriangleCount == 0) {
+      return batch;
+    }
+
+    batch->mTriangles.assign(inTriangles, inTriangles + inTriangleCount);
+    return batch;
+  }
+  Batch CreateTriangleBatch(const Vertex *inVertices, int inVertexCount,
+                            const uint32_t *inIndices,
+                            int inIndexCount) override {
+    ZoneScopedN("TbJoltRenderer::CreateTriangleBatch");
+    BatchImpl *batch = new BatchImpl;
+    if (inVertices == nullptr || inVertexCount == 0 || inIndices == nullptr ||
+        inIndexCount == 0)
+      return batch;
+
+    // Convert indexed triangle list to triangle list
+    batch->mTriangles.resize(inIndexCount / 3);
+    for (size_t t = 0; t < batch->mTriangles.size(); ++t) {
+      Triangle &triangle = batch->mTriangles[t];
+      triangle.mV[0] = inVertices[inIndices[t * 3 + 0]];
+      triangle.mV[1] = inVertices[inIndices[t * 3 + 1]];
+      triangle.mV[2] = inVertices[inIndices[t * 3 + 2]];
+    }
+
+    return batch;
+  }
+  void DrawGeometry(JPH::RMat44Arg inModelMatrix,
+                    const JPH::AABox &inWorldSpaceBounds, float inLODScaleSq,
+                    JPH::ColorArg inModelColor, const GeometryRef &inGeometry,
+                    ECullMode inCullMode, ECastShadow inCastShadow,
+                    EDrawMode inDrawMode) override {
+    ZoneScopedN("TbJoltRenderer::DrawGeometry");
+    (void)inWorldSpaceBounds;
+    (void)inLODScaleSq;
+    (void)inCullMode;
+    (void)inCastShadow;
+    // Figure out which LOD to use
+    const LOD *lod = inGeometry->mLODs.data();
+    // Only available on newer versions of jolt
+    // if (mCameraPosSet)
+    //  lod = &inGeometry->GetLOD(JPH::Vec3(mCameraPos), inWorldSpaceBounds,
+    //                            inLODScaleSq);
+
+    // Draw the batch
+    const BatchImpl *batch =
+        static_cast<const BatchImpl *>(lod->mTriangleBatch.GetPtr());
+    for (const Triangle &triangle : batch->mTriangles) {
+      JPH::RVec3 v0 = inModelMatrix * JPH::Vec3(triangle.mV[0].mPosition);
+      JPH::RVec3 v1 = inModelMatrix * JPH::Vec3(triangle.mV[1].mPosition);
+      JPH::RVec3 v2 = inModelMatrix * JPH::Vec3(triangle.mV[2].mPosition);
+      JPH::Color color = inModelColor; // * triangle.mV[0].mColor;
+
+      switch (inDrawMode) {
+      case EDrawMode::Wireframe:
+        DrawLine(v0, v1, color);
+        DrawLine(v1, v2, color);
+        DrawLine(v2, v0, color);
+        break;
+
+      case EDrawMode::Solid:
+        DrawTriangle(v0, v1, v2, color, inCastShadow);
+        break;
+      }
+    }
+  }
+
+private:
+  TbVisualLoggingSystem *vlog;
+
+  class BatchImpl : public JPH::RefTargetVirtual {
+  public:
+    JPH_OVERRIDE_NEW_DELETE
+
+    virtual void AddRef() override { ++mRefCount; }
+    virtual void Release() override {
+      if (--mRefCount == 0) {
+        delete this;
+      }
+    }
+
+    JPH::Array<Triangle> mTriangles;
+
+  private:
+    std::atomic<uint32_t> mRefCount = 0;
+  };
+
+  /// Last provided camera position
+  JPH::RVec3 mCameraPos;
+  bool mCameraPosSet = false;
+};
+#endif
+
 void physics_update_tick(flecs::iter it) {
   ZoneScopedN("Physics Update Tick");
   auto ecs = it.world();
@@ -420,6 +573,16 @@ void physics_update_tick(flecs::iter it) {
       tb_transform_set_world(ecs.c_ptr(), e, &updated);
     });
   }
+}
+
+void physics_debug_render_tick(flecs::iter it) {
+  ZoneScopedN("Physics Update Tick");
+  auto ecs = it.world();
+  auto *phys_sys = ecs.get_mut<TbPhysicsSystem>();
+  auto *dbg_rnd = ecs.get_mut<TbJoltRenderer>();
+
+  JPH::BodyManager::DrawSettings draw_settings = {};
+  phys_sys->jolt_phys->DrawBodies(draw_settings, dbg_rnd);
 }
 
 void tb_register_physics_sys(TbWorld *world) {
@@ -466,6 +629,17 @@ void tb_register_physics_sys(TbWorld *world) {
   ecs.set<TbPhysicsSystem>(sys);
 
   ecs.system("PhysicsUpdate").kind(EcsPostUpdate).iter(physics_update_tick);
+
+#ifdef JPH_DEBUG_RENDERER
+  // If jolt physics was compiled with its debug renderer we can register
+  // a system to help us visualize the internal state of the physics engine.
+  ecs.add<TbJoltRenderer>();
+  auto dbg_rnd = ecs.get_mut<TbJoltRenderer>();
+  dbg_rnd->Init(ecs.get_mut<TbVisualLoggingSystem>());
+  ecs.system("PhysicsDebugRenderTick")
+      .kind(EcsPostUpdate)
+      .iter(physics_debug_render_tick);
+#endif
 }
 
 void tb_unregister_physics_sys(TbWorld *world) {

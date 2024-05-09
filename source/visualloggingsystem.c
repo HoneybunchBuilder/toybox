@@ -47,14 +47,10 @@ typedef enum VLogShapeType {
   TB_VLOG_SHAPE_LINE,
 } VLogShapeType;
 
-#define TB_MAX_VLOG_DRAWS 1024
-
 typedef struct TbVLogFrame {
   float timestamp;
-  uint32_t loc_draw_count;
-  VLogLocation loc_draws[TB_MAX_VLOG_DRAWS];
-  uint32_t line_draw_count;
-  VLogLine line_draws[TB_MAX_VLOG_DRAWS];
+  TB_DYN_ARR_OF(VLogLocation) loc_draws;
+  TB_DYN_ARR_OF(VLogLine) line_draws;
 } TbVLogFrame;
 
 typedef struct VLogDrawBatch {
@@ -426,7 +422,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
 
   // Render primitives from selected frame
   if (sys->logging && sys->frames.capacity > 0) {
-    const TbVLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
+    TbVLogFrame *frame = &TB_DYN_ARR_AT(sys->frames, sys->log_frame_idx);
 
     // TODO: Make this less hacky
     const uint32_t width = sys->rnd_sys->render_thread->swapchain.width;
@@ -436,9 +432,11 @@ void vlog_draw_tick(ecs_iter_t *it) {
     for (int32_t i = 0; i < it->count; ++i) {
       const TbCameraComponent *camera = &cameras[i];
 
-      for (uint32_t i = 0; i < frame->line_draw_count; ++i) {
-        const VLogLine *line = &frame->line_draws[i];
+      tb_auto line_draw_count = TB_DYN_ARR_SIZE(frame->line_draws);
+      TB_DYN_ARR_FOREACH(frame->line_draws, i) {
+        const VLogLine *line = &TB_DYN_ARR_AT(frame->line_draws, i);
         (void)line;
+        (void)line_draw_count;
         // TODO: Encode line draws into the line batch
       }
 
@@ -454,19 +452,20 @@ void vlog_draw_tick(ecs_iter_t *it) {
       };
 
       TbDrawBatch *batch = tb_alloc_tp(sys->tmp_alloc, TbDrawBatch);
+      tb_auto loc_draw_count = TB_DYN_ARR_SIZE(frame->loc_draws);
       *batch = (TbDrawBatch){
           .layout = sys->pipe_layout,
           .pipeline = tb_shader_get_pipeline(it->world, sys->shader),
           .viewport = (VkViewport){0, height, width, -(float)height, 0, 1},
           .scissor = (VkRect2D){{0, 0}, {width, height}},
           .user_batch = loc_batch,
-          .draw_count = frame->loc_draw_count,
+          .draw_count = loc_draw_count,
           .draw_size = sizeof(VLogShape),
-          .draws =
-              tb_alloc_nm_tp(sys->tmp_alloc, frame->loc_draw_count, VLogShape),
+          .draws = tb_alloc_nm_tp(sys->tmp_alloc, loc_draw_count, VLogShape),
       };
-      for (uint32_t i = 0; i < frame->loc_draw_count; ++i) {
-        ((VLogShape *)batch->draws)[i].location = frame->loc_draws[i];
+      TB_DYN_ARR_FOREACH(frame->loc_draws, i) {
+        ((VLogShape *)batch->draws)[i].location =
+            TB_DYN_ARR_AT(frame->loc_draws, i);
       }
 
       tb_render_pipeline_issue_draw_batch(sys->rp_sys, sys->draw_ctx, 1, batch);
@@ -541,6 +540,11 @@ void vlog_ui_tick(ecs_iter_t *it) {
     }
     // If recording, insert a new frame
     TB_DYN_ARR_APPEND(sys->frames, (TbVLogFrame){0});
+    // Setup draw arrays for frame
+    TB_DYN_ARR_RESET(TB_DYN_ARR_BACKPTR(sys->frames)->line_draws, sys->gp_alloc,
+                     8192);
+    TB_DYN_ARR_RESET(TB_DYN_ARR_BACKPTR(sys->frames)->loc_draws, sys->gp_alloc,
+                     8192);
   }
 
   TracyCZoneEnd(ctx);
@@ -592,15 +596,13 @@ TbVLogFrame *get_current_frame(TbVisualLoggingSystem *vlog) {
 }
 
 VLogLocation *frame_acquire_location(TbVLogFrame *frame) {
-  TB_CHECK_RETURN(frame->loc_draw_count < TB_MAX_VLOG_DRAWS,
-                  "Draw count exceeded frame max", NULL);
-  return &frame->loc_draws[frame->loc_draw_count++];
+  TB_DYN_ARR_APPEND(frame->loc_draws, (VLogLocation){0});
+  return TB_DYN_ARR_BACKPTR(frame->loc_draws);
 }
 
 VLogLine *frame_acquire_line(TbVLogFrame *frame) {
-  TB_CHECK_RETURN(frame->line_draw_count < TB_MAX_VLOG_DRAWS,
-                  "Draw count exceeded frame max", NULL);
-  return &frame->line_draws[frame->line_draw_count++];
+  TB_DYN_ARR_APPEND(frame->line_draws, (VLogLine){0});
+  return TB_DYN_ARR_BACKPTR(frame->line_draws);
 }
 
 VLogShape *vlog_acquire_frame_shape(TbVisualLoggingSystem *vlog,
