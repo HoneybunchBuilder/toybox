@@ -10,6 +10,10 @@
 
 #define TB_VLOG_SYS_PRIO TB_SYSTEM_NORMAL
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct TbVLogFrame TbVLogFrame;
 
 typedef struct TbRenderSystem TbRenderSystem;
@@ -65,3 +69,7 @@ void tb_vlog_line(TbVisualLoggingSystem *vlog, float3 start, float3 end,
                   float3 color);
 void tb_vlog_location(TbVisualLoggingSystem *vlog, float3 position,
                       float radius, float3 color);
+
+#ifdef __cplusplus
+}
+#endif
