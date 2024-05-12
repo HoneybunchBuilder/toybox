@@ -11,7 +11,7 @@ ECS_COMPONENT_DECLARE(TbTextureUsage);
 
 typedef struct TbTexture2Ctx {
   VkDescriptorSetLayout set_layout;
-  TbFrameDescriptorPoolList frame_pools;
+  TbDescriptorPool set_pool;
 
   TbTexture2 default_color_tex;
   TbTexture2 default_normal_tex;
@@ -20,13 +20,16 @@ typedef struct TbTexture2Ctx {
 } TbTexture2Ctx;
 ECS_COMPONENT_DECLARE(TbTexture2Ctx);
 
-typedef struct TbTexture2Comp {
+typedef struct TbTextureImage {
   uint32_t ref_count;
   TbHostBuffer host_buffer;
   TbImage gpu_image;
   VkImageView image_view;
-} TbTexture2Comp;
-ECS_COMPONENT_DECLARE(TbTexture2Comp);
+} TbTextureImage;
+ECS_COMPONENT_DECLARE(TbTextureImage);
+
+typedef uint32_t TbTextureComponent2;
+ECS_COMPONENT_DECLARE(TbTextureComponent2);
 
 // Describes the creation of a texture that lives in a GLB file
 typedef struct TbTextureGLTFLoadRequest {
@@ -51,7 +54,6 @@ typedef struct TbTextureRawLoadRequest {
 ECS_COMPONENT_DECLARE(TbTextureRawLoadRequest);
 
 ECS_TAG_DECLARE(TbTextureLoaded);
-ECS_TAG_DECLARE(TbTextureReady);
 ECS_TAG_DECLARE(TbNeedTexDescUpdate);
 
 // Internals
@@ -71,7 +73,7 @@ extern ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
 extern VkImageType get_ktx2_image_type(const ktxTexture2 *t);
 extern VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t);
 
-TbTexture2Comp tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
+TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
                                  ktxTexture2 *ktx) {
   bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
   if (needs_transcoding) {
@@ -91,7 +93,7 @@ TbTexture2Comp tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
   TB_CHECK(ktx->generateMipmaps == false,
            "Not expecting to have to generate mips");
 
-  TbTexture2Comp texture = {0};
+  TbTextureImage texture = {0};
 
   // Allocate gpu image
   {
@@ -169,10 +171,10 @@ TbTexture2Comp tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
   return texture;
 }
 
-TbTexture2Comp tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
+TbTextureImage tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
                                     const cgltf_texture *texture) {
   TracyCZoneN(ctx, "Load Texture2", true);
-  TbTexture2Comp tex = {0};
+  TbTextureImage tex = {0};
 
   if (texture->has_basisu) {
     const cgltf_image *image = texture->basisu_image;
@@ -204,13 +206,13 @@ TbTexture2Comp tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
   return tex;
 }
 
-TbTexture2Comp tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
+TbTextureImage tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
                                  const uint8_t *pixels, uint64_t size,
                                  uint32_t width, uint32_t height,
                                  TbTextureUsage usage) {
   TracyCZoneN(ctx, "Load Raw Texture2", true);
 
-  TbTexture2Comp texture = {0};
+  TbTextureImage texture = {0};
 
   // Determine some parameters
   const uint32_t depth = 1;
@@ -320,7 +322,7 @@ TbTexture2Comp tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
 typedef struct TbTextureLoadedArgs {
   ecs_world_t *ecs;
   TbTexture2 tex;
-  TbTexture2Comp comp;
+  TbTextureImage comp;
 } TbTextureLoadedArgs;
 
 void tb_texture_loaded2(const void *args) {
@@ -329,7 +331,7 @@ void tb_texture_loaded2(const void *args) {
   tb_auto tex = loaded_args->tex;
   if (tex != 0) {
     ecs_add(ecs, tex, TbTextureLoaded);
-    ecs_set_ptr(ecs, tex, TbTexture2Comp, &loaded_args->comp);
+    ecs_set_ptr(ecs, tex, TbTextureImage, &loaded_args->comp);
   } else {
     TB_CHECK(false, "Texture load failed. Do we need to retry?");
   }
@@ -411,7 +413,7 @@ void tb_load_gltf_texture_task(const void *args) {
     tex = 0; // Invalid ent means task failed
   }
 
-  TbTexture2Comp tex_comp = {0};
+  TbTextureImage tex_comp = {0};
   if (tex != 0) {
     tex_comp = tb_load_gltf_texture(rnd_sys, image_name, texture);
   }
@@ -460,7 +462,7 @@ void tb_load_ktx_texture_task(const void *args) {
       ktxTexture2_CreateFromMemory(tex_data, tex_size, flags, &ktx);
   TB_CHECK(err == KTX_SUCCESS, "Failed to create KTX texture from memory");
 
-  TbTexture2Comp tex_comp = {0};
+  TbTextureImage tex_comp = {0};
   if (ktx != NULL) {
     tex_comp = tb_load_ktx_image(rnd_sys, name, ktx);
   }
@@ -497,7 +499,7 @@ void tb_load_raw_texture_task(const void *args) {
   tb_auto width = load_args->raw.width;
   tb_auto height = load_args->raw.height;
 
-  TbTexture2Comp tex_comp =
+  TbTextureImage tex_comp =
       tb_load_raw_image(rnd_sys, name, pixels, size, width, height, usage);
 
   // Launch pinned task to handle loading signals on main thread
@@ -637,6 +639,80 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+void tb_update_texture_descriptors(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Update Texture Descriptors", true);
+
+  tb_auto tex_ctx = ecs_field(it, TbTexture2Ctx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto world = ecs_field(it, TbWorldRef, 3)->world;
+  tb_auto tex_comps = ecs_field(it, TbTextureImage, 4);
+
+  tb_auto tex_count = (uint64_t)it->count;
+
+  if (tex_count != tex_ctx->set_pool.capacity) {
+    tex_ctx->set_pool.capacity = tex_count;
+    const uint64_t desc_count = tex_ctx->set_pool.capacity;
+
+    // Re-create pool and allocate the one set that everything will be bound to
+    {
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+          .maxSets = tex_ctx->set_pool.capacity,
+          .poolSizeCount = 1,
+          .pPoolSizes =
+              (VkDescriptorPoolSize[1]){
+                  {
+                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                      .descriptorCount = desc_count * 4,
+                  },
+              },
+      };
+      VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+          .sType =
+              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+          .descriptorSetCount = 1,
+          .pDescriptorCounts = (uint32_t[1]){tex_count},
+      };
+      tb_rnd_resize_desc_pool(rnd_sys, &create_info, &tex_ctx->set_layout,
+                              &alloc_info, &tex_ctx->set_pool, 1);
+    }
+  }
+
+  // Write all textures into the descriptor set table
+  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  {
+    TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
+    tb_auto image_info =
+        tb_alloc_nm_tp(world->tmp_alloc, tex_count, VkDescriptorImageInfo);
+
+    for (uint64_t i = 0; i < tex_count; ++i) {
+      tb_auto texture = &tex_comps[i];
+
+      image_info[i] = (VkDescriptorImageInfo){
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = texture->image_view,
+      };
+
+      tb_auto write = (VkWriteDescriptorSet){
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .dstSet = tex_ctx->set_pool.sets[0],
+          .dstArrayElement = i,
+          .pImageInfo = &image_info[i],
+      };
+      TB_DYN_ARR_APPEND(writes, write);
+
+      // Texture is now ready to be referenced elsewhere
+      ecs_set(it->world, it->entities[i], TbTextureComponent2, {i});
+    }
+  }
+  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+
+  TracyCZoneEnd(ctx);
+}
+
 // Toybox Glue
 
 void tb_register_texture2_sys(TbWorld *world) {
@@ -645,10 +721,10 @@ void tb_register_texture2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbTextureGLTFLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureKTXLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureRawLoadRequest);
-  ECS_COMPONENT_DEFINE(ecs, TbTexture2Comp);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureImage);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureComponent2);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
-  ECS_TAG_DEFINE(ecs, TbTextureReady);
   ECS_TAG_DEFINE(ecs, TbNeedTexDescUpdate);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
@@ -660,6 +736,11 @@ void tb_register_texture2_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
+
+  ECS_SYSTEM(ecs, tb_update_texture_descriptors,
+             EcsPreStore, [in] TbTexture2Ctx(TbTexture2Ctx),
+             [in] TbRenderSystem(TbRenderSystem), [in] TbWorldRef(TbWorldRef),
+             [in] TbTextureImage, TbTextureLoaded);
 
   TbTexture2Ctx ctx = {0};
 
@@ -759,6 +840,11 @@ TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
 
 // Public API
 
+VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->set_pool.sets[0];
+}
+
 TbTexture2 tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
                                    const uint8_t *pixels, uint64_t size,
                                    uint32_t width, uint32_t height,
@@ -834,6 +920,7 @@ TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   return tex_ent;
 }
 
-bool tb_is_tex_loaded(ecs_world_t *ecs, TbTexture2 tex) {
-  return ecs_has(ecs, tex, TbTextureLoaded);
+bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture2 tex) {
+  return ecs_has(ecs, tex, TbTextureLoaded) &&
+         ecs_has(ecs, tex, TbTextureComponent2);
 }

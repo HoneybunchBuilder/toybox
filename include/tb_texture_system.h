@@ -7,6 +7,8 @@
 typedef ecs_entity_t TbTexture2; // Entities can be handles to textures
 extern ECS_COMPONENT_DECLARE(TbTextureComponent2);
 
+VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs);
+
 // Begins an async texture load from a given set of pixels
 // The given pixles are assumed to be kept live by the caller until
 // the loading task finishes
@@ -23,4 +25,4 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
 // usage so the task can open the ktx file and find the expected image
 TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
                                    const char *name, TbTextureUsage usage);
-bool tb_is_tex_loaded(ecs_world_t *ecs, ecs_entity_t tex_ent);
+bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture2 tex_ent);
