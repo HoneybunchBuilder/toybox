@@ -28,9 +28,6 @@ typedef enum TbTextureUsage {
   TB_TEX_USAGE_METAL_ROUGH,
   TB_TEX_USAGE_BRDF,
 } TbTextureUsage;
-extern ECS_COMPONENT_DECLARE(TbTextureUsage);
-
-extern ECS_TAG_DECLARE(TbTextureReady);
 
 typedef struct TbTextureSystem {
   TbAllocator gp_alloc;
@@ -65,9 +62,3 @@ TbTextureId tb_tex_system_load_texture(TbTextureSystem *self, const char *path,
                                        const cgltf_texture *texture);
 bool tb_tex_system_take_tex_ref(TbTextureSystem *self, TbTextureId id);
 void tb_tex_system_release_texture_ref(TbTextureSystem *self, TbTextureId tex);
-
-ecs_entity_t tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
-                                     const char *mat_name,
-                                     TbTextureUsage usage);
-
-bool tb_is_tex_loaded(ecs_world_t *ecs, ecs_entity_t tex_ent);

@@ -5,8 +5,6 @@
 #include "tbcommon.h"
 #include "world.h"
 
-#include <mimalloc.h>
-
 typedef struct TbShader {
   VkPipeline pipeline;
 } TbShader;
@@ -55,7 +53,7 @@ void tb_shader_compile_task(const void *args) {
                              sizeof(TbShaderCompleteArgs));
 
   // We're only responsible for the compile args
-  mi_free(task_args->compile_args);
+  tb_free(tb_global_alloc, task_args->compile_args);
   TracyCZoneEnd(ctx);
 }
 
@@ -69,7 +67,7 @@ ecs_entity_t tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
   ecs_set(ecs, ent, TbShader, {0});
 
   // Need to make a copy of the args into a thread-safe pool
-  tb_auto compile_args = mi_malloc(args_size);
+  tb_auto compile_args = tb_alloc(tb_global_alloc, args_size);
   SDL_memcpy(compile_args, args, args_size);
 
   // Create main thread task

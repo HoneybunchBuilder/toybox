@@ -371,7 +371,8 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
   JPH::EAllowedDOFs allowed_dofs = JPH::EAllowedDOFs::All;
 
   auto shape_trans = tb_transform_from_node(node);
-  const float3 shape_scale = shape_trans.scale;
+  // const float3 shape_scale = shape_trans.scale;
+  const float3 shape_scale = tb_f3(1, 1, 1);
   const float max_scale =
       SDL_max(shape_scale.x, SDL_max(shape_scale.y, shape_scale.z));
 
