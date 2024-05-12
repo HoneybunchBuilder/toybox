@@ -12,6 +12,11 @@ ECS_COMPONENT_DECLARE(TbTextureUsage);
 typedef struct TbTexture2Ctx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_pools;
+
+  TbTexture2 default_color_tex;
+  TbTexture2 default_normal_tex;
+  TbTexture2 default_metal_rough_tex;
+  TbTexture2 brdf_tex;
 } TbTexture2Ctx;
 ECS_COMPONENT_DECLARE(TbTexture2Ctx);
 
@@ -23,29 +28,33 @@ typedef struct TbTexture2Comp {
 } TbTexture2Comp;
 ECS_COMPONENT_DECLARE(TbTexture2Comp);
 
-// Describes the creation of a texture from a cgltf texture pointer
+// Describes the creation of a texture that lives in a GLB file
 typedef struct TbTextureGLTFLoadRequest {
   const char *path;
   const char *mat_name; // TODO: Should be an entity id
 } TbTextureGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbTextureGLTFLoadRequest);
 
+typedef struct TbTextureKTXLoadRequest {
+  const char *path;
+  const char *name;
+} TbTextureKTXLoadRequest;
+ECS_COMPONENT_DECLARE(TbTextureKTXLoadRequest);
+
+typedef struct TbTextureRawLoadRequest {
+  const char *name;
+  const uint8_t *pixels;
+  uint64_t size;
+  uint32_t width;
+  uint32_t height;
+} TbTextureRawLoadRequest;
+ECS_COMPONENT_DECLARE(TbTextureRawLoadRequest);
+
 ECS_TAG_DECLARE(TbTextureLoaded);
 ECS_TAG_DECLARE(TbTextureReady);
 ECS_TAG_DECLARE(TbNeedTexDescUpdate);
 
 // Internals
-
-typedef struct TbLoadTexture2Args {
-  ecs_world_t *ecs;
-  TbTexture2 tex;
-  TbTaskScheduler enki;
-  TbRenderSystem *rnd_sys;
-  TbPinnedTask loaded_task;
-  const char *path;
-  const char *mat_name; // TODO: Should be an entity id
-  TbTextureUsage usage;
-} TbLoadTexture2Args;
 
 // Some goodies from the old texture system
 typedef struct KTX2IterData {
@@ -62,8 +71,14 @@ extern ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
 extern VkImageType get_ktx2_image_type(const ktxTexture2 *t);
 extern VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t);
 
-TbTexture2Comp tb_load_ktx_texture2(TbRenderSystem *rnd_sys, const char *name,
-                                    ktxTexture2 *ktx) {
+TbTexture2Comp tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
+                                 ktxTexture2 *ktx) {
+  bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
+  if (needs_transcoding) {
+    // TODO: pre-calculate the best format for the platform
+    ktx_error_code_e err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
+    TB_CHECK(err == KTX_SUCCESS, "Failed to transcode basis texture");
+  }
 
   size_t host_buffer_size = ktx->dataSize;
   uint32_t width = ktx->baseWidth;
@@ -154,44 +169,152 @@ TbTexture2Comp tb_load_ktx_texture2(TbRenderSystem *rnd_sys, const char *name,
   return texture;
 }
 
-TbTexture2Comp tb_load_texture_2(TbRenderSystem *rnd_sys, const char *name,
-                                 const cgltf_texture *texture) {
-  TracyCZoneN(ctx, "Load Texture 2", true);
-  // Must use basisu image
-  TB_CHECK(texture->has_basisu, "Expecting basisu image");
+TbTexture2Comp tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
+                                    const cgltf_texture *texture) {
+  TracyCZoneN(ctx, "Load Texture2", true);
+  TbTexture2Comp tex = {0};
 
-  const cgltf_image *image = texture->basisu_image;
-  const cgltf_buffer_view *image_view = image->buffer_view;
-  const cgltf_buffer *image_data = image_view->buffer;
+  if (texture->has_basisu) {
+    const cgltf_image *image = texture->basisu_image;
 
-  // Points to some jpg/png whatever image format data
-  uint8_t *raw_data = (uint8_t *)(image_data->data) + image_view->offset;
-  const int32_t raw_size = (int32_t)image_view->size;
+    const cgltf_buffer_view *image_view = image->buffer_view;
+    TB_CHECK(image->buffer_view->buffer->uri == NULL,
+             "Not setup to load data from uri");
+    const cgltf_buffer *image_data = image_view->buffer;
 
-  TB_CHECK(image->buffer_view->buffer->uri == NULL,
-           "Not setup to load data from uri");
+    // Points to some jpg/png whatever image format data
+    uint8_t *raw_data = (uint8_t *)(image_data->data) + image_view->offset;
+    const int32_t raw_size = (int32_t)image_view->size;
 
-  // Load the ktx texture
-  ktxTexture2 *ktx = NULL;
-  {
-    ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
+    // Parse the ktx texture
+    ktxTexture2 *ktx = NULL;
+    {
+      ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
 
-    ktx_error_code_e err =
-        ktxTexture2_CreateFromMemory(raw_data, raw_size, flags, &ktx);
-    TB_CHECK(err == KTX_SUCCESS, "Failed to create KTX texture from memory");
-
-    bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
-    if (needs_transcoding) {
-      // TODO: pre-calculate the best format for the platform
-      err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
-      TB_CHECK(err == KTX_SUCCESS, "Failed transcode basis texture");
+      ktx_error_code_e err =
+          ktxTexture2_CreateFromMemory(raw_data, raw_size, flags, &ktx);
+      TB_CHECK(err == KTX_SUCCESS, "Failed to create KTX texture from memory");
     }
+    tex = tb_load_ktx_image(rnd_sys, name, ktx);
+  } else {
+    TB_CHECK(false, "Uncompressed texture loading not implemented");
   }
 
-  // Create texture from ktx2 texture
-  TbTexture2Comp tex = tb_load_ktx_texture2(rnd_sys, name, ktx);
   TracyCZoneEnd(ctx);
   return tex;
+}
+
+TbTexture2Comp tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
+                                 const uint8_t *pixels, uint64_t size,
+                                 uint32_t width, uint32_t height,
+                                 TbTextureUsage usage) {
+  TracyCZoneN(ctx, "Load Raw Texture2", true);
+
+  TbTexture2Comp texture = {0};
+
+  // Determine some parameters
+  const uint32_t depth = 1;
+  const uint32_t layers = 1;
+  const uint32_t mip_levels = 1;
+  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+  if (usage == TB_TEX_USAGE_COLOR) {
+    format = VK_FORMAT_R8G8B8A8_SRGB;
+  } else if (usage == TB_TEX_USAGE_BRDF) {
+    format = VK_FORMAT_R32G32_SFLOAT;
+  } else if (usage == TB_TEX_USAGE_UNKNOWN) {
+    TB_CHECK(false, "Unexpected texture usage");
+  }
+
+  // Allocate gpu image
+  {
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .arrayLayers = layers,
+        .extent =
+            (VkExtent3D){
+                .width = width,
+                .height = height,
+                .depth = depth,
+            },
+        .format = format,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .mipLevels = mip_levels,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+    tb_rnd_sys_create_gpu_image(rnd_sys, pixels, size, &create_info, name,
+                                &texture.gpu_image, &texture.host_buffer);
+  }
+
+  // Create image view
+  {
+    VkImageViewCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = texture.gpu_image.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format,
+        .components =
+            {
+                VK_COMPONENT_SWIZZLE_R,
+                VK_COMPONENT_SWIZZLE_G,
+                VK_COMPONENT_SWIZZLE_B,
+                VK_COMPONENT_SWIZZLE_A,
+            },
+        .subresourceRange =
+            {
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                0,
+                mip_levels,
+                0,
+                layers,
+            },
+    };
+    char view_name[100] = {0};
+    SDL_snprintf(view_name, 100, "%s Image TbView", name); // NOLINT
+    tb_rnd_create_image_view(rnd_sys, &create_info, view_name,
+                             &texture.image_view);
+  }
+
+  // Issue uploads
+  {
+    TbBufferImageCopy *uploads =
+        tb_alloc_nm_tp(rnd_sys->tmp_alloc, mip_levels, TbBufferImageCopy);
+
+    TB_CHECK(mip_levels == 1, "Only expecting one mip level");
+    uploads[0] = (TbBufferImageCopy){
+        .src = texture.host_buffer.buffer,
+        .dst = texture.gpu_image.image,
+        .region =
+            {
+                .bufferOffset = texture.host_buffer.offset,
+                .imageSubresource =
+                    {
+                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                        .layerCount = 1,
+                    },
+                .imageExtent =
+                    {
+                        .width = width,
+                        .height = height,
+                        .depth = 1,
+                    },
+            },
+        .range =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseArrayLayer = 0,
+                .baseMipLevel = 0,
+                .layerCount = 1,
+                .levelCount = 1,
+            },
+    };
+
+    // Will handle transitioning the image's layout to shader read only
+    tb_rnd_upload_buffer_to_image(rnd_sys, uploads, mip_levels);
+  }
+
+  TracyCZoneEnd(ctx);
+  return texture;
 }
 
 typedef struct TbTextureLoadedArgs {
@@ -212,15 +335,29 @@ void tb_texture_loaded2(const void *args) {
   }
 }
 
-void tb_load_texture_task(const void *args) {
-  TracyCZoneN(ctx, "Load Texture Task", true);
-  tb_auto load_args = (const TbLoadTexture2Args *)args;
-  tb_auto rnd_sys = load_args->rnd_sys;
-  tb_auto path = load_args->path;
-  tb_auto mat_name = load_args->mat_name;
-  tb_auto usage = load_args->usage;
+typedef struct TbLoadCommonTexture2Args {
+  ecs_world_t *ecs;
+  TbTexture2 tex;
+  TbTaskScheduler enki;
+  TbRenderSystem *rnd_sys;
+  TbPinnedTask loaded_task;
+  TbTextureUsage usage;
+} TbLoadCommonTexture2Args;
 
-  TbTexture2 tex = load_args->tex;
+typedef struct TbLoadGLTFTexture2Args {
+  TbLoadCommonTexture2Args common;
+  TbTextureGLTFLoadRequest gltf;
+} TbLoadGLTFTexture2Args;
+
+void tb_load_gltf_texture_task(const void *args) {
+  TracyCZoneN(ctx, "Load GLTF Texture Task", true);
+  tb_auto load_args = (const TbLoadGLTFTexture2Args *)args;
+  TbTexture2 tex = load_args->common.tex;
+  tb_auto rnd_sys = load_args->common.rnd_sys;
+  tb_auto usage = load_args->common.usage;
+
+  tb_auto path = load_args->gltf.path;
+  tb_auto mat_name = load_args->gltf.mat_name;
 
   // tb_global_alloc is the only safe allocator to use in a task
   tb_auto data = tb_read_glb(tb_global_alloc, path);
@@ -276,28 +413,113 @@ void tb_load_texture_task(const void *args) {
 
   TbTexture2Comp tex_comp = {0};
   if (tex != 0) {
-    tex_comp = tb_load_texture_2(rnd_sys, image_name, texture);
+    tex_comp = tb_load_gltf_texture(rnd_sys, image_name, texture);
   }
 
   // Launch pinned task to handle loading signals on main thread
   TbTextureLoadedArgs loaded_args = {
-      .ecs = load_args->ecs,
+      .ecs = load_args->common.ecs,
       .tex = tex,
       .comp = tex_comp,
   };
-  tb_launch_pinned_task_args(load_args->enki, load_args->loaded_task,
-                             &loaded_args, sizeof(TbTextureLoadedArgs));
+  tb_launch_pinned_task_args(load_args->common.enki,
+                             load_args->common.loaded_task, &loaded_args,
+                             sizeof(TbTextureLoadedArgs));
+  TracyCZoneEnd(ctx);
+}
+
+typedef struct TbLoadKTXTexture2Args {
+  TbLoadCommonTexture2Args common;
+  TbTextureKTXLoadRequest ktx;
+} TbLoadKTXTexture2Args;
+
+void tb_load_ktx_texture_task(const void *args) {
+  TracyCZoneN(ctx, "Load KTX Texture Task", true);
+  tb_auto load_args = (const TbLoadKTXTexture2Args *)args;
+  TbTexture2 tex = load_args->common.tex;
+  tb_auto rnd_sys = load_args->common.rnd_sys;
+
+  tb_auto path = load_args->ktx.path;
+  tb_auto name = load_args->ktx.name;
+
+  ktxTexture2 *ktx = NULL;
+
+  ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
+
+  // We need to open this file with SDL_RWops because on a platform like
+  // android where the asset lives in package storage, this is the best way
+  // to actually open the file you're looking for
+  SDL_RWops *tex_file = SDL_RWFromFile(path, "rb");
+  size_t tex_size = SDL_RWsize(tex_file);
+
+  uint8_t *tex_data = tb_alloc(tb_global_alloc, tex_size);
+  SDL_RWread(tex_file, (void *)tex_data, tex_size);
+  SDL_RWclose(tex_file);
+
+  ktx_error_code_e err =
+      ktxTexture2_CreateFromMemory(tex_data, tex_size, flags, &ktx);
+  TB_CHECK(err == KTX_SUCCESS, "Failed to create KTX texture from memory");
+
+  TbTexture2Comp tex_comp = {0};
+  if (ktx != NULL) {
+    tex_comp = tb_load_ktx_image(rnd_sys, name, ktx);
+  }
+
+  tb_free(tb_global_alloc, tex_data);
+
+  // Launch pinned task to handle loading signals on main thread
+  TbTextureLoadedArgs loaded_args = {
+      .ecs = load_args->common.ecs,
+      .tex = tex,
+      .comp = tex_comp,
+  };
+  tb_launch_pinned_task_args(load_args->common.enki,
+                             load_args->common.loaded_task, &loaded_args,
+                             sizeof(TbTextureLoadedArgs));
+  TracyCZoneEnd(ctx);
+}
+
+typedef struct TbLoadRawTexture2Args {
+  TbLoadCommonTexture2Args common;
+  TbTextureRawLoadRequest raw;
+} TbLoadRawTexture2Args;
+
+void tb_load_raw_texture_task(const void *args) {
+  TracyCZoneN(ctx, "Load Raw Texture Task", true);
+  tb_auto load_args = (const TbLoadRawTexture2Args *)args;
+  TbTexture2 tex = load_args->common.tex;
+  tb_auto rnd_sys = load_args->common.rnd_sys;
+  tb_auto usage = load_args->common.usage;
+
+  tb_auto name = load_args->raw.name;
+  tb_auto pixels = load_args->raw.pixels;
+  tb_auto size = load_args->raw.size;
+  tb_auto width = load_args->raw.width;
+  tb_auto height = load_args->raw.height;
+
+  TbTexture2Comp tex_comp =
+      tb_load_raw_image(rnd_sys, name, pixels, size, width, height, usage);
+
+  // Launch pinned task to handle loading signals on main thread
+  TbTextureLoadedArgs loaded_args = {
+      .ecs = load_args->common.ecs,
+      .tex = tex,
+      .comp = tex_comp,
+  };
+  tb_launch_pinned_task_args(load_args->common.enki,
+                             load_args->common.loaded_task, &loaded_args,
+                             sizeof(TbTextureLoadedArgs));
   TracyCZoneEnd(ctx);
 }
 
 // Systems
 
-void tb_queue_tex_loads(ecs_iter_t *it) {
+void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 2);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 3);
-
-  tb_auto rnd_sys = ecs_singleton_get_mut(it->world, TbRenderSystem);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -310,24 +532,109 @@ void tb_queue_tex_loads(ecs_iter_t *it) {
     TbPinnedTask loaded_task =
         tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
 
-    TbLoadTexture2Args args = {
-        .ecs = it->world,
-        .tex = ent,
-        .enki = enki,
-        .rnd_sys = rnd_sys,
-        .loaded_task = loaded_task,
-        .path = req.path,
-        .mat_name = req.mat_name,
-        .usage = usage,
+    TbLoadGLTFTexture2Args args = {
+        .common =
+            {
+                .ecs = it->world,
+                .tex = ent,
+                .enki = enki,
+                .rnd_sys = rnd_sys,
+                .loaded_task = loaded_task,
+                .usage = usage,
+            },
+        .gltf = req,
     };
-    TbTask load_task = tb_async_task(enki, tb_load_texture_task, &args,
-                                     sizeof(TbLoadTexture2Args));
+    TbTask load_task = tb_async_task(enki, tb_load_gltf_texture_task, &args,
+                                     sizeof(TbLoadGLTFTexture2Args));
     // Apply task component to texture entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(it->world, ent, TbTextureGLTFLoadRequest);
   }
+  TracyCZoneEnd(ctx);
+}
+
+void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Queue KTX Tex Loads", true);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+
+  // TODO: Time slice the time spent creating tasks
+  // Iterate texture load tasks
+  for (int32_t i = 0; i < it->count; ++i) {
+    TbTexture2 ent = it->entities[i];
+    tb_auto req = reqs[i];
+    tb_auto usage = usages[i];
+
+    // This pinned task will be launched by the loading task
+    TbPinnedTask loaded_task =
+        tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
+
+    TbLoadKTXTexture2Args args = {
+        .common =
+            {
+                .ecs = it->world,
+                .tex = ent,
+                .enki = enki,
+                .rnd_sys = rnd_sys,
+                .loaded_task = loaded_task,
+                .usage = usage,
+            },
+        .ktx = req,
+    };
+    TbTask load_task = tb_async_task(enki, tb_load_ktx_texture_task, &args,
+                                     sizeof(TbLoadKTXTexture2Args));
+    // Apply task component to texture entity
+    ecs_set(it->world, ent, TbTask, {load_task});
+
+    // Remove load request as it has now been enqueued to the task system
+    ecs_remove(it->world, ent, TbTextureKTXLoadRequest);
+  }
+  TracyCZoneEnd(ctx);
+}
+
+void tb_queue_raw_tex_loads(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Queue Raw Tex Loads", true);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+
+  // TODO: Time slice the time spent creating tasks
+  // Iterate texture load tasks
+  for (int32_t i = 0; i < it->count; ++i) {
+    TbTexture2 ent = it->entities[i];
+    tb_auto req = reqs[i];
+    tb_auto usage = usages[i];
+
+    // This pinned task will be launched by the loading task
+    TbPinnedTask loaded_task =
+        tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
+
+    TbLoadRawTexture2Args args = {
+        .common =
+            {
+                .ecs = it->world,
+                .tex = ent,
+                .enki = enki,
+                .rnd_sys = rnd_sys,
+                .loaded_task = loaded_task,
+                .usage = usage,
+            },
+        .raw = req,
+    };
+    TbTask load_task = tb_async_task(enki, tb_load_raw_texture_task, &args,
+                                     sizeof(TbLoadRawTexture2Args));
+    // Apply task component to texture entity
+    ecs_set(it->world, ent, TbTask, {load_task});
+
+    // Remove load request as it has now been enqueued to the task system
+    ecs_remove(it->world, ent, TbTextureRawLoadRequest);
+  }
+  TracyCZoneEnd(ctx);
 }
 
 // Toybox Glue
@@ -336,29 +643,140 @@ void tb_register_texture2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbTexture2Ctx);
   ECS_COMPONENT_DEFINE(ecs, TbTextureGLTFLoadRequest);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureKTXLoadRequest);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureRawLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTexture2Comp);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
   ECS_TAG_DEFINE(ecs, TbTextureReady);
   ECS_TAG_DEFINE(ecs, TbNeedTexDescUpdate);
 
-  ECS_SYSTEM(ecs, tb_queue_tex_loads, EcsPreUpdate,
-             TbTaskScheduler(TbTaskScheduler), [in] TbTextureGLTFLoadRequest,
-             [in] TbTextureUsage);
+  ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
+             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
+             [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
+  ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPreUpdate,
+             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
+             [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
+  ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPreUpdate,
+             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
+             [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
 
-  // TODO: Init ctx specific resources
   TbTexture2Ctx ctx = {0};
+
+  // Create descriptor set layout
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+        VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+    const uint32_t binding_count = 1;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 2048, // HACK: High upper bound
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+            },
+    };
+    tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Texture Table Layout",
+                             &ctx.set_layout);
+  }
+
+  // Must set ctx before we try to load any textures
+  ecs_singleton_set_ptr(ecs, TbTexture2Ctx, &ctx);
+
+  // Load some default textures
+  {
+    const uint8_t pixels[] = {
+        255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255,
+    };
+    ctx.default_color_tex =
+        tb_tex_sys_load_raw_tex(ecs, "Default Color Texture", pixels,
+                                sizeof(pixels), 2, 2, TB_TEX_USAGE_COLOR);
+  }
+  {
+    const uint8_t pixels[] = {
+        0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
+        0x7E, 0x7E, 0xFF, 255, 0x7E, 0x7E, 0xFF, 255,
+    };
+    ctx.default_normal_tex =
+        tb_tex_sys_load_raw_tex(ecs, "Default Normal Texture", pixels,
+                                sizeof(pixels), 2, 2, TB_TEX_USAGE_NORMAL);
+  }
+  {
+    const uint8_t pixels[] = {
+        255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255,
+    };
+    ctx.default_metal_rough_tex =
+        tb_tex_sys_load_raw_tex(ecs, "Default Metal Rough Texture", pixels,
+                                sizeof(pixels), 2, 2, TB_TEX_USAGE_METAL_ROUGH);
+  }
+  // Load BRDF LUT texture
+  {
+    const char *path = ASSET_PREFIX "textures/brdf.ktx2";
+    ctx.brdf_tex =
+        tb_tex_sys_load_ktx_tex(ecs, path, "BRDF LUT", TB_TEX_USAGE_BRDF);
+  }
+
   ecs_singleton_set_ptr(ecs, TbTexture2Ctx, &ctx);
 }
 
 void tb_unregister_texture2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+
+  tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
+
+  // TODO: Release all default texture references
+
+  // TODO: Check for leaks
+
+  // TODO: Clean up descriptor pool
+
   ecs_singleton_remove(ecs, TbTexture2Ctx);
 }
 
 TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
 
 // Public API
+
+TbTexture2 tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
+                                   const uint8_t *pixels, uint64_t size,
+                                   uint32_t width, uint32_t height,
+                                   TbTextureUsage usage) {
+  // Create a texture entity
+  TbTexture2 tex_ent = ecs_new_entity(ecs, 0);
+  ecs_set_name(ecs, tex_ent, name);
+
+  // It is a child of the texture system context singleton
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
+
+  // Append a texture load request onto the entity to schedule loading
+  ecs_set(ecs, tex_ent, TbTextureRawLoadRequest,
+          {name, pixels, size, width, height});
+  ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
+
+  return tex_ent;
+}
 
 TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
                                    const char *mat_name, TbTextureUsage usage) {
@@ -394,8 +812,23 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
 
   // Append a texture load request onto the entity to schedule loading
-  // Or do we create a task pinned on the loading thread?
   ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path, mat_name});
+  ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
+
+  return tex_ent;
+}
+
+TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
+                                   const char *name, TbTextureUsage usage) {
+  // Create a texture entity
+  TbTexture2 tex_ent = ecs_new_entity(ecs, 0);
+  ecs_set_name(ecs, tex_ent, name);
+
+  // It is a child of the texture system context singleton
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
+
+  // Append a texture load request onto the entity to schedule loading
+  ecs_set(ecs, tex_ent, TbTextureKTXLoadRequest, {path, name});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
 
   return tex_ent;

@@ -95,8 +95,6 @@ public:
 
     JPH::JobSystem::Job *job = nullptr;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wgnu-statement-expression"
     while (TB_QUEUE_POP(*job_queue, &job)) {
       ZoneScopedC(TracyCategoryColorPhysics);
 #if (defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)) &&         \
@@ -106,7 +104,6 @@ public:
 #endif
       job->Execute();
     }
-#pragma clang diagnostic pop
   }
 
   explicit TbJobSystem(TbTaskScheduler enki, TbAllocator std_alloc,

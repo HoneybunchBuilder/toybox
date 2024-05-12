@@ -3,6 +3,11 @@
 #include "dynarray.h"
 #include <SDL3/SDL_mutex.h>
 
+// Disabling this warning with -Wno-gnu-statement-expression
+// doesn't seem to work in cmake's target_compile_options
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-statement-expression"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,8 +40,6 @@ extern "C" {
 
 #define TB_QUEUE_POP(queue, out)                                               \
   ({                                                                           \
-    _Pragma("clang diagnostic push");                                          \
-    _Pragma("clang diagnostic ignored \"-Wgnu-statement-expression\"");        \
     bool ret = false;                                                          \
     if (SDL_TryLockMutex((queue).mutex) == 0) {                                \
       if (TB_DYN_ARR_SIZE((queue).storage) > 0) {                              \
@@ -46,7 +49,6 @@ extern "C" {
       }                                                                        \
       SDL_UnlockMutex((queue).mutex);                                          \
     }                                                                          \
-    _Pragma("clang diagnostic pop");                                           \
     ret;                                                                       \
   })
 

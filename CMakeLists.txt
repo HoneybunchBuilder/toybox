@@ -357,9 +357,6 @@ add_library(toybox OBJECT ${lib_source})
 # We provide a cross platform blocks runtime so we can use this
 target_compile_options(toybox PUBLIC -fblocks)
 
-# We rely on gnu statement expressions
-target_compile_options(toybox PUBLIC -Wno-gnu-statement-expression)
-
 if(WIN32)
   # This really only matters for clang-cl
   # ${CMAKE_C_COMPILER_ID} being MSVC would fail the above check

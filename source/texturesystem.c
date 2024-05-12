@@ -357,11 +357,13 @@ TbTextureSystem create_texture_system(TbAllocator gp_alloc,
         err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
         TB_CHECK(err == KTX_SUCCESS, "Failed transcode basis texture");
       }
-    }
 
-    // Create texture from ktx2 texture
-    sys.brdf_tex =
-        tb_tex_system_create_texture_ktx2(&sys, path, "BRDF LUT", ktx);
+      // Create texture from ktx2 texture
+      sys.brdf_tex =
+          tb_tex_system_create_texture_ktx2(&sys, path, "BRDF LUT", ktx);
+
+      tb_free(sys.gp_alloc, tex_data);
+    }
   }
 
   return sys;

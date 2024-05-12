@@ -119,9 +119,10 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
     for (uint32_t state_idx = 0; state_idx < TB_MAX_FRAME_STATES; ++state_idx) {
       TbRenderSystemFrameState *state = &sys.frame_states[state_idx];
 
+      // Using global alloc because queues may be pushed to from task threads
       TB_DYN_ARR_RESET(state->set_write_queue, sys.gp_alloc, 1);
       TB_DYN_ARR_RESET(state->buf_copy_queue, sys.gp_alloc, 1);
-      TB_DYN_ARR_RESET(state->buf_img_copy_queue, sys.gp_alloc, 1);
+      TB_QUEUE_RESET(state->buf_img_copy_queue, tb_global_alloc, 1);
 
       // Allocate tmp host buffer
       {
@@ -215,7 +216,7 @@ void destroy_render_system(TbRenderSystem *self) {
                      state->tmp_host_buffer.alloc);
     TB_DYN_ARR_DESTROY(state->set_write_queue);
     TB_DYN_ARR_DESTROY(state->buf_copy_queue);
-    TB_DYN_ARR_DESTROY(state->buf_img_copy_queue);
+    TB_QUEUE_DESTROY(state->buf_img_copy_queue);
   }
 
   // Clean up main thread owned memory that the render thread held the primary
@@ -307,7 +308,6 @@ void render_frame_end(ecs_iter_t *it) {
       thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
       TB_DYN_ARR_CLEAR(state->set_write_queue);
       TB_DYN_ARR_CLEAR(state->buf_copy_queue);
-      TB_DYN_ARR_CLEAR(state->buf_img_copy_queue);
     }
 
     // Reset temp pool, the contents will still be intact for the render thread
@@ -822,11 +822,9 @@ void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
                                    TbBufferImageCopy *uploads,
                                    uint32_t upload_count) {
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-  uint32_t head = TB_DYN_ARR_SIZE(state->buf_img_copy_queue);
-  TB_DYN_ARR_RESIZE(state->buf_img_copy_queue, head + upload_count);
   // Append uploads to queue
   for (uint32_t i = 0; i < upload_count; ++i) {
-    TB_DYN_ARR_AT(state->buf_img_copy_queue, head + i) = uploads[i];
+    TB_QUEUE_PUSH(state->buf_img_copy_queue, uploads[i])
   }
 }
 

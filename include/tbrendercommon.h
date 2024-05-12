@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dynarray.h"
+#include "tbqueue.h"
 #include "tbvk.h"
 #include "tbvma.h"
 #include "vkdbg.h"
@@ -77,7 +78,7 @@ typedef struct TbBufferImageCopy {
 
 typedef TB_DYN_ARR_OF(VkWriteDescriptorSet) TbSetWriteQueue;
 typedef TB_DYN_ARR_OF(TbBufferCopy) TbBufferCopyQueue;
-typedef TB_DYN_ARR_OF(TbBufferImageCopy) TbBufferImageCopyQueue;
+typedef TB_QUEUE_OF(TbBufferImageCopy) TbBufferImageCopyQueue;
 
 typedef struct TbHostBuffer {
   VkBuffer buffer;
