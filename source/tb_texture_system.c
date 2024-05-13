@@ -2,6 +2,7 @@
 
 #include "assets.h"
 #include "tb_task_scheduler.h"
+#include "tbcommon.h"
 #include "tbgltf.h"
 #include "tbktx.h"
 #include "tbqueue.h"
@@ -58,20 +59,90 @@ ECS_TAG_DECLARE(TbNeedTexDescUpdate);
 
 // Internals
 
-// Some goodies from the old texture system
 typedef struct KTX2IterData {
   VkBuffer buffer;
   VkImage image;
   TbBufferImageCopy *uploads;
   uint64_t offset;
 } KTX2IterData;
-extern ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
-                                            int32_t width, int32_t height,
-                                            int32_t depth,
-                                            uint64_t face_lod_size,
-                                            void *pixels, void *userdata);
-extern VkImageType get_ktx2_image_type(const ktxTexture2 *t);
-extern VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t);
+
+ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
+                                     int32_t width, int32_t height,
+                                     int32_t depth, uint64_t face_lod_size,
+                                     void *pixels, void *userdata) {
+  (void)pixels;
+  KTX2IterData *user_data = (KTX2IterData *)userdata;
+
+  user_data->uploads[mip_level] = (TbBufferImageCopy){
+      .src = user_data->buffer,
+      .dst = user_data->image,
+      .region =
+          {
+              .bufferOffset = user_data->offset,
+              .imageSubresource =
+                  {
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                      .layerCount = 1,
+                      .baseArrayLayer = face,
+                      .mipLevel = mip_level,
+                  },
+              .imageExtent =
+                  {
+                      .width = width,
+                      .height = height,
+                      .depth = depth,
+                  },
+          },
+      .range =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseArrayLayer = face,
+              .baseMipLevel = mip_level,
+              .layerCount = 1,
+              .levelCount = 1,
+          },
+  };
+
+  user_data->offset += face_lod_size;
+  return KTX_SUCCESS;
+}
+
+VkImageType get_ktx2_image_type(const ktxTexture2 *t) {
+  return (VkImageType)(t->numDimensions - 1);
+}
+
+VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
+  const VkImageType img_type = get_ktx2_image_type(t);
+
+  const bool cube = t->isCubemap;
+  const bool array = t->isArray;
+
+  if (img_type == VK_IMAGE_TYPE_1D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_1D;
+    }
+  } else if (img_type == VK_IMAGE_TYPE_2D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_2D;
+    }
+
+  } else if (img_type == VK_IMAGE_TYPE_3D) {
+    // No such thing as a 3D array
+    return VK_IMAGE_VIEW_TYPE_3D;
+  } else if (cube) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    }
+    return VK_IMAGE_VIEW_TYPE_CUBE;
+  }
+
+  TB_CHECK(false, "Invalid");
+  return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+}
 
 TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
                                  ktxTexture2 *ktx) {
@@ -376,6 +447,9 @@ void tb_load_gltf_texture_task(const void *args) {
     TB_CHECK(false, "Failed to find material by name");
     tex = 0; // Invalid ent means task failed
   }
+
+  // Name was a copy; can be freed now
+  tb_free(tb_global_alloc, (void *)mat_name);
 
   char image_name[100] = {0};
   struct cgltf_texture *texture = NULL;
@@ -840,6 +914,11 @@ TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
 
 // Public API
 
+VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->set_layout;
+}
+
 VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
   return ctx->set_pool.sets[0];
@@ -902,11 +981,17 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
     ecs_set_name(ecs, tex_ent, image_name);
   }
 
+  // This copy is made to make sure that the name stays alive during async task
+  // The async task is responsible for freeing material name memory
+  const size_t mat_name_len = SDL_strnlen(mat_name, 256) + 1;
+  char *mat_name_cpy = tb_alloc_nm_tp(tb_global_alloc, mat_name_len, char);
+  SDL_strlcpy(mat_name_cpy, mat_name, mat_name_len);
+
   // It is a child of the texture system context singleton
   ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
 
   // Append a texture load request onto the entity to schedule loading
-  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path, mat_name});
+  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
 
   return tex_ent;

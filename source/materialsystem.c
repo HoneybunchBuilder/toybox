@@ -6,7 +6,7 @@
 #include "hash.h"
 #include "profiling.h"
 #include "rendersystem.h"
-#include "texturesystem.h"
+#include "tb_texture_system.h"
 #include "world.h"
 
 #include <flecs.h>
@@ -40,13 +40,11 @@ uint32_t find_mat_by_hash(TbMaterialSystem *self, uint64_t id) {
 
 TbMaterialSystem create_material_system(TbAllocator gp_alloc,
                                         TbAllocator tmp_alloc,
-                                        TbRenderSystem *rnd_sys,
-                                        TbTextureSystem *tex_sys) {
+                                        TbRenderSystem *rnd_sys) {
   TbMaterialSystem sys = {
       .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
-      .texture_system = tex_sys,
   };
 
   TB_DYN_ARR_RESET(sys.materials, gp_alloc, 1);
@@ -242,10 +240,9 @@ void tb_register_material_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMaterialSystem);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
 
-  TbMaterialSystem sys = create_material_system(
-      world->gp_alloc, world->tmp_alloc, rnd_sys, tex_sys);
+  TbMaterialSystem sys =
+      create_material_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
 
   ECS_SYSTEM(ecs, tick_material_system, EcsPreStore,
              TbMaterialSystem(TbMaterialSystem));
@@ -267,13 +264,12 @@ VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self) {
   return self->set_layout;
 }
 
-TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
+TbMaterialId tb_mat_system_load_material(ecs_world_t *ecs,
+                                         TbMaterialSystem *self,
                                          const char *path,
                                          const cgltf_material *mat) {
   TracyCZoneN(ctx, "Load Material", true);
   VkResult err = VK_SUCCESS;
-
-  tb_auto tex_sys = self->texture_system;
 
   // Hash the materials's path and gltf name to get the id
   uint64_t id = tb_hash(0, (const uint8_t *)path, SDL_strlen(path));
@@ -307,12 +303,9 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
 
       // Determine feature permutations and load textures
       {
-        TbTextureId metal_rough_id = tex_sys->default_metal_rough_tex;
-        TbTextureId color_id = tex_sys->default_color_tex;
-        TbTextureId normal_id = tex_sys->default_normal_tex;
-
-        // GLTFpack strips image names so we have to synthesize something
-        char image_name[100] = {0};
+        TbTexture2 metal_rough = tb_get_default_metal_rough_tex(ecs);
+        TbTexture2 color = tb_get_default_color_tex(ecs);
+        TbTexture2 normal = tb_get_default_normal_tex(ecs);
 
         TbMaterialPerm feat_perm = 0;
         if (mat->has_pbr_metallic_roughness) {
@@ -321,39 +314,27 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
           if (mat->pbr_metallic_roughness.metallic_roughness_texture.texture !=
               NULL) {
             feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
-            SDL_snprintf(image_name, 100, "%s_metal", mat->name);
-            metal_rough_id = tb_tex_system_load_texture(
-                tex_sys, path, image_name,
-                mat->pbr_metallic_roughness.metallic_roughness_texture.texture);
-          } else {
-            tb_tex_system_take_tex_ref(tex_sys, metal_rough_id);
+            metal_rough = tb_tex_sys_load_mat_tex(ecs, path, mat->name,
+                                                  TB_TEX_USAGE_NORMAL);
           }
           if (mat->pbr_metallic_roughness.base_color_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
-            SDL_snprintf(image_name, 100, "%s_color", mat->name);
-            color_id = tb_tex_system_load_texture(
-                tex_sys, path, image_name,
-                mat->pbr_metallic_roughness.base_color_texture.texture);
-          } else {
-            tb_tex_system_take_tex_ref(tex_sys, color_id);
+            color = tb_tex_sys_load_mat_tex(ecs, path, mat->name,
+                                            TB_TEX_USAGE_COLOR);
           }
 
-          material->metal_rough_map = metal_rough_id;
-          material->color_map = color_id;
+          material->metal_rough_map = metal_rough;
+          material->color_map = color;
         }
         if (mat->has_pbr_specular_glossiness) {
           feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
 
           if (mat->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
-            SDL_snprintf(image_name, 100, "%s_color", mat->name);
-            color_id = tb_tex_system_load_texture(
-                tex_sys, path, image_name,
-                mat->pbr_metallic_roughness.base_color_texture.texture);
-          } else {
-            tb_tex_system_take_tex_ref(tex_sys, color_id);
+            color = tb_tex_sys_load_mat_tex(ecs, path, mat->name,
+                                            TB_TEX_USAGE_COLOR);
           }
-          material->color_map = color_id;
+          material->color_map = color;
         }
         if (mat->has_clearcoat) {
           feat_perm |= GLTF_PERM_CLEARCOAT;
@@ -387,13 +368,10 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
         }
         if (mat->normal_texture.texture != NULL) {
           feat_perm |= GLTF_PERM_NORMAL_MAP;
-          SDL_snprintf(image_name, 100, "%s_normal", mat->name);
-          normal_id = tb_tex_system_load_texture(tex_sys, path, image_name,
-                                                 mat->normal_texture.texture);
-        } else {
-          tb_tex_system_take_tex_ref(tex_sys, normal_id);
+          normal = tb_tex_sys_load_mat_tex(ecs, path, mat->name,
+                                           TB_TEX_USAGE_NORMAL);
         }
-        material->normal_map = normal_id;
+        material->normal_map = normal;
 
         material->permutation = feat_perm;
       }
@@ -429,11 +407,10 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
                 mat->pbr_specular_glossiness.glossiness_factor),
             .emissives = tb_f3tof4(tb_atof3(mat->emissive_factor), 1.0f),
             .perm = material->permutation,
-            .color_idx = tb_tex_system_get_index(tex_sys, material->color_map),
-            .normal_idx =
-                tb_tex_system_get_index(tex_sys, material->normal_map),
-            .pbr_idx =
-                tb_tex_system_get_index(tex_sys, material->metal_rough_map),
+            // TODO: We shouldn't do this until textures are loaded
+            .color_idx = 0,
+            .normal_idx = 0,
+            .pbr_idx = 0,
         };
 
         if (mat->has_emissive_strength) {
@@ -466,13 +443,6 @@ TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
 
     material->id = (TbMaterialId){id, index};
     material->ref_count = 0;
-  } else {
-    TbMaterial *material = &TB_DYN_ARR_AT(self->materials, index);
-    // If the material was already loaded, go through the textures and grab
-    // a reference so it's known that the texture is in use
-    tb_tex_system_take_tex_ref(tex_sys, material->color_map);
-    tb_tex_system_take_tex_ref(tex_sys, material->normal_map);
-    tb_tex_system_take_tex_ref(tex_sys, material->metal_rough_map);
   }
 
   TB_DYN_ARR_AT(self->materials, index).ref_count++;
@@ -510,12 +480,7 @@ void tb_mat_system_release_material_ref(TbMaterialSystem *self,
 
   material->ref_count--;
 
-  // Materials should always release their texture references since materials
-  // don't own their textures
-  tb_auto tex_sys = self->texture_system;
-  tb_tex_system_release_texture_ref(tex_sys, material->color_map);
-  tb_tex_system_release_texture_ref(tex_sys, material->normal_map);
-  tb_tex_system_release_texture_ref(tex_sys, material->metal_rough_map);
+  // TODO: Should materials have to release texture references?
 
   if (material->ref_count == 0) {
     // Free the mesh at this index

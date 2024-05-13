@@ -14,8 +14,8 @@
 
 ECS_COMPONENT_DECLARE(TbMeshComponent);
 
-bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
-                                    TbAllocator gp_alloc,
+bool create_mesh_component_internal(ecs_world_t *ecs, TbMeshComponent *self,
+                                    TbMeshId id, TbAllocator gp_alloc,
                                     const char *source_path,
                                     const cgltf_node *node,
                                     TbMaterialSystem *mat_system) {
@@ -55,7 +55,7 @@ bool create_mesh_component_internal(TbMeshComponent *self, TbMeshId id,
 
       // Load materials
       submesh->material =
-          tb_mat_system_load_material(mat_system, source_path, material);
+          tb_mat_system_load_material(ecs, mat_system, source_path, material);
       TB_CHECK_RETURN(submesh->material.id, "Failed to load material", false);
 
       // calculate the aligned size
@@ -157,7 +157,7 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
   TbMeshComponent comp = {0};
-  bool ret = create_mesh_component_internal(&comp, id, world->gp_alloc,
+  bool ret = create_mesh_component_internal(ecs, &comp, id, world->gp_alloc,
                                             source_path, node, mat_sys);
   TB_CHECK(ret, "Failed to create mesh component");
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);

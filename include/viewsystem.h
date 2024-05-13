@@ -4,8 +4,8 @@
 #include "common.hlsli"
 #include "dynarray.h"
 #include "renderpipelinesystem.h"
+#include "tb_texture_system.h"
 #include "tbrendercommon.h"
-#include "texturesystem.h"
 
 #include <flecs.h>
 

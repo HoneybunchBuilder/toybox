@@ -1,12 +1,27 @@
 #pragma once
 
+#include "rendersystem.h"
+
 #include <flecs.h>
 
-#include "texturesystem.h" // For TbTextureUsage
+#define TB_TEX_SYS_PRIO (TB_RND_SYS_PRIO + 1)
+
+typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef ecs_entity_t TbTexture2; // Entities can be handles to textures
 extern ECS_COMPONENT_DECLARE(TbTextureComponent2);
 #define TbInvalidTexComp ((TbTextureComponent2)0xFFFFFFFF)
+
+typedef enum TbTextureUsage {
+  TB_TEX_USAGE_UNKNOWN = 0,
+  TB_TEX_USAGE_COLOR,
+  TB_TEX_USAGE_NORMAL,
+  TB_TEX_USAGE_METAL_ROUGH,
+  TB_TEX_USAGE_BRDF,
+} TbTextureUsage;
+
+VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs);
 
 // Returns the descriptor set that can be used to access textures by index from
 // a shader

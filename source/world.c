@@ -454,7 +454,7 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     tb_auto node = data->scene->nodes[i];
-    load_entity(world, &scene, tok, data, scene_path, TbInvalidEntityId, node);
+    load_entity(world, &scene, tok, data, asset_path, TbInvalidEntityId, node);
   }
 
   TB_DYN_ARR_APPEND(world->scenes, scene);

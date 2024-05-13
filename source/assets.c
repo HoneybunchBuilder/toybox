@@ -49,6 +49,7 @@ cgltf_data *tb_read_glb(TbAllocator gp_alloc, const char *path) {
   cgltf_data *data = NULL;
 
   SDL_RWops *glb_file = SDL_RWFromFile(path, "rb");
+  const char *err = SDL_GetError();
   TB_CHECK_RETURN(glb_file, "Failed to open glb.", NULL);
 
   cgltf_options options = {.type = cgltf_file_type_glb,

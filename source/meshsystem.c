@@ -14,8 +14,8 @@
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "tb_shader_system.h"
+#include "tb_texture_system.h"
 #include "tbutil.h"
-#include "texturesystem.h"
 #include "transformcomponent.h"
 #include "viewsystem.h"
 #include "vkdbg.h"
@@ -573,8 +573,7 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
 TbMeshSystem create_mesh_system_internal(
     ecs_world_t *ecs, TbAllocator gp_alloc, TbAllocator tmp_alloc,
-    TbRenderSystem *rnd_sys, TbMaterialSystem *mat_sys,
-    TbTextureSystem *tex_sys, TbViewSystem *view_sys,
+    TbRenderSystem *rnd_sys, TbMaterialSystem *mat_sys, TbViewSystem *view_sys,
     TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
       .gp_alloc = gp_alloc,
@@ -691,7 +690,7 @@ TbMeshSystem create_mesh_system_internal(
                   mat_sys->set_layout,
                   sys.draw_set_layout,
                   ro_sys->set_layout,
-                  tex_sys->set_layout,
+                  tb_tex_sys_get_set_layout2(ecs),
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
@@ -1305,7 +1304,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
   tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
   tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -1366,7 +1364,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       }
 
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
-      tb_auto tex_set = tb_tex_sys_get_set(tex_sys);
+      tb_auto tex_set = tb_tex_sys_get_set2(ecs);
       tb_auto mat_set = tb_mat_system_get_set(mat_sys);
       tb_auto idx_set = tb_mesh_system_get_idx_set(mesh_sys);
       tb_auto pos_set = tb_mesh_system_get_pos_set(mesh_sys);
@@ -1625,14 +1623,13 @@ void tb_register_mesh_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
-  tb_auto tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
-  tb_auto sys = create_mesh_system_internal(ecs, world->gp_alloc,
-                                            world->tmp_alloc, rnd_sys, mat_sys,
-                                            tex_sys, view_sys, ro_sys, rp_sys);
+  tb_auto sys =
+      create_mesh_system_internal(ecs, world->gp_alloc, world->tmp_alloc,
+                                  rnd_sys, mat_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});

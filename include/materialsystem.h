@@ -4,9 +4,9 @@
 #include "allocator.h"
 #include "dynarray.h"
 #include "rendersystem.h"
+#include "tb_texture_system.h"
 #include "tbcommon.h"
 #include "tbrendercommon.h"
-#include "texturesystem.h"
 
 #define TB_MAT_SYS_PRIO (TB_TEX_SYS_PRIO + 1)
 
@@ -28,7 +28,6 @@ typedef struct TbMaterialSystem {
   TbAllocator tmp_alloc;
 
   TbRenderSystem *rnd_sys;
-  TbTextureSystem *texture_system;
 
   VkSampler sampler;        // Immutable sampler for material descriptor sets
   VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
@@ -47,7 +46,8 @@ extern ECS_COMPONENT_DECLARE(TbMaterialSystem);
 
 VkDescriptorSetLayout tb_mat_system_get_set_layout(TbMaterialSystem *self);
 
-TbMaterialId tb_mat_system_load_material(TbMaterialSystem *self,
+TbMaterialId tb_mat_system_load_material(ecs_world_t *ecs,
+                                         TbMaterialSystem *self,
                                          const char *path,
                                          const cgltf_material *material);
 
