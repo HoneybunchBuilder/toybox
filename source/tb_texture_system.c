@@ -845,6 +845,14 @@ VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
   return ctx->set_pool.sets[0];
 }
 
+VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture2 tex) {
+  TB_CHECK_RETURN(tb_is_texture_ready(ecs, tex),
+                  "Tried to get image view of a texture that wasn't ready",
+                  VK_NULL_HANDLE);
+  tb_auto image = ecs_get(ecs, tex, TbTextureImage);
+  return image->image_view;
+}
+
 TbTexture2 tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
                                    const uint8_t *pixels, uint64_t size,
                                    uint32_t width, uint32_t height,
@@ -923,4 +931,21 @@ TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
 bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture2 tex) {
   return ecs_has(ecs, tex, TbTextureLoaded) &&
          ecs_has(ecs, tex, TbTextureComponent2);
+}
+
+TbTexture2 tb_get_default_color_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->default_color_tex;
+}
+TbTexture2 tb_get_default_normal_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->default_normal_tex;
+}
+TbTexture2 tb_get_default_metal_rough_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->default_metal_rough_tex;
+}
+TbTexture2 tb_get_brdf_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  return ctx->brdf_tex;
 }

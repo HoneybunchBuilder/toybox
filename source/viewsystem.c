@@ -5,8 +5,8 @@
 #include "profiling.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tb_texture_system.h"
 #include "tbcommon.h"
-#include "texturesystem.h"
 #include "transformcomponent.h"
 #include "world.h"
 
@@ -21,12 +21,10 @@ TB_REGISTER_SYS(tb, view, TB_VIEW_SYS_PRIO)
 
 TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                                 TbRenderSystem *rnd_sys,
-                                TbRenderTargetSystem *rt_sys,
-                                TbTextureSystem *tex_sys) {
+                                TbRenderTargetSystem *rt_sys) {
   TbViewSystem sys = {
       .rnd_sys = rnd_sys,
       .rt_sys = rt_sys,
-      .texture_system = tex_sys,
       .tmp_alloc = tmp_alloc,
       .gp_alloc = gp_alloc,
   };
@@ -163,7 +161,14 @@ void destroy_view_system(TbViewSystem *self) {
 void view_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "TbView System Tick", TracyCategoryColorRendering, true);
 
-  TbViewSystem *sys = ecs_field(it, TbViewSystem, 1);
+  // The view system requires that the texture system's BRDF texture be ready
+  tb_auto brdf_tex = tb_get_brdf_tex(it->world);
+  if (!tb_is_texture_ready(it->world, brdf_tex)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  tb_auto sys = ecs_field(it, TbViewSystem, 1);
 
   const uint32_t view_count = TB_DYN_ARR_SIZE(sys->views);
 
@@ -291,8 +296,7 @@ void view_update_tick(ecs_iter_t *it) {
     };
     image_info[image_idx + 2] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView = tb_tex_system_get_image_view(
-            sys->texture_system, sys->texture_system->brdf_tex)};
+        .imageView = tb_tex_sys_get_image_view2(it->world, brdf_tex)};
 
     image_info[image_idx + 3] = (VkDescriptorImageInfo){
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -368,13 +372,11 @@ void tb_register_view_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
 
-  TbRenderSystem *rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  TbRenderTargetSystem *rt_sys =
-      ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  TbTextureSystem *tex_sys = ecs_singleton_get_mut(ecs, TbTextureSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
 
-  TbViewSystem sys = create_view_system(world->gp_alloc, world->tmp_alloc,
-                                        rnd_sys, rt_sys, tex_sys);
+  tb_auto sys =
+      create_view_system(world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
@@ -450,7 +452,12 @@ void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
 VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
                                               TbViewId view) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
-    TB_CHECK(false, "TbView Id out of range");
+    return VK_NULL_HANDLE;
+  }
+
+  // Can happen if view system's descriptors weren't ready yet
+  if (self->frame_states[self->rnd_sys->frame_idx].sets == NULL) {
+    return VK_NULL_HANDLE;
   }
 
   return self->frame_states[self->rnd_sys->frame_idx].sets[view];

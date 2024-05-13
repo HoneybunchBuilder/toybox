@@ -1327,6 +1327,10 @@ void mesh_draw_tick(ecs_iter_t *it) {
       tb_auto camera = &cameras[cam_idx];
       tb_auto view_set =
           tb_view_system_get_descriptor(view_sys, camera->view_id);
+      // Skip camera if view set isn't ready
+      if (view_set == VK_NULL_HANDLE) {
+        continue;
+      }
 
       const float width = camera->width;
       const float height = camera->height;
