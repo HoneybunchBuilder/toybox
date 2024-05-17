@@ -305,10 +305,12 @@ void render_frame_end(ecs_iter_t *it) {
       // Assign to the thread
       thread_state->set_write_queue = state->set_write_queue;
       thread_state->buf_copy_queue = state->buf_copy_queue;
-      thread_state->buf_img_copy_queue = state->buf_img_copy_queue;
+
       TB_DYN_ARR_CLEAR(state->set_write_queue);
       TB_DYN_ARR_CLEAR(state->buf_copy_queue);
-      TB_QUEUE_CLEAR(state->buf_img_copy_queue);
+
+      // Queue is thread safe so render thread just has a reference
+      thread_state->buf_img_copy_queue = &state->buf_img_copy_queue;
     }
 
     // Reset temp pool, the contents will still be intact for the render thread

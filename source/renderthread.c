@@ -1325,7 +1325,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
         // Upload all buffer to image requests
         TbBufferImageCopy up = {0};
-        while (TB_QUEUE_POP(state->buf_img_copy_queue, &up)) {
+        while (TB_QUEUE_POP(*state->buf_img_copy_queue, &up)) {
           // Issue an upload command only if the src buffer exists
           // If it doesn't, assume that we want to only do a transition but
           // no copy

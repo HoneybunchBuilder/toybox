@@ -12,7 +12,7 @@ static void *global_alloc(void *user_data, size_t size) {
   (void)user_data;
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  void *ptr = mi_recalloc(NULL, 1, size);
+  void *ptr = mi_calloc(1, size);
   TracyCAllocN(ptr, size, "Global Alloc");
   TracyCZoneEnd(ctx);
   return ptr;
