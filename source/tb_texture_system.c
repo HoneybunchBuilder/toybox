@@ -12,7 +12,10 @@ ECS_COMPONENT_DECLARE(TbTextureUsage);
 
 typedef struct TbTexture2Ctx {
   VkDescriptorSetLayout set_layout;
-  TbDescriptorPool set_pool;
+  TbFrameDescriptorPoolList frame_set_pool;
+
+  // Custom query for special system
+  ecs_query_t *loaded_tex_query;
 
   TbTexture2 default_color_tex;
   TbTexture2 default_normal_tex;
@@ -448,7 +451,8 @@ void tb_load_gltf_texture_task(const void *args) {
     tex = 0; // Invalid ent means task failed
   }
 
-  // Name was a copy; can be freed now
+  // Strings were copies that can be freed now
+  tb_free(tb_global_alloc, (void *)path);
   tb_free(tb_global_alloc, (void *)mat_name);
 
   char image_name[100] = {0};
@@ -718,68 +722,75 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
 
   tb_auto tex_ctx = ecs_field(it, TbTexture2Ctx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto world = ecs_field(it, TbWorldRef, 3)->world;
-  tb_auto tex_comps = ecs_field(it, TbTextureImage, 4);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  tb_auto tex_count = (uint64_t)it->count;
+  uint64_t tex_count = 0; // it->count;
 
-  if (tex_count != tex_ctx->set_pool.capacity) {
-    tex_ctx->set_pool.capacity = tex_count;
-    const uint64_t desc_count = tex_ctx->set_pool.capacity;
+  // Accumulate the number of textures
+  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
+  while (ecs_query_next(&tex_it)) {
+    tex_count += tex_it.count;
+  }
 
-    // Re-create pool and allocate the one set that everything will be bound to
-    {
-      VkDescriptorPoolCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-          .maxSets = tex_ctx->set_pool.capacity,
-          .poolSizeCount = 1,
-          .pPoolSizes =
-              (VkDescriptorPoolSize[1]){
-                  {
-                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                      .descriptorCount = desc_count * 4,
-                  },
-              },
-      };
-      VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-          .sType =
-              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-          .descriptorSetCount = 1,
-          .pDescriptorCounts = (uint32_t[1]){tex_count},
-      };
-      tb_rnd_resize_desc_pool(rnd_sys, &create_info, &tex_ctx->set_layout,
-                              &alloc_info, &tex_ctx->set_pool, 1);
-    }
+  if (tex_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  {
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .descriptorCount = tex_count * 4,
+                },
+            },
+    };
+    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+        .sType =
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        .descriptorSetCount = 1,
+        .pDescriptorCounts = (uint32_t[1]){tex_count},
+    };
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &tex_ctx->set_layout,
+                                &alloc_info, tex_ctx->frame_set_pool.pools, 1);
   }
 
   // Write all textures into the descriptor set table
+  uint32_t tex_idx = 0;
+  tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
+
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  {
-    TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
-    tb_auto image_info =
-        tb_alloc_nm_tp(world->tmp_alloc, tex_count, VkDescriptorImageInfo);
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
+  while (ecs_query_next(&tex_it)) {
+    tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
+    for (int32_t i = 0; i < tex_it.count; ++i) {
+      tb_auto texture = &textures[i];
 
-    for (uint64_t i = 0; i < tex_count; ++i) {
-      tb_auto texture = &tex_comps[i];
-
-      image_info[i] = (VkDescriptorImageInfo){
+      VkDescriptorImageInfo image_info = {
           .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
           .imageView = texture->image_view,
       };
 
-      tb_auto write = (VkWriteDescriptorSet){
+      VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
           .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .dstSet = tex_ctx->set_pool.sets[0],
-          .dstArrayElement = i,
-          .pImageInfo = &image_info[i],
+          .dstSet = tb_rnd_frame_desc_pool_get_set(
+              rnd_sys, tex_ctx->frame_set_pool.pools, 0),
+          .dstArrayElement = tex_idx,
+          .pImageInfo = &image_info,
       };
       TB_DYN_ARR_APPEND(writes, write);
 
       // Texture is now ready to be referenced elsewhere
-      ecs_set(it->world, it->entities[i], TbTextureComponent2, {i});
+      ecs_set(it->world, tex_it.entities[i], TbTextureComponent2, {tex_idx});
+      tex_idx++;
     }
   }
   tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
@@ -813,10 +824,16 @@ void tb_register_texture2_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tb_update_texture_descriptors,
              EcsPreStore, [in] TbTexture2Ctx(TbTexture2Ctx),
-             [in] TbRenderSystem(TbRenderSystem), [in] TbWorldRef(TbWorldRef),
-             [in] TbTextureImage, TbTextureLoaded);
+             [in] TbRenderSystem(TbRenderSystem));
 
-  TbTexture2Ctx ctx = {0};
+  TbTexture2Ctx ctx = {
+      .loaded_tex_query = ecs_query(
+          ecs, {.filter.terms =
+                    {
+                        {.id = ecs_id(TbTextureImage), .inout = EcsIn},
+                        {.id = ecs_id(TbTextureLoaded)},
+                    }}),
+  };
 
   // Create descriptor set layout
   {
@@ -899,6 +916,8 @@ void tb_unregister_texture2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
 
+  ecs_query_fini(ctx->loaded_tex_query);
+
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
   // TODO: Release all default texture references
@@ -921,7 +940,8 @@ VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
 
 VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
-  return ctx->set_pool.sets[0];
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
 }
 
 VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture2 tex) {
@@ -981,8 +1001,12 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
     ecs_set_name(ecs, tex_ent, image_name);
   }
 
-  // This copy is made to make sure that the name stays alive during async task
-  // The async task is responsible for freeing material name memory
+  // Need to copy strings for task safety
+  // Tasks are responsible for freeing these names
+  const size_t path_len = SDL_strnlen(path, 256) + 1;
+  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
+  SDL_strlcpy(path_cpy, path, path_len);
+
   const size_t mat_name_len = SDL_strnlen(mat_name, 256) + 1;
   char *mat_name_cpy = tb_alloc_nm_tp(tb_global_alloc, mat_name_len, char);
   SDL_strlcpy(mat_name_cpy, mat_name, mat_name_len);
@@ -991,7 +1015,7 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
 
   // Append a texture load request onto the entity to schedule loading
-  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path, mat_name_cpy});
+  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path_cpy, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
 
   return tex_ent;

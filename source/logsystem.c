@@ -37,8 +37,9 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
 
 #if TB_WINDOWS == 1
   OutputDebugString(message);
+  OutputDebugString("\n");
 #else
-  printf("%s", message);
+  printf("%s\n", message);
   fflush(stdout);
 #endif
 }

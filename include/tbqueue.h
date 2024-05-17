@@ -43,7 +43,9 @@ extern "C" {
     bool ret = false;                                                          \
     if (SDL_TryLockMutex((queue).mutex) == 0) {                                \
       if (TB_DYN_ARR_SIZE((queue).storage) > 0) {                              \
-        (*out) = *TB_DYN_ARR_BACKPTR((queue).storage);                         \
+        if (out) {                                                             \
+          (*out) = *TB_DYN_ARR_BACKPTR((queue).storage);                       \
+        }                                                                      \
         TB_DYN_ARR_POP((queue).storage);                                       \
         ret = true;                                                            \
       }                                                                        \
@@ -53,7 +55,11 @@ extern "C" {
   })
 
 #define TB_QUEUE_CLEAR(queue)                                                  \
-  while (TB_QUEUE_POP((queue))) {                                              \
+  if (SDL_TryLockMutex((queue).mutex) == 0) {                                  \
+    while (TB_DYN_ARR_SIZE((queue).storage) > 0) {                             \
+      TB_DYN_ARR_POP((queue).storage);                                         \
+    }                                                                          \
+    SDL_UnlockMutex((queue).mutex);                                            \
   }
 
 #ifdef __cplusplus

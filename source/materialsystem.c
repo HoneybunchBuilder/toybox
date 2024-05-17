@@ -315,7 +315,7 @@ TbMaterialId tb_mat_system_load_material(ecs_world_t *ecs,
               NULL) {
             feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
             metal_rough = tb_tex_sys_load_mat_tex(ecs, path, mat->name,
-                                                  TB_TEX_USAGE_NORMAL);
+                                                  TB_TEX_USAGE_METAL_ROUGH);
           }
           if (mat->pbr_metallic_roughness.base_color_texture.texture != NULL) {
             feat_perm |= GLTF_PERM_BASE_COLOR_MAP;

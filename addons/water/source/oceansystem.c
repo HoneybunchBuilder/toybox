@@ -778,6 +778,9 @@ void ocean_draw_tick(ecs_iter_t *it) {
     return;
   }
 
+  tb_auto rnd_sys = sys->rnd_sys;
+  tb_auto view_sys = sys->view_sys;
+
   for (int32_t i = 0; i < it->count; ++i) {
     TbCameraComponent *camera = &cameras[i];
 
@@ -785,7 +788,12 @@ void ocean_draw_tick(ecs_iter_t *it) {
     const uint32_t height = camera->height;
 
     VkResult err = VK_SUCCESS;
-    TbRenderSystem *rnd_sys = sys->rnd_sys;
+
+    tb_auto view_set = tb_view_system_get_descriptor(view_sys, camera->view_id);
+    // Skip camera if view set isn't ready
+    if (view_set == VK_NULL_HANDLE) {
+      continue;
+    }
 
     // We want to draw a number of ocean tiles to cover the entire ocean plane
     // Since only visible ocean tiles need to be drawn we can calculate the
@@ -1025,9 +1033,6 @@ void ocean_draw_tick(ecs_iter_t *it) {
             tb_alloc_nm_tp(sys->tmp_alloc, batch_max, TbDrawBatch);
         tb_auto prepass_draw_batches =
             tb_alloc_nm_tp(sys->tmp_alloc, batch_max, TbDrawBatch);
-
-        tb_auto view_set =
-            tb_view_system_get_descriptor(sys->view_sys, camera->view_id);
 
         for (uint32_t ocean_idx = 0; ocean_idx < ocean_count; ++ocean_idx) {
           tb_auto ocean_set = tb_rnd_frame_desc_pool_get_set(
