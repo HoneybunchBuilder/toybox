@@ -142,7 +142,6 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   (void)pUserData;
   (void)pCallbackData;
 
-  // Can't use TB_LOG_* here because the internal allocator is not thread safe
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
     TB_LOG_VERBOSE(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
   } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
@@ -158,7 +157,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   // Helper for breaking when encountering a non-info message
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-    // SDL_TriggerBreakpoint();
+    SDL_TriggerBreakpoint();
   }
 
   return false;
