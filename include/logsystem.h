@@ -25,8 +25,6 @@ typedef struct TbLogSystem {
   bool *ui;
   bool enabled;
   bool autoscroll;
-  void *orig_log_fn;
-  void *orig_userdata;
   TB_DYN_ARR_OF(TbLogMessage) messages;
 } TbLogSystem;
 extern ECS_COMPONENT_DECLARE(TbLogSystem);

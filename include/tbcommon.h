@@ -5,9 +5,20 @@
 #include "allocator.h"
 #include "profiling.h"
 #include "settings.h"
-#include "tblog.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tbengineconfig.h"
+#include "tblog.h"
+
+// Manually definine preprocessor macros to reduce windows header includes
+// https://aras-p.info/blog/2018/01/12/Minimizing-windows.h/
+#if TB_WINDOWS == 1
+#if TB_X64 == 1
+#define _AMD64_
+#elif TB_ARM64 = 1
+#define _ARM_
+#endif
+#endif
 
 // Leaning in to clang language extensions
 // __auto_type is really cool
@@ -16,12 +27,12 @@
 
 #define TB_CHECK(expr, message)                                                \
   if (!(expr)) {                                                               \
-    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));            \
     SDL_TriggerBreakpoint();                                                   \
   }
 #define TB_CHECK_RETURN(expr, message, ret)                                    \
   if (!(expr)) {                                                               \
-    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));               \
+    TB_LOG_CRITICAL(SDL_LOG_CATEGORY_APPLICATION, "%s", (message));            \
     SDL_TriggerBreakpoint();                                                   \
     return (ret);                                                              \
   }
