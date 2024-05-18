@@ -78,7 +78,7 @@ static void *thread_alloc(void *user_data, size_t size) {
   if (thread_heap == NULL) {
     thread_heap = mi_heap_new();
   }
-  void *ptr = mi_heap_alloc(thread_heap, 1, size);
+  void *ptr = mi_heap_malloc(thread_heap, size);
   // TracyCAllocN(ptr, size, "Thread Alloc");
   // TracyCZoneEnd(ctx);
   return ptr;
