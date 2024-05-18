@@ -45,6 +45,8 @@ typedef struct TbAllocator {
 
 extern TbAllocator tb_global_alloc;
 
+extern _Thread_local TbAllocator tb_thread_alloc;
+
 typedef struct TbGeneralAllocator {
   mi_heap_t *heap;
   TbAllocator alloc;

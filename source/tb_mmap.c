@@ -39,7 +39,7 @@ void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
   (void)start;
   if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
     return MAP_FAILED;
-  if (file == -1) {
+  if ((intptr_t)file == (intptr_t)-1) {
     if (!(flags & MAP_ANON) || offset) {
       return MAP_FAILED;
     }
@@ -100,7 +100,8 @@ void tb_munmap(void *addr, size_t length) {
 #undef DWORD_LO
 
 #else
-
+#include <stddef.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 
 void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
