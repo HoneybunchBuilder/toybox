@@ -3174,7 +3174,7 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
       }
       // Clear out any in flight descriptor updates since this resize will
       // invalidate them
-      TB_DYN_ARR_CLEAR(frame_state->set_write_queue);
+      TB_QUEUE_CLEAR(*frame_state->set_write_queue);
     }
 
     tb_rnd_on_swapchain_resize(rp_sys);

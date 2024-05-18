@@ -1287,9 +1287,17 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
   // Write descriptor set updates at the top of the frame here
 
   {
-    uint32_t write_count = TB_DYN_ARR_SIZE(state->set_write_queue);
-    VkWriteDescriptorSet *writes = state->set_write_queue.data;
-    vkUpdateDescriptorSets(device, write_count, writes, 0, NULL);
+    TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+    uint32_t write_count = TB_DYN_ARR_SIZE(state->set_write_queue->storage);
+    TB_DYN_ARR_RESET(writes, state->tmp_alloc.alloc, write_count);
+
+    VkWriteDescriptorSet write = {0};
+    while (TB_QUEUE_POP(*state->set_write_queue, &write)) {
+      TB_DYN_ARR_APPEND(writes, write);
+    }
+    write_count = TB_DYN_ARR_SIZE(writes);
+
+    vkUpdateDescriptorSets(device, write_count, writes.data, 0, NULL);
   }
 
   // Draw
@@ -1315,55 +1323,56 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1,
                           true);
         // Upload all buffer requests
-        if (TB_DYN_ARR_SIZE(state->buf_copy_queue) > 0) {
-          TB_DYN_ARR_FOREACH(state->buf_copy_queue, i) {
-            const TbBufferCopy *up = &TB_DYN_ARR_AT(state->buf_copy_queue, i);
-            vkCmdCopyBuffer(start_buffer, up->src, up->dst, 1, &up->region);
+        {
+          TbBufferCopy up = {0};
+          while (TB_QUEUE_POP(*state->buf_copy_queue, &up)) {
+            vkCmdCopyBuffer(start_buffer, up.src, up.dst, 1, &up.region);
           }
-          TB_DYN_ARR_CLEAR(state->buf_copy_queue);
         }
 
         // Upload all buffer to image requests
-        TbBufferImageCopy up = {0};
-        while (TB_QUEUE_POP(*state->buf_img_copy_queue, &up)) {
-          // Issue an upload command only if the src buffer exists
-          // If it doesn't, assume that we want to only do a transition but
-          // no copy
-          if (up.src != VK_NULL_HANDLE) {
-            VkImageMemoryBarrier barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange = up.range,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .image = up.dst,
-            };
-            vkCmdPipelineBarrier(start_buffer,
-                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0,
-                                 NULL, 1, &barrier);
+        {
+          TbBufferImageCopy up = {0};
+          while (TB_QUEUE_POP(*state->buf_img_copy_queue, &up)) {
+            // Issue an upload command only if the src buffer exists
+            // If it doesn't, assume that we want to only do a transition but
+            // no copy
+            if (up.src != VK_NULL_HANDLE) {
+              VkImageMemoryBarrier barrier = {
+                  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                  .subresourceRange = up.range,
+                  .srcAccessMask = 0,
+                  .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                  .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                  .image = up.dst,
+              };
+              vkCmdPipelineBarrier(start_buffer,
+                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
+                                   0, NULL, 1, &barrier);
 
-            // Perform the copy
-            vkCmdCopyBufferToImage(start_buffer, up.src, up.dst,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                   &up.region);
-          }
+              // Perform the copy
+              vkCmdCopyBufferToImage(start_buffer, up.src, up.dst,
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                     &up.region);
+            }
 
-          // Transition to readable layout
-          {
-            VkImageMemoryBarrier barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .subresourceRange = up.range,
-                .srcAccessMask = 0,
-                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .image = up.dst,
-            };
-            vkCmdPipelineBarrier(start_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                                 NULL, 0, NULL, 1, &barrier);
+            // Transition to readable layout
+            {
+              VkImageMemoryBarrier barrier = {
+                  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                  .subresourceRange = up.range,
+                  .srcAccessMask = 0,
+                  .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                  .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                  .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  .image = up.dst,
+              };
+              vkCmdPipelineBarrier(start_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                                   NULL, 0, NULL, 1, &barrier);
+            }
           }
         }
 

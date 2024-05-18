@@ -100,8 +100,8 @@ typedef struct TbFrameState {
 
   // Memory expected to be actually allocated by the main thread
   // The main thread will write to this and the render thread will read it
-  TbSetWriteQueue set_write_queue;
-  TbBufferCopyQueue buf_copy_queue;
+  TbSetWriteQueue *set_write_queue;
+  TbBufferCopyQueue *buf_copy_queue;
   TbBufferImageCopyQueue *buf_img_copy_queue;
 
   TbArenaAllocator tmp_alloc;

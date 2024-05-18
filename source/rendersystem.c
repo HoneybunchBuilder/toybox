@@ -120,8 +120,8 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
       TbRenderSystemFrameState *state = &sys.frame_states[state_idx];
 
       // Using global alloc because queues may be pushed to from task threads
-      TB_DYN_ARR_RESET(state->set_write_queue, sys.gp_alloc, 1);
-      TB_DYN_ARR_RESET(state->buf_copy_queue, sys.gp_alloc, 1);
+      TB_QUEUE_RESET(state->set_write_queue, sys.gp_alloc, 1);
+      TB_QUEUE_RESET(state->buf_copy_queue, sys.gp_alloc, 1);
       TB_QUEUE_RESET(state->buf_img_copy_queue, tb_global_alloc, 1);
 
       // Allocate tmp host buffer
@@ -214,8 +214,8 @@ void destroy_render_system(TbRenderSystem *self) {
     vmaUnmapMemory(vma_alloc, state->tmp_host_buffer.alloc);
     vmaDestroyBuffer(vma_alloc, state->tmp_host_buffer.buffer,
                      state->tmp_host_buffer.alloc);
-    TB_DYN_ARR_DESTROY(state->set_write_queue);
-    TB_DYN_ARR_DESTROY(state->buf_copy_queue);
+    TB_QUEUE_DESTROY(state->set_write_queue);
+    TB_QUEUE_DESTROY(state->buf_copy_queue);
     TB_QUEUE_DESTROY(state->buf_img_copy_queue);
   }
 
@@ -302,14 +302,9 @@ void render_frame_end(ecs_iter_t *it) {
 
     // Send and Reset buffer upload pool
     {
-      // Assign to the thread
-      thread_state->set_write_queue = state->set_write_queue;
-      thread_state->buf_copy_queue = state->buf_copy_queue;
-
-      TB_DYN_ARR_CLEAR(state->set_write_queue);
-      TB_DYN_ARR_CLEAR(state->buf_copy_queue);
-
       // Queue is thread safe so render thread just has a reference
+      thread_state->set_write_queue = &state->set_write_queue;
+      thread_state->buf_copy_queue = &state->buf_copy_queue;
       thread_state->buf_img_copy_queue = &state->buf_img_copy_queue;
     }
 
@@ -813,11 +808,8 @@ VkResult tb_rnd_create_graphics_pipelines(
 void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
                            uint32_t upload_count) {
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-  uint32_t head = TB_DYN_ARR_SIZE(state->buf_copy_queue);
-  TB_DYN_ARR_RESIZE(state->buf_copy_queue, head + upload_count);
-  // Append uploads to queue
   for (uint32_t i = 0; i < upload_count; ++i) {
-    TB_DYN_ARR_AT(state->buf_copy_queue, head + i) = uploads[i];
+    TB_QUEUE_PUSH(state->buf_copy_queue, uploads[i])
   }
 }
 
@@ -825,7 +817,6 @@ void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
                                    TbBufferImageCopy *uploads,
                                    uint32_t upload_count) {
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-  // Append uploads to queue
   for (uint32_t i = 0; i < upload_count; ++i) {
     TB_QUEUE_PUSH(state->buf_img_copy_queue, uploads[i])
   }
@@ -880,9 +871,7 @@ void tb_rnd_destroy_descriptor_pool(TbRenderSystem *self,
 void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
                                const VkWriteDescriptorSet *writes) {
   // Queue these writes to be processed by the render thread
-  TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-  uint32_t head = TB_DYN_ARR_SIZE(state->set_write_queue);
-  TB_DYN_ARR_RESIZE(state->set_write_queue, head + write_count);
+  tb_auto state = &self->frame_states[self->frame_idx];
 
   // We know the frame state isn't in use so it's safe to grab its temp
   // allocator and make sure that descriptor info is properly copied
@@ -891,31 +880,32 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
 
   // Append uploads to queue
   for (uint32_t i = 0; i < write_count; ++i) {
-    tb_auto write = &TB_DYN_ARR_AT(state->set_write_queue, head + i);
-    *write = writes[i];
+    VkWriteDescriptorSet write = writes[i];
 
-    const tb_auto desc_count = write->descriptorCount;
-    if (write->pBufferInfo != NULL) {
+    const tb_auto desc_count = write.descriptorCount;
+    if (write.pBufferInfo != NULL) {
       tb_auto info = tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count,
                                     VkDescriptorBufferInfo);
-      SDL_memcpy(info, write->pBufferInfo,
+      SDL_memcpy(info, write.pBufferInfo,
                  sizeof(VkDescriptorBufferInfo) * desc_count);
-      write->pBufferInfo = info;
+      write.pBufferInfo = info;
     }
-    if (write->pImageInfo != NULL) {
+    if (write.pImageInfo != NULL) {
       tb_auto info =
           tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkDescriptorImageInfo);
-      SDL_memcpy(info, write->pImageInfo,
+      SDL_memcpy(info, write.pImageInfo,
                  sizeof(VkDescriptorImageInfo) * desc_count);
-      write->pImageInfo = info;
+      write.pImageInfo = info;
     }
-    if (write->pTexelBufferView != NULL) {
+    if (write.pTexelBufferView != NULL) {
       tb_auto info =
           tb_alloc_nm_tp(rt_state_tmp_alloc, desc_count, VkBufferView);
-      SDL_memcpy(info, write->pTexelBufferView,
+      SDL_memcpy(info, write.pTexelBufferView,
                  sizeof(VkBufferView) * desc_count);
-      write->pTexelBufferView = info;
+      write.pTexelBufferView = info;
     }
+
+    TB_QUEUE_PUSH(state->set_write_queue, write);
   }
 }
 
