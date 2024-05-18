@@ -104,7 +104,7 @@ void tb_munmap(void *addr, size_t length) {
 
 void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
               void *file, size_t offset) {
-  return mmap(start, length, prot, flags, (intptr_t)fd, offset);
+  return mmap(start, length, prot, flags, (intptr_t)file, offset);
 }
 
 void tb_munmap(void *addr, size_t length) { munmap(addr, length); }
