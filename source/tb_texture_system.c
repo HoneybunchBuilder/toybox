@@ -8,13 +8,18 @@
 #include "tbqueue.h"
 #include "world.h"
 
+static const int32_t TbMaxParallelTextureLoads = 24;
+
+typedef SDL_AtomicInt TbTexQueueCounter;
+ECS_COMPONENT_DECLARE(TbTexQueueCounter);
+
 ECS_COMPONENT_DECLARE(TbTextureUsage);
 
 typedef struct TbTexture2Ctx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
-  // Custom query for special system
+  // Custom queries for special system
   ecs_query_t *loaded_tex_query;
 
   TbTexture2 default_color_tex;
@@ -600,12 +605,16 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
+  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 4);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
+    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+      break;
+    }
     TbTexture2 ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
@@ -631,6 +640,8 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
+    SDL_AtomicIncRef(counter);
+
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(it->world, ent, TbTextureGLTFLoadRequest);
   }
@@ -641,12 +652,16 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue KTX Tex Loads", true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
+  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 4);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
+    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+      break;
+    }
     TbTexture2 ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
@@ -672,6 +687,8 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
+    SDL_AtomicIncRef(counter);
+
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(it->world, ent, TbTextureKTXLoadRequest);
   }
@@ -682,12 +699,17 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue Raw Tex Loads", true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
+  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 4);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
+    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+      break;
+    }
+
     TbTexture2 ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
@@ -713,10 +735,17 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
+    SDL_AtomicIncRef(counter);
+
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(it->world, ent, TbTextureRawLoadRequest);
   }
   TracyCZoneEnd(ctx);
+}
+
+void tb_reset_tex_queue_count(ecs_iter_t *it) {
+  tb_auto counter = ecs_field(it, TbTexQueueCounter, 1);
+  SDL_AtomicSet(counter, 0);
 }
 
 void tb_update_texture_descriptors(ecs_iter_t *it) {
@@ -811,18 +840,25 @@ void tb_register_texture2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbTextureImage);
   ECS_COMPONENT_DEFINE(ecs, TbTextureComponent2);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
+  ECS_COMPONENT_DEFINE(ecs, TbTexQueueCounter);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
   ECS_TAG_DEFINE(ecs, TbNeedTexDescUpdate);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
+             TbTexQueueCounter(TbTexQueueCounter),
              [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
   ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
+             TbTexQueueCounter(TbTexQueueCounter), [in] TbTextureKTXLoadRequest,
+             [in] TbTextureUsage);
   ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
+             TbTexQueueCounter(TbTexQueueCounter), [in] TbTextureRawLoadRequest,
+             [in] TbTextureUsage);
+
+  ECS_SYSTEM(ecs, tb_reset_tex_queue_count,
+             EcsPostUpdate, [in] TbTexQueueCounter(TbTexQueueCounter));
 
   ECS_SYSTEM(ecs, tb_update_texture_descriptors,
              EcsPreStore, [in] TbTexture2Ctx(TbTexture2Ctx),
@@ -836,6 +872,10 @@ void tb_register_texture2_sys(TbWorld *world) {
                         {.id = ecs_id(TbTextureLoaded)},
                     }}),
   };
+
+  TbTexQueueCounter queue_count = {0};
+  SDL_AtomicSet(&queue_count, 0);
+  ecs_singleton_set_ptr(ecs, TbTexQueueCounter, &queue_count);
 
   // Create descriptor set layout
   {

@@ -103,8 +103,8 @@ void tb_munmap(void *addr, size_t length) {
 #include <sys/mman.h>
 
 void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
-              int32_t fd, size_t offset) {
-  return mmap(start, length, prot, flags, fd, offset);
+              void *file, size_t offset) {
+  return mmap(start, length, prot, flags, (intptr_t)fd, offset);
 }
 
 void tb_munmap(void *addr, size_t length) { munmap(addr, length); }
