@@ -100,8 +100,6 @@ void tb_munmap(void *addr, size_t length) {
 #undef DWORD_LO
 
 #else
-#include <stddef.h>
-#include <stdlib.h>
 #include <sys/mman.h>
 
 void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
