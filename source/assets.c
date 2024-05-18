@@ -1,24 +1,20 @@
 #include "assets.h"
 
 #include "cgltf.h"
+#include "tb_mmap.h"
 #include "tbcommon.h"
 
 static cgltf_result
 sdl_read_glb(const struct cgltf_memory_options *memory_options,
              const struct cgltf_file_options *file_options, const char *path,
              cgltf_size *size, void **data) {
-  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
-  cgltf_size file_size = (cgltf_size)SDL_RWsize(file);
+  (void)memory_options;
   (void)path;
+  tb_auto file = (SDL_RWops *)file_options->user_data;
+  tb_auto file_size = (cgltf_size)SDL_RWsize(file);
 
-  void *mem = memory_options->alloc_func(memory_options->user_data, file_size);
-  TB_CHECK_RETURN(mem, "clgtf out of memory.", cgltf_result_out_of_memory);
-
-  size_t err = SDL_RWread(file, mem, file_size);
-  TB_CHECK_RETURN(err != 0, "clgtf io error.", cgltf_result_io_error);
-
+  *data = tb_rw_mmap(file, file_size);
   *size = file_size;
-  *data = mem;
 
   return cgltf_result_success;
 }
@@ -26,9 +22,11 @@ sdl_read_glb(const struct cgltf_memory_options *memory_options,
 static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
                             const struct cgltf_file_options *file_options,
                             void *data) {
-  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
+  (void)memory_options;
 
-  memory_options->free_func(memory_options->user_data, data);
+  tb_auto file = (SDL_RWops *)file_options->user_data;
+  tb_auto file_size = (cgltf_size)SDL_RWsize(file);
+  tb_rw_munmap(data, file_size);
 
   bool ok = SDL_RWclose(file) == 0;
   TB_CHECK(ok, "Failed to close glb file.");

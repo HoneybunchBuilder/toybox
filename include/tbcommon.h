@@ -13,6 +13,7 @@
 // Manually definine preprocessor macros to reduce windows header includes
 // https://aras-p.info/blog/2018/01/12/Minimizing-windows.h/
 #if TB_WINDOWS == 1
+#define WIN32_LEAN_AND_MEAN
 #if TB_X64 == 1
 #define _AMD64_
 #elif TB_ARM64 = 1

@@ -496,6 +496,8 @@ void tb_load_gltf_texture_task(const void *args) {
     tex_comp = tb_load_gltf_texture(rnd_sys, image_name, texture);
   }
 
+  cgltf_free(data);
+
   // Launch pinned task to handle loading signals on main thread
   TbTextureLoadedArgs loaded_args = {
       .ecs = load_args->common.ecs,
