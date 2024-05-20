@@ -98,8 +98,8 @@ typedef struct TbFrameState {
   VmaAllocation tmp_gpu_alloc;
   VkBuffer tmp_gpu_buffer;
 
-  // Memory expected to be actually allocated by the main thread
-  // The main thread will write to this and the render thread will read it
+  // References to queues owned by the main thread and pushed to by tasks
+  // The render thread only consumes these
   TbSetWriteQueue *set_write_queue;
   TbBufferCopyQueue *buf_copy_queue;
   TbBufferImageCopyQueue *buf_img_copy_queue;

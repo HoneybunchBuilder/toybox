@@ -15,19 +15,19 @@ ECS_COMPONENT_DECLARE(TbTexQueueCounter);
 
 ECS_COMPONENT_DECLARE(TbTextureUsage);
 
-typedef struct TbTexture2Ctx {
+typedef struct TbTextureCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
   // Custom queries for special system
   ecs_query_t *loaded_tex_query;
 
-  TbTexture2 default_color_tex;
-  TbTexture2 default_normal_tex;
-  TbTexture2 default_metal_rough_tex;
-  TbTexture2 brdf_tex;
-} TbTexture2Ctx;
-ECS_COMPONENT_DECLARE(TbTexture2Ctx);
+  TbTexture default_color_tex;
+  TbTexture default_normal_tex;
+  TbTexture default_metal_rough_tex;
+  TbTexture brdf_tex;
+} TbTextureCtx;
+ECS_COMPONENT_DECLARE(TbTextureCtx);
 
 typedef struct TbTextureImage {
   uint32_t ref_count;
@@ -400,7 +400,7 @@ TbTextureImage tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
 
 typedef struct TbTextureLoadedArgs {
   ecs_world_t *ecs;
-  TbTexture2 tex;
+  TbTexture tex;
   TbTextureImage comp;
 } TbTextureLoadedArgs;
 
@@ -418,7 +418,7 @@ void tb_texture_loaded2(const void *args) {
 
 typedef struct TbLoadCommonTexture2Args {
   ecs_world_t *ecs;
-  TbTexture2 tex;
+  TbTexture tex;
   TbTaskScheduler enki;
   TbRenderSystem *rnd_sys;
   TbPinnedTask loaded_task;
@@ -433,7 +433,7 @@ typedef struct TbLoadGLTFTexture2Args {
 void tb_load_gltf_texture_task(const void *args) {
   TracyCZoneN(ctx, "Load GLTF Texture Task", true);
   tb_auto load_args = (const TbLoadGLTFTexture2Args *)args;
-  TbTexture2 tex = load_args->common.tex;
+  TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto usage = load_args->common.usage;
 
@@ -523,7 +523,7 @@ typedef struct TbLoadKTXTexture2Args {
 void tb_load_ktx_texture_task(const void *args) {
   TracyCZoneN(ctx, "Load KTX Texture Task", true);
   tb_auto load_args = (const TbLoadKTXTexture2Args *)args;
-  TbTexture2 tex = load_args->common.tex;
+  TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
 
   tb_auto path = load_args->ktx.path;
@@ -574,7 +574,7 @@ typedef struct TbLoadRawTexture2Args {
 void tb_load_raw_texture_task(const void *args) {
   TracyCZoneN(ctx, "Load Raw Texture Task", true);
   tb_auto load_args = (const TbLoadRawTexture2Args *)args;
-  TbTexture2 tex = load_args->common.tex;
+  TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto usage = load_args->common.usage;
 
@@ -615,7 +615,7 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
     if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
       break;
     }
-    TbTexture2 ent = it->entities[i];
+    TbTexture ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
 
@@ -662,7 +662,7 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
     if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
       break;
     }
-    TbTexture2 ent = it->entities[i];
+    TbTexture ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
 
@@ -710,7 +710,7 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
       break;
     }
 
-    TbTexture2 ent = it->entities[i];
+    TbTexture ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
 
@@ -751,7 +751,7 @@ void tb_reset_tex_queue_count(ecs_iter_t *it) {
 void tb_update_texture_descriptors(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Update Texture Descriptors", true);
 
-  tb_auto tex_ctx = ecs_field(it, TbTexture2Ctx, 1);
+  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
@@ -833,7 +833,7 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
 
 void tb_register_texture2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  ECS_COMPONENT_DEFINE(ecs, TbTexture2Ctx);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureCtx);
   ECS_COMPONENT_DEFINE(ecs, TbTextureGLTFLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureKTXLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureRawLoadRequest);
@@ -861,10 +861,10 @@ void tb_register_texture2_sys(TbWorld *world) {
              EcsPostUpdate, [in] TbTexQueueCounter(TbTexQueueCounter));
 
   ECS_SYSTEM(ecs, tb_update_texture_descriptors,
-             EcsPreStore, [in] TbTexture2Ctx(TbTexture2Ctx),
+             EcsPreStore, [in] TbTextureCtx(TbTextureCtx),
              [in] TbRenderSystem(TbRenderSystem));
 
-  TbTexture2Ctx ctx = {
+  TbTextureCtx ctx = {
       .loaded_tex_query = ecs_query(
           ecs, {.filter.terms =
                     {
@@ -913,7 +913,7 @@ void tb_register_texture2_sys(TbWorld *world) {
   }
 
   // Must set ctx before we try to load any textures
-  ecs_singleton_set_ptr(ecs, TbTexture2Ctx, &ctx);
+  ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
 
   // Load some default textures
   {
@@ -950,13 +950,13 @@ void tb_register_texture2_sys(TbWorld *world) {
         tb_tex_sys_load_ktx_tex(ecs, path, "BRDF LUT", TB_TEX_USAGE_BRDF);
   }
 
-  ecs_singleton_set_ptr(ecs, TbTexture2Ctx, &ctx);
+  ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
 }
 
 void tb_unregister_texture2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
 
   ecs_query_fini(ctx->loaded_tex_query);
 
@@ -968,7 +968,7 @@ void tb_unregister_texture2_sys(TbWorld *world) {
 
   // TODO: Clean up descriptor pool
 
-  ecs_singleton_remove(ecs, TbTexture2Ctx);
+  ecs_singleton_remove(ecs, TbTextureCtx);
 }
 
 TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
@@ -976,17 +976,17 @@ TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
 // Public API
 
 VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->set_layout;
 }
 
 VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
 }
 
-VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture2 tex) {
+VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex) {
   TB_CHECK_RETURN(tb_is_texture_ready(ecs, tex),
                   "Tried to get image view of a texture that wasn't ready",
                   VK_NULL_HANDLE);
@@ -994,16 +994,22 @@ VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture2 tex) {
   return image->image_view;
 }
 
-TbTexture2 tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
-                                   const uint8_t *pixels, uint64_t size,
-                                   uint32_t width, uint32_t height,
-                                   TbTextureUsage usage) {
+TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
+                                  const uint8_t *pixels, uint64_t size,
+                                  uint32_t width, uint32_t height,
+                                  TbTextureUsage usage) {
+  // If an entity already exists with this name it is either loading or loaded
+  TbTexture tex_ent = ecs_lookup(ecs, name);
+  if (tex_ent != 0) {
+    return tex_ent;
+  }
+
   // Create a texture entity
-  TbTexture2 tex_ent = ecs_new_entity(ecs, 0);
+  tex_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, tex_ent, name);
 
   // It is a child of the texture system context singleton
-  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTextureCtx));
 
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureRawLoadRequest,
@@ -1013,16 +1019,12 @@ TbTexture2 tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   return tex_ent;
 }
 
-TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
-                                   const char *mat_name, TbTextureUsage usage) {
-  // Create a texture entity
-  TbTexture2 tex_ent = ecs_new_entity(ecs, 0);
-
+TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
+                                  const char *mat_name, TbTextureUsage usage) {
+  const uint32_t image_name_max = 100;
+  char image_name[image_name_max] = {0};
   // GLTFpack strips image names so we have to synthesize something
   {
-    const uint32_t image_name_max = 100;
-    char image_name[image_name_max] = {0};
-
     switch (usage) {
     case TB_TEX_USAGE_BRDF:
     default:
@@ -1039,9 +1041,17 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
       SDL_snprintf(image_name, image_name_max, "%s_normal", mat_name);
       break;
     }
-
-    ecs_set_name(ecs, tex_ent, image_name);
   }
+
+  // If an entity already exists with this name it is either loading or loaded
+  TbTexture tex_ent = ecs_lookup(ecs, image_name);
+  if (tex_ent != 0) {
+    return tex_ent;
+  }
+
+  // Create a texture entity
+  tex_ent = ecs_new_entity(ecs, 0);
+  ecs_set_name(ecs, tex_ent, image_name);
 
   // Need to copy strings for task safety
   // Tasks are responsible for freeing these names
@@ -1054,7 +1064,7 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   SDL_strlcpy(mat_name_cpy, mat_name, mat_name_len);
 
   // It is a child of the texture system context singleton
-  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTextureCtx));
 
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path_cpy, mat_name_cpy});
@@ -1063,14 +1073,20 @@ TbTexture2 tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   return tex_ent;
 }
 
-TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
-                                   const char *name, TbTextureUsage usage) {
+TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
+                                  const char *name, TbTextureUsage usage) {
+  // If an entity already exists with this name it is either loading or loaded
+  TbTexture tex_ent = ecs_lookup(ecs, name);
+  if (tex_ent != 0) {
+    return tex_ent;
+  }
+
   // Create a texture entity
-  TbTexture2 tex_ent = ecs_new_entity(ecs, 0);
+  tex_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, tex_ent, name);
 
   // It is a child of the texture system context singleton
-  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTexture2Ctx));
+  ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTextureCtx));
 
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureKTXLoadRequest, {path, name});
@@ -1079,24 +1095,24 @@ TbTexture2 tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   return tex_ent;
 }
 
-bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture2 tex) {
+bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture tex) {
   return ecs_has(ecs, tex, TbTextureLoaded) &&
          ecs_has(ecs, tex, TbTextureComponent2);
 }
 
-TbTexture2 tb_get_default_color_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+TbTexture tb_get_default_color_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->default_color_tex;
 }
-TbTexture2 tb_get_default_normal_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+TbTexture tb_get_default_normal_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->default_normal_tex;
 }
-TbTexture2 tb_get_default_metal_rough_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+TbTexture tb_get_default_metal_rough_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->default_metal_rough_tex;
 }
-TbTexture2 tb_get_brdf_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTexture2Ctx);
+TbTexture tb_get_brdf_tex(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->brdf_tex;
 }

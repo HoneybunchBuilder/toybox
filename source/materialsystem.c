@@ -303,9 +303,9 @@ TbMaterialId tb_mat_system_load_material(ecs_world_t *ecs,
 
       // Determine feature permutations and load textures
       {
-        TbTexture2 metal_rough = tb_get_default_metal_rough_tex(ecs);
-        TbTexture2 color = tb_get_default_color_tex(ecs);
-        TbTexture2 normal = tb_get_default_normal_tex(ecs);
+        TbTexture metal_rough = tb_get_default_metal_rough_tex(ecs);
+        TbTexture color = tb_get_default_color_tex(ecs);
+        TbTexture normal = tb_get_default_normal_tex(ecs);
 
         TbMaterialPerm feat_perm = 0;
         if (mat->has_pbr_metallic_roughness) {
