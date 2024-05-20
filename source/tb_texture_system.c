@@ -37,8 +37,8 @@ typedef struct TbTextureImage {
 } TbTextureImage;
 ECS_COMPONENT_DECLARE(TbTextureImage);
 
-typedef uint32_t TbTextureComponent2;
-ECS_COMPONENT_DECLARE(TbTextureComponent2);
+typedef uint32_t TbTextureComponent;
+ECS_COMPONENT_DECLARE(TbTextureComponent);
 
 // Describes the creation of a texture that lives in a GLB file
 typedef struct TbTextureGLTFLoadRequest {
@@ -63,7 +63,6 @@ typedef struct TbTextureRawLoadRequest {
 ECS_COMPONENT_DECLARE(TbTextureRawLoadRequest);
 
 ECS_TAG_DECLARE(TbTextureLoaded);
-ECS_TAG_DECLARE(TbNeedTexDescUpdate);
 
 // Internals
 
@@ -820,7 +819,7 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
       TB_DYN_ARR_APPEND(writes, write);
 
       // Texture is now ready to be referenced elsewhere
-      ecs_set(it->world, tex_it.entities[i], TbTextureComponent2, {tex_idx});
+      ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {tex_idx});
       tex_idx++;
     }
   }
@@ -831,18 +830,17 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
 
 // Toybox Glue
 
-void tb_register_texture2_sys(TbWorld *world) {
+void tb_register_texture_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbTextureCtx);
   ECS_COMPONENT_DEFINE(ecs, TbTextureGLTFLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureKTXLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureRawLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbTextureImage);
-  ECS_COMPONENT_DEFINE(ecs, TbTextureComponent2);
+  ECS_COMPONENT_DEFINE(ecs, TbTextureComponent);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
   ECS_COMPONENT_DEFINE(ecs, TbTexQueueCounter);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
-  ECS_TAG_DEFINE(ecs, TbNeedTexDescUpdate);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
@@ -953,7 +951,7 @@ void tb_register_texture2_sys(TbWorld *world) {
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
 }
 
-void tb_unregister_texture2_sys(TbWorld *world) {
+void tb_unregister_texture_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
@@ -971,7 +969,7 @@ void tb_unregister_texture2_sys(TbWorld *world) {
   ecs_singleton_remove(ecs, TbTextureCtx);
 }
 
-TB_REGISTER_SYS(tb, texture2, TB_TEX_SYS_PRIO)
+TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
 
 // Public API
 
@@ -1097,7 +1095,7 @@ TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
 
 bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture tex) {
   return ecs_has(ecs, tex, TbTextureLoaded) &&
-         ecs_has(ecs, tex, TbTextureComponent2);
+         ecs_has(ecs, tex, TbTextureComponent);
 }
 
 TbTexture tb_get_default_color_tex(ecs_world_t *ecs) {
