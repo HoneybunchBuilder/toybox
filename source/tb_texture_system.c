@@ -403,7 +403,7 @@ typedef struct TbTextureLoadedArgs {
   TbTextureImage comp;
 } TbTextureLoadedArgs;
 
-void tb_texture_loaded2(const void *args) {
+void tb_texture_loaded(const void *args) {
   tb_auto loaded_args = (const TbTextureLoadedArgs *)args;
   tb_auto ecs = loaded_args->ecs;
   tb_auto tex = loaded_args->tex;
@@ -415,17 +415,17 @@ void tb_texture_loaded2(const void *args) {
   }
 }
 
-typedef struct TbLoadCommonTexture2Args {
+typedef struct TbLoadCommonTextureArgs {
   ecs_world_t *ecs;
   TbTexture tex;
   TbTaskScheduler enki;
   TbRenderSystem *rnd_sys;
   TbPinnedTask loaded_task;
   TbTextureUsage usage;
-} TbLoadCommonTexture2Args;
+} TbLoadCommonTextureArgs;
 
 typedef struct TbLoadGLTFTexture2Args {
-  TbLoadCommonTexture2Args common;
+  TbLoadCommonTextureArgs common;
   TbTextureGLTFLoadRequest gltf;
 } TbLoadGLTFTexture2Args;
 
@@ -515,7 +515,7 @@ void tb_load_gltf_texture_task(const void *args) {
 }
 
 typedef struct TbLoadKTXTexture2Args {
-  TbLoadCommonTexture2Args common;
+  TbLoadCommonTextureArgs common;
   TbTextureKTXLoadRequest ktx;
 } TbLoadKTXTexture2Args;
 
@@ -565,14 +565,14 @@ void tb_load_ktx_texture_task(const void *args) {
   TracyCZoneEnd(ctx);
 }
 
-typedef struct TbLoadRawTexture2Args {
-  TbLoadCommonTexture2Args common;
+typedef struct TbLoadRawTextureArgs {
+  TbLoadCommonTextureArgs common;
   TbTextureRawLoadRequest raw;
-} TbLoadRawTexture2Args;
+} TbLoadRawTextureArgs;
 
 void tb_load_raw_texture_task(const void *args) {
   TracyCZoneN(ctx, "Load Raw Texture Task", true);
-  tb_auto load_args = (const TbLoadRawTexture2Args *)args;
+  tb_auto load_args = (const TbLoadRawTextureArgs *)args;
   TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto usage = load_args->common.usage;
@@ -620,7 +620,7 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
 
     // This pinned task will be launched by the loading task
     TbPinnedTask loaded_task =
-        tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
+        tb_create_pinned_task(enki, tb_texture_loaded, NULL, 0);
 
     TbLoadGLTFTexture2Args args = {
         .common =
@@ -667,7 +667,7 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
 
     // This pinned task will be launched by the loading task
     TbPinnedTask loaded_task =
-        tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
+        tb_create_pinned_task(enki, tb_texture_loaded, NULL, 0);
 
     TbLoadKTXTexture2Args args = {
         .common =
@@ -715,9 +715,9 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
 
     // This pinned task will be launched by the loading task
     TbPinnedTask loaded_task =
-        tb_create_pinned_task(enki, tb_texture_loaded2, NULL, 0);
+        tb_create_pinned_task(enki, tb_texture_loaded, NULL, 0);
 
-    TbLoadRawTexture2Args args = {
+    TbLoadRawTextureArgs args = {
         .common =
             {
                 .ecs = it->world,
@@ -730,7 +730,7 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
         .raw = req,
     };
     TbTask load_task = tb_async_task(enki, tb_load_raw_texture_task, &args,
-                                     sizeof(TbLoadRawTexture2Args));
+                                     sizeof(TbLoadRawTextureArgs));
     // Apply task component to texture entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
