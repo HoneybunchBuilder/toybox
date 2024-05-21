@@ -170,6 +170,13 @@ bool tb_is_scene_mat_ready(ecs_world_t *ecs, const TbMaterialData *data) {
          tb_is_texture_ready(ecs, scene_mat->metal_rough_map);
 }
 
+void *tb_get_scene_mat_data(const TbMaterialData *data) {
+  tb_auto scene_mat = (TbSceneMaterial *)data->domain_data;
+  return (void *)&scene_mat->data;
+}
+
+size_t tb_get_scene_mat_size(void) { return sizeof(TbGLTFMaterialData); }
+
 void tb_register_scene_material_domain(ecs_world_t *ecs) {
   TbSceneMaterial default_scene_mat = {
       .data =
@@ -186,6 +193,8 @@ void tb_register_scene_material_domain(ecs_world_t *ecs) {
       .parse_fn = tb_parse_scene_mat,
       .load_fn = tb_load_scene_mat,
       .ready_fn = tb_is_scene_mat_ready,
+      .get_data_fn = tb_get_scene_mat_data,
+      .get_size_fn = tb_get_scene_mat_size,
   };
 
   tb_register_mat_usage(ecs, "scene", TB_MAT_USAGE_SCENE, domain,

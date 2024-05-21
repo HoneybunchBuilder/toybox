@@ -39,11 +39,15 @@ typedef bool TbMatParseFn(const char *path, const char *name,
                           const cgltf_material *material, void *out_mat_data);
 typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
 typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
+typedef void *TbMatGetDataFn(const TbMaterialData *data);
+typedef size_t TbMatGetSizeFn(void);
 
 typedef struct TbMaterialDomain {
   TbMatParseFn *parse_fn;
   TbMatOnLoadFn *load_fn;
   TbMatIsReadyFn *ready_fn;
+  TbMatGetDataFn *get_data_fn;
+  TbMatGetSizeFn *get_size_fn;
 } TbMaterialDomain;
 
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,

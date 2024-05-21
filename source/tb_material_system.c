@@ -82,7 +82,6 @@ typedef struct TbLoadCommonMaterialArgs {
   TbRenderSystem *rnd_sys;
   TbPinnedTask loaded_task;
   TbMaterialDomain domain;
-  size_t domain_size;
 } TbLoadCommonMaterialArgs;
 
 typedef struct TbLoadGLTFMaterialArgs {
@@ -132,7 +131,6 @@ void tb_load_gltf_material_task(const void *args) {
   TbMaterial2 mat = load_args->common.mat;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto domain = load_args->common.domain;
-  tb_auto domain_size = load_args->common.domain_size;
 
   tb_auto path = load_args->gltf.path;
   tb_auto name = load_args->gltf.name;
@@ -157,7 +155,7 @@ void tb_load_gltf_material_task(const void *args) {
   TbMaterialData mat_data = {0};
   if (mat != 0) {
     mat_data = tb_parse_gltf_mat(rnd_sys, path, name, domain.parse_fn,
-                                 domain_size, material);
+                                 domain.get_size_fn(), material);
   }
 
   cgltf_free(data);
@@ -226,7 +224,6 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
                 .rnd_sys = rnd_sys,
                 .loaded_task = loaded_task,
                 .domain = handler.domain,
-                .domain_size = handler.type_size,
             },
         .gltf = req,
     };
@@ -266,10 +263,10 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
         continue;
       }
 
-      tb_auto domain_size = handler.type_size;
+      void *domain_data = domain.get_data_fn(material);
+      size_t domain_size = domain.get_size_fn();
       tb_rnd_sys_update_gpu_buffer_tmp(rnd_sys, &material->gpu_buffer,
-                                       material->domain_data, domain_size,
-                                       0x40);
+                                       domain_data, domain_size, 0x40);
 
       ecs_remove(mat_it.world, ent, TbMaterialUploadable);
       ecs_add(mat_it.world, ent, TbMaterialLoaded);
@@ -549,11 +546,13 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
   TbMaterial2 default_mat = ecs_new_entity(ecs, 0);
   ecs_set(ecs, default_mat, TbMaterialUsage, {usage});
-  ecs_add(ecs, default_mat, TbMaterialLoaded);
+  ecs_add(ecs, default_mat, TbMaterialUploadable);
 
   TbMaterialData mat_data = {
       .domain_data = data_copy,
   };
+
+  const size_t data_size = domain.get_size_fn();
 
   const uint32_t name_max = 100;
   char name[name_max] = {0};
@@ -561,7 +560,7 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
   VkBufferCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = size,
+      .size = data_size,
       .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
