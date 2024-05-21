@@ -2,7 +2,6 @@
 
 #include "cameracomponent.h"
 #include "lightcomponent.h"
-#include "materialsystem.h"
 #include "meshcomponent.h"
 #include "meshsystem.h"
 #include "profiling.h"
