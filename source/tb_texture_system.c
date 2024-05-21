@@ -754,7 +754,7 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  uint64_t tex_count = 0; // it->count;
+  uint64_t tex_count = 0;
 
   // Accumulate the number of textures
   ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
@@ -796,7 +796,9 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
   tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  TB_DYN_ARR_OF(VkDescriptorImageInfo) img_info = {0};
   TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
+  TB_DYN_ARR_RESET(img_info, world->tmp_alloc, tex_count);
   while (ecs_query_next(&tex_it)) {
     tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
     for (int32_t i = 0; i < tex_it.count; ++i) {
@@ -806,6 +808,7 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
           .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
           .imageView = texture->image_view,
       };
+      TB_DYN_ARR_APPEND(img_info, image_info);
 
       VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -814,7 +817,7 @@ void tb_update_texture_descriptors(ecs_iter_t *it) {
           .dstSet = tb_rnd_frame_desc_pool_get_set(
               rnd_sys, tex_ctx->frame_set_pool.pools, 0),
           .dstArrayElement = tex_idx,
-          .pImageInfo = &image_info,
+          .pImageInfo = &TB_DYN_ARR_AT(img_info, tex_idx),
       };
       TB_DYN_ARR_APPEND(writes, write);
 

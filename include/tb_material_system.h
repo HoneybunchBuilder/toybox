@@ -9,6 +9,8 @@
 
 typedef ecs_entity_t TbMaterial2; // Entities can be handles to materials
 
+typedef uint32_t TbMaterialPerm;
+
 typedef struct cgltf_material cgltf_material;
 
 // Material usage maps a material to the expected shader layout and usage
@@ -22,16 +24,32 @@ typedef enum TbMaterialUsage {
 } TbMaterialUsage;
 extern ECS_COMPONENT_DECLARE(TbMaterialUsage);
 
+typedef struct TbMaterialData {
+  TbBuffer gpu_buffer;
+  void *domain_data;
+} TbMaterialData;
+extern ECS_COMPONENT_DECLARE(TbMaterialData);
+
 typedef uint32_t TbMaterialComponent;
 extern ECS_COMPONENT_DECLARE(TbMaterialComponent);
 
 // A function that parses a material asset and fills out a pointer to a block
 // of memory that represents that material
-typedef bool TbMatParseFn(ecs_world_t *ecs, const char *path, const char *name,
+typedef bool TbMatParseFn(const char *path, const char *name,
                           const cgltf_material *material, void *out_mat_data);
+typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
+typedef bool TbMatUploadFn(TbRenderSystem *rnd_sys, TbMaterialData *data);
+typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
+
+typedef struct TbMaterialDomain {
+  TbMatParseFn *parse_fn;
+  TbMatOnLoadFn *load_fn;
+  TbMatUploadFn *upload_fn;
+  TbMatIsReadyFn *ready_fn;
+} TbMaterialDomain;
 
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
-                           TbMaterialUsage usage, TbMatParseFn parse_fn,
+                           TbMaterialUsage usage, TbMaterialDomain domain,
                            void *default_data, size_t size);
 
 VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs);

@@ -96,6 +96,11 @@ VkResult tb_rnd_sys_update_gpu_buffer(TbRenderSystem *self,
                                       const TbBuffer *buffer,
                                       const TbHostBuffer *host, void **ptr);
 
+// Updates the GPU buffer with the provided data via the tmp buffer
+VkResult tb_rnd_sys_update_gpu_buffer_tmp(TbRenderSystem *self,
+                                          const TbBuffer *buffer, void *data,
+                                          size_t size, size_t alignment);
+
 VkResult tb_rnd_create_sampler(TbRenderSystem *self,
                                const VkSamplerCreateInfo *create_info,
                                const char *name, VkSampler *sampler);

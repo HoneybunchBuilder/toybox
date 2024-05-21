@@ -1,15 +1,12 @@
 #include "tb_material_system.h"
 
 #include "assets.h"
+#include "tb_scene_material.h"
 #include "tb_task_scheduler.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
 #include "tbqueue.h"
 #include "world.h"
-
-#include "gltf.hlsli"
-
-typedef uint32_t TbMaterialPerm;
 
 static const int32_t TbMaxParallelMaterialLoads = 24;
 
@@ -20,19 +17,15 @@ ECS_COMPONENT_DECLARE(TbMaterialUsage);
 typedef SDL_AtomicInt TbMatQueueCounter;
 ECS_COMPONENT_DECLARE(TbMatQueueCounter);
 
-typedef struct TbMaterialData {
-  TbBuffer gpu_buffer;
-  void *domain_data;
-} TbMaterialData;
 ECS_COMPONENT_DECLARE(TbMaterialData);
 
-typedef struct TbMaterialUsageHandler {
+typedef struct TbMaterialDomainHandler {
   TbMaterialUsage usage;
-  TbMatParseFn *fn;
+  TbMaterialDomain domain;
   size_t type_size;
   TbMaterial2 default_mat;
-} TbMaterialUsageHandler;
-ECS_COMPONENT_DECLARE(TbMaterialUsageHandler);
+} TbMaterialDomainHandler;
+ECS_COMPONENT_DECLARE(TbMaterialDomainHandler);
 
 typedef struct TbMaterialCtx {
   VkSampler sampler;        // Immutable sampler for material descriptor sets
@@ -40,9 +33,10 @@ typedef struct TbMaterialCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
+  ecs_query_t *uploadable_mat_query;
   ecs_query_t *loaded_mat_query;
 
-  TB_DYN_ARR_OF(TbMaterialUsageHandler) usage_map;
+  TB_DYN_ARR_OF(TbMaterialDomainHandler) usage_map;
 } TbMaterialCtx;
 ECS_COMPONENT_DECLARE(TbMaterialCtx);
 
@@ -55,6 +49,7 @@ typedef struct TbMaterialGLTFLoadRequest {
 } TbMaterialGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbMaterialGLTFLoadRequest);
 
+ECS_TAG_DECLARE(TbMaterialUploadable);
 ECS_TAG_DECLARE(TbMaterialLoaded);
 
 // Internals
@@ -62,6 +57,7 @@ ECS_TAG_DECLARE(TbMaterialLoaded);
 typedef struct TbMaterialLoadedArgs {
   ecs_world_t *ecs;
   TbMaterial2 mat;
+  TbMaterialDomain domain;
   TbMaterialData comp;
 } TbMaterialLoadedArgs;
 
@@ -69,12 +65,14 @@ void tb_material_loaded(const void *args) {
   tb_auto loaded_args = (const TbMaterialLoadedArgs *)args;
   tb_auto ecs = loaded_args->ecs;
   tb_auto mat = loaded_args->mat;
-  if (mat != 0) {
-    ecs_add(ecs, mat, TbMaterialLoaded);
-    ecs_set_ptr(ecs, mat, TbMaterialData, &loaded_args->comp);
-  } else {
+  if (mat == 0) {
     TB_CHECK(false, "Material load failed. Do we need to retry?");
   }
+
+  loaded_args->domain.load_fn(ecs, loaded_args->comp.domain_data);
+
+  ecs_add(ecs, mat, TbMaterialLoaded);
+  ecs_set_ptr(ecs, mat, TbMaterialData, &loaded_args->comp);
 }
 
 typedef struct TbLoadCommonMaterialArgs {
@@ -83,7 +81,7 @@ typedef struct TbLoadCommonMaterialArgs {
   TbTaskScheduler enki;
   TbRenderSystem *rnd_sys;
   TbPinnedTask loaded_task;
-  TbMatParseFn *parse_fn;
+  TbMaterialDomain domain;
   size_t domain_size;
 } TbLoadCommonMaterialArgs;
 
@@ -92,157 +90,17 @@ typedef struct TbLoadGLTFMaterialArgs {
   TbMaterialGLTFLoadRequest gltf;
 } TbLoadGLTFMaterialArgs;
 
-typedef struct TbSceneMaterial {
-  TbGLTFMaterialData data;
-  TbTexture color_map;
-  TbTexture normal_map;
-  TbTexture metal_rough_map;
-} TbSceneMaterial;
-
-bool tb_parse_scene_mat(ecs_world_t *ecs, const char *path, const char *name,
-                        const cgltf_material *material, void *out_mat_data) {
-  tb_auto scene_mat = (TbSceneMaterial *)out_mat_data;
-
-  TbTexture metal_rough = tb_get_default_metal_rough_tex(ecs);
-  TbTexture color = tb_get_default_color_tex(ecs);
-  TbTexture normal = tb_get_default_normal_tex(ecs);
-
-  // Find a suitable texture transform from the material
-  cgltf_texture_transform tex_trans = {
-      .scale = {1, 1},
-  };
-  if (material) {
-    // Expecting that all textures in the material share the same texture
-    // transform
-    if (material->has_pbr_metallic_roughness) {
-      tex_trans = material->pbr_metallic_roughness.base_color_texture.transform;
-    } else if (material->has_pbr_specular_glossiness) {
-      tex_trans = material->pbr_specular_glossiness.diffuse_texture.transform;
-    } else if (material->normal_texture.texture) {
-      tex_trans = material->normal_texture.transform;
-    }
-  }
-
-  TbMaterialPerm feat_perm = 0;
-  if (material->has_pbr_metallic_roughness) {
-    feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
-
-    if (material->pbr_metallic_roughness.metallic_roughness_texture.texture !=
-        NULL) {
-      feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
-      metal_rough =
-          tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_METAL_ROUGH);
-    }
-    if (material->pbr_metallic_roughness.base_color_texture.texture != NULL) {
-      feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
-      color = tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_COLOR);
-    }
-
-    scene_mat->metal_rough_map = metal_rough;
-    scene_mat->color_map = color;
-  }
-  if (material->has_pbr_specular_glossiness) {
-    feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
-
-    if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
-      feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
-      color = tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_COLOR);
-    }
-    scene_mat->color_map = color;
-  }
-  if (material->has_clearcoat) {
-    feat_perm |= GLTF_PERM_CLEARCOAT;
-  }
-  if (material->has_transmission) {
-    feat_perm |= GLTF_PERM_TRANSMISSION;
-  }
-  if (material->has_volume) {
-    feat_perm |= GLTF_PERM_VOLUME;
-  }
-  if (material->has_ior) {
-    feat_perm |= GLTF_PERM_IOR;
-  }
-  if (material->has_specular) {
-    feat_perm |= GLTF_PERM_SPECULAR;
-  }
-  if (material->has_sheen) {
-    feat_perm |= GLTF_PERM_SHEEN;
-  }
-  if (material->unlit) {
-    feat_perm |= GLTF_PERM_UNLIT;
-  }
-  if (material->alpha_mode == cgltf_alpha_mode_mask) {
-    feat_perm |= GLTF_PERM_ALPHA_CLIP;
-  }
-  if (material->alpha_mode == cgltf_alpha_mode_blend) {
-    feat_perm |= GLTF_PERM_ALPHA_BLEND;
-  }
-  if (material->double_sided) {
-    feat_perm |= GLTF_PERM_DOUBLE_SIDED;
-  }
-  if (material->normal_texture.texture != NULL) {
-    feat_perm |= GLTF_PERM_NORMAL_MAP;
-    normal = tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_NORMAL);
-  }
-  scene_mat->normal_map = normal;
-
-  scene_mat->data = (TbGLTFMaterialData){
-      .tex_transform =
-          {
-              .offset =
-                  (float2){
-                      tex_trans.offset[0],
-                      tex_trans.offset[1],
-                  },
-              .scale =
-                  (float2){
-                      tex_trans.scale[0],
-                      tex_trans.scale[1],
-                  },
-          },
-      .pbr_metallic_roughness =
-          {
-              .base_color_factor =
-                  tb_atof4(material->pbr_metallic_roughness.base_color_factor),
-              .metal_rough_factors =
-                  {material->pbr_metallic_roughness.metallic_factor,
-                   material->pbr_metallic_roughness.roughness_factor},
-          },
-      .pbr_specular_glossiness.diffuse_factor =
-          tb_atof4(material->pbr_specular_glossiness.diffuse_factor),
-      .specular =
-          tb_f3tof4(tb_atof3(material->pbr_specular_glossiness.specular_factor),
-                    material->pbr_specular_glossiness.glossiness_factor),
-      .emissives = tb_f3tof4(tb_atof3(material->emissive_factor), 1.0f),
-      .perm = feat_perm,
-      // TODO: We shouldn't do this until textures are loaded
-      .color_idx = 0,
-      .normal_idx = 0,
-      .pbr_idx = 0,
-  };
-
-  if (material->has_emissive_strength) {
-    scene_mat->data.emissives[3] =
-        material->emissive_strength.emissive_strength;
-  }
-  if (material->alpha_mode == cgltf_alpha_mode_mask) {
-    scene_mat->data.sheen_alpha[3] = material->alpha_cutoff;
-  }
-
-  return true;
-}
-
-TbMaterialData tb_load_gltf_mat(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
-                                const char *path, const char *name,
-                                TbMatParseFn parse_fn, size_t domain_size,
-                                const cgltf_material *material) {
+TbMaterialData tb_parse_gltf_mat(TbRenderSystem *rnd_sys, const char *path,
+                                 const char *name, TbMatParseFn parse_fn,
+                                 size_t domain_size,
+                                 const cgltf_material *material) {
   TracyCZoneN(ctx, "Load Material", true);
 
   TbMaterialData mat_data = {0};
 
   // Load material based on usage
   uint8_t *data = tb_alloc(tb_global_alloc, domain_size);
-  if (!parse_fn(ecs, path, name, material, (void *)data)) {
+  if (!parse_fn(path, name, material, (void *)data)) {
     tb_free(tb_global_alloc, data);
     TracyCZoneEnd(ctx);
     return mat_data;
@@ -273,7 +131,7 @@ void tb_load_gltf_material_task(const void *args) {
   tb_auto load_args = (const TbLoadGLTFMaterialArgs *)args;
   TbMaterial2 mat = load_args->common.mat;
   tb_auto rnd_sys = load_args->common.rnd_sys;
-  tb_auto parse_fn = load_args->common.parse_fn;
+  tb_auto domain = load_args->common.domain;
   tb_auto domain_size = load_args->common.domain_size;
 
   tb_auto path = load_args->gltf.path;
@@ -298,13 +156,9 @@ void tb_load_gltf_material_task(const void *args) {
   // Parse material based on usage
   TbMaterialData mat_data = {0};
   if (mat != 0) {
-    mat_data = tb_load_gltf_mat(load_args->common.ecs, rnd_sys, path, name,
-                                parse_fn, domain_size, material);
+    mat_data = tb_parse_gltf_mat(rnd_sys, path, name, domain.parse_fn,
+                                 domain_size, material);
   }
-
-  // Strings were copies that can be freed now
-  tb_free(tb_global_alloc, (void *)path);
-  tb_free(tb_global_alloc, (void *)name);
 
   cgltf_free(data);
 
@@ -313,11 +167,24 @@ void tb_load_gltf_material_task(const void *args) {
       .ecs = load_args->common.ecs,
       .mat = mat,
       .comp = mat_data,
+      .domain = domain,
   };
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbMaterialLoadedArgs));
   TracyCZoneEnd(ctx);
+}
+
+TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
+                                                TbMaterialUsage usage) {
+  TB_DYN_ARR_FOREACH(ctx->usage_map, i) {
+    tb_auto handler = &TB_DYN_ARR_AT(ctx->usage_map, i);
+    if (handler->usage == usage) {
+      return *handler;
+    }
+  }
+  TB_CHECK(false, "Failed to find material domain from usage");
+  return (TbMaterialDomainHandler){0};
 }
 
 // Systems
@@ -341,20 +208,8 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
 
-    TbMatParseFn *parse_fn = NULL;
-    size_t domain_size = 0;
-    // Find domain based on usage
-    // There should not be a ton so this simple lookup should not be a
-    // bottleneck
-    TB_DYN_ARR_FOREACH(mat_ctx->usage_map, i) {
-      tb_auto domain_data = &TB_DYN_ARR_AT(mat_ctx->usage_map, i);
-      if (domain_data->usage == usage) {
-        parse_fn = domain_data->fn;
-        domain_size = domain_data->type_size;
-        break;
-      }
-    }
-    if (domain_size == 0 || parse_fn == NULL) {
+    TbMaterialDomainHandler handler = tb_find_material_domain(mat_ctx, usage);
+    if (handler.type_size == 0 || handler.usage == TB_MAT_USAGE_UNKNOWN) {
       TB_CHECK(false, "Unexpected material usage");
     }
 
@@ -370,8 +225,8 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
                 .enki = enki,
                 .rnd_sys = rnd_sys,
                 .loaded_task = loaded_task,
-                .parse_fn = parse_fn,
-                .domain_size = domain_size,
+                .domain = handler.domain,
+                .domain_size = handler.type_size,
             },
         .gltf = req,
     };
@@ -388,9 +243,140 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+void tb_upload_gltf_mats(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Material Uploads", true);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
+
+  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+  while (ecs_query_next(&mat_it)) {
+    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
+    tb_auto usages = ecs_field(&mat_it, TbMaterialUsage, 2);
+    for (int32_t i = 0; i < mat_it.count; ++i) {
+      TbMaterial2 ent = mat_it.entities[i];
+      tb_auto material = &materials[i];
+      tb_auto usage = usages[i];
+
+      // Determine if the material's dependencies are also met
+      tb_auto handler = tb_find_material_domain(mat_ctx, usage);
+      tb_auto domain = handler.domain;
+
+      // Material must be skipped if its dependencies aren't ready
+      if (!domain.ready_fn(it->world, material)) {
+        continue;
+      }
+
+      tb_auto domain_size = handler.type_size;
+      tb_rnd_sys_update_gpu_buffer_tmp(rnd_sys, &material->gpu_buffer,
+                                       material->domain_data, domain_size,
+                                       0x40);
+
+      ecs_remove(it->world, ent, TbMaterialUploadable);
+      ecs_add(it->world, ent, TbMaterialLoaded);
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
 void tb_reset_mat_queue_count(ecs_iter_t *it) {
   tb_auto counter = ecs_field(it, TbMatQueueCounter, 1);
   SDL_AtomicSet(counter, 0);
+}
+
+void tb_update_material_descriptors(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Update Material Descriptors", true);
+
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+
+  uint64_t mat_count = 0;
+
+  // Accumulate the number of materials
+  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+  while (ecs_query_next(&mat_it)) {
+    mat_count += mat_it.count;
+  }
+
+  if (mat_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  {
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorCount = mat_count * 4,
+                },
+            },
+    };
+    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+        .sType =
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        .descriptorSetCount = 1,
+        .pDescriptorCounts = (uint32_t[1]){mat_count},
+    };
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &mat_ctx->set_layout,
+                                &alloc_info, mat_ctx->frame_set_pool.pools, 1);
+  }
+
+  // Write all materials into the descriptor set table
+  uint32_t mat_idx = 0;
+  mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+
+  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, mat_count);
+  TB_DYN_ARR_RESET(buf_info, world->tmp_alloc, mat_count);
+  while (ecs_query_next(&mat_it)) {
+    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
+    tb_auto mat_usages = ecs_field(&mat_it, TbMaterialUsage, 2);
+    for (int32_t i = 0; i < mat_it.count; ++i) {
+      tb_auto material = &materials[i];
+      tb_auto usage = mat_usages[i];
+
+      // Get material domain handler
+      tb_auto mat_domain = tb_find_material_domain(mat_ctx, usage).domain;
+
+      // Material must be skipped if its dependencies aren't ready
+      if (!mat_domain.ready_fn(it->world, material)) {
+        continue;
+      }
+
+      VkDescriptorBufferInfo buffer_info = {
+          .range = VK_WHOLE_SIZE,
+          .buffer = material->gpu_buffer.buffer,
+      };
+      TB_DYN_ARR_APPEND(buf_info, buffer_info);
+
+      VkWriteDescriptorSet write = {
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .dstSet = tb_rnd_frame_desc_pool_get_set(
+              rnd_sys, mat_ctx->frame_set_pool.pools, 0),
+          .dstArrayElement = mat_idx,
+          .dstBinding = 2,
+          .pBufferInfo = &TB_DYN_ARR_AT(buf_info, mat_idx),
+      };
+      TB_DYN_ARR_APPEND(writes, write);
+
+      // Material is now ready to be referenced elsewhere
+      ecs_set(it->world, mat_it.entities[i], TbMaterialComponent, {mat_idx});
+      mat_idx++;
+    }
+  }
+  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+
+  TracyCZoneEnd(ctx);
 }
 
 // Toybox Glue
@@ -402,8 +388,9 @@ void tb_register_material2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMaterialComponent);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialData);
   ECS_COMPONENT_DEFINE(ecs, TbMatQueueCounter);
-  ECS_COMPONENT_DEFINE(ecs, TbMaterialUsageHandler);
+  ECS_COMPONENT_DEFINE(ecs, TbMaterialDomainHandler);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialUsage);
+  ECS_TAG_DEFINE(ecs, TbMaterialUploadable);
   ECS_TAG_DEFINE(ecs, TbMaterialLoaded);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
@@ -412,14 +399,30 @@ void tb_register_material2_sys(TbWorld *world) {
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              TbMatQueueCounter(TbMatQueueCounter), TbMaterialCtx(TbMaterialCtx),
              [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
+
+  ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate,
+             TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx));
+
   ECS_SYSTEM(ecs, tb_reset_mat_queue_count,
              EcsPostUpdate, [in] TbTexQueueCounter(TbMatQueueCounter));
 
+  ECS_SYSTEM(ecs, tb_update_material_descriptors,
+             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
+             [in] TbRenderSystem(TbRenderSystem));
+
   TbMaterialCtx ctx = {
+      .uploadable_mat_query = ecs_query(
+          ecs, {.filter.terms =
+                    {
+                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
+                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
+                        {.id = ecs_id(TbMaterialUploadable), .inout = EcsIn},
+                    }}),
       .loaded_mat_query = ecs_query(
           ecs, {.filter.terms =
                     {
                         {.id = ecs_id(TbMaterialData), .inout = EcsIn},
+                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
                         {.id = ecs_id(TbMaterialLoaded)},
                     }}),
   };
@@ -507,18 +510,7 @@ void tb_register_material2_sys(TbWorld *world) {
   ecs_singleton_set_ptr(ecs, TbMaterialCtx, &ctx);
 
   // Register default material usage handlers
-  TbSceneMaterial default_scene_mat = {
-      .data =
-          {
-              .perm = GLTF_PERM_BASE_COLOR_MAP | GLTF_PERM_NORMAL_MAP |
-                      GLTF_PERM_PBR_METAL_ROUGH_TEX,
-          },
-      .color_map = tb_get_default_color_tex(ecs),
-      .metal_rough_map = tb_get_default_metal_rough_tex(ecs),
-      .normal_map = tb_get_default_normal_tex(ecs),
-  };
-  tb_register_mat_usage(ecs, "scene", TB_MAT_USAGE_SCENE, tb_parse_scene_mat,
-                        &default_scene_mat, sizeof(TbSceneMaterial));
+  tb_register_scene_material_domain(ecs);
 }
 
 void tb_unregister_material2_sys(TbWorld *world) {
@@ -526,6 +518,7 @@ void tb_unregister_material2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
 
+  ecs_query_fini(ctx->uploadable_mat_query);
   ecs_query_fini(ctx->loaded_mat_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
@@ -544,7 +537,7 @@ TB_REGISTER_SYS(tb, material2, TB_MAT_SYS_PRIO)
 // Public API
 
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
-                           TbMaterialUsage usage, TbMatParseFn parse_fn,
+                           TbMaterialUsage usage, TbMaterialDomain domain,
                            void *default_data, size_t size) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
@@ -579,9 +572,9 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
   ecs_set_ptr(ecs, default_mat, TbMaterialData, &mat_data);
 
-  TbMaterialUsageHandler handler = {
+  TbMaterialDomainHandler handler = {
       .usage = usage,
-      .fn = parse_fn,
+      .domain = domain,
       .type_size = size,
       .default_mat = default_mat,
   };
@@ -641,9 +634,9 @@ bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat) {
 TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage) {
   tb_auto ctx = ecs_singleton_get(ecs, TbMaterialCtx);
   TB_DYN_ARR_FOREACH(ctx->usage_map, i) {
-    tb_auto domain = &TB_DYN_ARR_AT(ctx->usage_map, i);
-    if (domain->usage == usage) {
-      return domain->default_mat;
+    tb_auto handler = &TB_DYN_ARR_AT(ctx->usage_map, i);
+    if (handler->usage == usage) {
+      return handler->default_mat;
     }
   }
   TB_CHECK(false, "Failed to get default material");

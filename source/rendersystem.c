@@ -692,6 +692,39 @@ VkResult tb_rnd_sys_update_gpu_buffer(TbRenderSystem *self,
   return err;
 }
 
+VkResult tb_rnd_sys_update_gpu_buffer_tmp(TbRenderSystem *self,
+                                          const TbBuffer *buffer, void *data,
+                                          size_t size, size_t alignment) {
+  VkResult err = VK_SUCCESS;
+  if (buffer->info.size == 0) {
+    return err;
+  }
+
+  void *ptr = NULL;
+  if (!try_map(self->vma_alloc, buffer->alloc, &ptr)) {
+    TbHostBuffer host = {0};
+    err = alloc_tmp_buffer(self, buffer->info.size, alignment, &host);
+    TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
+
+    // Schedule another upload
+    TbBufferCopy upload = {
+        .src = host.buffer,
+        .dst = buffer->buffer,
+        .region =
+            {
+                .srcOffset = host.offset,
+                .size = buffer->info.size,
+            },
+    };
+    tb_rnd_upload_buffers(self, &upload, 1);
+
+    ptr = host.info.pMappedData;
+  }
+
+  SDL_memcpy(ptr, data, size);
+  return err;
+}
+
 VkResult tb_rnd_create_sampler(TbRenderSystem *self,
                                const VkSamplerCreateInfo *create_info,
                                const char *name, VkSampler *sampler) {
