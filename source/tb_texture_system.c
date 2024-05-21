@@ -455,10 +455,6 @@ void tb_load_gltf_texture_task(const void *args) {
     tex = 0; // Invalid ent means task failed
   }
 
-  // Strings were copies that can be freed now
-  tb_free(tb_global_alloc, (void *)path);
-  tb_free(tb_global_alloc, (void *)mat_name);
-
   char image_name[100] = {0};
   struct cgltf_texture *texture = NULL;
   // Find image by usage
@@ -499,6 +495,10 @@ void tb_load_gltf_texture_task(const void *args) {
   if (tex != 0) {
     tex_comp = tb_load_gltf_texture(rnd_sys, image_name, texture);
   }
+
+  // Strings were copies that can be freed now
+  tb_free(tb_global_alloc, (void *)path);
+  tb_free(tb_global_alloc, (void *)mat_name);
 
   cgltf_free(data);
 

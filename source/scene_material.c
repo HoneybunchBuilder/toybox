@@ -39,8 +39,6 @@ bool tb_parse_scene_mat(const char *path, const char *name,
 
   TbMaterialPerm feat_perm = 0;
   if (material->has_pbr_metallic_roughness) {
-    feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
-
     if (material->pbr_metallic_roughness.metallic_roughness_texture.texture !=
         NULL) {
       feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
@@ -52,6 +50,11 @@ bool tb_parse_scene_mat(const char *path, const char *name,
   if (material->has_pbr_specular_glossiness) {
     feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
 
+    if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL &&
+        material->pbr_specular_glossiness.specular_glossiness_texture.texture !=
+            NULL) {
+      feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
+    }
     if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
       feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
     }
@@ -160,7 +163,11 @@ void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
 }
 
 bool tb_is_scene_mat_ready(ecs_world_t *ecs, const TbMaterialData *data) {
-  return false;
+  tb_auto scene_mat = (TbSceneMaterial *)data->domain_data;
+
+  return tb_is_texture_ready(ecs, scene_mat->color_map) &&
+         tb_is_texture_ready(ecs, scene_mat->normal_map) &&
+         tb_is_texture_ready(ecs, scene_mat->metal_rough_map);
 }
 
 void tb_register_scene_material_domain(ecs_world_t *ecs) {
@@ -179,7 +186,6 @@ void tb_register_scene_material_domain(ecs_world_t *ecs) {
       .parse_fn = tb_parse_scene_mat,
       .load_fn = tb_load_scene_mat,
       .ready_fn = tb_is_scene_mat_ready,
-      .upload_fn = 0, // TODO
   };
 
   tb_register_mat_usage(ecs, "scene", TB_MAT_USAGE_SCENE, domain,

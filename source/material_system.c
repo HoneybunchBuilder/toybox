@@ -71,7 +71,7 @@ void tb_material_loaded(const void *args) {
 
   loaded_args->domain.load_fn(ecs, loaded_args->comp.domain_data);
 
-  ecs_add(ecs, mat, TbMaterialLoaded);
+  ecs_add(ecs, mat, TbMaterialUploadable);
   ecs_set_ptr(ecs, mat, TbMaterialData, &loaded_args->comp);
 }
 
@@ -248,7 +248,7 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
 
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->uploadable_mat_query);
   while (ecs_query_next(&mat_it)) {
     tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
     tb_auto usages = ecs_field(&mat_it, TbMaterialUsage, 2);
@@ -262,7 +262,7 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
       tb_auto domain = handler.domain;
 
       // Material must be skipped if its dependencies aren't ready
-      if (!domain.ready_fn(it->world, material)) {
+      if (!domain.ready_fn(mat_it.world, material)) {
         continue;
       }
 
@@ -271,8 +271,8 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
                                        material->domain_data, domain_size,
                                        0x40);
 
-      ecs_remove(it->world, ent, TbMaterialUploadable);
-      ecs_add(it->world, ent, TbMaterialLoaded);
+      ecs_remove(mat_it.world, ent, TbMaterialUploadable);
+      ecs_add(mat_it.world, ent, TbMaterialLoaded);
     }
   }
 

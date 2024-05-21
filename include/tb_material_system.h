@@ -38,13 +38,11 @@ extern ECS_COMPONENT_DECLARE(TbMaterialComponent);
 typedef bool TbMatParseFn(const char *path, const char *name,
                           const cgltf_material *material, void *out_mat_data);
 typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
-typedef bool TbMatUploadFn(TbRenderSystem *rnd_sys, TbMaterialData *data);
 typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
 
 typedef struct TbMaterialDomain {
   TbMatParseFn *parse_fn;
   TbMatOnLoadFn *load_fn;
-  TbMatUploadFn *upload_fn;
   TbMatIsReadyFn *ready_fn;
 } TbMaterialDomain;
 

@@ -120,8 +120,8 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
       TbRenderSystemFrameState *state = &sys.frame_states[state_idx];
 
       // Using global alloc because queues may be pushed to from task threads
-      TB_QUEUE_RESET(state->set_write_queue, sys.gp_alloc, 1);
-      TB_QUEUE_RESET(state->buf_copy_queue, sys.gp_alloc, 1);
+      TB_QUEUE_RESET(state->set_write_queue, tb_global_alloc, 1);
+      TB_QUEUE_RESET(state->buf_copy_queue, tb_global_alloc, 1);
       TB_QUEUE_RESET(state->buf_img_copy_queue, tb_global_alloc, 1);
 
       // Allocate tmp host buffer
