@@ -67,7 +67,6 @@ typedef struct TbMeshSystem {
   TbAllocator tmp_alloc;
 
   TbRenderSystem *rnd_sys;
-  TbMaterialSystem *material_system;
   TbViewSystem *view_sys;
   TbRenderObjectSystem *render_object_system;
   TbRenderPipelineSystem *rp_sys;

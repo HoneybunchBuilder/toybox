@@ -4,10 +4,10 @@
 
 #include "common.hlsli"
 #include "json.h"
-#include "materialsystem.h"
 #include "meshsystem.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
+#include "tb_material_system.h"
 #include "tbgltf.h"
 #include "tbutil.h"
 #include "world.h"
@@ -17,8 +17,7 @@ ECS_COMPONENT_DECLARE(TbMeshComponent);
 bool create_mesh_component_internal(ecs_world_t *ecs, TbMeshComponent *self,
                                     TbMeshId id, TbAllocator gp_alloc,
                                     const char *source_path,
-                                    const cgltf_node *node,
-                                    TbMaterialSystem *mat_system) {
+                                    const cgltf_node *node) {
   const uint32_t submesh_count = node->mesh->primitives_count;
 
   *self = (TbMeshComponent){
@@ -50,13 +49,11 @@ bool create_mesh_component_internal(ecs_world_t *ecs, TbMeshComponent *self,
       // If no material is provided we use a default
       const cgltf_material *material = prim->material;
       if (material == NULL) {
-        material = mat_system->default_material;
+        submesh->material = tb_get_default_mat(ecs, TB_MAT_USAGE_SCENE);
+      } else {
+        submesh->material = tb_mat_sys_load_gltf_mat(
+            ecs, source_path, material->name, TB_MAT_USAGE_SCENE);
       }
-
-      // Load materials
-      submesh->material =
-          tb_mat_system_load_material(ecs, mat_system, source_path, material);
-      TB_CHECK_RETURN(submesh->material.id, "Failed to load material", false);
 
       // calculate the aligned size
       size_t index_size =
@@ -132,11 +129,9 @@ bool create_mesh_component_internal(ecs_world_t *ecs, TbMeshComponent *self,
 }
 
 void destroy_mesh_component_internal(TbMeshComponent *self,
-                                     TbMeshSystem *mesh_system,
-                                     TbMaterialSystem *mat_system) {
+                                     TbMeshSystem *mesh_system) {
   TB_DYN_ARR_FOREACH(self->submeshes, i) {
-    tb_mat_system_release_material_ref(
-        mat_system, TB_DYN_ARR_AT(self->submeshes, i).material);
+    // TODO: Release materials
   }
   TB_DYN_ARR_DESTROY(self->submeshes);
   tb_mesh_system_release_mesh_ref(mesh_system, self->mesh_id);
@@ -151,14 +146,13 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   (void)json;
   tb_auto ecs = world->ecs;
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
 
   // Load mesh
   tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
   TbMeshComponent comp = {0};
   bool ret = create_mesh_component_internal(ecs, &comp, id, world->gp_alloc,
-                                            source_path, node, mat_sys);
+                                            source_path, node);
   TB_CHECK(ret, "Failed to create mesh component");
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
 

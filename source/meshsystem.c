@@ -6,13 +6,13 @@
 #include "gltf.hlsli"
 #include "hash.h"
 #include "lightcomponent.h"
-#include "materialsystem.h"
 #include "meshcomponent.h"
 #include "profiling.h"
 #include "renderobjectsystem.h"
 #include "renderpipelinesystem.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
+#include "tb_material_system.h"
 #include "tb_shader_system.h"
 #include "tb_texture_system.h"
 #include "tbutil.h"
@@ -571,15 +571,16 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
-TbMeshSystem create_mesh_system_internal(
-    ecs_world_t *ecs, TbAllocator gp_alloc, TbAllocator tmp_alloc,
-    TbRenderSystem *rnd_sys, TbMaterialSystem *mat_sys, TbViewSystem *view_sys,
-    TbRenderObjectSystem *ro_sys, TbRenderPipelineSystem *rp_sys) {
+TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
+                                         TbAllocator tmp_alloc,
+                                         TbRenderSystem *rnd_sys,
+                                         TbViewSystem *view_sys,
+                                         TbRenderObjectSystem *ro_sys,
+                                         TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
       .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
-      .material_system = mat_sys,
       .view_sys = view_sys,
       .render_object_system = ro_sys,
       .rp_sys = rp_sys,
@@ -687,10 +688,10 @@ TbMeshSystem create_mesh_system_internal(
           .pSetLayouts =
               (VkDescriptorSetLayout[layout_count]){
                   view_sys->set_layout,
-                  mat_sys->set_layout,
+                  tb_mat_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
                   ro_sys->set_layout,
-                  tb_tex_sys_get_set_layout2(ecs),
+                  tb_tex_sys_get_set_layout(ecs),
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
                   sys.mesh_set_layout,
@@ -1304,7 +1305,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
   tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
@@ -1346,7 +1346,14 @@ void mesh_draw_tick(ecs_iter_t *it) {
           for (uint32_t submesh_idx = 0;
                submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
             tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
-            tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
+
+            // Material must be loaded and ready
+            if (!tb_is_material_ready(ecs, sm->material)) {
+              continue;
+            }
+
+            // TODO: tb_mat_system_get_perm(mat_sys, sm->material);
+            TbMaterialPerm perm = 0;
 
             if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
               trans_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
@@ -1364,8 +1371,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
       }
 
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
-      tb_auto tex_set = tb_tex_sys_get_set2(ecs);
-      tb_auto mat_set = tb_mat_system_get_set(mat_sys);
+      tb_auto tex_set = tb_tex_sys_get_set(ecs);
+      tb_auto mat_set = tb_mat_sys_get_set(ecs);
       tb_auto idx_set = tb_mesh_system_get_idx_set(mesh_sys);
       tb_auto pos_set = tb_mesh_system_get_pos_set(mesh_sys);
       tb_auto norm_set = tb_mesh_system_get_norm_set(mesh_sys);
@@ -1441,7 +1448,12 @@ void mesh_draw_tick(ecs_iter_t *it) {
           for (uint32_t submesh_idx = 0;
                submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
             tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
-            tb_auto perm = tb_mat_system_get_perm(mat_sys, sm->material);
+            // Material must be loaded and ready
+            if (!tb_is_material_ready(ecs, sm->material)) {
+              continue;
+            }
+            // TODO: tb_mat_system_get_perm(mat_sys, sm->material);
+            TbMaterialPerm perm = 0;
 
             // Deduce whether to write to opaque or transparent data
             tb_auto draw_cmds = opaque_draw_cmds;
@@ -1463,7 +1475,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
                 .perm = sm->vertex_perm,
                 .obj_idx = ro->index,
                 .mesh_idx = mesh->mesh_id.idx,
-                .mat_idx = sm->material.idx,
+                .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
                 .index_offset = sm->index_offset,
                 .vertex_offset = sm->vertex_offset,
             };
@@ -1622,14 +1634,13 @@ void tb_register_mesh_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto mat_sys = ecs_singleton_get_mut(ecs, TbMaterialSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
   tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
   tb_auto sys =
       create_mesh_system_internal(ecs, world->gp_alloc, world->tmp_alloc,
-                                  rnd_sys, mat_sys, view_sys, ro_sys, rp_sys);
+                                  rnd_sys, view_sys, ro_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});

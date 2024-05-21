@@ -35,6 +35,8 @@ typedef struct TbMaterialUsageHandler {
 ECS_COMPONENT_DECLARE(TbMaterialUsageHandler);
 
 typedef struct TbMaterialCtx {
+  VkSampler sampler;        // Immutable sampler for material descriptor sets
+  VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
@@ -44,7 +46,6 @@ typedef struct TbMaterialCtx {
 } TbMaterialCtx;
 ECS_COMPONENT_DECLARE(TbMaterialCtx);
 
-typedef uint32_t TbMaterialComponent;
 ECS_COMPONENT_DECLARE(TbMaterialComponent);
 
 // Describes the creation of a material that lives in a GLB file
@@ -231,13 +232,12 @@ bool tb_parse_scene_mat(ecs_world_t *ecs, const char *path, const char *name,
   return true;
 }
 
-TbMaterialData tb_load_gltf_mat(ecs_world_t *ecs, const char *path,
-                                const char *name, TbMatParseFn parse_fn,
-                                size_t domain_size,
+TbMaterialData tb_load_gltf_mat(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
+                                const char *path, const char *name,
+                                TbMatParseFn parse_fn, size_t domain_size,
                                 const cgltf_material *material) {
   TracyCZoneN(ctx, "Load Material", true);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   TbMaterialData mat_data = {0};
 
   // Load material based on usage
@@ -260,7 +260,7 @@ TbMaterialData tb_load_gltf_mat(ecs_world_t *ecs, const char *path,
                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
     };
     // HACK: Known alignment for uniform buffers
-    tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, &data, name,
+    tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, data, name,
                                       &mat_data.gpu_buffer, 0x40);
   }
 
@@ -295,16 +295,16 @@ void tb_load_gltf_material_task(const void *args) {
     mat = 0; // Invalid ent means task failed
   }
 
-  // Strings were copies that can be freed now
-  tb_free(tb_global_alloc, (void *)path);
-  tb_free(tb_global_alloc, (void *)name);
-
   // Parse material based on usage
   TbMaterialData mat_data = {0};
   if (mat != 0) {
-    mat_data = tb_load_gltf_mat(load_args->common.ecs, path, name, parse_fn,
-                                domain_size, material);
+    mat_data = tb_load_gltf_mat(load_args->common.ecs, rnd_sys, path, name,
+                                parse_fn, domain_size, material);
   }
+
+  // Strings were copies that can be freed now
+  tb_free(tb_global_alloc, (void *)path);
+  tb_free(tb_global_alloc, (void *)name);
 
   cgltf_free(data);
 
@@ -406,6 +406,8 @@ void tb_register_material2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMaterialUsage);
   ECS_TAG_DEFINE(ecs, TbMaterialLoaded);
 
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
   ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              TbMatQueueCounter(TbMatQueueCounter), TbMaterialCtx(TbMaterialCtx),
@@ -421,6 +423,79 @@ void tb_register_material2_sys(TbWorld *world) {
                         {.id = ecs_id(TbMaterialLoaded)},
                     }}),
   };
+
+  // Create immutable sampler for materials
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = 16.0f, // 16x anisotropy is cheap
+        .maxLod = 14.0f,        // Hack; known number of mips for 8k textures
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+    };
+    tb_rnd_create_sampler(rnd_sys, &create_info, "Material Sampler",
+                          &ctx.sampler);
+  }
+
+  // Create immutable sampler for sampling shadows
+  {
+    VkSamplerCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+        .anisotropyEnable = VK_FALSE,
+        .compareEnable = VK_TRUE,
+        .compareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+        .maxAnisotropy = 1.0f,
+        .maxLod = 1.0f,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+    };
+    tb_rnd_create_sampler(rnd_sys, &create_info, "Material Shadow Sampler",
+                          &ctx.shadow_sampler);
+  }
+
+  // Create descriptor set layout for materials
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    const uint32_t binding_count = 3;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){0, 0, flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {0, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                 &ctx.sampler},
+                {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                 &ctx.shadow_sampler},
+                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                 2048, // HACK: Some high upper limit
+                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+                 NULL},
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout",
+                             &ctx.set_layout);
+  }
 
   TbMatQueueCounter queue_count = {0};
   SDL_AtomicSet(&queue_count, 0);
@@ -444,8 +519,6 @@ void tb_register_material2_sys(TbWorld *world) {
   };
   tb_register_mat_usage(ecs, "scene", TB_MAT_USAGE_SCENE, tb_parse_scene_mat,
                         &default_scene_mat, sizeof(TbSceneMaterial));
-
-  ecs_singleton_set_ptr(ecs, TbMaterialCtx, &ctx);
 }
 
 void tb_unregister_material2_sys(TbWorld *world) {
@@ -517,10 +590,21 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
   return true;
 }
 
+VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  return ctx->set_layout;
+}
+
+VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+}
+
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
                                      const char *name, TbMaterialUsage usage) {
   // If an entity already exists with this name it is either loading or loaded
-  TbTexture mat_ent = ecs_lookup(ecs, name);
+  TbTexture mat_ent = ecs_lookup_child(ecs, ecs_id(TbMaterialCtx), name);
   if (mat_ent != 0) {
     return mat_ent;
   }
@@ -555,7 +639,7 @@ bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat) {
 }
 
 TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto ctx = ecs_singleton_get(ecs, TbMaterialCtx);
   TB_DYN_ARR_FOREACH(ctx->usage_map, i) {
     tb_auto domain = &TB_DYN_ARR_AT(ctx->usage_map, i);
     if (domain->usage == usage) {

@@ -11,8 +11,8 @@ typedef struct TbWorld TbWorld;
 #define TB_VERTEX_BINDING_MAX 4
 
 typedef TbResourceId TbMeshId;
-typedef TbResourceId TbMaterialId;
 typedef uint64_t ecs_entity_t;
+typedef ecs_entity_t TbMaterial2;
 
 typedef struct TbSubMesh {
   uint32_t index_type;
@@ -21,7 +21,7 @@ typedef struct TbSubMesh {
   uint64_t vertex_offset;
   uint32_t vertex_count;
   uint32_t vertex_perm;
-  TbMaterialId material;
+  TbMaterial2 material;
 } TbSubMesh;
 
 typedef struct TbMeshComponent {

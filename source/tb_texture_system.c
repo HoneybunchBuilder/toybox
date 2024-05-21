@@ -973,12 +973,12 @@ TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
 
 // Public API
 
-VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
+VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   return ctx->set_layout;
 }
 
-VkDescriptorSet tb_tex_sys_get_set2(ecs_world_t *ecs) {
+VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
@@ -997,7 +997,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
                                   uint32_t width, uint32_t height,
                                   TbTextureUsage usage) {
   // If an entity already exists with this name it is either loading or loaded
-  TbTexture tex_ent = ecs_lookup(ecs, name);
+  TbTexture tex_ent = ecs_lookup_child(ecs, ecs_id(TbTextureCtx), name);
   if (tex_ent != 0) {
     return tex_ent;
   }
@@ -1099,18 +1099,18 @@ bool tb_is_texture_ready(ecs_world_t *ecs, TbTexture tex) {
 }
 
 TbTexture tb_get_default_color_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_get(ecs, TbTextureCtx);
   return ctx->default_color_tex;
 }
 TbTexture tb_get_default_normal_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_get(ecs, TbTextureCtx);
   return ctx->default_normal_tex;
 }
 TbTexture tb_get_default_metal_rough_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_get(ecs, TbTextureCtx);
   return ctx->default_metal_rough_tex;
 }
 TbTexture tb_get_brdf_tex(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_get(ecs, TbTextureCtx);
   return ctx->brdf_tex;
 }
