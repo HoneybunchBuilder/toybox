@@ -441,7 +441,7 @@ void tb_load_gltf_texture_task(const void *args) {
   tb_auto mat_name = load_args->gltf.mat_name;
 
   // tb_global_alloc is the only safe allocator to use in a task
-  tb_auto data = tb_read_glb(tb_thread_alloc, path);
+  tb_auto data = tb_read_glb(tb_global_alloc, path);
   // Find material by name
   struct cgltf_material *mat = NULL;
   for (cgltf_size i = 0; i < data->materials_count; ++i) {
@@ -1046,7 +1046,7 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   }
 
   // If an entity already exists with this name it is either loading or loaded
-  TbTexture tex_ent = ecs_lookup(ecs, image_name);
+  TbTexture tex_ent = ecs_lookup_child(ecs, ecs_id(TbTextureCtx), image_name);
   if (tex_ent != 0) {
     return tex_ent;
   }

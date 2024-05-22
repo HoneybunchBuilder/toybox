@@ -36,11 +36,12 @@ extern ECS_COMPONENT_DECLARE(TbMaterialComponent);
 // A function that parses a material asset and fills out a pointer to a block
 // of memory that represents that material
 typedef bool TbMatParseFn(const char *path, const char *name,
-                          const cgltf_material *material, void *out_mat_data);
+                          const cgltf_material *material, void **out_mat_data);
 typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
 typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
 typedef void *TbMatGetDataFn(ecs_world_t *ecs, const TbMaterialData *data);
 typedef size_t TbMatGetSizeFn(void);
+typedef bool TbMatIsTransparent(const TbMaterialData *data);
 
 typedef struct TbMaterialDomain {
   TbMatParseFn *parse_fn;
@@ -48,6 +49,7 @@ typedef struct TbMaterialDomain {
   TbMatIsReadyFn *ready_fn;
   TbMatGetDataFn *get_data_fn;
   TbMatGetSizeFn *get_size_fn;
+  TbMatIsTransparent *is_trans_fn;
 } TbMaterialDomain;
 
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
@@ -65,5 +67,7 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
 
 // Returns true if the material is ready to be used
 bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent);
+
+bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent);
 
 TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage);

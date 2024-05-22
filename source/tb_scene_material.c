@@ -16,8 +16,9 @@ typedef struct TbSceneMaterial {
 
 // Run on a thread
 bool tb_parse_scene_mat(const char *path, const char *name,
-                        const cgltf_material *material, void *out_mat_data) {
-  tb_auto scene_mat = (TbSceneMaterial *)out_mat_data;
+                        const cgltf_material *material, void **out_mat_data) {
+  *out_mat_data = tb_alloc(tb_global_alloc, sizeof(TbSceneMaterial));
+  tb_auto scene_mat = (TbSceneMaterial *)*out_mat_data;
 
   scene_mat->path = path;
   scene_mat->name = name;
@@ -140,6 +141,9 @@ bool tb_parse_scene_mat(const char *path, const char *name,
 // Run in a task on the main thread
 void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
   tb_auto scene_mat = (TbSceneMaterial *)mat_data;
+  if (scene_mat == NULL) {
+    return;
+  }
 
   const char *path = scene_mat->path;
   const char *name = scene_mat->name;
@@ -166,6 +170,9 @@ void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
 
 bool tb_is_scene_mat_ready(ecs_world_t *ecs, const TbMaterialData *data) {
   tb_auto scene_mat = (TbSceneMaterial *)data->domain_data;
+  if (scene_mat == NULL) {
+    return false;
+  }
 
   return tb_is_texture_ready(ecs, scene_mat->color_map) &&
          tb_is_texture_ready(ecs, scene_mat->normal_map) &&
@@ -185,6 +192,12 @@ void *tb_get_scene_mat_data(ecs_world_t *ecs, const TbMaterialData *data) {
 
 size_t tb_get_scene_mat_size(void) { return sizeof(TbGLTFMaterialData); }
 
+bool tb_is_scene_mat_trans(const TbMaterialData *data) {
+  tb_auto scene_mat = (TbSceneMaterial *)data->domain_data;
+  tb_auto perm = scene_mat->data.perm;
+  return perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND;
+}
+
 void tb_register_scene_material_domain(ecs_world_t *ecs) {
   TbSceneMaterial default_scene_mat = {
       .data =
@@ -203,6 +216,7 @@ void tb_register_scene_material_domain(ecs_world_t *ecs) {
       .ready_fn = tb_is_scene_mat_ready,
       .get_data_fn = tb_get_scene_mat_data,
       .get_size_fn = tb_get_scene_mat_size,
+      .is_trans_fn = tb_is_scene_mat_trans,
   };
 
   tb_register_mat_usage(ecs, "scene", TB_MAT_USAGE_SCENE, domain,

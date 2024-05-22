@@ -89,15 +89,15 @@ typedef struct TbLoadGLTFMaterialArgs {
 } TbLoadGLTFMaterialArgs;
 
 TbMaterialData tb_parse_gltf_mat(const char *path, const char *name,
-                                 TbMatParseFn parse_fn, size_t domain_size,
+                                 TbMatParseFn parse_fn,
                                  const cgltf_material *material) {
   TracyCZoneN(ctx, "Load Material", true);
 
   TbMaterialData mat_data = {0};
 
   // Load material based on usage
-  uint8_t *data = tb_alloc(tb_global_alloc, domain_size);
-  if (!parse_fn(path, name, material, (void *)data)) {
+  void *data = NULL;
+  if (!parse_fn(path, name, material, &data)) {
     tb_free(tb_global_alloc, data);
     TracyCZoneEnd(ctx);
     return mat_data;
@@ -119,7 +119,7 @@ void tb_load_gltf_material_task(const void *args) {
   tb_auto name = load_args->gltf.name;
 
   // tb_global_alloc is the only safe allocator to use in a task
-  tb_auto data = tb_read_glb(tb_thread_alloc, path);
+  tb_auto data = tb_read_glb(tb_global_alloc, path);
   // Find material by name
   struct cgltf_material *material = NULL;
   for (cgltf_size i = 0; i < data->materials_count; ++i) {
@@ -137,8 +137,7 @@ void tb_load_gltf_material_task(const void *args) {
   // Parse material based on usage
   TbMaterialData mat_data = {0};
   if (mat != 0) {
-    mat_data = tb_parse_gltf_mat(path, name, domain.parse_fn,
-                                 domain.get_size_fn(), material);
+    mat_data = tb_parse_gltf_mat(path, name, domain.parse_fn, material);
   }
 
   cgltf_free(data);
@@ -393,7 +392,7 @@ void tb_register_material2_sys(TbWorld *world) {
              TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx));
 
   ECS_SYSTEM(ecs, tb_reset_mat_queue_count,
-             EcsPostUpdate, [in] TbTexQueueCounter(TbMatQueueCounter));
+             EcsPostUpdate, [in] TbMatQueueCounter(TbMatQueueCounter));
 
   ECS_SYSTEM(ecs, tb_update_material_descriptors,
              EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
@@ -617,9 +616,18 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   return mat_ent;
 }
 
-bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat) {
-  return ecs_has(ecs, mat, TbMaterialLoaded) &&
-         ecs_has(ecs, mat, TbMaterialComponent);
+bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent) {
+  return ecs_has(ecs, mat_ent, TbMaterialLoaded) &&
+         ecs_has(ecs, mat_ent, TbMaterialComponent);
+}
+
+bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent) {
+  tb_auto ctx = ecs_singleton_get(ecs, TbMaterialCtx);
+  tb_auto data = ecs_get(ecs, mat_ent, TbMaterialData);
+  tb_auto usage = *ecs_get(ecs, mat_ent, TbMaterialUsage);
+
+  tb_auto handler = tb_find_material_domain(ctx, usage);
+  return handler.domain.is_trans_fn(data);
 }
 
 TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage) {

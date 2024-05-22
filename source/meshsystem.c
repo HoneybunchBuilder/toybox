@@ -1352,10 +1352,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
               continue;
             }
 
-            // TODO: tb_mat_system_get_perm(mat_sys, sm->material);
-            TbMaterialPerm perm = 0;
-
-            if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
+            if (tb_is_mat_transparent(ecs, sm->material)) {
               trans_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
             } else {
               opaque_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
@@ -1452,14 +1449,12 @@ void mesh_draw_tick(ecs_iter_t *it) {
             if (!tb_is_material_ready(ecs, sm->material)) {
               continue;
             }
-            // TODO: tb_mat_system_get_perm(mat_sys, sm->material);
-            TbMaterialPerm perm = 0;
 
             // Deduce whether to write to opaque or transparent data
             tb_auto draw_cmds = opaque_draw_cmds;
             tb_auto draw_count = &opaque_cmd_count;
             tb_auto draw_data = opaque_draw_data;
-            if (perm & GLTF_PERM_ALPHA_CLIP || perm & GLTF_PERM_ALPHA_BLEND) {
+            if (tb_is_mat_transparent(ecs, sm->material)) {
               draw_cmds = trans_draw_cmds;
               draw_count = &trans_cmd_count;
               draw_data = trans_draw_data;
