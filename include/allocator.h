@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <threads.h>
 
 #include <mimalloc.h>
 
@@ -46,7 +45,10 @@ typedef struct TbAllocator {
 
 extern TbAllocator tb_global_alloc;
 
-extern thread_local TbAllocator tb_thread_alloc;
+// thread_local macro from threads.h is not as reliable as this
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc11-extensions"
+extern _Thread_local TbAllocator tb_thread_alloc;
 
 typedef struct TbGeneralAllocator {
   mi_heap_t *heap;

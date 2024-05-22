@@ -118,8 +118,7 @@ void tb_load_gltf_material_task(const void *args) {
   tb_auto path = load_args->gltf.path;
   tb_auto name = load_args->gltf.name;
 
-  // tb_global_alloc is the only safe allocator to use in a task
-  tb_auto data = tb_read_glb(tb_global_alloc, path);
+  tb_auto data = tb_read_glb(tb_thread_alloc, path);
   // Find material by name
   struct cgltf_material *material = NULL;
   for (cgltf_size i = 0; i < data->materials_count; ++i) {

@@ -69,7 +69,7 @@ TbAllocator tb_global_alloc = {
     .free = global_free,
 };
 
-thread_local mi_heap_t *thread_heap = NULL;
+_Thread_local mi_heap_t *thread_heap = NULL;
 
 static void *thread_alloc(void *user_data, size_t size) {
   (void)user_data;
@@ -137,7 +137,7 @@ static void thread_free(void *user_data, void *ptr) {
   // TracyCZoneEnd(ctx);
 }
 
-thread_local TbAllocator tb_thread_alloc = {
+_Thread_local TbAllocator tb_thread_alloc = {
     .alloc = thread_alloc,
     .alloc_aligned = thread_alloc_aligned,
     .realloc = thread_realloc,
