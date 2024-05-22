@@ -7,13 +7,13 @@
 #include <TaskScheduler_c.h>
 
 void *tb_ts_alloc(size_t size) {
-  void *ptr = mi_malloc(size);
+  void *ptr = tb_alloc(tb_global_alloc, size);
   TracyCAllocN(ptr, size, "Task Alloc");
   return ptr;
 }
 
 void tb_ts_free(void *ptr) {
-  mi_free(ptr);
+  tb_free(tb_global_alloc, ptr);
   TracyCFreeN(ptr, "Task Alloc");
 }
 

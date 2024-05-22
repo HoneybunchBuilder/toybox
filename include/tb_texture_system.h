@@ -10,8 +10,9 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef ecs_entity_t TbTexture; // Entities can be handles to textures
+
+typedef uint32_t TbTextureComponent;
 extern ECS_COMPONENT_DECLARE(TbTextureComponent);
-#define TbInvalidTexComp ((TbTextureComponent)0xFFFFFFFF)
 
 typedef enum TbTextureUsage {
   TB_TEX_USAGE_UNKNOWN = 0,

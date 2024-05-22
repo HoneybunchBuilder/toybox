@@ -79,7 +79,6 @@ typedef struct TbLoadCommonMaterialArgs {
   ecs_world_t *ecs;
   TbMaterial2 mat;
   TbTaskScheduler enki;
-  TbRenderSystem *rnd_sys;
   TbPinnedTask loaded_task;
   TbMaterialDomain domain;
 } TbLoadCommonMaterialArgs;
@@ -89,9 +88,8 @@ typedef struct TbLoadGLTFMaterialArgs {
   TbMaterialGLTFLoadRequest gltf;
 } TbLoadGLTFMaterialArgs;
 
-TbMaterialData tb_parse_gltf_mat(TbRenderSystem *rnd_sys, const char *path,
-                                 const char *name, TbMatParseFn parse_fn,
-                                 size_t domain_size,
+TbMaterialData tb_parse_gltf_mat(const char *path, const char *name,
+                                 TbMatParseFn parse_fn, size_t domain_size,
                                  const cgltf_material *material) {
   TracyCZoneN(ctx, "Load Material", true);
 
@@ -107,20 +105,6 @@ TbMaterialData tb_parse_gltf_mat(TbRenderSystem *rnd_sys, const char *path,
 
   mat_data.domain_data = data;
 
-  // Send data to GPU
-  {
-    VkBufferCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = domain_size,
-        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    };
-    // HACK: Known alignment for uniform buffers
-    tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, data, name,
-                                      &mat_data.gpu_buffer, 0x40);
-  }
-
   TracyCZoneEnd(ctx);
   return mat_data;
 }
@@ -129,7 +113,6 @@ void tb_load_gltf_material_task(const void *args) {
   TracyCZoneN(ctx, "Load GLTF Material Task", true);
   tb_auto load_args = (const TbLoadGLTFMaterialArgs *)args;
   TbMaterial2 mat = load_args->common.mat;
-  tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto domain = load_args->common.domain;
 
   tb_auto path = load_args->gltf.path;
@@ -154,7 +137,7 @@ void tb_load_gltf_material_task(const void *args) {
   // Parse material based on usage
   TbMaterialData mat_data = {0};
   if (mat != 0) {
-    mat_data = tb_parse_gltf_mat(rnd_sys, path, name, domain.parse_fn,
+    mat_data = tb_parse_gltf_mat(path, name, domain.parse_fn,
                                  domain.get_size_fn(), material);
   }
 
@@ -190,11 +173,10 @@ TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
 void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto counter = ecs_field(it, TbMatQueueCounter, 3);
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 4);
-  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 5);
-  tb_auto usages = ecs_field(it, TbMaterialUsage, 6);
+  tb_auto counter = ecs_field(it, TbMatQueueCounter, 2);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 3);
+  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 4);
+  tb_auto usages = ecs_field(it, TbMaterialUsage, 5);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -221,7 +203,6 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
                 .ecs = it->world,
                 .mat = ent,
                 .enki = enki,
-                .rnd_sys = rnd_sys,
                 .loaded_task = loaded_task,
                 .domain = handler.domain,
             },
@@ -254,6 +235,8 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
       tb_auto material = &materials[i];
       tb_auto usage = usages[i];
 
+      const char *name = ecs_get_name(mat_it.world, ent);
+
       // Determine if the material's dependencies are also met
       tb_auto handler = tb_find_material_domain(mat_ctx, usage);
       tb_auto domain = handler.domain;
@@ -263,10 +246,19 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
         continue;
       }
 
-      void *domain_data = domain.get_data_fn(material);
+      void *domain_data = domain.get_data_fn(mat_it.world, material);
       size_t domain_size = domain.get_size_fn();
-      tb_rnd_sys_update_gpu_buffer_tmp(rnd_sys, &material->gpu_buffer,
-                                       domain_data, domain_size, 0x40);
+
+      VkBufferCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .size = domain_size,
+          .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      };
+      // HACK: Known alignment for uniform buffers
+      tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, domain_data,
+                                        name, &material->gpu_buffer, 0x40);
 
       ecs_remove(mat_it.world, ent, TbMaterialUploadable);
       ecs_add(mat_it.world, ent, TbMaterialLoaded);
@@ -393,7 +385,7 @@ void tb_register_material2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPreUpdate,
-             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
+             TbTaskScheduler(TbTaskScheduler),
              TbMatQueueCounter(TbMatQueueCounter), TbMaterialCtx(TbMaterialCtx),
              [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
 

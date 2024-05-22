@@ -37,7 +37,6 @@ typedef struct TbTextureImage {
 } TbTextureImage;
 ECS_COMPONENT_DECLARE(TbTextureImage);
 
-typedef uint32_t TbTextureComponent;
 ECS_COMPONENT_DECLARE(TbTextureComponent);
 
 // Describes the creation of a texture that lives in a GLB file
@@ -155,9 +154,11 @@ TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
                                  ktxTexture2 *ktx) {
   bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
   if (needs_transcoding) {
+    TracyCZoneN(ctx, "KTX Basis Transcode", true);
     // TODO: pre-calculate the best format for the platform
     ktx_error_code_e err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
     TB_CHECK(err == KTX_SUCCESS, "Failed to transcode basis texture");
+    TracyCZoneEnd(ctx);
   }
 
   size_t host_buffer_size = ktx->dataSize;
@@ -251,7 +252,7 @@ TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
 
 TbTextureImage tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
                                     const cgltf_texture *texture) {
-  TracyCZoneN(ctx, "Load Texture2", true);
+  TracyCZoneN(ctx, "Load GLTF Texture", true);
   TbTextureImage tex = {0};
 
   if (texture->has_basisu) {

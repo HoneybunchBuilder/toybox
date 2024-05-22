@@ -513,13 +513,6 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(TbRenderSystem *self,
   // Create the GPU side buffer
   VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
 
-  // If this buffer is host visible, just get the pointer to write to
-  if (try_map(self->vma_alloc, buffer->alloc, ptr)) {
-    return err;
-  }
-
-  // Otherwise we have to create write to the tmp buffer and schedule an
-  // upload
   TbHostBuffer host = {0};
   err = alloc_tmp_buffer(self, create_info->size, alignment, &host);
   TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);

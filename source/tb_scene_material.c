@@ -1,6 +1,7 @@
 #include "tb_scene_material.h"
 
 #include "gltf.hlsli"
+#include "tb_texture_system.h"
 #include "tbcommon.h"
 #include "tbgltf.h"
 
@@ -39,6 +40,7 @@ bool tb_parse_scene_mat(const char *path, const char *name,
 
   TbMaterialPerm feat_perm = 0;
   if (material->has_pbr_metallic_roughness) {
+    feat_perm |= GLTF_PERM_PBR_METALLIC_ROUGHNESS;
     if (material->pbr_metallic_roughness.metallic_roughness_texture.texture !=
         NULL) {
       feat_perm |= GLTF_PERM_PBR_METAL_ROUGH_TEX;
@@ -53,7 +55,7 @@ bool tb_parse_scene_mat(const char *path, const char *name,
     if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL &&
         material->pbr_specular_glossiness.specular_glossiness_texture.texture !=
             NULL) {
-      feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS;
+      // feat_perm |= GLTF_PERM_PBR_SPECULAR_GLOSSINESS_TEX;
     }
     if (material->pbr_specular_glossiness.diffuse_texture.texture != NULL) {
       feat_perm |= GLTF_PERM_BASE_COLOR_MAP;
@@ -155,7 +157,7 @@ void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
   scene_mat->normal_map = normal;
 
   tb_auto metal_rough = tb_get_default_metal_rough_tex(ecs);
-  if ((scene_mat->data.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) > 0) {
+  if ((scene_mat->data.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) > 0) {
     metal_rough =
         tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_METAL_ROUGH);
   }
@@ -170,8 +172,14 @@ bool tb_is_scene_mat_ready(ecs_world_t *ecs, const TbMaterialData *data) {
          tb_is_texture_ready(ecs, scene_mat->metal_rough_map);
 }
 
-void *tb_get_scene_mat_data(const TbMaterialData *data) {
+void *tb_get_scene_mat_data(ecs_world_t *ecs, const TbMaterialData *data) {
   tb_auto scene_mat = (TbSceneMaterial *)data->domain_data;
+  scene_mat->data.color_idx =
+      *ecs_get(ecs, scene_mat->color_map, TbTextureComponent);
+  scene_mat->data.normal_idx =
+      *ecs_get(ecs, scene_mat->normal_map, TbTextureComponent);
+  scene_mat->data.pbr_idx =
+      *ecs_get(ecs, scene_mat->metal_rough_map, TbTextureComponent);
   return (void *)&scene_mat->data;
 }
 

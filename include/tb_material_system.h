@@ -39,7 +39,7 @@ typedef bool TbMatParseFn(const char *path, const char *name,
                           const cgltf_material *material, void *out_mat_data);
 typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
 typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
-typedef void *TbMatGetDataFn(const TbMaterialData *data);
+typedef void *TbMatGetDataFn(ecs_world_t *ecs, const TbMaterialData *data);
 typedef size_t TbMatGetSizeFn(void);
 
 typedef struct TbMaterialDomain {
