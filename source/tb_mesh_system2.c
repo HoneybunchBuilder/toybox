@@ -35,6 +35,21 @@ ECS_TAG_DECLARE(TbMeshLoaded);
 
 // Systems
 
+void tb_reset_mesh_queue_count(ecs_iter_t *it) {
+  tb_auto counter = ecs_field(it, TbMeshQueueCounter, 1);
+  SDL_AtomicSet(counter, 0);
+}
+
+void tb_update_mesh_descriptors(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Update Mesh Descriptors", true);
+
+  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+
+  TracyCZoneEnd(ctx);
+}
+
 // Toybox Glue
 void tb_register_mesh2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
@@ -45,6 +60,11 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMeshGLTFLoadRequest);
   ECS_TAG_DEFINE(ecs, TbMeshUploadable);
   ECS_TAG_DEFINE(ecs, TbMeshLoaded);
+
+  ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
+             EcsPostUpdate, [in] TbMeshQueueCounter(TbMeshQueueCounter));
+  ECS_SYSTEM(ecs, tb_update_mesh_descriptors, EcsPreStore,
+             [in] TbMeshCtx(TbMeshCtx), [in] TbRenderSystem(TbRenderSystem));
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
