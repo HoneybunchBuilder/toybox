@@ -1,8 +1,8 @@
 #pragma once
 
-#include "allocator.h"
 #include "dynarray.h"
 #include "rendersystem.h"
+#include "tb_allocator.h"
 #include "tbrendercommon.h"
 
 #include <flecs.h>

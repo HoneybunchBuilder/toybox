@@ -24,7 +24,7 @@
   time.
 */
 
-#include "allocator.h"
+#include "tb_allocator.h"
 
 typedef struct SDL_Thread SDL_Thread;
 typedef struct SDL_Semaphore SDL_Semaphore;

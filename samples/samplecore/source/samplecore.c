@@ -4,12 +4,12 @@
 
 #include <flecs.h>
 
-#include "allocator.h"
 #include "pi.h"
 #include "profiling.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tb_allocator.h"
 #include "tbcommon.h"
 #include "tbengineconfig.h"
 #include "tbsdl.h"

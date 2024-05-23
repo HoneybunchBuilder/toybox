@@ -1,7 +1,7 @@
 #pragma once
 
-#include "allocator.h"
 #include "renderthread.h"
+#include "tb_allocator.h"
 #include "tbsystempriority.h"
 #include "tbvkalloc.h"
 #include "tbvma.h"

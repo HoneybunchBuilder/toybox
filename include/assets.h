@@ -1,6 +1,6 @@
 #pragma once
 
-#include "allocator.h"
+#include "tb_allocator.h"
 
 typedef struct cgltf_data cgltf_data;
 

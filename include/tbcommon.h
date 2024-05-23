@@ -2,11 +2,11 @@
 
 #include "tbsdl.h"
 
-#include "allocator.h"
 #include "profiling.h"
 #include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "tb_allocator.h"
 #include "tbengineconfig.h"
 #include "tblog.h"
 

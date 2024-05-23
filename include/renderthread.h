@@ -1,6 +1,6 @@
 #pragma once
 
-#include "allocator.h"
+#include "tb_allocator.h"
 #include "tbrendercommon.h"
 
 #if !defined(FINAL) && !defined(__ANDROID__)

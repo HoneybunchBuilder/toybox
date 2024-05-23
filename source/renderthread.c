@@ -3,8 +3,8 @@
 #include "mimalloc.h"
 #include <stdbool.h>
 
-#include "allocator.h"
 #include "profiling.h"
+#include "tb_allocator.h"
 
 #include "tbcommon.h"
 #include "tbengineconfig.h"

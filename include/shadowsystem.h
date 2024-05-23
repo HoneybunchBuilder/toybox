@@ -1,8 +1,8 @@
 #pragma once
 
-#include "allocator.h"
 #include "common.hlsli"
 #include "rendersystem.h"
+#include "tb_allocator.h"
 #include "tbsystempriority.h"
 
 #include <flecs.h>

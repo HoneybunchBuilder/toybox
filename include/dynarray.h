@@ -5,7 +5,7 @@
 
 #include <assert.h>
 
-#include "allocator.h"
+#include "tb_allocator.h"
 
 #define TB_DYN_ARR_OF(type)                                                    \
   struct {                                                                     \

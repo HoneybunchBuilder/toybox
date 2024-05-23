@@ -1,7 +1,7 @@
 #include "world.h"
 
-#include "allocator.h"
 #include "assets.h"
+#include "tb_allocator.h"
 
 #include "profiling.h"
 #include "simd.h"

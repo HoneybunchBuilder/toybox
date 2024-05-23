@@ -1,12 +1,12 @@
 #pragma once
 
-#include "allocator.h"
 #include "bloom.h"
 #include "dynarray.h"
 #include "luminance.h"
 #include "rendersystem.h"
 #include "rendertargetsystem.h"
 #include "skysystem.h"
+#include "tb_allocator.h"
 #include "tbrendercommon.h"
 
 #include <flecs.h>

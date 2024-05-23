@@ -1,7 +1,7 @@
 #pragma once
 
-#include "allocator.h"
 #include "dynarray.h"
+#include "tb_allocator.h"
 #include "tbsystempriority.h"
 
 #include <flecs.h>
