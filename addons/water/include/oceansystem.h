@@ -1,10 +1,10 @@
 #pragma once
 
-#include "rendersystem.h"
-#include "rendertargetsystem.h"
 #include "tb_allocator.h"
-#include "tbrendercommon.h"
-#include "visualloggingsystem.h"
+#include "tb_render_common.h"
+#include "tb_render_system.h"
+#include "tb_render_target_system.h"
+#include "tb_visual_logging_system.h"
 
 #include <flecs.h>
 

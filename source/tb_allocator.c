@@ -6,7 +6,7 @@
 #include <SDL3/SDL_assert.h>
 #include <mimalloc.h>
 
-#include "profiling.h"
+#include "tb_profiling.h"
 
 static void *global_alloc(void *user_data, size_t size) {
   (void)user_data;

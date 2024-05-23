@@ -2,12 +2,13 @@
 #include "common.hlsli"
 #include "sky_common.hlsli"
 
-#include "simd.h"
+#include "tb_simd.h"
 
-ConstantBuffer<TbSkyData> sky_data : register(b0, space0); // Fragment Stage Only
+ConstantBuffer<TbSkyData> sky_data
+    : register(b0, space0); // Fragment Stage Only
 
-[[vk::push_constant]] ConstantBuffer<TbSkyPushConstants> consts
-    : register(b1, space0);
+[[vk::push_constant]]
+ConstantBuffer<TbSkyPushConstants> consts : register(b1, space0);
 
 struct VertexIn {
   float3 local_pos : SV_POSITION;

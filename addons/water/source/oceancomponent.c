@@ -1,9 +1,9 @@
 #include "oceancomponent.h"
 
 #include "oceansystem.h"
-#include "tbcommon.h"
-#include "transformcomponent.h"
-#include "world.h"
+#include "tb_common.h"
+#include "tb_transform_component.h"
+#include "tb_world.h"
 
 #include <SDL3/SDL_stdinc.h>
 #include <flecs.h>

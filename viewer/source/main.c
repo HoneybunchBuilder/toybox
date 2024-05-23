@@ -1,15 +1,15 @@
 #include <mimalloc.h>
 
-#include "profiling.h"
-#include "settings.h"
-#include "shadercommon.h"
-#include "simd.h"
-#include "tbcommon.h"
+#include "tb_common.h"
+#include "tb_profiling.h"
+#include "tb_sdl.h"
+#include "tb_settings.h"
+#include "tb_shader_common.h"
+#include "tb_simd.h"
+#include "tb_vk.h"
+#include "tb_vma.h"
+#include "tb_world.h"
 #include "tbengineconfig.h"
-#include "tbsdl.h"
-#include "tbvk.h"
-#include "tbvma.h"
-#include "world.h"
 
 #include "viewersystem.h"
 

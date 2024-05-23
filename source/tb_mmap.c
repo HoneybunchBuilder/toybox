@@ -1,6 +1,6 @@
 #include "tb_mmap.h"
 
-#include "tbcommon.h"
+#include "tb_common.h"
 
 // Adapted from https://github.com/m-labs/uclibc-lm32/ (public domain)
 

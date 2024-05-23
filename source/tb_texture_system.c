@@ -1,12 +1,12 @@
 #include "tb_texture_system.h"
 
-#include "assets.h"
+#include "tb_assets.h"
+#include "tb_common.h"
+#include "tb_gltf.h"
+#include "tb_ktx.h"
+#include "tb_queue.h"
 #include "tb_task_scheduler.h"
-#include "tbcommon.h"
-#include "tbgltf.h"
-#include "tbktx.h"
-#include "tbqueue.h"
-#include "world.h"
+#include "tb_world.h"
 
 static const int32_t TbMaxParallelTextureLoads = 24;
 

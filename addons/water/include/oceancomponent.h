@@ -1,8 +1,8 @@
 #pragma once
 
-#include "simd.h"
+#include "tb_simd.h"
 
-#include "ocean.hlsli" // Must include simd.h before shader includes
+#include "ocean.hlsli" // Must include tb_simd.h before shader includes
 
 #include <flecs.h>
 

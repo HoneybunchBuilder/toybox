@@ -1,9 +1,9 @@
 #include "tb_scene_material.h"
 
 #include "gltf.hlsli"
+#include "tb_common.h"
+#include "tb_gltf.h"
 #include "tb_texture_system.h"
-#include "tbcommon.h"
-#include "tbgltf.h"
 
 typedef struct TbSceneMaterial {
   const char *path;
