@@ -8,7 +8,7 @@
 #include "tb_task_scheduler.h"
 #include "tb_world.h"
 
-static const int32_t TbMaxParallelMaterialLoads = 24;
+static const int32_t TbMaxParallelMaterialLoads = 8;
 
 // Components
 
@@ -595,6 +595,9 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   mat_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, mat_ent, name);
 
+  // It is a child of the texture system context singleton
+  ecs_add_pair(ecs, mat_ent, EcsChildOf, ecs_id(TbMaterialCtx));
+
   // Need to copy strings for task safety
   // Tasks are responsible for freeing these names
   const size_t path_len = SDL_strnlen(path, 256) + 1;
@@ -604,9 +607,6 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   const size_t name_len = SDL_strnlen(name, 256) + 1;
   char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
   SDL_strlcpy(name_cpy, name, name_len);
-
-  // It is a child of the texture system context singleton
-  ecs_add_pair(ecs, mat_ent, EcsChildOf, ecs_id(TbMaterialCtx));
 
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {path_cpy, name_cpy});

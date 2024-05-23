@@ -8,9 +8,7 @@
 #define TB_MAT_SYS_PRIO (TB_RND_SYS_PRIO + 2)
 
 typedef ecs_entity_t TbMaterial2; // Entities can be handles to materials
-
 typedef uint32_t TbMaterialPerm;
-
 typedef struct cgltf_material cgltf_material;
 
 // Material usage maps a material to the expected shader layout and usage

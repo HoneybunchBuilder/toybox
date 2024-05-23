@@ -8,7 +8,7 @@
 #include "tb_task_scheduler.h"
 #include "tb_world.h"
 
-static const int32_t TbMaxParallelTextureLoads = 24;
+static const int32_t TbMaxParallelTextureLoads = 8;
 
 typedef SDL_AtomicInt TbTexQueueCounter;
 ECS_COMPONENT_DECLARE(TbTexQueueCounter);
