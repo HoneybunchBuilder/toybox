@@ -1,6 +1,7 @@
 #include <mimalloc.h>
 
 #include "tb_common.h"
+#include "tb_engine_config.h"
 #include "tb_profiling.h"
 #include "tb_sdl.h"
 #include "tb_settings.h"
@@ -9,7 +10,6 @@
 #include "tb_vk.h"
 #include "tb_vma.h"
 #include "tb_world.h"
-#include "tbengineconfig.h"
 
 #include "viewersystem.h"
 

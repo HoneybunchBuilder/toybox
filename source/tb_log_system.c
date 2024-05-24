@@ -1,9 +1,9 @@
 #include "tb_coreui_system.h"
 #include "tb_dynarray.h"
+#include "tb_engine_config.h"
 #include "tb_imgui.h"
 #include "tb_profiling.h"
 #include "tb_world.h"
-#include "tbengineconfig.h"
 
 #if TB_WINDOWS == 1
 #include "debugapi.h"

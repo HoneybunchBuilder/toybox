@@ -7,13 +7,13 @@
 #include "tb_profiling.h"
 
 #include "tb_common.h"
+#include "tb_engine_config.h"
 #include "tb_log.h"
 #include "tb_sdl.h"
 #include "tb_vk.h"
 #include "tb_vk_alloc.h"
 #include "tb_vk_dbg.h"
 #include "tb_vma.h"
-#include "tbengineconfig.h"
 
 // we know that rendersystem.c defines this
 extern bool try_map(VmaAllocator vma, VmaAllocation alloc, void **ptr);

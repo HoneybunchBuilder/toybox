@@ -1,10 +1,10 @@
 #include "tb_coreui_system.h"
 
 #include "tb_common.h"
+#include "tb_engine_config.h"
 #include "tb_imgui.h"
 #include "tb_imgui_system.h"
 #include "tb_profiling.h"
-#include "tbengineconfig.h"
 
 ECS_COMPONENT_DECLARE(TbCoreUISystem);
 

@@ -6,6 +6,7 @@
 
 #include "tb_allocator.h"
 #include "tb_common.h"
+#include "tb_engine_config.h"
 #include "tb_pi.h"
 #include "tb_profiling.h"
 #include "tb_sdl.h"
@@ -13,7 +14,6 @@
 #include "tb_shader_common.h"
 #include "tb_simd.h"
 #include "tb_world.h"
-#include "tbengineconfig.h"
 
 #include <SDL3/SDL_main.h>
 int32_t main(int32_t argc, char *argv[]) {

@@ -3,12 +3,12 @@
 #include "tb_sdl.h"
 
 #include "tb_allocator.h"
+#include "tb_engine_config.h"
 #include "tb_log.h"
 #include "tb_profiling.h"
 #include "tb_settings.h"
 #include "tb_shader_common.h"
 #include "tb_simd.h"
-#include "tbengineconfig.h"
 
 // Manually definine preprocessor macros to reduce windows header includes
 // https://aras-p.info/blog/2018/01/12/Minimizing-windows.h/

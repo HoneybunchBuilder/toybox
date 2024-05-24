@@ -420,7 +420,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 # Generate config header
 set(engine_config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-configure_file(source/config.h.in ${engine_config_include_dir}/tbengineconfig.h @ONLY)
+configure_file(source/config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
 
 target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${engine_config_include_dir}")
