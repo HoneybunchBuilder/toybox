@@ -20,8 +20,17 @@ bool tb_parse_scene_mat(const char *path, const char *name,
   *out_mat_data = tb_alloc(tb_global_alloc, sizeof(TbSceneMaterial));
   tb_auto scene_mat = (TbSceneMaterial *)*out_mat_data;
 
-  scene_mat->path = path;
-  scene_mat->name = name;
+  // Need to make copies of these strings
+  const size_t path_len = SDL_strnlen(path, 256) + 1;
+  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
+  SDL_strlcpy(path_cpy, path, path_len);
+
+  const size_t name_len = SDL_strnlen(name, 256) + 1;
+  char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
+  SDL_strlcpy(name_cpy, name, name_len);
+
+  scene_mat->path = path_cpy;
+  scene_mat->name = name_cpy;
 
   // Find a suitable texture transform from the material
   cgltf_texture_transform tex_trans = {
@@ -166,6 +175,9 @@ void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
         tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_METAL_ROUGH);
   }
   scene_mat->metal_rough_map = metal_rough;
+
+  tb_free(tb_global_alloc, (void *)path);
+  tb_free(tb_global_alloc, (void *)name);
 }
 
 bool tb_is_scene_mat_ready(ecs_world_t *ecs, const TbMaterialData *data) {

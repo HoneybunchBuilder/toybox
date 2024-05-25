@@ -1,5 +1,9 @@
 #include "tb_mesh_system2.h"
 
+#include "tb_assets.h"
+#include "tb_gltf.h"
+#include "tb_task_scheduler.h"
+
 // Internals
 
 static const int32_t TbMaxParallelMeshLoads = 8;
@@ -27,7 +31,7 @@ ECS_COMPONENT_DECLARE(TbMeshData);
 
 ECS_COMPONENT_DECLARE(TbMeshIndex);
 
-// Describes the creation of a material that lives in a GLB file
+// Describes the creation of a mesh that lives in a GLB file
 typedef struct TbMeshGLTFLoadRequest {
   const char *path;
   const char *name;
@@ -37,7 +41,126 @@ ECS_COMPONENT_DECLARE(TbMeshGLTFLoadRequest);
 ECS_TAG_DECLARE(TbMeshUploadable);
 ECS_TAG_DECLARE(TbMeshLoaded);
 
+typedef struct TbMeshLoadedArgs {
+  ecs_world_t *ecs;
+  TbMesh2 mesh;
+  TbMeshData comp;
+} TbMeshLoadedArgs;
+
+void tb_mesh_loaded(const void *args) {
+  tb_auto loaded_args = (const TbMeshLoadedArgs *)args;
+  tb_auto ecs = loaded_args->ecs;
+  tb_auto mesh = loaded_args->mesh;
+  if (mesh == 0) {
+    TB_CHECK(false, "Mesh load failed. Do we need to retry?");
+  }
+
+  ecs_add(ecs, mesh, TbMeshUploadable);
+  ecs_set_ptr(ecs, mesh, TbMeshData, &loaded_args->comp);
+}
+
+typedef struct TbLoadCommonMeshArgs {
+  ecs_world_t *ecs;
+  TbMesh2 mesh;
+  TbTaskScheduler enki;
+  TbPinnedTask loaded_task;
+} TbLoadCommonMeshArgs;
+
+typedef struct TbLoadGLTFMeshArgs {
+  TbLoadCommonMeshArgs common;
+  TbMeshGLTFLoadRequest gltf;
+} TbLoadGLTFMeshArgs;
+
+void tb_load_gltf_mesh_task(const void *args) {
+  TracyCZoneN(ctx, "Load GLTF Mesh Task", true);
+  tb_auto load_args = (const TbLoadGLTFMeshArgs *)args;
+  TbMesh2 mesh = load_args->common.mesh;
+
+  tb_auto path = load_args->gltf.path;
+  tb_auto name = load_args->gltf.name;
+
+  tb_auto data = tb_read_glb(tb_thread_alloc, path);
+  // Find mesh by name
+  struct cgltf_mesh *gltf_mesh = NULL;
+  for (cgltf_size i = 0; i < data->meshes_count; ++i) {
+    tb_auto m = &data->meshes[i];
+    if (SDL_strcmp(name, m->name) == 0) {
+      gltf_mesh = m;
+      break;
+    }
+  }
+  if (gltf_mesh == NULL) {
+    TB_CHECK(false, "Failed to find mesh by name");
+    mesh = 0; // Invalid ent means task failed
+  }
+
+  // Queue upload of mesh data to the GPU
+  TbMeshData mesh_data = {0};
+  if (mesh != 0) {
+    TB_CHECK(false, "Test");
+  }
+
+  cgltf_free(data);
+
+  tb_free(tb_global_alloc, (void *)path);
+  tb_free(tb_global_alloc, (void *)name);
+
+  // Launch pinned task to handle loading signals on main thread
+  TbMeshLoadedArgs loaded_args = {
+      .ecs = load_args->common.ecs,
+      .mesh = mesh,
+      .comp = mesh_data,
+  };
+  tb_launch_pinned_task_args(load_args->common.enki,
+                             load_args->common.loaded_task, &loaded_args,
+                             sizeof(TbMeshLoadedArgs));
+  TracyCZoneEnd(ctx);
+}
+
 // Systems
+
+void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Queue GLTF Mesh Loads", true);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
+  tb_auto counter = ecs_field(it, TbMeshQueueCounter, 2);
+  tb_auto reqs = ecs_field(it, TbMeshGLTFLoadRequest, 3);
+
+  // TODO: Time slice the time spent creating tasks
+  // Iterate texture load tasks
+  for (int32_t i = 0; i < it->count; ++i) {
+    if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+      break;
+    }
+    TbMesh2 ent = it->entities[i];
+    tb_auto req = reqs[i];
+
+    // This pinned task will be launched by the loading task
+    TbPinnedTask loaded_task =
+        tb_create_pinned_task(enki, tb_mesh_loaded, NULL, 0);
+
+    TbLoadGLTFMeshArgs args = {
+        .common =
+            {
+                .ecs = it->world,
+                .mesh = ent,
+                .enki = enki,
+                .loaded_task = loaded_task,
+            },
+        .gltf = req,
+    };
+    TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
+                                     sizeof(TbLoadGLTFMeshArgs));
+    // Apply task component to texture entity
+    ecs_set(it->world, ent, TbTask, {load_task});
+
+    SDL_AtomicIncRef(counter);
+
+    // Remove load request as it has now been enqueued to the task system
+    ecs_remove(it->world, ent, TbMeshGLTFLoadRequest);
+  }
+
+  TracyCZoneEnd(ctx);
+}
 
 void tb_reset_mesh_queue_count(ecs_iter_t *it) {
   tb_auto counter = ecs_field(it, TbMeshQueueCounter, 1);
@@ -161,6 +284,11 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMeshGLTFLoadRequest);
   ECS_TAG_DEFINE(ecs, TbMeshUploadable);
   ECS_TAG_DEFINE(ecs, TbMeshLoaded);
+
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_mesh_loads, EcsPreUpdate,
+      TbTaskScheduler(TbTaskScheduler),
+      TbMeshQueueCounter(TbMeshQueueCounter), [in] TbMeshGLTFLoadRequest);
 
   ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
              EcsPostUpdate, [in] TbMeshQueueCounter(TbMeshQueueCounter));

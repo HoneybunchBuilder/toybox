@@ -141,6 +141,9 @@ void tb_load_gltf_material_task(const void *args) {
 
   cgltf_free(data);
 
+  tb_free(tb_global_alloc, (void *)path);
+  tb_free(tb_global_alloc, (void *)name);
+
   // Launch pinned task to handle loading signals on main thread
   TbMaterialLoadedArgs loaded_args = {
       .ecs = load_args->common.ecs,
