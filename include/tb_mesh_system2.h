@@ -20,8 +20,8 @@
 typedef ecs_entity_t TbMesh2;
 typedef struct ecs_query_t ecs_query_t;
 
-typedef uint32_t TbMeshComponent2;
-extern ECS_COMPONENT_DECLARE(TbMeshComponent2);
+typedef uint32_t TbMeshIndex;
+extern ECS_COMPONENT_DECLARE(TbMeshIndex);
 
 VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs);
 

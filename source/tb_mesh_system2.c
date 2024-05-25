@@ -17,11 +17,15 @@ typedef struct TbMeshCtx {
 ECS_COMPONENT_DECLARE(TbMeshCtx);
 
 typedef struct TbMeshData {
+  VkIndexType idx_type;
+  TbHostBuffer host_buffer;
   TbBuffer gpu_buffer;
+  VkBufferView index_view;
+  VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 } TbMeshData;
 ECS_COMPONENT_DECLARE(TbMeshData);
 
-ECS_COMPONENT_DECLARE(TbMeshComponent2);
+ECS_COMPONENT_DECLARE(TbMeshIndex);
 
 // Describes the creation of a material that lives in a GLB file
 typedef struct TbMeshGLTFLoadRequest {
@@ -47,16 +51,113 @@ void tb_update_mesh_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
+  uint64_t mesh_count = 0;
+
+  // Accumulate the number of meshes
+  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    mesh_count += mesh_it.count;
+  }
+
+  if (mesh_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+
+  {
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .maxSets = view_count,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorCount = mesh_count * view_count * 4,
+                },
+            },
+    };
+    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+        .sType =
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        .descriptorSetCount = view_count,
+        .pDescriptorCounts =
+            (uint32_t[view_count]){mesh_count, mesh_count, mesh_count,
+                                   mesh_count, mesh_count, mesh_count,
+                                   mesh_count},
+    };
+    VkDescriptorSetLayout layouts[view_count] = {
+        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+        mesh_ctx->set_layout};
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
+                                mesh_ctx->frame_set_pool.pools, view_count);
+  }
+
+  // Write all meshes into the descriptor set table
+  uint32_t mesh_idx = 0;
+  mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
+
+  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  TB_DYN_ARR_OF(VkBufferView) buf_views = {0};
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, mesh_count * view_count);
+  TB_DYN_ARR_RESET(buf_views, world->tmp_alloc, mesh_count * view_count);
+  while (ecs_query_next(&mesh_it)) {
+    tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
+    for (int32_t i = 0; i < mesh_it.count; ++i) {
+      tb_auto mesh = &meshes[i];
+
+      // Index Write
+      {
+        TB_DYN_ARR_APPEND(buf_views, mesh->index_view);
+        VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .descriptorCount = mesh_count,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .dstSet = tb_rnd_frame_desc_pool_get_set(
+                rnd_sys, mesh_ctx->frame_set_pool.pools, 0),
+            .dstBinding = 0,
+            .pTexelBufferView = &TB_DYN_ARR_AT(buf_views, mesh_idx),
+        };
+        TB_DYN_ARR_APPEND(writes, write);
+      }
+
+      // Write per view
+      for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
+        TB_DYN_ARR_APPEND(buf_views, mesh->attr_views[attr_idx]);
+        VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .descriptorCount = mesh_count,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .dstSet = tb_rnd_frame_desc_pool_get_set(
+                rnd_sys, mesh_ctx->frame_set_pool.pools, attr_idx + 1),
+            .dstBinding = 0,
+            .pTexelBufferView = &TB_DYN_ARR_AT(buf_views, mesh_idx),
+        };
+        TB_DYN_ARR_APPEND(writes, write);
+      }
+
+      // Mesh is now ready to be referenced elsewhere
+      ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {mesh_idx});
+      mesh_idx++;
+    }
+  }
+  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+
   TracyCZoneEnd(ctx);
 }
 
 // Toybox Glue
+
 void tb_register_mesh2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshCtx);
   ECS_COMPONENT_DEFINE(ecs, TbMeshData);
   ECS_COMPONENT_DEFINE(ecs, TbMeshQueueCounter);
-  ECS_COMPONENT_DEFINE(ecs, TbMeshComponent2);
+  ECS_COMPONENT_DEFINE(ecs, TbMeshIndex);
   ECS_COMPONENT_DEFINE(ecs, TbMeshGLTFLoadRequest);
   ECS_TAG_DEFINE(ecs, TbMeshUploadable);
   ECS_TAG_DEFINE(ecs, TbMeshLoaded);
@@ -176,7 +277,7 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
   mesh_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, mesh_ent, name);
 
-  // It is a child of the texture system context singleton
+  // It is a child of the mesh system context singleton
   ecs_add_pair(ecs, mesh_ent, EcsChildOf, ecs_id(TbMeshCtx));
 
   // Need to copy strings for task safety
@@ -197,5 +298,5 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
 
 bool tb_is_mesh_ready(ecs_world_t *ecs, TbMesh2 mesh_ent) {
   return ecs_has(ecs, mesh_ent, TbMeshLoaded) &&
-         ecs_has(ecs, mesh_ent, TbMeshComponent2);
+         ecs_has(ecs, mesh_ent, TbMeshIndex);
 }
