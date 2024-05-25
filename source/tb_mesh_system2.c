@@ -285,10 +285,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbMeshUploadable);
   ECS_TAG_DEFINE(ecs, TbMeshLoaded);
 
-  ECS_SYSTEM(
-      ecs, tb_queue_gltf_mesh_loads, EcsPreUpdate,
-      TbTaskScheduler(TbTaskScheduler),
-      TbMeshQueueCounter(TbMeshQueueCounter), [in] TbMeshGLTFLoadRequest);
+  ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
+             EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
+             [inout] TbMeshQueueCounter(TbMeshQueueCounter),
+             [in] TbMeshGLTFLoadRequest);
 
   ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
              EcsPostUpdate, [in] TbMeshQueueCounter(TbMeshQueueCounter));
@@ -342,6 +342,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
   }
 
   ecs_singleton_set_ptr(ecs, TbMeshCtx, &ctx);
+
+  TbMeshQueueCounter queue_count = {0};
+  SDL_AtomicSet(&queue_count, 0);
+  ecs_singleton_set_ptr(ecs, TbMeshQueueCounter, &queue_count);
 }
 
 void tb_unregister_mesh2_sys(TbWorld *world) {
