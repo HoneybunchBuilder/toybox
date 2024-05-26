@@ -13,3 +13,15 @@
 #include "cgltf.h"
 
 #pragma clang diagnostic pop
+
+// Toybox specific helpers
+#include "tb_allocator.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
+                                       cgltf_buffer_view *view);
+#ifdef __cplusplus
+}
+#endif

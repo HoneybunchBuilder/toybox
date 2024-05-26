@@ -26,10 +26,6 @@
 #include <flecs.h>
 #include <json-c/json.h>
 
-// From meshsystem.c
-extern "C" cgltf_result decompress_buffer_view(TbAllocator alloc,
-                                               cgltf_buffer_view *view);
-
 ECS_COMPONENT_DECLARE(TbPhysLayer);
 ECS_COMPONENT_DECLARE(TbPhysMotionType);
 ECS_COMPONENT_DECLARE(TbShapeType);
@@ -82,7 +78,7 @@ JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node,
       auto *indices = primitive.indices;
       auto *view = indices->buffer_view;
 
-      auto res = decompress_buffer_view(gp_alloc, view);
+      auto res = tb_decompress_buffer_view(gp_alloc, view);
       TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
       auto stride = indices->stride;
@@ -121,7 +117,7 @@ JPH::ShapeRefC create_mesh_shape(TbAllocator gp_alloc, const cgltf_node *node,
       auto &positions = primitive.attributes[pos_idx].data;
       auto *view = positions->buffer_view;
 
-      auto res = decompress_buffer_view(gp_alloc, view);
+      auto res = tb_decompress_buffer_view(gp_alloc, view);
       TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
       auto vert_count = positions->count;
@@ -169,7 +165,7 @@ JPH::ShapeRefC create_convex_hull_shape(TbAllocator gp_alloc,
       auto *indices = primitive.indices;
       auto *view = indices->buffer_view;
 
-      auto res = decompress_buffer_view(gp_alloc, view);
+      auto res = tb_decompress_buffer_view(gp_alloc, view);
       TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
       auto stride = indices->stride;
@@ -208,7 +204,7 @@ JPH::ShapeRefC create_convex_hull_shape(TbAllocator gp_alloc,
       auto &positions = primitive.attributes[pos_idx].data;
       auto *view = positions->buffer_view;
 
-      auto res = decompress_buffer_view(gp_alloc, view);
+      auto res = tb_decompress_buffer_view(gp_alloc, view);
       TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
       auto vert_count = positions->count;

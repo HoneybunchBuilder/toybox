@@ -9,6 +9,7 @@
 #include "tb_common.h"
 #include "tb_light_component.h"
 #include "tb_mesh_system.h"
+#include "tb_mesh_system2.h"
 #include "tb_profiling.h"
 #include "tb_rand.h"
 #include "tb_render_pipeline_system.h"
@@ -66,6 +67,7 @@ typedef struct TbOceanSystem {
   float wave_sound_timer;
 
   TbMeshId ocean_patch_mesh;
+  TbMesh2 ocean_patch_mesh2;
   TbTransform ocean_transform;
   float tile_width;
   float tile_depth;
@@ -537,6 +539,9 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
 
     sys->ocean_patch_mesh =
         tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
+
+    sys->ocean_patch_mesh2 = tb_mesh_sys_load_gltf_mesh(
+        ecs, asset_path, data->nodes[0].parent->name);
   }
 
   cgltf_free(data);

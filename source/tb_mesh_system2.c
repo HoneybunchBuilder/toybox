@@ -3,6 +3,7 @@
 #include "tb_assets.h"
 #include "tb_gltf.h"
 #include "tb_task_scheduler.h"
+#include "tb_util.h"
 
 // Internals
 
@@ -61,6 +62,7 @@ void tb_mesh_loaded(const void *args) {
 
 typedef struct TbLoadCommonMeshArgs {
   ecs_world_t *ecs;
+  TbRenderSystem *rnd_sys;
   TbMesh2 mesh;
   TbTaskScheduler enki;
   TbPinnedTask loaded_task;
@@ -71,9 +73,234 @@ typedef struct TbLoadGLTFMeshArgs {
   TbMeshGLTFLoadRequest gltf;
 } TbLoadGLTFMeshArgs;
 
+TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys, const char *name,
+                             const cgltf_mesh *gltf_mesh) {
+  TracyCZoneN(ctx, "Load GLTF Mesh", true);
+  TbMeshData data = {0};
+
+  // Determine how big this mesh is
+  uint64_t index_size = 0;
+  uint64_t geom_size = 0;
+  uint64_t attr_size_per_type[cgltf_attribute_type_max_enum] = {0};
+  {
+    // Determine mesh index type
+    {
+      tb_auto stride = gltf_mesh->primitives[0].indices->stride;
+      if (stride == sizeof(uint16_t)) {
+        data.idx_type = VK_INDEX_TYPE_UINT16;
+      } else if (stride == sizeof(uint32_t)) {
+        data.idx_type = VK_INDEX_TYPE_UINT32;
+      } else {
+        TB_CHECK(false, "Unexpected index stride");
+      }
+    }
+
+    uint64_t vertex_size = 0;
+    uint32_t vertex_count = 0;
+    for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
+         ++prim_idx) {
+      cgltf_primitive *prim = &gltf_mesh->primitives[prim_idx];
+      cgltf_accessor *indices = prim->indices;
+      cgltf_size idx_size =
+          tb_calc_aligned_size(indices->count, indices->stride, 16);
+
+      index_size += idx_size;
+      vertex_count = prim->attributes[0].data->count;
+
+      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+           ++attr_idx) {
+        // Only care about certain attributes at the moment
+        cgltf_attribute_type type = prim->attributes[attr_idx].type;
+        int32_t idx = prim->attributes[attr_idx].index;
+        if ((type == cgltf_attribute_type_position ||
+             type == cgltf_attribute_type_normal ||
+             type == cgltf_attribute_type_tangent ||
+             type == cgltf_attribute_type_texcoord) &&
+            idx == 0) {
+          cgltf_accessor *attr = prim->attributes[attr_idx].data;
+          uint64_t attr_size = vertex_count * attr->stride;
+          attr_size_per_type[type] += attr_size;
+        }
+      }
+
+      for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
+        tb_auto attr_size = attr_size_per_type[i];
+        if (attr_size > 0) {
+          attr_size_per_type[i] = tb_calc_aligned_size(1, attr_size, 16);
+          vertex_size += attr_size_per_type[i];
+        }
+      }
+    }
+
+    geom_size = index_size + vertex_size;
+  }
+
+  uint64_t attr_offset_per_type[cgltf_attribute_type_max_enum] = {0};
+  {
+    uint64_t offset = index_size;
+    for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
+      tb_auto attr_size = attr_size_per_type[i];
+      if (attr_size > 0) {
+        attr_offset_per_type[i] = offset;
+        offset += attr_size;
+      }
+    }
+  }
+
+  // Create space for the mesh on the GPU
+  void *ptr = NULL;
+  {
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = geom_size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    };
+    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, name, &data.gpu_buffer,
+                                 &data.host_buffer, &ptr);
+  }
+
+  // Read the cgltf mesh into the driver owned memory
+  {
+    uint64_t idx_offset = 0;
+    uint64_t vertex_count = 0;
+    cgltf_size attr_count = 0;
+    for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
+         ++prim_idx) {
+      tb_auto prim = &gltf_mesh->primitives[prim_idx];
+
+      {
+        tb_auto indices = prim->indices;
+        tb_auto view = indices->buffer_view;
+        cgltf_size src_size = indices->count * indices->stride;
+        cgltf_size padded_size =
+            tb_calc_aligned_size(indices->count, indices->stride, 16);
+
+        // Decode the buffer
+        cgltf_result res = tb_decompress_buffer_view(tb_global_alloc, view);
+        TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+        void *src = ((uint8_t *)view->data) + indices->offset;
+        void *dst = ((uint8_t *)(ptr)) + idx_offset;
+        SDL_memcpy(dst, src, src_size); // NOLINT
+        idx_offset += padded_size;
+      }
+
+      // Determine the order of attributes
+      cgltf_size attr_order[6] = {0};
+      {
+        const cgltf_attribute_type req_order[6] = {
+            cgltf_attribute_type_position, cgltf_attribute_type_normal,
+            cgltf_attribute_type_tangent,  cgltf_attribute_type_texcoord,
+            cgltf_attribute_type_joints,   cgltf_attribute_type_weights,
+        };
+        cgltf_size attr_target_idx = 0;
+        for (uint32_t i = 0; i < 6; ++i) {
+          bool found = false;
+          for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+               ++attr_idx) {
+            cgltf_attribute *attr = &prim->attributes[attr_idx];
+            if (attr->type == req_order[i]) {
+              attr_order[attr_target_idx] = attr_idx;
+              attr_target_idx++;
+              if (prim_idx == 0) {
+                attr_count++;
+              }
+              found = true;
+            }
+            if (found) {
+              break;
+            }
+          }
+        }
+      }
+
+      for (cgltf_size attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
+        cgltf_attribute *attr = &prim->attributes[attr_order[attr_idx]];
+        cgltf_accessor *accessor = attr->data;
+        cgltf_buffer_view *view = accessor->buffer_view;
+
+        uint64_t mesh_vert_offset = vertex_count * attr->data->stride;
+        uint64_t vtx_offset =
+            attr_offset_per_type[attr->type] + mesh_vert_offset;
+
+        size_t src_size = accessor->stride * accessor->count;
+
+        // Decode the buffer
+        cgltf_result res = tb_decompress_buffer_view(tb_global_alloc, view);
+        TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+        void *src = ((uint8_t *)view->data) + accessor->offset;
+        void *dst = ((uint8_t *)(ptr)) + vtx_offset;
+        SDL_memcpy(dst, src, src_size); // NOLINT
+      }
+
+      vertex_count += prim->attributes[0].data->count;
+    }
+
+    // Construct one write per primitive
+    {
+      static const VkFormat
+          attr_formats_per_type[cgltf_attribute_type_max_enum] = {
+              VK_FORMAT_UNDEFINED,         VK_FORMAT_R16G16B16A16_SINT,
+              VK_FORMAT_R8G8B8A8_SNORM,    VK_FORMAT_R8G8B8A8_SNORM,
+              VK_FORMAT_R16G16_SINT,       VK_FORMAT_R8G8B8A8_UNORM,
+              VK_FORMAT_R16G16B16A16_SINT, VK_FORMAT_R8G8B8A8_SINT,
+          };
+      static const int32_t attr_idx_per_type[cgltf_attribute_type_max_enum] = {
+          -1, 0, 1, 2, 3, -1, 5, 6, -1,
+      };
+
+      // Create one buffer view for indices
+      {
+        VkFormat idx_format = VK_FORMAT_R16_UINT;
+        if (data.idx_type == VK_INDEX_TYPE_UINT32) {
+          idx_format = VK_FORMAT_R32_UINT;
+        }
+        VkBufferViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = data.gpu_buffer.buffer,
+            .offset = 0,
+            .range = index_size,
+            .format = idx_format,
+        };
+        tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Index View",
+                                  &data.index_view);
+      }
+
+      for (size_t attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
+        cgltf_attribute *attr = &gltf_mesh->primitives[0].attributes[attr_idx];
+
+        // Create a buffer view per attribute
+        VkBufferViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = data.gpu_buffer.buffer,
+            .offset = attr_offset_per_type[attr->type],
+            .range = VK_WHOLE_SIZE,
+            .format = attr_formats_per_type[attr->type],
+        };
+        tb_rnd_create_buffer_view(
+            rnd_sys, &create_info, "Mesh Attribute View",
+            &data.attr_views[attr_idx_per_type[attr->type]]);
+      }
+    }
+
+    // Make sure to flush the gpu alloc if necessary
+    tb_flush_alloc(rnd_sys, data.gpu_buffer.alloc);
+  }
+
+  TracyCZoneEnd(ctx);
+  return data;
+}
+
 void tb_load_gltf_mesh_task(const void *args) {
   TracyCZoneN(ctx, "Load GLTF Mesh Task", true);
   tb_auto load_args = (const TbLoadGLTFMeshArgs *)args;
+  tb_auto rnd_sys = load_args->common.rnd_sys;
   TbMesh2 mesh = load_args->common.mesh;
 
   tb_auto path = load_args->gltf.path;
@@ -82,10 +309,10 @@ void tb_load_gltf_mesh_task(const void *args) {
   tb_auto data = tb_read_glb(tb_thread_alloc, path);
   // Find mesh by name
   struct cgltf_mesh *gltf_mesh = NULL;
-  for (cgltf_size i = 0; i < data->meshes_count; ++i) {
-    tb_auto m = &data->meshes[i];
-    if (SDL_strcmp(name, m->name) == 0) {
-      gltf_mesh = m;
+  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+    tb_auto node = &data->nodes[i];
+    if (SDL_strcmp(name, node->parent->name) == 0) {
+      gltf_mesh = node->mesh;
       break;
     }
   }
@@ -97,7 +324,7 @@ void tb_load_gltf_mesh_task(const void *args) {
   // Queue upload of mesh data to the GPU
   TbMeshData mesh_data = {0};
   if (mesh != 0) {
-    TB_CHECK(false, "Test");
+    mesh_data = tb_load_gltf_mesh(rnd_sys, name, gltf_mesh);
   }
 
   cgltf_free(data);
@@ -142,6 +369,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
         .common =
             {
                 .ecs = it->world,
+                .rnd_sys = ecs_singleton_get_mut(it->world, TbRenderSystem),
                 .mesh = ent,
                 .enki = enki,
                 .loaded_task = loaded_task,
