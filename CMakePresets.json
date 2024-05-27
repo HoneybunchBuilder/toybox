@@ -6,7 +6,6 @@
     "patch": 0
   },
   "configurePresets": [
-    // Hidden, base presets
     {
       "name": "ninja",
       "hidden": true,
@@ -94,7 +93,7 @@
     {
       "name": "x64-linux",
       "hidden": true,
-      "inherits": "host",
+      "inherits": "self-host",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-linux"
       }
@@ -102,7 +101,7 @@
     {
       "name": "arm64-linux",
       "hidden": true,
-      "inherits": "host",
+      "inherits": "self-host",
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-linux"
       }
@@ -136,7 +135,6 @@
         "CMAKE_SYSTEM_NAME": "iOS"
       }
     },
-    // Visible, usable configs start here
     {
       "name": "x64-windows-ninja-llvm",
       "inherits": [
