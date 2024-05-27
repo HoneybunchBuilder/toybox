@@ -6,184 +6,206 @@
     "patch": 0
   },
   "configurePresets": [
+    // Hidden, base presets
     {
-      "name": "x64-windows-ninja-llvm",
-      "displayName": "x64 Windows Ninja LLVM",
+      "name": "ninja",
+      "hidden": true,
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64-windows",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-win-llvm",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_RC_COMPILER": "llvm-rc",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "FINAL": "OFF",
-        "PROFILE_TRACY": "OFF"
-      },
       "environment": {
-        "VCPKG_KEEP_ENV_VARS": "PATH",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets/"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
       }
     },
     {
-      "name": "x64-windows-static-ninja-llvm",
-      "displayName": "x64 Windows Static Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64-windows-static",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "name": "llvm",
+      "hidden": true,
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-win-llvm-static",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_RC_COMPILER": "llvm-rc",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "environment": {
-        "VCPKG_KEEP_ENV_VARS": "PATH",
-        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets/"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
       }
     },
     {
-      "name": "arm64-android-ninja-llvm",
-      "displayName": "arm64 Android Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64-android",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "name": "arm64-android",
+      "hidden": true,
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-android",
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
         "ANDROID_PLATFORM": "android-31",
-        "ANDROID_ABI": "arm64-v8a",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "ANDROID_ABI": "arm64-v8a"
       },
       "environment": {
         "VCPKG_KEEP_ENV_VARS": "JAVA_HOME;ANDROID_HOME;ANDROID_NDK_HOME"
       }
     },
     {
-      "name": "x64-linux-ninja-llvm",
-      "displayName": "x64 Linux Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x64-linux-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "name": "self-host",
+      "hidden": true,
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-linux",
         "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "windows",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_RC_COMPILER": "llvm-rc"
       },
+      "environment": {
+        "VCPKG_KEEP_ENV_VARS": "PATH"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "x64-windows",
+      "hidden": true,
+      "inherits": [
+        "self-host",
+        "windows"
+      ],
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-win-llvm"
+      }
+    },
+    {
+      "name": "x64-windows-static",
+      "hidden": true,
+      "inherits": [
+        "self-host",
+        "windows"
+      ],
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-win-llvm-static"
+      }
+    },
+    {
+      "name": "linux",
+      "hidden": true,
+      "inherits": "self-host",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "x64-linux",
+      "hidden": true,
+      "inherits": "host",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
+      }
+    },
+    {
+      "name": "arm64-linux",
+      "hidden": true,
+      "inherits": "host",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux"
+      }
+    },
+    {
+      "name": "macos",
+      "hidden": true,
+      "inherits": "self-host",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "arm64-macos",
+      "hidden": true,
+      "inherits": "macos",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-osx",
+        "CMAKE_OSX_ARCHITECTURES": "arm64"
+      }
+    },
+    {
+      "name": "arm64-ios",
+      "hidden": true,
+      "inherits": "macos",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_SYSTEM_NAME": "iOS"
+      }
+    },
+    // Visible, usable configs start here
+    {
+      "name": "x64-windows-ninja-llvm",
+      "inherits": [
+        "x64-windows",
+        "ninja",
+        "llvm"
+      ],
+      "displayName": "x64 Windows Ninja LLVM",
+      "binaryDir": "${sourceDir}/build/x64-windows"
+    },
+    {
+      "name": "x64-windows-static-ninja-llvm",
+      "inherits": [
+        "x64-windows-static",
+        "ninja",
+        "llvm"
+      ],
+      "displayName": "x64 Windows Static Ninja LLVM",
+      "binaryDir": "${sourceDir}/build/x64-windows-static"
+    },
+    {
+      "name": "arm64-android-ninja-llvm",
+      "inherits": [
+        "arm64-android",
+        "ninja",
+        "llvm"
+      ],
+      "displayName": "arm64 Android Ninja LLVM",
+      "binaryDir": "${sourceDir}/build/arm64-android"
+    },
+    {
+      "name": "x64-linux-ninja-llvm",
+      "inherits": [
+        "x64-linux",
+        "ninja",
+        "llvm"
+      ],
+      "displayName": "x64 Linux Ninja LLVM",
+      "binaryDir": "${sourceDir}/build/x64-linux-llvm"
     },
     {
       "name": "arm64-linux-ninja-llvm",
+      "inherits": [
+        "arm64-linux",
+        "ninja",
+        "llvm"
+      ],
       "displayName": "arm64 Linux Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64-linux-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-linux",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      }
+      "binaryDir": "${sourceDir}/build/arm64-linux-llvm"
     },
     {
       "name": "arm64-macos-ninja-llvm",
+      "inherits": [
+        "arm64-macos",
+        "ninja",
+        "llvm"
+      ],
       "displayName": "arm64 macOS Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64-macos-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-osx",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
-      "name": "arm64-macos-xcode-llvm",
-      "displayName": "arm64 macOS Xcode LLVM",
-      "generator": "Xcode",
-      "binaryDir": "${sourceDir}/build/arm64-macos-xcode-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-osx",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
+      "binaryDir": "${sourceDir}/build/arm64-macos-llvm"
     },
     {
       "name": "arm64-ios-ninja-llvm",
+      "inherits": [
+        "arm64-ios",
+        "ninja",
+        "llvm"
+      ],
       "displayName": "arm64 iOS Ninja LLVM",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/arm64-ios-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_SYSTEM_NAME": "iOS",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
-    },
-    {
-      "name": "arm64-ios-xcode-llvm",
-      "displayName": "arm64 iOS Xcode LLVM",
-      "generator": "Xcode",
-      "binaryDir": "${sourceDir}/build/arm64-ios-xcode-llvm",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "arm64-ios",
-        "CMAKE_OSX_ARCHITECTURES": "arm64",
-        "CMAKE_SYSTEM_NAME": "iOS",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      }
+      "binaryDir": "${sourceDir}/build/arm64-ios-llvm"
     }
   ],
   "buildPresets": [
@@ -296,24 +318,6 @@
       "configuration": "Release"
     },
     {
-      "name": "debug-arm64-macos-xcode-llvm",
-      "displayName": "Debug",
-      "configurePreset": "arm64-macos-xcode-llvm",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-arm64-macos-xcode-llvm",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "arm64-macos-xcode-llvm",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-arm64-macos-xcode-llvm",
-      "displayName": "Release",
-      "configurePreset": "arm64-macos-xcode-llvm",
-      "configuration": "Release"
-    },
-    {
       "name": "debug-arm64-ios-ninja-llvm",
       "displayName": "Debug",
       "configurePreset": "arm64-ios-ninja-llvm",
@@ -329,24 +333,6 @@
       "name": "release-arm64-ios-ninja-llvm",
       "displayName": "Release",
       "configurePreset": "arm64-ios-ninja-llvm",
-      "configuration": "Release"
-    },
-    {
-      "name": "debug-arm64-ios-xcode-llvm",
-      "displayName": "Debug",
-      "configurePreset": "arm64-ios-xcode-llvm",
-      "configuration": "Debug"
-    },
-    {
-      "name": "relwithdebinfo-arm64-ios-xcode-llvm",
-      "displayName": "RelWithDebInfo",
-      "configurePreset": "arm64-ios-xcode-llvm",
-      "configuration": "RelWithDebInfo"
-    },
-    {
-      "name": "release-arm64-ios-xcode-llvm",
-      "displayName": "Release",
-      "configurePreset": "arm64-ios-xcode-llvm",
       "configuration": "Release"
     }
   ]
