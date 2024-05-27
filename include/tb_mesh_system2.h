@@ -23,6 +23,17 @@ typedef struct ecs_query_t ecs_query_t;
 typedef uint32_t TbMeshIndex;
 extern ECS_COMPONENT_DECLARE(TbMeshIndex);
 
+typedef ecs_entity_t TbSubMesh2;
+typedef struct TbSubMesh2Data {
+  uint32_t index_count;
+  uint64_t index_offset;
+  uint64_t vertex_offset;
+  uint32_t vertex_count;
+  uint32_t vertex_perm;
+  TbMaterial2 material;
+} TbSubMesh2Data;
+extern ECS_COMPONENT_DECLARE(TbSubMesh2Data);
+
 VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs);
 
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs);
