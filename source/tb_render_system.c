@@ -10,6 +10,11 @@
 
 ECS_COMPONENT_DECLARE(TbRenderSystem);
 
+ECS_COMPONENT_DECLARE(TbDescriptorCounter);
+ECS_TAG_DECLARE(TbNeedsDescriptorUpdate);
+ECS_TAG_DECLARE(TbUpdatingDescriptor);
+ECS_TAG_DECLARE(TbDescriptorReady);
+
 void tb_register_render_sys(TbWorld *world);
 void tb_unregister_render_sys(TbWorld *world);
 
@@ -325,10 +330,42 @@ void render_frame_end(ecs_iter_t *it) {
   TracyCZoneEnd(tick_ctx);
 }
 
+/*
+  Descriptors often live in per-frame pools, meaning there is actually
+  a descriptor per frame-state. This is to allow frame states to be operated on
+  by different threads independently.
+  So how do we know that an entity with a descriptor is ready to reference?
+  We wait one frame per frame state and then we should be guaranteed that
+  the descriptor is ready to be referenced.
+  This assumes that the render thread will always attempt to update all
+  descriptors that it gets for a frame. That means it's up to the main thread to
+  throttle how many descriptors need updates. This is to facilitate that.
+*/
+void tb_rnd_sys_track_descriptors(ecs_iter_t *it) {
+  tb_auto ecs = it->world;
+  tb_auto counters = ecs_field(it, TbDescriptorCounter, 1);
+  for (int32_t i = 0; i < it->count; ++i) {
+    // Could be a texture, mesh, material, whatever
+    ecs_entity_t ent = it->entities[i];
+    tb_auto counter = &counters[i];
+
+    SDL_AtomicIncRef(counter);
+    if (SDL_AtomicGet(counter) >= TB_MAX_FRAME_STATES) {
+      ecs_remove(ecs, ent, TbUpdatingDescriptor);
+      ecs_remove(ecs, ent, TbNeedsDescriptorUpdate);
+      ecs_add(ecs, ent, TbDescriptorReady);
+    }
+  }
+}
+
 void tb_register_render_sys(TbWorld *world) {
   TracyCZoneN(ctx, "Register Render Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderSystem);
+  ECS_COMPONENT_DEFINE(ecs, TbDescriptorCounter);
+  ECS_TAG_DEFINE(ecs, TbNeedsDescriptorUpdate);
+  ECS_TAG_DEFINE(ecs, TbUpdatingDescriptor);
+  ECS_TAG_DEFINE(ecs, TbDescriptorReady);
   TbRenderSystem sys = create_render_system(world->gp_alloc, world->tmp_alloc,
                                             world->render_thread);
   // Sets a singleton based on the value at a pointer
@@ -338,6 +375,11 @@ void tb_register_render_sys(TbWorld *world) {
              TbRenderSystem(TbRenderSystem));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame,
              TbRenderSystem(TbRenderSystem));
+
+  ECS_SYSTEM(
+      ecs, tb_rnd_sys_track_descriptors,
+      EcsOnStore, [inout] TbDescriptorCounter, [inout] TbUpdatingDescriptor);
+
   TracyCZoneEnd(ctx);
 }
 
@@ -935,9 +977,15 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
 VkResult tb_rnd_frame_desc_pool_tick(
     TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
     const VkDescriptorSetLayout *layouts, void *alloc_next,
-    TbFrameDescriptorPool *pools, uint32_t set_count) {
+    TbFrameDescriptorPool *pools, uint32_t set_count, uint32_t desc_count) {
   VkResult err = VK_SUCCESS;
   TbFrameDescriptorPool *pool = &pools[self->frame_idx];
+
+  // If descriptor count hasn't changed don't do anything
+  if (pool->desc_count == desc_count) {
+    return err;
+  }
+  pool->desc_count = desc_count;
 
   // Resize the pool
   if (pool->set_count < set_count) {
@@ -974,6 +1022,11 @@ VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                TbFrameDescriptorPool *pools,
                                                uint32_t set_idx) {
   return pools[self->frame_idx].sets[set_idx];
+}
+
+uint32_t tb_rnd_frame_desc_pool_get_desc_count(TbRenderSystem *self,
+                                               TbFrameDescriptorPool *pools) {
+  return pools[self->frame_idx].desc_count;
 }
 
 VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,

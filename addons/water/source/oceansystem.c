@@ -924,7 +924,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
             layouts[i] = sys->set_layout;
           }
           err = tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, layouts, NULL,
-                                            sys->ocean_pools, ocean_count);
+                                            sys->ocean_pools, ocean_count,
+                                            ocean_count);
           TB_VK_CHECK(err, "Failed to tick ocean's descriptor pool");
         }
 

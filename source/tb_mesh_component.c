@@ -7,6 +7,7 @@
 #include "tb_gltf.h"
 #include "tb_material_system.h"
 #include "tb_mesh_system.h"
+#include "tb_mesh_system2.h"
 #include "tb_profiling.h"
 #include "tb_render_object_system.h"
 #include "tb_util.h"
@@ -150,7 +151,9 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   // Load mesh
   tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
-  TbMeshComponent comp = {0};
+  TbMeshComponent comp = {
+      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, node->parent->name),
+  };
   bool ret = create_mesh_component_internal(ecs, &comp, id, world->gp_alloc,
                                             source_path, node);
   TB_CHECK(ret, "Failed to create mesh component");

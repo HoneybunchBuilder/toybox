@@ -2,6 +2,7 @@
 
 #include "tb_allocator.h"
 #include "tb_dynarray.h"
+#include "tb_mesh_system2.h"
 #include "tb_render_common.h"
 #include "tb_simd.h"
 #include "tb_system_priority.h"
@@ -37,6 +38,7 @@ typedef struct TbVisualLoggingSystem {
   bool *ui;
 
   TbMeshId sphere_mesh;
+  TbMesh2 sphere_mesh2;
   uint32_t sphere_index_type;
   uint32_t sphere_index_count;
   uint32_t sphere_pos_offset;

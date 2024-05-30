@@ -18,7 +18,7 @@ typedef struct TbLoadSceneArgs {
 } TbLoadSceneArgs;
 
 void tb_load_scene_task(const void *args) {
-  TracyCZoneN(ctx, "Load GLTF Material Task", true);
+  TracyCZoneN(ctx, "Load GLTF Scene Task", true);
   tb_auto load_args = (const TbLoadSceneArgs *)args;
 
   tb_auto enki = load_args->enki;

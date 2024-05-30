@@ -35,6 +35,7 @@ typedef struct TbMaterialCtx {
 
   ecs_query_t *uploadable_mat_query;
   ecs_query_t *loaded_mat_query;
+  ecs_query_t *dirty_mat_query;
 
   TB_DYN_ARR_OF(TbMaterialDomainHandler) usage_map;
 } TbMaterialCtx;
@@ -274,12 +275,11 @@ void tb_reset_mat_queue_count(ecs_iter_t *it) {
   SDL_AtomicSet(counter, 0);
 }
 
-void tb_update_material_descriptors(ecs_iter_t *it) {
+void tb_update_material_pool(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Update Material Descriptors", true);
 
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t mat_count = 0;
 
@@ -294,33 +294,79 @@ void tb_update_material_descriptors(ecs_iter_t *it) {
     return;
   }
 
-  {
-    VkDescriptorPoolCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        .maxSets = 1,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .descriptorCount = mat_count * 4,
-                },
-            },
-    };
-    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-        .sType =
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-        .descriptorSetCount = 1,
-        .pDescriptorCounts = (uint32_t[1]){mat_count},
-    };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &mat_ctx->set_layout,
-                                &alloc_info, mat_ctx->frame_set_pool.pools, 1);
+  // If we don't need to resize the pool we can just bail
+  if (mat_count == tb_rnd_frame_desc_pool_get_desc_count(
+                       rnd_sys, mat_ctx->frame_set_pool.pools)) {
+    TracyCZoneEnd(ctx);
+    return;
   }
 
-  // Write all materials into the descriptor set table
-  uint32_t mat_idx = 0;
+  VkDescriptorPoolCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      .maxSets = 1,
+      .poolSizeCount = 1,
+      .pPoolSizes =
+          (VkDescriptorPoolSize[1]){
+              {
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                  .descriptorCount = 4,
+              },
+          },
+  };
+  VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+      .sType =
+          VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+      .descriptorSetCount = 1,
+      .pDescriptorCounts = (uint32_t[1]){mat_count},
+  };
+  tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &mat_ctx->set_layout,
+                              &alloc_info, mat_ctx->frame_set_pool.pools, 1,
+                              mat_count);
+
+  // If we had to resize the pool, all materials are dirty
   mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+  while (ecs_query_next(&mat_it)) {
+    tb_auto ecs = mat_it.world;
+    for (int32_t i = 0; i < mat_it.count; ++i) {
+      tb_auto mat_ent = mat_it.entities[i];
+      ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
+      ecs_remove(ecs, mat_ent, TbDescriptorReady);
+      if (!ecs_has(ecs, mat_ent, TbDescriptorCounter)) {
+        ecs_set(ecs, mat_ent, TbDescriptorCounter, {0});
+      } else {
+        tb_auto counter = ecs_get_mut(ecs, mat_ent, TbDescriptorCounter);
+        SDL_AtomicSet(counter, 0);
+      }
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
+void tb_write_material_descriptors(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Write Material Descriptors", true);
+
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+
+  uint64_t mat_count = 0;
+
+  // Accumulate the number of textures
+  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
+  while (ecs_query_next(&mat_it)) {
+    mat_count += mat_it.count;
+  }
+
+  if (mat_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  // Write all dirty materials into the descriptor set table
+  uint32_t mat_idx = 0;
+  mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};
@@ -361,6 +407,7 @@ void tb_update_material_descriptors(ecs_iter_t *it) {
 
       // Material is now ready to be referenced elsewhere
       ecs_set(it->world, mat_it.entities[i], TbMaterialComponent, {mat_idx});
+      ecs_add(it->world, mat_it.entities[i], TbUpdatingDescriptor);
       mat_idx++;
     }
   }
@@ -396,8 +443,11 @@ void tb_register_material2_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, tb_reset_mat_queue_count,
              EcsPostUpdate, [in] TbMatQueueCounter(TbMatQueueCounter));
 
-  ECS_SYSTEM(ecs, tb_update_material_descriptors,
+  ECS_SYSTEM(ecs, tb_update_material_pool,
              EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
+             [in] TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, tb_write_material_descriptors,
+             EcsOnStore, [in] TbMaterialCtx(TbMaterialCtx),
              [in] TbRenderSystem(TbRenderSystem));
 
   TbMaterialCtx ctx = {
@@ -415,6 +465,14 @@ void tb_register_material2_sys(TbWorld *world) {
                         {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
                         {.id = ecs_id(TbMaterialLoaded)},
                     }}),
+      .dirty_mat_query = ecs_query(
+          ecs, {.filter.terms =
+                    {
+                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
+                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
+                        {.id = ecs_id(TbMaterialLoaded)},
+                        {.id = ecs_id(TbNeedsDescriptorUpdate)},
+                    }}),
   };
 
   // Create immutable sampler for materials
@@ -429,7 +487,7 @@ void tb_register_material2_sys(TbWorld *world) {
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = 16.0f, // 16x anisotropy is cheap
-        .maxLod = 14.0f,        // Hack; known number of mips for 8k textures
+        .maxLod = 14.0f,        // HACK: known number of mips for 8k textures
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
     tb_rnd_create_sampler(rnd_sys, &create_info, "Material Sampler",
@@ -510,6 +568,7 @@ void tb_unregister_material2_sys(TbWorld *world) {
 
   ecs_query_fini(ctx->uploadable_mat_query);
   ecs_query_fini(ctx->loaded_mat_query);
+  ecs_query_fini(ctx->dirty_mat_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -614,13 +673,15 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {path_cpy, name_cpy});
   ecs_set(ecs, mat_ent, TbMaterialUsage, {usage});
+  ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
 
   return mat_ent;
 }
 
 bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent) {
   return ecs_has(ecs, mat_ent, TbMaterialLoaded) &&
-         ecs_has(ecs, mat_ent, TbMaterialComponent);
+         ecs_has(ecs, mat_ent, TbMaterialComponent) &&
+         ecs_has(ecs, mat_ent, TbDescriptorReady);
 }
 
 bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent) {

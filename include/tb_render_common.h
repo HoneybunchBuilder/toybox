@@ -43,6 +43,7 @@ typedef struct TbFullscreenBatch {
 
 typedef struct TbFrameDescriptorPool {
   uint32_t set_count;
+  uint32_t desc_count;
   VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
 } TbFrameDescriptorPool;

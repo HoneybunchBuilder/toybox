@@ -11,8 +11,8 @@ typedef struct TbWorld TbWorld;
 #define TB_VERTEX_BINDING_MAX 4
 
 typedef TbResourceId TbMeshId;
-typedef uint64_t ecs_entity_t;
 typedef ecs_entity_t TbMaterial2;
+typedef ecs_entity_t TbMesh2;
 
 typedef struct TbSubMesh {
   uint32_t index_type;
@@ -25,6 +25,7 @@ typedef struct TbSubMesh {
 } TbSubMesh;
 
 typedef struct TbMeshComponent {
+  TbMesh2 mesh2;
   TbMeshId mesh_id;
   TB_DYN_ARR_OF(TbSubMesh) submeshes;
   TbAABB local_aabb;

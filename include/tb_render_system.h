@@ -16,6 +16,12 @@
 
 typedef struct TbWorld TbWorld;
 
+typedef SDL_AtomicInt TbDescriptorCounter;
+extern ECS_COMPONENT_DECLARE(TbDescriptorCounter);
+extern ECS_TAG_DECLARE(TbNeedsDescriptorUpdate);
+extern ECS_TAG_DECLARE(TbUpdatingDescriptor);
+extern ECS_TAG_DECLARE(TbDescriptorReady);
+
 typedef struct TbRenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;
   TbSetWriteQueue set_write_queue;
@@ -168,10 +174,12 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
 VkResult tb_rnd_frame_desc_pool_tick(
     TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
     const VkDescriptorSetLayout *layouts, void *alloc_next,
-    TbFrameDescriptorPool *pools, uint32_t set_count);
+    TbFrameDescriptorPool *pools, uint32_t set_count, uint32_t desc_count);
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                TbFrameDescriptorPool *pools,
                                                uint32_t set_idx);
+uint32_t tb_rnd_frame_desc_pool_get_desc_count(TbRenderSystem *self,
+                                               TbFrameDescriptorPool *pools);
 
 VkResult tb_rnd_resize_desc_pool(TbRenderSystem *self,
                                  const VkDescriptorPoolCreateInfo *pool_info,

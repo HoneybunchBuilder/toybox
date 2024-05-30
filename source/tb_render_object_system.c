@@ -145,7 +145,7 @@ void tick_render_object_system(ecs_iter_t *it) {
         .pDescriptorCounts = (uint32_t[1]){trans_buffer->obj_count},
     };
     tb_rnd_frame_desc_pool_tick(rnd_sys, &pool_info, &ro_sys->set_layout,
-                                &alloc_info, ro_sys->pools, 1);
+                                &alloc_info, ro_sys->pools, 1, 1);
 
     // Write all transform data to one descriptor
     tb_auto buffer_info = tb_alloc_nm_tp(

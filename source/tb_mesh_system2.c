@@ -2,6 +2,7 @@
 
 #include "tb_assets.h"
 #include "tb_gltf.h"
+#include "tb_log.h"
 #include "tb_material_system.h"
 #include "tb_task_scheduler.h"
 #include "tb_util.h"
@@ -25,6 +26,7 @@ typedef struct TbMeshCtx {
   TbFrameDescriptorPoolList frame_set_pool;
 
   ecs_query_t *uploaded_mesh_query;
+  ecs_query_t *dirty_mesh_query;
 } TbMeshCtx;
 ECS_COMPONENT_DECLARE(TbMeshCtx);
 
@@ -342,7 +344,7 @@ void tb_load_gltf_mesh_task(const void *args) {
   struct cgltf_mesh *gltf_mesh = NULL;
   for (cgltf_size i = 0; i < data->nodes_count; ++i) {
     tb_auto node = &data->nodes[i];
-    if (SDL_strcmp(name, node->parent->name) == 0) {
+    if (node->parent != NULL && SDL_strcmp(name, node->parent->name) == 0) {
       gltf_mesh = node->mesh;
       break;
     }
@@ -470,7 +472,7 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
         submesh_data.material = tb_mat_sys_load_gltf_mat(
             it->world, source_path, material->name, TB_MAT_USAGE_SCENE);
       }
-      tb_free(tb_global_alloc, (void *)source_path);
+      // tb_free(tb_global_alloc, (void *)source_path);
 
       // Determine index size and count
       {
@@ -559,12 +561,16 @@ void tb_reset_mesh_queue_count(ecs_iter_t *it) {
   SDL_AtomicSet(submesh_counter, 0);
 }
 
-void tb_update_mesh_descriptors(ecs_iter_t *it) {
+/*
+  TODO: Only bother doing this when all meshes are loaded. So we don't have to
+  keep updating this pool over and over during the load
+*/
+
+void tb_update_mesh_pool(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Update Mesh Descriptors", true);
 
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t mesh_count = 0;
 
@@ -579,42 +585,90 @@ void tb_update_mesh_descriptors(ecs_iter_t *it) {
     return;
   }
 
-  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
-
-  {
-    VkDescriptorPoolCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        .maxSets = view_count,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .descriptorCount = mesh_count * view_count * 4,
-                },
-            },
-    };
-    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-        .sType =
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-        .descriptorSetCount = view_count,
-        .pDescriptorCounts =
-            (uint32_t[view_count]){mesh_count, mesh_count, mesh_count,
-                                   mesh_count, mesh_count, mesh_count,
-                                   mesh_count},
-    };
-    VkDescriptorSetLayout layouts[view_count] = {
-        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-        mesh_ctx->set_layout};
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
-                                mesh_ctx->frame_set_pool.pools, view_count);
+  // Hacky test to see if the descriptor pool needs mutation
+  // Doing so can be expensive if we have to generate a bunch of writes
+  if (mesh_count == tb_rnd_frame_desc_pool_get_desc_count(
+                        rnd_sys, mesh_ctx->frame_set_pool.pools)) {
+    TracyCZoneEnd(ctx);
+    return;
   }
 
-  // Write all meshes into the descriptor set table
-  uint32_t mesh_idx = 0;
+  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+
+  VkDescriptorPoolCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      .maxSets = view_count,
+      .poolSizeCount = 1,
+      .pPoolSizes =
+          (VkDescriptorPoolSize[1]){
+              {
+                  .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                  .descriptorCount = view_count * 4,
+              },
+          },
+  };
+  VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+      .sType =
+          VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+      .descriptorSetCount = view_count,
+      .pDescriptorCounts =
+          (uint32_t[view_count]){mesh_count, mesh_count, mesh_count, mesh_count,
+                                 mesh_count, mesh_count, mesh_count},
+  };
+  VkDescriptorSetLayout layouts[view_count] = {
+      mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+      mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+      mesh_ctx->set_layout};
+  tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
+                              mesh_ctx->frame_set_pool.pools, view_count,
+                              mesh_count);
+
+  // If we had to resize the pool, all meshes are dirty
   mesh_it = ecs_query_iter(it->world, mesh_ctx->uploaded_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    tb_auto ecs = mesh_it.world;
+    for (int32_t i = 0; i < mesh_it.count; ++i) {
+      tb_auto mesh_ent = mesh_it.entities[i];
+      ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
+      ecs_remove(ecs, mesh_ent, TbDescriptorReady);
+      if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
+        ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
+      } else {
+        tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
+        SDL_AtomicSet(counter, 0);
+      }
+    }
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
+void tb_write_mesh_descriptors(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Write Mesh Descriptors", true);
+
+  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+
+  // Accumulate the number of meshes
+  uint64_t mesh_count = 0;
+
+  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    mesh_count += mesh_it.count;
+  }
+
+  if (mesh_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+
+  // Write all dirty meshes into the descriptor set table
+  uint32_t mesh_idx = 0;
+  mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkBufferView) buf_views = {0};
@@ -657,12 +711,11 @@ void tb_update_mesh_descriptors(ecs_iter_t *it) {
 
       // Mesh is now ready to be referenced elsewhere
       ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {mesh_idx});
+      ecs_add(it->world, mesh_it.entities[i], TbUpdatingDescriptor);
       mesh_idx++;
     }
   }
   tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_check_submesh_readiness(ecs_iter_t *it) {
@@ -704,7 +757,8 @@ void tb_check_mesh_readiness(ecs_iter_t *it) {
 
     // If all submesh children are ready and we have been given a mesh index
     // we can remove any other identifying tags and mark this mesh as ready
-    if (children_ready && ecs_has(it->world, mesh, TbMeshIndex)) {
+    if (children_ready && ecs_has(it->world, mesh, TbMeshIndex) &&
+        ecs_has(it->world, mesh, TbDescriptorReady)) {
       ecs_remove(it->world, mesh, TbMeshParsed);
       ecs_add(it->world, mesh, TbMeshReady);
     }
@@ -741,8 +795,8 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
              EcsPostUpdate, [inout] TbMeshQueueCounter(TbMeshQueueCounter),
              [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter));
-  ECS_SYSTEM(ecs, tb_update_mesh_descriptors, EcsPreStore,
-             [in] TbMeshCtx(TbMeshCtx), [in] TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPreStore, [in] TbMeshCtx(TbMeshCtx),
+             [in] TbRenderSystem(TbRenderSystem));
 
   ECS_SYSTEM(ecs, tb_check_submesh_readiness,
              EcsPreStore, [in] TbSubMesh2Data, [in] TbSubMeshParsed);
@@ -756,6 +810,13 @@ void tb_register_mesh2_sys(TbWorld *world) {
                               {
                                   {.id = ecs_id(TbMeshData), .inout = EcsIn},
                                   {.id = ecs_id(TbMeshUploaded)},
+                              }}),
+      .dirty_mesh_query =
+          ecs_query(ecs, {.filter.terms =
+                              {
+                                  {.id = ecs_id(TbMeshData), .inout = EcsIn},
+                                  {.id = ecs_id(TbMeshUploaded)},
+                                  {.id = ecs_id(TbNeedsDescriptorUpdate)},
                               }}),
   };
 
@@ -808,6 +869,7 @@ void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
 
   ecs_query_fini(ctx->uploaded_mesh_query);
+  ecs_query_fini(ctx->dirty_mesh_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -852,15 +914,19 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
                                    const char *name) {
+  const uint32_t max_mesh_name_len = 256;
+  char mesh_name[max_mesh_name_len] = {0};
+  SDL_snprintf(mesh_name, max_mesh_name_len, "%s_mesh", name);
+
   // If an entity already exists with this name it is either loading or loaded
-  TbMesh2 mesh_ent = ecs_lookup_child(ecs, ecs_id(TbMeshCtx), name);
+  TbMesh2 mesh_ent = ecs_lookup_child(ecs, ecs_id(TbMeshCtx), mesh_name);
   if (mesh_ent != 0) {
     return mesh_ent;
   }
 
   // Create a mesh entity
   mesh_ent = ecs_new_entity(ecs, 0);
-  ecs_set_name(ecs, mesh_ent, name);
+  ecs_set_name(ecs, mesh_ent, mesh_name);
 
   // It is a child of the mesh system context singleton
   ecs_add_pair(ecs, mesh_ent, EcsChildOf, ecs_id(TbMeshCtx));
@@ -871,12 +937,13 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
   char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
   SDL_strlcpy(path_cpy, path, path_len);
 
-  const size_t name_len = SDL_strnlen(name, 256) + 1;
+  const size_t name_len = SDL_strnlen(mesh_name, 256) + 1;
   char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
   SDL_strlcpy(name_cpy, name, name_len);
 
   // Append a mesh load request onto the entity to schedule loading
   ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {path_cpy, name_cpy});
+  ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
 
   return mesh_ent;
 }

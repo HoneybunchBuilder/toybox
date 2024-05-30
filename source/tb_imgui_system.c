@@ -616,7 +616,7 @@ void imgui_descriptor_sys(ecs_iter_t *it) {
     }
 
     tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
-                                ig_sys->desc_pools, set_count);
+                                ig_sys->desc_pools, set_count, set_count);
   }
 
   tb_auto tmp_alloc = ig_sys->tmp_alloc;

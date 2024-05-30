@@ -1287,6 +1287,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
   // Write descriptor set updates at the top of the frame here
 
   {
+    TracyCZoneN(desc_ctx, "Update Descriptors", true);
     TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
     uint32_t write_count = TB_DYN_ARR_SIZE(state->set_write_queue->storage);
     TB_DYN_ARR_RESET(writes, state->tmp_alloc.alloc, write_count);
@@ -1298,6 +1299,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
     write_count = TB_DYN_ARR_SIZE(writes);
 
     vkUpdateDescriptorSets(device, write_count, writes.data, 0, NULL);
+    TracyCZoneEnd(desc_ctx);
   }
 
   // Draw
