@@ -2,15 +2,13 @@
 
 #include "tb_allocator.h"
 #include "tb_assets.h"
-
 #include "tb_common.h"
 #include "tb_gltf.h"
+#include "tb_input_system.h"
 #include "tb_profiling.h"
 #include "tb_simd.h"
-
+#include "tb_texture_system.h"
 #include "tb_transform_component.h"
-
-#include "tb_input_system.h"
 
 #include <flecs.h>
 #include <json.h>
@@ -450,6 +448,8 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
   TbScene scene = {0};
   TB_DYN_ARR_RESET(scene.entities, world->gp_alloc, data->scene->nodes_count);
+
+  tb_tex_sys_reserve_tex_count(world->ecs, data->textures_count);
 
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {

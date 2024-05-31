@@ -6,6 +6,7 @@
 #include "tb_render_target_system.h"
 #include "tb_shader_common.h"
 #include "tb_shader_system.h"
+#include "tb_texture_system.h"
 #include "tb_view_system.h"
 #include "tb_world.h"
 
@@ -2964,6 +2965,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 
   tb_auto self = ecs_field(it, TbRenderPipelineSystem, 1);
 
+  tb_auto brdf_tex = tb_get_brdf_tex(it->world);
+
   // A few passes will be driven from here because an external system
   // has no need to directly drive these passes
 
@@ -3076,7 +3079,8 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       }
     }
     // Brightness pass
-    if (tb_is_shader_ready(it->world, self->brightness_shader)) {
+    if (tb_is_shader_ready(it->world, self->brightness_shader) &&
+        tb_is_texture_ready(it->world, brdf_tex)) {
       TbFullscreenBatch fs_batch = {
           .set = color_set,
       };
