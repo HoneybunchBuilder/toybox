@@ -42,6 +42,6 @@ VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs);
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
-                                   const char *name);
+                                   uint32_t index);
 
 bool tb_is_mesh_ready(ecs_world_t *ecs, TbMesh2 mesh_ent);

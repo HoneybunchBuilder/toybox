@@ -110,9 +110,10 @@ void tb_transform_set_world(ecs_world_t *ecs, ecs_entity_t entity,
 }
 
 bool tb_load_transform_comp(TbWorld *world, ecs_entity_t ent,
-                            const char *source_path, const cgltf_node *node,
-                            json_object *json) {
+                            const char *source_path, const cgltf_data *data,
+                            const cgltf_node *node, json_object *json) {
   (void)source_path;
+  (void)data;
   (void)json;
   TbTransformComponent comp = {
       .dirty = true,

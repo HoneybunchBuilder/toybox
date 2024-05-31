@@ -130,9 +130,10 @@ ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
 }
 
 bool tb_load_ocean_comp(TbWorld *world, ecs_entity_t ent,
-                        const char *source_path, const cgltf_node *node,
-                        json_object *json) {
+                        const char *source_path, const cgltf_data *data,
+                        const cgltf_node *node, json_object *json) {
   (void)source_path;
+  (void)data;
   (void)node;
   (void)json;
   tb_auto ecs = world->ecs;

@@ -3,6 +3,7 @@
 #include "tb_allocator.h"
 #include "tb_dynarray.h"
 #include "tb_scene.h"
+#include "tb_scene2.h"
 
 #include "blocks/Block.h"
 
@@ -34,11 +35,13 @@ void tb_register_system(const char *name, int32_t priority,
   }
 
 typedef struct json_object json_object;
+typedef struct cgltf_data cgltf_data;
 typedef struct cgltf_node cgltf_node;
 
 typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
 typedef bool (*TbLoadComponentFn)(TbWorld *world, ecs_entity_t ent,
                                   const char *source_path,
+                                  const cgltf_data *data,
                                   const cgltf_node *node, json_object *json);
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
                            TbLoadComponentFn load_fn);
@@ -66,6 +69,7 @@ typedef struct TbWorld {
   TbRenderThread *render_thread;
   SDL_Window *window;
   TB_DYN_ARR_OF(TbScene) scenes;
+  TB_DYN_ARR_OF(TbScene2) scenes2;
 } TbWorld;
 
 typedef struct TbWorldRef {

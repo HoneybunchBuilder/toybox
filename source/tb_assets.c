@@ -73,5 +73,6 @@ cgltf_data *tb_read_glb(TbAllocator gp_alloc, const char *path) {
   res = cgltf_validate(data);
   TB_CHECK_RETURN(res == cgltf_result_success, "Failed to validate glb.", NULL);
 #endif
+
   return data;
 }

@@ -4,6 +4,7 @@
 
 #include "common.hlsli"
 #include "json.h"
+#include "tb_assets.h"
 #include "tb_gltf.h"
 #include "tb_material_system.h"
 #include "tb_mesh_system.h"
@@ -141,8 +142,8 @@ void destroy_mesh_component_internal(TbMeshComponent *self,
 }
 
 bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
-                       const char *source_path, const cgltf_node *node,
-                       json_object *json) {
+                       const char *source_path, const cgltf_data *data,
+                       const cgltf_node *node, json_object *json) {
   TracyCZoneN(ctx, "Load Mesh Component", true);
   (void)json;
   tb_auto ecs = world->ecs;
@@ -151,8 +152,18 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   // Load mesh
   tb_auto id = tb_mesh_system_load_mesh(mesh_sys, source_path, node);
 
+  // Find mesh index by indexing. This is dirty but it works
+  uint32_t mesh_idx = SDL_MAX_UINT32;
+  for (cgltf_size i = 0; i < data->meshes_count; ++i) {
+    if (&data->meshes[i] == node->mesh) {
+      mesh_idx = i;
+      break;
+    }
+  }
+  TB_CHECK(mesh_idx != SDL_MAX_UINT32, "Failed to find mesh");
+
   TbMeshComponent comp = {
-      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, node->parent->name),
+      //.mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, mesh_idx),
   };
   bool ret = create_mesh_component_internal(ecs, &comp, id, world->gp_alloc,
                                             source_path, node);

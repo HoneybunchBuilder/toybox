@@ -352,9 +352,10 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
 }
 
 bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
-                            const char *source_path, const cgltf_node *node,
-                            json_object *object) {
+                            const char *source_path, const cgltf_data *data,
+                            const cgltf_node *node, json_object *object) {
   (void)source_path;
+  (void)data;
   flecs::world ecs(world->ecs);
 
   bool sensor = false;

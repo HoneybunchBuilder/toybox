@@ -21,9 +21,11 @@ ECS_COMPONENT_DECLARE(TbSpatialAudioSource);
 
 bool tb_load_spatial_audio_source_comp(TbWorld *world, ecs_entity_t ent,
                                        const char *source_path,
+                                       const cgltf_data *data,
                                        const cgltf_node *node,
                                        json_object *json) {
   (void)source_path;
+  (void)data;
   (void)node;
   char *file_path = NULL;
 

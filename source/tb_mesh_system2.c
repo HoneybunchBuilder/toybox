@@ -44,7 +44,7 @@ ECS_COMPONENT_DECLARE(TbMeshIndex);
 // Describes the creation of a mesh that lives in a GLB file
 typedef struct TbMeshGLTFLoadRequest {
   const char *path;
-  const char *name;
+  uint32_t index;
 } TbMeshGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbMeshGLTFLoadRequest);
 
@@ -106,7 +106,7 @@ typedef struct TbLoadGLTFMeshArgs {
   TbMeshGLTFLoadRequest gltf;
 } TbLoadGLTFMeshArgs;
 
-TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys, const char *name,
+TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                              const cgltf_mesh *gltf_mesh) {
   TracyCZoneN(ctx, "Load GLTF Mesh", true);
   TbMeshData data = {0};
@@ -193,8 +193,8 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys, const char *name,
                  VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, name, &data.gpu_buffer,
-                                 &data.host_buffer, &ptr);
+    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "gltf_mesh",
+                                 &data.gpu_buffer, &data.host_buffer, &ptr);
   }
 
   // Read the cgltf mesh into the driver owned memory
@@ -337,34 +337,17 @@ void tb_load_gltf_mesh_task(const void *args) {
   TbMesh2 mesh = load_args->common.mesh;
 
   tb_auto path = load_args->gltf.path;
-  tb_auto name = load_args->gltf.name;
+  tb_auto index = load_args->gltf.index;
 
   tb_auto data = tb_read_glb(tb_thread_alloc, path);
-  // Find mesh by name
-  struct cgltf_mesh *gltf_mesh = NULL;
-  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
-    tb_auto node = &data->nodes[i];
-    if (node->parent != NULL && SDL_strcmp(name, node->parent->name) == 0) {
-      gltf_mesh = node->mesh;
-      break;
-    }
-  }
-  if (gltf_mesh == NULL) {
-    TB_CHECK(false, "Failed to find mesh by name");
-    mesh = 0; // Invalid ent means task failed
-  }
+
+  cgltf_mesh *gltf_mesh = &data->meshes[index];
 
   // Queue upload of mesh data to the GPU
   TbMeshData mesh_data = {0};
   if (mesh != 0) {
-    mesh_data = tb_load_gltf_mesh(rnd_sys, name, gltf_mesh);
+    mesh_data = tb_load_gltf_mesh(rnd_sys, gltf_mesh);
   }
-
-  // TODO: We should free this but I am anticipating changes to how these tasks
-  // reference the gltf data
-  // cgltf_free(data);
-
-  tb_free(tb_global_alloc, (void *)name);
 
   // Launch pinned task to handle loading signals on main thread
   TbMeshLoadedArgs loaded_args = {
@@ -913,10 +896,10 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
 }
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
-                                   const char *name) {
+                                   uint32_t index) {
   const uint32_t max_mesh_name_len = 256;
   char mesh_name[max_mesh_name_len] = {0};
-  SDL_snprintf(mesh_name, max_mesh_name_len, "%s_mesh", name);
+  SDL_snprintf(mesh_name, max_mesh_name_len, "mesh_%d", index);
 
   // If an entity already exists with this name it is either loading or loaded
   TbMesh2 mesh_ent = ecs_lookup_child(ecs, ecs_id(TbMeshCtx), mesh_name);
@@ -937,12 +920,8 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
   char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
   SDL_strlcpy(path_cpy, path, path_len);
 
-  const size_t name_len = SDL_strnlen(mesh_name, 256) + 1;
-  char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
-  SDL_strlcpy(name_cpy, name, name_len);
-
   // Append a mesh load request onto the entity to schedule loading
-  ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {path_cpy, name_cpy});
+  ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {path_cpy, index});
   ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
 
   return mesh_ent;

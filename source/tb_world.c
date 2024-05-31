@@ -7,6 +7,7 @@
 #include "tb_input_system.h"
 #include "tb_material_system.h"
 #include "tb_profiling.h"
+#include "tb_scene2.h"
 #include "tb_simd.h"
 #include "tb_texture_system.h"
 #include "tb_transform_component.h"
@@ -228,6 +229,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 
   world->render_thread = render_thread;
   TB_DYN_ARR_RESET(world->scenes, gp_alloc, 1);
+  TB_DYN_ARR_RESET(world->scenes2, gp_alloc, 1);
 
   // Create all registered systems after sorting by priority
   {
@@ -393,13 +395,13 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
     tb_auto load_fn = s_comp_reg.entries[i].load_fn;
     if (load_fn) {
       if (SDL_strcmp(name, "transform") == 0) {
-        load_fn(world, ent, root_scene_path, node, NULL);
+        load_fn(world, ent, root_scene_path, data, node, NULL);
       } else if (SDL_strcmp(name, "mesh") == 0 && node->mesh) {
-        load_fn(world, ent, root_scene_path, node, NULL);
+        load_fn(world, ent, root_scene_path, data, node, NULL);
       } else if (SDL_strcmp(name, "camera") == 0 && node->camera) {
-        load_fn(world, ent, root_scene_path, node, NULL);
+        load_fn(world, ent, root_scene_path, data, node, NULL);
       } else if (SDL_strcmp(name, "light") == 0 && node->light) {
-        load_fn(world, ent, root_scene_path, node, NULL);
+        load_fn(world, ent, root_scene_path, data, node, NULL);
       }
     }
   }
@@ -423,7 +425,7 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
         const char *name = s_comp_reg.entries[i].name;
         tb_auto load_fn = s_comp_reg.entries[i].load_fn;
         if (SDL_strcmp(component_name, name) == 0) {
-          load_fn(world, ent, root_scene_path, node, component_obj);
+          load_fn(world, ent, root_scene_path, data, node, component_obj);
         }
       }
     }
@@ -465,6 +467,10 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
 
   // Clean up gltf file now that it's parsed
   cgltf_free(data);
+
+  // HACK
+  tb_auto scene2 = tb_load_scene2(world->ecs, asset_path);
+  TB_DYN_ARR_APPEND(world->scenes2, scene2);
 
   TracyCZoneEnd(ctx);
   return true;

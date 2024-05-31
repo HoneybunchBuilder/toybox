@@ -8,9 +8,10 @@
 ECS_COMPONENT_DECLARE(TbNoClipComponent);
 
 bool tb_load_noclip_comp(TbWorld *world, ecs_entity_t ent,
-                         const char *source_path, const cgltf_node *node,
-                         json_object *json) {
+                         const char *source_path, const cgltf_data *data,
+                         const cgltf_node *node, json_object *json) {
   (void)source_path;
+  (void)data;
   (void)node;
   ecs_world_t *ecs = world->ecs;
 
