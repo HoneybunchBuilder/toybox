@@ -761,7 +761,7 @@ void tb_reset_tex_queue_count(ecs_iter_t *it) {
 }
 
 void tb_tex_phase_loading(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Checking Texture Load State", true);
+  TracyCZoneN(ctx, "Texture Loading State", true);
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
@@ -935,18 +935,14 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
 }
 
 void tb_tex_phase_written(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Checking Texture Write State", true);
+  TracyCZoneN(ctx, "Texture Written Phase", true);
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
-  uint64_t total_tex_count = 0;
-  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->tex_query);
-  while (ecs_query_next(&tex_it)) {
-    total_tex_count += tex_it.count;
-  }
+  uint64_t total_tex_count = tex_ctx->owned_tex_count;
 
   uint64_t ready_tex_count = 0;
-  tex_it = ecs_query_iter(it->world, tex_ctx->ready_tex_query);
+  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->ready_tex_query);
   while (ecs_query_next(&tex_it)) {
     ready_tex_count += tex_it.count;
   }

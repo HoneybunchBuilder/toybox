@@ -58,6 +58,8 @@ VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs);
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs);
 
+void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count);
+
 // Begins an async material load from a path to a given glb file and the name of
 // the material to load
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
