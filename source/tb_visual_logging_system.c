@@ -321,9 +321,13 @@ TbVisualLoggingSystem create_visual_logging_system(
       uint64_t idx_padding = index_size % (sizeof(uint16_t) * 4);
       sys.sphere_pos_offset = index_size + idx_padding;
 
+      // Reserve space for the 1 mesh we're adding
+      tb_mesh_sys_reserve_mesh_count(ecs, 1);
+
       const cgltf_node *node = &data->nodes[0];
       sys.sphere_mesh = tb_mesh_system_load_mesh(mesh_system, asset_path, node);
-      sys.sphere_mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, asset_path, 0);
+      sys.sphere_mesh2 =
+          tb_mesh_sys_load_gltf_mesh(ecs, asset_path, "sphere", 0);
       sys.sphere_scale =
           (float3){node->scale[0], node->scale[1], node->scale[2]};
     }

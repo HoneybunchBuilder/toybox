@@ -549,7 +549,7 @@ void tb_load_ktx_texture_task(const void *args) {
   SDL_RWops *tex_file = SDL_RWFromFile(path, "rb");
   size_t tex_size = SDL_RWsize(tex_file);
 
-  uint8_t *tex_data = tb_alloc(tb_global_alloc, tex_size);
+  uint8_t *tex_data = tb_alloc(tb_thread_alloc, tex_size);
   SDL_RWread(tex_file, (void *)tex_data, tex_size);
   SDL_RWclose(tex_file);
 
@@ -562,7 +562,7 @@ void tb_load_ktx_texture_task(const void *args) {
     tex_comp = tb_load_ktx_image(rnd_sys, name, ktx);
   }
 
-  tb_free(tb_global_alloc, tex_data);
+  tb_free(tb_thread_alloc, tex_data);
 
   // Launch pinned task to handle loading signals on main thread
   TbTextureLoadedArgs loaded_args = {

@@ -33,8 +33,14 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   }
   TB_CHECK(mesh_idx != SDL_MAX_UINT32, "Failed to find mesh");
 
+  // We don't reserve here because we're expecting
+  // all meshes to already be loading
+  const uint32_t max_name_len = 256;
+  char name[max_name_len] = {0};
+  SDL_snprintf(name, max_name_len, "mesh_%d", mesh_idx);
   TbMeshComponent comp = {
-      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, mesh_idx),
+
+      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, name, mesh_idx),
   };
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
 

@@ -453,10 +453,7 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
   TbScene scene = {0};
   TB_DYN_ARR_RESET(scene.entities, world->gp_alloc, data->scene->nodes_count);
 
-  tb_mesh_sys_reserve_mesh_count(world->ecs, data->meshes_count);
-  tb_mat_sys_reserve_mat_count(world->ecs, data->materials_count);
-  tb_tex_sys_reserve_tex_count(world->ecs, data->textures_count);
-
+  // TODO: Parallelize
   // Create an entity for each node
   for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
     tb_auto node = data->scene->nodes[i];

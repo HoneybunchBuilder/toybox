@@ -8,6 +8,7 @@
 #pragma clang diagnostic pop
 
 #include "tb_common.h"
+#include "tb_profiling.h"
 #include "tb_sdl.h"
 
 #include <meshoptimizer.h>
@@ -16,8 +17,10 @@
 // https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
 cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
                                        cgltf_buffer_view *view) {
+  TracyCZoneN(ctx, "Deompress Buffer", true);
   if (view->data != NULL) {
     // Already decoded
+    TracyCZoneEnd(ctx);
     return cgltf_result_success;
   }
 
@@ -29,6 +32,8 @@ cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
     uint8_t *result = tb_alloc(alloc, view->size);
     SDL_memcpy(result, data, view->size); // NOLINT
     view->data = result;
+    TB_LOG_INFO(SDL_LOG_CATEGORY_SYSTEM, "%s", "Using Uncompressed Buffer");
+    TracyCZoneEnd(ctx);
     return cgltf_result_success;
   }
 
@@ -85,5 +90,6 @@ cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
 
   view->data = result;
 
+  TracyCZoneEnd(ctx);
   return cgltf_result_success;
 }

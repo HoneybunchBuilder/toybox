@@ -31,9 +31,17 @@ void tb_scene_loaded(const void *args) {
   tb_auto path = load_args->path;
   tb_auto data = load_args->data;
 
+  // Reserve space for the assets
+  tb_mesh_sys_reserve_mesh_count(ecs, data->meshes_count);
+  tb_mat_sys_reserve_mat_count(ecs, data->materials_count);
+  tb_tex_sys_reserve_tex_count(ecs, data->textures_count);
+
   // Loading meshes will trigger dependant materials and textures to load
   for (cgltf_size i = 0; i < data->meshes_count; ++i) {
-    tb_mesh_sys_load_gltf_mesh(ecs, path, i);
+    const uint32_t max_name_len = 256;
+    char name[max_name_len] = {0};
+    SDL_snprintf(name, max_name_len, "mesh_%d", i);
+    tb_mesh_sys_load_gltf_mesh(ecs, path, name, i);
   }
 
   tb_free(tb_global_alloc, (void *)path);

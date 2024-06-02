@@ -34,6 +34,7 @@ typedef struct TbMeshCtx {
   uint32_t owned_mesh_count;
   uint32_t pool_update_counter;
 
+  ecs_query_t *mesh_query;
   ecs_query_t *loaded_mesh_query;
   ecs_query_t *dirty_mesh_query;
 } TbMeshCtx;
@@ -223,7 +224,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
             tb_calc_aligned_size(indices->count, indices->stride, 16);
 
         // Decode the buffer
-        cgltf_result res = tb_decompress_buffer_view(tb_global_alloc, view);
+        cgltf_result res = tb_decompress_buffer_view(tb_thread_alloc, view);
         TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
         void *src = ((uint8_t *)view->data) + indices->offset;
@@ -273,7 +274,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         size_t src_size = accessor->stride * accessor->count;
 
         // Decode the buffer
-        cgltf_result res = tb_decompress_buffer_view(tb_global_alloc, view);
+        cgltf_result res = tb_decompress_buffer_view(tb_thread_alloc, view);
         TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
 
         void *src = ((uint8_t *)view->data) + accessor->offset;
@@ -406,7 +407,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
     };
     TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
                                      sizeof(TbLoadGLTFMeshArgs));
-    // Apply task component to texture entity
+    // Apply task component to mesh entity
     ecs_set(it->world, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
@@ -635,7 +636,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
   }
 
   // If we had to resize the pool, all meshes are dirty
-  mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
+  mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
   while (ecs_query_next(&mesh_it)) {
     tb_auto ecs = mesh_it.world;
     for (int32_t i = 0; i < mesh_it.count; ++i) {
@@ -873,6 +874,11 @@ void tb_register_mesh2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   TbMeshCtx ctx = {
+      .mesh_query =
+          ecs_query(ecs, {.filter.terms =
+                              {
+                                  {.id = ecs_id(TbMeshData), .inout = EcsIn},
+                              }}),
       .loaded_mesh_query =
           ecs_query(ecs, {.filter.terms =
                               {
@@ -936,6 +942,7 @@ void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
 
+  ecs_query_fini(ctx->mesh_query);
   ecs_query_fini(ctx->loaded_mesh_query);
   ecs_query_fini(ctx->dirty_mesh_query);
 
@@ -982,7 +989,7 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
 
 void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  ctx->owned_mesh_count = mesh_count;
+  ctx->owned_mesh_count += mesh_count;
   ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
   ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
   ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
@@ -991,10 +998,10 @@ void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
 }
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
-                                   uint32_t index) {
-  const uint32_t max_mesh_name_len = 256;
-  char mesh_name[max_mesh_name_len] = {0};
-  SDL_snprintf(mesh_name, max_mesh_name_len, "mesh_%d", index);
+                                   const char *name, uint32_t index) {
+  const uint32_t max_name_len = 512;
+  char mesh_name[max_name_len] = {0};
+  SDL_snprintf(mesh_name, max_name_len, "%s_%s", path, name);
 
   // If an entity already exists with this name it is either loading or loaded
   TbMesh2 mesh_ent = ecs_lookup_child(ecs, ecs_id(TbMeshCtx), mesh_name);
