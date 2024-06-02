@@ -25,9 +25,7 @@ typedef struct TbTextureCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_tex_count;
-
   uint32_t pool_update_counter;
-  uint32_t last_written_tex_count;
 
   // Custom queries for special systems
   ecs_query_t *tex_query;
@@ -761,7 +759,7 @@ void tb_reset_tex_queue_count(ecs_iter_t *it) {
 }
 
 void tb_tex_phase_loading(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Texture Loading State", true);
+  TracyCZoneN(ctx, "Texture Loading Phase", true);
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
@@ -782,7 +780,6 @@ void tb_tex_phase_loading(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
     ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
     tex_ctx->pool_update_counter = 0;
-    tex_ctx->last_written_tex_count = loaded_tex_count;
   }
 
   TracyCZoneEnd(ctx);
@@ -939,9 +936,9 @@ void tb_tex_phase_written(ecs_iter_t *it) {
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
-  uint64_t total_tex_count = tex_ctx->owned_tex_count;
+  uint32_t total_tex_count = tex_ctx->owned_tex_count;
 
-  uint64_t ready_tex_count = 0;
+  uint32_t ready_tex_count = 0;
   ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->ready_tex_query);
   while (ecs_query_next(&tex_it)) {
     ready_tex_count += tex_it.count;

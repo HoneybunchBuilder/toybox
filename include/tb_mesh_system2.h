@@ -24,6 +24,7 @@ typedef uint32_t TbMeshIndex;
 extern ECS_COMPONENT_DECLARE(TbMeshIndex);
 
 typedef ecs_entity_t TbSubMesh2;
+typedef ecs_entity_t TbMaterial2;
 typedef struct TbSubMesh2Data {
   uint32_t index_count;
   uint64_t index_offset;
@@ -41,6 +42,7 @@ VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs);
 
+void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count);
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
                                    uint32_t index);
 

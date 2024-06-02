@@ -14,6 +14,12 @@ ECS_COMPONENT_DECLARE(TbAABB);
 
 static const int32_t TbMaxParallelMeshLoads = 8;
 
+ECS_TAG_DECLARE(TbMeshLoadPhaseLoading);
+ECS_TAG_DECLARE(TbMeshLoadPhaseLoaded);
+ECS_TAG_DECLARE(TbMeshLoadPhaseWriting);
+ECS_TAG_DECLARE(TbMeshLoadPhaseWritten);
+ECS_TAG_DECLARE(TbMeshLoadPhaseReady);
+
 typedef SDL_AtomicInt TbMeshQueueCounter;
 ECS_COMPONENT_DECLARE(TbMeshQueueCounter);
 typedef SDL_AtomicInt TbSubMeshQueueCounter;
@@ -25,7 +31,10 @@ typedef struct TbMeshCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
-  ecs_query_t *uploaded_mesh_query;
+  uint32_t owned_mesh_count;
+  uint32_t pool_update_counter;
+
+  ecs_query_t *loaded_mesh_query;
   ecs_query_t *dirty_mesh_query;
 } TbMeshCtx;
 ECS_COMPONENT_DECLARE(TbMeshCtx);
@@ -54,7 +63,7 @@ typedef struct TbSubMeshGLTFLoadRequest {
 } TbSubMeshGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbSubMeshGLTFLoadRequest);
 
-ECS_TAG_DECLARE(TbMeshUploaded);
+ECS_TAG_DECLARE(TbMeshLoaded);
 ECS_TAG_DECLARE(TbMeshParsed);
 ECS_TAG_DECLARE(TbMeshReady);
 ECS_TAG_DECLARE(TbSubMeshParsed);
@@ -85,7 +94,7 @@ void tb_mesh_loaded(const void *args) {
       .gltf_mesh = gltf_mesh,
   };
 
-  ecs_add(ecs, mesh, TbMeshUploaded);
+  ecs_add(ecs, mesh, TbMeshLoaded);
   ecs_add(ecs, mesh, TbMeshParsed);
   ecs_set_ptr(ecs, mesh, TbMeshData, &loaded_args->comp);
   ecs_set_ptr(ecs, mesh, TbSubMeshGLTFLoadRequest, &submesh_req);
@@ -544,10 +553,30 @@ void tb_reset_mesh_queue_count(ecs_iter_t *it) {
   SDL_AtomicSet(submesh_counter, 0);
 }
 
-/*
-  TODO: Only bother doing this when all meshes are loaded. So we don't have to
-  keep updating this pool over and over during the load
-*/
+void tb_mesh_loading_phase(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Mesh Loading Phase", true);
+  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+
+  if (mesh_ctx->owned_mesh_count == 0) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  uint64_t loaded_mesh_count = 0;
+  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    loaded_mesh_count += mesh_it.count;
+  }
+
+  // This phase is over when there are no more meshes to load
+  if (mesh_ctx->owned_mesh_count == loaded_mesh_count) {
+    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
+    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
+    mesh_ctx->pool_update_counter = 0;
+  }
+
+  TracyCZoneEnd(ctx);
+}
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Update Mesh Descriptors", true);
@@ -558,7 +587,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
   uint64_t mesh_count = 0;
 
   // Accumulate the number of meshes
-  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->uploaded_mesh_query);
+  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
   while (ecs_query_next(&mesh_it)) {
     mesh_count += mesh_it.count;
   }
@@ -568,47 +597,45 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
     return;
   }
 
-  // Hacky test to see if the descriptor pool needs mutation
-  // Doing so can be expensive if we have to generate a bunch of writes
-  if (mesh_count == tb_rnd_frame_desc_pool_get_desc_count(
+  // Resize the pool if necessary
+  if (mesh_count != tb_rnd_frame_desc_pool_get_desc_count(
                         rnd_sys, mesh_ctx->frame_set_pool.pools)) {
-    TracyCZoneEnd(ctx);
-    return;
+
+    const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+
+    VkDescriptorPoolCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+        .maxSets = view_count,
+        .poolSizeCount = 1,
+        .pPoolSizes =
+            (VkDescriptorPoolSize[1]){
+                {
+                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorCount = view_count * 4,
+                },
+            },
+    };
+    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
+        .sType =
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        .descriptorSetCount = view_count,
+        .pDescriptorCounts =
+            (uint32_t[view_count]){mesh_count, mesh_count, mesh_count,
+                                   mesh_count, mesh_count, mesh_count,
+                                   mesh_count},
+    };
+    VkDescriptorSetLayout layouts[view_count] = {
+        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
+        mesh_ctx->set_layout};
+    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
+                                mesh_ctx->frame_set_pool.pools, view_count,
+                                mesh_count);
   }
 
-  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
-
-  VkDescriptorPoolCreateInfo create_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-      .maxSets = view_count,
-      .poolSizeCount = 1,
-      .pPoolSizes =
-          (VkDescriptorPoolSize[1]){
-              {
-                  .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                  .descriptorCount = view_count * 4,
-              },
-          },
-  };
-  VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-      .sType =
-          VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-      .descriptorSetCount = view_count,
-      .pDescriptorCounts =
-          (uint32_t[view_count]){mesh_count, mesh_count, mesh_count, mesh_count,
-                                 mesh_count, mesh_count, mesh_count},
-  };
-  VkDescriptorSetLayout layouts[view_count] = {
-      mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-      mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-      mesh_ctx->set_layout};
-  tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
-                              mesh_ctx->frame_set_pool.pools, view_count,
-                              mesh_count);
-
   // If we had to resize the pool, all meshes are dirty
-  mesh_it = ecs_query_iter(it->world, mesh_ctx->uploaded_mesh_query);
+  mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
   while (ecs_query_next(&mesh_it)) {
     tb_auto ecs = mesh_it.world;
     for (int32_t i = 0; i < mesh_it.count; ++i) {
@@ -622,6 +649,17 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
         SDL_AtomicSet(counter, 0);
       }
     }
+  }
+
+  mesh_ctx->pool_update_counter++;
+
+  // One pool must be resized per frame
+  if (mesh_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
+    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
+    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+
+    // Reset counter for next phase
+    mesh_ctx->pool_update_counter = 0;
   }
 
   TracyCZoneEnd(ctx);
@@ -699,6 +737,38 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
     }
   }
   tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
+
+  mesh_ctx->pool_update_counter++;
+
+  // One write must be enqueued per frame
+  if (mesh_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
+    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
+  }
+
+  TracyCZoneEnd(ctx);
+}
+
+void tb_mesh_phase_written(ecs_iter_t *it) {
+  TracyCZoneN(ctx, "Mesh Written Phase", true);
+  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+
+  // Accumulate the number of meshes
+  uint64_t parsed_meshes = 0;
+
+  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    parsed_meshes += mesh_it.count;
+  }
+
+  // When we have no more parsed meshes that means all meshes are ready
+  // This is cheaper than counting up
+  if (parsed_meshes == 0) {
+    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
+    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
+  }
+
+  TracyCZoneEnd(ctx);
 }
 
 void tb_check_submesh_readiness(ecs_iter_t *it) {
@@ -738,10 +808,8 @@ void tb_check_mesh_readiness(ecs_iter_t *it) {
       }
     }
 
-    // If all submesh children are ready and we have been given a mesh index
-    // we can remove any other identifying tags and mark this mesh as ready
-    if (children_ready && ecs_has(it->world, mesh, TbMeshIndex) &&
-        ecs_has(it->world, mesh, TbDescriptorReady)) {
+    // If all submeshes are ready, we are ready
+    if (children_ready) {
       ecs_remove(it->world, mesh, TbMeshParsed);
       ecs_add(it->world, mesh, TbMeshReady);
     }
@@ -761,11 +829,16 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbAABB);
   ECS_COMPONENT_DEFINE(ecs, TbMeshGLTFLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbSubMeshGLTFLoadRequest);
-  ECS_TAG_DEFINE(ecs, TbMeshUploaded);
+  ECS_TAG_DEFINE(ecs, TbMeshLoaded);
   ECS_TAG_DEFINE(ecs, TbMeshParsed);
   ECS_TAG_DEFINE(ecs, TbMeshReady);
   ECS_TAG_DEFINE(ecs, TbSubMeshParsed);
   ECS_TAG_DEFINE(ecs, TbSubMeshReady);
+  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseLoading);
+  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseLoaded);
+  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseWriting);
+  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseWritten);
+  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseReady);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
              EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
@@ -778,8 +851,20 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
              EcsPostUpdate, [inout] TbMeshQueueCounter(TbMeshQueueCounter),
              [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter));
-  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPreStore, [in] TbMeshCtx(TbMeshCtx),
-             [in] TbRenderSystem(TbRenderSystem));
+
+  // While meshes are moving from parsed to ready states
+  ECS_SYSTEM(ecs, tb_mesh_loading_phase, EcsPreFrame, [in] TbMeshCtx(TbMeshCtx),
+             TbMeshLoadPhaseLoading);
+  // When all meshes are loaded we start making them available to shaders
+  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
+             [in] TbRenderSystem(TbRenderSystem), TbMeshLoadPhaseLoaded);
+  // System that ticks as we ensure mesh descriptors are written
+  ECS_SYSTEM(ecs, tb_write_mesh_descriptors, EcsPreStore,
+             [in] TbMeshCtx(TbMeshCtx), [in] TbRenderSystem(TbRenderSystem),
+             TbMeshLoadPhaseWriting);
+  // When all meshes are ready the phase we will be done
+  ECS_SYSTEM(ecs, tb_mesh_phase_written, EcsOnStore, [in] TbMeshCtx(TbMeshCtx),
+             TbMeshLoadPhaseWritten);
 
   ECS_SYSTEM(ecs, tb_check_submesh_readiness,
              EcsPreStore, [in] TbSubMesh2Data, [in] TbSubMeshParsed);
@@ -788,17 +873,17 @@ void tb_register_mesh2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   TbMeshCtx ctx = {
-      .uploaded_mesh_query =
+      .loaded_mesh_query =
           ecs_query(ecs, {.filter.terms =
                               {
                                   {.id = ecs_id(TbMeshData), .inout = EcsIn},
-                                  {.id = ecs_id(TbMeshUploaded)},
+                                  {.id = ecs_id(TbMeshLoaded)},
                               }}),
       .dirty_mesh_query =
           ecs_query(ecs, {.filter.terms =
                               {
                                   {.id = ecs_id(TbMeshData), .inout = EcsIn},
-                                  {.id = ecs_id(TbMeshUploaded)},
+                                  {.id = ecs_id(TbMeshLoaded)},
                                   {.id = ecs_id(TbNeedsDescriptorUpdate)},
                               }}),
   };
@@ -851,7 +936,7 @@ void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
 
-  ecs_query_fini(ctx->uploaded_mesh_query);
+  ecs_query_fini(ctx->loaded_mesh_query);
   ecs_query_fini(ctx->dirty_mesh_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
@@ -895,6 +980,16 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 3);
 }
 
+void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  ctx->owned_mesh_count = mesh_count;
+  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
+  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
+  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
+  ecs_add(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
+}
+
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
                                    uint32_t index) {
   const uint32_t max_mesh_name_len = 256;
@@ -928,5 +1023,6 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
 }
 
 bool tb_is_mesh_ready(ecs_world_t *ecs, TbMesh2 mesh_ent) {
-  return ecs_has(ecs, mesh_ent, TbMeshReady);
+  return ecs_has(ecs, mesh_ent, TbMeshReady) &&
+         ecs_has(ecs, mesh_ent, TbDescriptorReady);
 }

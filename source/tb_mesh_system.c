@@ -9,6 +9,7 @@
 #include "tb_light_component.h"
 #include "tb_material_system.h"
 #include "tb_mesh_component.h"
+#include "tb_mesh_system2.h"
 #include "tb_profiling.h"
 #include "tb_render_object_system.h"
 #include "tb_render_pipeline_system.h"
@@ -1265,21 +1266,40 @@ void mesh_draw_tick(ecs_iter_t *it) {
       while (ecs_query_next(&mesh_it)) {
         tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          tb_auto mesh = &meshes[mesh_idx];
+          TbMesh2 mesh = meshes[mesh_idx].mesh2;
 
-          for (uint32_t submesh_idx = 0;
-               submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
-            tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
+          if (!tb_is_mesh_ready(it->world, mesh)) {
+            continue;
+          }
 
-            // Material must be loaded and ready
-            if (!tb_is_material_ready(ecs, sm->material)) {
-              continue;
-            }
+          tb_auto submesh_itr = ecs_children(it->world, mesh);
 
-            if (tb_is_mat_transparent(ecs, sm->material)) {
-              trans_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
-            } else {
-              opaque_draw_count += TB_DYN_ARR_SIZE(mesh->submeshes);
+          uint32_t submesh_count = 0;
+          while (ecs_children_next(&submesh_itr)) {
+            submesh_count += submesh_itr.count;
+          }
+
+          submesh_itr = ecs_children(it->world, mesh);
+          while (ecs_children_next(&submesh_itr)) {
+            for (int32_t sm_i = 0; sm_i < submesh_itr.count; ++sm_i) {
+              TbSubMesh2 sm_ent = submesh_itr.entities[sm_i];
+              if (!ecs_has(it->world, sm_ent, TbSubMesh2Data)) {
+                TB_CHECK(false,
+                         "Submesh entity unexpectedly lacked submesh data");
+                continue;
+              }
+              tb_auto sm = ecs_get(it->world, sm_ent, TbSubMesh2Data);
+
+              // Material must be loaded and ready
+              if (!tb_is_material_ready(ecs, sm->material)) {
+                continue;
+              }
+
+              if (tb_is_mat_transparent(ecs, sm->material)) {
+                trans_draw_count += submesh_count;
+              } else {
+                opaque_draw_count += submesh_count;
+              }
             }
           }
         }
@@ -1363,43 +1383,57 @@ void mesh_draw_tick(ecs_iter_t *it) {
       while (ecs_query_next(&mesh_it)) {
         tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          tb_auto mesh = &meshes[mesh_idx];
+          tb_auto mesh = meshes[mesh_idx].mesh2;
           tb_auto entity = mesh_it.entities[mesh_idx];
           tb_auto ro = ecs_get_mut(ecs, entity, TbRenderObject);
 
-          for (uint32_t submesh_idx = 0;
-               submesh_idx < TB_DYN_ARR_SIZE(mesh->submeshes); ++submesh_idx) {
-            tb_auto sm = &TB_DYN_ARR_AT(mesh->submeshes, submesh_idx);
-            // Material must be loaded and ready
-            if (!tb_is_material_ready(ecs, sm->material)) {
-              continue;
-            }
+          if (!tb_is_mesh_ready(it->world, mesh)) {
+            continue;
+          }
 
-            // Deduce whether to write to opaque or transparent data
-            tb_auto draw_cmds = opaque_draw_cmds;
-            tb_auto draw_count = &opaque_cmd_count;
-            tb_auto draw_data = opaque_draw_data;
-            if (tb_is_mat_transparent(ecs, sm->material)) {
-              draw_cmds = trans_draw_cmds;
-              draw_count = &trans_cmd_count;
-              draw_data = trans_draw_data;
-            }
+          tb_auto mesh_desc_idx = *ecs_get(it->world, mesh, TbMeshIndex);
 
-            // Write a command and a piece of draw data into the buffers
-            tb_auto draw_idx = *draw_count;
-            draw_cmds[draw_idx] = (VkDrawIndirectCommand){
-                .vertexCount = sm->index_count,
-                .instanceCount = 1,
-            };
-            draw_data[draw_idx] = (TbGLTFDrawData){
-                .perm = sm->vertex_perm,
-                .obj_idx = ro->index,
-                .mesh_idx = mesh->mesh_id.idx,
-                .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
-                .index_offset = sm->index_offset,
-                .vertex_offset = sm->vertex_offset,
-            };
-            (*draw_count) += 1;
+          tb_auto submesh_itr = ecs_children(it->world, mesh);
+          while (ecs_children_next(&submesh_itr)) {
+            for (int32_t sm_i = 0; sm_i < submesh_itr.count; ++sm_i) {
+              TbSubMesh2 sm_ent = submesh_itr.entities[sm_i];
+              if (!ecs_has(it->world, sm_ent, TbSubMesh2Data)) {
+                TB_CHECK(false,
+                         "Submesh entity unexpectedly lacked submesh data");
+                continue;
+              }
+              tb_auto sm = ecs_get(it->world, sm_ent, TbSubMesh2Data);
+              // Material must be loaded and ready
+              if (!tb_is_material_ready(ecs, sm->material)) {
+                continue;
+              }
+
+              // Deduce whether to write to opaque or transparent data
+              tb_auto draw_cmds = opaque_draw_cmds;
+              tb_auto draw_count = &opaque_cmd_count;
+              tb_auto draw_data = opaque_draw_data;
+              if (tb_is_mat_transparent(ecs, sm->material)) {
+                draw_cmds = trans_draw_cmds;
+                draw_count = &trans_cmd_count;
+                draw_data = trans_draw_data;
+              }
+
+              // Write a command and a piece of draw data into the buffers
+              tb_auto draw_idx = *draw_count;
+              draw_cmds[draw_idx] = (VkDrawIndirectCommand){
+                  .vertexCount = sm->index_count,
+                  .instanceCount = 1,
+              };
+              draw_data[draw_idx] = (TbGLTFDrawData){
+                  .perm = sm->vertex_perm,
+                  .obj_idx = ro->index,
+                  .mesh_idx = mesh_desc_idx,
+                  .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
+                  .index_offset = sm->index_offset,
+                  .vertex_offset = sm->vertex_offset,
+              };
+              (*draw_count) += 1;
+            }
           }
         }
       }
@@ -1564,15 +1598,9 @@ void tb_register_mesh_sys(TbWorld *world) {
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});
-  sys.mesh_query = ecs_query(ecs, {
-                                      .filter.terms =
-                                          {
-                                              {
-                                                  .id = ecs_id(TbMeshComponent),
-                                                  .inout = EcsInOut,
-                                              },
-                                          },
-                                  });
+  sys.mesh_query = ecs_query(ecs, {.filter.terms = {
+                                       {.id = ecs_id(TbMeshComponent)},
+                                   }});
   sys.dir_light_query =
       ecs_query(ecs, {.filter.terms = {
                           {.id = ecs_id(TbDirectionalLightComponent)},
