@@ -845,9 +845,20 @@ void tb_register_mesh2_sys(TbWorld *world) {
              EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
              [inout] TbMeshQueueCounter(TbMeshQueueCounter),
              [in] TbMeshGLTFLoadRequest);
-  ECS_SYSTEM(ecs, tb_queue_gltf_submesh_loads,
-             EcsPreUpdate, [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter),
-             [in] TbSubMeshGLTFLoadRequest);
+  ecs_system(
+      ecs,
+      {
+          .entity = ecs_entity(ecs, {.name = "tb_queue_gltf_submesh_loads",
+                                     .add = {ecs_dependson(EcsPreUpdate)}}),
+          .query.filter.terms =
+              {
+                  {.id = ecs_id(TbSubMeshQueueCounter),
+                   .src.id = ecs_id(TbSubMeshQueueCounter)},
+                  {.id = ecs_id(TbSubMeshGLTFLoadRequest)},
+              },
+          .callback = tb_queue_gltf_submesh_loads,
+          .no_readonly = true // disable readonly mode for this system
+      });
 
   ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
              EcsPostUpdate, [inout] TbMeshQueueCounter(TbMeshQueueCounter),

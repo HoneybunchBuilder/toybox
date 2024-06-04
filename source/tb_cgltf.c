@@ -17,7 +17,7 @@
 // https://github.com/jkuhlmann/cgltf/commit/bd8bd2c9cc08ff9b75a9aa9f99091f7144665c60
 cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
                                        cgltf_buffer_view *view) {
-  TracyCZoneN(ctx, "Deompress Buffer", true);
+  TracyCZoneN(ctx, "Decompress Buffer", true);
   if (view->data != NULL) {
     // Already decoded
     TracyCZoneEnd(ctx);
@@ -46,6 +46,7 @@ cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
   TB_CHECK_RETURN(result, "Failed to allocate space for decoded buffer view",
                   cgltf_result_out_of_memory);
 
+  TracyCZoneN(decode_ctx, "Decoding", true);
   int32_t res = -1;
   switch (mc->mode) {
   default:
@@ -69,7 +70,9 @@ cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
   }
   TB_CHECK_RETURN(res == 0, "Failed to decode buffer view",
                   cgltf_result_io_error);
+  TracyCZoneEnd(decode_ctx);
 
+  TracyCZoneN(filter_ctx, "Filtering", true);
   switch (mc->filter) {
   default:
   case cgltf_meshopt_compression_filter_none:
@@ -87,6 +90,7 @@ cgltf_result tb_decompress_buffer_view(TbAllocator alloc,
     meshopt_decodeFilterExp(result, mc->count, mc->stride);
     break;
   }
+  TracyCZoneEnd(filter_ctx);
 
   view->data = result;
 

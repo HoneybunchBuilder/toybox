@@ -754,9 +754,26 @@ void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count) {
 
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
                                      const char *name, TbMaterialUsage usage) {
+
+  /*
+    If we are in a deferred ecs state (in the middle of the execution of a
+  system) we would not be able to determine if a material entity already exists
+  or not. So the calling system *must* be no_readonly and we will have to
+  manually check if we need to stop suspending commands.
+  Otherwise a system that attempts to add the same material twice will not be
+  looking at the correct version of the ECS state when trying to determine if an
+  entity for a material already exists
+  */
+  bool deferred = false;
+  if (ecs_is_deferred(ecs)) {
+    deferred = ecs_defer_end(ecs);
+  }
   // If an entity already exists with this name it is either loading or loaded
-  TbTexture mat_ent = ecs_lookup_child(ecs, ecs_id(TbMaterialCtx), name);
+  TbMaterial2 mat_ent = ecs_lookup_child(ecs, ecs_id(TbMaterialCtx), name);
   if (mat_ent != 0) {
+    if (deferred) {
+      ecs_defer_begin(ecs);
+    }
     return mat_ent;
   }
 
@@ -781,6 +798,10 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {path_cpy, name_cpy});
   ecs_set(ecs, mat_ent, TbMaterialUsage, {usage});
   ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
+
+  if (deferred) {
+    ecs_defer_begin(ecs);
+  }
 
   return mat_ent;
 }
