@@ -12,7 +12,7 @@
 // Mesh system probably shouldn't own this
 ECS_COMPONENT_DECLARE(TbAABB);
 
-static const int32_t TbMaxParallelMeshLoads = 8;
+static const int32_t TbMaxParallelMeshLoads = 16;
 
 ECS_TAG_DECLARE(TbMeshLoadPhaseLoading);
 ECS_TAG_DECLARE(TbMeshLoadPhaseLoaded);
@@ -76,6 +76,7 @@ typedef struct TbMeshLoadedArgs {
   TbMeshData comp;
   const char *source_path;
   const cgltf_mesh *gltf_mesh;
+  TbMeshQueueCounter *counter;
 } TbMeshLoadedArgs;
 
 void tb_mesh_loaded(const void *args) {
@@ -85,6 +86,7 @@ void tb_mesh_loaded(const void *args) {
   tb_auto mesh = loaded_args->mesh;
   tb_auto source_path = loaded_args->source_path;
   tb_auto gltf_mesh = loaded_args->gltf_mesh;
+  tb_auto counter = loaded_args->counter;
   if (mesh == 0) {
     TB_CHECK(false, "Mesh load failed. Do we need to retry?");
     TracyCZoneEnd(ctx);
@@ -100,6 +102,8 @@ void tb_mesh_loaded(const void *args) {
   ecs_set_ptr(ecs, mesh, TbMeshData, &loaded_args->comp);
   ecs_set_ptr(ecs, mesh, TbSubMeshGLTFLoadRequest, &submesh_req);
 
+  SDL_AtomicDecRef(counter);
+
   TracyCZoneEnd(ctx);
 }
 
@@ -114,6 +118,7 @@ typedef struct TbLoadCommonMeshArgs {
 typedef struct TbLoadGLTFMeshArgs {
   TbLoadCommonMeshArgs common;
   TbMeshGLTFLoadRequest gltf;
+  TbMeshQueueCounter *counter;
 } TbLoadGLTFMeshArgs;
 
 TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
@@ -344,10 +349,10 @@ void tb_load_gltf_mesh_task(const void *args) {
   TracyCZoneN(ctx, "Load GLTF Mesh Task", true);
   tb_auto load_args = (const TbLoadGLTFMeshArgs *)args;
   tb_auto rnd_sys = load_args->common.rnd_sys;
-  TbMesh2 mesh = load_args->common.mesh;
-
+  tb_auto mesh = load_args->common.mesh;
   tb_auto path = load_args->gltf.path;
   tb_auto index = load_args->gltf.index;
+  tb_auto counter = load_args->counter;
 
   tb_auto data = tb_read_glb(tb_thread_alloc, path);
 
@@ -366,6 +371,7 @@ void tb_load_gltf_mesh_task(const void *args) {
       .comp = mesh_data,
       .source_path = path,
       .gltf_mesh = gltf_mesh,
+      .counter = counter,
   };
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
@@ -404,6 +410,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
                 .loaded_task = loaded_task,
             },
         .gltf = req,
+        .counter = counter,
     };
     TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
                                      sizeof(TbLoadGLTFMeshArgs));
@@ -419,10 +426,133 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+typedef struct TbSubMeshLoadArgs {
+  ecs_world_t *ecs;
+  TbSubMeshQueueCounter *counter;
+  TbMesh2 mesh;
+  TbSubMeshGLTFLoadRequest req;
+} TbSubMeshLoadArgs;
+
+void tb_load_submeshes_task(const void *args) {
+  tb_auto load_args = (const TbSubMeshLoadArgs *)args;
+  tb_auto ecs = load_args->ecs;
+  tb_auto counter = load_args->counter;
+  tb_auto mesh = load_args->mesh;
+  tb_auto gltf_mesh = load_args->req.gltf_mesh;
+  tb_auto source_path = load_args->req.path;
+
+  // As we go through submeshes we also want to construct an AABB for this
+  // mesh
+  TbAABB mesh_aabb = tb_aabb_init();
+
+  // Meshes are uploaded so now we just need to setup submeshes
+  uint32_t index_offset = 0;
+  uint32_t vertex_offset = 0;
+  for (cgltf_size i = 0; i < gltf_mesh->primitives_count; ++i) {
+    tb_auto prim = &gltf_mesh->primitives[i];
+
+    // Create an entity for this submesh which is a child of the mesh entity
+    TbSubMesh2 submesh = ecs_new_entity(ecs, 0);
+    ecs_add_pair(ecs, submesh, EcsChildOf, mesh);
+
+    TbSubMesh2Data submesh_data = {
+        .vertex_offset = vertex_offset,
+        .vertex_count = prim->attributes[0].data->count,
+    };
+    vertex_offset += submesh_data.vertex_count;
+
+    // If no material is provided we use a default
+    const cgltf_material *material = prim->material;
+    if (material == NULL) {
+      submesh_data.material = tb_get_default_mat(ecs, TB_MAT_USAGE_SCENE);
+    } else {
+      submesh_data.material = tb_mat_sys_load_gltf_mat(
+          ecs, source_path, material->name, TB_MAT_USAGE_SCENE);
+    }
+    // tb_free(tb_global_alloc, (void *)source_path);
+
+    // Determine index size and count
+    {
+      const cgltf_accessor *indices = prim->indices;
+
+      submesh_data.index_count = indices->count;
+      submesh_data.index_offset = index_offset;
+
+      // calculate the aligned size
+      size_t index_size =
+          tb_calc_aligned_size(indices->count, indices->stride, 16);
+      // calculate number of indices that represent that aligned size
+      index_offset += (index_size / indices->stride);
+    }
+
+    // Determine input permutation and attribute count
+    {
+      uint64_t vertex_attributes = 0;
+      for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
+           ++attr_idx) {
+        cgltf_attribute_type type = prim->attributes[attr_idx].type;
+        int32_t index = prim->attributes[attr_idx].index;
+        if ((type == cgltf_attribute_type_position ||
+             type == cgltf_attribute_type_normal ||
+             type == cgltf_attribute_type_tangent ||
+             type == cgltf_attribute_type_texcoord) &&
+            index == 0) {
+          if (type == cgltf_attribute_type_position) {
+            vertex_attributes |= TB_INPUT_PERM_POSITION;
+          } else if (type == cgltf_attribute_type_normal) {
+            vertex_attributes |= TB_INPUT_PERM_NORMAL;
+          } else if (type == cgltf_attribute_type_tangent) {
+            vertex_attributes |= TB_INPUT_PERM_TANGENT;
+          } else if (type == cgltf_attribute_type_texcoord) {
+            vertex_attributes |= TB_INPUT_PERM_TEXCOORD0;
+          }
+        }
+      }
+      submesh_data.vertex_perm = vertex_attributes;
+    }
+
+    // Read AABB from gltf
+    TbAABB submesh_aabb = tb_aabb_init();
+    {
+      const cgltf_attribute *pos_attr = NULL;
+      // Find position attribute
+      for (size_t i = 0; i < prim->attributes_count; ++i) {
+        tb_auto attr = &prim->attributes[i];
+        if (attr->type == cgltf_attribute_type_position) {
+          pos_attr = attr;
+          break;
+        }
+      }
+
+      TB_CHECK(pos_attr, "Expected a position attribute");
+      TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
+               "Unexpected vertex attribute type");
+
+      float *min = pos_attr->data->min;
+      float *max = pos_attr->data->max;
+
+      tb_aabb_add_point(&submesh_aabb, tb_f3(min[0], min[1], min[2]));
+      tb_aabb_add_point(&submesh_aabb, tb_f3(max[0], max[1], max[2]));
+    }
+    ecs_set_ptr(ecs, submesh, TbAABB, &submesh_aabb);
+    ecs_set_ptr(ecs, submesh, TbSubMesh2Data, &submesh_data);
+    ecs_add(ecs, submesh, TbSubMeshParsed);
+
+    tb_aabb_add_point(&mesh_aabb, submesh_aabb.min);
+    tb_aabb_add_point(&mesh_aabb, submesh_aabb.max);
+  }
+  ecs_set_ptr(ecs, mesh, TbAABB, &mesh_aabb);
+  ecs_remove(ecs, mesh, TbSubMeshGLTFLoadRequest);
+
+  // Mesh submeshes are loaded
+  SDL_AtomicDecRef(counter);
+}
+
 void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue GLTF Submesh Loads", true);
   tb_auto counter = ecs_field(it, TbSubMeshQueueCounter, 1);
-  tb_auto reqs = ecs_field(it, TbSubMeshGLTFLoadRequest, 2);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 2);
+  tb_auto reqs = ecs_field(it, TbSubMeshGLTFLoadRequest, 3);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -431,127 +561,22 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
       break;
     }
 
-    TbMesh2 mesh = it->entities[i];
-    tb_auto req = reqs[i];
-    tb_auto gltf_mesh = req.gltf_mesh;
-    tb_auto source_path = req.path;
-
-    // As we go through submeshes we also want to construct an AABB for this
-    // mesh
-    TbAABB mesh_aabb = tb_aabb_init();
-
-    // Meshes are uploaded so now we just need to setup submeshes
-    uint32_t index_offset = 0;
-    uint32_t vertex_offset = 0;
-    for (cgltf_size i = 0; i < gltf_mesh->primitives_count; ++i) {
-      tb_auto prim = &gltf_mesh->primitives[i];
-
-      // Create an entity for this submesh which is a child of the mesh entity
-      TbSubMesh2 submesh = ecs_new_entity(it->world, 0);
-      ecs_add_pair(it->world, submesh, EcsChildOf, mesh);
-
-      TbSubMesh2Data submesh_data = {
-          .vertex_offset = vertex_offset,
-          .vertex_count = prim->attributes[0].data->count,
-      };
-      vertex_offset += submesh_data.vertex_count;
-
-      // If no material is provided we use a default
-      const cgltf_material *material = prim->material;
-      if (material == NULL) {
-        submesh_data.material =
-            tb_get_default_mat(it->world, TB_MAT_USAGE_SCENE);
-      } else {
-        submesh_data.material = tb_mat_sys_load_gltf_mat(
-            it->world, source_path, material->name, TB_MAT_USAGE_SCENE);
-      }
-      // tb_free(tb_global_alloc, (void *)source_path);
-
-      // Determine index size and count
-      {
-        const cgltf_accessor *indices = prim->indices;
-
-        submesh_data.index_count = indices->count;
-        submesh_data.index_offset = index_offset;
-
-        // calculate the aligned size
-        size_t index_size =
-            tb_calc_aligned_size(indices->count, indices->stride, 16);
-        // calculate number of indices that represent that aligned size
-        index_offset += (index_size / indices->stride);
-      }
-
-      // Determine input permutation and attribute count
-      {
-        uint64_t vertex_attributes = 0;
-        for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
-             ++attr_idx) {
-          cgltf_attribute_type type = prim->attributes[attr_idx].type;
-          int32_t index = prim->attributes[attr_idx].index;
-          if ((type == cgltf_attribute_type_position ||
-               type == cgltf_attribute_type_normal ||
-               type == cgltf_attribute_type_tangent ||
-               type == cgltf_attribute_type_texcoord) &&
-              index == 0) {
-            if (type == cgltf_attribute_type_position) {
-              vertex_attributes |= TB_INPUT_PERM_POSITION;
-            } else if (type == cgltf_attribute_type_normal) {
-              vertex_attributes |= TB_INPUT_PERM_NORMAL;
-            } else if (type == cgltf_attribute_type_tangent) {
-              vertex_attributes |= TB_INPUT_PERM_TANGENT;
-            } else if (type == cgltf_attribute_type_texcoord) {
-              vertex_attributes |= TB_INPUT_PERM_TEXCOORD0;
-            }
-          }
-        }
-        submesh_data.vertex_perm = vertex_attributes;
-      }
-
-      // Read AABB from gltf
-      TbAABB submesh_aabb = tb_aabb_init();
-      {
-        const cgltf_attribute *pos_attr = NULL;
-        // Find position attribute
-        for (size_t i = 0; i < prim->attributes_count; ++i) {
-          tb_auto attr = &prim->attributes[i];
-          if (attr->type == cgltf_attribute_type_position) {
-            pos_attr = attr;
-            break;
-          }
-        }
-
-        TB_CHECK(pos_attr, "Expected a position attribute");
-        TB_CHECK(pos_attr->type == cgltf_attribute_type_position,
-                 "Unexpected vertex attribute type");
-
-        float *min = pos_attr->data->min;
-        float *max = pos_attr->data->max;
-
-        tb_aabb_add_point(&submesh_aabb, tb_f3(min[0], min[1], min[2]));
-        tb_aabb_add_point(&submesh_aabb, tb_f3(max[0], max[1], max[2]));
-      }
-      ecs_set_ptr(it->world, submesh, TbAABB, &submesh_aabb);
-      ecs_set_ptr(it->world, submesh, TbSubMesh2Data, &submesh_data);
-      ecs_add(it->world, submesh, TbSubMeshParsed);
-
-      tb_aabb_add_point(&mesh_aabb, submesh_aabb.min);
-      tb_aabb_add_point(&mesh_aabb, submesh_aabb.max);
-    }
-    ecs_set_ptr(it->world, mesh, TbAABB, &mesh_aabb);
+    // Enqueue task so that the submesh loads outside of a system where the
+    // ecs will be in a writable state
+    TbSubMeshLoadArgs args = {
+        .ecs = it->world,
+        .mesh = it->entities[i],
+        .req = reqs[i],
+        .counter = counter,
+    };
+    tb_auto task = tb_create_pinned_task(enki, tb_load_submeshes_task, &args,
+                                         sizeof(TbSubMeshLoadArgs));
+    tb_launch_pinned_task(enki, task);
 
     SDL_AtomicIncRef(counter);
-    ecs_remove(it->world, mesh, TbSubMeshGLTFLoadRequest);
   }
 
   TracyCZoneEnd(ctx);
-}
-
-void tb_reset_mesh_queue_count(ecs_iter_t *it) {
-  tb_auto mesh_counter = ecs_field(it, TbMeshQueueCounter, 1);
-  tb_auto submesh_counter = ecs_field(it, TbSubMeshQueueCounter, 2);
-
-  SDL_AtomicSet(mesh_counter, 0);
-  SDL_AtomicSet(submesh_counter, 0);
 }
 
 void tb_mesh_loading_phase(ecs_iter_t *it) {
@@ -845,24 +870,9 @@ void tb_register_mesh2_sys(TbWorld *world) {
              EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
              [inout] TbMeshQueueCounter(TbMeshQueueCounter),
              [in] TbMeshGLTFLoadRequest);
-  ecs_system(
-      ecs,
-      {
-          .entity = ecs_entity(ecs, {.name = "tb_queue_gltf_submesh_loads",
-                                     .add = {ecs_dependson(EcsPreUpdate)}}),
-          .query.filter.terms =
-              {
-                  {.id = ecs_id(TbSubMeshQueueCounter),
-                   .src.id = ecs_id(TbSubMeshQueueCounter)},
-                  {.id = ecs_id(TbSubMeshGLTFLoadRequest)},
-              },
-          .callback = tb_queue_gltf_submesh_loads,
-          .no_readonly = true // disable readonly mode for this system
-      });
-
-  ECS_SYSTEM(ecs, tb_reset_mesh_queue_count,
-             EcsPostUpdate, [inout] TbMeshQueueCounter(TbMeshQueueCounter),
-             [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter));
+  ECS_SYSTEM(ecs, tb_queue_gltf_submesh_loads, EcsPreUpdate,
+             TbSubMeshQueueCounter(TbSubMeshQueueCounter),
+             TbTaskScheduler(TbTaskScheduler), [in] TbSubMeshGLTFLoadRequest);
 
   // While meshes are moving from parsed to ready states
   ECS_SYSTEM(ecs, tb_mesh_loading_phase, EcsPreFrame, [in] TbMeshCtx(TbMeshCtx),

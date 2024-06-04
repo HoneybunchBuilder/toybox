@@ -670,8 +670,8 @@ void imgui_draw_sys(ecs_iter_t *it) {
   // we *require* the imgui shader be ready by this point
   // so wait for it if necessary
   {
-    static bool ready = false;
-    if (!ready && !tb_is_shader_ready(it->world, ig_sys->shader)) {
+    bool ready = tb_is_shader_ready(it->world, ig_sys->shader);
+    if (!ready) {
       // we *require* the imgui shader be ready by this point
       // so wait for it if necessary
       // If we get a false back that means we couldn't verify
@@ -680,6 +680,13 @@ void imgui_draw_sys(ecs_iter_t *it) {
     }
 
     if (!ready) {
+      // If we're bailing we need to advance a frame for imgui's sake
+      for (uint32_t imgui_idx = 0; imgui_idx < ctx_count; ++imgui_idx) {
+        tb_auto ui_ctx = &ig_sys->contexts[imgui_idx];
+        igSetCurrentContext(ui_ctx->context);
+        igRender();
+      }
+
       TracyCZoneEnd(ctx);
       return;
     }

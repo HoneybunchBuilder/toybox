@@ -171,9 +171,9 @@ void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
   enkiAddPinnedTaskArgs(enki, task, task_args);
 }
 
-void tb_run_pinned_tasks_sys(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Run Pinned Tasks Sys", TracyCategoryColorCore, true);
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
+void tb_run_pinned_tasks(ecs_world_t *ecs) {
+  TracyCZoneNC(ctx, "Run Pinned Tasks", TracyCategoryColorCore, true);
+  tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
   enkiRunPinnedTasks(enki);
   TracyCZoneEnd(ctx);
 }
@@ -205,8 +205,6 @@ void tb_register_task_scheduler_sys(TbWorld *world) {
 
   ecs_singleton_set(world->ecs, TbTaskScheduler, {enki});
 
-  ECS_SYSTEM(world->ecs, tb_run_pinned_tasks_sys,
-             EcsPostLoad, [inout] TbTaskScheduler(TbTaskScheduler));
   TracyCZoneEnd(ctx);
 }
 

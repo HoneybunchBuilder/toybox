@@ -10,6 +10,7 @@
 #include "tb_profiling.h"
 #include "tb_scene2.h"
 #include "tb_simd.h"
+#include "tb_task_scheduler.h"
 #include "tb_texture_system.h"
 #include "tb_transform_component.h"
 
@@ -263,6 +264,9 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
   ecs_world_t *ecs = world->ecs;
 
   world->time += (double)delta_seconds;
+
+  // Run pinned tasks first
+  tb_run_pinned_tasks(ecs);
 
   // Tick with flecs
   if (!ecs_progress(ecs, delta_seconds)) {
