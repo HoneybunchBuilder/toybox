@@ -1,7 +1,7 @@
-#include "oceancomponent.h"
+#include "tb_ocean_component.h"
 
-#include "oceansystem.h"
 #include "tb_common.h"
+#include "tb_ocean_system.h"
 #include "tb_transform_component.h"
 #include "tb_world.h"
 
