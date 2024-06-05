@@ -951,10 +951,10 @@ void mesh_draw_tick(ecs_iter_t *it) {
       TracyCZoneN(ctx2, "Iterate Meshes", true);
       while (ecs_query_next(&mesh_it)) {
         tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto render_objects = ecs_field(&mesh_it, TbRenderObject, 2);
         for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
           tb_auto mesh = meshes[mesh_idx].mesh2;
-          tb_auto entity = mesh_it.entities[mesh_idx];
-          tb_auto ro = ecs_get_mut(ecs, entity, TbRenderObject);
+          tb_auto ro = render_objects[mesh_idx];
 
           if (!tb_is_mesh_ready(it->world, mesh)) {
             continue;
@@ -995,7 +995,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
               };
               draw_data[draw_idx] = (TbGLTFDrawData){
                   .perm = sm->vertex_perm,
-                  .obj_idx = ro->index,
+                  .obj_idx = ro.index,
                   .mesh_idx = mesh_desc_idx,
                   .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
                   .index_offset = sm->index_offset,
@@ -1169,6 +1169,7 @@ void tb_register_mesh_sys(TbWorld *world) {
                                      }});
   sys.mesh_query = ecs_query(ecs, {.filter.terms = {
                                        {.id = ecs_id(TbMeshComponent)},
+                                       {.id = ecs_id(TbRenderObject)},
                                    }});
   sys.dir_light_query =
       ecs_query(ecs, {.filter.terms = {

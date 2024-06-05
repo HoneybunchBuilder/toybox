@@ -717,56 +717,47 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
     return;
   }
 
+  // One set of buffer views per attribute
   const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
+  TB_DYN_ARR_OF(VkBufferView) attr_views[view_count] = {0};
+  for (uint32_t i = 0; i < view_count; ++i) {
+    TB_DYN_ARR_RESET(attr_views[i], world->tmp_alloc, mesh_count);
+  }
 
-  // Write all dirty meshes into the descriptor set table
+  // For each mesh, collect the index/attr views
   uint32_t mesh_idx = 0;
   mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
-
-  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  TB_DYN_ARR_OF(VkBufferView) buf_views = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, mesh_count * view_count);
-  TB_DYN_ARR_RESET(buf_views, world->tmp_alloc, mesh_count * view_count);
   while (ecs_query_next(&mesh_it)) {
     tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
     for (int32_t i = 0; i < mesh_it.count; ++i) {
       tb_auto mesh = &meshes[i];
 
-      // Index Write
-      {
-        TB_DYN_ARR_APPEND(buf_views, mesh->index_view);
-        VkWriteDescriptorSet write = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .descriptorCount = mesh_count,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-            .dstSet = tb_rnd_frame_desc_pool_get_set(
-                rnd_sys, mesh_ctx->frame_set_pool.pools, 0),
-            .dstBinding = 0,
-            .pTexelBufferView = &TB_DYN_ARR_AT(buf_views, mesh_idx),
-        };
-        TB_DYN_ARR_APPEND(writes, write);
-      }
-
-      // Write per view
+      TB_DYN_ARR_APPEND(attr_views[0], mesh->index_view);
       for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
-        TB_DYN_ARR_APPEND(buf_views, mesh->attr_views[attr_idx]);
-        VkWriteDescriptorSet write = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .descriptorCount = mesh_count,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-            .dstSet = tb_rnd_frame_desc_pool_get_set(
-                rnd_sys, mesh_ctx->frame_set_pool.pools, attr_idx + 1),
-            .dstBinding = 0,
-            .pTexelBufferView = &TB_DYN_ARR_AT(buf_views, mesh_idx),
-        };
-        TB_DYN_ARR_APPEND(writes, write);
+        TB_DYN_ARR_APPEND(attr_views[attr_idx + 1], mesh->attr_views[attr_idx]);
       }
 
-      // Mesh is now ready to be referenced elsewhere
+      // Mesh will be ready to be referenced elsewhere
       ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {mesh_idx});
       ecs_add(it->world, mesh_it.entities[i], TbUpdatingDescriptor);
       mesh_idx++;
     }
+  }
+
+  // Write collections of views to the correct descriptor set
+  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, view_count);
+  for (uint32_t i = 0; i < view_count; ++i) {
+    VkWriteDescriptorSet write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .descriptorCount = mesh_count,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+        .dstSet = tb_rnd_frame_desc_pool_get_set(
+            rnd_sys, mesh_ctx->frame_set_pool.pools, i),
+        .dstBinding = 0,
+        .pTexelBufferView = &TB_DYN_ARR_AT(attr_views[i], 0),
+    };
+    TB_DYN_ARR_APPEND(writes, write);
   }
   tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
 
