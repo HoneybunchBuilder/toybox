@@ -325,16 +325,11 @@ TbVisualLoggingSystem create_visual_logging_system(
       tb_mesh_sys_reserve_mesh_count(ecs, 1);
 
       const cgltf_node *node = &data->nodes[0];
-      sys.sphere_mesh = tb_mesh_system_load_mesh(mesh_system, asset_path, node);
       sys.sphere_mesh2 =
           tb_mesh_sys_load_gltf_mesh(ecs, asset_path, "sphere", 0);
       sys.sphere_scale =
           (float3){node->scale[0], node->scale[1], node->scale[2]};
     }
-
-    sys.sphere_geom_buffer =
-        tb_mesh_system_get_gpu_mesh(mesh_system, sys.sphere_mesh);
-    TB_CHECK(sys.sphere_geom_buffer, "Failed to get gpu buffer for mesh");
 
     cgltf_free(data);
   }
@@ -405,8 +400,6 @@ void destroy_visual_logging_system(ecs_world_t *ecs,
                                    TbVisualLoggingSystem *self) {
   (void)ecs;
 #ifndef FINAL
-  tb_mesh_system_release_mesh_ref(self->mesh_system, self->sphere_mesh);
-
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->pipe_layout);
   tb_shader_destroy(ecs, self->shader);
 
@@ -425,6 +418,12 @@ void vlog_draw_tick(ecs_iter_t *it) {
 
   // Require shader to be loaded
   if (!tb_is_shader_ready(it->world, sys->shader)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  // Requires meshes to be loaded
+  if (!tb_is_mesh_ready(it->world, sys->sphere_mesh2)) {
     TracyCZoneEnd(ctx);
     return;
   }
@@ -451,7 +450,8 @@ void vlog_draw_tick(ecs_iter_t *it) {
       *loc_batch = (VLogDrawBatch){
           .index_count = sys->sphere_index_count,
           .pos_offset = sys->sphere_pos_offset,
-          .shape_geom_buffer = sys->sphere_geom_buffer,
+          .shape_geom_buffer =
+              tb_mesh_sys_get_gpu_mesh(it->world, sys->sphere_mesh2),
           .shape_scale = sys->sphere_scale,
           .type = TB_VLOG_SHAPE_LOCATION,
           .view_set =

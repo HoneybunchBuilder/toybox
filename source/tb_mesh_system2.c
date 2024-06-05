@@ -122,8 +122,11 @@ typedef struct TbLoadGLTFMeshArgs {
 } TbLoadGLTFMeshArgs;
 
 TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
-                             const cgltf_mesh *gltf_mesh) {
+                             const cgltf_mesh *gltf_mesh, const char *path,
+                             uint32_t index) {
   TracyCZoneN(ctx, "Load GLTF Mesh", true);
+  (void)path;
+  (void)index;
   TbMeshData data = {0};
 
   // Determine how big this mesh is
@@ -208,7 +211,11 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                  VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
-    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "gltf_mesh",
+    char mesh_name[512] = {0};
+#ifndef FINAL
+    SDL_snprintf(mesh_name, 512, "%s_mesh_%d", path, index);
+#endif
+    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, mesh_name,
                                  &data.gpu_buffer, &data.host_buffer, &ptr);
   }
 
@@ -361,7 +368,7 @@ void tb_load_gltf_mesh_task(const void *args) {
   // Queue upload of mesh data to the GPU
   TbMeshData mesh_data = {0};
   if (mesh != 0) {
-    mesh_data = tb_load_gltf_mesh(rnd_sys, gltf_mesh);
+    mesh_data = tb_load_gltf_mesh(rnd_sys, gltf_mesh, path, index);
   }
 
   // Launch pinned task to handle loading signals on main thread
@@ -700,7 +707,6 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
 
   // Accumulate the number of meshes
   uint64_t mesh_count = 0;
-
   ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
   while (ecs_query_next(&mesh_it)) {
     mesh_count += mesh_it.count;
@@ -987,25 +993,30 @@ VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
   return ctx->set_layout;
 }
 
-VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
+VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
 }
-VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs) {
+VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 1);
 }
-VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs) {
+VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 2);
 }
-VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
+VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 3);
+}
+VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 4);
 }
 
 void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
@@ -1048,6 +1059,11 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
   ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
 
   return mesh_ent;
+}
+
+VkBuffer tb_mesh_sys_get_gpu_mesh(ecs_world_t *ecs, TbMesh2 mesh) {
+  TB_CHECK(ecs_has(ecs, mesh, TbMeshData), "Entity must have mesh data");
+  return ecs_get(ecs, mesh, TbMeshData)->gpu_buffer.buffer;
 }
 
 bool tb_is_mesh_ready(ecs_world_t *ecs, TbMesh2 mesh_ent) {

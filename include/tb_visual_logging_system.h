@@ -22,7 +22,6 @@ typedef struct TbMeshSystem TbMeshSystem;
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkBuffer_T *VkBuffer;
 typedef uint32_t TbDrawContextId;
-typedef TbResourceId TbMeshId;
 
 typedef struct TbWorld TbWorld;
 
@@ -37,13 +36,11 @@ typedef struct TbVisualLoggingSystem {
 
   bool *ui;
 
-  TbMeshId sphere_mesh;
   TbMesh2 sphere_mesh2;
   uint32_t sphere_index_type;
   uint32_t sphere_index_count;
   uint32_t sphere_pos_offset;
   float3 sphere_scale;
-  VkBuffer sphere_geom_buffer;
 
   VkPipelineLayout pipe_layout;
   ecs_entity_t shader;

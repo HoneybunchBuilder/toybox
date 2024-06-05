@@ -869,9 +869,8 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  uint64_t tex_count = 0;
-
   // Accumulate the number of textures
+  uint64_t tex_count = 0;
   ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
   while (ecs_query_next(&tex_it)) {
     tex_count += tex_it.count;

@@ -96,20 +96,11 @@ typedef struct TbMeshSystem {
   TB_DYN_ARR_OF(TbMesh) meshes;
   // For per draw data
   TbFrameDescriptorPoolList draw_pools;
-  // For per mesh bindless vertex buffers
-  TbDescriptorPool mesh_pool;
-  uint32_t mesh_desc_count;
 } TbMeshSystem;
 extern ECS_COMPONENT_DECLARE(TbMeshSystem);
 
 void tb_register_mesh_sys(TbWorld *world);
 void tb_unregister_mesh_sys(TbWorld *world);
-
-TbMeshId tb_mesh_system_load_mesh(TbMeshSystem *self, const char *path,
-                                  const cgltf_node *node);
-bool tb_mesh_system_take_mesh_ref(TbMeshSystem *self, TbMeshId id);
-VkBuffer tb_mesh_system_get_gpu_mesh(TbMeshSystem *self, TbMeshId id);
-void tb_mesh_system_release_mesh_ref(TbMeshSystem *self, TbMeshId id);
 
 VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self);

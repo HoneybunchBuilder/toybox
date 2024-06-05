@@ -66,7 +66,6 @@ typedef struct TbOceanSystem {
   TbSoundEffectId wave_sounds[TB_OCEAN_SFX_COUNT];
   float wave_sound_timer;
 
-  TbMeshId ocean_patch_mesh;
   TbMesh2 ocean_patch_mesh2;
   TbTransform ocean_transform;
   float tile_width;
@@ -75,7 +74,6 @@ typedef struct TbOceanSystem {
   uint32_t ocean_index_count;
   uint64_t ocean_pos_offset;
   uint64_t ocean_uv_offset;
-  VkBuffer ocean_geom_buffer;
 
   VkSampler sampler;
   VkSampler shadow_sampler;
@@ -537,9 +535,6 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
         sys->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4, 16);
     sys->ocean_pos_offset = index_size;
 
-    sys->ocean_patch_mesh =
-        tb_mesh_system_load_mesh(mesh_system, asset_path, &data->nodes[0]);
-
     // Reserve space for the 1 mesh we're adding
     tb_mesh_sys_reserve_mesh_count(ecs, 1);
     sys->ocean_patch_mesh2 =
@@ -722,10 +717,6 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
                   .draw_fn = ocean_pass_record,
                   .pass_id = color_id,
               });
-
-  sys->ocean_geom_buffer =
-      tb_mesh_system_get_gpu_mesh(mesh_system, sys->ocean_patch_mesh);
-  TB_CHECK(sys->ocean_geom_buffer, "Failed to get gpu buffer for mesh");
 }
 
 void destroy_ocean_system(TbOceanSystem *self) {
@@ -734,7 +725,6 @@ void destroy_ocean_system(TbOceanSystem *self) {
                                        self->wave_sounds[i]);
   }
   // tb_audio_system_release_music_ref(self->audio_system, self->music);
-  tb_mesh_system_release_mesh_ref(self->mesh_system, self->ocean_patch_mesh);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     tb_rnd_destroy_descriptor_pool(self->rnd_sys,
@@ -778,9 +768,15 @@ void ocean_draw_tick(ecs_iter_t *it) {
   tb_auto sys = ecs_field(it, TbOceanSystem, 1);
   tb_auto cameras = ecs_field(it, TbCameraComponent, 2);
 
-  // If system pipelines aren't ready just bail
+  // If shaders aren't ready just bail
   if (!tb_is_shader_ready(ecs, sys->ocean_pass_shader) ||
       !tb_is_shader_ready(ecs, sys->ocean_prepass_shader)) {
+    TracyCZoneEnd(ctx);
+    return;
+  }
+
+  // If mesh isn't loaded just bail
+  if (!tb_is_mesh_ready(ecs, sys->ocean_patch_mesh2)) {
     TracyCZoneEnd(ctx);
     return;
   }
@@ -1068,7 +1064,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
               .inst_buffer = tb_rnd_get_gpu_tmp_buffer(sys->rnd_sys),
               .inst_offset = tile_offset,
               .inst_count = visible_tile_count,
-              .geom_buffer = sys->ocean_geom_buffer,
+              .geom_buffer =
+                  tb_mesh_sys_get_gpu_mesh(ecs, sys->ocean_patch_mesh2),
               .index_type = (VkIndexType)sys->ocean_index_type,
               .index_count = sys->ocean_index_count,
               .pos_offset = sys->ocean_pos_offset,
