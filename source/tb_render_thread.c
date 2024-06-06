@@ -406,8 +406,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     }
 
     {
-      TracyCGPUContext *gpu_ctx = TracyCVkContextExt(
-          gpu, device, graphics_queue, state->base_command_buffers[0],
+      TracyCGPUContext *gpu_ctx = TracyCVkContextHostCalib(
+          gpu, device, vkResetQueryPool,
           vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
           vkGetCalibratedTimestampsEXT);
       const char *name = "Frame State GPU Context";
@@ -761,6 +761,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   VkPhysicalDeviceVulkan12Features vk_12_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &vk_13_features,
+      .hostQueryReset = VK_TRUE,
       .shaderFloat16 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,
       .descriptorBindingVariableDescriptorCount = VK_TRUE,

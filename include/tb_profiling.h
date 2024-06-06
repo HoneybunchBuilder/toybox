@@ -43,6 +43,10 @@ TracyCVkContextExt(VkPhysicalDevice gpu, VkDevice device, VkQueue queue,
                    VkCommandBuffer buffer,
                    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT ext1,
                    PFN_vkGetCalibratedTimestampsEXT ext2);
+TracyCGPUContext *TracyCVkContextHostCalib(
+    VkPhysicalDevice gpu, VkDevice device, PFN_vkResetQueryPoolEXT qpreset,
+    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT gpdctd,
+    PFN_vkGetCalibratedTimestampsEXT gct);
 void TracyCVkContextDestroy(TracyCGPUContext *ctx);
 void TracyCVkContextName(TracyCGPUContext *ctx, const char *name, size_t len);
 
@@ -75,6 +79,7 @@ typedef struct TracyCGPUScope TracyCGPUScope;
   (void)gpu, (void)device, (void)queue, (void)buffer, (void)ext1, (void)ext2;
 
 #define TracyCVkContext(...)
+#define TracyCVkContextHostCalib(...)
 #define TracyCVkContextDestroy(...)
 #define TracyCVkContextName(ctx, name, len) (void)ctx, (void)name, (void)len
 #define TracyCVkNamedZone(ctx, var_name, cmd_buf, name, depth, active)         \

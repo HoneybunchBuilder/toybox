@@ -656,10 +656,19 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   TracyCZoneEnd(ctx);
 }
 
+/*
+  What's with the commented out TracyCVkNamedZone calls?
+  Passes that use multi-view can occasionally step out of phase with the
+  Tracy query ringbuffer and some invalid number of bits will be requested
+  before the query count can wrap around back to 0
+*/
+
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
+
                         uint32_t batch_count, const TbDrawBatch *batches) {
+  (void)gpu_ctx;
   TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 3, true);
+  // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 3, true);
   cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   record_sky_common(buffer, batch_count, batches);
@@ -667,14 +676,15 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   // TODO: After capturing the environment map we need to mip it down
 
   cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
+  // TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
+  (void)gpu_ctx;
   TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 3, true);
+  // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 3, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
@@ -697,14 +707,15 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   }
 
   cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
+  // TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
 void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
+  (void)gpu_ctx;
   TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
-  TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 3, true);
+  // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 3, true);
   cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
   for (uint32_t i = 0; i < batch_count; ++i) {
@@ -730,7 +741,7 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   }
 
   cmd_end_label(buffer);
-  TracyCVkZoneEnd(frame_scope);
+  // TracyCVkZoneEnd(frame_scope);
   TracyCZoneEnd(ctx);
 }
 
