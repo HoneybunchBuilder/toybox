@@ -816,11 +816,13 @@ void mesh_draw_tick(ecs_iter_t *it) {
   while (ecs_query_next(&camera_it)) {
     tb_auto cameras = ecs_field(&camera_it, TbCameraComponent, 1);
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
+      TracyCZoneN(cam_ctx, "Camera", 1);
       tb_auto camera = &cameras[cam_idx];
       tb_auto view_set =
           tb_view_system_get_descriptor(view_sys, camera->view_id);
       // Skip camera if view set isn't ready
       if (view_set == VK_NULL_HANDLE) {
+        TracyCZoneEnd(cam_ctx);
         continue;
       }
 
@@ -829,6 +831,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       // Run query to determine how many meshes so we can pre-allocate space for
       // batches
+      TracyCZoneN(count_ctx, "Count Meshes", true);
       tb_auto mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
       uint32_t opaque_draw_count = 0;
       uint32_t trans_draw_count = 0;
@@ -874,9 +877,11 @@ void mesh_draw_tick(ecs_iter_t *it) {
         }
       }
       mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
+      TracyCZoneEnd(count_ctx);
 
       const uint32_t max_draw_count = opaque_draw_count + trans_draw_count;
       if (max_draw_count == 0) {
+        TracyCZoneEnd(cam_ctx);
         continue;
       }
 
@@ -1145,6 +1150,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
         }
         TracyCZoneEnd(ctx2);
       }
+
+      TracyCZoneEnd(cam_ctx);
     }
   }
 

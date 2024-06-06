@@ -16,8 +16,8 @@ extern "C" {
 
 TracyCGPUContext *TracyCVkContext(VkPhysicalDevice gpu, VkDevice device,
                                   VkQueue queue, VkCommandBuffer buffer) {
-  auto ctx = (tracy::VkCtx *)tracy::tracy_malloc(sizeof(tracy::VkCtx));
-  new (ctx) tracy::VkCtx(gpu, device, queue, buffer, nullptr, nullptr);
+  auto ctx =
+      tracy::CreateVkContext(gpu, device, queue, buffer, nullptr, nullptr);
   return (TracyCGPUContext *)ctx;
 }
 
@@ -26,15 +26,20 @@ TracyCVkContextExt(VkPhysicalDevice gpu, VkDevice device, VkQueue queue,
                    VkCommandBuffer buffer,
                    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT ext1,
                    PFN_vkGetCalibratedTimestampsEXT ext2) {
-  auto ctx = (tracy::VkCtx *)tracy::tracy_malloc(sizeof(tracy::VkCtx));
-  new (ctx) tracy::VkCtx(gpu, device, queue, buffer, ext1, ext2);
+  auto ctx = tracy::CreateVkContext(gpu, device, queue, buffer, ext1, ext2);
+  return (TracyCGPUContext *)ctx;
+}
+
+TracyCGPUContext *TracyCVkContextHostCalib(
+    VkPhysicalDevice gpu, VkDevice device, PFN_vkResetQueryPoolEXT qpreset,
+    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT gpdctd,
+    PFN_vkGetCalibratedTimestampsEXT gct) {
+  auto ctx = tracy::CreateVkContext(gpu, device, qpreset, gpdctd, gct);
   return (TracyCGPUContext *)ctx;
 }
 
 void TracyCVkContextDestroy(TracyCGPUContext *ctx) {
-  auto *c = (tracy::VkCtx *)ctx;
-  c->~VkCtx();
-  tracy::tracy_free((void *)c);
+  tracy::DestroyVkContext((tracy::VkCtx *)ctx);
 }
 
 void TracyCVkContextName(TracyCGPUContext *ctx, const char *name, size_t len) {
@@ -48,10 +53,11 @@ _TracyCVkNamedZone(TracyCGPUContext *ctx,
                    bool active) {
   auto scope =
       (tracy::VkCtxScope *)tracy::tracy_malloc(sizeof(tracy::VkCtxScope));
-  new (scope) tracy::VkCtxScope(
-      (tracy::VkCtx *)ctx, source_loc->line, source_loc->file,
-      strlen(source_loc->file), source_loc->function,
-      strlen(source_loc->function), name, strlen(name), cmd_buf, depth, active);
+  new (scope)
+      tracy::VkCtxScope((tracy::VkCtx *)ctx, source_loc->line, source_loc->file,
+                        strlen(source_loc->file), source_loc->function,
+                        strlen(source_loc->function), name, strlen(name) + 1,
+                        cmd_buf, depth, active);
   return (TracyCGPUScope *)scope;
 }
 void TracyCVkZoneEnd(TracyCGPUScope *scope) {
