@@ -92,7 +92,9 @@ typedef struct TracyCGPUScope TracyCGPUScope;
   (void)gpu, (void)device, (void)queue, (void)buffer, (void)ext1, (void)ext2;
 
 #define TracyCVkContext(...)
-#define TracyCVkContextHostCalib(...)
+#define TracyCVkContextHostCalib(gpu, device, fn1, fn2, fn3)                   \
+  0;                                                                           \
+  (void)gpu, (void)device, (void)fn1, (void)fn2, (void)fn3
 #define TracyCVkContextDestroy(...)
 #define TracyCVkContextName(ctx, name, len) (void)ctx, (void)name, (void)len
 #define TracyCVkNamedZone(ctx, var_name, cmd_buf, name, depth, active)         \
