@@ -200,7 +200,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
   // Create space for the mesh on the GPU
   void *ptr = NULL;
+  TbBufferCopy buf_copy = {0};
   {
+
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = geom_size,
@@ -215,8 +217,18 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 #ifndef FINAL
     SDL_snprintf(mesh_name, 512, "%s_mesh_%d", path, index);
 #endif
-    tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, mesh_name,
-                                 &data.gpu_buffer, &data.host_buffer, &ptr);
+    tb_rnd_sys_create_gpu_buffer_noup(rnd_sys, &create_info, mesh_name,
+                                      &data.gpu_buffer, &data.host_buffer,
+                                      &ptr);
+
+    buf_copy = (TbBufferCopy){
+        .dst = data.gpu_buffer.buffer,
+        .src = data.host_buffer.buffer,
+        .region =
+            {
+                .size = create_info.size,
+            },
+    };
   }
 
   // Read the cgltf mesh into the driver owned memory
@@ -346,6 +358,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
     // Make sure to flush the gpu alloc if necessary
     tb_flush_alloc(rnd_sys, data.gpu_buffer.alloc);
+
+    // Only enqueue this buffer upload request after the allocation is flushed
+    tb_rnd_upload_buffers(rnd_sys, &buf_copy, 1);
   }
 
   TracyCZoneEnd(ctx);
@@ -360,6 +375,8 @@ void tb_load_gltf_mesh_task(const void *args) {
   tb_auto path = load_args->gltf.path;
   tb_auto index = load_args->gltf.index;
   tb_auto counter = load_args->counter;
+
+  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Task %s %d", path, index);
 
   tb_auto data = tb_read_glb(tb_thread_alloc, path);
 
@@ -447,6 +464,9 @@ void tb_load_submeshes_task(const void *args) {
   tb_auto mesh = load_args->mesh;
   tb_auto gltf_mesh = load_args->req.gltf_mesh;
   tb_auto source_path = load_args->req.path;
+
+  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Submeshs For %s",
+               ecs_get_name(ecs, mesh));
 
   // As we go through submeshes we also want to construct an AABB for this
   // mesh
@@ -629,6 +649,9 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
     TracyCZoneEnd(ctx);
     return;
   }
+
+  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION,
+               "Mesh Descriptor Pool has %d meshes", mesh_count);
 
   // Resize the pool if necessary
   if (mesh_count != tb_rnd_frame_desc_pool_get_desc_count(

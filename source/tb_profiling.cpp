@@ -14,6 +14,8 @@
 
 extern "C" {
 
+void tb_tracy_zone_end(TracyCZoneCtx *ctx) { TracyCZoneEnd(*ctx); }
+
 TracyCGPUContext *TracyCVkContext(VkPhysicalDevice gpu, VkDevice device,
                                   VkQueue queue, VkCommandBuffer buffer) {
   auto ctx =

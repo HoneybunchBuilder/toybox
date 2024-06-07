@@ -36,6 +36,10 @@ typedef struct TracyCGPUScope TracyCGPUScope;
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// A cleanup function used by TB_TRACY_SCOPE
+void tb_tracy_zone_end(TracyCZoneCtx *ctx);
+
 TracyCGPUContext *TracyCVkContext(VkPhysicalDevice gpu, VkDevice device,
                                   VkQueue queue, VkCommandBuffer buffer);
 TracyCGPUContext *
@@ -66,6 +70,15 @@ void TracyCVkZoneEnd(TracyCGPUScope *scope);
 
 void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 
+#define TB_TRACY_SCOPE(name)                                                   \
+  static const struct ___tracy_source_location_data TracyConcat(               \
+      __tracy_source_location, TracyLine) = {name, __func__, TracyFile,        \
+                                             (uint32_t)TracyLine, 0};          \
+  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx ctx##__COUNTER__ = \
+      ___tracy_emit_zone_begin_callstack(                                      \
+          &TracyConcat(__tracy_source_location, TracyLine), TRACY_CALLSTACK,   \
+          true);
+
 #ifdef __cplusplus
 }
 #endif
@@ -88,6 +101,8 @@ typedef struct TracyCGPUScope TracyCGPUScope;
       (void)active
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
+
+#define TB_TRACY_SCOPE(...)
 
 #endif
 

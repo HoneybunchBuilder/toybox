@@ -574,6 +574,29 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(TbRenderSystem *self,
   return err;
 }
 
+VkResult tb_rnd_sys_create_gpu_buffer_noup(
+    TbRenderSystem *self, const VkBufferCreateInfo *create_info,
+    const char *name, TbBuffer *buffer, TbHostBuffer *host, void **ptr) {
+  // Create the GPU side buffer
+  VkResult err = tb_rnd_sys_alloc_gpu_buffer(self, create_info, name, buffer);
+
+  // If this buffer is host visible, just get the pointer to write to
+  if (try_map(self->vma_alloc, buffer->alloc, ptr)) {
+    return err;
+  }
+
+  // Otherwise we have to create a host buffer
+
+  // It's the caller's responsibility to handle the host buffer too
+  // even if it's not going to be used on non-uma systems
+  err = alloc_host_buffer(self, create_info, name, host);
+  TB_VK_CHECK_RET(err, "Failed to alloc host buffer", err);
+
+  // Assuming the caller will schedule an upload manually
+
+  *ptr = host->info.pMappedData;
+}
+
 VkResult tb_rnd_sys_create_gpu_buffer2(TbRenderSystem *self,
                                        const VkBufferCreateInfo *create_info,
                                        const void *data, const char *name,

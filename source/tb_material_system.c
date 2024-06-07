@@ -171,16 +171,14 @@ void tb_load_gltf_material_task(const void *args) {
 
 TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
                                                 TbMaterialUsage usage) {
-  TracyCZoneN(tracy, "Find Mat Domain", true);
+  TB_TRACY_SCOPE("Find Mat Domain");
   TB_DYN_ARR_FOREACH(ctx->usage_map, i) {
     tb_auto handler = &TB_DYN_ARR_AT(ctx->usage_map, i);
     if (handler->usage == usage) {
-      TracyCZoneEnd(tracy);
       return *handler;
     }
   }
   TB_CHECK(false, "Failed to find material domain from usage");
-  TracyCZoneEnd(tracy);
   return (TbMaterialDomainHandler){0};
 }
 

@@ -72,6 +72,10 @@ VkResult tb_rnd_sys_create_gpu_buffer_tmp(TbRenderSystem *self,
                                           const VkBufferCreateInfo *create_info,
                                           const char *name, TbBuffer *buffer,
                                           uint32_t alignment, void **ptr);
+// Don't automatically enqueue an upload
+VkResult tb_rnd_sys_create_gpu_buffer_noup(
+    TbRenderSystem *self, const VkBufferCreateInfo *create_info,
+    const char *name, TbBuffer *buffer, TbHostBuffer *host, void **ptr);
 // Create a GPU buffer and immediately copy the given data to it.
 // An upload will automatically be scheduled if necessary.
 // Caller must provide space for a host buffer though it will not be necessary

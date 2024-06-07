@@ -305,7 +305,7 @@ VkResult create_semaphore(VkDevice device,
 }
 
 bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
-                       const TbSwapchain *swapchain, VkQueue graphics_queue,
+                       const TbSwapchain *swapchain,
                        uint32_t graphics_queue_family_index,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
@@ -1143,12 +1143,11 @@ bool init_render_thread(TbRenderThread *thread) {
                                  &thread->swapchain),
                   "Failed to init swapchain", false);
 
-  TB_CHECK_RETURN(init_frame_states(thread->gpu, thread->device,
-                                    &thread->swapchain, thread->graphics_queue,
-                                    thread->graphics_queue_family_index,
-                                    thread->vma_alloc, vk_alloc,
-                                    thread->frame_states),
-                  "Failed to init frame states", false);
+  TB_CHECK_RETURN(
+      init_frame_states(thread->gpu, thread->device, &thread->swapchain,
+                        thread->graphics_queue_family_index, thread->vma_alloc,
+                        vk_alloc, thread->frame_states),
+      "Failed to init frame states", false);
 
   TracyCZoneEnd(ctx);
   return true;
@@ -1326,9 +1325,12 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1,
                           true);
         // Upload all buffer requests
+        TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "%s",
+                     "Uploading All Meshes");
         {
           TbBufferCopy up = {0};
           while (TB_QUEUE_POP(*state->buf_copy_queue, &up)) {
+            TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "%s", "Uploading Mesh");
             vkCmdCopyBuffer(start_buffer, up.src, up.dst, 1, &up.region);
           }
         }
