@@ -595,6 +595,7 @@ VkResult tb_rnd_sys_create_gpu_buffer_noup(
   // Assuming the caller will schedule an upload manually
 
   *ptr = host->info.pMappedData;
+  return err;
 }
 
 VkResult tb_rnd_sys_create_gpu_buffer2(TbRenderSystem *self,
