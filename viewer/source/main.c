@@ -101,7 +101,7 @@ int32_t main(int32_t argc, char *argv[]) {
       if (viewer->unload_scene_signal) {
         // TODO: Properly wait for the render thread to be finished otherwise
         // we'll destroy resources in flight
-        tb_unload_scene(&world, &world.scenes.data[0]);
+        // tb_unload_scene(&world, &world.scenes.data[0]);
         viewer->unload_scene_signal = false;
       }
       if (viewer->load_scene_signal) {
