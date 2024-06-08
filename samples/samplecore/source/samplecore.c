@@ -111,9 +111,6 @@ int32_t main(int32_t argc, char *argv[]) {
   }
   return 0;
 
-  // This doesn't quite work yet
-  tb_clear_world(&world);
-
   // This will also close the window that was provded
   tb_destroy_world(&world);
 

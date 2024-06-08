@@ -6,7 +6,7 @@
 #include "tb_texture_system.h"
 
 typedef struct TbSceneMaterial {
-  const char *path;
+  const cgltf_data *gltf_data;
   const char *name;
   TbGLTFMaterialData data;
   TbTexture color_map;
@@ -15,21 +15,16 @@ typedef struct TbSceneMaterial {
 } TbSceneMaterial;
 
 // Run on a thread
-bool tb_parse_scene_mat(const char *path, const char *name,
+bool tb_parse_scene_mat(const cgltf_data *gltf_data, const char *name,
                         const cgltf_material *material, void **out_mat_data) {
   *out_mat_data = tb_alloc(tb_global_alloc, sizeof(TbSceneMaterial));
   tb_auto scene_mat = (TbSceneMaterial *)*out_mat_data;
-
-  // Need to make copies of these strings
-  const size_t path_len = SDL_strnlen(path, 256) + 1;
-  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
-  SDL_strlcpy(path_cpy, path, path_len);
 
   const size_t name_len = SDL_strnlen(name, 256) + 1;
   char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
   SDL_strlcpy(name_cpy, name, name_len);
 
-  scene_mat->path = path_cpy;
+  scene_mat->gltf_data = gltf_data;
   scene_mat->name = name_cpy;
 
   // Find a suitable texture transform from the material
@@ -154,29 +149,28 @@ void tb_load_scene_mat(ecs_world_t *ecs, void *mat_data) {
     return;
   }
 
-  const char *path = scene_mat->path;
+  const cgltf_data *gltf_data = scene_mat->gltf_data;
   const char *name = scene_mat->name;
 
   tb_auto color = tb_get_default_color_tex(ecs);
   if ((scene_mat->data.perm & GLTF_PERM_BASE_COLOR_MAP) > 0) {
-    color = tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_COLOR);
+    color = tb_tex_sys_load_mat_tex(ecs, gltf_data, name, TB_TEX_USAGE_COLOR);
   }
   scene_mat->color_map = color;
 
   tb_auto normal = tb_get_default_normal_tex(ecs);
   if ((scene_mat->data.perm & GLTF_PERM_NORMAL_MAP) > 0) {
-    normal = tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_NORMAL);
+    normal = tb_tex_sys_load_mat_tex(ecs, gltf_data, name, TB_TEX_USAGE_NORMAL);
   }
   scene_mat->normal_map = normal;
 
   tb_auto metal_rough = tb_get_default_metal_rough_tex(ecs);
   if ((scene_mat->data.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) > 0) {
     metal_rough =
-        tb_tex_sys_load_mat_tex(ecs, path, name, TB_TEX_USAGE_METAL_ROUGH);
+        tb_tex_sys_load_mat_tex(ecs, gltf_data, name, TB_TEX_USAGE_METAL_ROUGH);
   }
   scene_mat->metal_rough_map = metal_rough;
 
-  tb_free(tb_global_alloc, (void *)path);
   tb_free(tb_global_alloc, (void *)name);
 }
 

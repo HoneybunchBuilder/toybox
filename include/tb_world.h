@@ -68,8 +68,6 @@ typedef struct TbWorld {
   TbAllocator tmp_alloc;
   TbRenderThread *render_thread;
   SDL_Window *window;
-  TB_DYN_ARR_OF(TbScene) scenes;
-  TB_DYN_ARR_OF(TbScene2) scenes2;
 } TbWorld;
 
 typedef struct TbWorldRef {
@@ -79,11 +77,13 @@ extern ECS_COMPONENT_DECLARE(TbWorldRef);
 
 bool tb_create_world(const TbWorldDesc *desc, TbWorld *world);
 bool tb_tick_world(TbWorld *world, float delta_seconds);
-void tb_clear_world(TbWorld *world);
 void tb_destroy_world(TbWorld *world);
 
 bool tb_load_scene(TbWorld *world, const char *scene_path);
 void tb_unload_scene(TbWorld *world, TbScene *scene);
+
+// HACK: Get component load function by name for scene2
+TbLoadComponentFn tb_get_component_load_fn(const char *name);
 
 extern ECS_COMPONENT_DECLARE(float3);
 extern ECS_COMPONENT_DECLARE(float4);

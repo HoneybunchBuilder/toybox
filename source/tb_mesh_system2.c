@@ -53,13 +53,13 @@ ECS_COMPONENT_DECLARE(TbMeshIndex);
 
 // Describes the creation of a mesh that lives in a GLB file
 typedef struct TbMeshGLTFLoadRequest {
-  const char *path;
+  cgltf_data *data;
   uint32_t index;
 } TbMeshGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbMeshGLTFLoadRequest);
 
 typedef struct TbSubMeshGLTFLoadRequest {
-  const char *path;
+  const cgltf_data *data;
   const cgltf_mesh *gltf_mesh;
 } TbSubMeshGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbSubMeshGLTFLoadRequest);
@@ -74,7 +74,7 @@ typedef struct TbMeshLoadedArgs {
   ecs_world_t *ecs;
   TbMesh2 mesh;
   TbMeshData comp;
-  const char *source_path;
+  const cgltf_data *data;
   const cgltf_mesh *gltf_mesh;
   TbMeshQueueCounter *counter;
 } TbMeshLoadedArgs;
@@ -84,7 +84,7 @@ void tb_mesh_loaded(const void *args) {
   tb_auto loaded_args = (const TbMeshLoadedArgs *)args;
   tb_auto ecs = loaded_args->ecs;
   tb_auto mesh = loaded_args->mesh;
-  tb_auto source_path = loaded_args->source_path;
+  tb_auto data = loaded_args->data;
   tb_auto gltf_mesh = loaded_args->gltf_mesh;
   tb_auto counter = loaded_args->counter;
   if (mesh == 0) {
@@ -93,7 +93,7 @@ void tb_mesh_loaded(const void *args) {
   }
 
   TbSubMeshGLTFLoadRequest submesh_req = {
-      .path = source_path,
+      .data = data,
       .gltf_mesh = gltf_mesh,
   };
 
@@ -122,11 +122,8 @@ typedef struct TbLoadGLTFMeshArgs {
 } TbLoadGLTFMeshArgs;
 
 TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
-                             const cgltf_mesh *gltf_mesh, const char *path,
-                             uint32_t index) {
+                             const cgltf_mesh *gltf_mesh) {
   TracyCZoneN(ctx, "Load GLTF Mesh", true);
-  (void)path;
-  (void)index;
   TbMeshData data = {0};
 
   // Determine how big this mesh is
@@ -214,9 +211,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
     };
     char mesh_name[512] = {0};
-#ifndef FINAL
-    SDL_snprintf(mesh_name, 512, "%s_mesh_%d", path, index);
-#endif
+
     tb_rnd_sys_create_gpu_buffer_noup(rnd_sys, &create_info, mesh_name,
                                       &data.gpu_buffer, &data.host_buffer,
                                       &ptr);
@@ -360,7 +355,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
     tb_flush_alloc(rnd_sys, data.gpu_buffer.alloc);
 
     // Only enqueue this buffer upload request after the allocation is flushed
-    tb_rnd_upload_buffers(rnd_sys, &buf_copy, 1);
+    if (buf_copy.src != NULL) {
+      tb_rnd_upload_buffers(rnd_sys, &buf_copy, 1);
+    }
   }
 
   TracyCZoneEnd(ctx);
@@ -372,20 +369,16 @@ void tb_load_gltf_mesh_task(const void *args) {
   tb_auto load_args = (const TbLoadGLTFMeshArgs *)args;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto mesh = load_args->common.mesh;
-  tb_auto path = load_args->gltf.path;
+  tb_auto data = load_args->gltf.data;
   tb_auto index = load_args->gltf.index;
   tb_auto counter = load_args->counter;
-
-  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Task %s %d", path, index);
-
-  tb_auto data = tb_read_glb(tb_thread_alloc, path);
 
   cgltf_mesh *gltf_mesh = &data->meshes[index];
 
   // Queue upload of mesh data to the GPU
   TbMeshData mesh_data = {0};
   if (mesh != 0) {
-    mesh_data = tb_load_gltf_mesh(rnd_sys, gltf_mesh, path, index);
+    mesh_data = tb_load_gltf_mesh(rnd_sys, gltf_mesh);
   }
 
   // Launch pinned task to handle loading signals on main thread
@@ -393,7 +386,7 @@ void tb_load_gltf_mesh_task(const void *args) {
       .ecs = load_args->common.ecs,
       .mesh = mesh,
       .comp = mesh_data,
-      .source_path = path,
+      .data = data,
       .gltf_mesh = gltf_mesh,
       .counter = counter,
   };
@@ -463,7 +456,7 @@ void tb_load_submeshes_task(const void *args) {
   tb_auto counter = load_args->counter;
   tb_auto mesh = load_args->mesh;
   tb_auto gltf_mesh = load_args->req.gltf_mesh;
-  tb_auto source_path = load_args->req.path;
+  tb_auto data = load_args->req.data;
 
   TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Submeshs For %s",
                ecs_get_name(ecs, mesh));
@@ -494,7 +487,7 @@ void tb_load_submeshes_task(const void *args) {
       submesh_data.material = tb_get_default_mat(ecs, TB_MAT_USAGE_SCENE);
     } else {
       submesh_data.material = tb_mat_sys_load_gltf_mat(
-          ecs, source_path, material->name, TB_MAT_USAGE_SCENE);
+          ecs, data, material->name, TB_MAT_USAGE_SCENE);
     }
     // tb_free(tb_global_alloc, (void *)source_path);
 
@@ -1043,8 +1036,9 @@ void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
   ecs_add(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
 }
 
-TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
-                                   const char *name, uint32_t index) {
+TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
+                                   const char *path, const char *name,
+                                   uint32_t index) {
   const uint32_t max_name_len = 512;
   char mesh_name[max_name_len] = {0};
   SDL_snprintf(mesh_name, max_name_len, "%s_%s", path, name);
@@ -1055,6 +1049,8 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
     return mesh_ent;
   }
 
+  TB_CHECK_RETURN(data, "Expected data", 0);
+
   // Create a mesh entity
   mesh_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, mesh_ent, mesh_name);
@@ -1062,14 +1058,8 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, const char *path,
   // It is a child of the mesh system context singleton
   ecs_add_pair(ecs, mesh_ent, EcsChildOf, ecs_id(TbMeshCtx));
 
-  // Need to copy strings for task safety
-  // Tasks are responsible for freeing these names
-  const size_t path_len = SDL_strnlen(path, 256) + 1;
-  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
-  SDL_strlcpy(path_cpy, path, path_len);
-
   // Append a mesh load request onto the entity to schedule loading
-  ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {path_cpy, index});
+  ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {data, index});
   ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
 
   return mesh_ent;

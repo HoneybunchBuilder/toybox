@@ -230,8 +230,6 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   tb_wait_thread_initialized(render_thread);
 
   world->render_thread = render_thread;
-  TB_DYN_ARR_RESET(world->scenes, gp_alloc, 1);
-  TB_DYN_ARR_RESET(world->scenes2, gp_alloc, 1);
 
   // Create all registered systems after sorting by priority
   {
@@ -287,19 +285,9 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
   return true;
 }
 
-void tb_clear_world(TbWorld *world) {
-  TB_DYN_ARR_FOREACH(world->scenes, i) {
-    TbScene *scene = &TB_DYN_ARR_AT(world->scenes, i);
-    tb_unload_scene(world, scene);
-  }
-  TB_DYN_ARR_CLEAR(world->scenes);
-}
-
 void tb_destroy_world(TbWorld *world) {
   // Clean up singletons
   ecs_world_t *ecs = world->ecs;
-
-  tb_clear_world(world);
 
   // Stop the render thread before we start destroying render objects
   tb_stop_render_thread(world->render_thread);
@@ -444,7 +432,7 @@ void load_entity(TbWorld *world, TbScene *scene, json_tokener *tok,
 }
 
 bool tb_load_scene(TbWorld *world, const char *scene_path) {
-  TracyCZoneN(ctx, "Load Scene", true);
+  TB_TRACY_SCOPE("Load Scene");
   // Get qualified path to scene asset
   char *asset_path = tb_resolve_asset_path(world->tmp_alloc, scene_path);
 
@@ -464,18 +452,8 @@ bool tb_load_scene(TbWorld *world, const char *scene_path) {
     load_entity(world, &scene, tok, data, asset_path, TbInvalidEntityId, node);
   }
 
-  TB_DYN_ARR_APPEND(world->scenes, scene);
-
-  json_tokener_free(tok);
-
-  // Clean up gltf file now that it's parsed
-  cgltf_free(data);
-
-  // HACK
-  tb_auto scene2 = tb_load_scene2(world->ecs, asset_path);
-  TB_DYN_ARR_APPEND(world->scenes2, scene2);
-
-  TracyCZoneEnd(ctx);
+  // Create an entity that represents the scene and trigger an async load
+  tb_load_scene2(world->ecs, asset_path);
   return true;
 }
 
@@ -485,4 +463,16 @@ void tb_unload_scene(TbWorld *world, TbScene *scene) {
   TB_DYN_ARR_FOREACH(scene->entities, i) {
     ecs_delete(ecs, TB_DYN_ARR_AT(scene->entities, i));
   }
+}
+
+TbLoadComponentFn tb_get_component_load_fn(const char *name) {
+  for (int32_t i = 0; i < s_comp_reg.count; ++i) {
+    const char *comp_name = s_comp_reg.entries[i].name;
+    tb_auto load_fn = s_comp_reg.entries[i].load_fn;
+    if (SDL_strcmp(comp_name, name) == 0) {
+      return load_fn;
+    }
+  }
+  TB_CHECK(false, "Failed to get component load function");
+  return NULL;
 }

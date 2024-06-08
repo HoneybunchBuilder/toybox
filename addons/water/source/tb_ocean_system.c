@@ -538,10 +538,10 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
     // Reserve space for the 1 mesh we're adding
     tb_mesh_sys_reserve_mesh_count(ecs, 1);
     sys->ocean_patch_mesh2 =
-        tb_mesh_sys_load_gltf_mesh(ecs, asset_path, "ocean", 0);
+        tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "ocean", 0);
   }
 
-  cgltf_free(data);
+  // cgltf_free(data);
 
   VkResult err = VK_SUCCESS;
 

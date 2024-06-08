@@ -39,8 +39,8 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   char name[max_name_len] = {0};
   SDL_snprintf(name, max_name_len, "mesh_%d", mesh_idx);
   TbMeshComponent comp = {
-
-      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, source_path, name, mesh_idx),
+      .mesh2 = tb_mesh_sys_load_gltf_mesh(ecs, (cgltf_data *)data, source_path,
+                                          name, mesh_idx),
   };
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
 

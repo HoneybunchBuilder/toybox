@@ -56,7 +56,7 @@ ECS_COMPONENT_DECLARE(TbMaterialComponent);
 
 // Describes the creation of a material that lives in a GLB file
 typedef struct TbMaterialGLTFLoadRequest {
-  const char *path;
+  const cgltf_data *data;
   const char *name;
 } TbMaterialGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbMaterialGLTFLoadRequest);
@@ -100,7 +100,7 @@ typedef struct TbLoadGLTFMaterialArgs {
   TbMaterialGLTFLoadRequest gltf;
 } TbLoadGLTFMaterialArgs;
 
-TbMaterialData tb_parse_gltf_mat(const char *path, const char *name,
+TbMaterialData tb_parse_gltf_mat(const cgltf_data *gltf_data, const char *name,
                                  TbMatParseFn parse_fn,
                                  const cgltf_material *material) {
   TracyCZoneN(ctx, "Load Material", true);
@@ -109,7 +109,7 @@ TbMaterialData tb_parse_gltf_mat(const char *path, const char *name,
 
   // Load material based on usage
   void *data = NULL;
-  if (!parse_fn(path, name, material, &data)) {
+  if (!parse_fn(gltf_data, name, material, &data)) {
     tb_free(tb_global_alloc, data);
     TracyCZoneEnd(ctx);
     return mat_data;
@@ -127,10 +127,9 @@ void tb_load_gltf_material_task(const void *args) {
   TbMaterial2 mat = load_args->common.mat;
   tb_auto domain = load_args->common.domain;
 
-  tb_auto path = load_args->gltf.path;
+  tb_auto data = load_args->gltf.data;
   tb_auto name = load_args->gltf.name;
 
-  tb_auto data = tb_read_glb(tb_thread_alloc, path);
   // Find material by name
   struct cgltf_material *material = NULL;
   for (cgltf_size i = 0; i < data->materials_count; ++i) {
@@ -148,12 +147,9 @@ void tb_load_gltf_material_task(const void *args) {
   // Parse material based on usage
   TbMaterialData mat_data = {0};
   if (mat != 0) {
-    mat_data = tb_parse_gltf_mat(path, name, domain.parse_fn, material);
+    mat_data = tb_parse_gltf_mat(data, name, domain.parse_fn, material);
   }
 
-  cgltf_free(data);
-
-  tb_free(tb_global_alloc, (void *)path);
   tb_free(tb_global_alloc, (void *)name);
 
   // Launch pinned task to handle loading signals on main thread
@@ -753,9 +749,8 @@ void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count) {
   ecs_add(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading);
 }
 
-TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
+TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
                                      const char *name, TbMaterialUsage usage) {
-
   /*
     If we are in a deferred ecs state (in the middle of the execution of a
   system) we would not be able to determine if a material entity already exists
@@ -778,6 +773,11 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
     return mat_ent;
   }
 
+  if (data == NULL) {
+    TB_CHECK(false, "Expected data");
+    return 0;
+  }
+
   // Create a material entity
   mat_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, mat_ent, name);
@@ -786,17 +786,13 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
   ecs_add_pair(ecs, mat_ent, EcsChildOf, ecs_id(TbMaterialCtx));
 
   // Need to copy strings for task safety
-  // Tasks are responsible for freeing these names
-  const size_t path_len = SDL_strnlen(path, 256) + 1;
-  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
-  SDL_strlcpy(path_cpy, path, path_len);
-
+  // Task is responsible for freeing this string
   const size_t name_len = SDL_strnlen(name, 256) + 1;
   char *name_cpy = tb_alloc_nm_tp(tb_global_alloc, name_len, char);
   SDL_strlcpy(name_cpy, name, name_len);
 
   // Append a texture load request onto the entity to schedule loading
-  ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {path_cpy, name_cpy});
+  ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {data, name_cpy});
   ecs_set(ecs, mat_ent, TbMaterialUsage, {usage});
   ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
 

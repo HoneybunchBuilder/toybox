@@ -52,8 +52,8 @@ ECS_COMPONENT_DECLARE(TbTextureComponent);
 
 // Describes the creation of a texture that lives in a GLB file
 typedef struct TbTextureGLTFLoadRequest {
-  const char *path;
-  const char *mat_name; // TODO: Should be an entity id
+  const cgltf_data *data;
+  const char *mat_name;
 } TbTextureGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbTextureGLTFLoadRequest);
 
@@ -448,10 +448,9 @@ void tb_load_gltf_texture_task(const void *args) {
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto usage = load_args->common.usage;
 
-  tb_auto path = load_args->gltf.path;
+  tb_auto data = load_args->gltf.data;
   tb_auto mat_name = load_args->gltf.mat_name;
 
-  tb_auto data = tb_read_glb(tb_thread_alloc, path);
   // Find material by name
   struct cgltf_material *mat = NULL;
   for (cgltf_size i = 0; i < data->materials_count; ++i) {
@@ -508,10 +507,7 @@ void tb_load_gltf_texture_task(const void *args) {
   }
 
   // Strings were copies that can be freed now
-  tb_free(tb_global_alloc, (void *)path);
   tb_free(tb_global_alloc, (void *)mat_name);
-
-  cgltf_free(data);
 
   // Launch pinned task to handle loading signals on main thread
   TbTextureLoadedArgs loaded_args = {
@@ -1188,7 +1184,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   return tex_ent;
 }
 
-TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
+TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
                                   const char *mat_name, TbTextureUsage usage) {
   const uint32_t image_name_max = 100;
   char image_name[image_name_max] = {0};
@@ -1218,16 +1214,14 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
     return tex_ent;
   }
 
+  TB_CHECK_RETURN(data, "Expected Data", 0);
+
   // Create a texture entity
   tex_ent = ecs_new_entity(ecs, 0);
   ecs_set_name(ecs, tex_ent, image_name);
 
   // Need to copy strings for task safety
-  // Tasks are responsible for freeing these names
-  const size_t path_len = SDL_strnlen(path, 256) + 1;
-  char *path_cpy = tb_alloc_nm_tp(tb_global_alloc, path_len, char);
-  SDL_strlcpy(path_cpy, path, path_len);
-
+  // Task is responsible for freeing this name
   const size_t mat_name_len = SDL_strnlen(mat_name, 256) + 1;
   char *mat_name_cpy = tb_alloc_nm_tp(tb_global_alloc, mat_name_len, char);
   SDL_strlcpy(mat_name_cpy, mat_name, mat_name_len);
@@ -1236,7 +1230,7 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
   ecs_add_pair(ecs, tex_ent, EcsChildOf, ecs_id(TbTextureCtx));
 
   // Append a texture load request onto the entity to schedule loading
-  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {path_cpy, mat_name_cpy});
+  ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {data, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
   ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
 

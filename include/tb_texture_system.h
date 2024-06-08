@@ -10,6 +10,7 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef ecs_entity_t TbTexture; // Entities can be handles to textures
+typedef struct cgltf_data cgltf_data;
 
 typedef uint32_t TbTextureComponent;
 extern ECS_COMPONENT_DECLARE(TbTextureComponent);
@@ -40,10 +41,10 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
                                   const uint8_t *pixels, uint64_t size,
                                   uint32_t width, uint32_t height,
                                   TbTextureUsage usage);
-// Begins an async texture load from a path to a given glb file, the material,
-// and the texture usage so the task can open the glb file and find the expected
-// image
-TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const char *path,
+// Begins an async texture load from a loaded glb file, the material,
+// and the texture usage so the task can parse the gltf data and find the
+// expected image
+TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
                                   const char *mat_name, TbTextureUsage usage);
 // Begins an async texture load from a path to a given ktx file and the texture
 // usage so the task can open the ktx file and find the expected image

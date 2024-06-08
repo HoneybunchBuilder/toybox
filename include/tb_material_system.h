@@ -9,6 +9,7 @@
 
 typedef ecs_entity_t TbMaterial2; // Entities can be handles to materials
 typedef uint32_t TbMaterialPerm;
+typedef struct cgltf_data cgltf_data;
 typedef struct cgltf_material cgltf_material;
 
 // Material usage maps a material to the expected shader layout and usage
@@ -33,7 +34,7 @@ extern ECS_COMPONENT_DECLARE(TbMaterialComponent);
 
 // A function that parses a material asset and fills out a pointer to a block
 // of memory that represents that material
-typedef bool TbMatParseFn(const char *path, const char *name,
+typedef bool TbMatParseFn(const cgltf_data *gltf_data, const char *name,
                           const cgltf_material *material, void **out_mat_data);
 typedef void TbMatOnLoadFn(ecs_world_t *ecs, void *mat_data);
 typedef bool TbMatIsReadyFn(ecs_world_t *ecs, const TbMaterialData *data);
@@ -60,9 +61,7 @@ VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs);
 
 void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count);
 
-// Begins an async material load from a path to a given glb file and the name of
-// the material to load
-TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const char *path,
+TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
                                      const char *name, TbMaterialUsage usage);
 
 // Returns true if the material is ready to be used

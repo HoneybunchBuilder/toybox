@@ -133,8 +133,6 @@ int32_t main(int32_t argc, char *argv[]) {
   }
   return 0;
 
-  tb_clear_world(&world);
-
   tb_destroy_world(&world);
 
   SDL_Quit();

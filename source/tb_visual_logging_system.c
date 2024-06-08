@@ -326,12 +326,12 @@ TbVisualLoggingSystem create_visual_logging_system(
 
       const cgltf_node *node = &data->nodes[0];
       sys.sphere_mesh2 =
-          tb_mesh_sys_load_gltf_mesh(ecs, asset_path, "sphere", 0);
+          tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "sphere", 0);
       sys.sphere_scale =
           (float3){node->scale[0], node->scale[1], node->scale[2]};
     }
 
-    cgltf_free(data);
+    // cgltf_free(data);
   }
 
   {
