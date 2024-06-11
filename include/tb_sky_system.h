@@ -20,12 +20,6 @@ typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct TbWorld TbWorld;
 typedef struct ecs_query_t ecs_query_t;
 
-typedef struct TbSkySystemFrameState {
-  uint32_t set_count;
-  VkDescriptorPool set_pool;
-  VkDescriptorSet *sets;
-} TbSkySystemFrameState;
-
 typedef struct TbSkySystem {
   TbRenderSystem *rnd_sys;
   TbRenderPipelineSystem *rp_sys;
@@ -37,7 +31,8 @@ typedef struct TbSkySystem {
   ecs_query_t *camera_query;
 
   float time;
-  TbSkySystemFrameState frame_states[TB_MAX_FRAME_STATES];
+
+  TbFrameDescriptorPoolList pools;
 
   TbDrawContextId sky_draw_ctx;
   TbDrawContextId env_capture_ctxs[PREFILTER_PASS_COUNT];

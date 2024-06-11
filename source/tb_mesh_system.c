@@ -948,9 +948,9 @@ void mesh_draw_tick(ecs_iter_t *it) {
             mesh_sys->draw_set_layout,
             mesh_sys->draw_set_layout,
         };
-        tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
-                                    mesh_sys->draw_pools.pools, set_count,
-                                    set_count);
+        tb_rnd_frame_desc_pool_tick(
+            rnd_sys, "mesh_draw_instances", &create_info, layouts, NULL,
+            mesh_sys->draw_pools.pools, set_count, set_count);
       }
 
       TracyCZoneN(ctx2, "Iterate Meshes", true);

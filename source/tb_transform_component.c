@@ -109,7 +109,7 @@ void tb_transform_set_world(ecs_world_t *ecs, ecs_entity_t entity,
   tb_transform_mark_dirty(ecs, entity);
 }
 
-bool tb_load_transform_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_transform_comp(ecs_world_t *ecs, ecs_entity_t ent,
                             const char *source_path, const cgltf_data *data,
                             const cgltf_node *node, json_object *json) {
   (void)source_path;
@@ -119,7 +119,7 @@ bool tb_load_transform_comp(TbWorld *world, ecs_entity_t ent,
       .dirty = true,
       .transform = tb_transform_from_node(node),
   };
-  ecs_set_ptr(world->ecs, ent, TbTransformComponent, &comp);
+  ecs_set_ptr(ecs, ent, TbTransformComponent, &comp);
   return true;
 }
 

@@ -1325,12 +1325,9 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1,
                           true);
         // Upload all buffer requests
-        TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "%s",
-                     "Uploading All Meshes");
         {
           TbBufferCopy up = {0};
           while (TB_QUEUE_POP(*state->buf_copy_queue, &up)) {
-            TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "%s", "Uploading Mesh");
             vkCmdCopyBuffer(start_buffer, up.src, up.dst, 1, &up.region);
           }
         }

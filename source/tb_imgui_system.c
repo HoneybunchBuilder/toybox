@@ -615,7 +615,7 @@ void imgui_descriptor_sys(ecs_iter_t *it) {
       layouts[i] = ig_sys->set_layout;
     }
 
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, NULL,
+    tb_rnd_frame_desc_pool_tick(rnd_sys, "imgui", &create_info, layouts, NULL,
                                 ig_sys->desc_pools, set_count, set_count);
   }
 

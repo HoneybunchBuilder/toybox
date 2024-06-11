@@ -204,15 +204,15 @@ ecs_entity_t tb_register_time_of_day_comp(TbWorld *world) {
   return ecs_id(TbTimeOfDayDescriptor);
 }
 
-bool tb_load_time_of_day_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_time_of_day_comp(ecs_world_t *ecs, ecs_entity_t ent,
                               const char *source_path, const cgltf_data *data,
-                              const cgltf_node *node, json_object *object) {
+                              const cgltf_node *node, json_object *json) {
   (void)source_path;
   (void)data;
   (void)node;
 
   TbTimeOfDayComponent comp = {0};
-  json_object_object_foreach(object, key, value) {
+  json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "start_time") == 0) {
       comp.time = (float)json_object_get_double(value);
     }
@@ -220,7 +220,7 @@ bool tb_load_time_of_day_comp(TbWorld *world, ecs_entity_t ent,
       comp.time_scale = (float)json_object_get_double(value);
     }
   }
-  ecs_set_ptr(world->ecs, ent, TbTimeOfDayComponent, &comp);
+  ecs_set_ptr(ecs, ent, TbTimeOfDayComponent, &comp);
 
   return true;
 }

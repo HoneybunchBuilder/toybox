@@ -57,7 +57,7 @@ void third_person_move_on_set(ecs_iter_t *it) {
   }
 }
 
-bool tb_load_third_person_move_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_third_person_move_comp(ecs_world_t *ecs, ecs_entity_t ent,
                                     const char *source_path,
                                     const cgltf_data *data,
                                     const cgltf_node *node, json_object *json) {
@@ -65,7 +65,6 @@ bool tb_load_third_person_move_comp(TbWorld *world, ecs_entity_t ent,
   (void)data;
   (void)node;
 
-  ecs_world_t *ecs = world->ecs;
   TbThirdPersonMovementComponent comp = {0};
   json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "speed") == 0) {

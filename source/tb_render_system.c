@@ -998,10 +998,30 @@ void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
   }
 }
 
-VkResult tb_rnd_frame_desc_pool_tick(
-    TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
-    const VkDescriptorSetLayout *layouts, void *alloc_next,
-    TbFrameDescriptorPool *pools, uint32_t set_count, uint32_t desc_count) {
+VkResult tb_rnd_alloc_descriptor_sets(TbRenderSystem *self, const char *name,
+                                      const VkDescriptorSetAllocateInfo *info,
+                                      VkDescriptorSet *sets) {
+  VkResult err =
+      vkAllocateDescriptorSets(self->render_thread->device, info, sets);
+  TB_VK_CHECK(err, "Failed to allocate descriptor sets");
+
+  const uint32_t MAX_SET_NAME_LEN = 256;
+  char set_name[MAX_SET_NAME_LEN] = {0};
+  for (uint32_t i = 0; i < info->descriptorSetCount; ++i) {
+    SDL_snprintf(set_name, MAX_SET_NAME_LEN, "%s_set%d", name, i);
+    SET_VK_NAME(self->render_thread->device, sets[i],
+                VK_OBJECT_TYPE_DESCRIPTOR_SET, set_name);
+  }
+
+  return err;
+}
+
+VkResult
+tb_rnd_frame_desc_pool_tick(TbRenderSystem *self, const char *name,
+                            const VkDescriptorPoolCreateInfo *pool_info,
+                            const VkDescriptorSetLayout *layouts,
+                            void *alloc_next, TbFrameDescriptorPool *pools,
+                            uint32_t set_count, uint32_t desc_count) {
   VkResult err = VK_SUCCESS;
   TbFrameDescriptorPool *pool = &pools[self->frame_idx];
 
@@ -1017,8 +1037,7 @@ VkResult tb_rnd_frame_desc_pool_tick(
       tb_rnd_destroy_descriptor_pool(self, pool->set_pool);
     }
 
-    err =
-        tb_rnd_create_descriptor_pool(self, pool_info, "Pool", &pool->set_pool);
+    err = tb_rnd_create_descriptor_pool(self, pool_info, name, &pool->set_pool);
     TB_VK_CHECK(err, "Failed to create pool");
     pool->set_count = set_count;
     pool->sets = tb_realloc_nm_tp(self->gp_alloc, pool->sets, pool->set_count,
@@ -1035,8 +1054,7 @@ VkResult tb_rnd_frame_desc_pool_tick(
       .descriptorPool = pool->set_pool,
       .pSetLayouts = layouts,
   };
-  err = vkAllocateDescriptorSets(self->render_thread->device, &alloc_info,
-                                 pool->sets);
+  err = tb_rnd_alloc_descriptor_sets(self, name, &alloc_info, pool->sets);
   TB_VK_CHECK(err, "Failed to re-allocate descriptor sets");
 
   return err;

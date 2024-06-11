@@ -253,7 +253,7 @@ void tb_on_rigidbody_set(flecs::entity ent, TbRigidbodyComponent &rb) {
 
   auto body = JPH::BodyID(rb);
   bodies.SetPositionAndRotation(body, position, rotation,
-                                JPH::EActivation::Activate);
+                                JPH::EActivation::DontActivate);
 }
 
 void tb_on_rigidbody_removed(flecs::entity ent, TbRigidbodyComponent &rb) {
@@ -351,12 +351,13 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
   return ecs_id(TbRigidbodyDescriptor);
 }
 
-bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_rigidbody_comp(ecs_world_t *_ecs, ecs_entity_t ent,
                             const char *source_path, const cgltf_data *data,
-                            const cgltf_node *node, json_object *object) {
+                            const cgltf_node *node, json_object *json) {
+  ZoneScopedN("Load Rigidbody Component");
   (void)source_path;
   (void)data;
-  flecs::world ecs(world->ecs);
+  flecs::world ecs(_ecs);
 
   bool sensor = false;
   JPH::EShapeSubType shape_type = (JPH::EShapeSubType)-1;
@@ -373,7 +374,7 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
   const float max_scale =
       SDL_max(shape_scale.x, SDL_max(shape_scale.y, shape_scale.z));
 
-  json_object_object_foreach(object, key, value) {
+  json_object_object_foreach(json, key, value) {
     // Parse Shape type
     if (SDL_strcmp(key, "shape_type") == 0) {
       const char *shape_type_str = json_object_get_string(value);
@@ -514,7 +515,7 @@ bool tb_load_rigidbody_comp(TbWorld *world, ecs_entity_t ent,
   body_settings.mMassPropertiesOverride.mMass = 1.0f;
 
   JPH::BodyID body =
-      bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
+      bodies.CreateAndAddBody(body_settings, JPH::EActivation::DontActivate);
 
   TbRigidbodyComponent comp = {
       body.GetIndexAndSequenceNumber(),

@@ -3,7 +3,6 @@
 #include "tb_allocator.h"
 #include "tb_dynarray.h"
 #include "tb_scene.h"
-#include "tb_scene2.h"
 
 #include "blocks/Block.h"
 
@@ -39,7 +38,7 @@ typedef struct cgltf_data cgltf_data;
 typedef struct cgltf_node cgltf_node;
 
 typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
-typedef bool (*TbLoadComponentFn)(TbWorld *world, ecs_entity_t ent,
+typedef bool (*TbLoadComponentFn)(ecs_world_t *ecs, ecs_entity_t ent,
                                   const char *source_path,
                                   const cgltf_data *data,
                                   const cgltf_node *node, json_object *json);
@@ -79,7 +78,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world);
 bool tb_tick_world(TbWorld *world, float delta_seconds);
 void tb_destroy_world(TbWorld *world);
 
-bool tb_load_scene(TbWorld *world, const char *scene_path);
+TbScene tb_load_scene(TbWorld *world, const char *scene_path);
 void tb_unload_scene(TbWorld *world, TbScene *scene);
 
 // HACK: Get component load function by name for scene2

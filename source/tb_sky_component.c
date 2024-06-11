@@ -9,15 +9,15 @@
 ECS_COMPONENT_DECLARE(TbSkyDescriptor);
 ECS_COMPONENT_DECLARE(TbSkyComponent);
 
-bool tb_load_sky_comp(TbWorld *world, ecs_entity_t ent, const char *source_path,
-                      const cgltf_data *data, const cgltf_node *node,
-                      json_object *object) {
+bool tb_load_sky_comp(ecs_world_t *ecs, ecs_entity_t ent,
+                      const char *source_path, const cgltf_data *data,
+                      const cgltf_node *node, json_object *json) {
   (void)source_path;
   (void)data;
   (void)node;
 
   TbSkyComponent sky = {0};
-  json_object_object_foreach(object, key, value) {
+  json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "cirrus") == 0) {
       sky.cirrus = (float)json_object_get_double(value);
     } else if (SDL_strcmp(key, "cumulus") == 0) {
@@ -25,7 +25,7 @@ bool tb_load_sky_comp(TbWorld *world, ecs_entity_t ent, const char *source_path,
     }
   }
 
-  ecs_set_ptr(world->ecs, ent, TbSkyComponent, &sky);
+  ecs_set_ptr(ecs, ent, TbSkyComponent, &sky);
 
   return true;
 }

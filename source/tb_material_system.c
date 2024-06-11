@@ -353,9 +353,9 @@ void tb_update_material_pool(ecs_iter_t *it) {
         .descriptorSetCount = 1,
         .pDescriptorCounts = (uint32_t[1]){mat_count},
     };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &mat_ctx->set_layout,
-                                &alloc_info, mat_ctx->frame_set_pool.pools, 1,
-                                mat_count);
+    tb_rnd_frame_desc_pool_tick(rnd_sys, "material", &create_info,
+                                &mat_ctx->set_layout, &alloc_info,
+                                mat_ctx->frame_set_pool.pools, 1, mat_count);
   }
 
   // When we get to this phase all materials must be marked dirty

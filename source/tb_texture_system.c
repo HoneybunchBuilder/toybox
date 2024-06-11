@@ -822,9 +822,9 @@ void tb_update_texture_pool(ecs_iter_t *it) {
         .descriptorSetCount = 1,
         .pDescriptorCounts = (uint32_t[1]){tex_count},
     };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &tex_ctx->set_layout,
-                                &alloc_info, tex_ctx->frame_set_pool.pools, 1,
-                                tex_count);
+    tb_rnd_frame_desc_pool_tick(rnd_sys, "texture", &create_info,
+                                &tex_ctx->set_layout, &alloc_info,
+                                tex_ctx->frame_set_pool.pools, 1, tex_count);
   }
 
   // When we get to this phase all textures must be marked dirty

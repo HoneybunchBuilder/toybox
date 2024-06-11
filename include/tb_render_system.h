@@ -147,6 +147,7 @@ tb_rnd_create_compute_pipelines(TbRenderSystem *self,
                                 uint32_t create_info_count,
                                 const VkComputePipelineCreateInfo *create_info,
                                 const char *name, VkPipeline *pipelines);
+
 VkResult tb_rnd_create_graphics_pipelines(
     TbRenderSystem *self, uint32_t create_info_count,
     const VkGraphicsPipelineCreateInfo *create_info, const char *name,
@@ -175,10 +176,15 @@ void tb_rnd_destroy_descriptor_pool(TbRenderSystem *self,
 void tb_rnd_update_descriptors(TbRenderSystem *self, uint32_t write_count,
                                const VkWriteDescriptorSet *writes);
 
-VkResult tb_rnd_frame_desc_pool_tick(
-    TbRenderSystem *self, const VkDescriptorPoolCreateInfo *pool_info,
-    const VkDescriptorSetLayout *layouts, void *alloc_next,
-    TbFrameDescriptorPool *pools, uint32_t set_count, uint32_t desc_count);
+VkResult tb_rnd_alloc_descriptor_sets(TbRenderSystem *self, const char *name,
+                                      const VkDescriptorSetAllocateInfo *info,
+                                      VkDescriptorSet *sets);
+VkResult
+tb_rnd_frame_desc_pool_tick(TbRenderSystem *self, const char *name,
+                            const VkDescriptorPoolCreateInfo *pool_info,
+                            const VkDescriptorSetLayout *layouts,
+                            void *alloc_next, TbFrameDescriptorPool *pools,
+                            uint32_t set_count, uint32_t desc_count);
 VkDescriptorSet tb_rnd_frame_desc_pool_get_set(TbRenderSystem *self,
                                                TbFrameDescriptorPool *pools,
                                                uint32_t set_idx);

@@ -1,11 +1,9 @@
 #pragma once
 
-#include <SDL3/SDL_stdinc.h>
+#include <flecs.h>
 
-#include "tb_dynarray.h"
+typedef ecs_entity_t TbScene;
 
-typedef uint64_t ecs_entity_t;
+TbScene tb_create_scene(ecs_world_t *ecs, const char *scene_path);
 
-typedef struct TbScene {
-  TB_DYN_ARR_OF(ecs_entity_t) entities;
-} TbScene;
+bool tb_is_scene_ready(ecs_world_t *ecs, TbScene scene);

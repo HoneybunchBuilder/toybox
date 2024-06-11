@@ -11,15 +11,12 @@
 
 ECS_COMPONENT_DECLARE(TbCameraComponent);
 
-bool tb_load_camera_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_camera_comp(ecs_world_t *ecs, ecs_entity_t ent,
                          const char *source_path, const cgltf_data *data,
                          const cgltf_node *node, json_object *json) {
   (void)source_path;
   (void)data;
   (void)json;
-
-  tb_auto ecs = world->ecs;
-
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
   if (node->camera->type == cgltf_camera_type_perspective) {

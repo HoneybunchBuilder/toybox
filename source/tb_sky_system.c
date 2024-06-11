@@ -1013,10 +1013,6 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
 void destroy_sky_system(ecs_world_t *ecs, TbSkySystem *self) {
   TbRenderSystem *rnd_sys = self->rnd_sys;
 
-  for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
-    tb_rnd_destroy_descriptor_pool(rnd_sys, self->frame_states[i].set_pool);
-  }
-
   vmaDestroyBuffer(rnd_sys->vma_alloc, self->sky_geom_gpu_buffer.buffer,
                    self->sky_geom_gpu_buffer.alloc);
 
@@ -1052,8 +1048,6 @@ void sky_draw_tick(ecs_iter_t *it) {
   const uint32_t width = rnd_sys->render_thread->swapchain.width;
   const uint32_t height = rnd_sys->render_thread->swapchain.height;
 
-  tb_auto state = &sky_sys->frame_states[rnd_sys->frame_idx];
-
   // Early out if any shaders aren't compiled yet
   if (!tb_is_shader_ready(ecs, sky_sys->sky_shader) ||
       !tb_is_shader_ready(ecs, sky_sys->env_shader) ||
@@ -1073,64 +1067,36 @@ void sky_draw_tick(ecs_iter_t *it) {
     float3 sun_dir = -tb_transform_get_forward(&transform->transform);
 
     VkResult err = VK_SUCCESS;
-    VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
     const uint32_t write_count = 2; // +1 for irradiance pass
 
-    // Allocate all the descriptor sets for this frame
     {
-      // Resize the pool
-      if (state->set_count < write_count) {
-        if (state->set_pool) {
-          tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
-        }
-
-        VkDescriptorPoolCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = write_count,
-            .poolSizeCount = 2,
-            .pPoolSizes =
-                (VkDescriptorPoolSize[2]){
-                    {
-                        .descriptorCount = write_count,
-                        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    },
-                    {
-                        .descriptorCount = write_count,
-                        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    },
-                },
-            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        };
-        err = tb_rnd_create_descriptor_pool(
-            rnd_sys, &create_info, "Sky System Frame State Descriptor Pool",
-            &state->set_pool);
-        TB_VK_CHECK(err,
-                    "Failed to create sky system frame state descriptor pool");
-
-        state->set_count = write_count;
-        state->sets = tb_realloc_nm_tp(sky_sys->gp_alloc, state->sets,
-                                       state->set_count, VkDescriptorSet);
-      } else {
-        vkResetDescriptorPool(rnd_sys->render_thread->device, state->set_pool,
-                              0);
-        state->set_count = write_count;
-      }
+      VkDescriptorPoolCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+          .maxSets = write_count,
+          .poolSizeCount = 2,
+          .pPoolSizes =
+              (VkDescriptorPoolSize[2]){
+                  {
+                      .descriptorCount = write_count,
+                      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                  },
+                  {
+                      .descriptorCount = write_count,
+                      .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                  },
+              },
+          .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+      };
 
       tb_auto layouts = tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count,
                                        VkDescriptorSetLayout);
       layouts[0] = sky_sys->sky_set_layout;
       layouts[1] = sky_sys->irr_set_layout;
 
-      VkDescriptorSetAllocateInfo alloc_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-          .descriptorSetCount = state->set_count,
-          .descriptorPool = state->set_pool,
-          .pSetLayouts = layouts,
-      };
-      err = vkAllocateDescriptorSets(rnd_sys->render_thread->device,
-                                     &alloc_info, state->sets);
-      TB_VK_CHECK(err, "Failed to re-allocate sky descriptor sets");
+      tb_rnd_frame_desc_pool_tick(rnd_sys, "sky", &create_info, layouts, NULL,
+                                  sky_sys->pools.pools, write_count,
+                                  write_count);
     }
 
     // Just upload and write all views for now, they tend to be important anyway
@@ -1153,7 +1119,7 @@ void sky_draw_tick(ecs_iter_t *it) {
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
     *buffer_info = (VkDescriptorBufferInfo){
-        .buffer = tmp_gpu_buffer,
+        .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
         .offset = offset,
         .range = sizeof(TbSkyData),
     };
@@ -1161,7 +1127,8 @@ void sky_draw_tick(ecs_iter_t *it) {
     // Construct a write descriptor
     writes[0] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = state->sets[0],
+        .dstSet =
+            tb_rnd_frame_desc_pool_get_set(rnd_sys, sky_sys->pools.pools, 0),
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
@@ -1174,7 +1141,8 @@ void sky_draw_tick(ecs_iter_t *it) {
         sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
     writes[1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = state->sets[1],
+        .dstSet =
+            tb_rnd_frame_desc_pool_get_set(rnd_sys, sky_sys->pools.pools, 1),
         .dstBinding = 0,
         .dstArrayElement = 0,
         .descriptorCount = 1,
@@ -1225,7 +1193,8 @@ void sky_draw_tick(ecs_iter_t *it) {
                 {
                     .vp = vp,
                 },
-            .sky_set = state->sets[0],
+            .sky_set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
+                                                      sky_sys->pools.pools, 0),
             .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
@@ -1270,7 +1239,8 @@ void sky_draw_tick(ecs_iter_t *it) {
               .user_batch = irradiance_batch,
           };
           *irradiance_batch = (IrradianceBatch){
-              .set = state->sets[state->set_count - 1],
+              .set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
+                                                    sky_sys->pools.pools, 1),
               .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
               .index_count = get_skydome_index_count(),
               .vertex_offset = get_skydome_vert_offset(),
@@ -1296,7 +1266,8 @@ void sky_draw_tick(ecs_iter_t *it) {
             };
 
             prefilter_batches[i] = (PrefilterBatch){
-                .set = state->sets[state->set_count - 1],
+                .set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
+                                                      sky_sys->pools.pools, 1),
                 .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
                 .index_count = get_skydome_index_count(),
                 .vertex_offset = get_skydome_vert_offset(),

@@ -23,7 +23,7 @@ ECS_COMPONENT_DECLARE(TbThrowDir);
 ECS_COMPONENT_DECLARE(TbThrowForce);
 ECS_COMPONENT_DECLARE(TbThrower);
 
-bool tb_load_thrower_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_thrower_comp(ecs_world_t *ecs, ecs_entity_t ent,
                           const char *source_path, const cgltf_data *data,
                           const cgltf_node *node, json_object *json) {
   (void)source_path;
@@ -31,7 +31,7 @@ bool tb_load_thrower_comp(TbWorld *world, ecs_entity_t ent,
   (void)node;
   (void)json;
   // Descriptor just marks that a thrower component should be attached
-  ecs_set(world->ecs, ent, TbThrower, {0});
+  ecs_set(ecs, ent, TbThrower, {0});
   return true;
 }
 

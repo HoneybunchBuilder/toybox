@@ -7,14 +7,12 @@
 
 ECS_COMPONENT_DECLARE(TbNoClipComponent);
 
-bool tb_load_noclip_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_noclip_comp(ecs_world_t *ecs, ecs_entity_t ent,
                          const char *source_path, const cgltf_data *data,
                          const cgltf_node *node, json_object *json) {
   (void)source_path;
   (void)data;
   (void)node;
-  ecs_world_t *ecs = world->ecs;
-
   TbNoClipComponent comp = {0};
   json_object_object_foreach(json, key, value) {
     if (SDL_strcmp(key, "move_speed") == 0) {

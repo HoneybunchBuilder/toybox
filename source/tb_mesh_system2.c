@@ -458,9 +458,6 @@ void tb_load_submeshes_task(const void *args) {
   tb_auto gltf_mesh = load_args->req.gltf_mesh;
   tb_auto data = load_args->req.data;
 
-  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Submeshs For %s",
-               ecs_get_name(ecs, mesh));
-
   // As we go through submeshes we also want to construct an AABB for this
   // mesh
   TbAABB mesh_aabb = tb_aabb_init();
@@ -643,9 +640,6 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
     return;
   }
 
-  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION,
-               "Mesh Descriptor Pool has %d meshes", mesh_count);
-
   // Resize the pool if necessary
   if (mesh_count != tb_rnd_frame_desc_pool_get_desc_count(
                         rnd_sys, mesh_ctx->frame_set_pool.pools)) {
@@ -678,9 +672,9 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
         mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
         mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
         mesh_ctx->set_layout};
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, layouts, &alloc_info,
-                                mesh_ctx->frame_set_pool.pools, view_count,
-                                mesh_count);
+    tb_rnd_frame_desc_pool_tick(rnd_sys, "mesh", &create_info, layouts,
+                                &alloc_info, mesh_ctx->frame_set_pool.pools,
+                                view_count, mesh_count);
   }
 
   // If we had to resize the pool, all meshes are dirty

@@ -38,6 +38,12 @@ extern "C" {
     SDL_UnlockMutex((queue).mutex);                                            \
   }
 
+#define TB_QUEUE_PUSH_PTR(queue, element)                                      \
+  if (SDL_TryLockMutex((queue)->mutex) == 0) {                                 \
+    TB_DYN_ARR_APPEND((queue)->storage, element);                              \
+    SDL_UnlockMutex((queue)->mutex);                                           \
+  }
+
 #define TB_QUEUE_POP(queue, out)                                               \
   ({                                                                           \
     bool ret = false;                                                          \

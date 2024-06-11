@@ -2629,9 +2629,9 @@ void tick_core_desc_pool(TbRenderPipelineSystem *self) {
       self->lum_hist_work.set_layout, self->lum_avg_work.set_layout,
       self->tonemap_set_layout,
   };
-  err =
-      tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
-                                  self->descriptor_pools, set_count, set_count);
+  err = tb_rnd_frame_desc_pool_tick(
+      self->rnd_sys, "render_pipeline", &pool_info, layouts, NULL,
+      self->descriptor_pools, set_count, set_count);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 #undef SET_COUNT
 
@@ -2804,9 +2804,9 @@ void tick_downsample_desc_pool(TbRenderPipelineSystem *self) {
     layouts[i] = self->downsample_work.set_layout;
   }
 
-  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
-                                    self->down_desc_pools, BLUR_BATCH_COUNT,
-                                    BLUR_BATCH_COUNT);
+  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, "downsample", &pool_info,
+                                    layouts, NULL, self->down_desc_pools,
+                                    BLUR_BATCH_COUNT, BLUR_BATCH_COUNT);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 
 #define WRITE_COUNT BLUR_BATCH_COUNT * 2
@@ -2897,9 +2897,9 @@ void tick_upsample_desc_pool(TbRenderPipelineSystem *self) {
     layouts[i] = self->upsample_work.set_layout;
   }
 
-  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, &pool_info, layouts, NULL,
-                                    self->up_desc_pools, BLUR_BATCH_COUNT,
-                                    BLUR_BATCH_COUNT);
+  err = tb_rnd_frame_desc_pool_tick(self->rnd_sys, "upsample", &pool_info,
+                                    layouts, NULL, self->up_desc_pools,
+                                    BLUR_BATCH_COUNT, BLUR_BATCH_COUNT);
   TB_VK_CHECK(err, "Failed to tick descriptor pool");
 
 #define WRITE_COUNT BLUR_BATCH_COUNT * 2

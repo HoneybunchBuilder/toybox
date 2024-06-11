@@ -19,7 +19,7 @@ typedef struct TbSpatialAudioSource {
 ECS_COMPONENT_DECLARE(TbSpatialAudioSourceDesc);
 ECS_COMPONENT_DECLARE(TbSpatialAudioSource);
 
-bool tb_load_spatial_audio_source_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_spatial_audio_source_comp(ecs_world_t *ecs, ecs_entity_t ent,
                                        const char *source_path,
                                        const cgltf_data *data,
                                        const cgltf_node *node,
@@ -30,6 +30,8 @@ bool tb_load_spatial_audio_source_comp(TbWorld *world, ecs_entity_t ent,
   char *file_path = NULL;
 
   TbSpatialAudioSource comp = {0};
+
+  tb_auto world = ecs_singleton_get(ecs, TbWorldRef)->world;
 
   json_object_object_foreach(json, key, value) {
     // Determine file path
@@ -44,7 +46,7 @@ bool tb_load_spatial_audio_source_comp(TbWorld *world, ecs_entity_t ent,
 
   // TODO: Start task to load the audio file
 
-  ecs_set_ptr(world->ecs, ent, TbSpatialAudioSource, &comp);
+  ecs_set_ptr(ecs, ent, TbSpatialAudioSource, &comp);
   return true;
 }
 

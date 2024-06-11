@@ -84,8 +84,9 @@ void tick_fxaa_draw(ecs_iter_t *it) {
                 },
             },
     };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, &create_info, &self->set_layout, NULL,
-                                self->pools.pools, 1, 1);
+    tb_rnd_frame_desc_pool_tick(rnd_sys, "fxaa", &create_info,
+                                &self->set_layout, NULL, self->pools.pools, 1,
+                                1);
     VkDescriptorSet set =
         tb_rnd_frame_desc_pool_get_set(rnd_sys, self->pools.pools, 0);
 

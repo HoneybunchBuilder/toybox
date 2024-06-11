@@ -16,12 +16,11 @@
 
 ECS_COMPONENT_DECLARE(TbMeshComponent);
 
-bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
+bool tb_load_mesh_comp(ecs_world_t *ecs, ecs_entity_t ent,
                        const char *source_path, const cgltf_data *data,
                        const cgltf_node *node, json_object *json) {
-  TracyCZoneN(ctx, "Load Mesh Component", true);
   (void)json;
-  tb_auto ecs = world->ecs;
+  TB_TRACY_SCOPE("Load Mesh Component");
 
   // Find mesh index by indexing. This is dirty but it works
   uint32_t mesh_idx = SDL_MAX_UINT32;
@@ -47,7 +46,6 @@ bool tb_load_mesh_comp(TbWorld *world, ecs_entity_t ent,
   // Mark this entity as a render object
   ecs_set(ecs, ent, TbRenderObject, {0});
 
-  TracyCZoneEnd(ctx);
   return true;
 }
 

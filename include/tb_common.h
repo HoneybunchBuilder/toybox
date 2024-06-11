@@ -38,9 +38,6 @@
     return (ret);                                                              \
   }
 
-#define TB_COPY(dst, src, count, type)                                         \
-  SDL_memcpy((dst), (src), sizeof(type) * count)
-
 #ifdef __ANDROID__
 #define ASSET_PREFIX ""
 #else
