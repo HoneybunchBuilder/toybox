@@ -98,8 +98,8 @@ void tb_parse_scene_task(const void *args) {
   json_tokener *tok = json_tokener_new(); // TODO: clean this up alongside data
 
   // Create an entity for each node
-  for (cgltf_size i = 0; i < data->scene->nodes_count; ++i) {
-    tb_auto node = data->scene->nodes[i];
+  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+    tb_auto node = &data->nodes[i];
 
     json_object *json = NULL;
     {
@@ -335,8 +335,8 @@ void tb_load_entities(ecs_iter_t *it) {
 void tb_resolve_parents(ecs_iter_t *it) {
   tb_auto ecs = it->world;
 
-  tb_auto nodes = ecs_field(it, TbNode, 1);
-  tb_auto scene_refs = ecs_field(it, TbSceneRef, 2);
+  tb_auto nodes = ecs_field(it, TbNode, 2);
+  tb_auto scene_refs = ecs_field(it, TbSceneRef, 3);
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto entity = it->entities[i];
     tb_auto node = nodes[i];
