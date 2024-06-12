@@ -46,7 +46,6 @@ ECS_TAG_DECLARE(TbSceneLoading);
 ECS_TAG_DECLARE(TbSceneLoaded);
 ECS_TAG_DECLARE(TbSceneReady);
 ECS_TAG_DECLARE(TbComponentsReady);
-ECS_TAG_DECLARE(TbEntityEnabled);
 ECS_TAG_DECLARE(TbEntityReady);
 
 typedef struct TbSceneParsedArgs {
@@ -91,6 +90,44 @@ typedef struct TbParseSceneArgs {
   TbPinnedTask parsed_task;
 } TbParseSceneArgs;
 
+void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
+                                 TbEntityTaskQueue *queue, json_tokener *tok,
+                                 const cgltf_data *data,
+                                 const cgltf_node *node) {
+  json_object *json = NULL;
+  {
+    cgltf_size extra_size = 0;
+    char *extra_json = NULL;
+    if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
+      extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
+      extra_json = tb_alloc_nm_tp(tb_thread_alloc, extra_size, char);
+      if (cgltf_copy_extras_json(data, &node->extras, extra_json,
+                                 &extra_size) != cgltf_result_success) {
+        extra_size = 0;
+        extra_json = NULL;
+      }
+    }
+
+    if (extra_json) {
+      json = json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
+    }
+  }
+
+  // Enqueue entity load request
+  TbEntityLoadRequest req = {
+      .ecs = ecs,
+      .source_path = path,
+      .data = data,
+      .node = node,
+      .json = json,
+  };
+  TB_QUEUE_PUSH_PTR(queue, req);
+
+  for (cgltf_size i = 0; i < node->children_count; ++i) {
+    tb_enqueue_entity_parse_req(ecs, path, queue, tok, data, node->children[i]);
+  }
+}
+
 void tb_parse_scene_task(const void *args) {
   TB_TRACY_SCOPE("Parse GLTF Scene Task");
   tb_auto load_args = (const TbParseSceneArgs *)args;
@@ -109,37 +146,9 @@ void tb_parse_scene_task(const void *args) {
   json_tokener *tok = json_tokener_new(); // TODO: clean this up alongside data
 
   // Create an entity for each node
-  for (cgltf_size i = 0; i < data->nodes_count; ++i) {
-    tb_auto node = &data->nodes[i];
-
-    json_object *json = NULL;
-    {
-      cgltf_size extra_size = 0;
-      char *extra_json = NULL;
-      if (node->extras.end_offset != 0 && node->extras.start_offset != 0) {
-        extra_size = (node->extras.end_offset - node->extras.start_offset) + 1;
-        extra_json = tb_alloc_nm_tp(tb_thread_alloc, extra_size, char);
-        if (cgltf_copy_extras_json(data, &node->extras, extra_json,
-                                   &extra_size) != cgltf_result_success) {
-          extra_size = 0;
-          extra_json = NULL;
-        }
-      }
-
-      if (extra_json) {
-        json = json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
-      }
-    }
-
-    // Enqueue entity load request
-    TbEntityLoadRequest req = {
-        .ecs = ecs,
-        .source_path = path,
-        .data = data,
-        .node = node,
-        .json = json,
-    };
-    TB_QUEUE_PUSH_PTR(queue, req);
+  for (cgltf_size i = 0; i < data->scenes[0].nodes_count; ++i) {
+    tb_auto node = data->scenes[0].nodes[i];
+    tb_enqueue_entity_parse_req(ecs, path, queue, tok, data, node);
   }
 
   TbSceneParsedArgs parsed_args = {
@@ -284,9 +293,7 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
     }
   }
 
-  if (enabled) {
-    ecs_add(ecs, ent, TbEntityEnabled);
-  }
+  ecs_enable(ecs, ent, enabled);
   return ent;
 }
 
@@ -462,8 +469,14 @@ void tb_ready_check_scenes(ecs_iter_t *it) {
                                       }});
     tb_auto filter_it = ecs_filter_iter(ecs, filter);
     while (ecs_filter_next(&filter_it)) {
+      tb_auto scene_refs = ecs_field(&filter_it, TbSceneRef, 1);
       for (int32_t ent_idx = 0; ent_idx < filter_it.count; ++ent_idx) {
         tb_auto entity = filter_it.entities[ent_idx];
+        tb_auto scene_ref = scene_refs[ent_idx];
+        if (scene != scene_ref) {
+          continue;
+        }
+
         if (ecs_has(ecs, entity, TbTransformComponent)) {
           tb_transform_mark_dirty(ecs, entity);
         }
@@ -490,7 +503,6 @@ void tb_register_scene_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbSceneLoaded);
   ECS_TAG_DEFINE(ecs, TbSceneReady);
   ECS_TAG_DEFINE(ecs, TbComponentsReady);
-  ECS_TAG_DEFINE(ecs, TbEntityEnabled);
   ECS_TAG_DEFINE(ecs, TbEntityReady);
 
   // This is a no-readonly system because we are adding entities

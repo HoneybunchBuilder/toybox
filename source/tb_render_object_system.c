@@ -127,13 +127,14 @@ void tick_render_object_system(ecs_iter_t *it) {
 
   // We can optimize this later but for now just always update this descriptor
   // set every frame
-  if (trans_buffer->obj_count > 0) {
+  tb_auto trans_count = trans_buffer->obj_count;
+  if (trans_count > 0) {
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         .poolSizeCount = 1,
         .pPoolSizes = (VkDescriptorPoolSize[1]){{
-            .descriptorCount = trans_buffer->obj_count,
+            .descriptorCount = trans_count,
             .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         }},
         .maxSets = 1,
@@ -142,17 +143,17 @@ void tick_render_object_system(ecs_iter_t *it) {
         .sType =
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
         .descriptorSetCount = 1,
-        .pDescriptorCounts = (uint32_t[1]){trans_buffer->obj_count},
+        .pDescriptorCounts = (uint32_t[1]){trans_count},
     };
     tb_rnd_frame_desc_pool_tick(rnd_sys, "render_object", &pool_info,
                                 &ro_sys->set_layout, &alloc_info, ro_sys->pools,
                                 1, 1);
 
     // Write all transform data to one descriptor
-    tb_auto buffer_info = tb_alloc_nm_tp(
-        rnd_sys->tmp_alloc, trans_buffer->obj_count, VkDescriptorBufferInfo);
+    tb_auto buffer_info =
+        tb_alloc_nm_tp(rnd_sys->tmp_alloc, trans_count, VkDescriptorBufferInfo);
 
-    for (int32_t i = 0; i < trans_buffer->obj_count; ++i) {
+    for (int32_t i = 0; i < trans_count; ++i) {
       buffer_info[i] = (VkDescriptorBufferInfo){
           .offset = sizeof(TbCommonObjectData) * i,
           .range = sizeof(TbCommonObjectData),
@@ -162,7 +163,7 @@ void tick_render_object_system(ecs_iter_t *it) {
 
     tb_auto write = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .descriptorCount = trans_buffer->obj_count,
+        .descriptorCount = trans_count,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .dstSet = tb_render_object_sys_get_set(ro_sys),
         .pBufferInfo = buffer_info,
