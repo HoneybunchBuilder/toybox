@@ -44,7 +44,9 @@ ECS_TAG_DECLARE(TbSceneParsing);
 ECS_TAG_DECLARE(TbSceneParsed);
 ECS_TAG_DECLARE(TbSceneLoading);
 ECS_TAG_DECLARE(TbSceneLoaded);
+ECS_TAG_DECLARE(TbSceneReady);
 ECS_TAG_DECLARE(TbComponentsReady);
+ECS_TAG_DECLARE(TbEntityEnabled);
 ECS_TAG_DECLARE(TbEntityReady);
 
 typedef struct TbSceneParsedArgs {
@@ -282,7 +284,9 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
     }
   }
 
-  ecs_enable(ecs, ent, enabled);
+  if (enabled) {
+    ecs_add(ecs, ent, TbEntityEnabled);
+  }
   return ent;
 }
 
@@ -407,7 +411,6 @@ void tb_ready_check_entities(ecs_iter_t *it) {
     tb_auto filter_it = ecs_filter_iter(ecs, filter);
     while (ecs_filter_next(&filter_it)) {
       for (int32_t ent_idx = 0; ent_idx < filter_it.count; ++ent_idx) {
-
         tb_auto entity = filter_it.entities[ent_idx];
 
         // Entity already ready
@@ -447,6 +450,31 @@ void tb_ready_check_entities(ecs_iter_t *it) {
   }
 }
 
+void tb_ready_check_scenes(ecs_iter_t *it) {
+  tb_auto ecs = it->world;
+  for (int32_t scene_idx = 0; scene_idx < it->count; ++scene_idx) {
+    TbScene scene = it->entities[scene_idx];
+
+    // We're here because all entities are loaded
+    // Mark everything as ready!
+    tb_auto filter = ecs_filter(ecs, {.terms = {
+                                          {.id = ecs_id(TbSceneRef)},
+                                      }});
+    tb_auto filter_it = ecs_filter_iter(ecs, filter);
+    while (ecs_filter_next(&filter_it)) {
+      for (int32_t ent_idx = 0; ent_idx < filter_it.count; ++ent_idx) {
+        tb_auto entity = filter_it.entities[ent_idx];
+        if (ecs_has(ecs, entity, TbTransformComponent)) {
+          tb_transform_mark_dirty(ecs, entity);
+        }
+      }
+    }
+
+    ecs_remove(ecs, scene, TbSceneLoaded);
+    ecs_add(ecs, scene, TbSceneReady);
+  }
+}
+
 void tb_register_scene_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbEntityTaskQueue);
@@ -460,7 +488,9 @@ void tb_register_scene_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbSceneParsed);
   ECS_TAG_DEFINE(ecs, TbSceneLoading);
   ECS_TAG_DEFINE(ecs, TbSceneLoaded);
+  ECS_TAG_DEFINE(ecs, TbSceneReady);
   ECS_TAG_DEFINE(ecs, TbComponentsReady);
+  ECS_TAG_DEFINE(ecs, TbEntityEnabled);
   ECS_TAG_DEFINE(ecs, TbEntityReady);
 
   // This is a no-readonly system because we are adding entities
@@ -482,6 +512,8 @@ void tb_register_scene_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, tb_ready_check_entities,
              EcsPostLoad, [in] TbSceneEntityCount, [out] TbSceneEntReadyCounter,
              TbSceneLoading);
+
+  ECS_SYSTEM(ecs, tb_ready_check_scenes, EcsPostLoad, TbSceneLoaded);
 }
 
 void tb_unregister_scene_sys(TbWorld *world) { (void)world; }

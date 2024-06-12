@@ -253,7 +253,7 @@ void tb_on_rigidbody_set(flecs::entity ent, TbRigidbodyComponent &rb) {
 
   auto body = JPH::BodyID(rb);
   bodies.SetPositionAndRotation(body, position, rotation,
-                                JPH::EActivation::DontActivate);
+                                JPH::EActivation::Activate);
 }
 
 void tb_on_rigidbody_removed(flecs::entity ent, TbRigidbodyComponent &rb) {
@@ -516,7 +516,7 @@ bool tb_load_rigidbody_comp(ecs_world_t *_ecs, ecs_entity_t ent,
   body_settings.mMassPropertiesOverride.mMass = 1.0f;
 
   JPH::BodyID body =
-      bodies.CreateAndAddBody(body_settings, JPH::EActivation::DontActivate);
+      bodies.CreateAndAddBody(body_settings, JPH::EActivation::Activate);
 
   TbRigidbodyComponent comp = {
       body.GetIndexAndSequenceNumber(),
