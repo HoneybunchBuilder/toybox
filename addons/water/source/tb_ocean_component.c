@@ -100,7 +100,7 @@ TbOceanSample tb_sample_ocean(const TbOceanComponent *ocean, ecs_world_t *ecs,
   return sample;
 }
 
-ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_ocean_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbOceanComponent);
   ECS_COMPONENT_DEFINE(ecs, TbOceanWave);
@@ -126,7 +126,8 @@ ecs_entity_t tb_register_ocean_comp(TbWorld *world) {
                         .type = ecs_vector(ecs, {.type = ecs_id(TbOceanWave)})},
                    },
            });
-  return ecs_id(TbOceanDescriptor);
+  return (TbComponentRegisterResult){ecs_id(TbOceanComponent),
+                                     ecs_id(TbOceanDescriptor)};
 }
 
 bool tb_load_ocean_comp(ecs_world_t *ecs, ecs_entity_t ent,
@@ -143,6 +144,11 @@ bool tb_load_ocean_comp(ecs_world_t *ecs, ecs_entity_t ent,
 
 void tb_destroy_ocean_comp(TbWorld *world, ecs_entity_t ent) {
   ecs_remove(world->ecs, ent, TbOceanComponent);
+}
+
+bool tb_ready_ocean_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbOceanComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, ocean)

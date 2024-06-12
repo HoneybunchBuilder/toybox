@@ -41,7 +41,7 @@ bool tb_load_camera_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_camera_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_camera_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbCameraComponent);
 
@@ -62,7 +62,12 @@ ecs_entity_t tb_register_camera_comp(TbWorld *world) {
              });
 
   // Returning 0 means we need no custom descriptor for editor UI
-  return 0;
+  return (TbComponentRegisterResult){ecs_id(TbCameraComponent), 0};
+}
+
+bool tb_ready_camera_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbCameraComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, camera)

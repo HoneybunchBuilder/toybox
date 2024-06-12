@@ -123,7 +123,7 @@ bool tb_load_transform_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_transform_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_transform_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, float3);
   ECS_COMPONENT_DEFINE(ecs, float4);
@@ -169,7 +169,12 @@ ecs_entity_t tb_register_transform_comp(TbWorld *world) {
              });
 
   // Return 0 because we don't actually want to mark an id for UI schema export
-  return 0;
+  return (TbComponentRegisterResult){ecs_id(TbTransformComponent), 0};
+}
+
+bool tb_ready_transform_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbTransformComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, transform)

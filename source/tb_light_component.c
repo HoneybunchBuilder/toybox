@@ -34,11 +34,16 @@ bool tb_load_light_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_light_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_light_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbDirectionalLightComponent);
   // Returning 0 means we need no custom descriptor for editor UI
-  return 0;
+  return (TbComponentRegisterResult){ecs_id(TbDirectionalLightComponent), 0};
+}
+
+bool tb_ready_light_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbDirectionalLightComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, light)

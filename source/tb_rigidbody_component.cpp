@@ -271,7 +271,7 @@ void tb_on_rigidbody_removed(flecs::entity ent, TbRigidbodyComponent &rb) {
   bodies.RemoveBody(body);
 }
 
-ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_rigidbody_comp(TbWorld *world) {
   flecs::world ecs(world->ecs);
 
   // Is there a better way to avoid having to use this macro in C++?
@@ -348,7 +348,8 @@ ecs_entity_t tb_register_rigidbody_comp(TbWorld *world) {
               }});
 #pragma clang diagnostic pop
 
-  return ecs_id(TbRigidbodyDescriptor);
+  return TbComponentRegisterResult{ecs_id(TbRigidbodyComponent),
+                                   ecs_id(TbRigidbodyDescriptor)};
 }
 
 bool tb_load_rigidbody_comp(ecs_world_t *_ecs, ecs_entity_t ent,
@@ -523,6 +524,11 @@ bool tb_load_rigidbody_comp(ecs_world_t *_ecs, ecs_entity_t ent,
   ecs.entity(ent).set<TbRigidbodyComponent>(comp);
 
   return true;
+}
+
+bool tb_ready_rigidbody_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  auto comp = ecs_get(ecs, ent, TbRigidbodyComponent);
+  return comp != nullptr;
 }
 
 TB_REGISTER_COMP(tb, rigidbody);

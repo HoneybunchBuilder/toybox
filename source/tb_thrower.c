@@ -35,7 +35,7 @@ bool tb_load_thrower_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_thrower_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_thrower_comp(TbWorld *world) {
   tb_auto ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbThrowerDesc);
@@ -49,7 +49,12 @@ ecs_entity_t tb_register_thrower_comp(TbWorld *world) {
 
                    }});
 
-  return ecs_id(TbThrowerDesc);
+  return (TbComponentRegisterResult){ecs_id(TbThrower), ecs_id(TbThrowerDesc)};
+}
+
+bool tb_ready_thrower_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbThrower);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, thrower)

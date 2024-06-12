@@ -35,6 +35,8 @@ typedef struct TbComponentEntry {
   char *name;
   TbRegisterComponentFn reg_fn;
   TbLoadComponentFn load_fn;
+  TbReadyComponentFn ready_fn;
+  ecs_entity_t id;
   ecs_entity_t desc_id;
 } TbComponentEntry;
 
@@ -117,7 +119,8 @@ void tb_register_system(const char *name, int32_t priority,
 static TbComponentRegistry s_comp_reg = {0};
 
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
-                           TbLoadComponentFn load_fn) {
+                           TbLoadComponentFn load_fn,
+                           TbReadyComponentFn ready_fn) {
   TracyCZoneN(ctx, "Register Component", true);
   int32_t index = s_comp_reg.count;
   int32_t next_count = ++s_comp_reg.count;
@@ -128,6 +131,7 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   tb_auto entry = &s_comp_reg.entries[index];
   entry->reg_fn = reg_fn;
   entry->load_fn = load_fn;
+  entry->ready_fn = ready_fn;
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
@@ -207,7 +211,9 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   for (int32_t i = 0; i < s_comp_reg.count; ++i) {
     tb_auto fn = s_comp_reg.entries[i].reg_fn;
     if (fn) {
-      s_comp_reg.entries[i].desc_id = fn(world);
+      tb_auto result = fn(world);
+      s_comp_reg.entries[i].id = result.type_id;
+      s_comp_reg.entries[i].desc_id = result.desc_id;
     }
   }
 
@@ -324,4 +330,21 @@ TbLoadComponentFn tb_get_component_load_fn(const char *name) {
     }
   }
   return NULL;
+}
+
+bool tb_enitity_components_ready(ecs_world_t *ecs, ecs_entity_t ent) {
+  bool ready = true;
+  for (int32_t i = 0; i < s_comp_reg.count; ++i) {
+    tb_auto comp_entry = &s_comp_reg.entries[i];
+    // If the entity lacks this component, don't test it
+    if (!ecs_has_id(ecs, ent, comp_entry->id)) {
+      continue;
+    }
+    ready = comp_entry->ready_fn(ecs, ent);
+    if (ready == false) {
+      break;
+    }
+  }
+
+  return ready;
 }

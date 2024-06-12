@@ -190,7 +190,7 @@ void tb_unregister_time_of_day_sys(TbWorld *world) {
 
 TB_REGISTER_SYS(tb, time_of_day, TB_SYSTEM_NORMAL)
 
-ecs_entity_t tb_register_time_of_day_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_time_of_day_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayComponent);
   ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayDescriptor);
@@ -201,7 +201,8 @@ ecs_entity_t tb_register_time_of_day_comp(TbWorld *world) {
                        {.name = "time_scale", .type = ecs_id(ecs_f32_t)},
                    }});
 
-  return ecs_id(TbTimeOfDayDescriptor);
+  return (TbComponentRegisterResult){ecs_id(TbTimeOfDayComponent),
+                                     ecs_id(TbTimeOfDayDescriptor)};
 }
 
 bool tb_load_time_of_day_comp(ecs_world_t *ecs, ecs_entity_t ent,
@@ -227,6 +228,11 @@ bool tb_load_time_of_day_comp(ecs_world_t *ecs, ecs_entity_t ent,
 
 void tb_destroy_time_of_day_comp(TbWorld *world, ecs_entity_t ent) {
   ecs_remove(world->ecs, ent, TbTimeOfDayComponent);
+}
+
+bool tb_ready_time_of_day_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbTimeOfDayComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, time_of_day)

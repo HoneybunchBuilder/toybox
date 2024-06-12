@@ -1,9 +1,9 @@
 #include "tb_noclip_component.h"
 
-#include "json.h"
+#include "tb_common.h"
 #include "tb_world.h"
 
-#include <SDL3/SDL_stdinc.h>
+#include <json.h>
 
 ECS_COMPONENT_DECLARE(TbNoClipComponent);
 
@@ -25,7 +25,7 @@ bool tb_load_noclip_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_noclip_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_noclip_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbNoClipComponent);
 
@@ -34,7 +34,13 @@ ecs_entity_t tb_register_noclip_comp(TbWorld *world) {
                        {.name = "move_speed", .type = ecs_id(ecs_f32_t)},
                        {.name = "look_speed", .type = ecs_id(ecs_f32_t)},
                    }});
-  return ecs_id(TbNoClipComponent);
+  return (TbComponentRegisterResult){ecs_id(TbNoClipComponent),
+                                     ecs_id(TbNoClipComponent)};
+}
+
+bool tb_ready_noclip_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbNoClipComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, noclip)

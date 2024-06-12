@@ -37,18 +37,26 @@ typedef struct json_object json_object;
 typedef struct cgltf_data cgltf_data;
 typedef struct cgltf_node cgltf_node;
 
-typedef ecs_entity_t (*TbRegisterComponentFn)(TbWorld *);
+typedef struct TbComponentRegisterResult {
+  ecs_entity_t type_id;
+  ecs_entity_t desc_id;
+} TbComponentRegisterResult;
+
+typedef TbComponentRegisterResult (*TbRegisterComponentFn)(TbWorld *);
 typedef bool (*TbLoadComponentFn)(ecs_world_t *ecs, ecs_entity_t ent,
                                   const char *source_path,
                                   const cgltf_data *data,
                                   const cgltf_node *node, json_object *json);
+typedef bool (*TbReadyComponentFn)(ecs_world_t *ecs, ecs_entity_t ent);
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
-                           TbLoadComponentFn load_fn);
+                           TbLoadComponentFn load_fn,
+                           TbReadyComponentFn ready_fn);
 #define TB_REGISTER_COMP(namespace, name)                                      \
   __attribute__((                                                              \
       __constructor__)) void __##namespace##_register_##name##_comp(void) {    \
     tb_register_component(#name, &namespace##_register_##name##_comp,          \
-                          &namespace##_load_##name##_comp);                    \
+                          &namespace##_load_##name##_comp,                     \
+                          &namespace##_ready_##name##_comp);                   \
   }
 
 typedef struct TbWorldDesc {
@@ -83,6 +91,7 @@ void tb_unload_scene(TbWorld *world, TbScene *scene);
 
 // HACK: Get component load function by name for scene2
 TbLoadComponentFn tb_get_component_load_fn(const char *name);
+bool tb_enitity_components_ready(ecs_world_t *ecs, ecs_entity_t ent);
 
 extern ECS_COMPONENT_DECLARE(float3);
 extern ECS_COMPONENT_DECLARE(float4);

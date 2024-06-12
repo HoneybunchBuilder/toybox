@@ -50,7 +50,8 @@ bool tb_load_spatial_audio_source_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_spatial_audio_source_comp(TbWorld *world) {
+TbComponentRegisterResult
+tb_register_spatial_audio_source_comp(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbSpatialAudioSource);
   ECS_COMPONENT_DEFINE(ecs, TbSpatialAudioSourceDesc);
@@ -60,7 +61,13 @@ ecs_entity_t tb_register_spatial_audio_source_comp(TbWorld *world) {
                        {.name = "file_path", .type = ecs_id(ecs_string_t)},
                    }});
 
-  return ecs_id(TbSpatialAudioSourceDesc);
+  return (TbComponentRegisterResult){ecs_id(TbSpatialAudioSource),
+                                     ecs_id(TbSpatialAudioSourceDesc)};
+}
+
+bool tb_ready_spatial_audio_source_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbSpatialAudioSource);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, spatial_audio_source)

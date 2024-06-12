@@ -30,8 +30,12 @@ typedef const struct cgltf_node *TbNode;
 ECS_COMPONENT_DECLARE(TbNode);
 ECS_TAG_DECLARE(TbParentRequest);
 
-typedef uint32_t TbSceneEntityCounter;
-ECS_COMPONENT_DECLARE(TbSceneEntityCounter);
+typedef uint32_t TbSceneEntityCount;
+ECS_COMPONENT_DECLARE(TbSceneEntityCount);
+typedef uint32_t TbSceneEntParseCounter;
+ECS_COMPONENT_DECLARE(TbSceneEntParseCounter);
+typedef uint32_t TbSceneEntReadyCounter;
+ECS_COMPONENT_DECLARE(TbSceneEntReadyCounter);
 
 typedef TbScene TbSceneRef;
 ECS_COMPONENT_DECLARE(TbSceneRef);
@@ -40,6 +44,8 @@ ECS_TAG_DECLARE(TbSceneParsing);
 ECS_TAG_DECLARE(TbSceneParsed);
 ECS_TAG_DECLARE(TbSceneLoading);
 ECS_TAG_DECLARE(TbSceneLoaded);
+ECS_TAG_DECLARE(TbComponentsReady);
+ECS_TAG_DECLARE(TbEntityReady);
 
 typedef struct TbSceneParsedArgs {
   ecs_world_t *ecs;
@@ -66,7 +72,10 @@ void tb_scene_parsed(const void *args) {
   ecs_add(ecs, scene, TbSceneParsed);
 
   ecs_set_ptr(ecs, scene, TbEntityTaskQueue, load_args->queue);
-  ecs_set(ecs, scene, TbSceneEntityCounter, {data->nodes_count});
+  ecs_set(ecs, scene, TbSceneEntityCount, {data->nodes_count});
+  ecs_set(ecs, scene, TbSceneEntParseCounter,
+          {data->nodes_count});                     // Counts down
+  ecs_set(ecs, scene, TbSceneEntReadyCounter, {0}); // Counts up
 
   TracyCZoneEnd(ctx);
 }
@@ -284,7 +293,7 @@ void tb_load_entities(ecs_iter_t *it) {
   static const uint32_t MAX_ENTITIES_DEQUEUE_PER_FRAME = 16;
 
   tb_auto entity_queues = ecs_field(it, TbEntityTaskQueue, 1);
-  tb_auto counters = ecs_field(it, TbSceneEntityCounter, 2);
+  tb_auto counters = ecs_field(it, TbSceneEntParseCounter, 2);
   uint32_t dequeue_counter = 0;
   bool exit = false;
 
@@ -369,10 +378,81 @@ void tb_resolve_parents(ecs_iter_t *it) {
   }
 }
 
+void tb_ready_check_components(ecs_iter_t *it) {
+  tb_auto ecs = it->world;
+
+  for (int32_t ent_idx = 0; ent_idx < it->count; ++ent_idx) {
+    tb_auto ent = it->entities[ent_idx];
+    if (tb_enitity_components_ready(ecs, ent)) {
+      ecs_add(ecs, ent, TbComponentsReady);
+    }
+  }
+}
+
+void tb_ready_check_entities(ecs_iter_t *it) {
+  tb_auto ecs = it->world;
+
+  tb_auto ent_totals = ecs_field(it, TbSceneEntityCount, 1);
+  tb_auto counters = ecs_field(it, TbSceneEntReadyCounter, 2);
+  for (int32_t scene_idx = 0; scene_idx < it->count; ++scene_idx) {
+    tb_auto scene = it->entities[scene_idx];
+    tb_auto counter = &counters[scene_idx];
+    tb_auto total = ent_totals[scene_idx];
+
+    bool complete = false;
+
+    tb_auto filter = ecs_filter(ecs, {.terms = {
+                                          {.id = ecs_id(TbNode)},
+                                      }});
+    tb_auto filter_it = ecs_filter_iter(ecs, filter);
+    while (ecs_filter_next(&filter_it)) {
+      for (int32_t ent_idx = 0; ent_idx < filter_it.count; ++ent_idx) {
+
+        tb_auto entity = filter_it.entities[ent_idx];
+
+        // Entity already ready
+        if (ecs_has(ecs, entity, TbEntityReady)) {
+          continue;
+        }
+
+        // Not relevant to this scene
+        if (scene != *ecs_get(ecs, entity, TbSceneRef)) {
+          continue;
+        }
+        // Parent is still being resolved
+        if (ecs_has(ecs, entity, TbParentRequest)) {
+          continue;
+        }
+        // Components are still pending
+        if (!ecs_has(ecs, entity, TbComponentsReady)) {
+          continue;
+        }
+
+        // Entity is ready! Remove unnecessary components and mark as ready
+        ecs_remove(ecs, entity, TbNode);
+        ecs_add(ecs, entity, TbEntityReady);
+        (*counter)++;
+        if (*counter == total) {
+          complete = true;
+          break;
+        }
+      }
+    }
+    ecs_filter_fini(filter);
+
+    if (complete) {
+      ecs_remove(ecs, scene, TbSceneLoading);
+      ecs_add(ecs, scene, TbSceneLoaded);
+    }
+  }
+}
+
 void tb_register_scene_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbEntityTaskQueue);
-  ECS_COMPONENT_DEFINE(ecs, TbSceneEntityCounter);
+  ECS_COMPONENT_DEFINE(ecs, TbSceneEntityCount);
+  ECS_COMPONENT_DEFINE(ecs, TbSceneEntParseCounter);
+  ECS_COMPONENT_DEFINE(ecs, TbSceneEntReadyCounter);
   ECS_COMPONENT_DEFINE(ecs, TbNode);
   ECS_COMPONENT_DEFINE(ecs, TbSceneRef);
   ECS_TAG_DEFINE(ecs, TbParentRequest);
@@ -380,19 +460,28 @@ void tb_register_scene_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbSceneParsed);
   ECS_TAG_DEFINE(ecs, TbSceneLoading);
   ECS_TAG_DEFINE(ecs, TbSceneLoaded);
+  ECS_TAG_DEFINE(ecs, TbComponentsReady);
+  ECS_TAG_DEFINE(ecs, TbEntityReady);
 
   // This is a no-readonly system because we are adding entities
   ecs_system(ecs,
              {.entity = ecs_entity(ecs, {.name = "tb_load_entities",
                                          .add = {ecs_dependson(EcsOnLoad)}}),
               .query.filter.terms = {{.id = ecs_id(TbEntityTaskQueue)},
-                                     {.id = ecs_id(TbSceneEntityCounter)},
+                                     {.id = ecs_id(TbSceneEntParseCounter)},
                                      {.id = ecs_id(TbSceneParsed)}},
               .callback = tb_load_entities,
               .no_readonly = true});
 
   ECS_SYSTEM(ecs, tb_resolve_parents,
              EcsPostLoad, [in] TbParentRequest, [in] TbNode, [in] TbSceneRef);
+
+  ECS_SYSTEM(ecs, tb_ready_check_components,
+             EcsPostLoad, [in] TbNode, [in] !TbComponentsReady);
+
+  ECS_SYSTEM(ecs, tb_ready_check_entities,
+             EcsPostLoad, [in] TbSceneEntityCount, [out] TbSceneEntReadyCounter,
+             TbSceneLoading);
 }
 
 void tb_unregister_scene_sys(TbWorld *world) { (void)world; }

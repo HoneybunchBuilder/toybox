@@ -1,5 +1,6 @@
 #include "tb_sky_component.h"
 
+#include "tb_common.h"
 #include "tb_light_component.h"
 #include "tb_sky_system.h"
 #include "tb_world.h"
@@ -30,7 +31,7 @@ bool tb_load_sky_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_sky_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_sky_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbSkyDescriptor);
   ECS_COMPONENT_DEFINE(ecs, TbSkyComponent);
@@ -47,7 +48,13 @@ ecs_entity_t tb_register_sky_comp(TbWorld *world) {
                        {.name = "cumulus", .type = ecs_id(ecs_f32_t)},
                    }});
 
-  return ecs_id(TbSkyDescriptor);
+  return (TbComponentRegisterResult){ecs_id(TbSkyComponent),
+                                     ecs_id(TbSkyDescriptor)};
+}
+
+bool tb_ready_sky_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto sky = ecs_get(ecs, ent, TbSkyComponent);
+  return sky != NULL;
 }
 
 TB_REGISTER_COMP(tb, sky)

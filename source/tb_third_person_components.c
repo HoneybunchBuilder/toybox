@@ -91,7 +91,7 @@ bool tb_load_third_person_move_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_third_person_move_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_third_person_move_comp(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbThirdPersonMovementComponentDesc);
   ECS_COMPONENT_DEFINE(ecs, TbThirdPersonMovementComponent);
@@ -111,7 +111,14 @@ ecs_entity_t tb_register_third_person_move_comp(TbWorld *world) {
                        {.name = "fixed_rotation", .type = ecs_id(ecs_bool_t)},
                    }});
 
-  return ecs_id(TbThirdPersonMovementComponentDesc);
+  return (TbComponentRegisterResult){
+      ecs_id(TbThirdPersonMovementComponent),
+      ecs_id(TbThirdPersonMovementComponentDesc)};
+}
+
+bool tb_ready_third_person_move_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  tb_auto comp = ecs_get(ecs, ent, TbThirdPersonMovementComponent);
+  return comp != NULL;
 }
 
 TB_REGISTER_COMP(tb, third_person_move)

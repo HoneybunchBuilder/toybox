@@ -49,10 +49,19 @@ bool tb_load_mesh_comp(ecs_world_t *ecs, ecs_entity_t ent,
   return true;
 }
 
-ecs_entity_t tb_register_mesh_comp(TbWorld *world) {
+TbComponentRegisterResult tb_register_mesh_comp(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshComponent);
-  return 0;
+  return (TbComponentRegisterResult){ecs_id(TbMeshComponent), 0};
+}
+
+bool tb_ready_mesh_comp(ecs_world_t *ecs, ecs_entity_t ent) {
+  // Component is ready when mesh is ready
+  tb_auto comp = ecs_get(ecs, ent, TbMeshComponent);
+  if (!comp) {
+    return false;
+  }
+  return tb_is_mesh_ready(ecs, comp->mesh2);
 }
 
 TB_REGISTER_COMP(tb, mesh)
