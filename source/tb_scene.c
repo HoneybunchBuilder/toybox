@@ -239,13 +239,6 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
   }
 
   if (name) {
-    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Creating Entity: %d (%s)", ent,
-                 name);
-  } else {
-    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Creating Entity: %d", ent);
-  }
-
-  if (name) {
     ecs_set_name(ecs, ent, name);
   }
 

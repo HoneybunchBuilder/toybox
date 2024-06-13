@@ -147,7 +147,7 @@ void tick_render_object_system(ecs_iter_t *it) {
     };
     tb_rnd_frame_desc_pool_tick(rnd_sys, "render_object", &pool_info,
                                 &ro_sys->set_layout, &alloc_info, ro_sys->pools,
-                                1, 1);
+                                1, trans_count);
 
     // Write all transform data to one descriptor
     tb_auto buffer_info =
