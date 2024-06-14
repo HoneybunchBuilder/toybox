@@ -94,6 +94,7 @@ void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
                                  TbEntityTaskQueue *queue, json_tokener *tok,
                                  const cgltf_data *data,
                                  const cgltf_node *node) {
+  TB_TRACY_SCOPE("Enqueue Entity Parse Req");
   json_object *json = NULL;
   {
     cgltf_size extra_size = 0;
@@ -163,6 +164,7 @@ void tb_parse_scene_task(const void *args) {
 }
 
 TbScene tb_create_scene(ecs_world_t *ecs, const char *scene_path) {
+  TB_TRACY_SCOPE("Create Scene");
   // If an entity already exists with this name it is either loading or loaded
   TbScene scene = ecs_lookup(ecs, scene_path);
   if (scene != 0) {
@@ -226,6 +228,7 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
 
   // Determine what to call this entity
   const char *name = node->name;
+  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Entity %s", name);
   if (name && ecs_lookup(ecs, name) != TbInvalidEntityId) {
     name = NULL;
   }
@@ -303,14 +306,14 @@ void tb_load_entities(ecs_iter_t *it) {
 
   TbEntityLoadRequest load_req = {0};
   for (int32_t i = 0; i < it->count; ++i) {
-    tb_auto entity_queue = entity_queues[i];
+    tb_auto entity_queue = &entity_queues[i];
     tb_auto scene_counter = &counters[i];
     if (*scene_counter == 0) {
       continue;
     }
 
     TbScene scene = it->entities[i];
-    while (TB_QUEUE_POP(entity_queue, &load_req)) {
+    while (TB_QUEUE_POP(*entity_queue, &load_req)) {
       if (dequeue_counter >= MAX_ENTITIES_DEQUEUE_PER_FRAME ||
           *scene_counter == 0) {
         dequeue_counter = 0;
@@ -346,6 +349,7 @@ void tb_load_entities(ecs_iter_t *it) {
 }
 
 void tb_resolve_parents(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Resolve Parents");
   tb_auto ecs = it->world;
 
   tb_auto nodes = ecs_field(it, TbNode, 2);
@@ -383,6 +387,7 @@ void tb_resolve_parents(ecs_iter_t *it) {
 }
 
 void tb_ready_check_components(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Ready Check Components");
   tb_auto ecs = it->world;
 
   for (int32_t ent_idx = 0; ent_idx < it->count; ++ent_idx) {
@@ -394,6 +399,7 @@ void tb_ready_check_components(ecs_iter_t *it) {
 }
 
 void tb_ready_check_entities(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Ready Check Entities");
   tb_auto ecs = it->world;
 
   tb_auto ent_totals = ecs_field(it, TbSceneEntityCount, 1);
@@ -451,6 +457,7 @@ void tb_ready_check_entities(ecs_iter_t *it) {
 }
 
 void tb_ready_check_scenes(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Ready Check Scenes");
   tb_auto ecs = it->world;
   for (int32_t scene_idx = 0; scene_idx < it->count; ++scene_idx) {
     TbScene scene = it->entities[scene_idx];

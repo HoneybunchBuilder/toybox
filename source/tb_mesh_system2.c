@@ -1033,6 +1033,11 @@ void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
                                    const char *path, const char *name,
                                    uint32_t index) {
+  bool deferred = false;
+  if (ecs_is_deferred(ecs)) {
+    deferred = ecs_defer_end(ecs);
+  }
+
   const uint32_t max_name_len = 512;
   char mesh_name[max_name_len] = {0};
   SDL_snprintf(mesh_name, max_name_len, "%s_%s", path, name);
@@ -1040,6 +1045,9 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
   // If an entity already exists with this name it is either loading or loaded
   TbMesh2 mesh_ent = ecs_lookup_child(ecs, ecs_id(TbMeshCtx), mesh_name);
   if (mesh_ent != 0) {
+    if (deferred) {
+      ecs_defer_begin(ecs);
+    }
     return mesh_ent;
   }
 
@@ -1055,6 +1063,10 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
   // Append a mesh load request onto the entity to schedule loading
   ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {data, index});
   ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
+
+  if (deferred) {
+    ecs_defer_begin(ecs);
+  }
 
   return mesh_ent;
 }

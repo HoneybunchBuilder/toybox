@@ -201,12 +201,8 @@ void tb_register_render_object_sys(TbWorld *world) {
       ecs_query(ecs, {
                          .filter.terms =
                              {
-                                 {
-                                     .id = ecs_id(TbTransformComponent),
-                                 },
-                                 {
-                                     .id = ecs_id(TbRenderObject),
-                                 },
+                                 {.id = ecs_id(TbTransformComponent)},
+                                 {.id = ecs_id(TbRenderObject)},
                              },
                      });
   // Sets a singleton based on the value at a pointer

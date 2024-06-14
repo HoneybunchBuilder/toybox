@@ -1124,12 +1124,26 @@ void tb_register_ocean_sys(TbWorld *world) {
   };
   ecs_singleton_set_ptr(ecs, TbOceanSystem, &sys);
 
-  ECS_SYSTEM(ecs, ocean_on_start, EcsOnStart, TbRenderSystem(TbRenderSystem),
-             TbRenderPipelineSystem(TbRenderPipelineSystem),
-             TbMeshSystem(TbMeshSystem), TbViewSystem(TbViewSystem),
-             TbRenderTargetSystem(TbRenderTargetSystem),
-             TbVisualLoggingSystem(TbVisualLoggingSystem),
-             TbAudioSystem(TbAudioSystem));
+  // ocean_on_start must be no_readonly because it enqueues a mesh load request
+  ecs_system(
+      ecs,
+      {.entity = ecs_entity(
+           ecs, {.name = "ocean_on_start", .add = {ecs_dependson(EcsOnStart)}}),
+       .query.filter.terms =
+           {
+               {.id = ecs_id(TbRenderSystem), .src.id = ecs_id(TbRenderSystem)},
+               {.id = ecs_id(TbRenderPipelineSystem),
+                .src.id = ecs_id(TbRenderPipelineSystem)},
+               {.id = ecs_id(TbMeshSystem), .src.id = ecs_id(TbMeshSystem)},
+               {.id = ecs_id(TbViewSystem), .src.id = ecs_id(TbViewSystem)},
+               {.id = ecs_id(TbRenderTargetSystem),
+                .src.id = ecs_id(TbRenderTargetSystem)},
+               {.id = ecs_id(TbVisualLoggingSystem),
+                .src.id = ecs_id(TbVisualLoggingSystem)},
+               {.id = ecs_id(TbAudioSystem), .src.id = ecs_id(TbAudioSystem)},
+           },
+       .callback = ocean_on_start,
+       .no_readonly = true});
 
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem(TbOceanSystem),
              TbOceanComponent);
