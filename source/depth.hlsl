@@ -1,11 +1,11 @@
 #include "common.hlsli"
 #include "gltf.hlsli"
 
-GLTF_VIEW_SET(space0);
-GLTF_DRAW_SET(space1);
-TB_OBJECT_SET(space2);
-TB_IDX_SET(space3)
-TB_POS_SET(space4);
+GLTF_VIEW_SET(0);
+GLTF_DRAW_SET(1);
+TB_OBJECT_SET(2);
+TB_IDX_SET(3)
+TB_POS_SET(4);
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;

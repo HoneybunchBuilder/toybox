@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
@@ -136,6 +136,10 @@ find_program(GLTFPACK gltfpack
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
   REQUIRED)
 
+find_program(SLANG slangc 
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/shader-slang
+  REQUIRED)
+
 # The list of all external targets to link
 list(APPEND library_list "$<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>")
 list(APPEND library_list "volk::volk")
@@ -158,6 +162,49 @@ function(cook_shaders out_shader_sources out_shader_headers)
   # Compile Shaders
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
   file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli" "${shader_include_dir}/*.h")
+
+  file(GLOB slang_shaders CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.slang")
+  foreach(shader ${slang_shaders})
+    get_filename_component(filename ${shader} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+    # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(vert_out_path "${filename}_vert")
+    set(frag_out_path "${filename}_frag")
+    set(out_paths "${vert_out_path};${frag_out_path}")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage vertex -entry vert -target spirv $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${vert_out_path} ${shader}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage fragment -entry frag -target spirv $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${frag_out_path} ${shader}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+
+    set(vert_header "${shader_out_path}/${filename}_vert.h")
+    set(frag_header "${shader_out_path}/${filename}_frag.h")
+
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
+    add_custom_command(
+        OUTPUT ${vert_header}
+        COMMAND xxd -i ${vert_out_path} ${vert_header}
+        COMMAND ${CMAKE_COMMAND} -E remove ${vert_out_path}
+        MAIN_DEPENDENCY ${vert_out_path}
+    )
+    add_custom_command(
+        OUTPUT ${frag_header}
+        COMMAND xxd -i ${frag_out_path} ${frag_header}
+        COMMAND ${CMAKE_COMMAND} -E remove ${frag_out_path}
+        MAIN_DEPENDENCY ${frag_out_path}
+    )
+
+    list(APPEND shader_headers ${vert_header} ${vert_out_path})
+    list(APPEND shader_headers ${frag_header} ${frag_out_path})
+  endforeach()
 
   file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
   foreach(shader ${shader_files})
@@ -435,7 +482,7 @@ target_compile_options(toybox PUBLIC
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
 )
 
-target_compile_features(toybox PUBLIC c_std_11)
+target_compile_features(toybox PUBLIC c_std_23)
 target_compile_features(toybox PUBLIC cxx_std_20)
 
 # Cook engine shaders

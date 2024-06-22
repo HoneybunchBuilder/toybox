@@ -44,6 +44,15 @@
         "ktx"
       ],
       "reference": "ktx"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "c68cb41fda048d396b07300f19da42dfc01d1742",
+      "packages": [
+        "shader-slang"
+      ],
+      "reference": "slang"
     }
   ]
 }

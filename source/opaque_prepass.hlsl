@@ -1,12 +1,13 @@
 #include "common.hlsli"
 #include "gltf.hlsli"
 
-ConstantBuffer<TbCommonViewData> camera_data : register(b0, space0);
-GLTF_DRAW_SET(space1);
-TB_OBJECT_SET(space2);
-TB_IDX_SET(space3);
-TB_POS_SET(space4);
-TB_NORM_SET(space5);
+[[vk::binding(0, 0)]]
+ConstantBuffer<TbCommonViewData> camera_data;
+GLTF_DRAW_SET(1);
+TB_OBJECT_SET(2);
+TB_IDX_SET(3);
+TB_POS_SET(4);
+TB_NORM_SET(5);
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;

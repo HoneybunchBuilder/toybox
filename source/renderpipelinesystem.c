@@ -549,13 +549,13 @@ VkPipeline create_tonemapping_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = tonemap_vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = tonemap_frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =

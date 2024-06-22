@@ -2,22 +2,22 @@
 #include "gltf.hlsli"
 #include "lighting.hlsli"
 
-GLTF_VIEW_SET(space0);
-GLTF_MATERIAL_SET(space1);
-GLTF_DRAW_SET(space2);
-TB_OBJECT_SET(space3);
-TB_TEXTURE_SET(space4);
-TB_IDX_SET(space5)
-TB_POS_SET(space6);
-TB_NORM_SET(space7);
-TB_TAN_SET(space8);
-TB_UV0_SET(space9);
-TB_JOINT_SET(space10);
-TB_WEIGHT_SET(space11);
+GLTF_VIEW_SET(0)
+GLTF_MATERIAL_SET(1)
+GLTF_DRAW_SET(2)
+TB_OBJECT_SET(3)
+TB_TEXTURE_SET(4)
+TB_IDX_SET(5)
+TB_POS_SET(6)
+TB_NORM_SET(7)
+TB_TAN_SET(8)
+TB_UV0_SET(9)
+TB_JOINT_SET(10)
+TB_WEIGHT_SET(11)
 
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;
-  [[vk::builtin("DrawIndex")]]
+  [[KnownBuiltin("DrawIndex")]]
   uint32_t draw_idx : POSITION0;
 };
 
