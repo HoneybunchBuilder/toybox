@@ -11,10 +11,21 @@ typedef struct TbLoadUICtx {
 } TbLoadUICtx;
 ECS_COMPONENT_DECLARE(TbLoadUICtx);
 
+// From tb_scene.c
+typedef uint32_t TbSceneEntityCount;
+typedef uint32_t TbSceneEntParseCounter;
+typedef uint32_t TbSceneEntReadyCounter;
+extern ECS_COMPONENT_DECLARE(TbSceneEntityCount);
+extern ECS_COMPONENT_DECLARE(TbSceneEntParseCounter);
+extern ECS_COMPONENT_DECLARE(TbSceneEntReadyCounter);
+
 void tb_load_ui_tick(ecs_iter_t *it) {
   tb_auto ecs = it->world;
 
   if (igBegin("Loading", NULL, 0)) {
+
+    uint64_t total_counter = 0;
+    uint64_t counter = 0;
 
     // For each scene root
     for (int32_t i = 0; i < it->count; ++i) {
@@ -23,6 +34,18 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       tb_auto loaded_state =
           tb_is_scene_ready(ecs, scene) ? "Ready" : "Loading";
       igText("Scene %s - : %s", scene_name, loaded_state);
+
+      if (ecs_has(ecs, scene, TbSceneEntityCount) &&
+          ecs_has(ecs, scene, TbSceneEntParseCounter) &&
+          ecs_has(ecs, scene, TbSceneEntReadyCounter)) {
+        tb_auto ent_count = *ecs_get(ecs, scene, TbSceneEntityCount);
+        tb_auto ents_to_parse = *ecs_get(ecs, scene, TbSceneEntParseCounter);
+        tb_auto ents_ready = *ecs_get(ecs, scene, TbSceneEntReadyCounter);
+        igText("%d to parse - %d of %d ready", ents_to_parse, ents_ready,
+               ent_count);
+        total_counter += ent_count;
+        counter += ents_ready;
+      }
     }
 
     //  Check Mesh State
@@ -43,6 +66,8 @@ void tb_load_ui_tick(ecs_iter_t *it) {
           }
         }
       }
+      total_counter += mesh_count;
+      counter += ready_mesh_count;
       igText("Meshes %d/%d", ready_mesh_count, mesh_count);
       ecs_filter_fini(mesh_filter);
     }
@@ -64,6 +89,8 @@ void tb_load_ui_tick(ecs_iter_t *it) {
           }
         }
       }
+      total_counter += mat_count;
+      counter += ready_mat_count;
       igText("Materials %d/%d", ready_mat_count, mat_count);
       ecs_filter_fini(mat_filter);
     }
@@ -85,8 +112,14 @@ void tb_load_ui_tick(ecs_iter_t *it) {
           }
         }
       }
+      total_counter += tex_count;
+      counter += ready_tex_count;
       igText("Textures %d/%d", ready_tex_count, tex_count);
       ecs_filter_fini(tex_filter);
+    }
+
+    if (total_counter > 0) {
+      igProgressBar((float)counter / (float)total_counter, (ImVec2){0}, NULL);
     }
 
     igEnd();
