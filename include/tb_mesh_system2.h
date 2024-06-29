@@ -43,7 +43,7 @@ VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs);
 
-void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count);
+void tb_mesh_sys_begin_load(ecs_world_t *ecs);
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
                                    const char *path, const char *name,
                                    uint32_t index);

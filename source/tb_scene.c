@@ -40,6 +40,7 @@ ECS_COMPONENT_DECLARE(TbSceneEntReadyCounter);
 typedef TbScene TbSceneRef;
 ECS_COMPONENT_DECLARE(TbSceneRef);
 
+ECS_TAG_DECLARE(TbSceneRoot);
 ECS_TAG_DECLARE(TbSceneParsing);
 ECS_TAG_DECLARE(TbSceneParsed);
 ECS_TAG_DECLARE(TbSceneLoading);
@@ -52,7 +53,6 @@ typedef struct TbSceneParsedArgs {
   ecs_world_t *ecs;
   TbScene scene;
   uint32_t local_parent;
-  const cgltf_data *data;
   const char *path;
   TbEntityTaskQueue *queue;
 } TbSceneParsedArgs;
@@ -62,21 +62,16 @@ void tb_scene_parsed(const void *args) {
   tb_auto load_args = (const TbSceneParsedArgs *)args;
   tb_auto scene = load_args->scene;
   tb_auto ecs = load_args->ecs;
-  tb_auto data = load_args->data;
-
-  // Reserve space for the assets
-  tb_mesh_sys_reserve_mesh_count(ecs, data->meshes_count);
-  tb_mat_sys_reserve_mat_count(ecs, data->materials_count);
-  tb_tex_sys_reserve_tex_count(ecs, data->textures_count);
+  tb_auto queue = load_args->queue;
+  tb_auto used_node_count = TB_DYN_ARR_SIZE(queue->storage);
 
   ecs_remove(ecs, scene, TbSceneParsing);
   ecs_add(ecs, scene, TbSceneParsed);
 
-  ecs_set_ptr(ecs, scene, TbEntityTaskQueue, load_args->queue);
-  ecs_set(ecs, scene, TbSceneEntityCount, {data->nodes_count});
-  ecs_set(ecs, scene, TbSceneEntParseCounter,
-          {data->nodes_count});                     // Counts down
-  ecs_set(ecs, scene, TbSceneEntReadyCounter, {0}); // Counts up
+  ecs_set_ptr(ecs, scene, TbEntityTaskQueue, queue);
+  ecs_set(ecs, scene, TbSceneEntityCount, {used_node_count});
+  ecs_set(ecs, scene, TbSceneEntParseCounter, {used_node_count}); // Counts down
+  ecs_set(ecs, scene, TbSceneEntReadyCounter, {0});               // Counts up
 
   TracyCZoneEnd(ctx);
 }
@@ -89,6 +84,8 @@ typedef struct TbParseSceneArgs {
   const char *scene_path;
   TbPinnedTask parsed_task;
 } TbParseSceneArgs;
+
+static SDL_AtomicInt entity_reqs = {0};
 
 void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
                                  TbEntityTaskQueue *queue, json_tokener *tok,
@@ -113,6 +110,8 @@ void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
       json = json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
     }
   }
+
+  SDL_AtomicIncRef(&entity_reqs);
 
   // Enqueue entity load request
   TbEntityLoadRequest req = {
@@ -154,7 +153,6 @@ void tb_parse_scene_task(const void *args) {
 
   TbSceneParsedArgs parsed_args = {
       .ecs = ecs,
-      .data = data,
       .scene = scene,
       .path = path,
       .queue = queue,
@@ -204,6 +202,7 @@ TbScene tb_create_scene(ecs_world_t *ecs, const char *scene_path) {
 
   ecs_set(ecs, scene, TbTask, {load_task});
   ecs_add(ecs, scene, TbSceneParsing);
+  ecs_add(ecs, scene, TbSceneRoot);
 
   return scene;
 }
@@ -228,7 +227,6 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
 
   // Determine what to call this entity
   const char *name = node->name;
-  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loading Entity %s", name);
   if (name && ecs_lookup(ecs, name) != TbInvalidEntityId) {
     name = NULL;
   }
@@ -497,6 +495,7 @@ void tb_register_scene_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbNode);
   ECS_COMPONENT_DEFINE(ecs, TbSceneRef);
   ECS_TAG_DEFINE(ecs, TbParentRequest);
+  ECS_TAG_DEFINE(ecs, TbSceneRoot);
   ECS_TAG_DEFINE(ecs, TbSceneParsing);
   ECS_TAG_DEFINE(ecs, TbSceneParsed);
   ECS_TAG_DEFINE(ecs, TbSceneLoading);
@@ -531,3 +530,7 @@ void tb_register_scene_sys(TbWorld *world) {
 void tb_unregister_scene_sys(TbWorld *world) { (void)world; }
 
 TB_REGISTER_SYS(tb, scene, TB_SYSTEM_NORMAL)
+
+bool tb_is_scene_ready(ecs_world_t *ecs, TbScene scene) {
+  return ecs_has(ecs, scene, TbSceneReady);
+}

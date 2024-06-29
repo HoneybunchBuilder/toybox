@@ -59,7 +59,7 @@ VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs);
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs);
 
-void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count);
+void tb_mat_sys_begin_load(ecs_world_t *ecs);
 
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
                                      const char *name, TbMaterialUsage usage);

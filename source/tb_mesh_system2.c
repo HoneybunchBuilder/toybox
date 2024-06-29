@@ -399,10 +399,15 @@ void tb_load_gltf_mesh_task(const void *args) {
 // Systems
 
 void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue GLTF Mesh Loads", true);
+  TB_TRACY_SCOPE("Queue GLTF Mesh Loads");
+
+  tb_auto ecs = it->world;
+
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto counter = ecs_field(it, TbMeshQueueCounter, 2);
   tb_auto reqs = ecs_field(it, TbMeshGLTFLoadRequest, 3);
+
+  tb_auto mesh_ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -420,8 +425,8 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
     TbLoadGLTFMeshArgs args = {
         .common =
             {
-                .ecs = it->world,
-                .rnd_sys = ecs_singleton_get_mut(it->world, TbRenderSystem),
+                .ecs = ecs,
+                .rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem),
                 .mesh = ent,
                 .enki = enki,
                 .loaded_task = loaded_task,
@@ -432,15 +437,15 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
     TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
                                      sizeof(TbLoadGLTFMeshArgs));
     // Apply task component to mesh entity
-    ecs_set(it->world, ent, TbTask, {load_task});
+    ecs_set(ecs, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
+    mesh_ctx->owned_mesh_count++;
+    tb_mesh_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
-    ecs_remove(it->world, ent, TbMeshGLTFLoadRequest);
+    ecs_remove(ecs, ent, TbMeshGLTFLoadRequest);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbSubMeshLoadArgs {
@@ -843,6 +848,7 @@ void tb_check_mesh_readiness(ecs_iter_t *it) {
 
     // If all submeshes are ready, we are ready
     if (children_ready) {
+      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loaded Mesh %d", mesh);
       ecs_remove(it->world, mesh, TbMeshParsed);
       ecs_add(it->world, mesh, TbMeshReady);
     }
@@ -1020,14 +1026,14 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 4);
 }
 
-void tb_mesh_sys_reserve_mesh_count(ecs_world_t *ecs, uint32_t mesh_count) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  ctx->owned_mesh_count += mesh_count;
-  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
-  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
-  ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
-  ecs_add(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
+void tb_mesh_sys_begin_load(ecs_world_t *ecs) {
+  if (!ecs_has(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading)) {
+    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
+    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
+    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
+    ecs_add(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
+  }
 }
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,

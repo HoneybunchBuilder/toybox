@@ -535,8 +535,6 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
         sys->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4, 16);
     sys->ocean_pos_offset = index_size;
 
-    // Reserve space for the 1 mesh we're adding
-    tb_mesh_sys_reserve_mesh_count(ecs, 1);
     sys->ocean_patch_mesh2 =
         tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "ocean", 0);
   }

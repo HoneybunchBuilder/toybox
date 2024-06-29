@@ -7,6 +7,7 @@
 #include "tb_render_object_system.h"
 #include "tb_render_pipeline_system.h"
 #include "tb_render_target_system.h"
+#include "tb_shader_system.h"
 #include "tb_transform_component.h"
 #include "tb_view_system.h"
 #include "tb_visual_logging_system.h"
@@ -345,7 +346,7 @@ void shadow_update_tick(ecs_iter_t *it) {
 }
 
 void shadow_draw_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Shadow System Draw", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPE("Shadow System Draw");
   tb_auto ecs = it->world;
 
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -353,9 +354,15 @@ void shadow_draw_tick(ecs_iter_t *it) {
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
+  // If any shaders aren't ready just bail
+  if (!tb_is_shader_ready(ecs, mesh_sys->opaque_shader) ||
+      !tb_is_shader_ready(ecs, mesh_sys->transparent_shader) ||
+      !tb_is_shader_ready(ecs, mesh_sys->prepass_shader)) {
+    return;
+  }
+
   // The shadow batch is just the opaque batch but with a different pipeline
   if (!mesh_sys->opaque_batch) {
-    TracyCZoneEnd(ctx);
     return;
   }
   TbDrawBatch shadow_batch = *mesh_sys->opaque_batch;
@@ -370,10 +377,9 @@ void shadow_draw_tick(ecs_iter_t *it) {
     TbDirectionalLightComponent *lights =
         ecs_field(&light_it, TbDirectionalLightComponent, 1);
     for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
+      TB_TRACY_SCOPE("Submit Batches");
       const TbDirectionalLightComponent *light = &lights[light_idx];
-
       // Submit batch for each shadow cascade
-      TracyCZoneN(ctx2, "Submit Batches", true);
       for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
            ++cascade_idx) {
 
@@ -391,11 +397,8 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_render_pipeline_issue_draw_batch(
             rp_sys, shadow_sys->draw_ctxs[cascade_idx], 1, batch);
       }
-      TracyCZoneEnd(ctx2);
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_shadow_sys(TbWorld *world) {

@@ -163,13 +163,13 @@ VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
 
 TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
                                  ktxTexture2 *ktx) {
+  TB_TRACY_SCOPE("Load KTX Texture");
   bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
   if (needs_transcoding) {
-    TracyCZoneN(ctx, "KTX Basis Transcode", true);
+    TB_TRACY_SCOPE("KTX Basis Transcode");
     // TODO: pre-calculate the best format for the platform
     ktx_error_code_e err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
     TB_CHECK(err == KTX_SUCCESS, "Failed to transcode basis texture");
-    TracyCZoneEnd(ctx);
   }
 
   size_t host_buffer_size = ktx->dataSize;
@@ -263,7 +263,7 @@ TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
 
 TbTextureImage tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
                                     const cgltf_texture *texture) {
-  TracyCZoneN(ctx, "Load GLTF Texture", true);
+  TB_TRACY_SCOPE("Load GLTF Texture");
   TbTextureImage tex = {0};
 
   if (texture->has_basisu) {
@@ -292,7 +292,6 @@ TbTextureImage tb_load_gltf_texture(TbRenderSystem *rnd_sys, const char *name,
     TB_CHECK(false, "Uncompressed texture loading not implemented");
   }
 
-  TracyCZoneEnd(ctx);
   return tex;
 }
 
@@ -300,7 +299,7 @@ TbTextureImage tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
                                  const uint8_t *pixels, uint64_t size,
                                  uint32_t width, uint32_t height,
                                  TbTextureUsage usage) {
-  TracyCZoneN(ctx, "Load Raw Texture2", true);
+  TB_TRACY_SCOPE("Load Raw Texture");
 
   TbTextureImage texture = {0};
 
@@ -405,7 +404,6 @@ TbTextureImage tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
     tb_rnd_upload_buffer_to_image(rnd_sys, uploads, mip_levels);
   }
 
-  TracyCZoneEnd(ctx);
   return texture;
 }
 
@@ -420,6 +418,7 @@ void tb_texture_loaded(const void *args) {
   tb_auto ecs = loaded_args->ecs;
   tb_auto tex = loaded_args->tex;
   if (tex != 0) {
+    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Texture %d loaded", tex);
     ecs_add(ecs, tex, TbTextureLoaded);
     ecs_set_ptr(ecs, tex, TbTextureImage, &loaded_args->comp);
   } else {
@@ -442,7 +441,7 @@ typedef struct TbLoadGLTFTexture2Args {
 } TbLoadGLTFTexture2Args;
 
 void tb_load_gltf_texture_task(const void *args) {
-  TracyCZoneN(ctx, "Load GLTF Texture Task", true);
+  TB_TRACY_SCOPE("Load GLTF Texture Task");
   tb_auto load_args = (const TbLoadGLTFTexture2Args *)args;
   TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
@@ -518,7 +517,6 @@ void tb_load_gltf_texture_task(const void *args) {
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbTextureLoadedArgs));
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbLoadKTXTexture2Args {
@@ -527,7 +525,7 @@ typedef struct TbLoadKTXTexture2Args {
 } TbLoadKTXTexture2Args;
 
 void tb_load_ktx_texture_task(const void *args) {
-  TracyCZoneN(ctx, "Load KTX Texture Task", true);
+  TB_TRACY_SCOPE("Load KTX Texture Task");
   tb_auto load_args = (const TbLoadKTXTexture2Args *)args;
   TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
@@ -569,7 +567,6 @@ void tb_load_ktx_texture_task(const void *args) {
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbTextureLoadedArgs));
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbLoadRawTextureArgs {
@@ -578,7 +575,7 @@ typedef struct TbLoadRawTextureArgs {
 } TbLoadRawTextureArgs;
 
 void tb_load_raw_texture_task(const void *args) {
-  TracyCZoneN(ctx, "Load Raw Texture Task", true);
+  TB_TRACY_SCOPE("Load Raw Texture Task");
   tb_auto load_args = (const TbLoadRawTextureArgs *)args;
   TbTexture tex = load_args->common.tex;
   tb_auto rnd_sys = load_args->common.rnd_sys;
@@ -602,18 +599,22 @@ void tb_load_raw_texture_task(const void *args) {
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbTextureLoadedArgs));
-  TracyCZoneEnd(ctx);
 }
 
 // Systems
 
 void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
+  TB_TRACY_SCOPE("Queue GLTF Tex Loads");
+
+  tb_auto ecs = it->world;
+
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
   tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 4);
   tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+
+  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -632,7 +633,7 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
     TbLoadGLTFTexture2Args args = {
         .common =
             {
-                .ecs = it->world,
+                .ecs = ecs,
                 .tex = ent,
                 .enki = enki,
                 .rnd_sys = rnd_sys,
@@ -644,23 +645,29 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
     TbTask load_task = tb_async_task(enki, tb_load_gltf_texture_task, &args,
                                      sizeof(TbLoadGLTFTexture2Args));
     // Apply task component to texture entity
-    ecs_set(it->world, ent, TbTask, {load_task});
+    ecs_set(ecs, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
+    tex_ctx->owned_tex_count++;
+    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
-    ecs_remove(it->world, ent, TbTextureGLTFLoadRequest);
+    ecs_remove(ecs, ent, TbTextureGLTFLoadRequest);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue KTX Tex Loads", true);
+  TB_TRACY_SCOPE("Queue KTX Tex Loads");
+
+  tb_auto ecs = it->world;
+
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
   tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 4);
   tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+
+  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -679,7 +686,7 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
     TbLoadKTXTexture2Args args = {
         .common =
             {
-                .ecs = it->world,
+                .ecs = ecs,
                 .tex = ent,
                 .enki = enki,
                 .rnd_sys = rnd_sys,
@@ -691,23 +698,29 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
     TbTask load_task = tb_async_task(enki, tb_load_ktx_texture_task, &args,
                                      sizeof(TbLoadKTXTexture2Args));
     // Apply task component to texture entity
-    ecs_set(it->world, ent, TbTask, {load_task});
+    ecs_set(ecs, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
+    tex_ctx->owned_tex_count++;
+    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
-    ecs_remove(it->world, ent, TbTextureKTXLoadRequest);
+    ecs_remove(ecs, ent, TbTextureKTXLoadRequest);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_queue_raw_tex_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue Raw Tex Loads", true);
+  TB_TRACY_SCOPE("Queue Raw Tex Loads");
+
+  tb_auto ecs = it->world;
+
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
   tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 4);
   tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+
+  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -727,7 +740,7 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
     TbLoadRawTextureArgs args = {
         .common =
             {
-                .ecs = it->world,
+                .ecs = ecs,
                 .tex = ent,
                 .enki = enki,
                 .rnd_sys = rnd_sys,
@@ -739,14 +752,15 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
     TbTask load_task = tb_async_task(enki, tb_load_raw_texture_task, &args,
                                      sizeof(TbLoadRawTextureArgs));
     // Apply task component to texture entity
-    ecs_set(it->world, ent, TbTask, {load_task});
+    ecs_set(ecs, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
+    tex_ctx->owned_tex_count++;
+    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
-    ecs_remove(it->world, ent, TbTextureRawLoadRequest);
+    ecs_remove(ecs, ent, TbTextureRawLoadRequest);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_reset_tex_queue_count(ecs_iter_t *it) {
@@ -755,12 +769,11 @@ void tb_reset_tex_queue_count(ecs_iter_t *it) {
 }
 
 void tb_tex_phase_loading(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Texture Loading Phase", true);
+  TB_TRACY_SCOPE("Texture Loading Phase");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
   if (tex_ctx->owned_tex_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -777,12 +790,10 @@ void tb_tex_phase_loading(ecs_iter_t *it) {
     ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
     tex_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_update_texture_pool(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Update Texture Pool", true);
+  TB_TRACY_SCOPE("Update Texture Pool");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
@@ -794,15 +805,22 @@ void tb_update_texture_pool(ecs_iter_t *it) {
   while (ecs_query_next(&tex_it)) {
     tex_count += tex_it.count;
   }
-
   if (tex_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
+
+  if (tex_count < tex_ctx->owned_tex_count) {
+    TB_LOG_WARN(SDL_LOG_CATEGORY_RENDER, "%s",
+                "Unexpected difference in textures");
+    tex_count = tex_ctx->owned_tex_count;
+  }
+
+  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Updating %d ", tex_count);
 
   // Resize the pool if necessary
   if (tex_count != tb_rnd_frame_desc_pool_get_desc_count(
                        rnd_sys, tex_ctx->frame_set_pool.pools)) {
+    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Resizing %d ", tex_count);
     VkDescriptorPoolCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
@@ -854,12 +872,10 @@ void tb_update_texture_pool(ecs_iter_t *it) {
     // Reset counter for next phase
     tex_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_write_texture_descriptors(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Write Texture Descriptors", true);
+  TB_TRACY_SCOPE("Write Texture Descriptors");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
@@ -873,7 +889,6 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
   }
 
   if (tex_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -908,6 +923,7 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
       TB_DYN_ARR_APPEND(writes, write);
 
       // Texture is now ready to be referenced elsewhere
+      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Writing Texture %d", tex_idx);
       ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {tex_idx});
       ecs_add(it->world, tex_it.entities[i], TbUpdatingDescriptor);
       tex_idx++;
@@ -921,13 +937,12 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
   if (tex_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
     ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
     ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
+    tex_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_tex_phase_written(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Texture Written Phase", true);
+  TB_TRACY_SCOPE("Texture Written Phase");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
 
@@ -944,8 +959,6 @@ void tb_tex_phase_written(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
     ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseReady);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 // Toybox Glue
@@ -1101,7 +1114,6 @@ void tb_register_texture_sys(TbWorld *world) {
   }
 
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
-  ecs_add(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
 }
 
 void tb_unregister_texture_sys(TbWorld *world) {
@@ -1148,14 +1160,14 @@ VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex) {
   return image->image_view;
 }
 
-void tb_tex_sys_reserve_tex_count(ecs_world_t *ecs, uint32_t tex_count) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-  ctx->owned_tex_count = tex_count + 4; // HACK:+4 for the 4 default textures
-  ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
-  ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-  ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
-  ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseReady);
-  ecs_add(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
+void tb_tex_sys_begin_load(ecs_world_t *ecs) {
+  if (!ecs_has(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading)) {
+    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
+    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
+    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
+    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseReady);
+    ecs_add(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
+  }
 }
 
 TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,

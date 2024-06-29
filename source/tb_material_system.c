@@ -182,6 +182,9 @@ TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
 
 void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
   TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
+
+  tb_auto ecs = it->world;
+
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto counter = ecs_field(it, TbMatQueueCounter, 2);
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 3);
@@ -210,7 +213,7 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
     TbLoadGLTFMaterialArgs args = {
         .common =
             {
-                .ecs = it->world,
+                .ecs = ecs,
                 .mat = ent,
                 .enki = enki,
                 .loaded_task = loaded_task,
@@ -221,12 +224,14 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
     TbTask load_task = tb_async_task(enki, tb_load_gltf_material_task, &args,
                                      sizeof(TbLoadGLTFMaterialArgs));
     // Apply task component to texture entity
-    ecs_set(it->world, ent, TbTask, {load_task});
+    ecs_set(ecs, ent, TbTask, {load_task});
 
     SDL_AtomicIncRef(counter);
+    mat_ctx->owned_mat_count++;
+    tb_mat_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
-    ecs_remove(it->world, ent, TbMaterialGLTFLoadRequest);
+    ecs_remove(ecs, ent, TbMaterialGLTFLoadRequest);
   }
   TracyCZoneEnd(ctx);
 }
@@ -272,6 +277,7 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
 
       ecs_remove(mat_it.world, ent, TbMaterialUploadable);
       ecs_add(mat_it.world, ent, TbMaterialLoaded);
+      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loaded Material %d", ent);
     }
   }
 
@@ -536,6 +542,7 @@ void tb_register_material2_sys(TbWorld *world) {
              TbMaterialCtx(TbMaterialCtx), TbMatLoadPhaseWritten);
 
   TbMaterialCtx ctx = {
+      .owned_mat_count = 0,
       .uploadable_mat_query = ecs_query(
           ecs, {.filter.terms =
                     {
@@ -725,6 +732,7 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
   };
   TB_DYN_ARR_APPEND(ctx->usage_map, handler);
 
+  ctx->owned_mat_count++;
   return true;
 }
 
@@ -739,14 +747,14 @@ VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
 }
 
-void tb_mat_sys_reserve_mat_count(ecs_world_t *ecs, uint32_t mat_count) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-  ctx->owned_mat_count = mat_count + 1; // HACK:+4 for the 1 default material
-  ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
-  ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-  ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
-  ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseReady);
-  ecs_add(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading);
+void tb_mat_sys_begin_load(ecs_world_t *ecs) {
+  if (!ecs_has(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading)) {
+    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
+    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
+    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
+    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseReady);
+    ecs_add(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading);
+  }
 }
 
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
