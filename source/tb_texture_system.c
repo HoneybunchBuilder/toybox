@@ -418,7 +418,6 @@ void tb_texture_loaded(const void *args) {
   tb_auto ecs = loaded_args->ecs;
   tb_auto tex = loaded_args->tex;
   if (tex != 0) {
-    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Texture %d loaded", tex);
     ecs_add(ecs, tex, TbTextureLoaded);
     ecs_set_ptr(ecs, tex, TbTextureImage, &loaded_args->comp);
   } else {
@@ -798,29 +797,11 @@ void tb_update_texture_pool(ecs_iter_t *it) {
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint64_t tex_count = 0;
-
-  // Accumulate the number of textures
-  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
-  while (ecs_query_next(&tex_it)) {
-    tex_count += tex_it.count;
-  }
-  if (tex_count == 0) {
-    return;
-  }
-
-  if (tex_count < tex_ctx->owned_tex_count) {
-    TB_LOG_WARN(SDL_LOG_CATEGORY_RENDER, "%s",
-                "Unexpected difference in textures");
-    tex_count = tex_ctx->owned_tex_count;
-  }
-
-  TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Updating %d ", tex_count);
+  uint64_t tex_count = tex_ctx->owned_tex_count;
 
   // Resize the pool if necessary
   if (tex_count != tb_rnd_frame_desc_pool_get_desc_count(
                        rnd_sys, tex_ctx->frame_set_pool.pools)) {
-    TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Resizing %d ", tex_count);
     VkDescriptorPoolCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
@@ -846,7 +827,7 @@ void tb_update_texture_pool(ecs_iter_t *it) {
   }
 
   // When we get to this phase all textures must be marked dirty
-  tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
+  tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
   while (ecs_query_next(&tex_it)) {
     tb_auto ecs = tex_it.world;
     for (int32_t i = 0; i < tex_it.count; ++i) {
@@ -881,28 +862,34 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  // Accumulate the number of textures
-  uint64_t tex_count = 0;
-  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
-  while (ecs_query_next(&tex_it)) {
-    tex_count += tex_it.count;
-  }
-
+  // We care about writing descriptors for all owned textures
+  uint64_t tex_count = tex_ctx->owned_tex_count;
   if (tex_count == 0) {
     return;
   }
 
+  // We can't write more than this number of textures
+  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
+      rnd_sys, tex_ctx->frame_set_pool.pools);
+
   // Write all dirty textures into the descriptor set table
   uint32_t tex_idx = 0;
-  tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
+  tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorImageInfo) img_info = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, tex_count);
-  TB_DYN_ARR_RESET(img_info, world->tmp_alloc, tex_count);
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, desc_count);
+  TB_DYN_ARR_RESET(img_info, world->tmp_alloc, desc_count);
   while (ecs_query_next(&tex_it)) {
     tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
+    if (tex_idx >= desc_count) {
+      break;
+    }
     for (int32_t i = 0; i < tex_it.count; ++i) {
+      if (tex_idx >= desc_count) {
+        break;
+      }
+
       tb_auto texture = &textures[i];
 
       VkDescriptorImageInfo image_info = {
@@ -923,7 +910,6 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
       TB_DYN_ARR_APPEND(writes, write);
 
       // Texture is now ready to be referenced elsewhere
-      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Writing Texture %d", tex_idx);
       ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {tex_idx});
       ecs_add(it->world, tex_it.entities[i], TbUpdatingDescriptor);
       tex_idx++;

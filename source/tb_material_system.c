@@ -277,7 +277,6 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
 
       ecs_remove(mat_it.world, ent, TbMaterialUploadable);
       ecs_add(mat_it.world, ent, TbMaterialLoaded);
-      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loaded Material %d", ent);
     }
   }
 

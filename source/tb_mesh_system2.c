@@ -848,7 +848,6 @@ void tb_check_mesh_readiness(ecs_iter_t *it) {
 
     // If all submeshes are ready, we are ready
     if (children_ready) {
-      TB_LOG_DEBUG(SDL_LOG_CATEGORY_APPLICATION, "Loaded Mesh %d", mesh);
       ecs_remove(it->world, mesh, TbMeshParsed);
       ecs_add(it->world, mesh, TbMeshReady);
     }
