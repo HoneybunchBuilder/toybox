@@ -85,8 +85,6 @@ typedef struct TbParseSceneArgs {
   TbPinnedTask parsed_task;
 } TbParseSceneArgs;
 
-static SDL_AtomicInt entity_reqs = {0};
-
 void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
                                  TbEntityTaskQueue *queue, json_tokener *tok,
                                  const cgltf_data *data,
@@ -110,8 +108,6 @@ void tb_enqueue_entity_parse_req(ecs_world_t *ecs, const char *path,
       json = json_tokener_parse_ex(tok, extra_json, (int32_t)extra_size);
     }
   }
-
-  SDL_AtomicIncRef(&entity_reqs);
 
   // Enqueue entity load request
   TbEntityLoadRequest req = {
@@ -293,8 +289,8 @@ ecs_entity_t tb_load_entity(ecs_world_t *ecs, const char *source_path,
 
 void tb_load_entities(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Load Entities");
-  // TODO: Really this should be timesliced since entities may take
-  // a while to load their components
+  //  TODO: Really this should be timesliced since entities may take
+  //  a while to load their components
   static const uint32_t MAX_ENTITIES_DEQUEUE_PER_FRAME = 16;
 
   tb_auto entity_queues = ecs_field(it, TbEntityTaskQueue, 1);
@@ -316,7 +312,8 @@ void tb_load_entities(ecs_iter_t *it) {
           *scene_counter == 0) {
         dequeue_counter = 0;
         exit = true;
-        break;
+        // USED TO HAVE A BREAK HERE BUT THAT IS NOT CORRECT
+        // IF WE POP AN ENTITY FROM THE QUEUE WE MUST PROCESS IT
       }
 
       tb_auto ecs = load_req.ecs;
