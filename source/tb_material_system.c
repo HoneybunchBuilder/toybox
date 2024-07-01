@@ -322,13 +322,7 @@ void tb_update_material_pool(ecs_iter_t *it) {
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint64_t mat_count = 0;
-
-  // Accumulate the number of materials
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    mat_count += mat_it.count;
-  }
+  uint64_t mat_count = mat_ctx->owned_mat_count;
 
   if (mat_count == 0) {
     TracyCZoneEnd(ctx);
@@ -364,7 +358,7 @@ void tb_update_material_pool(ecs_iter_t *it) {
   }
 
   // When we get to this phase all materials must be marked dirty
-  mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+  tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
   while (ecs_query_next(&mat_it)) {
     tb_auto ecs = mat_it.world;
     for (int32_t i = 0; i < mat_it.count; ++i) {
@@ -401,13 +395,7 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  uint64_t mat_count = 0;
-
-  // Accumulate the number of textures
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    mat_count += mat_it.count;
-  }
+  uint64_t mat_count = mat_ctx->owned_mat_count;
 
   if (mat_count == 0) {
     TracyCZoneEnd(ctx);
@@ -416,7 +404,7 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
 
   // Write all dirty materials into the descriptor set table
   uint32_t mat_idx = 0;
-  mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
+  tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};

@@ -365,11 +365,6 @@ void shadow_draw_tick(ecs_iter_t *it) {
   if (!mesh_sys->opaque_batch) {
     return;
   }
-  TbDrawBatch shadow_batch = *mesh_sys->opaque_batch;
-  tb_auto shadow_prim_batch = *(TbPrimitiveBatch *)shadow_batch.user_batch;
-  shadow_batch.pipeline = shadow_sys->pipeline;
-  shadow_batch.layout = shadow_sys->pipe_layout;
-  shadow_batch.user_batch = &shadow_prim_batch;
 
   // For each shadow casting light we want to record shadow draws
   ecs_iter_t light_it = ecs_query_iter(ecs, shadow_sys->dir_light_query);
@@ -386,6 +381,19 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto view_set = tb_view_system_get_descriptor(
             view_sys, light->cascade_views[cascade_idx]);
 
+        // Skip if view set isn't ready
+        if (view_set == VK_NULL_HANDLE) {
+          continue;
+        }
+
+        // Must perform the above check before we try to access the opaque batch
+        TbDrawBatch shadow_batch = *mesh_sys->opaque_batch;
+        tb_auto shadow_prim_batch =
+            *(TbPrimitiveBatch *)shadow_batch.user_batch;
+        shadow_batch.pipeline = shadow_sys->pipeline;
+        shadow_batch.layout = shadow_sys->pipe_layout;
+        shadow_batch.user_batch = &shadow_prim_batch;
+
         tb_auto batch = &shadow_batch;
         tb_auto prim_batch = (TbPrimitiveBatch *)batch->user_batch;
 
@@ -399,6 +407,9 @@ void shadow_draw_tick(ecs_iter_t *it) {
       }
     }
   }
+
+  // The opaque batch has been consumed and invalidated
+  mesh_sys->opaque_batch = NULL;
 }
 
 void tb_register_shadow_sys(TbWorld *world) {

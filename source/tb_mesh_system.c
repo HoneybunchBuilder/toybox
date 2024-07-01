@@ -1020,6 +1020,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       // Opaque batch is a bit special since we need to share with the shadow
       // system
+      TB_CHECK(mesh_sys->opaque_batch == NULL, "Opaque batch was not consumed");
       mesh_sys->opaque_batch = tb_alloc_tp(mesh_sys->tmp_alloc, TbDrawBatch);
       tb_auto opaque_prim_batch =
           tb_alloc_tp(mesh_sys->tmp_alloc, TbPrimitiveBatch);

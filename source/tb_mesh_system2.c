@@ -632,13 +632,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint64_t mesh_count = 0;
-
-  // Accumulate the number of meshes
-  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    mesh_count += mesh_it.count;
-  }
+  uint64_t mesh_count = mesh_ctx->owned_mesh_count;
 
   if (mesh_count == 0) {
     TracyCZoneEnd(ctx);
@@ -683,7 +677,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
   }
 
   // If we had to resize the pool, all meshes are dirty
-  mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
+  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
   while (ecs_query_next(&mesh_it)) {
     tb_auto ecs = mesh_it.world;
     for (int32_t i = 0; i < mesh_it.count; ++i) {
@@ -720,12 +714,7 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  // Accumulate the number of meshes
-  uint64_t mesh_count = 0;
-  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    mesh_count += mesh_it.count;
-  }
+  uint64_t mesh_count = mesh_ctx->owned_mesh_count;
 
   if (mesh_count == 0) {
     TracyCZoneEnd(ctx);
@@ -741,7 +730,7 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
 
   // For each mesh, collect the index/attr views
   uint32_t mesh_idx = 0;
-  mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
+  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
   while (ecs_query_next(&mesh_it)) {
     tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
     for (int32_t i = 0; i < mesh_it.count; ++i) {

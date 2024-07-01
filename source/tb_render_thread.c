@@ -1238,7 +1238,16 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
   {
     TracyCZoneN(fence_ctx, "Wait for GPU", true);
     TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
-    vkWaitForFences(thread->device, 1, &fence, VK_TRUE, SDL_MAX_UINT64);
+    VkResult res = VK_TIMEOUT;
+    while (res != VK_SUCCESS) {
+      if (res == VK_TIMEOUT) {
+        res =
+            vkWaitForFences(thread->device, 1, &fence, VK_TRUE, SDL_MAX_UINT64);
+      } else {
+        TB_CHECK(false, "Error waiting for fence");
+      }
+    }
+
     TracyCZoneEnd(fence_ctx);
 
     vkResetFences(device, 1, &fence);
