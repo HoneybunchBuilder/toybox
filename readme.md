@@ -78,7 +78,7 @@ So an example for configuring and building the `x64-windows` triplet with `ninja
 See the github actions page for build status and a quick overview of the supported and tested configurations
 
 ## Additional Notes
-This project relies on some of clang's C language extensions because I was lazy and didn't want to write out SSE/NEON intrinsics for some basic math. See `src/simd.h` & `src/simd.c` for more details. This has balooned into a few other clang specific features being supported, such as Blocks. Only LLVM family compilers are expected to be able to compile Toybox for the foreseeable future.
+This project relies on some of clang's C language extensions because I was lazy and didn't want to write out SSE/NEON intrinsics for some basic math. See `src/tb_simd.h` & `src/tb_simd.c` for more details. This has balooned into a few other clang specific features being supported, such as Blocks. Only LLVM family compilers are expected to be able to compile Toybox for the foreseeable future.
 
 For best results, use the latest version of vcpkg provided by your package manager or directly via Git. There are couple custom ports for SDL3 and SDL3_Mixer that I maintain. See `vcpkg-configuration.json` for how that's set up.
 

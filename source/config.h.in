@@ -14,4 +14,15 @@
 #define TB_PLATFORM "@platform@"
 #define TB_ARCH "@arch@"
 
+// clang-format off
+#define TB_WINDOWS @tb_windows@
+#define TB_MACOS @tb_macos@
+#define TB_LINUX @tb_linux@
+#define TB_ANDROID @tb_android@
+#define TB_IOS @tb_ios@
+
+#define TB_X64 @tb_x64@
+#define TB_ARM64 @tb_arm64@
+// clang-format on
+
 #define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"

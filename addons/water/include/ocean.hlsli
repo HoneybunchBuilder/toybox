@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.hlsli"
-#include "pi.h"
+#include "tb_pi.h"
 
 #define TB_WAVE_MAX 8
 
@@ -11,13 +11,11 @@ typedef float4 TbOceanWave; // xy = dir, z = steep, w = wavelength
 typedef struct OceanData {
   float4 time_waves; // x = time, y = wave count
   TbOceanWave wave[TB_WAVE_MAX];
-}
-OceanData;
+} OceanData;
 
 typedef struct OceanPushConstants {
   float4x4 m;
-}
-OceanPushConstants;
+} OceanPushConstants;
 
 // If not in a shader, make a quick static assert check
 #ifndef __HLSL_VERSION

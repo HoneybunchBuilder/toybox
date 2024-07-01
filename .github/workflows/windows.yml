@@ -17,7 +17,7 @@ jobs:
           {preset: x64-windows-static-ninja-llvm},
         ]
 
-    name: ${{matrix.toolsets.preset}} on Windows}
+    name: ${{matrix.toolsets.preset}} on Windows
     runs-on: [Windows, X64, self-hosted]
 
     steps:

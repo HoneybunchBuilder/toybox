@@ -1,6 +1,6 @@
 #include "skydome.h"
 
-#include "simd.h"
+#include "tb_simd.h"
 #include <SDL3/SDL_stdinc.h>
 
 static const uint16_t skydome_indices[] = {
