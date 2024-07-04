@@ -493,6 +493,7 @@ void destroy_frame_states(VkDevice device, VmaAllocator vma_alloc,
 bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
               VkPhysicalDevice *gpu, VkPhysicalDeviceProperties2 *gpu_props,
               VkPhysicalDeviceDriverProperties *driver_props,
+              VkPhysicalDeviceDescriptorBufferPropertiesEXT *desc_buf_props,
               uint32_t *queue_family_count,
               VkQueueFamilyProperties **queue_props,
               VkPhysicalDeviceFeatures *gpu_features,
@@ -549,11 +550,18 @@ bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
   *gpu = gpus[gpu_idx];
 
   // Check physical device properties
+  *desc_buf_props = (VkPhysicalDeviceDescriptorBufferPropertiesEXT){
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+  };
   *driver_props = (VkPhysicalDeviceDriverProperties){
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES,
+      .pNext = desc_buf_props,
+  };
   *gpu_props = (VkPhysicalDeviceProperties2){
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = driver_props};
+      .pNext = driver_props,
+  };
   vkGetPhysicalDeviceProperties2(*gpu, gpu_props);
 
   vkGetPhysicalDeviceQueueFamilyProperties(*gpu, queue_family_count, NULL);
@@ -734,6 +742,11 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     // Mesh Shader support
     // required_device_ext((const char **)&device_ext_names, &device_ext_count,
     //                    props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+    // We want to use descriptor buffers
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count,
+                        VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
 
 #ifdef TRACY_ENABLE
     // Enable calibrated timestamps if we can when profiling with tracy
@@ -1108,8 +1121,9 @@ bool init_render_thread(TbRenderThread *thread) {
 
   TB_CHECK_RETURN(init_gpu(thread->instance, gp_alloc, tmp_alloc, &thread->gpu,
                            &thread->gpu_props, &thread->driver_props,
-                           &thread->queue_family_count, &thread->queue_props,
-                           &thread->gpu_features, &thread->gpu_mem_props),
+                           &thread->desc_buf_props, &thread->queue_family_count,
+                           &thread->queue_props, &thread->gpu_features,
+                           &thread->gpu_mem_props),
                   "Failed to select gpu", false)
 
   TB_CHECK_RETURN(SDL_Vulkan_CreateSurface(thread->window, thread->instance,

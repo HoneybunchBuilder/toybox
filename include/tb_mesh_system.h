@@ -81,7 +81,6 @@ typedef struct TbMeshSystem {
   TbDrawContextId opaque_draw_ctx2;
   TbDrawContextId transparent_draw_ctx2;
 
-  VkDescriptorSetLayout mesh_set_layout;
   VkDescriptorSetLayout draw_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipelineLayout prepass_layout;

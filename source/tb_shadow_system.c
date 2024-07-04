@@ -448,6 +448,8 @@ void tb_register_shadow_sys(TbWorld *world) {
     VkResult err = VK_SUCCESS;
     // Create pipeline layout
     {
+      tb_auto mesh_set_layout = tb_mesh_sys_get_set_layout(ecs);
+
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = 5,
@@ -456,8 +458,8 @@ void tb_register_shadow_sys(TbWorld *world) {
                   view_sys->set_layout,
                   mesh_sys->draw_set_layout,
                   ro_sys->set_layout,
-                  mesh_sys->mesh_set_layout,
-                  mesh_sys->mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
               },
       };
       err = tb_rnd_create_pipeline_layout(

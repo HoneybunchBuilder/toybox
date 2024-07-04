@@ -145,6 +145,7 @@ typedef struct TbRenderThread {
   VkPhysicalDevice gpu;
   VkPhysicalDeviceProperties2 gpu_props;
   VkPhysicalDeviceDriverProperties driver_props;
+  VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buf_props;
   uint32_t queue_family_count;
   VkQueueFamilyProperties *queue_props;
   VkPhysicalDeviceFeatures gpu_features;

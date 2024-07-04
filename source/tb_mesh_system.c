@@ -591,39 +591,11 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
   TbRenderPassId opaque_pass_id = rp_sys->opaque_color_pass;
   TbRenderPassId transparent_pass_id = rp_sys->transparent_color_pass;
 
+  tb_auto mesh_set_layout = tb_mesh_sys_get_set_layout(ecs);
+
   // Setup mesh system for rendering
   {
     VkResult err = VK_SUCCESS;
-
-    // Create mesh descriptor set layout
-    {
-      const VkDescriptorBindingFlags flags =
-          VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-          VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-      VkDescriptorSetLayoutCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-          .pNext =
-              &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
-                  .sType =
-                      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                  .bindingCount = 1,
-                  .pBindingFlags = (VkDescriptorBindingFlags[1]){flags},
-              },
-          .bindingCount = 1,
-          .pBindings =
-              (VkDescriptorSetLayoutBinding[1]){
-                  {
-                      .binding = 0,
-                      .descriptorCount = 4096,
-                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                  },
-              },
-      };
-      err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Mesh Attr Layout",
-                                     &sys.mesh_set_layout);
-      TB_VK_CHECK(err, "Failed to create mesh attr set layout");
-    }
 
     // Create instance descriptor set layout
     {
@@ -648,6 +620,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
 
     // Create prepass pipeline layout
     {
+
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = 6,
@@ -656,9 +629,9 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                   view_sys->set_layout,
                   sys.draw_set_layout,
                   ro_sys->set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
               },
       };
       err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
@@ -693,13 +666,13 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                   sys.draw_set_layout,
                   ro_sys->set_layout,
                   tb_tex_sys_get_set_layout(ecs),
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
-                  sys.mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
               },
       };
       tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
