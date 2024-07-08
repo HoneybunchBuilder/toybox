@@ -83,8 +83,15 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
 #endif
 
   VkResult err = tb_resize_desc_buffer(rnd_sys, capacity, out_buf);
-  TB_CHECK(err, "Error occurred during resize");
+  TB_VK_CHECK(err, "Error occurred during resize");
   return err;
+}
+
+void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
+                                  TbDescriptorBuffer *buf) {
+  (void)rnd_sys;
+  (void)buf;
+  TB_CHECK(false, "Unimplemented");
 }
 
 uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
@@ -157,6 +164,7 @@ uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
   uint8_t *ptr = desc_buf->data_ptr + offset;
   vkGetDescriptorEXT(device, &desc_info, desc_size, ptr);
 
+  // NOTE: This could cause a lot of time spent processing buffer uploads
   // Upload just the region of the buffer that changed
   TbBufferCopy copy = {
       .dst = desc_buf->buffer.buffer,

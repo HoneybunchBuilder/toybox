@@ -24,6 +24,9 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
                                      const char *name, uint32_t capacity,
                                      TbDescriptorBuffer *out_buf);
 
+void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
+                                  TbDescriptorBuffer *buf);
+
 uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
                                  TbDescriptorBuffer *desc_buf, uint32_t binding,
                                  VkDescriptorType type,

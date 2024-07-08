@@ -758,8 +758,15 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 #endif
   }
 
+  VkPhysicalDeviceDescriptorBufferFeaturesEXT vk_desc_buf_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+      .pNext = NULL,
+      .descriptorBuffer = VK_TRUE,
+  };
+
   VkPhysicalDeviceRobustness2FeaturesEXT vk_rob2_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+      .pNext = &vk_desc_buf_features,
       .nullDescriptor = VK_TRUE,
   };
 
@@ -774,6 +781,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
   VkPhysicalDeviceVulkan12Features vk_12_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &vk_13_features,
+      .bufferDeviceAddress = VK_TRUE,
       .hostQueryReset = VK_TRUE,
       .shaderFloat16 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,

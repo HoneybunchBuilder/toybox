@@ -108,6 +108,7 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
           NULL,
       };
       VmaAllocatorCreateInfo create_info = {
+          .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
           .physicalDevice = thread->gpu,
           .device = thread->device,
           .pVulkanFunctions = &volk_functions,

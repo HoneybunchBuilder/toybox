@@ -2,6 +2,7 @@
 
 #include "tb_assets.h"
 #include "tb_common.h"
+#include "tb_descriptor_buffer.h"
 #include "tb_gltf.h"
 #include "tb_ktx.h"
 #include "tb_queue.h"
@@ -26,6 +27,9 @@ typedef struct TbTextureCtx {
   TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_tex_count;
   uint32_t pool_update_counter;
+
+  VkDescriptorSetLayout set_layout2;
+  TbDescriptorBuffer desc_buffer;
 
   // Custom queries for special systems
   ecs_query_t *tex_query;
@@ -1026,6 +1030,8 @@ void tb_register_texture_sys(TbWorld *world) {
   SDL_AtomicSet(&queue_count, 0);
   ecs_singleton_set_ptr(ecs, TbTexQueueCounter, &queue_count);
 
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
   // Create descriptor set layout
   {
     const VkDescriptorBindingFlags flags =
@@ -1056,9 +1062,41 @@ void tb_register_texture_sys(TbWorld *world) {
                 },
             },
     };
-    tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
     tb_rnd_create_set_layout(rnd_sys, &create_info, "Texture Table Layout",
                              &ctx.set_layout);
+  }
+
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    const uint32_t binding_count = 1;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 2048, // HACK: High upper bound
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info,
+                             "Texture Desc Buffer Layout", &ctx.set_layout2);
+    tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2, "Texture Descriptors",
+                                4, &ctx.desc_buffer);
   }
 
   // Must set ctx before we try to load any textures
@@ -1111,6 +1149,8 @@ void tb_unregister_texture_sys(TbWorld *world) {
   ecs_query_fini(ctx->loaded_tex_query);
   ecs_query_fini(ctx->dirty_tex_query);
   ecs_query_fini(ctx->ready_tex_query);
+
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
