@@ -1212,8 +1212,7 @@ VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
 }
 
 // Returns the binding info of the texture system's descriptor buffer
-VkDescriptorBufferBindingInfoEXT
-tb_tex_sys_get_tex_table_addr(ecs_world_t *ecs) {
+VkDescriptorBufferBindingInfoEXT tb_tex_sys_get_table_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   VkDescriptorBufferBindingInfoEXT binding_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,

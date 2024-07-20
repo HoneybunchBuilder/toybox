@@ -480,11 +480,29 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
     const uint32_t set_count = 6;
-    VkDescriptorSet sets[set_count] = {
-        prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
-        prim_batch->idx_set,  prim_batch->pos_set,  prim_batch->norm_set};
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            set_count, sets, 0, NULL);
+
+#if TB_USE_DESC_BUFFER == 1
+    {
+      const VkDescriptorBufferBindingInfoEXT buffer_bindings[set_count] = {
+          prim_batch->view_addr, prim_batch->draw_addr, prim_batch->obj_addr,
+          prim_batch->idx_addr,  prim_batch->pos_addr,  prim_batch->norm_addr,
+      };
+      uint32_t idx = 0;
+      VkDeviceSize offset = 0;
+      vkCmdSetDescriptorBufferOffsetsEXT(buffer,
+                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                         layout, 0, set_count, &idx, &offset);
+      vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+    }
+#else
+    {
+      VkDescriptorSet sets[set_count] = {
+          prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
+          prim_batch->idx_set,  prim_batch->pos_set,  prim_batch->norm_set};
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              0, set_count, sets, 0, NULL);
+    }
+#endif
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       tb_auto draw = &((const TbIndirectDraw *)batch->draws)[draw_idx];
@@ -527,24 +545,31 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     const uint32_t set_count = 10;
 
 #if TB_USE_DESC_BUFFER == 1
-    const VkDescriptorBufferBindingInfoEXT buffer_bindings[1] = {
-        prim_batch->tex_addr,
-    };
-    uint32_t buffer_idx = 0;
-    uint32_t buffer_offset = 0;
-    vkCmdSetDescriptorBufferOffsetsEXT(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                       layout, 4, 1, &buffer_idx,
-                                       &buffer_offset);
-    vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+    {
+      const VkDescriptorBufferBindingInfoEXT buffer_bindings[set_count] = {
+          prim_batch->view_addr, prim_batch->mat_addr,  prim_batch->draw_addr,
+          prim_batch->obj_addr,  prim_batch->tex_addr,  prim_batch->idx_addr,
+          prim_batch->pos_addr,  prim_batch->norm_addr, prim_batch->tan_addr,
+          prim_batch->uv0_addr,
+      };
+      uint32_t idx = 0;
+      VkDeviceSize offset = 0;
+      vkCmdSetDescriptorBufferOffsetsEXT(buffer,
+                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                         layout, 0, set_count, &idx, &offset);
+      vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+    }
 #else
-    const VkDescriptorSet sets[set_count] = {
-        prim_batch->view_set, prim_batch->mat_set,  prim_batch->draw_set,
-        prim_batch->obj_set,  prim_batch->tex_set,  prim_batch->idx_set,
-        prim_batch->pos_set,  prim_batch->norm_set, prim_batch->tan_set,
-        prim_batch->uv0_set,
-    };
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            set_count, sets, 0, NULL);
+    {
+      const VkDescriptorSet sets[set_count] = {
+          prim_batch->view_set, prim_batch->mat_set,  prim_batch->draw_set,
+          prim_batch->obj_set,  prim_batch->tex_set,  prim_batch->idx_set,
+          prim_batch->pos_set,  prim_batch->norm_set, prim_batch->tan_set,
+          prim_batch->uv0_set,
+      };
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              0, set_count, sets, 0, NULL);
+    }
 #endif
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
@@ -873,7 +898,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       }
 
 #if TB_USE_DESC_BUFFER == 1
-      tb_auto tex_addr = tb_tex_sys_get_tex_table_addr(ecs);
+      tb_auto tex_addr = tb_tex_sys_get_table_addr(ecs);
 #else
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
       tb_auto tex_set = tb_tex_sys_get_set(ecs);

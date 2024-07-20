@@ -176,12 +176,30 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t set_count = 5;
-    VkDescriptorSet sets[set_count] = {
-        prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
-        prim_batch->idx_set, prim_batch->pos_set};
-    vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
-                            set_count, sets, 0, NULL);
+    const uint32_t binding_count = 5;
+#if TB_USE_DESC_BUFFER == 1
+    {
+      const VkDescriptorBufferBindingInfoEXT buffer_bindings[binding_count] = {
+          prim_batch->view_addr, prim_batch->draw_addr, prim_batch->obj_addr,
+          prim_batch->idx_addr,  prim_batch->pos_addr,
+      };
+      uint32_t idx = 0;
+      VkDeviceSize offset = 0;
+      vkCmdSetDescriptorBufferOffsetsEXT(
+          buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, binding_count,
+          &idx, &offset);
+      vkCmdBindDescriptorBuffersEXT(buffer, binding_count, buffer_bindings);
+    }
+#else
+    {
+      VkDescriptorSet sets[binding_count] = {
+          prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
+          prim_batch->idx_set, prim_batch->pos_set};
+      vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+                              0, binding_count, sets, 0, NULL);
+    }
+#endif
+
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       TracyCZoneNC(draw_ctx, "Record Indirect Draw",
                    TracyCategoryColorRendering, true);
