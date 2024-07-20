@@ -22,7 +22,9 @@ VkResult tb_resize_desc_buffer(TbRenderSystem *rnd_sys, uint32_t capacity,
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = buffer_size,
         .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };
     const char *buf_name = "";
 #ifndef FINAL
@@ -50,7 +52,7 @@ VkResult tb_resize_desc_buffer(TbRenderSystem *rnd_sys, uint32_t capacity,
   // Reverse iter so the last idx we append is 0
   // Iter from the previous buf's cap so that we only reports newly allocated
   // indices as free. Existing free list is still correct
-  for (uint32_t i = cap - 1; i > prev_buf.desc_cap; --i) {
+  for (uint32_t i = cap; i > prev_buf.desc_cap; --i) {
     TB_DYN_ARR_APPEND(out_buf->free_list, i);
   }
 
@@ -102,7 +104,7 @@ uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
   if (desc_buf->desc_count + 1 >= desc_buf->desc_cap) {
     const uint32_t new_cap = desc_buf->desc_cap + TB_DESC_BUF_PAGE_SIZE;
     VkResult err = tb_resize_desc_buffer(rnd_sys, new_cap, desc_buf);
-    TB_CHECK(err, "Error occurred during resize");
+    TB_VK_CHECK(err, "Error occurred during resize");
   }
 
   // Take first free index
@@ -164,14 +166,17 @@ uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
   uint8_t *ptr = desc_buf->data_ptr + offset;
   vkGetDescriptorEXT(device, &desc_info, desc_size, ptr);
 
-  // NOTE: This could cause a lot of time spent processing buffer uploads
-  // Upload just the region of the buffer that changed
-  TbBufferCopy copy = {
-      .dst = desc_buf->buffer.buffer,
-      .src = desc_buf->host.buffer,
-      .region = {.srcOffset = offset, .dstOffset = offset, .size = desc_size},
-  };
-  tb_rnd_upload_buffers(rnd_sys, &copy, 1);
+  // Host will be null if the buffer was mappable
+  if (desc_buf->host.buffer != VK_NULL_HANDLE) {
+    // NOTE: This could cause a lot of time spent processing buffer uploads
+    // Upload just the region of the buffer that changed
+    TbBufferCopy copy = {
+        .dst = desc_buf->buffer.buffer,
+        .src = desc_buf->host.buffer,
+        .region = {.srcOffset = offset, .dstOffset = offset, .size = desc_size},
+    };
+    tb_rnd_upload_buffers(rnd_sys, &copy, 1);
+  }
 
   // Increase buffer count
   desc_buf->desc_count++;

@@ -797,6 +797,11 @@ void tb_tex_phase_loading(ecs_iter_t *it) {
 
 void tb_update_texture_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Texture Pool");
+#if TB_USE_DESC_BUFFER == 1
+  // Skip this phase
+  ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
+  ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
+#else
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
@@ -857,6 +862,7 @@ void tb_update_texture_pool(ecs_iter_t *it) {
     // Reset counter for next phase
     tex_ctx->pool_update_counter = 0;
   }
+#endif
 }
 
 void tb_write_texture_descriptors(ecs_iter_t *it) {
@@ -872,13 +878,34 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
     return;
   }
 
-  // We can't write more than this number of textures
-  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
-      rnd_sys, tex_ctx->frame_set_pool.pools);
-
   // Write all dirty textures into the descriptor set table
   uint32_t tex_idx = 0;
   tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
+
+// Alternate path: write to descriptor buffer
+#if TB_USE_DESC_BUFFER == 1
+  while (ecs_query_next(&tex_it)) {
+    tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
+    for (int32_t i = 0; i < tex_it.count; ++i) {
+      tb_auto texture = &textures[i];
+
+      VkDescriptorImageInfo image_info = {
+          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .imageView = texture->image_view,
+      };
+      VkDescriptorDataEXT desc = {.pSampledImage = &image_info};
+      uint32_t idx =
+          tb_write_desc_to_buffer(rnd_sys, &tex_ctx->desc_buffer, 0,
+                                  VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &desc);
+
+      ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {idx});
+      ecs_add(it->world, tex_it.entities[i], TbDescriptorReady);
+    }
+  }
+#else
+  // We can't write more than this number of textures
+  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
+      rnd_sys, tex_ctx->frame_set_pool.pools);
 
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorImageInfo) img_info = {0};
@@ -929,6 +956,7 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
     ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
     tex_ctx->pool_update_counter = 0;
   }
+#endif
 }
 
 void tb_tex_phase_written(ecs_iter_t *it) {
@@ -1172,10 +1200,31 @@ VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
   return ctx->set_layout;
 }
 
+VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  return ctx->set_layout2;
+}
+
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+}
+
+// Returns the binding info of the texture system's descriptor buffer
+VkDescriptorBufferBindingInfoEXT
+tb_tex_sys_get_tex_table_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->desc_buffer.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
 }
 
 VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex) {

@@ -162,7 +162,8 @@ void tb_create_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(uint32_t) * 256,
-        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
     };
     tb_rnd_sys_alloc_gpu_buffer(rnd_sys, &create_info, "Luminance Histogram",
                                 &work->lum_histogram);
@@ -303,7 +304,8 @@ void tb_create_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
     VkBufferCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sizeof(float),
-        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
     };
     tb_rnd_sys_alloc_gpu_buffer(rnd_sys, &create_info, "Luminance Average",
                                 &work->lum_avg);

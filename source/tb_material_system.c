@@ -269,7 +269,8 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
           .size = domain_size,
           .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
       };
       // HACK: Known alignment for uniform buffers
       tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, domain_data,
@@ -703,7 +704,8 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
       .size = data_size,
       .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
   };
   // HACK: Known alignment for uniform buffers
   tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, data_copy, name,

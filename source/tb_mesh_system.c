@@ -525,6 +525,18 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
     const uint32_t set_count = 10;
+
+#if TB_USE_DESC_BUFFER == 1
+    const VkDescriptorBufferBindingInfoEXT buffer_bindings[1] = {
+        prim_batch->tex_addr,
+    };
+    uint32_t buffer_idx = 0;
+    uint32_t buffer_offset = 0;
+    vkCmdSetDescriptorBufferOffsetsEXT(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       layout, 4, 1, &buffer_idx,
+                                       &buffer_offset);
+    vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+#else
     const VkDescriptorSet sets[set_count] = {
         prim_batch->view_set, prim_batch->mat_set,  prim_batch->draw_set,
         prim_batch->obj_set,  prim_batch->tex_set,  prim_batch->idx_set,
@@ -533,6 +545,8 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     };
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             set_count, sets, 0, NULL);
+#endif
+
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       TracyCZoneNC(draw_ctx, "Record Indirect Draw",
                    TracyCategoryColorRendering, true);
@@ -858,6 +872,9 @@ void mesh_draw_tick(ecs_iter_t *it) {
         continue;
       }
 
+#if TB_USE_DESC_BUFFER == 1
+      tb_auto tex_addr = tb_tex_sys_get_tex_table_addr(ecs);
+#else
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
       tb_auto tex_set = tb_tex_sys_get_set(ecs);
       tb_auto mat_set = tb_mat_sys_get_set(ecs);
@@ -866,6 +883,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       tb_auto norm_set = tb_mesh_sys_get_norm_set(ecs);
       tb_auto tan_set = tb_mesh_sys_get_tan_set(ecs);
       tb_auto uv0_set = tb_mesh_sys_get_uv0_set(ecs);
+#endif
 
       // Allocate indirect draw buffers
       VkDrawIndirectCommand *opaque_draw_cmds = NULL;
@@ -999,6 +1017,18 @@ void mesh_draw_tick(ecs_iter_t *it) {
           tb_alloc_tp(mesh_sys->tmp_alloc, TbPrimitiveBatch);
 
       *opaque_prim_batch = (TbPrimitiveBatch){
+#if TB_USE_DESC_BUFFER == 1
+          .view_addr = view_addr,
+          .mat_addr = mat_addr,
+          .draw_addr = opaque_draw_addr,
+          .obj_addr = obj_addr,
+          .tex_addr = tex_addr,
+          .idx_addr = idx_addr,
+          .pos_addr = pos_addr,
+          .norm_addr = norm_addr,
+          .tan_addr = tan_addr,
+          .uv0_addr = uv0_addr,
+#else
           .view_set = view_set,
           .mat_set = mat_set,
           .draw_set = opaque_draw_set,
@@ -1009,6 +1039,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
           .norm_set = norm_set,
           .tan_set = tan_set,
           .uv0_set = uv0_set,
+#endif
       };
 
       // Define batches
@@ -1040,6 +1071,18 @@ void mesh_draw_tick(ecs_iter_t *it) {
           .scissor = {{0, 0}, {width, height}},
           .user_batch =
               &(TbPrimitiveBatch){
+#if TB_USE_DESC_BUFFER == 1
+                  .view_addr = view_addr,
+                  .mat_addr = mat_addr,
+                  .draw_addr = trans_draw_addr,
+                  .obj_addr = obj_addr,
+                  .tex_addr = tex_addr,
+                  .idx_addr = idx_addr,
+                  .pos_addr = pos_addr,
+                  .norm_addr = norm_addr,
+                  .tan_addr = tan_addr,
+                  .uv0_addr = uv0_addr,
+#else
                   .view_set = view_set,
                   .mat_set = mat_set,
                   .draw_set = trans_draw_set,
@@ -1050,6 +1093,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
                   .norm_set = norm_set,
                   .tan_set = tan_set,
                   .uv0_set = uv0_set,
+#endif
               },
           .draw_count = 1,
           .draw_size = sizeof(TbIndirectDraw),

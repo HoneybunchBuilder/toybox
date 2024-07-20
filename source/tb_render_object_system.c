@@ -97,7 +97,8 @@ void tick_render_object_system(ecs_iter_t *it) {
         .size = sizeof(TbCommonObjectData) * obj_count,
         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
     };
     tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, "TbTransform Buffer",
                                  &trans_buffer->gpu, &trans_buffer->host,

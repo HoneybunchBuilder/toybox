@@ -24,10 +24,15 @@ typedef enum TbTextureUsage {
 } TbTextureUsage;
 
 VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs);
+VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs);
 
 // Returns the descriptor set that can be used to access textures by index from
 // a shader
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs);
+
+// Returns the address of the texture system's descriptor buffer
+VkDescriptorBufferBindingInfoEXT
+tb_tex_sys_get_tex_table_addr(ecs_world_t *ecs);
 
 // Returns the image view of the given texture if it is ready
 VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex);

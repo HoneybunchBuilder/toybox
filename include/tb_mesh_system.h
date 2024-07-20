@@ -52,6 +52,18 @@ typedef struct TbIndirectDraw {
 } TbIndirectDraw;
 
 typedef struct TbPrimitiveBatch {
+#if TB_USE_DESC_BUFFER == 1
+  VkDescriptorBufferBindingInfoEXT view_addr;
+  VkDescriptorBufferBindingInfoEXT mat_addr;
+  VkDescriptorBufferBindingInfoEXT draw_addr;
+  VkDescriptorBufferBindingInfoEXT obj_addr;
+  VkDescriptorBufferBindingInfoEXT tex_addr;
+  VkDescriptorBufferBindingInfoEXT idx_addr;
+  VkDescriptorBufferBindingInfoEXT pos_addr;
+  VkDescriptorBufferBindingInfoEXT norm_addr;
+  VkDescriptorBufferBindingInfoEXT tan_addr;
+  VkDescriptorBufferBindingInfoEXT uv0_addr;
+#else
   VkDescriptorSet view_set;
   VkDescriptorSet mat_set;
   VkDescriptorSet draw_set;
@@ -62,6 +74,7 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorSet norm_set;
   VkDescriptorSet tan_set;
   VkDescriptorSet uv0_set;
+#endif
 } TbPrimitiveBatch;
 
 typedef struct TbMeshSystem {

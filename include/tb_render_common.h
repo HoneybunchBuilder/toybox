@@ -16,6 +16,9 @@
 #define TB_MAX_RENDER_PASS_TRANS 16
 #define TB_MAX_BARRIERS 16
 
+// TEMP: For migrating to descriptor buffers
+#define TB_USE_DESC_BUFFER 0
+
 typedef struct TbDrawBatch {
   VkPipelineLayout layout;
   VkPipeline pipeline;
@@ -92,6 +95,7 @@ typedef struct TbBuffer {
   VkBuffer buffer;
   VmaAllocation alloc;
   VmaAllocationInfo info;
+  VkDeviceAddress address;
 } TbBuffer;
 
 typedef struct TbImage {

@@ -208,7 +208,8 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                  VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT |
-                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
     };
     char mesh_name[512] = {0};
 

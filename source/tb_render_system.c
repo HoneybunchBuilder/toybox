@@ -467,8 +467,15 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(TbRenderSystem *self,
                       &buffer->buffer, &buffer->alloc, &buffer->info);
   TB_VK_CHECK_RET(err, "Failed to allocate gpu buffer", err);
 
-  SET_VK_NAME(self->render_thread->device, buffer->buffer,
-              VK_OBJECT_TYPE_BUFFER, name);
+  tb_auto device = self->render_thread->device;
+
+  VkBufferDeviceAddressInfo addr_info = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      .buffer = buffer->buffer,
+  };
+  buffer->address = vkGetBufferDeviceAddress(device, &addr_info);
+
+  SET_VK_NAME(device, buffer->buffer, VK_OBJECT_TYPE_BUFFER, name);
 
   return err;
 }

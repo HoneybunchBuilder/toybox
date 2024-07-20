@@ -425,7 +425,8 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                   VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+                   VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
       };
       VmaAllocationCreateInfo alloc_create_info = {
           .usage = VMA_MEMORY_USAGE_AUTO,
@@ -916,6 +917,7 @@ bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
       NULL,
   };
   VmaAllocatorCreateInfo create_info = {
+      .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
       .physicalDevice = gpu,
       .device = device,
       .pVulkanFunctions = &volk_functions,

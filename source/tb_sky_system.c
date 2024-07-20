@@ -995,7 +995,8 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
             .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .size = skydome_size,
         };
         err = tb_rnd_sys_create_gpu_buffer_tmp(
