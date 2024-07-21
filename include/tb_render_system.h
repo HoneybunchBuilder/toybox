@@ -101,6 +101,8 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(TbRenderSystem *self, const void *data,
 
 VkBuffer tb_rnd_get_gpu_tmp_buffer(TbRenderSystem *self);
 
+VkDeviceAddress tb_rnd_get_gpu_tmp_addr(TbRenderSystem *self);
+
 // API for updating the contents of a buffer without resizing it
 VkResult tb_rnd_sys_update_gpu_buffer(TbRenderSystem *self,
                                       const TbBuffer *buffer,

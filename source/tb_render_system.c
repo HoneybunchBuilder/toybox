@@ -733,6 +733,10 @@ VkBuffer tb_rnd_get_gpu_tmp_buffer(TbRenderSystem *self) {
   return self->render_thread->frame_states[self->frame_idx].tmp_gpu_buffer;
 }
 
+VkDeviceAddress tb_rnd_get_gpu_tmp_addr(TbRenderSystem *self) {
+  return self->render_thread->frame_states[self->frame_idx].tmp_gpu_buf_addr;
+}
+
 VkResult tb_rnd_sys_update_gpu_buffer(TbRenderSystem *self,
                                       const TbBuffer *buffer,
                                       const TbHostBuffer *host, void **ptr) {

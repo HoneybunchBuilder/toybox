@@ -665,7 +665,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
           .setLayoutCount = 6,
           .pSetLayouts =
               (VkDescriptorSetLayout[6]){
-                  view_sys->set_layout,
+                  tb_view_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),
                   mesh_set_layout,
@@ -700,7 +700,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
           .setLayoutCount = layout_count,
           .pSetLayouts =
               (VkDescriptorSetLayout[layout_count]){
-                  view_sys->set_layout,
+                  tb_view_sys_get_set_layout(ecs),
                   tb_mat_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),
@@ -830,13 +830,22 @@ void mesh_draw_tick(ecs_iter_t *it) {
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
       TracyCZoneN(cam_ctx, "Camera", 1);
       tb_auto camera = &cameras[cam_idx];
-      tb_auto view_set =
-          tb_view_system_get_descriptor(view_sys, camera->view_id);
+      tb_auto view_id = camera->view_id;
+#if TB_USE_DESC_BUFFER == 1
+      tb_auto view_addr = tb_view_sys_get_table_addr(ecs, view_id);
+      // Skip camera if view set isn't ready
+      if (view_addr.address == VK_NULL_HANDLE) {
+        TracyCZoneEnd(cam_ctx);
+        continue;
+      }
+#else
+      tb_auto view_set = tb_view_system_get_descriptor(view_sys, view_id);
       // Skip camera if view set isn't ready
       if (view_set == VK_NULL_HANDLE) {
         TracyCZoneEnd(cam_ctx);
         continue;
       }
+#endif
 
       const float width = camera->width;
       const float height = camera->height;

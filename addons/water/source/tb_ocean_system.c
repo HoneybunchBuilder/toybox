@@ -634,7 +634,7 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
         .pSetLayouts =
             (VkDescriptorSetLayout[2]){
                 sys->set_layout,
-                sys->view_sys->set_layout,
+                tb_view_sys_get_set_layout(ecs),
             },
         .pushConstantRangeCount = 1,
         .pPushConstantRanges =

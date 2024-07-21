@@ -27,7 +27,6 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
       .gp_alloc = gp_alloc,
   };
 
-#if TB_USE_DESC_BUFFER == 1
   {
     const VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
@@ -62,7 +61,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
                                 "Render Object Descriptors", 4,
                                 &sys.desc_buffer);
   }
-#else
+
   {
     const VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
@@ -90,7 +89,6 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
         },
         "Object Descriptor Set Layout", &sys.set_layout);
   }
-#endif
 
   return sys;
 }
@@ -163,9 +161,9 @@ void tick_render_object_system(ecs_iter_t *it) {
   tb_auto trans_count = trans_buffer->obj_count;
   if (trans_count > 0) {
 #if TB_USE_DESC_BUFFER == 1
-    VkDescriptorBufferInfo buffer_info = {
-        .buffer = trans_buffer->gpu.buffer,
-        .offset = 0,
+    VkDescriptorAddressInfoEXT buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+        .address = trans_buffer->gpu.address,
         .range = sizeof(TbCommonObjectData) * trans_count,
     };
     VkDescriptorDataEXT desc = {.pStorageBuffer = &buffer_info};

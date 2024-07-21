@@ -345,7 +345,7 @@ TbVisualLoggingSystem create_visual_logging_system(
         .setLayoutCount = 1,
         .pSetLayouts =
             (VkDescriptorSetLayout[1]){
-                view_sys->set_layout,
+                tb_view_sys_get_set_layout(ecs),
             },
     };
     err = tb_rnd_create_pipeline_layout(

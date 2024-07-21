@@ -191,3 +191,19 @@ void tb_free_desc_from_buffer(TbDescriptorBuffer *desc_buf, uint32_t idx) {
   TB_DYN_ARR_APPEND(desc_buf->free_list, idx);
   --desc_buf->desc_count;
 }
+
+// Resets the internal free-list and invalidates all previously written
+// descriptors
+void tb_reset_descriptor_buffer(TbRenderSystem *rnd_sys,
+                                TbDescriptorBuffer *desc_buf) {
+  tb_auto cap = desc_buf->desc_cap;
+  // Free list can be initialized and all possible indices should be placed into
+  // the list
+  TB_DYN_ARR_RESET(desc_buf->free_list, rnd_sys->gp_alloc, cap);
+  // Reverse iter so the last idx we append is 0
+  // Iter from the previous buf's cap so that we only reports newly allocated
+  // indices as free. Existing free list is still correct
+  for (uint32_t i = cap; i > 0; --i) {
+    TB_DYN_ARR_APPEND(desc_buf->free_list, i);
+  }
+}

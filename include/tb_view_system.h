@@ -2,6 +2,7 @@
 
 #include "common.hlsli"
 #include "tb_allocator.h"
+#include "tb_descriptor_buffer.h"
 #include "tb_dynarray.h"
 #include "tb_render_common.h"
 #include "tb_render_pipeline_system.h"
@@ -35,6 +36,7 @@ typedef struct TbView {
   TbCommonViewData view_data;
   TbCommonLightData light_data;
   TbFrustum frustum;
+  TbDescriptorBuffer desc_buffer;
 } TbView;
 
 typedef struct TbViewSystem {
@@ -47,6 +49,9 @@ typedef struct TbViewSystem {
   VkSampler filtered_env_sampler;
   VkDescriptorSetLayout set_layout;
   TbViewSystemFrameState frame_states[TB_MAX_FRAME_STATES];
+
+  VkDescriptorSetLayout set_layout2;
+  TbDescriptorBuffer desc_buffer;
 
   TB_DYN_ARR_OF(TbView) views;
 } TbViewSystem;
@@ -65,3 +70,7 @@ VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,
                                               TbViewId view);
 VkDescriptorSet tb_view_sys_get_set(TbViewSystem *self);
 const TbView *tb_get_view(TbViewSystem *self, TbViewId view);
+
+VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_view_sys_get_table_addr(ecs_world_t *ecs,
+                                                            TbViewId view);

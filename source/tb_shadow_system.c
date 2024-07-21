@@ -395,14 +395,23 @@ void shadow_draw_tick(ecs_iter_t *it) {
       // Submit batch for each shadow cascade
       for (uint32_t cascade_idx = 0; cascade_idx < TB_CASCADE_COUNT;
            ++cascade_idx) {
+        tb_auto view_id = light->cascade_views[cascade_idx];
 
-        tb_auto view_set = tb_view_system_get_descriptor(
-            view_sys, light->cascade_views[cascade_idx]);
-
-        // Skip if view set isn't ready
-        if (view_set == VK_NULL_HANDLE) {
+#if TB_USE_DESC_BUFFER == 1
+        tb_auto view_addr = tb_view_sys_get_table_addr(ecs, view_id);
+        // Skip camera if view set isn't ready
+        if (view_addr.address == VK_NULL_HANDLE) {
+          TracyCZoneEnd(cam_ctx);
           continue;
         }
+#else
+        tb_auto view_set = tb_view_system_get_descriptor(view_sys, view_id);
+        // Skip camera if view set isn't ready
+        if (view_set == VK_NULL_HANDLE) {
+          TracyCZoneEnd(cam_ctx);
+          continue;
+        }
+#endif
 
         // Must perform the above check before we try to access the opaque batch
         TbDrawBatch shadow_batch = *mesh_sys->opaque_batch;
@@ -415,7 +424,11 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto batch = &shadow_batch;
         tb_auto prim_batch = (TbPrimitiveBatch *)batch->user_batch;
 
+#ifdef TB_USE_DESC_BUFFER == 1
+        prim_batch->view_addr = view_addr;
+#else
         prim_batch->view_set = view_set;
+#endif
         const float dim = TB_SHADOW_MAP_DIM;
         batch->viewport = (VkViewport){0, 0, dim, dim, 0, 1};
         batch->scissor = (VkRect2D){{0, 0}, {dim, dim}};
@@ -472,7 +485,7 @@ void tb_register_shadow_sys(TbWorld *world) {
           .setLayoutCount = 5,
           .pSetLayouts =
               (VkDescriptorSetLayout[5]){
-                  view_sys->set_layout,
+                  tb_view_sys_get_set_layout(ecs),
                   mesh_sys->draw_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),
                   mesh_set_layout,

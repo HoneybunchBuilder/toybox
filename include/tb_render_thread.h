@@ -97,6 +97,7 @@ typedef struct TbFrameState {
 
   VmaAllocation tmp_gpu_alloc;
   VkBuffer tmp_gpu_buffer;
+  VkDeviceAddress tmp_gpu_buf_addr;
 
   // References to queues owned by the main thread and pushed to by tasks
   // The render thread only consumes these

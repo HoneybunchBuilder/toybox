@@ -31,8 +31,6 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
 
   TB_DYN_ARR_RESET(sys.views, sys.gp_alloc, 1);
 
-  VkResult err = VK_SUCCESS;
-
   // Create a filtered env sampler
   {
     VkSamplerCreateInfo create_info = {
@@ -46,9 +44,8 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
         .maxLod = 9.0f, // TODO: Fix hack
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Filtered Env Sampler",
-                                &sys.filtered_env_sampler);
-    TB_VK_CHECK(err, "Failed to create filtered env sampler");
+    tb_rnd_create_sampler(rnd_sys, &create_info, "Filtered Env Sampler",
+                          &sys.filtered_env_sampler);
   }
 
   // Create a BRDF sampler
@@ -64,9 +61,8 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
         .maxLod = 1.0f,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
     };
-    err = tb_rnd_create_sampler(rnd_sys, &create_info, "BRDF Sampler",
-                                &sys.brdf_sampler);
-    TB_VK_CHECK(err, "Failed to create brdf sampler");
+    tb_rnd_create_sampler(rnd_sys, &create_info, "BRDF Sampler",
+                          &sys.brdf_sampler);
   }
 
   // Create view descriptor set layout
@@ -136,23 +132,99 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                 },
             },
     };
-    err = tb_rnd_create_set_layout(
-        rnd_sys, &create_info, "TbView Descriptor Set Layout", &sys.set_layout);
-    TB_VK_CHECK(err, "Failed to create view descriptor set");
+    tb_rnd_create_set_layout(rnd_sys, &create_info,
+                             "TbView Descriptor Set Layout", &sys.set_layout);
   }
+
+  {
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        .bindingCount = 9,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[9]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 2,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 3,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 4,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 5,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 6,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+                {
+                    .binding = 7,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &sys.filtered_env_sampler,
+                },
+                {
+                    .binding = 8,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .pImmutableSamplers = &sys.brdf_sampler,
+                },
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info,
+                             "View Descriptor Set Layout", &sys.set_layout2);
+    tb_create_descriptor_buffer(rnd_sys, sys.set_layout2, "View Descriptors", 4,
+                                &sys.desc_buffer);
+  }
+
   return sys;
 }
 
-void destroy_view_system(TbViewSystem *self) {
+void destroy_view_system(TbViewSystem *self, TbRenderSystem *rnd_sys) {
   TB_DYN_ARR_DESTROY(self->views);
 
-  tb_rnd_destroy_sampler(self->rnd_sys, self->brdf_sampler);
-  tb_rnd_destroy_sampler(self->rnd_sys, self->filtered_env_sampler);
-  tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
+  tb_rnd_destroy_sampler(rnd_sys, self->brdf_sampler);
+  tb_rnd_destroy_sampler(rnd_sys, self->filtered_env_sampler);
+  tb_rnd_destroy_set_layout(rnd_sys, self->set_layout);
+
+  tb_rnd_destroy_set_layout(rnd_sys, self->set_layout2);
+  tb_destroy_descriptor_buffer(rnd_sys, &self->desc_buffer);
 
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     TbViewSystemFrameState *state = &self->frame_states[i];
-    tb_rnd_destroy_descriptor_pool(self->rnd_sys, state->set_pool);
+    tb_rnd_destroy_descriptor_pool(rnd_sys, state->set_pool);
   }
 
   *self = (TbViewSystem){0};
@@ -184,6 +256,109 @@ void view_update_tick(ecs_iter_t *it) {
 
   VkBuffer tmp_gpu_buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys);
 
+#if TB_USE_DESC_BUFFER == 1
+  {
+    // Reset the descriptor buffer so we can just re-use it from the start
+    // Similar to restarting a descriptor pool
+    tb_reset_descriptor_buffer(rnd_sys, &sys->desc_buffer);
+
+    const uint32_t frame_idx = rnd_sys->frame_idx;
+
+    TB_DYN_ARR_FOREACH(sys->views, view_idx) {
+      const TbView *view = &TB_DYN_ARR_AT(sys->views, view_idx);
+      const TbCommonViewData *view_data = &view->view_data;
+      const TbCommonLightData *light_data = &view->light_data;
+
+      tb_auto tmp_addr = tb_rnd_get_gpu_tmp_addr(rnd_sys);
+
+      // Write view data into the tmp buffer we know will wind up on the GPU
+      uint64_t view_offset = 0;
+      tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonViewData), 0x40,
+                                    view_data, &view_offset);
+      uint64_t light_offset = 0;
+      tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonLightData), 0x40,
+                                    light_data, &light_offset);
+
+      TB_DYN_ARR_OF(TbDescriptor) descriptors = {0};
+      TB_DYN_ARR_RESET(descriptors, rnd_sys->tmp_alloc, 16);
+
+      // Binding 0: Common View Data
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              .data = {
+                  .pUniformBuffer = &(VkDescriptorAddressInfoEXT){
+                      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                      .address = tmp_addr + view_offset,
+                      .range = sizeof(TbCommonViewData),
+                  }}}));
+      // Binding 1: Irradiance Map
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .data = {
+                  .pSampledImage = &(VkDescriptorImageInfo){
+                      .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .imageView = tb_render_target_get_view(
+                          rt_sys, frame_idx, rt_sys->irradiance_map),
+                  }}}));
+      // Binding 2: Environment Map
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .data = {
+                  .pSampledImage = &(VkDescriptorImageInfo){
+                      .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .imageView = tb_render_target_get_view(
+                          rt_sys, frame_idx, rt_sys->prefiltered_cube),
+                  }}}));
+      // Binding 3: BRDF
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .data = {
+                  .pSampledImage = &(VkDescriptorImageInfo){
+                      .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .imageView = tb_render_target_get_view(rt_sys, frame_idx,
+                                                             brdf_tex),
+                  }}}));
+      // Binding 4: Cascaded Shadow Map
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+              .data = {
+                  .pSampledImage = &(VkDescriptorImageInfo){
+                      .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      .imageView = tb_render_target_get_view(
+                          rt_sys, frame_idx, rt_sys->shadow_map),
+                  }}}));
+      // Binding 5: Lighting Data
+      TB_DYN_ARR_APPEND(
+          descriptors,
+          ((TbDescriptor){
+              .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              .data = {
+                  .pUniformBuffer = &(VkDescriptorAddressInfoEXT){
+                      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                      .address = tmp_addr + light_offset,
+                      .range = sizeof(TbCommonLightData),
+                  }}}));
+
+      // Write all descriptors to buffer
+      TB_DYN_ARR_FOREACH(descriptors, i) {
+        tb_auto descriptor = TB_DYN_ARR_AT(descriptors, i);
+        tb_write_desc_to_buffer(rnd_sys, &sys->desc_buffer, i, descriptor.type,
+                                &descriptor.data);
+      }
+    }
+  }
+
+#else
   TbViewSystemFrameState *state = &sys->frame_states[rnd_sys->frame_idx];
   // Allocate all the descriptor sets for this frame
   {
@@ -245,11 +420,11 @@ void view_update_tick(ecs_iter_t *it) {
   const uint32_t img_count = 4;
   const uint32_t write_count = buf_count + img_count;
 
-  VkWriteDescriptorSet *writes = tb_alloc_nm_tp(
+  tb_auto writes = tb_alloc_nm_tp(
       sys->tmp_alloc, (uint64_t)view_count * write_count, VkWriteDescriptorSet);
-  VkDescriptorBufferInfo *buffer_info = tb_alloc_nm_tp(
+  tb_auto buffer_info = tb_alloc_nm_tp(
       sys->tmp_alloc, (uint64_t)view_count * buf_count, VkDescriptorBufferInfo);
-  VkDescriptorImageInfo *image_info = tb_alloc_nm_tp(
+  tb_auto image_info = tb_alloc_nm_tp(
       sys->tmp_alloc, (uint64_t)view_count * img_count, VkDescriptorImageInfo);
   TB_DYN_ARR_FOREACH(sys->views, view_idx) {
     const TbView *view = &TB_DYN_ARR_AT(sys->views, view_idx);
@@ -362,6 +537,7 @@ void view_update_tick(ecs_iter_t *it) {
     };
   }
   tb_rnd_update_descriptors(rnd_sys, view_count * write_count, writes);
+#endif
 
   TracyCZoneEnd(ctx);
 }
@@ -386,9 +562,9 @@ void tb_register_view_sys(TbWorld *world) {
 
 void tb_unregister_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-
-  TbViewSystem *sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  destroy_view_system(sys);
+  tb_auto sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  destroy_view_system(sys, rnd_sys);
   ecs_singleton_remove(ecs, TbViewSystem);
 }
 
@@ -468,4 +644,34 @@ const TbView *tb_get_view(TbViewSystem *self, TbViewId view) {
     TB_CHECK_RETURN(false, "TbView Id out of range", NULL);
   }
   return &TB_DYN_ARR_AT(self->views, view);
+}
+
+VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+#if TB_USE_DESC_BUFFER == 1
+  return ctx->set_layout2;
+#else
+  return ctx->set_layout;
+#endif
+}
+
+VkDescriptorBufferBindingInfoEXT tb_view_sys_get_table_addr(ecs_world_t *ecs,
+                                                            TbViewId view) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto addr = ctx->desc_buffer.buffer.address;
+  tb_auto set_size = ctx->desc_buffer.layout_size;
+  // An address of 0 indicates an error
+  if (addr > 0 && set_size > 0) {
+    addr = addr + ((uint64_t)view * set_size);
+  }
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = addr,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
 }

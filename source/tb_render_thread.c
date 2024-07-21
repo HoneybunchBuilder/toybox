@@ -438,6 +438,13 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
       err = vmaCreateBuffer(vma_alloc, &create_info, &alloc_create_info,
                             &state->tmp_gpu_buffer, &state->tmp_gpu_alloc,
                             &alloc_info);
+
+      VkBufferDeviceAddressInfo addr_info = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+          .buffer = state->tmp_gpu_buffer,
+      };
+      state->tmp_gpu_buf_addr = vkGetBufferDeviceAddress(device, &addr_info);
+
       TB_VK_CHECK_RET(err, "Failed to create vma temp gpu buffer", false);
       SET_VK_NAME(device, state->tmp_gpu_buffer, VK_OBJECT_TYPE_BUFFER,
                   "Vulkan Tmp GPU Buffer");
