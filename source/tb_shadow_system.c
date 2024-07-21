@@ -4,6 +4,7 @@
 #include "tb_mesh_component.h"
 #include "tb_mesh_system.h"
 #include "tb_profiling.h"
+#include "tb_render_common.h"
 #include "tb_render_object_system.h"
 #include "tb_render_pipeline_system.h"
 #include "tb_render_target_system.h"
@@ -424,7 +425,7 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto batch = &shadow_batch;
         tb_auto prim_batch = (TbPrimitiveBatch *)batch->user_batch;
 
-#ifdef TB_USE_DESC_BUFFER == 1
+#if TB_USE_DESC_BUFFER == 1
         prim_batch->view_addr = view_addr;
 #else
         prim_batch->view_set = view_set;
@@ -453,6 +454,7 @@ void tb_register_shadow_sys(TbWorld *world) {
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  (void)view_sys;
 
   TbShadowSystem sys = {
       .gp_alloc = world->gp_alloc,
