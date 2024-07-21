@@ -438,7 +438,6 @@ void tb_register_shadow_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
 
@@ -475,7 +474,7 @@ void tb_register_shadow_sys(TbWorld *world) {
               (VkDescriptorSetLayout[5]){
                   view_sys->set_layout,
                   mesh_sys->draw_set_layout,
-                  ro_sys->set_layout,
+                  tb_render_object_sys_get_set_layout(ecs),
                   mesh_set_layout,
                   mesh_set_layout,
               },

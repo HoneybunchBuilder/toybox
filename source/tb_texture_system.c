@@ -1197,12 +1197,11 @@ TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
 
 VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-  return ctx->set_layout;
-}
-
-VkDescriptorSetLayout tb_tex_sys_get_set_layout2(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+#if TB_USE_DESC_BUFFER == 1
   return ctx->set_layout2;
+#else
+  return ctx->set_layout;
+#endif
 }
 
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {

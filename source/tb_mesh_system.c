@@ -667,7 +667,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
               (VkDescriptorSetLayout[6]){
                   view_sys->set_layout,
                   sys.draw_set_layout,
-                  ro_sys->set_layout,
+                  tb_render_object_sys_get_set_layout(ecs),
                   mesh_set_layout,
                   mesh_set_layout,
                   mesh_set_layout,
@@ -703,7 +703,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                   view_sys->set_layout,
                   tb_mat_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
-                  ro_sys->set_layout,
+                  tb_render_object_sys_get_set_layout(ecs),
                   tb_tex_sys_get_set_layout(ecs),
                   mesh_set_layout,
                   mesh_set_layout,
@@ -898,6 +898,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       }
 
 #if TB_USE_DESC_BUFFER == 1
+      tb_auto obj_addr = tb_render_object_sys_get_table_addr(ecs);
       tb_auto tex_addr = tb_tex_sys_get_table_addr(ecs);
 #else
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);

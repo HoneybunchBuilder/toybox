@@ -27,40 +27,72 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
       .gp_alloc = gp_alloc,
   };
 
-  // Create render object descriptor set layout
-  const VkDescriptorBindingFlags flags =
-      VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-      VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-  tb_rnd_create_set_layout(
-      rnd_sys,
-      &(VkDescriptorSetLayoutCreateInfo){
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-          .pNext =
-              &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
-                  .sType =
-                      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                  .bindingCount = 1,
-                  .pBindingFlags = (VkDescriptorBindingFlags[1]){flags},
-              },
-          .bindingCount = 1,
-          .pBindings =
-              &(VkDescriptorSetLayoutBinding){
-                  .binding = 0,
-                  .descriptorCount = 2048, // HACK: Some high upper limit
-                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                  .stageFlags =
-                      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-              },
-      },
-      "Object Descriptor Set Layout", &sys.set_layout);
+#if TB_USE_DESC_BUFFER == 1
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    const uint32_t binding_count = 1;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {
+                    .binding = 0,
+                    .descriptorCount = 2048, // HACK: High upper bound
+                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info,
+                             "Render Object Desc Buffer Layout",
+                             &sys.set_layout2);
+    tb_create_descriptor_buffer(rnd_sys, sys.set_layout2,
+                                "Render Object Descriptors", 4,
+                                &sys.desc_buffer);
+  }
+#else
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    tb_rnd_create_set_layout(
+        rnd_sys,
+        &(VkDescriptorSetLayoutCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext =
+                &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                    .sType =
+                        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                    .bindingCount = 1,
+                    .pBindingFlags = (VkDescriptorBindingFlags[1]){flags},
+                },
+            .bindingCount = 1,
+            .pBindings =
+                &(VkDescriptorSetLayoutBinding){
+                    .binding = 0,
+                    .descriptorCount = 2048, // HACK: Some high upper limit
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT,
+                },
+        },
+        "Object Descriptor Set Layout", &sys.set_layout);
+  }
+#endif
 
   return sys;
-}
-
-void destroy_render_object_system(TbRenderObjectSystem *self) {
-  tb_rnd_destroy_set_layout(self->rnd_sys, self->set_layout);
-
-  *self = (TbRenderObjectSystem){0};
 }
 
 void tick_render_object_system(ecs_iter_t *it) {
@@ -130,6 +162,16 @@ void tick_render_object_system(ecs_iter_t *it) {
   // set every frame
   tb_auto trans_count = trans_buffer->obj_count;
   if (trans_count > 0) {
+#if TB_USE_DESC_BUFFER == 1
+    VkDescriptorBufferInfo buffer_info = {
+        .buffer = trans_buffer->gpu.buffer,
+        .offset = 0,
+        .range = sizeof(TbCommonObjectData) * trans_count,
+    };
+    VkDescriptorDataEXT desc = {.pStorageBuffer = &buffer_info};
+    tb_write_desc_to_buffer(rnd_sys, &ro_sys->desc_buffer, 0,
+                            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &desc);
+#else
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
@@ -170,12 +212,38 @@ void tick_render_object_system(ecs_iter_t *it) {
         .pBufferInfo = buffer_info,
     };
     tb_rnd_update_descriptors(rnd_sys, 1, &write);
+#endif
   }
   TracyCZoneEnd(ctx);
 }
 
 VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys) {
   return tb_rnd_frame_desc_pool_get_set(sys->rnd_sys, sys->pools, 0);
+}
+
+VkDescriptorSetLayout tb_render_object_sys_get_set_layout(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+#if TB_USE_DESC_BUFFER == 1
+  return ctx->set_layout2;
+#else
+  return ctx->set_layout;
+#endif
+}
+
+// Returns the binding info of the render object system's descriptor buffer
+VkDescriptorBufferBindingInfoEXT
+tb_render_object_sys_get_table_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->desc_buffer.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
 }
 
 void tb_register_render_object_sys(TbWorld *world) {
@@ -217,8 +285,12 @@ void tb_register_render_object_sys(TbWorld *world) {
 
 void tb_unregister_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  ecs_query_fini(sys->obj_query);
-  destroy_render_object_system(sys);
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+
+  tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
+
+  ecs_query_fini(ctx->obj_query);
   ecs_singleton_remove(ecs, TbRenderObjectSystem);
 }

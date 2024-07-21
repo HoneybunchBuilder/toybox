@@ -986,6 +986,11 @@ TB_REGISTER_SYS(tb, mesh2, TB_MESH_SYS_PRIO)
 
 VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  // #if TB_USE_DESC_BUFFER == 1
+  //   return ctx->set_layout2;
+  // #else
+  //   return ctx->set_layout;
+  // #endif
   return ctx->set_layout;
 }
 

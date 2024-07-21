@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tb_allocator.h"
+#include "tb_descriptor_buffer.h"
 #include "tb_dynarray.h"
 #include "tb_render_common.h"
 #include "tb_render_system.h"
@@ -49,6 +50,9 @@ typedef struct TbRenderObjectSystem {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPool pools[TB_MAX_FRAME_STATES];
 
+  VkDescriptorSetLayout set_layout2;
+  TbDescriptorBuffer desc_buffer;
+
   TbTransformsBuffer trans_buffers[TB_MAX_FRAME_STATES];
 
   ecs_query_t *obj_query;
@@ -56,3 +60,9 @@ typedef struct TbRenderObjectSystem {
 extern ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
 VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys);
+
+VkDescriptorSetLayout tb_render_object_sys_get_set_layout(ecs_world_t *ecs);
+
+// Returns the address of the render object system's descriptor buffer
+VkDescriptorBufferBindingInfoEXT
+tb_render_object_sys_get_table_addr(ecs_world_t *ecs);
