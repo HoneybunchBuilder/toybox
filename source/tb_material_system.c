@@ -40,6 +40,9 @@ typedef struct TbMaterialCtx {
   TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_mat_count;
 
+  VkDescriptorSetLayout set_layout2;
+  TbDescriptorBuffer desc_buffer;
+
   uint32_t pool_update_counter;
   uint32_t last_written_mat_count;
 
@@ -318,15 +321,18 @@ void tb_mat_phase_loading(ecs_iter_t *it) {
 }
 
 void tb_update_material_pool(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Update Material Descriptors", true);
-
+  TB_TRACY_SCOPE("Update Material Descriptors");
+#if TB_USE_DESC_BUFFER == 1
+  // Skip this phase
+  ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
+  ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
+#else
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
   uint64_t mat_count = mat_ctx->owned_mat_count;
 
   if (mat_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -385,12 +391,11 @@ void tb_update_material_pool(ecs_iter_t *it) {
     // Reset counter for next phase
     mat_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
+#endif
 }
 
 void tb_write_material_descriptors(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Write Material Descriptors", true);
+  TB_TRACY_SCOPE("Write Material Descriptors");
 
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
@@ -399,14 +404,52 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
   uint64_t mat_count = mat_ctx->owned_mat_count;
 
   if (mat_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
   // Write all dirty materials into the descriptor set table
-  uint32_t mat_idx = 0;
   tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
 
+// Alternate path: write to descriptor buffer
+#if TB_USE_DESC_BUFFER == 1
+  while (ecs_query_next(&mat_it)) {
+    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
+    tb_auto mat_usages = ecs_field(&mat_it, TbMaterialUsage, 2);
+    for (int32_t i = 0; i < mat_it.count; ++i) {
+      tb_auto material = &materials[i];
+      tb_auto usage = mat_usages[i];
+
+      // Get material domain handler
+      tb_auto mat_domain = tb_find_material_domain(mat_ctx, usage).domain;
+
+      // If a material isn't ready we mustn't exit this phase
+      if (!mat_domain.ready_fn(it->world, material)) {
+        TracyCZoneEnd(ctx);
+        return;
+      }
+
+      TbDescriptor desc = {
+          .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .data =
+              {
+                  .pStorageBuffer =
+                      &(VkDescriptorAddressInfoEXT){
+                          .sType =
+                              VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                          .address = material->gpu_buffer.address,
+                          .range = material->gpu_buffer.info.size,
+                      },
+              },
+      };
+      uint32_t idx =
+          tb_write_desc_to_buffer(rnd_sys, &mat_ctx->desc_buffer, 2, &desc);
+
+      ecs_set(it->world, mat_it.entities[i], TbMaterialComponent, {idx});
+      ecs_add(it->world, mat_it.entities[i], TbDescriptorReady);
+    }
+  }
+#else
+  uint32_t mat_idx = 0;
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};
   TB_DYN_ARR_RESET(writes, world->tmp_alloc, mat_count);
@@ -460,12 +503,11 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
     ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
   }
-
-  TracyCZoneEnd(ctx);
+#endif
 }
 
 void tb_mat_phase_written(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Material Written Phase", true);
+  TB_TRACY_SCOPE("Material Written Phase");
 
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
 
@@ -482,8 +524,6 @@ void tb_mat_phase_written(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
     ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseReady);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 // Toybox Glue
@@ -635,6 +675,40 @@ void tb_register_material2_sys(TbWorld *world) {
     tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout",
                              &ctx.set_layout);
   }
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    const uint32_t binding_count = 3;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = binding_count,
+                .pBindingFlags =
+                    (VkDescriptorBindingFlags[binding_count]){0, 0, flags},
+            },
+        .bindingCount = binding_count,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[binding_count]){
+                {0, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                 &ctx.sampler},
+                {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                 &ctx.shadow_sampler},
+                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                 2048, // HACK: Some high upper limit
+                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+                 NULL},
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout2",
+                             &ctx.set_layout2);
+    tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2,
+                                "Material Descriptors", 4, &ctx.desc_buffer);
+  }
 
   TbMatQueueCounter queue_count = {0};
   SDL_AtomicSet(&queue_count, 0);
@@ -660,6 +734,9 @@ void tb_unregister_material2_sys(TbWorld *world) {
   ecs_query_fini(ctx->ready_mat_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
+  tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout2);
+
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
 
   // TODO: Release all default references
 
@@ -727,13 +804,31 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
 VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+#if TB_USE_DESC_BUFFER == 1
+  return ctx->set_layout2;
+#else
   return ctx->set_layout;
+#endif
 }
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->desc_buffer.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
 }
 
 void tb_mat_sys_begin_load(ecs_world_t *ecs) {

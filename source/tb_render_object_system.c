@@ -161,14 +161,17 @@ void tick_render_object_system(ecs_iter_t *it) {
   tb_auto trans_count = trans_buffer->obj_count;
   if (trans_count > 0) {
 #if TB_USE_DESC_BUFFER == 1
-    VkDescriptorAddressInfoEXT buffer_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-        .address = trans_buffer->gpu.address,
-        .range = sizeof(TbCommonObjectData) * trans_count,
-    };
-    VkDescriptorDataEXT desc = {.pStorageBuffer = &buffer_info};
-    tb_write_desc_to_buffer(rnd_sys, &ro_sys->desc_buffer, 0,
-                            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &desc);
+    tb_auto desc = (TbDescriptor){
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .data = {
+            .pStorageBuffer =
+                &(VkDescriptorAddressInfoEXT){
+                    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                    .address = trans_buffer->gpu.address,
+                    .range = sizeof(TbCommonObjectData) * trans_count,
+                },
+        }};
+    tb_write_desc_to_buffer(rnd_sys, &ro_sys->desc_buffer, 0, &desc);
 #else
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,

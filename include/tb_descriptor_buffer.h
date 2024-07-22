@@ -35,8 +35,7 @@ void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
 // Returns the index of the descriptor in the buffer
 uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
                                  TbDescriptorBuffer *desc_buf, uint32_t binding,
-                                 VkDescriptorType type,
-                                 const VkDescriptorDataEXT *desc);
+                                 const TbDescriptor *desc);
 
 // For freeing an individual descriptor from the buffer
 void tb_free_desc_from_buffer(TbDescriptorBuffer *desc_buf, uint32_t idx);

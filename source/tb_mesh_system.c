@@ -909,6 +909,12 @@ void mesh_draw_tick(ecs_iter_t *it) {
 #if TB_USE_DESC_BUFFER == 1
       tb_auto obj_addr = tb_render_object_sys_get_table_addr(ecs);
       tb_auto tex_addr = tb_tex_sys_get_table_addr(ecs);
+      tb_auto mat_addr = tb_mat_sys_get_table_addr(ecs);
+      tb_auto idx_addr = tb_mesh_sys_get_table_idx_addr(ecs);
+      tb_auto pos_addr = tb_mesh_sys_get_table_pos_addr(ecs);
+      tb_auto norm_addr = tb_mesh_sys_get_table_norm_addr(ecs);
+      tb_auto tan_addr = tb_mesh_sys_get_table_tan_addr(ecs);
+      tb_auto uv0_addr = tb_mesh_sys_get_table_uv0_addr(ecs);
 #else
       tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
       tb_auto tex_set = tb_tex_sys_get_set(ecs);

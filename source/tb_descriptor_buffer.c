@@ -96,10 +96,41 @@ void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
   TB_CHECK(false, "Unimplemented");
 }
 
+VkDeviceSize tb_lookup_desc_size(
+    VkDescriptorType type,
+    const VkPhysicalDeviceDescriptorBufferPropertiesEXT *props) {
+  switch (type) {
+  case VK_DESCRIPTOR_TYPE_SAMPLER: {
+    return props->samplerDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: {
+    return props->sampledImageDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
+    return props->storageImageDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER: {
+    return props->uniformTexelBufferDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER: {
+    return props->storageTexelBufferDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
+    return props->uniformBufferDescriptorSize;
+  }
+  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
+    return props->storageBufferDescriptorSize;
+  }
+  default: {
+    TB_CHECK(false, "Failed to determine descriptor size");
+    return 0;
+  }
+  }
+}
+
 uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
                                  TbDescriptorBuffer *desc_buf, uint32_t binding,
-                                 VkDescriptorType type,
-                                 const VkDescriptorDataEXT *desc) {
+                                 const TbDescriptor *desc) {
   // See if we need to resize the buffer
   if (desc_buf->desc_count + 1 >= desc_buf->desc_cap) {
     const uint32_t new_cap = desc_buf->desc_cap + TB_DESC_BUF_PAGE_SIZE;
@@ -120,46 +151,11 @@ uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
                                            &binding_offset);
   VkDescriptorGetInfoEXT desc_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-      .type = type,
-      .data = *desc,
+      .type = desc->type,
+      .data = desc->data,
   };
   tb_auto desc_buf_props = &rnd_sys->render_thread->desc_buf_props;
-  VkDeviceSize desc_size = 0;
-  switch (type) {
-  case VK_DESCRIPTOR_TYPE_SAMPLER: {
-    desc_size = desc_buf_props->samplerDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE: {
-    desc_size = desc_buf_props->sampledImageDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE: {
-    desc_size = desc_buf_props->storageImageDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER: {
-    desc_size = desc_buf_props->uniformTexelBufferDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER: {
-    desc_size = desc_buf_props->storageTexelBufferDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER: {
-    desc_size = desc_buf_props->uniformBufferDescriptorSize;
-    break;
-  }
-  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
-    desc_size = desc_buf_props->storageBufferDescriptorSize;
-    break;
-  }
-  default: {
-    desc_size = 0;
-    break;
-  }
-  }
-  TB_CHECK(desc_size, "Failed to determine descriptor size");
+  tb_auto desc_size = tb_lookup_desc_size(desc->type, desc_buf_props);
 
   // Write to the buffer by having vkGetDescriptorExt output to the buf's ptr
   VkDeviceSize offset = (idx * desc_size) + binding_offset;

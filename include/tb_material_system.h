@@ -59,6 +59,8 @@ VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs);
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs);
 
+VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs);
+
 void tb_mat_sys_begin_load(ecs_world_t *ecs);
 
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,

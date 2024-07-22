@@ -802,7 +802,6 @@ void tb_update_texture_pool(ecs_iter_t *it) {
   ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
   ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
 #else
-
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
@@ -888,15 +887,14 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
     tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
     for (int32_t i = 0; i < tex_it.count; ++i) {
       tb_auto texture = &textures[i];
-
-      VkDescriptorImageInfo image_info = {
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = texture->image_view,
-      };
-      VkDescriptorDataEXT desc = {.pSampledImage = &image_info};
+      TbDescriptor desc = {
+          .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          .data = {.pSampledImage = &(VkDescriptorImageInfo){
+                       .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                       .imageView = texture->image_view,
+                   }}};
       uint32_t idx =
-          tb_write_desc_to_buffer(rnd_sys, &tex_ctx->desc_buffer, 0,
-                                  VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &desc);
+          tb_write_desc_to_buffer(rnd_sys, &tex_ctx->desc_buffer, 0, &desc);
 
       ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {idx});
       ecs_add(it->world, tex_it.entities[i], TbDescriptorReady);

@@ -352,8 +352,7 @@ void view_update_tick(ecs_iter_t *it) {
       // Write all descriptors to buffer
       TB_DYN_ARR_FOREACH(descriptors, i) {
         tb_auto descriptor = TB_DYN_ARR_AT(descriptors, i);
-        tb_write_desc_to_buffer(rnd_sys, &sys->desc_buffer, i, descriptor.type,
-                                &descriptor.data);
+        tb_write_desc_to_buffer(rnd_sys, &sys->desc_buffer, i, &descriptor);
       }
     }
   }
