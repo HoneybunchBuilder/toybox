@@ -31,6 +31,12 @@ typedef struct TbMeshCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
 
+  TbDescriptorBuffer idx_desc_buf;
+  TbDescriptorBuffer pos_desc_buf;
+  TbDescriptorBuffer norm_desc_buf;
+  TbDescriptorBuffer tan_desc_buf;
+  TbDescriptorBuffer uv0_desc_buf;
+
   uint32_t owned_mesh_count;
   uint32_t pool_update_counter;
 
@@ -44,8 +50,13 @@ typedef struct TbMeshData {
   VkIndexType idx_type;
   TbHostBuffer host_buffer;
   TbBuffer gpu_buffer;
+#if TB_USE_DESC_BUFFER == 1
+  VkDescriptorAddressInfoEXT index_addr;
+  VkDescriptorAddressInfoEXT attribute_addr[TB_INPUT_PERM_COUNT];
+#else
   VkBufferView index_view;
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
+#endif
 } TbMeshData;
 ECS_COMPONENT_DECLARE(TbMeshData);
 
@@ -324,6 +335,15 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         if (data.idx_type == VK_INDEX_TYPE_UINT32) {
           idx_format = VK_FORMAT_R32_UINT;
         }
+
+#if TB_USE_DESC_BUFFER == 1
+        data.index_addr = (VkDescriptorAddressInfoEXT){
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+            .address = data.gpu_buffer.address,
+            .range = index_size,
+            .format = idx_format,
+        };
+#else
         VkBufferViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
             .buffer = data.gpu_buffer.buffer,
@@ -333,11 +353,23 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         };
         tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Index View",
                                   &data.index_view);
+#endif
       }
 
       for (size_t attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
         cgltf_attribute *attr = &gltf_mesh->primitives[0].attributes[attr_idx];
 
+#if TB_USE_DESC_BUFFER == 1
+        VkDeviceAddress address =
+            data.gpu_buffer.address + attr_offset_per_type[attr->type];
+        data.attribute_addr[attr_idx_per_type[attr->type]] =
+            (VkDescriptorAddressInfoEXT){
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                .address = address,
+                .range = VK_WHOLE_SIZE,
+                .format = attr_formats_per_type[attr->type],
+            };
+#else
         // Create a buffer view per attribute
         VkBufferViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
@@ -349,6 +381,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         tb_rnd_create_buffer_view(
             rnd_sys, &create_info, "Mesh Attribute View",
             &data.attr_views[attr_idx_per_type[attr->type]]);
+#endif
       }
     }
 
@@ -628,15 +661,19 @@ void tb_mesh_loading_phase(ecs_iter_t *it) {
 }
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Update Mesh Descriptors", true);
+  TB_TRACY_SCOPE("Update Mesh Descriptors");
 
+#if TB_USE_DESC_BUFFER == 1
+  // Skip this phase
+  ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
+  ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+#else
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
   uint64_t mesh_count = mesh_ctx->owned_mesh_count;
 
   if (mesh_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -704,24 +741,67 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
     // Reset counter for next phase
     mesh_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
+#endif
 }
 
 void tb_write_mesh_descriptors(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Write Mesh Descriptors", true);
+  TB_TRACY_SCOPE("Write Mesh Descriptors");
 
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t mesh_count = mesh_ctx->owned_mesh_count;
-
   if (mesh_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
+#if TB_USE_DESC_BUFFER == 1
+  uint32_t mesh_idx = 0;
+  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
+  while (ecs_query_next(&mesh_it)) {
+    tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
+    for (int32_t i = 0; i < mesh_it.count; ++i) {
+      tb_auto mesh = &meshes[i];
+
+      TbDescriptor desc = {
+          .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+          .data = {.pStorageTexelBuffer = &mesh->index_addr},
+      };
+      // HACK: This manual mapping of descriptor buffers to indices is bad
+      uint32_t idx =
+          tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->idx_desc_buf, 0, &desc);
+      for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
+        desc.data.pStorageTexelBuffer = &mesh->attribute_addr[attr_idx];
+        uint32_t view_idx = idx;
+        switch (attr_idx) {
+        case 0:
+          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->pos_desc_buf,
+                                             0, &desc);
+          break;
+        case 1:
+          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->norm_desc_buf,
+                                             0, &desc);
+          break;
+        case 2:
+          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->tan_desc_buf,
+                                             0, &desc);
+          break;
+        case 3:
+          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->uv0_desc_buf,
+                                             0, &desc);
+          break;
+        default:
+          break;
+        }
+        TB_CHECK(view_idx == idx, "Mesh Attribute descriptors out of phase");
+      }
+
+      ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {idx});
+      ecs_add(it->world, mesh_it.entities[i], TbUpdatingDescriptor);
+    }
+  }
+#else
   // One set of buffer views per attribute
   const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
   TB_DYN_ARR_OF(VkBufferView) attr_views[view_count] = {0};
@@ -773,8 +853,7 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
     ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
   }
-
-  TracyCZoneEnd(ctx);
+#endif
 }
 
 void tb_mesh_phase_written(ecs_iter_t *it) {
@@ -924,6 +1003,9 @@ void tb_register_mesh2_sys(TbWorld *world) {
         VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
         .pNext =
             &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
                 .sType =
@@ -936,7 +1018,7 @@ void tb_register_mesh2_sys(TbWorld *world) {
             (VkDescriptorSetLayoutBinding[1]){
                 {
                     .binding = 0,
-                    .descriptorCount = 4096,
+                    .descriptorCount = 4096, // HACK: High upper bound
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 },
@@ -945,6 +1027,19 @@ void tb_register_mesh2_sys(TbWorld *world) {
     tb_rnd_create_set_layout(rnd_sys, &create_info, "Mesh Attr Layout",
                              &ctx.set_layout);
   }
+
+#if TB_USE_DESC_BUFFER == 1
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Idx Descriptors",
+                              4, &ctx.idx_desc_buf);
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Pos Descriptors",
+                              4, &ctx.pos_desc_buf);
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Norm Descriptors",
+                              4, &ctx.norm_desc_buf);
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Tan Descriptors",
+                              4, &ctx.tan_desc_buf);
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh UV0 Descriptors",
+                              4, &ctx.uv0_desc_buf);
+#endif
 
   ecs_singleton_set_ptr(ecs, TbMeshCtx, &ctx);
 
@@ -971,6 +1066,12 @@ void tb_unregister_mesh2_sys(TbWorld *world) {
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->idx_desc_buf);
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->pos_desc_buf);
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->norm_desc_buf);
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->tan_desc_buf);
+  tb_destroy_descriptor_buffer(rnd_sys, &ctx->uv0_desc_buf);
+
   // TODO: Release all default references
 
   // TODO: Check for leaks
@@ -986,11 +1087,6 @@ TB_REGISTER_SYS(tb, mesh2, TB_MESH_SYS_PRIO)
 
 VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  // #if TB_USE_DESC_BUFFER == 1
-  //   return ctx->set_layout2;
-  // #else
-  //   return ctx->set_layout;
-  // #endif
   return ctx->set_layout;
 }
 
@@ -1018,6 +1114,76 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 4);
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->idx_desc_buf.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_pos_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->pos_desc_buf.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_norm_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->norm_desc_buf.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->tan_desc_buf.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
+}
+
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  VkDescriptorBufferBindingInfoEXT binding_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = ctx->uv0_desc_buf.buffer.address,
+      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+  return binding_info;
 }
 
 void tb_mesh_sys_begin_load(ecs_world_t *ecs) {

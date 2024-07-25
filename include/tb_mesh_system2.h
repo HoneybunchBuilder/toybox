@@ -43,6 +43,12 @@ VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs);
 
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_pos_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_norm_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs);
+
 void tb_mesh_sys_begin_load(ecs_world_t *ecs);
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
                                    const char *path, const char *name,
