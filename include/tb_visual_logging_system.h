@@ -2,7 +2,7 @@
 
 #include "tb_allocator.h"
 #include "tb_dynarray.h"
-#include "tb_mesh_system2.h"
+#include "tb_mesh_system.h"
 #include "tb_render_common.h"
 #include "tb_simd.h"
 #include "tb_system_priority.h"

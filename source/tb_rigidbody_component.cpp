@@ -2,6 +2,7 @@
 
 #include "tb_common.h"
 #include "tb_gltf.h"
+#include "tb_mesh_rnd_sys.h"
 #include "tb_mesh_system.h"
 #include "tb_physics_system.hpp"
 #include "tb_simd.h"

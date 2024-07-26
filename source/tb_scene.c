@@ -5,7 +5,7 @@
 #include "tb_common.h"
 #include "tb_gltf.h"
 #include "tb_material_system.h"
-#include "tb_mesh_system2.h"
+#include "tb_mesh_system.h"
 #include "tb_profiling.h"
 #include "tb_task_scheduler.h"
 #include "tb_texture_system.h"

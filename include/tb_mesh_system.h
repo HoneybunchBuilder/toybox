@@ -17,104 +17,42 @@
 #define TB_MESH_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 #endif
 
-typedef struct TbRenderSystem TbRenderSystem;
-typedef struct TbMaterialSystem TbMaterialSystem;
-typedef struct TbViewSystem TbViewSystem;
-typedef struct TbRenderObjectSystem TbRenderObjectSystem;
-typedef struct TbRenderPipelineSystem TbRenderPipelineSystem;
-typedef struct TbMesh TbMesh;
-typedef struct TbWorld TbWorld;
-typedef TbResourceId TbMeshId;
-typedef uint32_t TbMaterialPerm;
-typedef uint32_t TbDrawContextId;
-typedef struct cgltf_mesh cgltf_mesh;
-typedef struct VkBuffer_T *VkBuffer;
-typedef struct VkWriteDescriptorSet VkWriteDescriptorSet;
+typedef ecs_entity_t TbMesh2;
 typedef struct ecs_query_t ecs_query_t;
 
-static const TbMeshId TbInvalidMeshId = {SDL_MAX_UINT64, SDL_MAX_UINT32};
-static const uint32_t TB_MESH_CMD_PAGE_SIZE = 64;
+typedef uint32_t TbMeshIndex;
+extern ECS_COMPONENT_DECLARE(TbMeshIndex);
 
-typedef struct TbPrimitiveDraw {
-  VkBuffer geom_buffer;
-  VkIndexType index_type;
+typedef ecs_entity_t TbSubMesh2;
+typedef ecs_entity_t TbMaterial2;
+typedef struct TbSubMesh2Data {
   uint32_t index_count;
   uint64_t index_offset;
-  uint32_t vertex_offset;
-  uint32_t instance_count;
-} TbPrimitiveDraw;
+  uint64_t vertex_offset;
+  uint32_t vertex_count;
+  uint32_t vertex_perm;
+  TbMaterial2 material;
+} TbSubMesh2Data;
+extern ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 
-typedef struct TbIndirectDraw {
-  VkBuffer buffer;
-  uint64_t offset;
-  uint32_t draw_count;
-  uint32_t stride;
-} TbIndirectDraw;
+VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs);
 
-typedef struct TbPrimitiveBatch {
-#if TB_USE_DESC_BUFFER == 1
-  VkDescriptorBufferBindingInfoEXT view_addr;
-  VkDescriptorBufferBindingInfoEXT mat_addr;
-  VkDescriptorBufferBindingInfoEXT draw_addr;
-  VkDescriptorBufferBindingInfoEXT obj_addr;
-  VkDescriptorBufferBindingInfoEXT tex_addr;
-  VkDescriptorBufferBindingInfoEXT idx_addr;
-  VkDescriptorBufferBindingInfoEXT pos_addr;
-  VkDescriptorBufferBindingInfoEXT norm_addr;
-  VkDescriptorBufferBindingInfoEXT tan_addr;
-  VkDescriptorBufferBindingInfoEXT uv0_addr;
-#else
-  VkDescriptorSet view_set;
-  VkDescriptorSet mat_set;
-  VkDescriptorSet draw_set;
-  VkDescriptorSet obj_set;
-  VkDescriptorSet tex_set;
-  VkDescriptorSet idx_set;
-  VkDescriptorSet pos_set;
-  VkDescriptorSet norm_set;
-  VkDescriptorSet tan_set;
-  VkDescriptorSet uv0_set;
-#endif
-} TbPrimitiveBatch;
+VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs);
 
-typedef struct TbMeshSystem {
-  TbAllocator gp_alloc;
-  TbAllocator tmp_alloc;
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_pos_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_norm_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs);
+VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs);
 
-  TbRenderSystem *rnd_sys;
-  TbViewSystem *view_sys;
-  TbRenderObjectSystem *render_object_system;
-  TbRenderPipelineSystem *rp_sys;
+void tb_mesh_sys_begin_load(ecs_world_t *ecs);
+TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
+                                   const char *path, const char *name,
+                                   uint32_t index);
+VkBuffer tb_mesh_sys_get_gpu_mesh(ecs_world_t *ecs, TbMesh2 mesh);
 
-  ecs_query_t *camera_query;
-  ecs_query_t *mesh_query;
-  ecs_query_t *dir_light_query;
-
-  TbDrawContextId prepass_draw_ctx2;
-  TbDrawContextId opaque_draw_ctx2;
-  TbDrawContextId transparent_draw_ctx2;
-
-  VkDescriptorSetLayout draw_set_layout;
-  VkPipelineLayout pipe_layout;
-  VkPipelineLayout prepass_layout;
-
-  ecs_entity_t opaque_shader;
-  ecs_entity_t transparent_shader;
-  ecs_entity_t prepass_shader;
-
-  // Re-used by shadows
-  TbDrawBatch *opaque_batch;
-
-  TB_DYN_ARR_OF(TbMesh) meshes;
-  // For per draw data
-  TbFrameDescriptorPoolList draw_pools;
-} TbMeshSystem;
-extern ECS_COMPONENT_DECLARE(TbMeshSystem);
-
-void tb_register_mesh_sys(TbWorld *world);
-void tb_unregister_mesh_sys(TbWorld *world);
-
-VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self);
-VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self);
-VkDescriptorSet tb_mesh_system_get_tan_set(TbMeshSystem *self);
-VkDescriptorSet tb_mesh_system_get_uv0_set(TbMeshSystem *self);
+bool tb_is_mesh_ready(ecs_world_t *ecs, TbMesh2 mesh_ent);

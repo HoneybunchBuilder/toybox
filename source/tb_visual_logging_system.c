@@ -6,6 +6,7 @@
 #include "tb_coreui_system.h"
 #include "tb_gltf.h"
 #include "tb_imgui.h"
+#include "tb_mesh_rnd_sys.h"
 #include "tb_mesh_system.h"
 #include "tb_profiling.h"
 #include "tb_render_object_system.h"

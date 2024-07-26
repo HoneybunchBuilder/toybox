@@ -6,7 +6,7 @@
 #include "tb_gltf.h"
 #include "tb_input_system.h"
 #include "tb_material_system.h"
-#include "tb_mesh_system2.h"
+#include "tb_mesh_system.h"
 #include "tb_profiling.h"
 #include "tb_scene.h"
 #include "tb_simd.h"

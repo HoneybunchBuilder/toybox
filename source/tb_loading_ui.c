@@ -2,7 +2,7 @@
 #include "tb_imgui.h"
 #include "tb_material_system.h"
 #include "tb_mesh_component.h"
-#include "tb_mesh_system2.h"
+#include "tb_mesh_system.h"
 #include "tb_system_priority.h"
 #include "tb_world.h"
 

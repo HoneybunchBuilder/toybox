@@ -2,6 +2,7 @@
 #include "tb_common.h"
 #include "tb_light_component.h"
 #include "tb_mesh_component.h"
+#include "tb_mesh_rnd_sys.h"
 #include "tb_mesh_system.h"
 #include "tb_profiling.h"
 #include "tb_render_common.h"
