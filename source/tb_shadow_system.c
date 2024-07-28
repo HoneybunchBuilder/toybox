@@ -69,6 +69,9 @@ VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -178,27 +181,27 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t binding_count = 5;
+    const uint32_t set_count = 5;
 #if TB_USE_DESC_BUFFER == 1
     {
-      const VkDescriptorBufferBindingInfoEXT buffer_bindings[binding_count] = {
+      const VkDescriptorBufferBindingInfoEXT buffer_bindings[set_count] = {
           prim_batch->view_addr, prim_batch->draw_addr, prim_batch->obj_addr,
           prim_batch->idx_addr,  prim_batch->pos_addr,
       };
-      uint32_t idx = 0;
-      VkDeviceSize offset = 0;
+      vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+      uint32_t buf_indices[set_count] = {0};
+      VkDeviceSize buf_offsets[set_count] = {0};
       vkCmdSetDescriptorBufferOffsetsEXT(
-          buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, binding_count,
-          &idx, &offset);
-      vkCmdBindDescriptorBuffersEXT(buffer, binding_count, buffer_bindings);
+          buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, set_count,
+          buf_indices, buf_offsets);
     }
 #else
     {
-      VkDescriptorSet sets[binding_count] = {
+      VkDescriptorSet sets[set_count] = {
           prim_batch->view_set, prim_batch->draw_set, prim_batch->obj_set,
           prim_batch->idx_set, prim_batch->pos_set};
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                              0, binding_count, sets, 0, NULL);
+                              0, set_count, sets, 0, NULL);
     }
 #endif
 
@@ -403,7 +406,6 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto view_addr = tb_view_sys_get_table_addr(ecs, view_id);
         // Skip camera if view set isn't ready
         if (view_addr.address == VK_NULL_HANDLE) {
-          TracyCZoneEnd(cam_ctx);
           continue;
         }
 #else

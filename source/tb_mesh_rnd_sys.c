@@ -86,6 +86,9 @@ VkPipeline create_prepass_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -217,6 +220,9 @@ VkPipeline create_opaque_mesh_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -350,6 +356,9 @@ VkPipeline create_transparent_mesh_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -487,12 +496,12 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           prim_batch->view_addr, prim_batch->draw_addr, prim_batch->obj_addr,
           prim_batch->idx_addr,  prim_batch->pos_addr,  prim_batch->norm_addr,
       };
-      uint32_t idx = 0;
-      VkDeviceSize offset = 0;
-      vkCmdSetDescriptorBufferOffsetsEXT(buffer,
-                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                         layout, 0, set_count, &idx, &offset);
       vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+      uint32_t buf_indices[set_count] = {0};
+      VkDeviceSize buf_offsets[set_count] = {0};
+      vkCmdSetDescriptorBufferOffsetsEXT(
+          buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, set_count,
+          buf_indices, buf_offsets);
     }
 #else
     {
@@ -552,12 +561,12 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           prim_batch->pos_addr,  prim_batch->norm_addr, prim_batch->tan_addr,
           prim_batch->uv0_addr,
       };
-      uint32_t idx = 0;
-      VkDeviceSize offset = 0;
-      vkCmdSetDescriptorBufferOffsetsEXT(buffer,
-                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                         layout, 0, set_count, &idx, &offset);
       vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
+      uint32_t buf_indices[set_count] = {0};
+      VkDeviceSize buf_offsets[set_count] = {0};
+      vkCmdSetDescriptorBufferOffsetsEXT(
+          buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, set_count,
+          buf_indices, buf_offsets);
     }
 #else
     {

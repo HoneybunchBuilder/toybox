@@ -117,6 +117,8 @@ void tick_render_object_system(ecs_iter_t *it) {
     return;
   }
 
+  tb_reset_descriptor_buffer(rnd_sys, &ro_sys->desc_buffer);
+
   obj_it = ecs_query_iter(ecs, ro_sys->obj_query); // reset query
 
   TbCommonObjectData *obj_ptr = NULL;

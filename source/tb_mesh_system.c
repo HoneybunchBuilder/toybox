@@ -806,9 +806,13 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
       }
 
       ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {idx});
-      ecs_add(it->world, mesh_it.entities[i], TbUpdatingDescriptor);
+      ecs_remove(it->world, mesh_it.entities[i], TbNeedsDescriptorUpdate);
+      ecs_add(it->world, mesh_it.entities[i], TbDescriptorReady);
     }
   }
+
+  ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
+  ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
 #else
   // One set of buffer views per attribute
   const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer

@@ -202,4 +202,5 @@ void tb_reset_descriptor_buffer(TbRenderSystem *rnd_sys,
   for (uint32_t i = cap; i > 0; --i) {
     TB_DYN_ARR_APPEND(desc_buf->free_list, i);
   }
+  desc_buf->desc_count = 0;
 }

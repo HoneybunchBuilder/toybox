@@ -900,6 +900,8 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
       ecs_add(it->world, tex_it.entities[i], TbDescriptorReady);
     }
   }
+  ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
+  ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
 #else
   // We can't write more than this number of textures
   const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(

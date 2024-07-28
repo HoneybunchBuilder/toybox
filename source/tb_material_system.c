@@ -424,7 +424,6 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
 
       // If a material isn't ready we mustn't exit this phase
       if (!mat_domain.ready_fn(it->world, material)) {
-        TracyCZoneEnd(ctx);
         return;
       }
 
@@ -448,6 +447,8 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
       ecs_add(it->world, mat_it.entities[i], TbDescriptorReady);
     }
   }
+  ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
+  ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
 #else
   uint32_t mat_idx = 0;
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
