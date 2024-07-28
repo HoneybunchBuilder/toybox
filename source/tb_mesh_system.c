@@ -356,6 +356,14 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 #endif
       }
 
+      // Set a default buffer for each primitive
+      for (size_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
+        data.attribute_addr[attr_idx] = (VkDescriptorAddressInfoEXT){
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+            .range = VK_WHOLE_SIZE,
+        };
+      }
+
       for (size_t attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
         cgltf_attribute *attr = &gltf_mesh->primitives[0].attributes[attr_idx];
 
@@ -366,7 +374,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
             (VkDescriptorAddressInfoEXT){
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
                 .address = address,
-                .range = VK_WHOLE_SIZE,
+                .range = attr_size_per_type[attr->type],
                 .format = attr_formats_per_type[attr->type],
             };
 #else

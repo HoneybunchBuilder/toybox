@@ -586,6 +586,9 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
         .bindingCount = 5,
         .pBindings = (VkDescriptorSetLayoutBinding[5]){
             {

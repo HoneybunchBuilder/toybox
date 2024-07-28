@@ -323,8 +323,8 @@ void view_update_tick(ecs_iter_t *it) {
               .data = {
                   .pSampledImage = &(VkDescriptorImageInfo){
                       .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      .imageView = tb_render_target_get_view(rt_sys, frame_idx,
-                                                             brdf_tex),
+                      .imageView =
+                          tb_tex_sys_get_image_view2(it->world, brdf_tex),
                   }}}));
       // Binding 4: Cascaded Shadow Map
       TB_DYN_ARR_APPEND(
