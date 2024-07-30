@@ -189,7 +189,7 @@ void shadow_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
           prim_batch->idx_addr,  prim_batch->pos_addr,
       };
       vkCmdBindDescriptorBuffersEXT(buffer, set_count, buffer_bindings);
-      uint32_t buf_indices[set_count] = {0};
+      uint32_t buf_indices[set_count] = {0, 1, 2, 3, 4};
       VkDeviceSize buf_offsets[set_count] = {0};
       vkCmdSetDescriptorBufferOffsetsEXT(
           buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, set_count,
