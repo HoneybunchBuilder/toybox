@@ -1165,12 +1165,19 @@ void sky_draw_tick(ecs_iter_t *it) {
       tb_auto camera = &cameras[cam_idx];
       tb_auto transform = &transforms[cam_idx];
 
+#if TB_USE_DESC_BUFFER == 1
+      tb_auto view_addr = tb_view_sys_get_table_addr(ecs, camera->view_id);
+      if (view_addr.address == 0) {
+        continue;
+      }
+#else
       tb_auto view_set =
           tb_view_system_get_descriptor(sky_sys->view_sys, camera->view_id);
       // Skip camera if view set isn't ready
       if (view_set == VK_NULL_HANDLE) {
         continue;
       }
+#endif
 
       // Need to manually calculate this here
       float4x4 vp = {.col0 = {0}};
