@@ -86,8 +86,8 @@ typedef struct TbOceanSystem {
   VkDescriptorSetLayout set_layout;
   VkPipelineLayout pipe_layout;
 
-  ecs_entity_t ocean_pass_shader;
-  ecs_entity_t ocean_prepass_shader;
+  TbShader ocean_pass_shader;
+  TbShader ocean_prepass_shader;
 } TbOceanSystem;
 ECS_COMPONENT_DECLARE(TbOceanSystem);
 

@@ -36,12 +36,21 @@
 #define FILTERED_ENV_DIM 512
 #define FILTERED_ENV_MIPS ((uint32_t)(SDL_floorf(log2f(FILTERED_ENV_DIM))) + 1u)
 
+typedef VkDescriptorBufferBindingInfoEXT TbSkyDescInfo;
+ECS_COMPONENT_DECLARE(TbSkyDescInfo);
+
 ECS_COMPONENT_DECLARE(TbSkySystem);
+
+ECS_TAG_DECLARE(TbSkyRenderDirty);
 
 typedef struct SkyDrawBatch {
   VkPushConstantRange const_range;
   TbSkyPushConstants consts;
+#if TB_USE_DESC_BUFFER == 1
+  VkDescriptorBufferBindingInfoEXT desc_binding;
+#else
   VkDescriptorSet sky_set;
+#endif
 
   VkBuffer geom_buffer;
   uint32_t index_count;
@@ -110,6 +119,9 @@ VkPipeline create_sky_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -375,6 +387,9 @@ VkPipeline create_irradiance_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -509,6 +524,9 @@ VkPipeline create_prefilter_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -632,8 +650,17 @@ void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdPushConstants(buffer, batch->layout, range.stageFlags, range.offset,
                        range.size, consts);
 
+#if TB_USE_DESC_BUFFER == 1
+    vkCmdBindDescriptorBuffersEXT(buffer, 1, &sky_batch->desc_binding);
+    uint32_t buf_indices[1] = {0};
+    VkDeviceSize buf_offsets[1] = {0};
+    vkCmdSetDescriptorBufferOffsetsEXT(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       batch->layout, 0, 1, buf_indices,
+                                       buf_offsets);
+#else
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             batch->layout, 0, 1, &sky_batch->sky_set, 0, NULL);
+#endif
 
     vkCmdBindIndexBuffer(buffer, sky_batch->geom_buffer, 0,
                          VK_INDEX_TYPE_UINT16);
@@ -664,7 +691,6 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 */
 
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
-
                         uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
   TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
@@ -784,11 +810,17 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
     TB_VK_CHECK(err, "Failed to create irradiance sampler");
   }
 
+  VkFlags layout_flags =
+      VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+#if TB_USE_DESC_BUFFER == 1
+  layout_flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+#endif
+
   // Create Descriptor Set Layouts
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .flags = layout_flags,
         .bindingCount = 1,
         .pBindings =
             &(VkDescriptorSetLayoutBinding){
@@ -802,7 +834,7 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+        .flags = layout_flags,
         .bindingCount = 2,
         .pBindings =
             (VkDescriptorSetLayoutBinding[2]){
@@ -1031,7 +1063,7 @@ void destroy_sky_system(ecs_world_t *ecs, TbSkySystem *self) {
   *self = (TbSkySystem){0};
 }
 
-void sky_draw_tick(ecs_iter_t *it) {
+void tb_sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
 
@@ -1071,6 +1103,9 @@ void sky_draw_tick(ecs_iter_t *it) {
 
     const uint32_t write_count = 2; // +1 for irradiance pass
 
+#if TB_USE_DESC_BUFFER == 1
+
+#else
     {
       VkDescriptorPoolCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1105,6 +1140,7 @@ void sky_draw_tick(ecs_iter_t *it) {
         tb_alloc_nm_tp(sky_sys->tmp_alloc, write_count, VkWriteDescriptorSet);
     tb_auto buffer_info =
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
+#endif
 
     TbSkyData data = {
         .time = (float)world->time,
@@ -1119,6 +1155,9 @@ void sky_draw_tick(ecs_iter_t *it) {
                                         &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
+#if TB_USE_DESC_BUFFER == 1
+
+#else
     *buffer_info = (VkDescriptorBufferInfo){
         .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
         .offset = offset,
@@ -1155,6 +1194,7 @@ void sky_draw_tick(ecs_iter_t *it) {
             },
     };
     tb_rnd_update_descriptors(rnd_sys, write_count, writes);
+#endif
   }
 
   ecs_iter_t cam_it = ecs_query_iter(ecs, sky_sys->camera_query);
@@ -1201,8 +1241,12 @@ void sky_draw_tick(ecs_iter_t *it) {
                 {
                     .vp = vp,
                 },
+#if TB_USE_DESC_BUFFER == 1
+            .desc_binding = {0},
+#else
             .sky_set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
                                                       sky_sys->pools.pools, 0),
+#endif
             .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
             .index_count = get_skydome_index_count(),
             .vertex_offset = get_skydome_vert_offset(),
@@ -1304,11 +1348,29 @@ void sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
+void tb_sky_observer(ecs_iter_t *it) {
+  // On any changes to a TbSkyComponent, mark it as dirty
+  for (int i = 0; i < it->count; i++) {
+    tb_auto ent = it->entities[i];
+    ecs_add(it->world, ent, TbSkyRenderDirty);
+  }
+}
+
+void tb_sky_desc_update(ecs_iter_t *it) {
+  for (int i = 0; i < it->count; i++) {
+    tb_auto ent = it->entities[i];
+
+    // Entity is no longer dirty
+    ecs_remove(it->world, ent, TbSkyRenderDirty);
+  }
+}
+
 void tb_register_sky_sys(TbWorld *world) {
   TracyCZoneN(ctx, "Register Sky Sys", true);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbSkySystem);
+  ECS_TAG_DEFINE(ecs, TbSkyRenderDirty);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
@@ -1325,7 +1387,17 @@ void tb_register_sky_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
-  ECS_SYSTEM(ecs, sky_draw_tick,
+  ECS_SYSTEM(ecs, tb_sky_desc_update, EcsPreStore, [inout] TbSkyComponent,
+             [in] TbTransformComponent, [in] TbSkyRenderDirty);
+
+  // On any changes to a TbSkyComponent, mark it as dirty
+  ecs_observer(ecs, {
+                        .filter = {.terms = {{.id = ecs_id(TbSkyComponent)}}},
+                        .events = {EcsOnAdd, EcsOnRemove, EcsOnSet, EcsUnSet},
+                        .callback = tb_sky_observer,
+                    });
+
+  ECS_SYSTEM(ecs, tb_sky_draw_tick,
              EcsOnStore, [inout] TbSkyComponent, [in] TbTransformComponent);
 
   TracyCZoneEnd(ctx);

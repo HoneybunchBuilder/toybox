@@ -8,7 +8,7 @@ typedef struct TbSkyDescriptor {
   float cirrus;
   float cumulus;
 } TbSkyDescriptor;
-extern ECS_COMPONENT_DECLARE(TbSkyComponent);
+extern ECS_COMPONENT_DECLARE(TbSkyDescriptor);
 
 typedef struct TbSkyComponent {
   float time;

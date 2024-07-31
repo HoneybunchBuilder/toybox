@@ -98,9 +98,9 @@ typedef struct TbMeshSystem {
   VkPipelineLayout pipe_layout;
   VkPipelineLayout prepass_layout;
 
-  ecs_entity_t opaque_shader;
-  ecs_entity_t transparent_shader;
-  ecs_entity_t prepass_shader;
+  TbShader opaque_shader;
+  TbShader transparent_shader;
+  TbShader prepass_shader;
 
   // Re-used by shadows
   TbDrawBatch *opaque_batch;

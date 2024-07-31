@@ -7,6 +7,8 @@
 
 #include <flecs.h>
 
+typedef ecs_entity_t TbShader;
+
 #define TB_SKY_SYS_PRIO (TB_RP_SYS_PRIO + 1)
 
 typedef struct TbRenderSystem TbRenderSystem;
@@ -46,10 +48,10 @@ typedef struct TbSkySystem {
   VkPipelineLayout irr_pipe_layout;
   VkPipelineLayout prefilter_pipe_layout;
 
-  ecs_entity_t sky_shader;
-  ecs_entity_t env_shader;
-  ecs_entity_t irradiance_shader;
-  ecs_entity_t prefilter_shader;
+  TbShader sky_shader;
+  TbShader env_shader;
+  TbShader irradiance_shader;
+  TbShader prefilter_shader;
 
   TbBuffer sky_geom_gpu_buffer;
 } TbSkySystem;

@@ -13,6 +13,8 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+typedef ecs_entity_t TbShader;
+
 #define TB_RP_SYS_PRIO (TB_VIEW_SYS_PRIO + 1)
 
 #define TB_MAX_RENDER_PASS_ATTACHMENTS 4
@@ -105,11 +107,11 @@ typedef struct TbRenderPipelineSystem {
   VkPipelineLayout copy_pipe_layout;
   VkPipelineLayout comp_copy_pipe_layout;
   VkPipelineLayout tonemap_pipe_layout;
-  ecs_entity_t depth_copy_shader;
-  ecs_entity_t color_copy_shader;
-  ecs_entity_t brightness_shader;
-  ecs_entity_t comp_copy_shader;
-  ecs_entity_t tonemap_shader;
+  TbShader depth_copy_shader;
+  TbShader color_copy_shader;
+  TbShader brightness_shader;
+  TbShader comp_copy_shader;
+  TbShader tonemap_shader;
 
   TbFrameDescriptorPool descriptor_pools[TB_MAX_FRAME_STATES];
   TbFrameDescriptorPool down_desc_pools[TB_MAX_FRAME_STATES];

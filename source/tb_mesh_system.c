@@ -356,6 +356,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 #endif
       }
 
+#if TB_USE_DESC_BUFFER == 1
       // Set a default buffer for each primitive
       for (size_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
         data.attribute_addr[attr_idx] = (VkDescriptorAddressInfoEXT){
@@ -363,6 +364,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
             .range = VK_WHOLE_SIZE,
         };
       }
+#endif
 
       for (size_t attr_idx = 0; attr_idx < attr_count; ++attr_idx) {
         cgltf_attribute *attr = &gltf_mesh->primitives[0].attributes[attr_idx];

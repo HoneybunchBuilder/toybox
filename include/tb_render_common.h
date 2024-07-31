@@ -17,7 +17,7 @@
 #define TB_MAX_BARRIERS 16
 
 // TEMP: For migrating to descriptor buffers
-#define TB_USE_DESC_BUFFER 1
+#define TB_USE_DESC_BUFFER 0
 
 typedef struct TbDrawBatch {
   VkPipelineLayout layout;
