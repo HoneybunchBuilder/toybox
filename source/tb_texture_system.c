@@ -1213,16 +1213,7 @@ VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
 // Returns the binding info of the texture system's descriptor buffer
 VkDescriptorBufferBindingInfoEXT tb_tex_sys_get_table_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->desc_buffer.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->desc_buffer);
 }
 
 VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex) {

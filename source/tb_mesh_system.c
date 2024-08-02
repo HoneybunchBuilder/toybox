@@ -1132,72 +1132,27 @@ VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->idx_desc_buf.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->idx_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_pos_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->pos_desc_buf.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->pos_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_norm_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->norm_desc_buf.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->norm_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->tan_desc_buf.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->tan_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  VkDescriptorBufferBindingInfoEXT binding_info = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-      .address = ctx->uv0_desc_buf.buffer.address,
-      // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-  };
-  return binding_info;
+  return tb_desc_buff_get_binding(&ctx->uv0_desc_buf);
 }
 
 void tb_mesh_sys_begin_load(ecs_world_t *ecs) {

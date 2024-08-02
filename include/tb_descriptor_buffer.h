@@ -32,6 +32,9 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
 void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
                                   TbDescriptorBuffer *buf);
 
+VkDescriptorBufferBindingInfoEXT
+tb_desc_buff_get_binding(const TbDescriptorBuffer *desc_buf);
+
 // Returns the index of the descriptor in the buffer
 uint32_t tb_write_desc_to_buffer(TbRenderSystem *rnd_sys,
                                  TbDescriptorBuffer *desc_buf, uint32_t binding,

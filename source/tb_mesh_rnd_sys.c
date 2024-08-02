@@ -1078,24 +1078,10 @@ void mesh_draw_tick(ecs_iter_t *it) {
       TracyCZoneEnd(ctx2);
 
 #if TB_USE_DESC_BUFFER == 1
-      VkDescriptorBufferBindingInfoEXT opaque_draw_addr = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-          .address = mesh_sys->opaque_draw_descs.buffer.address,
-          // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-          .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      };
-      VkDescriptorBufferBindingInfoEXT trans_draw_addr = {
-          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
-          .address = mesh_sys->trans_draw_descs.buffer.address,
-          // HACK: Hardcoded same usage from tb_descriptor_buffer.c
-          .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      };
+      VkDescriptorBufferBindingInfoEXT opaque_draw_addr =
+          tb_desc_buff_get_binding(&mesh_sys->opaque_draw_descs);
+      VkDescriptorBufferBindingInfoEXT trans_draw_addr =
+          tb_desc_buff_get_binding(&mesh_sys->trans_draw_descs);
 #else
       VkDescriptorSet opaque_draw_set = tb_rnd_frame_desc_pool_get_set(
           rnd_sys, mesh_sys->draw_pools.pools, 0);

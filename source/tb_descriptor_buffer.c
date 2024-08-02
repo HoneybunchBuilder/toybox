@@ -96,6 +96,18 @@ void tb_destroy_descriptor_buffer(TbRenderSystem *rnd_sys,
   TB_CHECK(false, "Unimplemented");
 }
 
+VkDescriptorBufferBindingInfoEXT
+tb_desc_buff_get_binding(const TbDescriptorBuffer *desc_buf) {
+  return (VkDescriptorBufferBindingInfoEXT){
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT,
+      .address = desc_buf->buffer.address,
+      .usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+               VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+  };
+}
+
 VkDeviceSize tb_lookup_desc_size(
     VkDescriptorType type,
     const VkPhysicalDeviceDescriptorBufferPropertiesEXT *props) {
@@ -183,6 +195,13 @@ void tb_free_desc_from_buffer(TbDescriptorBuffer *desc_buf, uint32_t idx) {
   TB_CHECK(desc_buf->desc_count > 0, "No descriptors exist to free");
   TB_CHECK(TB_DYN_ARR_SIZE(desc_buf->free_list) < desc_buf->desc_cap,
            "No space for free index");
+  // If the idx is already free, do nothing
+  TB_DYN_ARR_FOREACH(desc_buf->free_list, i) {
+    tb_auto free_idx = TB_DYN_ARR_AT(desc_buf->free_list, i);
+    if (free_idx == idx) {
+      return;
+    }
+  }
   // We could be nice and set the data at ptr to 0 but that is unnecessary
   TB_DYN_ARR_APPEND(desc_buf->free_list, idx);
   --desc_buf->desc_count;

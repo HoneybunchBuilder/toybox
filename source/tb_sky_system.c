@@ -58,7 +58,11 @@ typedef struct SkyDrawBatch {
 } SkyDrawBatch;
 
 typedef struct IrradianceBatch {
+#if TB_USE_DESC_BUFFER == 1
+  VkDescriptorBufferBindingInfoEXT desc_binding;
+#else
   VkDescriptorSet set;
+#endif
 
   VkBuffer geom_buffer;
   uint32_t index_count;
@@ -67,7 +71,11 @@ typedef struct IrradianceBatch {
 
 typedef struct PrefilterBatch {
   TbEnvFilterConstants consts;
+#if TB_USE_DESC_BUFFER == 1
+  VkDescriptorBufferBindingInfoEXT desc_binding;
+#else
   VkDescriptorSet set;
+#endif
 
   VkBuffer geom_buffer;
   uint32_t index_count;
@@ -253,6 +261,9 @@ VkPipeline create_env_capture_pipeline(void *args) {
 
   VkGraphicsPipelineCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
       .pNext =
           &(VkPipelineRenderingCreateInfo){
               .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -722,8 +733,17 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
+#if TB_USE_DESC_BUFFER == 1
+    vkCmdBindDescriptorBuffersEXT(buffer, 1, &irr_batch->desc_binding);
+    uint32_t buf_indices[1] = {0};
+    VkDeviceSize buf_offsets[1] = {0};
+    vkCmdSetDescriptorBufferOffsetsEXT(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       batch->layout, 0, 1, buf_indices,
+                                       buf_offsets);
+#else
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             batch->layout, 0, 1, &irr_batch->set, 0, NULL);
+#endif
 
     vkCmdBindIndexBuffer(buffer, irr_batch->geom_buffer, 0,
                          VK_INDEX_TYPE_UINT16);
@@ -749,8 +769,17 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     const PrefilterBatch *pre_batch = (const PrefilterBatch *)batch->user_batch;
     vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, batch->pipeline);
 
+#if TB_USE_DESC_BUFFER == 1
+    vkCmdBindDescriptorBuffersEXT(buffer, 1, &pre_batch->desc_binding);
+    uint32_t buf_indices[1] = {0};
+    VkDeviceSize buf_offsets[1] = {0};
+    vkCmdSetDescriptorBufferOffsetsEXT(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       batch->layout, 0, 1, buf_indices,
+                                       buf_offsets);
+#else
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             batch->layout, 0, 1, &pre_batch->set, 0, NULL);
+#endif
 
     vkCmdBindIndexBuffer(buffer, pre_batch->geom_buffer, 0,
                          VK_INDEX_TYPE_UINT16);
@@ -785,8 +814,6 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
       .gp_alloc = gp_alloc,
   };
 
-  VkResult err = VK_SUCCESS;
-
   // Get passes
   TbRenderPassId sky_pass_id = rp_sys->sky_pass;
   TbRenderPassId irr_pass_id = rp_sys->irradiance_pass;
@@ -805,9 +832,8 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
         .maxLod = FILTERED_ENV_MIPS,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
     };
-    err = tb_rnd_create_sampler(rnd_sys, &create_info, "Irradiance Sampler",
-                                &sys.irradiance_sampler);
-    TB_VK_CHECK(err, "Failed to create irradiance sampler");
+    tb_rnd_create_sampler(rnd_sys, &create_info, "Irradiance Sampler",
+                          &sys.irradiance_sampler);
   }
 
   VkFlags layout_flags =
@@ -827,9 +853,12 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                 VK_SHADER_STAGE_FRAGMENT_BIT, NULL},
     };
-    err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Sky Set Layout",
-                                   &sys.sky_set_layout);
-    TB_VK_CHECK(err, "Failed to create sky descriptor set layout");
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Sky Set Layout",
+                             &sys.sky_set_layout);
+#if TB_USE_DESC_BUFFER == 1
+    tb_create_descriptor_buffer(rnd_sys, sys.sky_set_layout, "Sky Desc Buffer",
+                                1, &sys.sky_desc_buffer);
+#endif
   }
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
@@ -844,9 +873,13 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                  &sys.irradiance_sampler},
             },
     };
-    err = tb_rnd_create_set_layout(
-        rnd_sys, &create_info, "Irradiance Set Layout", &sys.irr_set_layout);
-    TB_VK_CHECK(err, "Failed to irradiance sky descriptor set layout");
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Irradiance Set Layout",
+                             &sys.irr_set_layout);
+#if TB_USE_DESC_BUFFER == 1
+    tb_create_descriptor_buffer(rnd_sys, sys.irr_set_layout,
+                                "Irradiance Desc Buffer", 1,
+                                &sys.irr_desc_buffer);
+#endif
   }
 
   // Create Pipeline Layouts
@@ -863,9 +896,8 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                 sizeof(TbSkyPushConstants),
             },
     };
-    err = tb_rnd_create_pipeline_layout(
-        rnd_sys, &create_info, "Sky Pipeline Layout", &sys.sky_pipe_layout);
-    TB_VK_CHECK(err, "Failed to create sky pipeline layout");
+    tb_rnd_create_pipeline_layout(rnd_sys, &create_info, "Sky Pipeline Layout",
+                                  &sys.sky_pipe_layout);
   }
   {
     VkPipelineLayoutCreateInfo create_info = {
@@ -873,10 +905,9 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
         .setLayoutCount = 1,
         .pSetLayouts = &sys.irr_set_layout,
     };
-    err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                        "Irradiance Pipeline Layout",
-                                        &sys.irr_pipe_layout);
-    TB_VK_CHECK(err, "Failed to create irradiance pipeline layout");
+    tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                  "Irradiance Pipeline Layout",
+                                  &sys.irr_pipe_layout);
   }
   {
     VkPipelineLayoutCreateInfo create_info = {
@@ -890,10 +921,9 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             },
     };
-    err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                        "Prefilter Pipeline Layout",
-                                        &sys.prefilter_pipe_layout);
-    TB_VK_CHECK(err, "Failed to create prefilter pipeline layout");
+    tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                  "Prefilter Pipeline Layout",
+                                  &sys.prefilter_pipe_layout);
   }
 
   // Look up target color and depth formats for pipeline creation
@@ -1031,10 +1061,9 @@ TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             .size = skydome_size,
         };
-        err = tb_rnd_sys_create_gpu_buffer_tmp(
-            rnd_sys, &create_info, "SkyDome Geom Buffer",
-            &sys.sky_geom_gpu_buffer, 16, &ptr);
-        TB_VK_CHECK(err, "Failed to create skydome geom buffer");
+        tb_rnd_sys_create_gpu_buffer_tmp(rnd_sys, &create_info,
+                                         "SkyDome Geom Buffer",
+                                         &sys.sky_geom_gpu_buffer, 16, &ptr);
       }
       copy_skydome(ptr);
     }
@@ -1077,10 +1106,6 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   ecs_singleton_modified(ecs, TbRenderPipelineSystem);
 
-  // TODO: Make this less hacky
-  const uint32_t width = rnd_sys->render_thread->swapchain.width;
-  const uint32_t height = rnd_sys->render_thread->swapchain.height;
-
   // Early out if any shaders aren't compiled yet
   if (!tb_is_shader_ready(ecs, sky_sys->sky_shader) ||
       !tb_is_shader_ready(ecs, sky_sys->env_shader) ||
@@ -1089,6 +1114,14 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
     TracyCZoneEnd(ctx);
     return;
   }
+
+#if TB_USE_DESC_BUFFER == 1
+  // Reset descriptor buffers
+  {
+    tb_reset_descriptor_buffer(rnd_sys, &sky_sys->sky_desc_buffer);
+    tb_reset_descriptor_buffer(rnd_sys, &sky_sys->irr_desc_buffer);
+  }
+#endif
 
   // Write descriptor sets for each sky
   tb_auto skys = ecs_field(it, TbSkyComponent, 1);
@@ -1101,11 +1134,8 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
 
     VkResult err = VK_SUCCESS;
 
+#if TB_USE_DESC_BUFFER == 0
     const uint32_t write_count = 2; // +1 for irradiance pass
-
-#if TB_USE_DESC_BUFFER == 1
-
-#else
     {
       VkDescriptorPoolCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1141,7 +1171,6 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
     tb_auto buffer_info =
         tb_alloc_tp(sky_sys->tmp_alloc, VkDescriptorBufferInfo);
 #endif
-
     TbSkyData data = {
         .time = (float)world->time,
         .cirrus = sky->cirrus,
@@ -1155,8 +1184,30 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
                                         &offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for sky");
 
-#if TB_USE_DESC_BUFFER == 1
+    tb_auto env_map_view = tb_render_target_get_view(
+        sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
 
+#if TB_USE_DESC_BUFFER == 1
+    TbDescriptor sky_desc = {
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .data.pStorageBuffer =
+            &(VkDescriptorAddressInfoEXT){
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
+                .address = sky_sys->sky_desc_buffer.buffer.address + offset,
+                .range = sizeof(TbSkyData),
+            },
+    };
+    tb_write_desc_to_buffer(rnd_sys, &sky_sys->sky_desc_buffer, 0, &sky_desc);
+
+    TbDescriptor irr_desc = {
+        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .data.pSampledImage =
+            &(VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+                .imageView = env_map_view,
+            },
+    };
+    tb_write_desc_to_buffer(rnd_sys, &sky_sys->irr_desc_buffer, 0, &irr_desc);
 #else
     *buffer_info = (VkDescriptorBufferInfo){
         .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
@@ -1177,8 +1228,6 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
     };
 
     // Last write is for the irradiance pass
-    tb_auto env_map_view = tb_render_target_get_view(
-        sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
     writes[1] = (VkWriteDescriptorSet){
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet =
@@ -1219,6 +1268,9 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
       }
 #endif
 
+      const uint32_t width = camera->width;
+      const uint32_t height = camera->height;
+
       // Need to manually calculate this here
       float4x4 vp = {.col0 = {0}};
       {
@@ -1242,7 +1294,7 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
                     .vp = vp,
                 },
 #if TB_USE_DESC_BUFFER == 1
-            .desc_binding = {0},
+            .desc_binding = tb_desc_buff_get_binding(&sky_sys->sky_desc_buffer),
 #else
             .sky_set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
                                                       sky_sys->pools.pools, 0),
@@ -1291,8 +1343,13 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
               .user_batch = irradiance_batch,
           };
           *irradiance_batch = (IrradianceBatch){
+#if TB_USE_DESC_BUFFER == 1
+              .desc_binding =
+                  tb_desc_buff_get_binding(&sky_sys->irr_desc_buffer),
+#else
               .set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
                                                     sky_sys->pools.pools, 1),
+#endif
               .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
               .index_count = get_skydome_index_count(),
               .vertex_offset = get_skydome_vert_offset(),
@@ -1318,8 +1375,13 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
             };
 
             prefilter_batches[i] = (PrefilterBatch){
+#if TB_USE_DESC_BUFFER == 1
+                .desc_binding =
+                    tb_desc_buff_get_binding(&sky_sys->irr_desc_buffer),
+#else
                 .set = tb_rnd_frame_desc_pool_get_set(rnd_sys,
                                                       sky_sys->pools.pools, 1),
+#endif
                 .geom_buffer = sky_sys->sky_geom_gpu_buffer.buffer,
                 .index_count = get_skydome_index_count(),
                 .vertex_offset = get_skydome_vert_offset(),
@@ -1348,23 +1410,6 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-void tb_sky_observer(ecs_iter_t *it) {
-  // On any changes to a TbSkyComponent, mark it as dirty
-  for (int i = 0; i < it->count; i++) {
-    tb_auto ent = it->entities[i];
-    ecs_add(it->world, ent, TbSkyRenderDirty);
-  }
-}
-
-void tb_sky_desc_update(ecs_iter_t *it) {
-  for (int i = 0; i < it->count; i++) {
-    tb_auto ent = it->entities[i];
-
-    // Entity is no longer dirty
-    ecs_remove(it->world, ent, TbSkyRenderDirty);
-  }
-}
-
 void tb_register_sky_sys(TbWorld *world) {
   TracyCZoneN(ctx, "Register Sky Sys", true);
   ecs_world_t *ecs = world->ecs;
@@ -1386,16 +1431,6 @@ void tb_register_sky_sys(TbWorld *world) {
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
-
-  ECS_SYSTEM(ecs, tb_sky_desc_update, EcsPreStore, [inout] TbSkyComponent,
-             [in] TbTransformComponent, [in] TbSkyRenderDirty);
-
-  // On any changes to a TbSkyComponent, mark it as dirty
-  ecs_observer(ecs, {
-                        .filter = {.terms = {{.id = ecs_id(TbSkyComponent)}}},
-                        .events = {EcsOnAdd, EcsOnRemove, EcsOnSet, EcsUnSet},
-                        .callback = tb_sky_observer,
-                    });
 
   ECS_SYSTEM(ecs, tb_sky_draw_tick,
              EcsOnStore, [inout] TbSkyComponent, [in] TbTransformComponent);

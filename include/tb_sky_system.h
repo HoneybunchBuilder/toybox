@@ -43,8 +43,8 @@ typedef struct TbSkySystem {
 
   VkSampler irradiance_sampler;
   VkDescriptorSetLayout sky_set_layout;
-  VkPipelineLayout sky_pipe_layout;
   VkDescriptorSetLayout irr_set_layout;
+  VkPipelineLayout sky_pipe_layout;
   VkPipelineLayout irr_pipe_layout;
   VkPipelineLayout prefilter_pipe_layout;
 
@@ -54,5 +54,7 @@ typedef struct TbSkySystem {
   TbShader prefilter_shader;
 
   TbBuffer sky_geom_gpu_buffer;
+  TbDescriptorBuffer sky_desc_buffer;
+  TbDescriptorBuffer irr_desc_buffer;
 } TbSkySystem;
 extern ECS_COMPONENT_DECLARE(TbSkySystem);
