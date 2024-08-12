@@ -1188,12 +1188,13 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
         sky_sys->rt_sys, rnd_sys->frame_idx, sky_sys->rt_sys->env_cube);
 
 #if TB_USE_DESC_BUFFER == 1
+    tb_auto tmp_gpu_buf_addr = tb_rnd_get_gpu_tmp_addr(rnd_sys);
     TbDescriptor sky_desc = {
-        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .data.pStorageBuffer =
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .data.pUniformBuffer =
             &(VkDescriptorAddressInfoEXT){
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-                .address = sky_sys->sky_desc_buffer.buffer.address + offset,
+                .address = tmp_gpu_buf_addr + offset,
                 .range = sizeof(TbSkyData),
             },
     };

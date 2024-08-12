@@ -52,7 +52,7 @@ VkResult tb_resize_desc_buffer(TbRenderSystem *rnd_sys, uint32_t capacity,
   // Reverse iter so the last idx we append is 0
   // Iter from the previous buf's cap so that we only reports newly allocated
   // indices as free. Existing free list is still correct
-  for (uint32_t i = cap; i > prev_buf.desc_cap; --i) {
+  for (int32_t i = (int32_t)cap - 1; i >= (int32_t)prev_buf.desc_cap; --i) {
     TB_DYN_ARR_APPEND(out_buf->free_list, i);
   }
 
@@ -218,7 +218,7 @@ void tb_reset_descriptor_buffer(TbRenderSystem *rnd_sys,
   // Reverse iter so the last idx we append is 0
   // Iter from the previous buf's cap so that we only reports newly allocated
   // indices as free. Existing free list is still correct
-  for (uint32_t i = cap; i > 0; --i) {
+  for (int32_t i = (int32_t)cap - 1; i >= 0; --i) {
     TB_DYN_ARR_APPEND(desc_buf->free_list, i);
   }
   desc_buf->desc_count = 0;
