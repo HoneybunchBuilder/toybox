@@ -407,6 +407,10 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
     return;
   }
 
+  // We can't write more than this number of materials
+  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
+      rnd_sys, mat_ctx->frame_set_pool.pools);
+
   // Write all dirty materials into the descriptor set table
   tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
 
@@ -453,12 +457,19 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
   uint32_t mat_idx = 0;
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
   TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, mat_count);
-  TB_DYN_ARR_RESET(buf_info, world->tmp_alloc, mat_count);
+  TB_DYN_ARR_RESET(writes, world->tmp_alloc, desc_count);
+  TB_DYN_ARR_RESET(buf_info, world->tmp_alloc, desc_count);
   while (ecs_query_next(&mat_it)) {
+    if (mat_idx >= desc_count) {
+      break;
+    }
     tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
     tb_auto mat_usages = ecs_field(&mat_it, TbMaterialUsage, 2);
     for (int32_t i = 0; i < mat_it.count; ++i) {
+      if (mat_idx >= desc_count) {
+        break;
+      }
+
       tb_auto material = &materials[i];
       tb_auto usage = mat_usages[i];
 

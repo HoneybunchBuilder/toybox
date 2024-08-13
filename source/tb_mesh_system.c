@@ -766,6 +766,9 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
     return;
   }
 
+  uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
+      rnd_sys, mesh_ctx->frame_set_pool.pools);
+
 #if TB_USE_DESC_BUFFER == 1
   uint32_t mesh_idx = 0;
   tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
@@ -820,15 +823,21 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
   const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
   TB_DYN_ARR_OF(VkBufferView) attr_views[view_count] = {0};
   for (uint32_t i = 0; i < view_count; ++i) {
-    TB_DYN_ARR_RESET(attr_views[i], world->tmp_alloc, mesh_count);
+    TB_DYN_ARR_RESET(attr_views[i], world->tmp_alloc, desc_count);
   }
 
   // For each mesh, collect the index/attr views
   uint32_t mesh_idx = 0;
   tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
   while (ecs_query_next(&mesh_it)) {
+    if (mesh_idx >= desc_count) {
+      break;
+    }
     tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
     for (int32_t i = 0; i < mesh_it.count; ++i) {
+      if (mesh_idx >= desc_count) {
+        break;
+      }
       tb_auto mesh = &meshes[i];
 
       TB_DYN_ARR_APPEND(attr_views[0], mesh->index_view);
@@ -849,7 +858,7 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
   for (uint32_t i = 0; i < view_count; ++i) {
     VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .descriptorCount = mesh_count,
+        .descriptorCount = desc_count,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
         .dstSet = tb_rnd_frame_desc_pool_get_set(
             rnd_sys, mesh_ctx->frame_set_pool.pools, i),
