@@ -412,7 +412,6 @@ void shadow_draw_tick(ecs_iter_t *it) {
         tb_auto view_set = tb_view_system_get_descriptor(view_sys, view_id);
         // Skip camera if view set isn't ready
         if (view_set == VK_NULL_HANDLE) {
-          TracyCZoneEnd(cam_ctx);
           continue;
         }
 #endif

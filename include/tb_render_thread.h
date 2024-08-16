@@ -106,6 +106,7 @@ typedef struct TbFrameState {
   TbBufferImageCopyQueue *buf_img_copy_queue;
 
   TbArenaAllocator tmp_alloc;
+  TbAllocator gp_alloc;
 
   TB_DYN_ARR_OF(TbPassContext) pass_contexts;
   TB_DYN_ARR_OF(TbDrawContext) draw_contexts;

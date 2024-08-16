@@ -833,26 +833,7 @@ void tb_update_texture_pool(ecs_iter_t *it) {
                                 &tex_ctx->set_layout, &alloc_info,
                                 tex_ctx->frame_set_pool.pools, 1, tex_count);
   }
-
-  // When we get to this phase all textures must be marked dirty
-  tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
-  while (ecs_query_next(&tex_it)) {
-    tb_auto ecs = tex_it.world;
-    for (int32_t i = 0; i < tex_it.count; ++i) {
-      tb_auto tex_ent = tex_it.entities[i];
-      ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
-      ecs_remove(ecs, tex_ent, TbDescriptorReady);
-      if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
-        ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
-      } else {
-        tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
-        SDL_AtomicSet(counter, 0);
-      }
-    }
-  }
-
   tex_ctx->pool_update_counter++;
-
   // One pool must be resized per frame
   if (tex_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
     ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
@@ -860,6 +841,23 @@ void tb_update_texture_pool(ecs_iter_t *it) {
 
     // Reset counter for next phase
     tex_ctx->pool_update_counter = 0;
+
+    // When we get to this phase all textures must be marked dirty
+    tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
+    while (ecs_query_next(&tex_it)) {
+      tb_auto ecs = tex_it.world;
+      for (int32_t i = 0; i < tex_it.count; ++i) {
+        tb_auto tex_ent = tex_it.entities[i];
+        ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
+        ecs_remove(ecs, tex_ent, TbDescriptorReady);
+        if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
+          ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
+        } else {
+          tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
+          SDL_AtomicSet(counter, 0);
+        }
+      }
+    }
   }
 #endif
 }

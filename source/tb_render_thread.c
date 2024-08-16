@@ -309,7 +309,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        uint32_t graphics_queue_family_index,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
-                       TbFrameState *states) {
+                       TbAllocator gp_alloc, TbFrameState *states) {
   TracyCZoneN(ctx, "Initialize Frame States", true);
   TB_CHECK_RETURN(states, "Invalid states", false);
   VkResult err = VK_SUCCESS;
@@ -336,6 +336,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
   for (uint32_t i = 0; i < TB_MAX_FRAME_STATES; ++i) {
     TbFrameState *state = &states[i];
 
+    state->gp_alloc = gp_alloc;
     tb_create_arena_alloc("Render Thread Frame State Tmp Alloc",
                           &state->tmp_alloc, 128 * 1024 * 1024);
 
@@ -1177,7 +1178,7 @@ bool init_render_thread(TbRenderThread *thread) {
   TB_CHECK_RETURN(
       init_frame_states(thread->gpu, thread->device, &thread->swapchain,
                         thread->graphics_queue_family_index, thread->vma_alloc,
-                        vk_alloc, thread->frame_states),
+                        vk_alloc, gp_alloc, thread->frame_states),
       "Failed to init frame states", false);
 
   TracyCZoneEnd(ctx);
@@ -1329,16 +1330,20 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
   {
     TracyCZoneN(desc_ctx, "Update Descriptors", true);
     TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-    uint32_t write_count = TB_DYN_ARR_SIZE(state->set_write_queue->storage);
-    TB_DYN_ARR_RESET(writes, state->tmp_alloc.alloc, write_count);
+    // We HAVE to use the gp alloc here. The size of the set_write_queue is
+    // unknown so we will have to resize the array
+    TB_DYN_ARR_RESET(writes, state->gp_alloc, 16);
 
     VkWriteDescriptorSet write = {0};
     while (TB_QUEUE_POP(*state->set_write_queue, &write)) {
       TB_DYN_ARR_APPEND(writes, write);
     }
-    write_count = TB_DYN_ARR_SIZE(writes);
+    uint32_t write_count = TB_DYN_ARR_SIZE(writes);
 
     vkUpdateDescriptorSets(device, write_count, writes.data, 0, NULL);
+
+    // Must clean up array
+    TB_DYN_ARR_DESTROY(writes);
     TracyCZoneEnd(desc_ctx);
   }
 

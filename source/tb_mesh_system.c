@@ -9,6 +9,8 @@
 
 // Internals
 
+#define TB_MAX_READY_CHECKS_PER_FRAME 16
+
 // Mesh system probably shouldn't own this
 ECS_COMPONENT_DECLARE(TbAABB);
 
@@ -91,7 +93,7 @@ typedef struct TbMeshLoadedArgs {
 } TbMeshLoadedArgs;
 
 void tb_mesh_loaded(const void *args) {
-  TracyCZoneN(ctx, "Mesh Loaded", true);
+  TB_TRACY_SCOPE("Mesh Loaded");
   tb_auto loaded_args = (const TbMeshLoadedArgs *)args;
   tb_auto ecs = loaded_args->ecs;
   tb_auto mesh = loaded_args->mesh;
@@ -100,7 +102,6 @@ void tb_mesh_loaded(const void *args) {
   tb_auto counter = loaded_args->counter;
   if (mesh == 0) {
     TB_CHECK(false, "Mesh load failed. Do we need to retry?");
-    TracyCZoneEnd(ctx);
   }
 
   TbSubMeshGLTFLoadRequest submesh_req = {
@@ -114,8 +115,6 @@ void tb_mesh_loaded(const void *args) {
   ecs_set_ptr(ecs, mesh, TbSubMeshGLTFLoadRequest, &submesh_req);
 
   SDL_AtomicDecRef(counter);
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbLoadCommonMeshArgs {
@@ -134,7 +133,7 @@ typedef struct TbLoadGLTFMeshArgs {
 
 TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                              const cgltf_mesh *gltf_mesh) {
-  TracyCZoneN(ctx, "Load GLTF Mesh", true);
+  TB_TRACY_SCOPE("Load GLTF Mesh");
   TbMeshData data = {0};
 
   // Determine how big this mesh is
@@ -403,13 +402,11 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
       tb_rnd_upload_buffers(rnd_sys, &buf_copy, 1);
     }
   }
-
-  TracyCZoneEnd(ctx);
   return data;
 }
 
 void tb_load_gltf_mesh_task(const void *args) {
-  TracyCZoneN(ctx, "Load GLTF Mesh Task", true);
+  TB_TRACY_SCOPE("Load GLTF Mesh Task");
   tb_auto load_args = (const TbLoadGLTFMeshArgs *)args;
   tb_auto rnd_sys = load_args->common.rnd_sys;
   tb_auto mesh = load_args->common.mesh;
@@ -437,7 +434,6 @@ void tb_load_gltf_mesh_task(const void *args) {
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbMeshLoadedArgs));
-  TracyCZoneEnd(ctx);
 }
 
 // Systems
@@ -500,6 +496,7 @@ typedef struct TbSubMeshLoadArgs {
 } TbSubMeshLoadArgs;
 
 void tb_load_submeshes_task(const void *args) {
+  TB_TRACY_SCOPE("Load Submeshes Task");
   tb_auto load_args = (const TbSubMeshLoadArgs *)args;
   tb_auto ecs = load_args->ecs;
   tb_auto counter = load_args->counter;
@@ -615,7 +612,7 @@ void tb_load_submeshes_task(const void *args) {
 }
 
 void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue GLTF Submesh Loads", true);
+  TB_TRACY_SCOPE("Queue GLTF Submesh Loads");
   tb_auto counter = ecs_field(it, TbSubMeshQueueCounter, 1);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 2);
   tb_auto reqs = ecs_field(it, TbSubMeshGLTFLoadRequest, 3);
@@ -641,16 +638,13 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
 
     SDL_AtomicIncRef(counter);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_mesh_loading_phase(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Mesh Loading Phase", true);
+  TB_TRACY_SCOPE("Mesh Phase: Loading");
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
 
   if (mesh_ctx->owned_mesh_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -666,12 +660,10 @@ void tb_mesh_loading_phase(ecs_iter_t *it) {
     ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
     mesh_ctx->pool_update_counter = 0;
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Update Mesh Descriptors");
+  TB_TRACY_SCOPE("Mesh Phase: Update Pool");
 
 #if TB_USE_DESC_BUFFER == 1
   // Skip this phase
@@ -724,23 +716,6 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
                                 view_count, mesh_count);
   }
 
-  // If we had to resize the pool, all meshes are dirty
-  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    tb_auto ecs = mesh_it.world;
-    for (int32_t i = 0; i < mesh_it.count; ++i) {
-      tb_auto mesh_ent = mesh_it.entities[i];
-      ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
-      ecs_remove(ecs, mesh_ent, TbDescriptorReady);
-      if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
-        ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
-      } else {
-        tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
-        SDL_AtomicSet(counter, 0);
-      }
-    }
-  }
-
   mesh_ctx->pool_update_counter++;
 
   // One pool must be resized per frame
@@ -750,12 +725,29 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
 
     // Reset counter for next phase
     mesh_ctx->pool_update_counter = 0;
+
+    // After pools have been reset, mark all meshes as dirty
+    tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
+    while (ecs_query_next(&mesh_it)) {
+      tb_auto ecs = mesh_it.world;
+      for (int32_t i = 0; i < mesh_it.count; ++i) {
+        tb_auto mesh_ent = mesh_it.entities[i];
+        ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
+        ecs_remove(ecs, mesh_ent, TbDescriptorReady);
+        if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
+          ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
+        } else {
+          tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
+          SDL_AtomicSet(counter, 0);
+        }
+      }
+    }
   }
 #endif
 }
 
 void tb_write_mesh_descriptors(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Write Mesh Descriptors");
+  TB_TRACY_SCOPE("Mesh Phase: Write Descriptors");
 
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
@@ -880,7 +872,8 @@ void tb_write_mesh_descriptors(ecs_iter_t *it) {
 }
 
 void tb_mesh_phase_written(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Mesh Written Phase", true);
+  TB_TRACY_SCOPE("Mesh Phase: Written");
+
   tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
 
   // Accumulate the number of meshes
@@ -897,11 +890,11 @@ void tb_mesh_phase_written(ecs_iter_t *it) {
     ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
     ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_check_submesh_readiness(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Check Submesh Readiness");
+  uint32_t count = 0;
   tb_auto submesh_data = ecs_field(it, TbSubMesh2Data, 1);
   for (int32_t i = 0; i < it->count; ++i) {
     TbSubMesh2 submesh = it->entities[i];
@@ -911,10 +904,16 @@ void tb_check_submesh_readiness(ecs_iter_t *it) {
       ecs_remove(it->world, submesh, TbSubMeshParsed);
       ecs_add(it->world, submesh, TbSubMeshReady);
     }
+    count++;
+    if (count == TB_MAX_READY_CHECKS_PER_FRAME) {
+      return;
+    }
   }
 }
 
 void tb_check_mesh_readiness(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Check Mesh Readiness");
+  uint32_t count = 0;
   for (int32_t i = 0; i < it->count; ++i) {
     TbMesh2 mesh = it->entities[i];
 
@@ -942,6 +941,11 @@ void tb_check_mesh_readiness(ecs_iter_t *it) {
     if (children_ready) {
       ecs_remove(it->world, mesh, TbMeshParsed);
       ecs_add(it->world, mesh, TbMeshReady);
+    }
+
+    count++;
+    if (count == TB_MAX_READY_CHECKS_PER_FRAME) {
+      return;
     }
   }
 }
@@ -994,7 +998,8 @@ void tb_register_mesh2_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tb_check_submesh_readiness,
              EcsPreStore, [in] TbSubMesh2Data, [in] TbSubMeshParsed);
-  ECS_SYSTEM(ecs, tb_check_mesh_readiness, EcsPreStore, [in] TbMeshParsed);
+  ECS_SYSTEM(ecs, tb_check_mesh_readiness,
+             EcsPreStore, [in] TbMeshParsed, [in] TbDescriptorReady);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
