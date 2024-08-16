@@ -364,29 +364,29 @@ void tb_update_material_pool(ecs_iter_t *it) {
                                 mat_ctx->frame_set_pool.pools, 1, mat_count);
   }
 
-  // When we get to this phase all materials must be marked dirty
-  tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    tb_auto ecs = mat_it.world;
-    for (int32_t i = 0; i < mat_it.count; ++i) {
-      tb_auto mat_ent = mat_it.entities[i];
-      ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
-      ecs_remove(ecs, mat_ent, TbDescriptorReady);
-      if (!ecs_has(ecs, mat_ent, TbDescriptorCounter)) {
-        ecs_set(ecs, mat_ent, TbDescriptorCounter, {0});
-      } else {
-        tb_auto counter = ecs_get_mut(ecs, mat_ent, TbDescriptorCounter);
-        SDL_AtomicSet(counter, 0);
-      }
-    }
-  }
-
   mat_ctx->pool_update_counter++;
 
   // One pool must be resized per frame
   if (mat_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
     ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
     ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
+
+    // When we get to this phase all materials must be marked dirty
+    tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
+    while (ecs_query_next(&mat_it)) {
+      tb_auto ecs = mat_it.world;
+      for (int32_t i = 0; i < mat_it.count; ++i) {
+        tb_auto mat_ent = mat_it.entities[i];
+        ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
+        ecs_remove(ecs, mat_ent, TbDescriptorReady);
+        if (!ecs_has(ecs, mat_ent, TbDescriptorCounter)) {
+          ecs_set(ecs, mat_ent, TbDescriptorCounter, {0});
+        } else {
+          tb_auto counter = ecs_get_mut(ecs, mat_ent, TbDescriptorCounter);
+          SDL_AtomicSet(counter, 0);
+        }
+      }
+    }
 
     // Reset counter for next phase
     mat_ctx->pool_update_counter = 0;
@@ -478,7 +478,6 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
 
       // If a material isn't ready we mustn't exit this phase
       if (!mat_domain.ready_fn(it->world, material)) {
-        TracyCZoneEnd(ctx);
         return;
       }
 
