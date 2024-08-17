@@ -793,6 +793,7 @@ void tb_finalize_textures(ecs_iter_t *it) {
       ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
     }
   }
+  TB_DYN_ARR_DESTROY(writes);
 }
 
 void tb_update_texture_pool(ecs_iter_t *it) {

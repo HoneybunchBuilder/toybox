@@ -320,19 +320,18 @@ void tb_finalize_materials(ecs_iter_t *it) {
       ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
     }
   }
+
+  TB_DYN_ARR_DESTROY(writes);
 }
 
 void tb_update_material_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Material Pool");
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-
-  uint64_t mat_count = mat_ctx->owned_mat_count;
-  if (mat_count == 0) {
+  if (mat_ctx->owned_mat_count == 0) {
     return;
   }
-
-  // Tick the pool in case any new textures require us to expand the pool
+  // Tick the pool in case any new materials require us to expand the pool
   tb_tick_dyn_desc_pool(rnd_sys, &mat_ctx->desc_pool, "material");
 }
 

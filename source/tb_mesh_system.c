@@ -1,6 +1,7 @@
 #include "tb_mesh_system.h"
 
 #include "tb_assets.h"
+#include "tb_dyn_desc_pool.h"
 #include "tb_gltf.h"
 #include "tb_log.h"
 #include "tb_material_system.h"
@@ -16,12 +17,6 @@ ECS_COMPONENT_DECLARE(TbAABB);
 
 static const int32_t TbMaxParallelMeshLoads = 16;
 
-ECS_TAG_DECLARE(TbMeshLoadPhaseLoading);
-ECS_TAG_DECLARE(TbMeshLoadPhaseLoaded);
-ECS_TAG_DECLARE(TbMeshLoadPhaseWriting);
-ECS_TAG_DECLARE(TbMeshLoadPhaseWritten);
-ECS_TAG_DECLARE(TbMeshLoadPhaseReady);
-
 typedef SDL_AtomicInt TbMeshQueueCounter;
 ECS_COMPONENT_DECLARE(TbMeshQueueCounter);
 typedef SDL_AtomicInt TbSubMeshQueueCounter;
@@ -30,21 +25,19 @@ ECS_COMPONENT_DECLARE(TbSubMeshQueueCounter);
 ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 
 typedef struct TbMeshCtx {
+  uint32_t owned_mesh_count;
   VkDescriptorSetLayout set_layout;
-  TbFrameDescriptorPoolList frame_set_pool;
+  TbDynDescPool idx_desc_pool;
+  TbDynDescPool pos_desc_pool;
+  TbDynDescPool norm_desc_pool;
+  TbDynDescPool tan_desc_pool;
+  TbDynDescPool uv0_desc_pool;
 
   TbDescriptorBuffer idx_desc_buf;
   TbDescriptorBuffer pos_desc_buf;
   TbDescriptorBuffer norm_desc_buf;
   TbDescriptorBuffer tan_desc_buf;
   TbDescriptorBuffer uv0_desc_buf;
-
-  uint32_t owned_mesh_count;
-  uint32_t pool_update_counter;
-
-  ecs_query_t *mesh_query;
-  ecs_query_t *loaded_mesh_query;
-  ecs_query_t *dirty_mesh_query;
 } TbMeshCtx;
 ECS_COMPONENT_DECLARE(TbMeshCtx);
 
@@ -478,10 +471,8 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
                                      sizeof(TbLoadGLTFMeshArgs));
     // Apply task component to mesh entity
     ecs_set(ecs, ent, TbTask, {load_task});
-
     SDL_AtomicIncRef(counter);
     mesh_ctx->owned_mesh_count++;
-    tb_mesh_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbMeshGLTFLoadRequest);
@@ -640,256 +631,99 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
   }
 }
 
-void tb_mesh_loading_phase(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Mesh Phase: Loading");
-  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
+                             uint32_t mesh_count, const ecs_entity_t *entities,
+                             const TbMeshData *data, TbAllocator gp_alloc,
+                             TbAllocator tmp_alloc, uint32_t attr_idx) {
+  TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
+  TB_DYN_ARR_RESET(writes, gp_alloc, mesh_count);
 
-  if (mesh_ctx->owned_mesh_count == 0) {
+  for (uint32_t i = 0; i < mesh_count; ++i) {
+    tb_auto mesh = &data[i];
+    VkBufferView attr_view = mesh->index_view;
+    if (attr_idx > 0) {
+      attr_view = mesh->attr_views[attr_idx - 1];
+    }
+    TbDynDescWrite write = {
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+        .desc.texel_buffer = attr_view,
+    };
+    TB_DYN_ARR_APPEND(writes, write);
+  }
+
+  const uint32_t write_count = TB_DYN_ARR_SIZE(writes);
+  if (write_count > 0) {
+    tb_auto indices = tb_alloc_nm_tp(tmp_alloc, write_count, uint32_t);
+    TbDynDescPool *pool = NULL;
+    switch (attr_idx) {
+    case 0:
+      pool = &ctx->idx_desc_pool;
+      break;
+    case 1:
+      pool = &ctx->pos_desc_pool;
+      break;
+    case 2:
+      pool = &ctx->norm_desc_pool;
+      break;
+    case 3:
+      pool = &ctx->tan_desc_pool;
+      break;
+    case 4:
+      pool = &ctx->uv0_desc_pool;
+      break;
+    default:
+      pool = NULL;
+    }
+    TB_CHECK(pool, "Failed to find pool for attribute");
+    tb_write_dyn_desc_pool(pool, write_count, writes.data, indices);
+
+    // A bit hack but we always expect attr idx 0 (indices)
+    // so this is when we can use the reported indices to mark
+    // mesh components
+    // Ideally we'd make sure the various attr pools are in sync but for now we
+    // just pray
+    if (attr_idx == 0) {
+      TB_DYN_ARR_FOREACH(writes, i) {
+        ecs_set(ecs, entities[i], TbMeshIndex, {indices[i]});
+        ecs_add(ecs, entities[i], TbUpdatingDescriptor);
+        ecs_remove(ecs, entities[i], TbNeedsDescriptorUpdate);
+      }
+    }
+  }
+  TB_DYN_ARR_DESTROY(writes);
+}
+
+void tb_finalize_meshes(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Finalize Meshes");
+
+  tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
+  tb_auto meshes = ecs_field(it, TbMeshData, 2);
+  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+
+  if (ctx->owned_mesh_count == 0 || it->count == 0) {
     return;
   }
 
-  uint64_t loaded_mesh_count = 0;
-  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->loaded_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    loaded_mesh_count += mesh_it.count;
-  }
-
-  // This phase is over when there are no more meshes to load
-  if (mesh_ctx->owned_mesh_count == loaded_mesh_count) {
-    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
-    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
-    mesh_ctx->pool_update_counter = 0;
+  // HACK: known fixed number of mesh attributes
+  for (uint32_t i = 0; i < 5; ++i) {
+    tb_write_mesh_attr_desc(it->world, ctx, it->count, it->entities, meshes,
+                            world->gp_alloc, world->tmp_alloc, i);
   }
 }
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Mesh Phase: Update Pool");
+  TB_TRACY_SCOPE("Update Mesh Pool");
 
-#if TB_USE_DESC_BUFFER == 1
-  // Skip this phase
-  ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
-  ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-#else
-  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
+  tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-
-  uint64_t mesh_count = mesh_ctx->owned_mesh_count;
-
-  if (mesh_count == 0) {
+  if (ctx->owned_mesh_count == 0) {
     return;
   }
-
-  // Resize the pool if necessary
-  if (mesh_count != tb_rnd_frame_desc_pool_get_desc_count(
-                        rnd_sys, mesh_ctx->frame_set_pool.pools)) {
-
-    const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
-
-    VkDescriptorPoolCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        .maxSets = view_count,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .descriptorCount = view_count * 4,
-                },
-            },
-    };
-    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-        .sType =
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-        .descriptorSetCount = view_count,
-        .pDescriptorCounts =
-            (uint32_t[view_count]){mesh_count, mesh_count, mesh_count,
-                                   mesh_count, mesh_count, mesh_count,
-                                   mesh_count},
-    };
-    VkDescriptorSetLayout layouts[view_count] = {
-        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-        mesh_ctx->set_layout, mesh_ctx->set_layout, mesh_ctx->set_layout,
-        mesh_ctx->set_layout};
-    tb_rnd_frame_desc_pool_tick(rnd_sys, "mesh", &create_info, layouts,
-                                &alloc_info, mesh_ctx->frame_set_pool.pools,
-                                view_count, mesh_count);
-  }
-
-  mesh_ctx->pool_update_counter++;
-
-  // One pool must be resized per frame
-  if (mesh_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
-    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-
-    // Reset counter for next phase
-    mesh_ctx->pool_update_counter = 0;
-
-    // After pools have been reset, mark all meshes as dirty
-    tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->mesh_query);
-    while (ecs_query_next(&mesh_it)) {
-      tb_auto ecs = mesh_it.world;
-      for (int32_t i = 0; i < mesh_it.count; ++i) {
-        tb_auto mesh_ent = mesh_it.entities[i];
-        ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
-        ecs_remove(ecs, mesh_ent, TbDescriptorReady);
-        if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
-          ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
-        } else {
-          tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
-          SDL_AtomicSet(counter, 0);
-        }
-      }
-    }
-  }
-#endif
-}
-
-void tb_write_mesh_descriptors(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Mesh Phase: Write Descriptors");
-
-  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
-
-  uint64_t mesh_count = mesh_ctx->owned_mesh_count;
-  if (mesh_count == 0) {
-    return;
-  }
-
-  uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
-      rnd_sys, mesh_ctx->frame_set_pool.pools);
-
-#if TB_USE_DESC_BUFFER == 1
-  uint32_t mesh_idx = 0;
-  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
-    for (int32_t i = 0; i < mesh_it.count; ++i) {
-      tb_auto mesh = &meshes[i];
-
-      TbDescriptor desc = {
-          .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-          .data = {.pStorageTexelBuffer = &mesh->index_addr},
-      };
-      // HACK: This manual mapping of descriptor buffers to indices is bad
-      uint32_t idx =
-          tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->idx_desc_buf, 0, &desc);
-      for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
-        desc.data.pStorageTexelBuffer = &mesh->attribute_addr[attr_idx];
-        uint32_t view_idx = idx;
-        switch (attr_idx) {
-        case 0:
-          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->pos_desc_buf,
-                                             0, &desc);
-          break;
-        case 1:
-          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->norm_desc_buf,
-                                             0, &desc);
-          break;
-        case 2:
-          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->tan_desc_buf,
-                                             0, &desc);
-          break;
-        case 3:
-          view_idx = tb_write_desc_to_buffer(rnd_sys, &mesh_ctx->uv0_desc_buf,
-                                             0, &desc);
-          break;
-        default:
-          break;
-        }
-        TB_CHECK(view_idx == idx, "Mesh Attribute descriptors out of phase");
-      }
-
-      ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {idx});
-      ecs_remove(it->world, mesh_it.entities[i], TbNeedsDescriptorUpdate);
-      ecs_add(it->world, mesh_it.entities[i], TbDescriptorReady);
-    }
-  }
-
-  ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-  ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
-#else
-  // One set of buffer views per attribute
-  const uint32_t view_count = TB_INPUT_PERM_COUNT + 1; // +1 for index buffer
-  TB_DYN_ARR_OF(VkBufferView) attr_views[view_count] = {0};
-  for (uint32_t i = 0; i < view_count; ++i) {
-    TB_DYN_ARR_RESET(attr_views[i], world->tmp_alloc, desc_count);
-  }
-
-  // For each mesh, collect the index/attr views
-  uint32_t mesh_idx = 0;
-  tb_auto mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    if (mesh_idx >= desc_count) {
-      break;
-    }
-    tb_auto meshes = ecs_field(&mesh_it, TbMeshData, 1);
-    for (int32_t i = 0; i < mesh_it.count; ++i) {
-      if (mesh_idx >= desc_count) {
-        break;
-      }
-      tb_auto mesh = &meshes[i];
-
-      TB_DYN_ARR_APPEND(attr_views[0], mesh->index_view);
-      for (uint32_t attr_idx = 0; attr_idx < TB_INPUT_PERM_COUNT; ++attr_idx) {
-        TB_DYN_ARR_APPEND(attr_views[attr_idx + 1], mesh->attr_views[attr_idx]);
-      }
-
-      // Mesh will be ready to be referenced elsewhere
-      ecs_set(it->world, mesh_it.entities[i], TbMeshIndex, {mesh_idx});
-      ecs_add(it->world, mesh_it.entities[i], TbUpdatingDescriptor);
-      mesh_idx++;
-    }
-  }
-
-  // Write collections of views to the correct descriptor set
-  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, view_count);
-  for (uint32_t i = 0; i < view_count; ++i) {
-    VkWriteDescriptorSet write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .descriptorCount = desc_count,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-        .dstSet = tb_rnd_frame_desc_pool_get_set(
-            rnd_sys, mesh_ctx->frame_set_pool.pools, i),
-        .dstBinding = 0,
-        .pTexelBufferView = &TB_DYN_ARR_AT(attr_views[i], 0),
-    };
-    TB_DYN_ARR_APPEND(writes, write);
-  }
-  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
-
-  mesh_ctx->pool_update_counter++;
-
-  // One write must be enqueued per frame
-  if (mesh_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
-  }
-#endif
-}
-
-void tb_mesh_phase_written(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Mesh Phase: Written");
-
-  tb_auto mesh_ctx = ecs_field(it, TbMeshCtx, 1);
-
-  // Accumulate the number of meshes
-  uint64_t parsed_meshes = 0;
-
-  ecs_iter_t mesh_it = ecs_query_iter(it->world, mesh_ctx->dirty_mesh_query);
-  while (ecs_query_next(&mesh_it)) {
-    parsed_meshes += mesh_it.count;
-  }
-
-  // When we have no more parsed meshes that means all meshes are ready
-  // This is cheaper than counting up
-  if (parsed_meshes == 0) {
-    ecs_remove(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
-    ecs_add(it->world, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
-  }
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->idx_desc_pool, "mesh_indices");
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->pos_desc_pool, "mesh_positions");
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->norm_desc_pool, "mesh_normals");
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->tan_desc_pool, "mesh_tangents");
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->uv0_desc_pool, "mesh_uv0s");
 }
 
 void tb_check_submesh_readiness(ecs_iter_t *it) {
@@ -968,11 +802,6 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbMeshReady);
   ECS_TAG_DEFINE(ecs, TbSubMeshParsed);
   ECS_TAG_DEFINE(ecs, TbSubMeshReady);
-  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseLoading);
-  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseLoaded);
-  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseWriting);
-  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseWritten);
-  ECS_TAG_DEFINE(ecs, TbMeshLoadPhaseReady);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
              EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
@@ -982,47 +811,23 @@ void tb_register_mesh2_sys(TbWorld *world) {
              TbSubMeshQueueCounter(TbSubMeshQueueCounter),
              TbTaskScheduler(TbTaskScheduler), [in] TbSubMeshGLTFLoadRequest);
 
-  // While meshes are moving from parsed to ready states
-  ECS_SYSTEM(ecs, tb_mesh_loading_phase, EcsPreFrame, [in] TbMeshCtx(TbMeshCtx),
-             TbMeshLoadPhaseLoading);
-  // When all meshes are loaded we start making them available to shaders
-  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
-             [in] TbRenderSystem(TbRenderSystem), TbMeshLoadPhaseLoaded);
   // System that ticks as we ensure mesh descriptors are written
-  ECS_SYSTEM(ecs, tb_write_mesh_descriptors, EcsPreStore,
-             [in] TbMeshCtx(TbMeshCtx), [in] TbRenderSystem(TbRenderSystem),
-             TbMeshLoadPhaseWriting);
-  // When all meshes are ready the phase we will be done
-  ECS_SYSTEM(ecs, tb_mesh_phase_written, EcsOnStore, [in] TbMeshCtx(TbMeshCtx),
-             TbMeshLoadPhaseWritten);
+  ECS_SYSTEM(ecs, tb_finalize_meshes, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
+             [in] TbMeshData, [in] TbMeshLoaded, [in] TbNeedsDescriptorUpdate,
+             !TbUpdatingDescriptor, !TbDescriptorReady);
+  // When all meshes are loaded we start making them available to shaders
+  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPreStore, [in] TbMeshCtx(TbMeshCtx),
+             [in] TbRenderSystem(TbRenderSystem));
 
   ECS_SYSTEM(ecs, tb_check_submesh_readiness,
              EcsPreStore, [in] TbSubMesh2Data, [in] TbSubMeshParsed);
-  ECS_SYSTEM(ecs, tb_check_mesh_readiness,
-             EcsPreStore, [in] TbMeshParsed, [in] TbDescriptorReady);
+  ECS_SYSTEM(
+      ecs, tb_check_mesh_readiness,
+      EcsPreStore, [in] TbMeshData, [in] TbMeshParsed, [in] TbDescriptorReady);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  TbMeshCtx ctx = {
-      .mesh_query =
-          ecs_query(ecs, {.filter.terms =
-                              {
-                                  {.id = ecs_id(TbMeshData), .inout = EcsIn},
-                              }}),
-      .loaded_mesh_query =
-          ecs_query(ecs, {.filter.terms =
-                              {
-                                  {.id = ecs_id(TbMeshData), .inout = EcsIn},
-                                  {.id = ecs_id(TbMeshLoaded)},
-                              }}),
-      .dirty_mesh_query =
-          ecs_query(ecs, {.filter.terms =
-                              {
-                                  {.id = ecs_id(TbMeshData), .inout = EcsIn},
-                                  {.id = ecs_id(TbMeshLoaded)},
-                                  {.id = ecs_id(TbNeedsDescriptorUpdate)},
-                              }}),
-  };
+  TbMeshCtx ctx = {0};
 
   // Create mesh descriptor set layout
   {
@@ -1067,6 +872,12 @@ void tb_register_mesh2_sys(TbWorld *world) {
                               4, &ctx.tan_desc_buf);
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh UV0 Descriptors",
                               4, &ctx.uv0_desc_buf);
+#else
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.idx_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.pos_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.norm_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.tan_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.uv0_desc_pool, 0);
 #endif
 
   ecs_singleton_set_ptr(ecs, TbMeshCtx, &ctx);
@@ -1087,10 +898,6 @@ void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-
-  ecs_query_fini(ctx->mesh_query);
-  ecs_query_fini(ctx->loaded_mesh_query);
-  ecs_query_fini(ctx->dirty_mesh_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -1121,27 +928,27 @@ VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
 VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->idx_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 1);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->pos_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 2);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->norm_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 3);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->tan_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 4);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->uv0_desc_pool);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs) {
@@ -1167,16 +974,6 @@ VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs) {
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->uv0_desc_buf);
-}
-
-void tb_mesh_sys_begin_load(ecs_world_t *ecs) {
-  if (!ecs_has(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading)) {
-    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoaded);
-    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWriting);
-    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseWritten);
-    ecs_remove(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseReady);
-    ecs_add(ecs, ecs_id(TbMeshCtx), TbMeshLoadPhaseLoading);
-  }
 }
 
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
@@ -1212,6 +1009,13 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
   // Append a mesh load request onto the entity to schedule loading
   ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {data, index});
   ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
+  // TODO: Make descriptor update needs more ergonomic
+  if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
+    ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
+  } else {
+    tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
+    SDL_AtomicSet(counter, 0);
+  }
 
   if (deferred) {
     ecs_defer_begin(ecs);
