@@ -17,17 +17,11 @@ ECS_COMPONENT_DECLARE(TbTextureUsage);
 
 typedef struct TbTextureCtx {
   VkDescriptorSetLayout set_layout;
-  TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_tex_count;
   TbDynDescPool desc_pool;
 
   VkDescriptorSetLayout set_layout2;
   TbDescriptorBuffer desc_buffer;
-
-  // Custom queries for special systems
-  ecs_query_t *tex_query;
-  ecs_query_t *loaded_tex_query;
-  ecs_query_t *ready_tex_query;
 
   TbTexture default_color_tex;
   TbTexture default_normal_tex;
@@ -68,7 +62,6 @@ typedef struct TbTextureRawLoadRequest {
 } TbTextureRawLoadRequest;
 ECS_COMPONENT_DECLARE(TbTextureRawLoadRequest);
 
-ECS_TAG_DECLARE(TbTextureLoading);
 ECS_TAG_DECLARE(TbTextureLoaded);
 
 // Internals
@@ -769,28 +762,6 @@ void tb_finalize_textures(ecs_iter_t *it) {
     return;
   }
 
-// Alternate path: write to descriptor buffer
-#if TB_USE_DESC_BUFFER == 1
-  while (ecs_query_next(&tex_it)) {
-    tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
-    for (int32_t i = 0; i < tex_it.count; ++i) {
-      tb_auto texture = &textures[i];
-      TbDescriptor desc = {
-          .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .data = {.pSampledImage = &(VkDescriptorImageInfo){
-                       .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                       .imageView = texture->image_view,
-                   }}};
-      uint32_t idx =
-          tb_write_desc_to_buffer(rnd_sys, &tex_ctx->desc_buffer, 0, &desc);
-
-      ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {idx});
-      ecs_add(it->world, tex_it.entities[i], TbDescriptorReady);
-    }
-  }
-  ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-  ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
-#else
   // Collect a write for every new texture
   TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
   TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
@@ -822,7 +793,6 @@ void tb_finalize_textures(ecs_iter_t *it) {
       ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
     }
   }
-#endif
 }
 
 void tb_update_texture_pool(ecs_iter_t *it) {
@@ -852,7 +822,6 @@ void tb_register_texture_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbTextureComponent);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
 
-  ECS_TAG_DEFINE(ecs, TbTextureLoading);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
@@ -873,27 +842,7 @@ void tb_register_texture_sys(TbWorld *world) {
              EcsPreStore, [in] TbTextureCtx(TbTextureCtx),
              [in] TbRenderSystem(TbRenderSystem));
 
-  TbTextureCtx ctx = {
-      .tex_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbTextureImage), .inout = EcsIn},
-                    }}),
-      .loaded_tex_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbTextureImage), .inout = EcsIn},
-                        {.id = ecs_id(TbTextureLoaded)},
-                    }}),
-      .ready_tex_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbTextureImage), .inout = EcsIn},
-                        {.id = ecs_id(TbTextureLoaded)},
-                        {.id = ecs_id(TbTextureComponent)},
-                        {.id = ecs_id(TbDescriptorReady)},
-                    }}),
-  };
+  TbTextureCtx ctx = {0};
 
   SDL_AtomicSet(&tb_parallel_tex_load_count, 0);
 
@@ -968,7 +917,7 @@ void tb_register_texture_sys(TbWorld *world) {
   }
 #endif
 
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool, 0);
 
   // Must set ctx before we try to load any textures
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
@@ -1015,10 +964,6 @@ void tb_unregister_texture_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-
-  ecs_query_fini(ctx->tex_query);
-  ecs_query_fini(ctx->loaded_tex_query);
-  ecs_query_fini(ctx->ready_tex_query);
 
   tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
 
@@ -1087,6 +1032,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   ecs_set(ecs, tex_ent, TbTextureRawLoadRequest,
           {name, pixels, size, width, height});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
+  // TODO: Make descriptor update needs more ergonomic
   ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
   if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
     ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});

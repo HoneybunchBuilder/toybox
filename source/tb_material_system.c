@@ -2,6 +2,7 @@
 
 #include "tb_assets.h"
 #include "tb_common.h"
+#include "tb_dyn_desc_pool.h"
 #include "tb_gltf.h"
 #include "tb_queue.h"
 #include "tb_scene_material.h"
@@ -9,19 +10,11 @@
 #include "tb_world.h"
 
 static const int32_t TbMaxParallelMaterialLoads = 8;
-
-ECS_TAG_DECLARE(TbMatLoadPhaseLoading);
-ECS_TAG_DECLARE(TbMatLoadPhaseLoaded);
-ECS_TAG_DECLARE(TbMatLoadPhaseWriting);
-ECS_TAG_DECLARE(TbMatLoadPhaseWritten);
-ECS_TAG_DECLARE(TbMatLoadPhaseReady);
+static SDL_AtomicInt tb_parallel_mat_load_count = {0};
 
 // Components
 
 ECS_COMPONENT_DECLARE(TbMaterialUsage);
-
-typedef SDL_AtomicInt TbMatQueueCounter;
-ECS_COMPONENT_DECLARE(TbMatQueueCounter);
 
 ECS_COMPONENT_DECLARE(TbMaterialData);
 
@@ -37,19 +30,11 @@ typedef struct TbMaterialCtx {
   VkSampler sampler;        // Immutable sampler for material descriptor sets
   VkSampler shadow_sampler; // Immutable sampler for sampling shadow maps
   VkDescriptorSetLayout set_layout;
-  TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_mat_count;
+  TbDynDescPool desc_pool;
 
   VkDescriptorSetLayout set_layout2;
   TbDescriptorBuffer desc_buffer;
-
-  uint32_t pool_update_counter;
-  uint32_t last_written_mat_count;
-
-  ecs_query_t *uploadable_mat_query;
-  ecs_query_t *loaded_mat_query;
-  ecs_query_t *dirty_mat_query;
-  ecs_query_t *ready_mat_query;
 
   TB_DYN_ARR_OF(TbMaterialDomainHandler) usage_map;
 } TbMaterialCtx;
@@ -64,8 +49,8 @@ typedef struct TbMaterialGLTFLoadRequest {
 } TbMaterialGLTFLoadRequest;
 ECS_COMPONENT_DECLARE(TbMaterialGLTFLoadRequest);
 
-ECS_TAG_DECLARE(TbMaterialUploadable);
 ECS_TAG_DECLARE(TbMaterialLoaded);
+ECS_TAG_DECLARE(TbMaterialUploaded);
 
 // Internals
 
@@ -86,7 +71,8 @@ void tb_material_loaded(const void *args) {
 
   loaded_args->domain.load_fn(ecs, loaded_args->comp.domain_data);
 
-  ecs_add(ecs, mat, TbMaterialUploadable);
+  SDL_AtomicDecRef(&tb_parallel_mat_load_count);
+  ecs_add(ecs, mat, TbMaterialLoaded);
   ecs_set_ptr(ecs, mat, TbMaterialData, &loaded_args->comp);
 }
 
@@ -189,15 +175,15 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
   tb_auto ecs = it->world;
 
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto counter = ecs_field(it, TbMatQueueCounter, 2);
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 3);
-  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 4);
-  tb_auto usages = ecs_field(it, TbMaterialUsage, 5);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
+  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbMaterialUsage, 4);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelMaterialLoads) {
+    if (SDL_AtomicGet(&tb_parallel_mat_load_count) >
+        TbMaxParallelMaterialLoads) {
       break;
     }
     TbMaterial2 ent = it->entities[i];
@@ -229,9 +215,8 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(ecs, ent, TbTask, {load_task});
 
-    SDL_AtomicIncRef(counter);
+    SDL_AtomicIncRef(&tb_parallel_mat_load_count);
     mat_ctx->owned_mat_count++;
-    tb_mat_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbMaterialGLTFLoadRequest);
@@ -240,165 +225,61 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
 }
 
 void tb_upload_gltf_mats(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Material Uploads", true);
+  TB_TRACY_SCOPE("Material Uploads");
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
 
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->uploadable_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
-    tb_auto usages = ecs_field(&mat_it, TbMaterialUsage, 2);
-    for (int32_t i = 0; i < mat_it.count; ++i) {
-      TbMaterial2 ent = mat_it.entities[i];
-      tb_auto material = &materials[i];
-      tb_auto usage = usages[i];
+  tb_auto materials = ecs_field(it, TbMaterialData, 3);
+  tb_auto usages = ecs_field(it, TbMaterialUsage, 4);
+  for (int32_t i = 0; i < it->count; ++i) {
+    TbMaterial2 ent = it->entities[i];
+    tb_auto material = &materials[i];
+    tb_auto usage = usages[i];
 
-      const char *name = ecs_get_name(mat_it.world, ent);
+    const char *name = ecs_get_name(it->world, ent);
 
-      // Determine if the material's dependencies are also met
-      tb_auto handler = tb_find_material_domain(mat_ctx, usage);
-      tb_auto domain = handler.domain;
+    // Determine if the material's dependencies are also met
+    tb_auto handler = tb_find_material_domain(mat_ctx, usage);
+    tb_auto domain = handler.domain;
 
-      // Material must be skipped if its dependencies aren't ready
-      if (!domain.ready_fn(mat_it.world, material)) {
-        continue;
-      }
-
-      void *domain_data = domain.get_data_fn(mat_it.world, material);
-      size_t domain_size = domain.get_size_fn();
-
-      VkBufferCreateInfo create_info = {
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .size = domain_size,
-          .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-      };
-      // HACK: Known alignment for uniform buffers
-      tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, domain_data,
-                                        name, &material->gpu_buffer, 0x40);
-
-      ecs_remove(mat_it.world, ent, TbMaterialUploadable);
-      ecs_add(mat_it.world, ent, TbMaterialLoaded);
-    }
-  }
-
-  TracyCZoneEnd(ctx);
-}
-
-void tb_reset_mat_queue_count(ecs_iter_t *it) {
-  tb_auto counter = ecs_field(it, TbMatQueueCounter, 1);
-  SDL_AtomicSet(counter, 0);
-}
-
-void tb_mat_phase_loading(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Material Loading State", true);
-
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-
-  if (mat_ctx->owned_mat_count == 0) {
-    TracyCZoneEnd(ctx);
-    return;
-  }
-
-  uint64_t loaded_mat_count = 0;
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    loaded_mat_count += mat_it.count;
-  }
-
-  // We are in the loading phase and all materials have loaded
-  // Move on to the next phase
-  if (mat_ctx->owned_mat_count == loaded_mat_count) {
-    ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading);
-    ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
-    mat_ctx->pool_update_counter = 0;
-    mat_ctx->last_written_mat_count = loaded_mat_count;
-  }
-
-  TracyCZoneEnd(ctx);
-}
-
-void tb_update_material_pool(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Update Material Descriptors");
-#if TB_USE_DESC_BUFFER == 1
-  // Skip this phase
-  ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
-  ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-#else
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-
-  uint64_t mat_count = mat_ctx->owned_mat_count;
-
-  if (mat_count == 0) {
-    return;
-  }
-
-  // Resize the pool if necessary
-  if (mat_count != tb_rnd_frame_desc_pool_get_desc_count(
-                       rnd_sys, mat_ctx->frame_set_pool.pools)) {
-
-    VkDescriptorPoolCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        .maxSets = 1,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .descriptorCount = 4,
-                },
-            },
-    };
-    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-        .sType =
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-        .descriptorSetCount = 1,
-        .pDescriptorCounts = (uint32_t[1]){mat_count},
-    };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, "material", &create_info,
-                                &mat_ctx->set_layout, &alloc_info,
-                                mat_ctx->frame_set_pool.pools, 1, mat_count);
-  }
-
-  mat_ctx->pool_update_counter++;
-
-  // One pool must be resized per frame
-  if (mat_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
-    ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-
-    // When we get to this phase all materials must be marked dirty
-    tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->loaded_mat_query);
-    while (ecs_query_next(&mat_it)) {
-      tb_auto ecs = mat_it.world;
-      for (int32_t i = 0; i < mat_it.count; ++i) {
-        tb_auto mat_ent = mat_it.entities[i];
-        ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
-        ecs_remove(ecs, mat_ent, TbDescriptorReady);
-        if (!ecs_has(ecs, mat_ent, TbDescriptorCounter)) {
-          ecs_set(ecs, mat_ent, TbDescriptorCounter, {0});
-        } else {
-          tb_auto counter = ecs_get_mut(ecs, mat_ent, TbDescriptorCounter);
-          SDL_AtomicSet(counter, 0);
-        }
-      }
+    // Material must be skipped if its dependencies aren't ready
+    if (!domain.ready_fn(it->world, material)) {
+      continue;
     }
 
-    // Reset counter for next phase
-    mat_ctx->pool_update_counter = 0;
+    void *domain_data = domain.get_data_fn(it->world, material);
+    size_t domain_size = domain.get_size_fn();
+
+    VkBufferCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = domain_size,
+        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    };
+    // HACK: Known alignment for uniform buffers
+    tb_rnd_sys_create_gpu_buffer2_tmp(rnd_sys, &create_info, domain_data, name,
+                                      &material->gpu_buffer, 0x40);
+
+    ecs_remove(it->world, ent, TbMaterialLoaded);
+    ecs_add(it->world, ent, TbMaterialUploaded);
+    // TODO: Make descriptor update needs more ergonomic
+    ecs_add(it->world, ent, TbNeedsDescriptorUpdate);
+    if (!ecs_has(it->world, ent, TbDescriptorCounter)) {
+      ecs_set(it->world, ent, TbDescriptorCounter, {0});
+    } else {
+      tb_auto counter = ecs_get_mut(it->world, ent, TbDescriptorCounter);
+      SDL_AtomicSet(counter, 0);
+    }
   }
-#endif
 }
 
-void tb_write_material_descriptors(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Write Material Descriptors");
+void tb_finalize_materials(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Finalize Materials");
 
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto materials = ecs_field(it, TbMaterialData, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t mat_count = mat_ctx->owned_mat_count;
@@ -407,134 +288,52 @@ void tb_write_material_descriptors(ecs_iter_t *it) {
     return;
   }
 
-  // We can't write more than this number of materials
-  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
-      rnd_sys, mat_ctx->frame_set_pool.pools);
-
-  // Write all dirty materials into the descriptor set table
-  tb_auto mat_it = ecs_query_iter(it->world, mat_ctx->dirty_mat_query);
-
-// Alternate path: write to descriptor buffer
-#if TB_USE_DESC_BUFFER == 1
-  while (ecs_query_next(&mat_it)) {
-    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
-    tb_auto mat_usages = ecs_field(&mat_it, TbMaterialUsage, 2);
-    for (int32_t i = 0; i < mat_it.count; ++i) {
-      tb_auto material = &materials[i];
-      tb_auto usage = mat_usages[i];
-
-      // Get material domain handler
-      tb_auto mat_domain = tb_find_material_domain(mat_ctx, usage).domain;
-
-      // If a material isn't ready we mustn't exit this phase
-      if (!mat_domain.ready_fn(it->world, material)) {
-        return;
-      }
-
-      TbDescriptor desc = {
-          .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-          .data =
-              {
-                  .pStorageBuffer =
-                      &(VkDescriptorAddressInfoEXT){
-                          .sType =
-                              VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-                          .address = material->gpu_buffer.address,
-                          .range = material->gpu_buffer.info.size,
-                      },
-              },
-      };
-      uint32_t idx =
-          tb_write_desc_to_buffer(rnd_sys, &mat_ctx->desc_buffer, 2, &desc);
-
-      ecs_set(it->world, mat_it.entities[i], TbMaterialComponent, {idx});
-      ecs_add(it->world, mat_it.entities[i], TbDescriptorReady);
-    }
+  // Collect a write for every new material
+  TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
+  TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
+  for (int32_t i = 0; i < it->count; ++i) {
+    tb_auto material = &materials[i];
+    TbDynDescWrite write = {
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .desc.buffer =
+            (VkDescriptorBufferInfo){
+                .buffer = material->gpu_buffer.buffer,
+                .range = material->gpu_buffer.info.size,
+            },
+    };
+    TB_DYN_ARR_APPEND(writes, write);
   }
-  ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-  ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
-#else
-  uint32_t mat_idx = 0;
-  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  TB_DYN_ARR_OF(VkDescriptorBufferInfo) buf_info = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, desc_count);
-  TB_DYN_ARR_RESET(buf_info, world->tmp_alloc, desc_count);
-  while (ecs_query_next(&mat_it)) {
-    if (mat_idx >= desc_count) {
-      break;
-    }
-    tb_auto materials = ecs_field(&mat_it, TbMaterialData, 1);
-    tb_auto mat_usages = ecs_field(&mat_it, TbMaterialUsage, 2);
-    for (int32_t i = 0; i < mat_it.count; ++i) {
-      if (mat_idx >= desc_count) {
-        break;
-      }
 
-      tb_auto material = &materials[i];
-      tb_auto usage = mat_usages[i];
+  const tb_auto write_count = TB_DYN_ARR_SIZE(writes);
+  if (write_count > 0) {
+    // Allocate space for indices
+    uint32_t *mat_indices =
+        tb_alloc_nm_tp(world->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
+    tb_write_dyn_desc_pool(&mat_ctx->desc_pool, write_count, writes.data,
+                           mat_indices);
 
-      // Get material domain handler
-      tb_auto mat_domain = tb_find_material_domain(mat_ctx, usage).domain;
-
-      // If a material isn't ready we mustn't exit this phase
-      if (!mat_domain.ready_fn(it->world, material)) {
-        return;
-      }
-
-      VkDescriptorBufferInfo buffer_info = {
-          .range = VK_WHOLE_SIZE,
-          .buffer = material->gpu_buffer.buffer,
-      };
-      TB_DYN_ARR_APPEND(buf_info, buffer_info);
-
-      VkWriteDescriptorSet write = {
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-          .dstSet = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, mat_ctx->frame_set_pool.pools, 0),
-          .dstArrayElement = mat_idx,
-          .dstBinding = 2,
-          .pBufferInfo = &TB_DYN_ARR_AT(buf_info, mat_idx),
-      };
-      TB_DYN_ARR_APPEND(writes, write);
-
+    TB_DYN_ARR_FOREACH(writes, i) {
       // Material is now ready to be referenced elsewhere
-      ecs_set(it->world, mat_it.entities[i], TbMaterialComponent, {mat_idx});
-      ecs_add(it->world, mat_it.entities[i], TbUpdatingDescriptor);
-      mat_idx++;
+      ecs_set(it->world, it->entities[i], TbMaterialComponent,
+              {mat_indices[i]});
+      ecs_add(it->world, it->entities[i], TbUpdatingDescriptor);
+      ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
     }
   }
-  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
-
-  mat_ctx->pool_update_counter++;
-
-  // One write must be enqueued per frame
-  if (mat_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-    ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
-  }
-#endif
 }
 
-void tb_mat_phase_written(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Material Written Phase");
-
+void tb_update_material_pool(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Update Material Pool");
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint64_t total_mat_count = mat_ctx->owned_mat_count;
-
-  uint64_t ready_mat_count = 0;
-  ecs_iter_t mat_it = ecs_query_iter(it->world, mat_ctx->ready_mat_query);
-  while (ecs_query_next(&mat_it)) {
-    ready_mat_count += mat_it.count;
+  uint64_t mat_count = mat_ctx->owned_mat_count;
+  if (mat_count == 0) {
+    return;
   }
 
-  // When all textures are ready we can consider this phase over
-  if (total_mat_count > 0 && total_mat_count == ready_mat_count) {
-    ecs_remove(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
-    ecs_add(it->world, ecs_id(TbMaterialCtx), TbMatLoadPhaseReady);
-  }
+  // Tick the pool in case any new textures require us to expand the pool
+  tb_tick_dyn_desc_pool(rnd_sys, &mat_ctx->desc_pool, "material");
 }
 
 // Toybox Glue
@@ -545,74 +344,34 @@ void tb_register_material2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbMaterialGLTFLoadRequest);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialComponent);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialData);
-  ECS_COMPONENT_DEFINE(ecs, TbMatQueueCounter);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialDomainHandler);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialUsage);
-  ECS_TAG_DEFINE(ecs, TbMaterialUploadable);
   ECS_TAG_DEFINE(ecs, TbMaterialLoaded);
-  ECS_TAG_DEFINE(ecs, TbMatLoadPhaseLoading);
-  ECS_TAG_DEFINE(ecs, TbMatLoadPhaseLoaded);
-  ECS_TAG_DEFINE(ecs, TbMatLoadPhaseWriting);
-  ECS_TAG_DEFINE(ecs, TbMatLoadPhaseWritten);
-  ECS_TAG_DEFINE(ecs, TbMatLoadPhaseReady);
+  ECS_TAG_DEFINE(ecs, TbMaterialUploaded);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPreUpdate,
-             TbTaskScheduler(TbTaskScheduler),
-             TbMatQueueCounter(TbMatQueueCounter), TbMaterialCtx(TbMaterialCtx),
+             TbTaskScheduler(TbTaskScheduler), TbMaterialCtx(TbMaterialCtx),
              [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
 
   ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate,
-             TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx));
+             TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx),
+             [in] TbMaterialData, [in] TbMaterialUsage, [in] TbMaterialLoaded,
+             !TbMaterialUploaded);
 
-  ECS_SYSTEM(ecs, tb_reset_mat_queue_count,
-             EcsPostUpdate, [in] TbMatQueueCounter(TbMatQueueCounter));
-
-  ECS_SYSTEM(ecs, tb_mat_phase_loading, EcsPreFrame,
-             TbMaterialCtx(TbMaterialCtx), TbMatLoadPhaseLoading);
+  ECS_SYSTEM(ecs, tb_finalize_materials,
+             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
+             [in] TbMaterialData, [in] TbMaterialUploaded,
+             TbNeedsDescriptorUpdate, !TbUpdatingDescriptor,
+             !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_material_pool,
              EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem), TbMatLoadPhaseLoaded);
-  ECS_SYSTEM(ecs, tb_write_material_descriptors,
-             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem), TbMatLoadPhaseWriting);
-  ECS_SYSTEM(ecs, tb_mat_phase_written, EcsOnStore,
-             TbMaterialCtx(TbMaterialCtx), TbMatLoadPhaseWritten);
+             [in] TbRenderSystem(TbRenderSystem));
 
-  TbMaterialCtx ctx = {
-      .owned_mat_count = 0,
-      .uploadable_mat_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialUploadable), .inout = EcsIn},
-                    }}),
-      .loaded_mat_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialLoaded)},
-                    }}),
-      .dirty_mat_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialLoaded)},
-                        {.id = ecs_id(TbNeedsDescriptorUpdate)},
-                    }}),
-      .ready_mat_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbMaterialData), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialUsage), .inout = EcsIn},
-                        {.id = ecs_id(TbMaterialLoaded)},
-                        {.id = ecs_id(TbDescriptorReady)},
-                    }}),
-  };
+  TbMaterialCtx ctx = {0};
+
+  SDL_AtomicSet(&tb_parallel_mat_load_count, 0);
 
   // Create immutable sampler for materials
   {
@@ -723,11 +482,9 @@ void tb_register_material2_sys(TbWorld *world) {
   }
 #endif
 
-  TbMatQueueCounter queue_count = {0};
-  SDL_AtomicSet(&queue_count, 0);
-  ecs_singleton_set_ptr(ecs, TbMatQueueCounter, &queue_count);
-
   TB_DYN_ARR_RESET(ctx.usage_map, tb_global_alloc, 4);
+
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool, 2);
 
   // Must set ctx before we try to load any materials
   ecs_singleton_set_ptr(ecs, TbMaterialCtx, &ctx);
@@ -740,11 +497,6 @@ void tb_unregister_material2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-
-  ecs_query_fini(ctx->uploadable_mat_query);
-  ecs_query_fini(ctx->loaded_mat_query);
-  ecs_query_fini(ctx->dirty_mat_query);
-  ecs_query_fini(ctx->ready_mat_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout2);
@@ -777,7 +529,7 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
   TbMaterial2 default_mat = ecs_new_entity(ecs, 0);
   ecs_set(ecs, default_mat, TbMaterialUsage, {usage});
-  ecs_add(ecs, default_mat, TbMaterialUploadable);
+  ecs_add(ecs, default_mat, TbMaterialLoaded);
 
   TbMaterialData mat_data = {
       .domain_data = data_copy,
@@ -827,22 +579,12 @@ VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
-}
-
-void tb_mat_sys_begin_load(ecs_world_t *ecs) {
-  if (!ecs_has(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading)) {
-    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoaded);
-    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWriting);
-    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseWritten);
-    ecs_remove(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseReady);
-    ecs_add(ecs, ecs_id(TbMaterialCtx), TbMatLoadPhaseLoading);
-  }
 }
 
 TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
@@ -900,7 +642,7 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
 }
 
 bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent) {
-  return ecs_has(ecs, mat_ent, TbMaterialLoaded) &&
+  return ecs_has(ecs, mat_ent, TbMaterialUploaded) &&
          ecs_has(ecs, mat_ent, TbMaterialComponent) &&
          ecs_has(ecs, mat_ent, TbDescriptorReady);
 }

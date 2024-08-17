@@ -44,10 +44,11 @@ void tb_resize_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
 }
 
 void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys,
-                             VkDescriptorSetLayout layout,
-                             TbDynDescPool *pool) {
+                             VkDescriptorSetLayout layout, TbDynDescPool *pool,
+                             uint32_t binding) {
   *pool = (TbDynDescPool){
       .layout = layout,
+      .binding = binding,
   };
   TB_DYN_ARR_RESET(pool->free_list, rnd_sys->gp_alloc, 16);
   TB_DYN_ARR_RESET(pool->writes, rnd_sys->gp_alloc, 16);
@@ -125,6 +126,7 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
           .descriptorType = desc_write.type,
+          .dstBinding = pool->binding,
           .dstSet = pool->sets[frame_idx],
           .dstArrayElement = i,
       };
@@ -157,6 +159,7 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
           .descriptorType = desc_write.type,
+          .dstBinding = pool->binding,
           .dstSet = pool->sets[frame_idx],
           .dstArrayElement = write_idx,
       };

@@ -19,6 +19,7 @@ typedef struct TbDynDescWrite {
 typedef struct TbDynDescPool {
   uint32_t desc_count;
   uint32_t desc_cap;
+  uint32_t binding;
   VkDescriptorSetLayout layout;
   VkDescriptorPool pools[TB_MAX_FRAME_STATES];
   VkDescriptorSet sets[TB_MAX_FRAME_STATES];
@@ -29,7 +30,8 @@ typedef struct TbDynDescPool {
 } TbDynDescPool;
 
 void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys,
-                             VkDescriptorSetLayout layout, TbDynDescPool *pool);
+                             VkDescriptorSetLayout layout, TbDynDescPool *pool,
+                             uint32_t binding);
 
 bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
                             const TbDynDescWrite *writes, uint32_t *out_idxs);
