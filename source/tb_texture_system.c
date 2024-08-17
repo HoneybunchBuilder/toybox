@@ -3,6 +3,7 @@
 #include "tb_assets.h"
 #include "tb_common.h"
 #include "tb_descriptor_buffer.h"
+#include "tb_dyn_desc_pool.h"
 #include "tb_gltf.h"
 #include "tb_ktx.h"
 #include "tb_queue.h"
@@ -10,15 +11,7 @@
 #include "tb_world.h"
 
 static const int32_t TbMaxParallelTextureLoads = 8;
-
-ECS_TAG_DECLARE(TbTexLoadPhaseLoading);
-ECS_TAG_DECLARE(TbTexLoadPhaseLoaded);
-ECS_TAG_DECLARE(TbTexLoadPhaseWriting);
-ECS_TAG_DECLARE(TbTexLoadPhaseWritten);
-ECS_TAG_DECLARE(TbTexLoadPhaseReady);
-
-typedef SDL_AtomicInt TbTexQueueCounter;
-ECS_COMPONENT_DECLARE(TbTexQueueCounter);
+static SDL_AtomicInt tb_parallel_tex_load_count = {0};
 
 ECS_COMPONENT_DECLARE(TbTextureUsage);
 
@@ -26,7 +19,7 @@ typedef struct TbTextureCtx {
   VkDescriptorSetLayout set_layout;
   TbFrameDescriptorPoolList frame_set_pool;
   uint32_t owned_tex_count;
-  uint32_t pool_update_counter;
+  TbDynDescPool desc_pool;
 
   VkDescriptorSetLayout set_layout2;
   TbDescriptorBuffer desc_buffer;
@@ -34,7 +27,6 @@ typedef struct TbTextureCtx {
   // Custom queries for special systems
   ecs_query_t *tex_query;
   ecs_query_t *loaded_tex_query;
-  ecs_query_t *dirty_tex_query;
   ecs_query_t *ready_tex_query;
 
   TbTexture default_color_tex;
@@ -76,6 +68,7 @@ typedef struct TbTextureRawLoadRequest {
 } TbTextureRawLoadRequest;
 ECS_COMPONENT_DECLARE(TbTextureRawLoadRequest);
 
+ECS_TAG_DECLARE(TbTextureLoading);
 ECS_TAG_DECLARE(TbTextureLoaded);
 
 // Internals
@@ -422,6 +415,7 @@ void tb_texture_loaded(const void *args) {
   tb_auto ecs = loaded_args->ecs;
   tb_auto tex = loaded_args->tex;
   if (tex != 0) {
+    SDL_AtomicDecRef(&tb_parallel_tex_load_count);
     ecs_add(ecs, tex, TbTextureLoaded);
     ecs_set_ptr(ecs, tex, TbTextureImage, &loaded_args->comp);
   } else {
@@ -613,16 +607,16 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
 
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
-  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 4);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
   tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >=
+        TbMaxParallelTextureLoads) {
       break;
     }
     TbTexture ent = it->entities[i];
@@ -650,9 +644,8 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(ecs, ent, TbTask, {load_task});
 
-    SDL_AtomicIncRef(counter);
+    SDL_AtomicIncRef(&tb_parallel_tex_load_count);
     tex_ctx->owned_tex_count++;
-    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbTextureGLTFLoadRequest);
@@ -666,16 +659,16 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
 
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
-  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 4);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
   tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >
+        TbMaxParallelTextureLoads) {
       break;
     }
     TbTexture ent = it->entities[i];
@@ -703,9 +696,8 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(ecs, ent, TbTask, {load_task});
 
-    SDL_AtomicIncRef(counter);
+    SDL_AtomicIncRef(&tb_parallel_tex_load_count);
     tex_ctx->owned_tex_count++;
-    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbTextureKTXLoadRequest);
@@ -719,16 +711,16 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
 
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto counter = ecs_field(it, TbTexQueueCounter, 3);
-  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 4);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 5);
+  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 3);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
   tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelTextureLoads) {
+    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >
+        TbMaxParallelTextureLoads) {
       break;
     }
 
@@ -757,127 +749,25 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
     // Apply task component to texture entity
     ecs_set(ecs, ent, TbTask, {load_task});
 
-    SDL_AtomicIncRef(counter);
+    SDL_AtomicIncRef(&tb_parallel_tex_load_count);
     tex_ctx->owned_tex_count++;
-    tb_tex_sys_begin_load(ecs);
 
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbTextureRawLoadRequest);
   }
 }
 
-void tb_reset_tex_queue_count(ecs_iter_t *it) {
-  tb_auto counter = ecs_field(it, TbTexQueueCounter, 1);
-  SDL_AtomicSet(counter, 0);
-}
-
-void tb_tex_phase_loading(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Texture Loading Phase");
+void tb_finalize_textures(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Finalize Textures");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-
-  if (tex_ctx->owned_tex_count == 0) {
-    return;
-  }
-
-  uint64_t loaded_tex_count = 0;
-  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
-  while (ecs_query_next(&tex_it)) {
-    loaded_tex_count += tex_it.count;
-  }
-
-  // We are in the loading phase and all textures have loaded
-  // Move on to the next phase
-  if (tex_ctx->owned_tex_count == loaded_tex_count) {
-    ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
-    ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
-    tex_ctx->pool_update_counter = 0;
-  }
-}
-
-void tb_update_texture_pool(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Update Texture Pool");
-#if TB_USE_DESC_BUFFER == 1
-  // Skip this phase
-  ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
-  ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-#else
-  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-
-  uint64_t tex_count = tex_ctx->owned_tex_count;
-
-  // Resize the pool if necessary
-  if (tex_count != tb_rnd_frame_desc_pool_get_desc_count(
-                       rnd_sys, tex_ctx->frame_set_pool.pools)) {
-    VkDescriptorPoolCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-        .maxSets = 1,
-        .poolSizeCount = 1,
-        .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
-                {
-                    .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .descriptorCount = 4,
-                },
-            },
-    };
-    VkDescriptorSetVariableDescriptorCountAllocateInfo alloc_info = {
-        .sType =
-            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-        .descriptorSetCount = 1,
-        .pDescriptorCounts = (uint32_t[1]){tex_count},
-    };
-    tb_rnd_frame_desc_pool_tick(rnd_sys, "texture", &create_info,
-                                &tex_ctx->set_layout, &alloc_info,
-                                tex_ctx->frame_set_pool.pools, 1, tex_count);
-  }
-  tex_ctx->pool_update_counter++;
-  // One pool must be resized per frame
-  if (tex_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
-    ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-
-    // Reset counter for next phase
-    tex_ctx->pool_update_counter = 0;
-
-    // When we get to this phase all textures must be marked dirty
-    tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->loaded_tex_query);
-    while (ecs_query_next(&tex_it)) {
-      tb_auto ecs = tex_it.world;
-      for (int32_t i = 0; i < tex_it.count; ++i) {
-        tb_auto tex_ent = tex_it.entities[i];
-        ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
-        ecs_remove(ecs, tex_ent, TbDescriptorReady);
-        if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
-          ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
-        } else {
-          tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
-          SDL_AtomicSet(counter, 0);
-        }
-      }
-    }
-  }
-#endif
-}
-
-void tb_write_texture_descriptors(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Write Texture Descriptors");
-
-  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto textures = ecs_field(it, TbTextureImage, 2);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  // We care about writing descriptors for all owned textures
   uint64_t tex_count = tex_ctx->owned_tex_count;
   if (tex_count == 0) {
     return;
   }
-
-  // Write all dirty textures into the descriptor set table
-  uint32_t tex_idx = 0;
-  tb_auto tex_it = ecs_query_iter(it->world, tex_ctx->dirty_tex_query);
 
 // Alternate path: write to descriptor buffer
 #if TB_USE_DESC_BUFFER == 1
@@ -901,80 +791,53 @@ void tb_write_texture_descriptors(ecs_iter_t *it) {
   ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
   ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
 #else
-  // We can't write more than this number of textures
-  const uint64_t desc_count = tb_rnd_frame_desc_pool_get_desc_count(
-      rnd_sys, tex_ctx->frame_set_pool.pools);
-
-  TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  TB_DYN_ARR_OF(VkDescriptorImageInfo) img_info = {0};
-  TB_DYN_ARR_RESET(writes, world->tmp_alloc, desc_count);
-  TB_DYN_ARR_RESET(img_info, world->tmp_alloc, desc_count);
-  while (ecs_query_next(&tex_it)) {
-    tb_auto textures = ecs_field(&tex_it, TbTextureImage, 1);
-    if (tex_idx >= desc_count) {
-      break;
-    }
-    for (int32_t i = 0; i < tex_it.count; ++i) {
-      if (tex_idx >= desc_count) {
-        break;
-      }
-
-      tb_auto texture = &textures[i];
-
-      VkDescriptorImageInfo image_info = {
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-          .imageView = texture->image_view,
-      };
-      TB_DYN_ARR_APPEND(img_info, image_info);
-
-      VkWriteDescriptorSet write = {
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .descriptorCount = 1,
-          .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-          .dstSet = tb_rnd_frame_desc_pool_get_set(
-              rnd_sys, tex_ctx->frame_set_pool.pools, 0),
-          .dstArrayElement = tex_idx,
-          .pImageInfo = &TB_DYN_ARR_AT(img_info, tex_idx),
-      };
-      TB_DYN_ARR_APPEND(writes, write);
-
-      // Texture is now ready to be referenced elsewhere
-      ecs_set(it->world, tex_it.entities[i], TbTextureComponent, {tex_idx});
-      ecs_add(it->world, tex_it.entities[i], TbUpdatingDescriptor);
-      tex_idx++;
-    }
+  // Collect a write for every new texture
+  TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
+  TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
+  for (int32_t i = 0; i < it->count; ++i) {
+    tb_auto texture = &textures[i];
+    TbDynDescWrite write = {
+        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .desc.image =
+            (VkDescriptorImageInfo){
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .imageView = texture->image_view,
+            },
+    };
+    TB_DYN_ARR_APPEND(writes, write);
   }
-  tb_rnd_update_descriptors(rnd_sys, TB_DYN_ARR_SIZE(writes), writes.data);
 
-  tex_ctx->pool_update_counter++;
+  // Allocate space for indices
+  const tb_auto write_count = TB_DYN_ARR_SIZE(writes);
+  if (write_count > 0) {
+    uint32_t *tex_indices =
+        tb_alloc_nm_tp(world->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
+    tb_write_dyn_desc_pool(&tex_ctx->desc_pool, write_count, writes.data,
+                           tex_indices);
 
-  // One write must be enqueued per frame
-  if (tex_ctx->pool_update_counter >= TB_MAX_FRAME_STATES) {
-    ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-    ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
-    tex_ctx->pool_update_counter = 0;
+    TB_DYN_ARR_FOREACH(writes, i) {
+      // Texture is now ready to be referenced elsewhere
+      ecs_set(it->world, it->entities[i], TbTextureComponent, {tex_indices[i]});
+      ecs_add(it->world, it->entities[i], TbUpdatingDescriptor);
+      ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
+    }
   }
 #endif
 }
 
-void tb_tex_phase_written(ecs_iter_t *it) {
-  TB_TRACY_SCOPE("Texture Written Phase");
+void tb_update_texture_pool(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Update Texture Pool");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint32_t total_tex_count = tex_ctx->owned_tex_count;
-
-  uint32_t ready_tex_count = 0;
-  ecs_iter_t tex_it = ecs_query_iter(it->world, tex_ctx->ready_tex_query);
-  while (ecs_query_next(&tex_it)) {
-    ready_tex_count += tex_it.count;
+  uint64_t tex_count = tex_ctx->owned_tex_count;
+  if (tex_count == 0) {
+    return;
   }
 
-  // When all textures are ready we can consider this phase over
-  if (total_tex_count > 0 && total_tex_count == ready_tex_count) {
-    ecs_remove(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
-    ecs_add(it->world, ecs_id(TbTextureCtx), TbTexLoadPhaseReady);
-  }
+  // Tick the pool in case any new textures require us to expand the pool
+  tb_tick_dyn_desc_pool(rnd_sys, &tex_ctx->desc_pool, "texture");
 }
 
 // Toybox Glue
@@ -988,40 +851,27 @@ void tb_register_texture_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbTextureImage);
   ECS_COMPONENT_DEFINE(ecs, TbTextureComponent);
   ECS_COMPONENT_DEFINE(ecs, TbTextureUsage);
-  ECS_COMPONENT_DEFINE(ecs, TbTexQueueCounter);
+
+  ECS_TAG_DEFINE(ecs, TbTextureLoading);
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
-  ECS_TAG_DEFINE(ecs, TbTexLoadPhaseLoading);
-  ECS_TAG_DEFINE(ecs, TbTexLoadPhaseLoaded);
-  ECS_TAG_DEFINE(ecs, TbTexLoadPhaseWriting);
-  ECS_TAG_DEFINE(ecs, TbTexLoadPhaseWritten);
-  ECS_TAG_DEFINE(ecs, TbTexLoadPhaseReady);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             TbTexQueueCounter(TbTexQueueCounter),
              [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
   ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             TbTexQueueCounter(TbTexQueueCounter), [in] TbTextureKTXLoadRequest,
-             [in] TbTextureUsage);
+             [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
   ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPreUpdate,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             TbTexQueueCounter(TbTexQueueCounter), [in] TbTextureRawLoadRequest,
-             [in] TbTextureUsage);
+             [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
 
-  ECS_SYSTEM(ecs, tb_reset_tex_queue_count,
-             EcsPostUpdate, [in] TbTexQueueCounter(TbTexQueueCounter));
-
-  ECS_SYSTEM(ecs, tb_tex_phase_loading, EcsPreFrame, TbTextureCtx(TbTextureCtx),
-             TbTexLoadPhaseLoading);
-  ECS_SYSTEM(ecs, tb_update_texture_pool,
+  ECS_SYSTEM(ecs, tb_finalize_textures,
              EcsPostUpdate, [in] TbTextureCtx(TbTextureCtx),
-             [in] TbRenderSystem(TbRenderSystem), TbTexLoadPhaseLoaded);
-  ECS_SYSTEM(ecs, tb_write_texture_descriptors,
+             [in] TbTextureImage, [in] TbTextureLoaded, TbNeedsDescriptorUpdate,
+             !TbUpdatingDescriptor, !TbDescriptorReady);
+  ECS_SYSTEM(ecs, tb_update_texture_pool,
              EcsPreStore, [in] TbTextureCtx(TbTextureCtx),
-             [in] TbRenderSystem(TbRenderSystem), TbTexLoadPhaseWriting);
-  ECS_SYSTEM(ecs, tb_tex_phase_written, EcsOnStore, TbTextureCtx(TbTextureCtx),
-             TbTexLoadPhaseWritten);
+             [in] TbRenderSystem(TbRenderSystem));
 
   TbTextureCtx ctx = {
       .tex_query = ecs_query(
@@ -1035,13 +885,6 @@ void tb_register_texture_sys(TbWorld *world) {
                         {.id = ecs_id(TbTextureImage), .inout = EcsIn},
                         {.id = ecs_id(TbTextureLoaded)},
                     }}),
-      .dirty_tex_query = ecs_query(
-          ecs, {.filter.terms =
-                    {
-                        {.id = ecs_id(TbTextureImage), .inout = EcsIn},
-                        {.id = ecs_id(TbTextureLoaded)},
-                        {.id = ecs_id(TbNeedsDescriptorUpdate)},
-                    }}),
       .ready_tex_query = ecs_query(
           ecs, {.filter.terms =
                     {
@@ -1052,9 +895,7 @@ void tb_register_texture_sys(TbWorld *world) {
                     }}),
   };
 
-  TbTexQueueCounter queue_count = {0};
-  SDL_AtomicSet(&queue_count, 0);
-  ecs_singleton_set_ptr(ecs, TbTexQueueCounter, &queue_count);
+  SDL_AtomicSet(&tb_parallel_tex_load_count, 0);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
@@ -1092,6 +933,7 @@ void tb_register_texture_sys(TbWorld *world) {
                              &ctx.set_layout);
   }
 
+#if TB_USE_DESC_BUFFER == 1
   {
     const VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
@@ -1124,6 +966,9 @@ void tb_register_texture_sys(TbWorld *world) {
     tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2, "Texture Descriptors",
                                 4, &ctx.desc_buffer);
   }
+#endif
+
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool);
 
   // Must set ctx before we try to load any textures
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
@@ -1173,7 +1018,6 @@ void tb_unregister_texture_sys(TbWorld *world) {
 
   ecs_query_fini(ctx->tex_query);
   ecs_query_fini(ctx->loaded_tex_query);
-  ecs_query_fini(ctx->dirty_tex_query);
   ecs_query_fini(ctx->ready_tex_query);
 
   tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
@@ -1205,7 +1049,7 @@ VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  return tb_rnd_frame_desc_pool_get_set(rnd_sys, ctx->frame_set_pool.pools, 0);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 // Returns the binding info of the texture system's descriptor buffer
@@ -1220,16 +1064,6 @@ VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex) {
                   VK_NULL_HANDLE);
   tb_auto image = ecs_get(ecs, tex, TbTextureImage);
   return image->image_view;
-}
-
-void tb_tex_sys_begin_load(ecs_world_t *ecs) {
-  if (!ecs_has(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading)) {
-    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoaded);
-    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWriting);
-    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseWritten);
-    ecs_remove(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseReady);
-    ecs_add(ecs, ecs_id(TbTextureCtx), TbTexLoadPhaseLoading);
-  }
 }
 
 TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
@@ -1254,6 +1088,12 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
           {name, pixels, size, width, height});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
   ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
+  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
+    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
+  } else {
+    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
+    SDL_AtomicSet(counter, 0);
+  }
 
   return tex_ent;
 }
@@ -1307,6 +1147,12 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
   ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {data, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
   ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
+  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
+    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
+  } else {
+    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
+    SDL_AtomicSet(counter, 0);
+  }
 
   return tex_ent;
 }
@@ -1330,6 +1176,12 @@ TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   ecs_set(ecs, tex_ent, TbTextureKTXLoadRequest, {path, name});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
   ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
+  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
+    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
+  } else {
+    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
+    SDL_AtomicSet(counter, 0);
+  }
 
   return tex_ent;
 }

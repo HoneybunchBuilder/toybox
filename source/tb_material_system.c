@@ -686,6 +686,7 @@ void tb_register_material2_sys(TbWorld *world) {
     tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout",
                              &ctx.set_layout);
   }
+#if TB_USE_DESC_BUFFER == 1
   {
     const VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
@@ -720,6 +721,7 @@ void tb_register_material2_sys(TbWorld *world) {
     tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2,
                                 "Material Descriptors", 4, &ctx.desc_buffer);
   }
+#endif
 
   TbMatQueueCounter queue_count = {0};
   SDL_AtomicSet(&queue_count, 0);

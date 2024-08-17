@@ -49,6 +49,7 @@ typedef struct TbFrameDescriptorPool {
   uint32_t desc_count;
   VkDescriptorPool set_pool;
   VkDescriptorSet *sets;
+  TB_DYN_ARR_OF(uint32_t) free_list;
 } TbFrameDescriptorPool;
 
 typedef struct TbDescriptorPool {

@@ -136,6 +136,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                              "TbView Descriptor Set Layout", &sys.set_layout);
   }
 
+#if TB_USE_DESC_BUFFER == 1
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -208,6 +209,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
     tb_create_descriptor_buffer(rnd_sys, sys.set_layout2, "View Descriptors", 4,
                                 &sys.desc_buffer);
   }
+#endif
 
   return sys;
 }

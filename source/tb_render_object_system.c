@@ -27,6 +27,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
       .gp_alloc = gp_alloc,
   };
 
+#if TB_USE_DESC_BUFFER == 1
   {
     const VkDescriptorBindingFlags flags =
         VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
@@ -62,6 +63,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
                                 "Render Object Descriptors", 4,
                                 &sys.desc_buffer);
   }
+#endif
 
   {
     const VkDescriptorBindingFlags flags =
@@ -117,7 +119,9 @@ void tick_render_object_system(ecs_iter_t *it) {
     return;
   }
 
+#if TB_USE_DESC_BUFFER == 1
   tb_reset_descriptor_buffer(rnd_sys, &ro_sys->desc_buffer);
+#endif
 
   obj_it = ecs_query_iter(ecs, ro_sys->obj_query); // reset query
 

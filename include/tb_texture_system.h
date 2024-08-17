@@ -35,8 +35,6 @@ VkDescriptorBufferBindingInfoEXT tb_tex_sys_get_table_addr(ecs_world_t *ecs);
 // Returns the image view of the given texture if it is ready
 VkImageView tb_tex_sys_get_image_view2(ecs_world_t *ecs, TbTexture tex);
 
-void tb_tex_sys_begin_load(ecs_world_t *ecs);
-
 // Begins an async texture load from a given set of pixels
 // The given pixles are assumed to be kept live by the caller until
 // the loading task finishes

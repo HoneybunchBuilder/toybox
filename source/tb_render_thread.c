@@ -748,14 +748,16 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 
-    // Mesh Shader support
-    // required_device_ext((const char **)&device_ext_names, &device_ext_count,
-    //                    props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
+// Mesh Shader support
+// required_device_ext((const char **)&device_ext_names, &device_ext_count,
+//                    props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
-    // We want to use descriptor buffers
+// We want to use descriptor buffers
+#if TB_USE_DESC_BUFFER == 1
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count,
                         VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+#endif
 
 #ifdef TRACY_ENABLE
     // Enable calibrated timestamps if we can when profiling with tracy
@@ -767,15 +769,19 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
 #endif
   }
 
+#if TB_USE_DESC_BUFFER == 1
   VkPhysicalDeviceDescriptorBufferFeaturesEXT vk_desc_buf_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
       .pNext = NULL,
       .descriptorBuffer = VK_TRUE,
   };
+#endif
 
   VkPhysicalDeviceRobustness2FeaturesEXT vk_rob2_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+#if TB_USE_DESC_BUFFER == 1
       .pNext = &vk_desc_buf_features,
+#endif
       .nullDescriptor = VK_TRUE,
   };
 
