@@ -293,6 +293,7 @@ void tb_finalize_materials(ecs_iter_t *it) {
   TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto material = &materials[i];
+    TB_CHECK(material->gpu_buffer.info.size, "Material GPU Buffer is size 0");
     TbDynDescWrite write = {
         .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .desc.buffer =

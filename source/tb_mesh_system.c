@@ -327,6 +327,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         if (data.idx_type == VK_INDEX_TYPE_UINT32) {
           idx_format = VK_FORMAT_R32_UINT;
         }
+        TB_CHECK(index_size, "Unexpected index size of 0");
 
 #if TB_USE_DESC_BUFFER == 1
         data.index_addr = (VkDescriptorAddressInfoEXT){
