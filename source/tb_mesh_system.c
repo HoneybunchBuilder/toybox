@@ -686,8 +686,7 @@ void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
     if (attr_idx == 0) {
       TB_DYN_ARR_FOREACH(writes, i) {
         ecs_set(ecs, entities[i], TbMeshIndex, {indices[i]});
-        ecs_add(ecs, entities[i], TbUpdatingDescriptor);
-        ecs_remove(ecs, entities[i], TbNeedsDescriptorUpdate);
+        tb_rnd_mark_descriptor(ecs, entities[i]);
       }
     }
   }
@@ -874,11 +873,21 @@ void tb_register_mesh2_sys(TbWorld *world) {
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh UV0 Descriptors",
                               4, &ctx.uv0_desc_buf);
 #else
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.idx_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.pos_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.norm_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.tan_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.uv0_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                          &ctx.idx_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                          &ctx.pos_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                          &ctx.norm_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                          &ctx.tan_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+                          &ctx.uv0_desc_pool, 0);
 #endif
 
   ecs_singleton_set_ptr(ecs, TbMeshCtx, &ctx);
@@ -1009,14 +1018,7 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
 
   // Append a mesh load request onto the entity to schedule loading
   ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {data, index});
-  ecs_add(ecs, mesh_ent, TbNeedsDescriptorUpdate);
-  // TODO: Make descriptor update needs more ergonomic
-  if (!ecs_has(ecs, mesh_ent, TbDescriptorCounter)) {
-    ecs_set(ecs, mesh_ent, TbDescriptorCounter, {0});
-  } else {
-    tb_auto counter = ecs_get_mut(ecs, mesh_ent, TbDescriptorCounter);
-    SDL_AtomicSet(counter, 0);
-  }
+  tb_rnd_reset_descriptor_count(ecs, mesh_ent);
 
   if (deferred) {
     ecs_defer_begin(ecs);

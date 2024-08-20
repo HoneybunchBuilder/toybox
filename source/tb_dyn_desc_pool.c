@@ -2,7 +2,7 @@
 #include "tb_common.h"
 #include "tb_util.h"
 
-static const uint32_t TbDynDescPageSize = 64;
+static const uint32_t TbDynDescPageSize = 4;
 
 void tb_resize_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
                              TbDynDescPool *pool, uint32_t frame_idx) {
@@ -14,8 +14,8 @@ void tb_resize_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
       .pPoolSizes =
           (VkDescriptorPoolSize[1]){
               {
-                  .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                  .descriptorCount = 1,
+                  .type = pool->type,
+                  .descriptorCount = pool->desc_cap,
               },
           },
   };
@@ -44,11 +44,13 @@ void tb_resize_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
 }
 
 void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys,
-                             VkDescriptorSetLayout layout, TbDynDescPool *pool,
+                             VkDescriptorSetLayout layout,
+                             VkDescriptorType type, TbDynDescPool *pool,
                              uint32_t binding) {
   *pool = (TbDynDescPool){
       .layout = layout,
       .binding = binding,
+      .type = type,
   };
   TB_DYN_ARR_RESET(pool->free_list, rnd_sys->gp_alloc, 16);
   TB_DYN_ARR_RESET(pool->writes, rnd_sys->gp_alloc, 16);
@@ -76,8 +78,10 @@ bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
     // Add newly created indices to the free list
     for (int32_t i = (pool->desc_cap - 1); i >= (int32_t)old_desc_cap; --i) {
       TB_DYN_ARR_APPEND(pool->free_list, i);
-      // New writes are ignored
-      TB_DYN_ARR_AT(pool->writes, i).type = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+      // New write entries use the type defined by the pool but otherwise point
+      // to null descriptors
+      tb_auto write = &TB_DYN_ARR_AT(pool->writes, i);
+      write->type = pool->type;
     }
 
     // If we had to resize, mark every frame as needing resize
@@ -122,11 +126,11 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
     // Rewrite all descriptors
     for (uint32_t i = 0; i < pool->desc_count; ++i) {
       tb_auto desc_write = &TB_DYN_ARR_AT(pool->writes, i);
-      tb_auto type = desc_write->type;
+      tb_auto type = pool->type;
       VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
-          .descriptorType = desc_write->type,
+          .descriptorType = type,
           .dstBinding = pool->binding,
           .dstSet = pool->sets[frame_idx],
           .dstArrayElement = i,
@@ -134,16 +138,27 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
       // Skip unused descriptors
       if (type == VK_DESCRIPTOR_TYPE_MAX_ENUM) {
         continue;
-      } else if (type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
-                 type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
-                 type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+      }
+
+      if (type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+          type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+          type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
         write.pImageInfo = &desc_write->desc.image;
+        if (write.pImageInfo->imageView == VK_NULL_HANDLE) {
+          continue;
+        }
       } else if (type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
                  type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER) {
         write.pTexelBufferView = &desc_write->desc.texel_buffer;
+        if (write.pTexelBufferView == VK_NULL_HANDLE) {
+          continue;
+        }
       } else if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
                  type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
         write.pBufferInfo = &desc_write->desc.buffer;
+        if (write.pBufferInfo->buffer == VK_NULL_HANDLE) {
+          continue;
+        }
       } else {
         TB_CHECK(false, "Unexpected descriptor type");
       }
@@ -156,11 +171,11 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
     TB_DYN_ARR_FOREACH(*write_queue, i) {
       tb_auto write_idx = TB_DYN_ARR_AT(*write_queue, i);
       tb_auto desc_write = &TB_DYN_ARR_AT(pool->writes, write_idx);
-      tb_auto type = desc_write->type;
+      tb_auto type = pool->type;
       VkWriteDescriptorSet write = {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .descriptorCount = 1,
-          .descriptorType = desc_write->type,
+          .descriptorType = type,
           .dstBinding = pool->binding,
           .dstSet = pool->sets[frame_idx],
           .dstArrayElement = write_idx,
@@ -168,16 +183,27 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
       // Skip unused descriptors
       if (type == VK_DESCRIPTOR_TYPE_MAX_ENUM) {
         continue;
-      } else if (type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
-                 type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
-                 type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+      }
+
+      if (type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+          type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
+          type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
         write.pImageInfo = &desc_write->desc.image;
+        if (write.pImageInfo->imageView == VK_NULL_HANDLE) {
+          continue;
+        }
       } else if (type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER ||
                  type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER) {
         write.pTexelBufferView = &desc_write->desc.texel_buffer;
+        if (write.pTexelBufferView == VK_NULL_HANDLE) {
+          continue;
+        }
       } else if (type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
                  type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
         write.pBufferInfo = &desc_write->desc.buffer;
+        if (write.pBufferInfo->buffer == VK_NULL_HANDLE) {
+          continue;
+        }
       } else {
         TB_CHECK(false, "Unexpected descriptor type");
       }

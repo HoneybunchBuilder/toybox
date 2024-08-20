@@ -15,6 +15,26 @@ ECS_TAG_DECLARE(TbNeedsDescriptorUpdate);
 ECS_TAG_DECLARE(TbUpdatingDescriptor);
 ECS_TAG_DECLARE(TbDescriptorReady);
 
+void tb_rnd_mark_descriptor(ecs_world_t *ecs, ecs_entity_t ent) {
+  TB_TRACY_SCOPE("Mark Descriptor");
+  TB_CHECK(ecs_has(ecs, ent, TbDescriptorCounter), "Expected Descriptor Count");
+  ecs_add(ecs, ent, TbUpdatingDescriptor);
+  ecs_remove(ecs, ent, TbNeedsDescriptorUpdate);
+  tb_auto counter = ecs_get_mut(ecs, ent, TbDescriptorCounter);
+  SDL_AtomicSet(counter, 0);
+}
+
+void tb_rnd_reset_descriptor_count(ecs_world_t *ecs, ecs_entity_t ent) {
+  TB_TRACY_SCOPE("Reset Descriptor Counter");
+  ecs_add(ecs, ent, TbNeedsDescriptorUpdate);
+  if (!ecs_has(ecs, ent, TbDescriptorCounter)) {
+    ecs_set(ecs, ent, TbDescriptorCounter, {0});
+  } else {
+    tb_auto counter = ecs_get_mut(ecs, ent, TbDescriptorCounter);
+    SDL_AtomicSet(counter, 0);
+  }
+}
+
 void tb_register_render_sys(TbWorld *world);
 void tb_unregister_render_sys(TbWorld *world);
 

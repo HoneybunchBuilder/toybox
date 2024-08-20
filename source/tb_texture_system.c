@@ -789,8 +789,7 @@ void tb_finalize_textures(ecs_iter_t *it) {
     TB_DYN_ARR_FOREACH(writes, i) {
       // Texture is now ready to be referenced elsewhere
       ecs_set(it->world, it->entities[i], TbTextureComponent, {tex_indices[i]});
-      ecs_add(it->world, it->entities[i], TbUpdatingDescriptor);
-      ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
+      tb_rnd_mark_descriptor(it->world, it->entities[i]);
     }
   }
   TB_DYN_ARR_DESTROY(writes);
@@ -918,7 +917,8 @@ void tb_register_texture_sys(TbWorld *world) {
   }
 #endif
 
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &ctx.desc_pool, 0);
 
   // Must set ctx before we try to load any textures
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
@@ -1033,14 +1033,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   ecs_set(ecs, tex_ent, TbTextureRawLoadRequest,
           {name, pixels, size, width, height});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  // TODO: Make descriptor update needs more ergonomic
-  ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
-  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
-    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
-  } else {
-    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
-    SDL_AtomicSet(counter, 0);
-  }
+  tb_rnd_reset_descriptor_count(ecs, tex_ent);
 
   return tex_ent;
 }
@@ -1093,13 +1086,7 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {data, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
-  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
-    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
-  } else {
-    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
-    SDL_AtomicSet(counter, 0);
-  }
+  tb_rnd_reset_descriptor_count(ecs, tex_ent);
 
   return tex_ent;
 }
@@ -1122,13 +1109,7 @@ TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureKTXLoadRequest, {path, name});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  ecs_add(ecs, tex_ent, TbNeedsDescriptorUpdate);
-  if (!ecs_has(ecs, tex_ent, TbDescriptorCounter)) {
-    ecs_set(ecs, tex_ent, TbDescriptorCounter, {0});
-  } else {
-    tb_auto counter = ecs_get_mut(ecs, tex_ent, TbDescriptorCounter);
-    SDL_AtomicSet(counter, 0);
-  }
+  tb_rnd_reset_descriptor_count(ecs, tex_ent);
 
   return tex_ent;
 }

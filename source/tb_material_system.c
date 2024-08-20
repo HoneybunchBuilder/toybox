@@ -264,14 +264,7 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
 
     ecs_remove(it->world, ent, TbMaterialLoaded);
     ecs_add(it->world, ent, TbMaterialUploaded);
-    // TODO: Make descriptor update needs more ergonomic
-    ecs_add(it->world, ent, TbNeedsDescriptorUpdate);
-    if (!ecs_has(it->world, ent, TbDescriptorCounter)) {
-      ecs_set(it->world, ent, TbDescriptorCounter, {0});
-    } else {
-      tb_auto counter = ecs_get_mut(it->world, ent, TbDescriptorCounter);
-      SDL_AtomicSet(counter, 0);
-    }
+    tb_rnd_reset_descriptor_count(it->world, ent);
   }
 }
 
@@ -317,8 +310,7 @@ void tb_finalize_materials(ecs_iter_t *it) {
       // Material is now ready to be referenced elsewhere
       ecs_set(it->world, it->entities[i], TbMaterialComponent,
               {mat_indices[i]});
-      ecs_add(it->world, it->entities[i], TbUpdatingDescriptor);
-      ecs_remove(it->world, it->entities[i], TbNeedsDescriptorUpdate);
+      tb_rnd_mark_descriptor(it->world, it->entities[i]);
     }
   }
 
@@ -484,7 +476,8 @@ void tb_register_material2_sys(TbWorld *world) {
 
   TB_DYN_ARR_RESET(ctx.usage_map, tb_global_alloc, 4);
 
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout, &ctx.desc_pool, 2);
+  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &ctx.desc_pool, 2);
 
   // Must set ctx before we try to load any materials
   ecs_singleton_set_ptr(ecs, TbMaterialCtx, &ctx);
@@ -632,7 +625,7 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {data, name_cpy});
   ecs_set(ecs, mat_ent, TbMaterialUsage, {usage});
-  ecs_add(ecs, mat_ent, TbNeedsDescriptorUpdate);
+  tb_rnd_reset_descriptor_count(ecs, mat_ent);
 
   if (deferred) {
     ecs_defer_begin(ecs);
