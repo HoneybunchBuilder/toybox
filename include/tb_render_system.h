@@ -16,14 +16,7 @@
 
 typedef struct TbWorld TbWorld;
 
-typedef SDL_AtomicInt TbDescriptorCounter;
-extern ECS_COMPONENT_DECLARE(TbDescriptorCounter);
-extern ECS_TAG_DECLARE(TbNeedsDescriptorUpdate);
-extern ECS_TAG_DECLARE(TbUpdatingDescriptor);
 extern ECS_TAG_DECLARE(TbDescriptorReady);
-
-void tb_rnd_mark_descriptor(ecs_world_t *ecs, ecs_entity_t ent);
-void tb_rnd_reset_descriptor_count(ecs_world_t *ecs, ecs_entity_t ent);
 
 typedef struct TbRenderSystemFrameState {
   TbHostBuffer tmp_host_buffer;

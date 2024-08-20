@@ -264,7 +264,7 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
 
     ecs_remove(it->world, ent, TbMaterialLoaded);
     ecs_add(it->world, ent, TbMaterialUploaded);
-    tb_rnd_reset_descriptor_count(it->world, ent);
+    ecs_remove(it->world, ent, TbDescriptorReady);
   }
 }
 
@@ -272,7 +272,8 @@ void tb_finalize_materials(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Finalize Materials");
 
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-  tb_auto materials = ecs_field(it, TbMaterialData, 2);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto materials = ecs_field(it, TbMaterialData, 3);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t mat_count = mat_ctx->owned_mat_count;
@@ -281,9 +282,13 @@ void tb_finalize_materials(ecs_iter_t *it) {
     return;
   }
 
+  // Render Thread allocator to make sure writes live
+  tb_auto rnd_tmp_alloc =
+      rnd_sys->render_thread->frame_states[rnd_sys->frame_idx].tmp_alloc.alloc;
+
   // Collect a write for every new material
   TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
-  TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
+  TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, it->count);
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto material = &materials[i];
     TB_CHECK(material->gpu_buffer.info.size, "Material GPU Buffer is size 0");
@@ -310,11 +315,9 @@ void tb_finalize_materials(ecs_iter_t *it) {
       // Material is now ready to be referenced elsewhere
       ecs_set(it->world, it->entities[i], TbMaterialComponent,
               {mat_indices[i]});
-      tb_rnd_mark_descriptor(it->world, it->entities[i]);
+      ecs_add(it->world, it->entities[i], TbDescriptorReady);
     }
   }
-
-  TB_DYN_ARR_DESTROY(writes);
 }
 
 void tb_update_material_pool(ecs_iter_t *it) {
@@ -354,9 +357,8 @@ void tb_register_material2_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tb_finalize_materials,
              EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbMaterialData, [in] TbMaterialUploaded,
-             TbNeedsDescriptorUpdate, !TbUpdatingDescriptor,
-             !TbDescriptorReady);
+             [in] TbRenderSystem(TbRenderSystem), [in] TbMaterialData,
+             [in] TbMaterialUploaded, !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_material_pool,
              EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
              [in] TbRenderSystem(TbRenderSystem));
@@ -625,7 +627,7 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, mat_ent, TbMaterialGLTFLoadRequest, {data, name_cpy});
   ecs_set(ecs, mat_ent, TbMaterialUsage, {usage});
-  tb_rnd_reset_descriptor_count(ecs, mat_ent);
+  ecs_remove(ecs, mat_ent, TbDescriptorReady);
 
   if (deferred) {
     ecs_defer_begin(ecs);

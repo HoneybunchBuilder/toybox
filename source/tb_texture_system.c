@@ -754,7 +754,8 @@ void tb_finalize_textures(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Finalize Textures");
 
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-  tb_auto textures = ecs_field(it, TbTextureImage, 2);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto textures = ecs_field(it, TbTextureImage, 3);
   tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
   uint64_t tex_count = tex_ctx->owned_tex_count;
@@ -762,9 +763,13 @@ void tb_finalize_textures(ecs_iter_t *it) {
     return;
   }
 
+  // Render Thread allocator to make sure writes live
+  tb_auto rnd_tmp_alloc =
+      rnd_sys->render_thread->frame_states[rnd_sys->frame_idx].tmp_alloc.alloc;
+
   // Collect a write for every new texture
   TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
-  TB_DYN_ARR_RESET(writes, world->gp_alloc, 16);
+  TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, it->count);
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto texture = &textures[i];
     TbDynDescWrite write = {
@@ -789,10 +794,9 @@ void tb_finalize_textures(ecs_iter_t *it) {
     TB_DYN_ARR_FOREACH(writes, i) {
       // Texture is now ready to be referenced elsewhere
       ecs_set(it->world, it->entities[i], TbTextureComponent, {tex_indices[i]});
-      tb_rnd_mark_descriptor(it->world, it->entities[i]);
+      ecs_add(it->world, it->entities[i], TbDescriptorReady);
     }
   }
-  TB_DYN_ARR_DESTROY(writes);
 }
 
 void tb_update_texture_pool(ecs_iter_t *it) {
@@ -836,8 +840,8 @@ void tb_register_texture_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tb_finalize_textures,
              EcsPostUpdate, [in] TbTextureCtx(TbTextureCtx),
-             [in] TbTextureImage, [in] TbTextureLoaded, TbNeedsDescriptorUpdate,
-             !TbUpdatingDescriptor, !TbDescriptorReady);
+             [in] TbRenderSystem(TbRenderSystem), [in] TbTextureImage,
+             [in] TbTextureLoaded, !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_texture_pool,
              EcsPreStore, [in] TbTextureCtx(TbTextureCtx),
              [in] TbRenderSystem(TbRenderSystem));
@@ -1033,7 +1037,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   ecs_set(ecs, tex_ent, TbTextureRawLoadRequest,
           {name, pixels, size, width, height});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  tb_rnd_reset_descriptor_count(ecs, tex_ent);
+  ecs_remove(ecs, tex_ent, TbDescriptorReady);
 
   return tex_ent;
 }
@@ -1086,7 +1090,7 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureGLTFLoadRequest, {data, mat_name_cpy});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  tb_rnd_reset_descriptor_count(ecs, tex_ent);
+  ecs_remove(ecs, tex_ent, TbDescriptorReady);
 
   return tex_ent;
 }
@@ -1109,7 +1113,7 @@ TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   // Append a texture load request onto the entity to schedule loading
   ecs_set(ecs, tex_ent, TbTextureKTXLoadRequest, {path, name});
   ecs_set(ecs, tex_ent, TbTextureUsage, {usage});
-  tb_rnd_reset_descriptor_count(ecs, tex_ent);
+  ecs_remove(ecs, tex_ent, TbDescriptorReady);
 
   return tex_ent;
 }

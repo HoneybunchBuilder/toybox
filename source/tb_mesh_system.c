@@ -634,10 +634,10 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
 
 void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
                              uint32_t mesh_count, const ecs_entity_t *entities,
-                             const TbMeshData *data, TbAllocator gp_alloc,
-                             TbAllocator tmp_alloc, uint32_t attr_idx) {
+                             const TbMeshData *data, TbAllocator tmp_alloc,
+                             uint32_t attr_idx) {
   TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
-  TB_DYN_ARR_RESET(writes, gp_alloc, mesh_count);
+  TB_DYN_ARR_RESET(writes, tmp_alloc, mesh_count);
 
   for (uint32_t i = 0; i < mesh_count; ++i) {
     tb_auto mesh = &data[i];
@@ -686,28 +686,31 @@ void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
     if (attr_idx == 0) {
       TB_DYN_ARR_FOREACH(writes, i) {
         ecs_set(ecs, entities[i], TbMeshIndex, {indices[i]});
-        tb_rnd_mark_descriptor(ecs, entities[i]);
+        ecs_add(ecs, entities[i], TbDescriptorReady);
       }
     }
   }
-  TB_DYN_ARR_DESTROY(writes);
 }
 
 void tb_finalize_meshes(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Finalize Meshes");
 
   tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
-  tb_auto meshes = ecs_field(it, TbMeshData, 2);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto meshes = ecs_field(it, TbMeshData, 3);
 
   if (ctx->owned_mesh_count == 0 || it->count == 0) {
     return;
   }
 
+  // Render Thread allocator to make sure writes live
+  tb_auto rnd_tmp_alloc =
+      rnd_sys->render_thread->frame_states[rnd_sys->frame_idx].tmp_alloc.alloc;
+
   // HACK: known fixed number of mesh attributes
   for (uint32_t i = 0; i < 5; ++i) {
     tb_write_mesh_attr_desc(it->world, ctx, it->count, it->entities, meshes,
-                            world->gp_alloc, world->tmp_alloc, i);
+                            rnd_tmp_alloc, i);
   }
 }
 
@@ -812,9 +815,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
              TbTaskScheduler(TbTaskScheduler), [in] TbSubMeshGLTFLoadRequest);
 
   // System that ticks as we ensure mesh descriptors are written
-  ECS_SYSTEM(ecs, tb_finalize_meshes, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
-             [in] TbMeshData, [in] TbMeshLoaded, [in] TbNeedsDescriptorUpdate,
-             !TbUpdatingDescriptor, !TbDescriptorReady);
+  ECS_SYSTEM(
+      ecs, tb_finalize_meshes, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
+      [in] TbRenderSystem(TbRenderSystem), [in] TbMeshData, [in] TbMeshLoaded,
+      !TbDescriptorReady);
   // When all meshes are loaded we start making them available to shaders
   ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPreStore, [in] TbMeshCtx(TbMeshCtx),
              [in] TbRenderSystem(TbRenderSystem));
@@ -1018,7 +1022,7 @@ TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
 
   // Append a mesh load request onto the entity to schedule loading
   ecs_set(ecs, mesh_ent, TbMeshGLTFLoadRequest, {data, index});
-  tb_rnd_reset_descriptor_count(ecs, mesh_ent);
+  ecs_remove(ecs, mesh_ent, TbDescriptorReady);
 
   if (deferred) {
     ecs_defer_begin(ecs);

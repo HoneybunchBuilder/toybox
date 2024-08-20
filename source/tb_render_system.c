@@ -10,30 +10,7 @@
 
 ECS_COMPONENT_DECLARE(TbRenderSystem);
 
-ECS_COMPONENT_DECLARE(TbDescriptorCounter);
-ECS_TAG_DECLARE(TbNeedsDescriptorUpdate);
-ECS_TAG_DECLARE(TbUpdatingDescriptor);
 ECS_TAG_DECLARE(TbDescriptorReady);
-
-void tb_rnd_mark_descriptor(ecs_world_t *ecs, ecs_entity_t ent) {
-  TB_TRACY_SCOPE("Mark Descriptor");
-  TB_CHECK(ecs_has(ecs, ent, TbDescriptorCounter), "Expected Descriptor Count");
-  ecs_add(ecs, ent, TbUpdatingDescriptor);
-  ecs_remove(ecs, ent, TbNeedsDescriptorUpdate);
-  tb_auto counter = ecs_get_mut(ecs, ent, TbDescriptorCounter);
-  SDL_AtomicSet(counter, 0);
-}
-
-void tb_rnd_reset_descriptor_count(ecs_world_t *ecs, ecs_entity_t ent) {
-  TB_TRACY_SCOPE("Reset Descriptor Counter");
-  ecs_add(ecs, ent, TbNeedsDescriptorUpdate);
-  if (!ecs_has(ecs, ent, TbDescriptorCounter)) {
-    ecs_set(ecs, ent, TbDescriptorCounter, {0});
-  } else {
-    tb_auto counter = ecs_get_mut(ecs, ent, TbDescriptorCounter);
-    SDL_AtomicSet(counter, 0);
-  }
-}
 
 void tb_register_render_sys(TbWorld *world);
 void tb_unregister_render_sys(TbWorld *world);
@@ -351,41 +328,10 @@ void render_frame_end(ecs_iter_t *it) {
   TracyCZoneEnd(tick_ctx);
 }
 
-/*
-  Descriptors often live in per-frame pools, meaning there is actually
-  a descriptor per frame-state. This is to allow frame states to be operated on
-  by different threads independently.
-  So how do we know that an entity with a descriptor is ready to reference?
-  We wait one frame per frame state and then we should be guaranteed that
-  the descriptor is ready to be referenced.
-  This assumes that the render thread will always attempt to update all
-  descriptors that it gets for a frame. That means it's up to the main thread to
-  throttle how many descriptors need updates. This is to facilitate that.
-*/
-void tb_rnd_sys_track_descriptors(ecs_iter_t *it) {
-  tb_auto ecs = it->world;
-  tb_auto counters = ecs_field(it, TbDescriptorCounter, 1);
-  for (int32_t i = 0; i < it->count; ++i) {
-    // Could be a texture, mesh, material, whatever
-    ecs_entity_t ent = it->entities[i];
-    tb_auto counter = &counters[i];
-
-    SDL_AtomicIncRef(counter);
-    if (SDL_AtomicGet(counter) >= TB_MAX_FRAME_STATES) {
-      ecs_remove(ecs, ent, TbUpdatingDescriptor);
-      ecs_remove(ecs, ent, TbNeedsDescriptorUpdate);
-      ecs_add(ecs, ent, TbDescriptorReady);
-    }
-  }
-}
-
 void tb_register_render_sys(TbWorld *world) {
   TracyCZoneN(ctx, "Register Render Sys", true);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderSystem);
-  ECS_COMPONENT_DEFINE(ecs, TbDescriptorCounter);
-  ECS_TAG_DEFINE(ecs, TbNeedsDescriptorUpdate);
-  ECS_TAG_DEFINE(ecs, TbUpdatingDescriptor);
   ECS_TAG_DEFINE(ecs, TbDescriptorReady);
   TbRenderSystem sys = create_render_system(world->gp_alloc, world->tmp_alloc,
                                             world->render_thread);
@@ -396,10 +342,6 @@ void tb_register_render_sys(TbWorld *world) {
              TbRenderSystem(TbRenderSystem));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame,
              TbRenderSystem(TbRenderSystem));
-
-  ECS_SYSTEM(
-      ecs, tb_rnd_sys_track_descriptors,
-      EcsOnStore, [inout] TbDescriptorCounter, [inout] TbUpdatingDescriptor);
 
   TracyCZoneEnd(ctx);
 }

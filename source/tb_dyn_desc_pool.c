@@ -2,7 +2,7 @@
 #include "tb_common.h"
 #include "tb_util.h"
 
-static const uint32_t TbDynDescPageSize = 4;
+static const uint32_t TbDynDescPageSize = 64;
 
 void tb_resize_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
                              TbDynDescPool *pool, uint32_t frame_idx) {
@@ -115,8 +115,12 @@ void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool,
   }
   tb_auto write_queue = &pool->write_queues[frame_idx];
 
+  // Render Thread allocator to make sure writes live
+  tb_auto rnd_tmp_alloc =
+      rnd_sys->render_thread->frame_states[rnd_sys->frame_idx].tmp_alloc.alloc;
+
   TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
-  TB_DYN_ARR_RESET(writes, rnd_sys->tmp_alloc, pool->desc_cap);
+  TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, pool->desc_cap);
 
   // Resize the pool if needed
   if (pool->resize[frame_idx]) {
