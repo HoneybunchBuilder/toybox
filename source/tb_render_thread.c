@@ -1497,8 +1497,8 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         queue_begin_label(graphics_queue, "Upload",
                           (float4){1.0f, 0.1f, 0.1f, 1.0f});
         err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-        queue_end_label(graphics_queue);
         TB_VK_CHECK(err, "Failed to submit upload work");
+        queue_end_label(graphics_queue);
       }
 
       TracyCZoneEnd(submit_ctx);
@@ -1684,8 +1684,8 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         queue_begin_label(graphics_queue, "Finalize",
                           (float4){1.0f, 0.1f, 0.1f, 1.0f});
         err = vkQueueSubmit(graphics_queue, 1, &submit_info, state->fence);
-        queue_end_label(graphics_queue);
         TB_VK_CHECK(err, "Failed to submit ending work");
+        queue_end_label(graphics_queue);
       }
 
       TracyCZoneEnd(submit_ctx);

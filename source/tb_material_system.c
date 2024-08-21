@@ -33,7 +33,6 @@ typedef struct TbMaterialCtx {
   uint32_t owned_mat_count;
   TbDynDescPool desc_pool;
 
-  VkDescriptorSetLayout set_layout2;
   TbDescriptorBuffer desc_buffer;
 
   TB_DYN_ARR_OF(TbMaterialDomainHandler) usage_map;
@@ -274,11 +273,8 @@ void tb_finalize_materials(ecs_iter_t *it) {
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto materials = ecs_field(it, TbMaterialData, 3);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  uint64_t mat_count = mat_ctx->owned_mat_count;
-
-  if (mat_count == 0) {
+  if (mat_ctx->owned_mat_count == 0 || it->count == 0) {
     return;
   }
 
@@ -307,7 +303,7 @@ void tb_finalize_materials(ecs_iter_t *it) {
   if (write_count > 0) {
     // Allocate space for indices
     uint32_t *mat_indices =
-        tb_alloc_nm_tp(world->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
+        tb_alloc_nm_tp(rnd_sys->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
     tb_write_dyn_desc_pool(&mat_ctx->desc_pool, write_count, writes.data,
                            mat_indices);
 
@@ -324,11 +320,8 @@ void tb_update_material_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Material Pool");
   tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  if (mat_ctx->owned_mat_count == 0) {
-    return;
-  }
   // Tick the pool in case any new materials require us to expand the pool
-  tb_tick_dyn_desc_pool(rnd_sys, &mat_ctx->desc_pool, "material");
+  tb_tick_dyn_desc_pool(rnd_sys, &mat_ctx->desc_pool);
 }
 
 // Toybox Glue
@@ -346,7 +339,7 @@ void tb_register_material2_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPreUpdate,
+  ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPostLoad,
              TbTaskScheduler(TbTaskScheduler), TbMaterialCtx(TbMaterialCtx),
              [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
 
@@ -356,11 +349,11 @@ void tb_register_material2_sys(TbWorld *world) {
              !TbMaterialUploaded);
 
   ECS_SYSTEM(ecs, tb_finalize_materials,
-             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
+             EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
              [in] TbRenderSystem(TbRenderSystem), [in] TbMaterialData,
              [in] TbMaterialUploaded, !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_material_pool,
-             EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
+             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
              [in] TbRenderSystem(TbRenderSystem));
 
   TbMaterialCtx ctx = {0};
@@ -415,6 +408,9 @@ void tb_register_material2_sys(TbWorld *world) {
     const uint32_t binding_count = 3;
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
         .pNext =
             &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
                 .sType =
@@ -430,8 +426,7 @@ void tb_register_material2_sys(TbWorld *world) {
                  &ctx.sampler},
                 {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
                  &ctx.shadow_sampler},
-                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                 2048, // HACK: Some high upper limit
+                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, TB_DESC_POOL_CAP,
                  VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
                  NULL},
             },
@@ -439,47 +434,12 @@ void tb_register_material2_sys(TbWorld *world) {
     tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout",
                              &ctx.set_layout);
   }
-#if TB_USE_DESC_BUFFER == 1
-  {
-    const VkDescriptorBindingFlags flags =
-        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-    const uint32_t binding_count = 3;
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
-        .pNext =
-            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                .bindingCount = binding_count,
-                .pBindingFlags =
-                    (VkDescriptorBindingFlags[binding_count]){0, 0, flags},
-            },
-        .bindingCount = binding_count,
-        .pBindings =
-            (VkDescriptorSetLayoutBinding[binding_count]){
-                {0, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                 &ctx.sampler},
-                {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                 &ctx.shadow_sampler},
-                {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                 2048, // HACK: Some high upper limit
-                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-                 NULL},
-            },
-    };
-    tb_rnd_create_set_layout(rnd_sys, &create_info, "Material Set Layout2",
-                             &ctx.set_layout2);
-    tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2,
-                                "Material Descriptors", 4, &ctx.desc_buffer);
-  }
-#endif
 
   TB_DYN_ARR_RESET(ctx.usage_map, tb_global_alloc, 4);
 
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &ctx.desc_pool, 2);
+  tb_create_dyn_desc_pool(rnd_sys, "Material Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, TB_DESC_POOL_CAP,
+                          &ctx.desc_pool, 2);
 
   // Must set ctx before we try to load any materials
   ecs_singleton_set_ptr(ecs, TbMaterialCtx, &ctx);
@@ -494,9 +454,10 @@ void tb_unregister_material2_sys(TbWorld *world) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
-  tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout2);
 
+#if TB_DESC_BUFFER == 1
   tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
+#endif
 
   // TODO: Release all default references
 
@@ -564,11 +525,7 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 
 VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-#if TB_USE_DESC_BUFFER == 1
-  return ctx->set_layout2;
-#else
   return ctx->set_layout;
-#endif
 }
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
@@ -586,12 +543,12 @@ TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
                                      const char *name, TbMaterialUsage usage) {
   /*
     If we are in a deferred ecs state (in the middle of the execution of a
-  system) we would not be able to determine if a material entity already exists
-  or not. So the calling system *must* be no_readonly and we will have to
+  system) we would not be able to determine if a material entity already
+exists or not. So the calling system *must* be no_readonly and we will have to
   manually check if we need to stop suspending commands.
   Otherwise a system that attempts to add the same material twice will not be
-  looking at the correct version of the ECS state when trying to determine if an
-  entity for a material already exists
+  looking at the correct version of the ECS state when trying to determine if
+an entity for a material already exists
   */
   bool deferred = false;
   if (ecs_is_deferred(ecs)) {

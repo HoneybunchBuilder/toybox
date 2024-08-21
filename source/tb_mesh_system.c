@@ -524,7 +524,6 @@ void tb_load_submeshes_task(const void *args) {
       submesh_data.material = tb_mat_sys_load_gltf_mat(
           ecs, data, material->name, TB_MAT_USAGE_SCENE);
     }
-    // tb_free(tb_global_alloc, (void *)source_path);
 
     // Determine index size and count
     {
@@ -635,9 +634,9 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
 void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
                              uint32_t mesh_count, const ecs_entity_t *entities,
                              const TbMeshData *data, TbAllocator tmp_alloc,
-                             uint32_t attr_idx) {
+                             TbAllocator rnd_tmp_alloc, uint32_t attr_idx) {
   TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
-  TB_DYN_ARR_RESET(writes, tmp_alloc, mesh_count);
+  TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, mesh_count);
 
   for (uint32_t i = 0; i < mesh_count; ++i) {
     tb_auto mesh = &data[i];
@@ -710,7 +709,7 @@ void tb_finalize_meshes(ecs_iter_t *it) {
   // HACK: known fixed number of mesh attributes
   for (uint32_t i = 0; i < 5; ++i) {
     tb_write_mesh_attr_desc(it->world, ctx, it->count, it->entities, meshes,
-                            rnd_tmp_alloc, i);
+                            rnd_sys->tmp_alloc, rnd_tmp_alloc, i);
   }
 }
 
@@ -719,14 +718,12 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
 
   tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  if (ctx->owned_mesh_count == 0) {
-    return;
-  }
-  tb_tick_dyn_desc_pool(rnd_sys, &ctx->idx_desc_pool, "mesh_indices");
-  tb_tick_dyn_desc_pool(rnd_sys, &ctx->pos_desc_pool, "mesh_positions");
-  tb_tick_dyn_desc_pool(rnd_sys, &ctx->norm_desc_pool, "mesh_normals");
-  tb_tick_dyn_desc_pool(rnd_sys, &ctx->tan_desc_pool, "mesh_tangents");
-  tb_tick_dyn_desc_pool(rnd_sys, &ctx->uv0_desc_pool, "mesh_uv0s");
+
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->idx_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->pos_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->norm_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->tan_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->uv0_desc_pool);
 }
 
 void tb_check_submesh_readiness(ecs_iter_t *it) {
@@ -807,10 +804,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbSubMeshReady);
 
   ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
-             EcsPreUpdate, [inout] TbTaskScheduler(TbTaskScheduler),
+             EcsPostLoad, [inout] TbTaskScheduler(TbTaskScheduler),
              [inout] TbMeshQueueCounter(TbMeshQueueCounter),
              [in] TbMeshGLTFLoadRequest);
-  ECS_SYSTEM(ecs, tb_queue_gltf_submesh_loads, EcsPreUpdate,
+  ECS_SYSTEM(ecs, tb_queue_gltf_submesh_loads, EcsPostLoad,
              TbSubMeshQueueCounter(TbSubMeshQueueCounter),
              TbTaskScheduler(TbTaskScheduler), [in] TbSubMeshGLTFLoadRequest);
 
@@ -855,7 +852,7 @@ void tb_register_mesh2_sys(TbWorld *world) {
             (VkDescriptorSetLayoutBinding[1]){
                 {
                     .binding = 0,
-                    .descriptorCount = 4096, // HACK: High upper bound
+                    .descriptorCount = TB_DESC_POOL_CAP,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 },
@@ -877,20 +874,21 @@ void tb_register_mesh2_sys(TbWorld *world) {
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh UV0 Descriptors",
                               4, &ctx.uv0_desc_buf);
 #else
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+  static const uint32_t desc_cap = TB_DESC_POOL_CAP;
+  tb_create_dyn_desc_pool(rnd_sys, "Mesh Index Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.idx_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+  tb_create_dyn_desc_pool(rnd_sys, "Mesh Position Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.pos_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+  tb_create_dyn_desc_pool(rnd_sys, "Mesh Normal Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.norm_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+  tb_create_dyn_desc_pool(rnd_sys, "Mesh Tangent Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.tan_desc_pool, 0);
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+  tb_create_dyn_desc_pool(rnd_sys, "Mesh Texcoord0 Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.uv0_desc_pool, 0);
 #endif
 

@@ -20,7 +20,6 @@ typedef struct TbTextureCtx {
   uint32_t owned_tex_count;
   TbDynDescPool desc_pool;
 
-  VkDescriptorSetLayout set_layout2;
   TbDescriptorBuffer desc_buffer;
 
   TbTexture default_color_tex;
@@ -756,10 +755,8 @@ void tb_finalize_textures(ecs_iter_t *it) {
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
   tb_auto textures = ecs_field(it, TbTextureImage, 3);
-  tb_auto world = ecs_singleton_get(it->world, TbWorldRef)->world;
 
-  uint64_t tex_count = tex_ctx->owned_tex_count;
-  if (tex_count == 0) {
+  if (tex_ctx->owned_tex_count == 0 || it->count == 0) {
     return;
   }
 
@@ -787,7 +784,7 @@ void tb_finalize_textures(ecs_iter_t *it) {
   const tb_auto write_count = TB_DYN_ARR_SIZE(writes);
   if (write_count > 0) {
     uint32_t *tex_indices =
-        tb_alloc_nm_tp(world->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
+        tb_alloc_nm_tp(rnd_sys->tmp_alloc, TB_DYN_ARR_SIZE(writes), uint32_t);
     tb_write_dyn_desc_pool(&tex_ctx->desc_pool, write_count, writes.data,
                            tex_indices);
 
@@ -805,13 +802,8 @@ void tb_update_texture_pool(ecs_iter_t *it) {
   tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
 
-  uint64_t tex_count = tex_ctx->owned_tex_count;
-  if (tex_count == 0) {
-    return;
-  }
-
   // Tick the pool in case any new textures require us to expand the pool
-  tb_tick_dyn_desc_pool(rnd_sys, &tex_ctx->desc_pool, "texture");
+  tb_tick_dyn_desc_pool(rnd_sys, &tex_ctx->desc_pool);
 }
 
 // Toybox Glue
@@ -828,13 +820,13 @@ void tb_register_texture_sys(TbWorld *world) {
 
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPreUpdate,
+  ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPostLoad,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
-  ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPreUpdate,
+  ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPostLoad,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
-  ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPreUpdate,
+  ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPostLoad,
              TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
              [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
 
@@ -862,7 +854,11 @@ void tb_register_texture_sys(TbWorld *world) {
     const uint32_t binding_count = 1;
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#else
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+#endif
         .pNext =
             &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
                 .sType =
@@ -876,7 +872,7 @@ void tb_register_texture_sys(TbWorld *world) {
             (VkDescriptorSetLayoutBinding[binding_count]){
                 {
                     .binding = 0,
-                    .descriptorCount = 2048, // HACK: High upper bound
+                    .descriptorCount = TB_DESC_POOL_CAP,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
@@ -886,43 +882,9 @@ void tb_register_texture_sys(TbWorld *world) {
                              &ctx.set_layout);
   }
 
-#if TB_USE_DESC_BUFFER == 1
-  {
-    const VkDescriptorBindingFlags flags =
-        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-    const uint32_t binding_count = 1;
-    VkDescriptorSetLayoutCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
-        .pNext =
-            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                .bindingCount = binding_count,
-                .pBindingFlags =
-                    (VkDescriptorBindingFlags[binding_count]){flags},
-            },
-        .bindingCount = binding_count,
-        .pBindings =
-            (VkDescriptorSetLayoutBinding[binding_count]){
-                {
-                    .binding = 0,
-                    .descriptorCount = 2048, // HACK: High upper bound
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-            },
-    };
-    tb_rnd_create_set_layout(rnd_sys, &create_info,
-                             "Texture Desc Buffer Layout", &ctx.set_layout2);
-    tb_create_descriptor_buffer(rnd_sys, ctx.set_layout2, "Texture Descriptors",
-                                4, &ctx.desc_buffer);
-  }
-#endif
-
-  tb_create_dyn_desc_pool(rnd_sys, ctx.set_layout,
-                          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, &ctx.desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, "Texture Descriptors", ctx.set_layout,
+                          VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, TB_DESC_POOL_CAP,
+                          &ctx.desc_pool, 0);
 
   // Must set ctx before we try to load any textures
   ecs_singleton_set_ptr(ecs, TbTextureCtx, &ctx);
@@ -989,11 +951,7 @@ TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
 
 VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-#if TB_USE_DESC_BUFFER == 1
-  return ctx->set_layout2;
-#else
   return ctx->set_layout;
-#endif
 }
 
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {

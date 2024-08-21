@@ -8,13 +8,13 @@
 
 void *tb_ts_alloc(size_t size) {
   void *ptr = tb_alloc(tb_global_alloc, size);
-  TracyCAllocN(ptr, size, "Task Alloc");
+  // TracyCAllocN(ptr, size, "Task Alloc");
   return ptr;
 }
 
 void tb_ts_free(void *ptr) {
   tb_free(tb_global_alloc, ptr);
-  TracyCFreeN(ptr, "Task Alloc");
+  // TracyCFreeN(ptr, "Task Alloc");
 }
 
 #define tb_ts_alloc_tp(T) (T *)tb_ts_alloc(sizeof(T))
