@@ -41,8 +41,11 @@ void tb_load_ui_tick(ecs_iter_t *it) {
         tb_auto ent_count = *ecs_get(ecs, scene, TbSceneEntityCount);
         tb_auto ents_to_parse = *ecs_get(ecs, scene, TbSceneEntParseCounter);
         tb_auto ents_ready = *ecs_get(ecs, scene, TbSceneEntReadyCounter);
-        igText("%d to parse - %d of %d ready", ents_to_parse, ents_ready,
-               ent_count);
+        if (ents_to_parse > 0) {
+          igText("%d/%d to parse", ents_to_parse, ent_count);
+        }
+        igText("%d/%d ready", ents_ready, ent_count);
+
         total_counter += ent_count;
         counter += ents_ready;
       }

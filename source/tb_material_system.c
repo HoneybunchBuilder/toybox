@@ -9,7 +9,7 @@
 #include "tb_task_scheduler.h"
 #include "tb_world.h"
 
-static const int32_t TbMaxParallelMaterialLoads = 8;
+static const int32_t TbMaxParallelMaterialLoads = 128;
 static SDL_AtomicInt tb_parallel_mat_load_count = {0};
 static const int32_t TbMaxMaterialUploadsPerFrame = 8;
 

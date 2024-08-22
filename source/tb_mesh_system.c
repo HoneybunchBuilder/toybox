@@ -18,7 +18,7 @@
 // Mesh system probably shouldn't own this
 ECS_COMPONENT_DECLARE(TbAABB);
 
-static const int32_t TbMaxParallelMeshLoads = 8;
+static const int32_t TbMaxParallelMeshLoads = 128;
 
 typedef SDL_AtomicInt TbMeshQueueCounter;
 ECS_COMPONENT_DECLARE(TbMeshQueueCounter);
