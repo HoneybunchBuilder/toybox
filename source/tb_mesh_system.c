@@ -468,7 +468,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
       break;
     }
     tb_auto reqs = ecs_field(&mesh_it, TbMeshGLTFLoadRequest, 1);
-    for (uint32_t i = 0; i < mesh_it.count; ++i) {
+    for (int32_t i = 0; i < mesh_it.count; ++i) {
       if (*queue_counter >= TB_MAX_MESH_QUEUE_PER_FRAME) {
         saturated = true;
         break;
