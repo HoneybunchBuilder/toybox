@@ -12,15 +12,22 @@
 
 #define TB_MAX_READY_CHECKS_PER_FRAME 16
 
+#define TB_MAX_MESH_QUEUE_PER_FRAME 4
+#define TB_MAX_SUBMESH_QUEUE_PER_FRAME 4
+
 // Mesh system probably shouldn't own this
 ECS_COMPONENT_DECLARE(TbAABB);
 
-static const int32_t TbMaxParallelMeshLoads = 16;
+static const int32_t TbMaxParallelMeshLoads = 8;
 
 typedef SDL_AtomicInt TbMeshQueueCounter;
 ECS_COMPONENT_DECLARE(TbMeshQueueCounter);
 typedef SDL_AtomicInt TbSubMeshQueueCounter;
 ECS_COMPONENT_DECLARE(TbSubMeshQueueCounter);
+typedef uint32_t TbPerFrameMeshQueueCounter;
+ECS_COMPONENT_DECLARE(TbPerFrameMeshQueueCounter);
+typedef uint32_t TbPerFrameSubmeshQueueCounter;
+ECS_COMPONENT_DECLARE(TbPerFrameSubmeshQueueCounter);
 
 ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 
@@ -32,6 +39,9 @@ typedef struct TbMeshCtx {
   TbDynDescPool norm_desc_pool;
   TbDynDescPool tan_desc_pool;
   TbDynDescPool uv0_desc_pool;
+
+  ecs_query_t *mesh_load_query;
+  ecs_query_t *submesh_load_query;
 
   TbDescriptorBuffer idx_desc_buf;
   TbDescriptorBuffer pos_desc_buf;
@@ -432,51 +442,72 @@ void tb_load_gltf_mesh_task(const void *args) {
 
 // Systems
 
+void tb_reset_queue_counters(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Reset Queue Counters");
+  tb_auto mesh_counter = ecs_field(it, TbPerFrameMeshQueueCounter, 1);
+  tb_auto submesh_counter = ecs_field(it, TbPerFrameSubmeshQueueCounter, 2);
+  *mesh_counter = 0;
+  *submesh_counter = 0;
+}
+
 void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Queue GLTF Mesh Loads");
 
   tb_auto ecs = it->world;
 
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto counter = ecs_field(it, TbMeshQueueCounter, 2);
-  tb_auto reqs = ecs_field(it, TbMeshGLTFLoadRequest, 3);
+  tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 2);
+  tb_auto counter = ecs_field(it, TbMeshQueueCounter, 3);
+  tb_auto queue_counter = ecs_field(it, TbPerFrameMeshQueueCounter, 4);
 
-  tb_auto mesh_ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  bool saturated = false;
 
-  // TODO: Time slice the time spent creating tasks
-  // Iterate texture load tasks
-  for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+  tb_auto mesh_it = ecs_query_iter(ecs, ctx->mesh_load_query);
+  while (ecs_query_next(&mesh_it)) {
+    if (saturated) {
       break;
     }
-    TbMesh2 ent = it->entities[i];
-    tb_auto req = reqs[i];
+    tb_auto reqs = ecs_field(&mesh_it, TbMeshGLTFLoadRequest, 1);
+    for (uint32_t i = 0; i < mesh_it.count; ++i) {
+      if (*queue_counter >= TB_MAX_MESH_QUEUE_PER_FRAME) {
+        saturated = true;
+        break;
+      }
+      (*queue_counter)++;
 
-    // This pinned task will be launched by the loading task
-    TbPinnedTask loaded_task =
-        tb_create_pinned_task(enki, tb_mesh_loaded, NULL, 0);
+      if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+        saturated = true;
+        break;
+      }
+      TbMesh2 ent = mesh_it.entities[i];
+      tb_auto req = reqs[i];
 
-    TbLoadGLTFMeshArgs args = {
-        .common =
-            {
-                .ecs = ecs,
-                .rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem),
-                .mesh = ent,
-                .enki = enki,
-                .loaded_task = loaded_task,
-            },
-        .gltf = req,
-        .counter = counter,
-    };
-    TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
-                                     sizeof(TbLoadGLTFMeshArgs));
-    // Apply task component to mesh entity
-    ecs_set(ecs, ent, TbTask, {load_task});
-    SDL_AtomicIncRef(counter);
-    mesh_ctx->owned_mesh_count++;
+      // This pinned task will be launched by the loading task
+      TbPinnedTask loaded_task =
+          tb_create_pinned_task(enki, tb_mesh_loaded, NULL, 0);
 
-    // Remove load request as it has now been enqueued to the task system
-    ecs_remove(ecs, ent, TbMeshGLTFLoadRequest);
+      TbLoadGLTFMeshArgs args = {
+          .common =
+              {
+                  .ecs = ecs,
+                  .rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem),
+                  .mesh = ent,
+                  .enki = enki,
+                  .loaded_task = loaded_task,
+              },
+          .gltf = req,
+          .counter = counter,
+      };
+      TbTask load_task = tb_async_task(enki, tb_load_gltf_mesh_task, &args,
+                                       sizeof(TbLoadGLTFMeshArgs));
+      // Apply task component to mesh entity
+      ecs_set(ecs, ent, TbTask, {load_task});
+      SDL_AtomicIncRef(counter);
+      ctx->owned_mesh_count++;
+
+      // Remove load request as it has now been enqueued to the task system
+      ecs_remove(ecs, ent, TbMeshGLTFLoadRequest);
+    }
   }
 }
 
@@ -604,30 +635,44 @@ void tb_load_submeshes_task(const void *args) {
 
 void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Queue GLTF Submesh Loads");
-  tb_auto counter = ecs_field(it, TbSubMeshQueueCounter, 1);
+  tb_auto ctx = ecs_field(it, TbMeshCtx, 1);
   tb_auto enki = *ecs_field(it, TbTaskScheduler, 2);
-  tb_auto reqs = ecs_field(it, TbSubMeshGLTFLoadRequest, 3);
+  tb_auto counter = ecs_field(it, TbSubMeshQueueCounter, 3);
+  tb_auto queue_counter = ecs_field(it, TbPerFrameSubmeshQueueCounter, 4);
 
-  // TODO: Time slice the time spent creating tasks
-  // Iterate texture load tasks
-  for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+  bool saturated = false;
+
+  tb_auto submesh_it = ecs_query_iter(it->world, ctx->submesh_load_query);
+  while (ecs_query_next(&submesh_it)) {
+    if (saturated) {
       break;
     }
+    tb_auto reqs = ecs_field(&submesh_it, TbSubMeshGLTFLoadRequest, 1);
+    for (int32_t i = 0; i < submesh_it.count; ++i) {
+      if (*queue_counter >= TB_MAX_SUBMESH_QUEUE_PER_FRAME) {
+        saturated = true;
+        break;
+      }
+      (*queue_counter)++;
+      if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+        saturated = true;
+        break;
+      }
 
-    // Enqueue task so that the submesh loads outside of a system where the
-    // ecs will be in a writable state
-    TbSubMeshLoadArgs args = {
-        .ecs = it->world,
-        .mesh = it->entities[i],
-        .req = reqs[i],
-        .counter = counter,
-    };
-    tb_auto task = tb_create_pinned_task(enki, tb_load_submeshes_task, &args,
-                                         sizeof(TbSubMeshLoadArgs));
-    tb_launch_pinned_task(enki, task);
+      // Enqueue task so that the submesh loads outside of a system where the
+      // ecs will be in a writable state
+      TbSubMeshLoadArgs args = {
+          .ecs = it->world,
+          .mesh = submesh_it.entities[i],
+          .req = reqs[i],
+          .counter = counter,
+      };
+      tb_auto task = tb_create_pinned_task(enki, tb_load_submeshes_task, &args,
+                                           sizeof(TbSubMeshLoadArgs));
+      tb_launch_pinned_task(enki, task);
 
-    SDL_AtomicIncRef(counter);
+      SDL_AtomicIncRef(counter);
+    }
   }
 }
 
@@ -793,6 +838,8 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbSubMesh2Data);
   ECS_COMPONENT_DEFINE(ecs, TbSubMeshQueueCounter);
   ECS_COMPONENT_DEFINE(ecs, TbMeshQueueCounter);
+  ECS_COMPONENT_DEFINE(ecs, TbPerFrameMeshQueueCounter);
+  ECS_COMPONENT_DEFINE(ecs, TbPerFrameSubmeshQueueCounter);
   ECS_COMPONENT_DEFINE(ecs, TbMeshIndex);
   ECS_COMPONENT_DEFINE(ecs, TbAABB);
   ECS_COMPONENT_DEFINE(ecs, TbMeshGLTFLoadRequest);
@@ -803,13 +850,21 @@ void tb_register_mesh2_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbSubMeshParsed);
   ECS_TAG_DEFINE(ecs, TbSubMeshReady);
 
+  ECS_SYSTEM(
+      ecs, tb_reset_queue_counters,
+      EcsOnLoad, [out] TbPerFrameMeshQueueCounter(TbPerFrameMeshQueueCounter),
+      [out] TbPerFrameSubmeshQueueCounter(TbPerFrameSubmeshQueueCounter));
+
   ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
-             EcsPostLoad, [inout] TbTaskScheduler(TbTaskScheduler),
+             EcsPostLoad, [in] TbMeshCtx(TbMeshCtx),
+             [inout] TbTaskScheduler(TbTaskScheduler),
              [inout] TbMeshQueueCounter(TbMeshQueueCounter),
-             [in] TbMeshGLTFLoadRequest);
-  ECS_SYSTEM(ecs, tb_queue_gltf_submesh_loads, EcsPostLoad,
-             TbSubMeshQueueCounter(TbSubMeshQueueCounter),
-             TbTaskScheduler(TbTaskScheduler), [in] TbSubMeshGLTFLoadRequest);
+             [inout] TbPerFrameMeshQueueCounter(TbPerFrameMeshQueueCounter));
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_submesh_loads, EcsPostLoad, [in] TbMeshCtx(TbMeshCtx),
+      [inout] TbTaskScheduler(TbTaskScheduler),
+      [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter),
+      [inout] TbPerFrameSubmeshQueueCounter(TbPerFrameSubmeshQueueCounter));
 
   // System that ticks as we ensure mesh descriptors are written
   ECS_SYSTEM(
@@ -828,7 +883,18 @@ void tb_register_mesh2_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
-  TbMeshCtx ctx = {0};
+  TbMeshCtx ctx = {
+      .mesh_load_query =
+          ecs_query(ecs, {.filter.terms =
+                              {
+                                  {.id = ecs_id(TbMeshGLTFLoadRequest)},
+                              }}),
+      .submesh_load_query =
+          ecs_query(ecs, {.filter.terms =
+                              {
+                                  {.id = ecs_id(TbSubMeshGLTFLoadRequest)},
+                              }}),
+  };
 
   // Create mesh descriptor set layout
   {
@@ -904,12 +970,18 @@ void tb_register_mesh2_sys(TbWorld *world) {
     SDL_AtomicSet(&queue_count, 0);
     ecs_singleton_set_ptr(ecs, TbSubMeshQueueCounter, &queue_count);
   }
+
+  ecs_singleton_set(ecs, TbPerFrameMeshQueueCounter, {0});
+  ecs_singleton_set(ecs, TbPerFrameSubmeshQueueCounter, {0});
 }
 
 void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+
+  ecs_query_fini(ctx->mesh_load_query);
+  ecs_query_fini(ctx->submesh_load_query);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -991,6 +1063,7 @@ VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs) {
 TbMesh2 tb_mesh_sys_load_gltf_mesh(ecs_world_t *ecs, cgltf_data *data,
                                    const char *path, const char *name,
                                    uint32_t index) {
+  TB_TRACY_SCOPE("Load GLTF Mesh");
   bool deferred = false;
   if (ecs_is_deferred(ecs)) {
     deferred = ecs_defer_end(ecs);

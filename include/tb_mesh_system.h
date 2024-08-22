@@ -24,14 +24,14 @@ typedef uint32_t TbMeshIndex;
 extern ECS_COMPONENT_DECLARE(TbMeshIndex);
 
 typedef ecs_entity_t TbSubMesh2;
-typedef ecs_entity_t TbMaterial2;
+typedef ecs_entity_t TbMaterial;
 typedef struct TbSubMesh2Data {
   uint32_t index_count;
   uint64_t index_offset;
   uint64_t vertex_offset;
   uint32_t vertex_count;
   uint32_t vertex_perm;
-  TbMaterial2 material;
+  TbMaterial material;
 } TbSubMesh2Data;
 extern ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 

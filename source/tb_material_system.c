@@ -11,6 +11,7 @@
 
 static const int32_t TbMaxParallelMaterialLoads = 8;
 static SDL_AtomicInt tb_parallel_mat_load_count = {0};
+static const int32_t TbMaxMaterialUploadsPerFrame = 8;
 
 // Components
 
@@ -22,7 +23,7 @@ typedef struct TbMaterialDomainHandler {
   TbMaterialUsage usage;
   TbMaterialDomain domain;
   size_t type_size;
-  TbMaterial2 default_mat;
+  TbMaterial default_mat;
 } TbMaterialDomainHandler;
 ECS_COMPONENT_DECLARE(TbMaterialDomainHandler);
 
@@ -55,12 +56,13 @@ ECS_TAG_DECLARE(TbMaterialUploaded);
 
 typedef struct TbMaterialLoadedArgs {
   ecs_world_t *ecs;
-  TbMaterial2 mat;
+  TbMaterial mat;
   TbMaterialDomain domain;
   TbMaterialData comp;
 } TbMaterialLoadedArgs;
 
 void tb_material_loaded(const void *args) {
+  TB_TRACY_SCOPE("Material Loaded Task");
   tb_auto loaded_args = (const TbMaterialLoadedArgs *)args;
   tb_auto ecs = loaded_args->ecs;
   tb_auto mat = loaded_args->mat;
@@ -77,7 +79,7 @@ void tb_material_loaded(const void *args) {
 
 typedef struct TbLoadCommonMaterialArgs {
   ecs_world_t *ecs;
-  TbMaterial2 mat;
+  TbMaterial mat;
   TbTaskScheduler enki;
   TbPinnedTask loaded_task;
   TbMaterialDomain domain;
@@ -91,28 +93,22 @@ typedef struct TbLoadGLTFMaterialArgs {
 TbMaterialData tb_parse_gltf_mat(const cgltf_data *gltf_data, const char *name,
                                  TbMatParseFn parse_fn,
                                  const cgltf_material *material) {
-  TracyCZoneN(ctx, "Load Material", true);
-
+  TB_TRACY_SCOPE("Parse GLTF Mat");
   TbMaterialData mat_data = {0};
-
   // Load material based on usage
   void *data = NULL;
   if (!parse_fn(gltf_data, name, material, &data)) {
     tb_free(tb_global_alloc, data);
-    TracyCZoneEnd(ctx);
     return mat_data;
   }
-
   mat_data.domain_data = data;
-
-  TracyCZoneEnd(ctx);
   return mat_data;
 }
 
 void tb_load_gltf_material_task(const void *args) {
-  TracyCZoneN(ctx, "Load GLTF Material Task", true);
+  TB_TRACY_SCOPE("Load GLTF Material Task");
   tb_auto load_args = (const TbLoadGLTFMaterialArgs *)args;
-  TbMaterial2 mat = load_args->common.mat;
+  TbMaterial mat = load_args->common.mat;
   tb_auto domain = load_args->common.domain;
 
   tb_auto data = load_args->gltf.data;
@@ -150,7 +146,6 @@ void tb_load_gltf_material_task(const void *args) {
   tb_launch_pinned_task_args(load_args->common.enki,
                              load_args->common.loaded_task, &loaded_args,
                              sizeof(TbMaterialLoadedArgs));
-  TracyCZoneEnd(ctx);
 }
 
 TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
@@ -169,7 +164,7 @@ TbMaterialDomainHandler tb_find_material_domain(const TbMaterialCtx *ctx,
 // Systems
 
 void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Queue GLTF Tex Loads", true);
+  TB_TRACY_SCOPE("Queue GLTF Mat Loads");
 
   tb_auto ecs = it->world;
 
@@ -185,7 +180,7 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
         TbMaxParallelMaterialLoads) {
       break;
     }
-    TbMaterial2 ent = it->entities[i];
+    TbMaterial ent = it->entities[i];
     tb_auto req = reqs[i];
     tb_auto usage = usages[i];
 
@@ -220,7 +215,6 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
     // Remove load request as it has now been enqueued to the task system
     ecs_remove(ecs, ent, TbMaterialGLTFLoadRequest);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_upload_gltf_mats(ecs_iter_t *it) {
@@ -231,7 +225,10 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
   tb_auto materials = ecs_field(it, TbMaterialData, 3);
   tb_auto usages = ecs_field(it, TbMaterialUsage, 4);
   for (int32_t i = 0; i < it->count; ++i) {
-    TbMaterial2 ent = it->entities[i];
+    if (i >= TbMaxMaterialUploadsPerFrame) {
+      break;
+    }
+    TbMaterial ent = it->entities[i];
     tb_auto material = &materials[i];
     tb_auto usage = usages[i];
 
@@ -326,7 +323,8 @@ void tb_update_material_pool(ecs_iter_t *it) {
 
 // Toybox Glue
 
-void tb_register_material2_sys(TbWorld *world) {
+void tb_register_material_sys(TbWorld *world) {
+  TB_TRACY_SCOPE("Register Material System");
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMaterialCtx);
   ECS_COMPONENT_DEFINE(ecs, TbMaterialGLTFLoadRequest);
@@ -448,7 +446,7 @@ void tb_register_material2_sys(TbWorld *world) {
   tb_register_scene_material_domain(ecs);
 }
 
-void tb_unregister_material2_sys(TbWorld *world) {
+void tb_unregister_material_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
@@ -468,7 +466,7 @@ void tb_unregister_material2_sys(TbWorld *world) {
   ecs_singleton_remove(ecs, TbMaterialCtx);
 }
 
-TB_REGISTER_SYS(tb, material2, TB_MAT_SYS_PRIO)
+TB_REGISTER_SYS(tb, material, TB_MAT_SYS_PRIO)
 
 // Public API
 
@@ -483,7 +481,7 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
   uint8_t *data_copy = tb_alloc_nm_tp(tb_global_alloc, size, uint8_t);
   SDL_memcpy(data_copy, default_data, size);
 
-  TbMaterial2 default_mat = ecs_new_entity(ecs, 0);
+  TbMaterial default_mat = ecs_new_entity(ecs, 0);
   ecs_set(ecs, default_mat, TbMaterialUsage, {usage});
   ecs_add(ecs, default_mat, TbMaterialLoaded);
 
@@ -539,8 +537,8 @@ VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs) {
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
 }
 
-TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
-                                     const char *name, TbMaterialUsage usage) {
+TbMaterial tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
+                                    const char *name, TbMaterialUsage usage) {
   /*
     If we are in a deferred ecs state (in the middle of the execution of a
   system) we would not be able to determine if a material entity already
@@ -555,7 +553,7 @@ an entity for a material already exists
     deferred = ecs_defer_end(ecs);
   }
   // If an entity already exists with this name it is either loading or loaded
-  TbMaterial2 mat_ent = ecs_lookup_child(ecs, ecs_id(TbMaterialCtx), name);
+  TbMaterial mat_ent = ecs_lookup_child(ecs, ecs_id(TbMaterialCtx), name);
   if (mat_ent != 0) {
     if (deferred) {
       ecs_defer_begin(ecs);
@@ -593,13 +591,13 @@ an entity for a material already exists
   return mat_ent;
 }
 
-bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent) {
+bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial mat_ent) {
   return ecs_has(ecs, mat_ent, TbMaterialUploaded) &&
          ecs_has(ecs, mat_ent, TbMaterialComponent) &&
          ecs_has(ecs, mat_ent, TbDescriptorReady);
 }
 
-bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent) {
+bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial mat_ent) {
   tb_auto ctx = ecs_singleton_get(ecs, TbMaterialCtx);
   tb_auto data = ecs_get(ecs, mat_ent, TbMaterialData);
   tb_auto usage = *ecs_get(ecs, mat_ent, TbMaterialUsage);
@@ -608,7 +606,7 @@ bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent) {
   return handler.domain.is_trans_fn(data);
 }
 
-TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage) {
+TbMaterial tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage) {
   tb_auto ctx = ecs_singleton_get(ecs, TbMaterialCtx);
   TB_DYN_ARR_FOREACH(ctx->usage_map, i) {
     tb_auto handler = &TB_DYN_ARR_AT(ctx->usage_map, i);

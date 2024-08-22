@@ -6,6 +6,7 @@ void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
                              VkDescriptorSetLayout layout,
                              VkDescriptorType type, uint32_t desc_cap,
                              TbDynDescPool *pool, uint32_t binding) {
+  TB_TRACY_SCOPE("Create Dynamic Descriptor Pool");
   *pool = (TbDynDescPool){
       .layout = layout,
       .binding = binding,
@@ -55,6 +56,7 @@ void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
 
 bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
                             const TbDynDescWrite *writes, uint32_t *out_idxs) {
+  TB_TRACY_SCOPE("Write Dynamic Descriptor Pool");
   if (write_count == 0) {
     return true;
   }
@@ -112,6 +114,7 @@ bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
 }
 
 void tb_tick_dyn_desc_pool(TbRenderSystem *rnd_sys, TbDynDescPool *pool) {
+  TB_TRACY_SCOPE("Tick Dynamic Descriptor Pool");
   const uint32_t frame_idx = rnd_sys->frame_idx;
   tb_auto write_queue = &pool->write_queues[frame_idx];
 

@@ -7,7 +7,7 @@
 // HACK: +2 because this needs to be after the texture system
 #define TB_MAT_SYS_PRIO (TB_RND_SYS_PRIO + 2)
 
-typedef ecs_entity_t TbMaterial2; // Entities can be handles to materials
+typedef ecs_entity_t TbMaterial; // Entities can be handles to materials
 typedef uint32_t TbMaterialPerm;
 typedef struct cgltf_data cgltf_data;
 typedef struct cgltf_material cgltf_material;
@@ -61,12 +61,12 @@ VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs);
 
 VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs);
 
-TbMaterial2 tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
-                                     const char *name, TbMaterialUsage usage);
+TbMaterial tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
+                                    const char *name, TbMaterialUsage usage);
 
 // Returns true if the material is ready to be used
-bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial2 mat_ent);
+bool tb_is_material_ready(ecs_world_t *ecs, TbMaterial mat_ent);
 
-bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial2 mat_ent);
+bool tb_is_mat_transparent(ecs_world_t *ecs, TbMaterial mat_ent);
 
-TbMaterial2 tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage);
+TbMaterial tb_get_default_mat(ecs_world_t *ecs, TbMaterialUsage usage);
