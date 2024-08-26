@@ -42,9 +42,7 @@ bool tb_load_mesh_comp(ecs_world_t *ecs, ecs_entity_t ent,
                                           name, mesh_idx),
   };
   ecs_set_ptr(ecs, ent, TbMeshComponent, &comp);
-
-  // Mark this entity as a render object
-  ecs_set(ecs, ent, TbRenderObject, {0});
+  tb_mark_as_render_object(ecs, ent);
 
   return true;
 }

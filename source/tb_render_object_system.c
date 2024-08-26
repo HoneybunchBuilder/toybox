@@ -10,6 +10,9 @@
 
 #include "blocks/Block.h"
 
+// Configuration
+static const uint32_t TbMaxRenderObjects = 1 << 16; // 65536
+
 void tb_register_render_object_sys(TbWorld *world);
 void tb_unregister_render_object_sys(TbWorld *world);
 
@@ -243,6 +246,15 @@ VkDescriptorBufferBindingInfoEXT
 tb_render_object_sys_get_table_addr(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
+}
+
+void tb_mark_as_render_object(ecs_world_t *ecs, ecs_entity_t ent) {
+  uint32_t idx = 0; // TODO:
+  ecs_set(ecs, ent, TbRenderObject,
+          {
+              .perm = 0,
+              .index = idx,
+          });
 }
 
 void tb_register_render_object_sys(TbWorld *world) {

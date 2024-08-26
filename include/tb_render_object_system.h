@@ -66,3 +66,7 @@ VkDescriptorSetLayout tb_render_object_sys_get_set_layout(ecs_world_t *ecs);
 // Returns the address of the render object system's descriptor buffer
 VkDescriptorBufferBindingInfoEXT
 tb_render_object_sys_get_table_addr(ecs_world_t *ecs);
+
+// Called by rendering systems to mark meshes / etc. as render objects
+// This is where the render object is assigned an index
+void tb_mark_as_render_object(ecs_world_t *ecs, ecs_entity_t ent);

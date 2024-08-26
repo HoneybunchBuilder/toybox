@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tb_free_list.h"
 #include "tb_render_common.h"
 #include "tb_render_system.h"
 
@@ -26,7 +27,7 @@ typedef struct TbDynDescPool {
   VkDescriptorType type;
   VkDescriptorPool pools[TB_MAX_FRAME_STATES];
   VkDescriptorSet sets[TB_MAX_FRAME_STATES];
-  TB_DYN_ARR_OF(uint32_t) free_list;
+  TbFreeList free_list;
   TB_QUEUE_OF(VkWriteDescriptorSet) write_queues[TB_MAX_FRAME_STATES];
 } TbDynDescPool;
 

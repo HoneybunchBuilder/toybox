@@ -13,7 +13,7 @@ void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
       .type = type,
       .desc_cap = desc_cap,
   };
-  TB_DYN_ARR_RESET(pool->free_list, rnd_sys->gp_alloc, pool->desc_cap);
+  tb_reset_free_list(rnd_sys->gp_alloc, &pool->free_list, pool->desc_cap);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
     VkDescriptorPoolCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -48,10 +48,6 @@ void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
 
     TB_QUEUE_RESET(pool->write_queues[frame_idx], rnd_sys->gp_alloc, desc_cap);
   }
-  // Add newly created indices to the free list
-  for (int32_t i = (pool->desc_cap - 1); i > 0; --i) {
-    TB_DYN_ARR_APPEND(pool->free_list, i);
-  }
 }
 
 bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
@@ -64,8 +60,9 @@ bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
                   "Not enough space for writes", false);
 
   for (uint32_t i = 0; i < write_count; ++i) {
-    uint32_t free_idx = *TB_DYN_ARR_BACKPTR(pool->free_list);
-    TB_DYN_ARR_POP(pool->free_list);
+    uint32_t free_idx = 0;
+    bool idx_ok = tb_pull_index(&pool->free_list, &free_idx);
+    TB_CHECK(idx_ok, "Failed to retrieve index from free list");
 
     tb_auto desc_write = &writes[i];
     TB_CHECK(pool->type == desc_write->type, "Invalid write type");
