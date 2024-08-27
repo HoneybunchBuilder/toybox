@@ -21,6 +21,9 @@
 #endif
 #endif
 
+// Flecs uses '$' in identifiers as part of a DSL so this gets in the way
+#pragma clang diagnostic ignored "-Wdollar-in-identifier-extension"
+
 // Leaning in to clang language extensions
 // __auto_type is really cool
 #pragma clang diagnostic ignored "-Wgnu-auto-type"

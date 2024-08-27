@@ -79,7 +79,7 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
     camera_pos += target_pos;
 
     camera_trans = tb_look_forward_transform(camera_pos, -body_to_cam, TB_UP);
-    camera_trans_comp.dirty = true;
+    tb_transform_mark_dirty(ecs, ecs.entity(move.camera));
   }
 
   // Handle movement of body

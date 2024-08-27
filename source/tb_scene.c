@@ -7,6 +7,7 @@
 #include "tb_material_system.h"
 #include "tb_mesh_system.h"
 #include "tb_profiling.h"
+#include "tb_render_object_system.h"
 #include "tb_task_scheduler.h"
 #include "tb_texture_system.h"
 #include "tb_transform_component.h"
@@ -539,6 +540,8 @@ void tb_ready_check_scenes(ecs_iter_t *it) {
         if (ecs_has(ecs, entity, TbTransformComponent)) {
           tb_transform_mark_dirty(ecs, entity);
         }
+
+        tb_render_object_mark_dirty(ecs, entity);
       }
     }
 

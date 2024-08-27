@@ -2,17 +2,19 @@
 
 #include "tb_common.h"
 #include "tb_profiling.h"
+#include "tb_render_object_system.h" // HACK: Evil for a component to include a system header like this
 #include "tb_world.h"
 
 #include <flecs.h>
 
+ECS_TAG_DECLARE(TbTransformDirty);
 ECS_COMPONENT_DECLARE(TbTransformComponent);
 
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity) {
   TracyCZoneNC(ctx, "TbTransform Get World Matrix", TracyCategoryColorCore,
                true);
   tb_auto comp = ecs_get_mut(ecs, entity, TbTransformComponent);
-  if (comp->dirty) {
+  if (ecs_has(ecs, entity, TbTransformDirty)) {
     comp->world_matrix = tb_transform_to_matrix(&comp->transform);
     // If we have a parent, look up its world transform and combine it with this
     tb_auto parent = ecs_get_parent(ecs, entity);
@@ -26,7 +28,7 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity) {
       comp->world_matrix = tb_mulf44f44(parent_mat, comp->world_matrix);
       parent = ecs_get_parent(ecs, parent);
     }
-    comp->dirty = false;
+    ecs_remove(ecs, entity, TbTransformDirty);
     ecs_modified(ecs, entity, TbTransformComponent);
   }
 
@@ -58,14 +60,16 @@ TbTransform tb_transform_get_world_trans(ecs_world_t *ecs,
 
 void tb_transform_mark_dirty(ecs_world_t *ecs, ecs_entity_t entity) {
   TracyCZoneNC(ctx, "TbTransform Set Dirty", TracyCategoryColorCore, true);
-  tb_auto comp = ecs_get_mut(ecs, entity, TbTransformComponent);
-  comp->dirty = true;
+  ecs_add(ecs, entity, TbTransformDirty);
   tb_auto child_it = ecs_children(ecs, entity);
   while (ecs_children_next(&child_it)) {
     for (int i = 0; i < child_it.count; i++) {
       tb_transform_mark_dirty(ecs, child_it.entities[i]);
     }
   }
+  // HACK: If the transform was updated, any relevant render object data also
+  // needs to be updated
+  tb_render_object_mark_dirty(ecs, entity);
   ecs_modified(ecs, entity, TbTransformComponent);
   TracyCZoneEnd(ctx);
 }
@@ -116,10 +120,10 @@ bool tb_load_transform_comp(ecs_world_t *ecs, ecs_entity_t ent,
   (void)data;
   (void)json;
   TbTransformComponent comp = {
-      .dirty = true,
       .transform = tb_transform_from_node(node),
   };
   ecs_set_ptr(ecs, ent, TbTransformComponent, &comp);
+  ecs_add(ecs, ent, TbTransformDirty);
   return true;
 }
 
@@ -130,6 +134,7 @@ TbComponentRegisterResult tb_register_transform_comp(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, float4x4);
   ECS_COMPONENT_DEFINE(ecs, TbTransform);
   ECS_COMPONENT_DEFINE(ecs, TbTransformComponent);
+  ECS_TAG_DEFINE(ecs, TbTransformDirty);
 
   ecs_struct(ecs, {.entity = ecs_id(float3),
                    .members = {

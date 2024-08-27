@@ -2,7 +2,9 @@
 
 #include "tb_allocator.h"
 #include "tb_descriptor_buffer.h"
+#include "tb_dyn_desc_pool.h"
 #include "tb_dynarray.h"
+#include "tb_free_list.h"
 #include "tb_render_common.h"
 #include "tb_render_system.h"
 
@@ -31,13 +33,11 @@ typedef struct VkDescriptorSet_T *VkDescriptorSet;
 typedef struct ecs_query_t ecs_query_t;
 
 typedef struct TbRenderObject {
-  int32_t perm;
   int32_t index;
 } TbRenderObject;
 extern ECS_COMPONENT_DECLARE(TbRenderObject);
 
 typedef struct TbTransformsBuffer {
-  int32_t obj_count;
   TbBuffer gpu;
   TbHostBuffer host;
 } TbTransformsBuffer;
@@ -47,19 +47,18 @@ typedef struct TbRenderObjectSystem {
   TbAllocator gp_alloc;
   TbAllocator tmp_alloc;
 
+  TbFreeList free_list;
+
   VkDescriptorSetLayout set_layout;
-  TbFrameDescriptorPool pools[TB_MAX_FRAME_STATES];
+  TbDynDescPool desc_pool;
 
-  VkDescriptorSetLayout set_layout2;
-  TbDescriptorBuffer desc_buffer;
+  TbTransformsBuffer trans_buffer;
 
-  TbTransformsBuffer trans_buffers[TB_MAX_FRAME_STATES];
-
-  ecs_query_t *obj_query;
+  ecs_query_t *dirty_query;
 } TbRenderObjectSystem;
 extern ECS_COMPONENT_DECLARE(TbRenderObjectSystem);
 
-VkDescriptorSet tb_render_object_sys_get_set(TbRenderObjectSystem *sys);
+VkDescriptorSet tb_render_object_sys_get_set(ecs_world_t *ecs);
 
 VkDescriptorSetLayout tb_render_object_sys_get_set_layout(ecs_world_t *ecs);
 
@@ -70,3 +69,5 @@ tb_render_object_sys_get_table_addr(ecs_world_t *ecs);
 // Called by rendering systems to mark meshes / etc. as render objects
 // This is where the render object is assigned an index
 void tb_mark_as_render_object(ecs_world_t *ecs, ecs_entity_t ent);
+
+void tb_render_object_mark_dirty(ecs_world_t *ecs, ecs_entity_t ent);

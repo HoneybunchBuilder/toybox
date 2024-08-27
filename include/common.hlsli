@@ -56,7 +56,7 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 // that represent global loaded resource tables
 #define TB_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
 #define TB_OBJECT_SET(space)                                                   \
-  StructuredBuffer<TbCommonObjectData> object_data[] : register(t0, space);
+  StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
 #define TB_IDX_SET(space) RWBuffer<int32_t> idx_buffers[] : register(u0, space);
 #define TB_POS_SET(space) RWBuffer<int4> pos_buffers[] : register(u0, space);
 #define TB_NORM_SET(space)                                                     \
@@ -82,8 +82,8 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 #ifdef __HLSL_VERSION
 
 TbCommonObjectData
-tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffers[]) {
-  return buffers[NonUniformResourceIndex(obj)][0];
+tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffer) {
+  return buffer[NonUniformResourceIndex(obj)];
 }
 
 Texture2D tb_get_texture(int32_t tex, Texture2D textures[]) {

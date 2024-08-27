@@ -105,7 +105,9 @@ bool tb_write_dyn_desc_pool(TbDynDescPool *pool, uint32_t write_count,
 
       TB_QUEUE_PUSH_PTR(write_queue, write);
     }
-    out_idxs[i] = free_idx;
+    if (out_idxs) {
+      out_idxs[i] = free_idx;
+    }
   }
   return true;
 }

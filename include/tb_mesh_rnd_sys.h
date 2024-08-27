@@ -83,7 +83,6 @@ typedef struct TbMeshSystem {
 
   TbRenderSystem *rnd_sys;
   TbViewSystem *view_sys;
-  TbRenderObjectSystem *render_object_system;
   TbRenderPipelineSystem *rp_sys;
 
   ecs_query_t *camera_query;

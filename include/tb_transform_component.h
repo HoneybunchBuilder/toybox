@@ -9,8 +9,8 @@
 extern "C" {
 #endif
 
+extern ECS_TAG_DECLARE(TbTransformDirty);
 typedef struct TbTransformComponent {
-  bool dirty;
   float4x4 world_matrix;
   TbTransform transform;
 } TbTransformComponent;

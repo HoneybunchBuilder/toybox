@@ -7,7 +7,7 @@ void tb_reset_free_list(TbAllocator alloc, TbFreeList *free_list,
   TB_DYN_ARR_RESERVE(*free_list, capacity);
   // Reverse iter so the last idx we append is 0 which will make sense as the
   // first index to pop
-  for (int32_t i = (int32_t)capacity - 1; i > 0; --i) {
+  for (int32_t i = (int32_t)capacity - 1; i >= 0; --i) {
     TB_DYN_ARR_APPEND(*free_list, i);
   }
 }

@@ -624,14 +624,12 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                                          TbAllocator tmp_alloc,
                                          TbRenderSystem *rnd_sys,
                                          TbViewSystem *view_sys,
-                                         TbRenderObjectSystem *ro_sys,
                                          TbRenderPipelineSystem *rp_sys) {
   TbMeshSystem sys = {
       .gp_alloc = gp_alloc,
       .tmp_alloc = tmp_alloc,
       .rnd_sys = rnd_sys,
       .view_sys = view_sys,
-      .render_object_system = ro_sys,
       .rp_sys = rp_sys,
   };
   TB_DYN_ARR_RESET(sys.meshes, gp_alloc, 8);
@@ -836,7 +834,6 @@ void mesh_draw_tick(ecs_iter_t *it) {
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
   tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
-  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
@@ -942,7 +939,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       tb_auto tan_addr = tb_mesh_sys_get_tan_addr(ecs);
       tb_auto uv0_addr = tb_mesh_sys_get_uv0_addr(ecs);
 #else
-      tb_auto obj_set = tb_render_object_sys_get_set(ro_sys);
+      tb_auto obj_set = tb_render_object_sys_get_set(ecs);
       tb_auto tex_set = tb_tex_sys_get_set(ecs);
       tb_auto mat_set = tb_mat_sys_get_set(ecs);
       tb_auto idx_set = tb_mesh_sys_get_idx_set(ecs);
@@ -1295,12 +1292,10 @@ void tb_register_mesh_sys(TbWorld *world) {
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
   tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto ro_sys = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
   tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
 
-  tb_auto sys =
-      create_mesh_system_internal(ecs, world->gp_alloc, world->tmp_alloc,
-                                  rnd_sys, view_sys, ro_sys, rp_sys);
+  tb_auto sys = create_mesh_system_internal(
+      ecs, world->gp_alloc, world->tmp_alloc, rnd_sys, view_sys, rp_sys);
   sys.camera_query = ecs_query(ecs, {.filter.terms = {
                                          {.id = ecs_id(TbCameraComponent)},
                                      }});

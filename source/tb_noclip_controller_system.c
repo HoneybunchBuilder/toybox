@@ -19,8 +19,9 @@ void noclip_update_tick(ecs_iter_t *it) {
   TbNoClipComponent *noclips = ecs_field(it, TbNoClipComponent, 2);
 
   for (int32_t i = 0; i < it->count; ++i) {
-    TbTransformComponent *transform = &transforms[i];
-    TbNoClipComponent *noclip = &noclips[i];
+    tb_auto transform = &transforms[i];
+    tb_auto noclip = &noclips[i];
+    tb_auto entity = it->entities[i];
 
     float2 look_axis = {0};
     float2 move_axis = {0};
@@ -78,9 +79,9 @@ void noclip_update_tick(ecs_iter_t *it) {
     {
       float delta_look_speed = noclip->look_speed * it->delta_time;
 
-      TbQuaternion av0 =
+      tb_auto av0 =
           tb_angle_axis_to_quat(tb_f3tof4(up, look_axis.x * delta_look_speed));
-      TbQuaternion av1 = tb_angle_axis_to_quat(
+      tb_auto av1 = tb_angle_axis_to_quat(
           tb_f3tof4(right, look_axis.y * delta_look_speed));
 
       angular_velocity = tb_mulq(av0, av1);
@@ -88,7 +89,7 @@ void noclip_update_tick(ecs_iter_t *it) {
 
     tb_translate(&transform->transform, velocity);
     tb_rotate(&transform->transform, angular_velocity);
-    transform->dirty = true;
+    tb_transform_mark_dirty(it->world, entity);
   }
   TracyCZoneEnd(ctx);
 }
