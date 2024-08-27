@@ -7,28 +7,25 @@
 #define _Static_assert static_assert
 #endif
 
-#include "pi.h"
-#include "simd.h"
+#include "tb_pi.h"
+#include "tb_simd.h"
 
 #define PUSH_CONSTANT_BYTES 128
 
 typedef struct TB_GPU_STRUCT TbSkyPushConstants {
   float4x4 vp;
-}
-TbSkyPushConstants;
+} TbSkyPushConstants;
 
 typedef struct TB_GPU_STRUCT TbEnvFilterConstants {
   float roughness;
   uint32_t sample_count;
-}
-TbEnvFilterConstants;
+} TbEnvFilterConstants;
 
 typedef struct TB_GPU_STRUCT TbPrimitivePushConstants {
   float3 position;
   float3 scale;
   float4 color;
-}
-TbPrimitivePushConstants;
+} TbPrimitivePushConstants;
 
 // Constant per-view Camera Data
 typedef struct TB_GPU_STRUCT TbCommonViewData {
@@ -39,8 +36,7 @@ typedef struct TB_GPU_STRUCT TbCommonViewData {
   float4x4 inv_proj;
   float3 view_pos;
   float4 proj_params;
-}
-TbCommonViewData;
+} TbCommonViewData;
 
 // Constant per-view Light Data
 #define TB_CASCADE_COUNT 4
@@ -49,20 +45,18 @@ typedef struct TB_GPU_STRUCT TbCommonLightData {
   float3 light_dir;
   float4 cascade_splits;
   float4x4 cascade_vps[TB_CASCADE_COUNT];
-}
-TbCommonLightData;
+} TbCommonLightData;
 
 // Per-instance object data
 typedef struct TB_GPU_STRUCT TbCommonObjectData {
   float4x4 m;
-}
-TbCommonObjectData;
+} TbCommonObjectData;
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables
 #define TB_TEXTURE_SET(space) Texture2D gltf_textures[] : register(t0, space);
 #define TB_OBJECT_SET(space)                                                   \
-  StructuredBuffer<TbCommonObjectData> object_data[] : register(t0, space);
+  StructuredBuffer<TbCommonObjectData> object_data : register(t0, space);
 #define TB_IDX_SET(space) RWBuffer<int32_t> idx_buffers[] : register(u0, space);
 #define TB_POS_SET(space) RWBuffer<int4> pos_buffers[] : register(u0, space);
 #define TB_NORM_SET(space)                                                     \
@@ -88,8 +82,8 @@ TbCommonObjectData;
 #ifdef __HLSL_VERSION
 
 TbCommonObjectData
-tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffers[]) {
-  return buffers[NonUniformResourceIndex(obj)][0];
+tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffer) {
+  return buffer[NonUniformResourceIndex(obj)];
 }
 
 Texture2D tb_get_texture(int32_t tex, Texture2D textures[]) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "simd.h"
+#include "tb_simd.h"
 
 // Per view matrix look up table
 // So that each view is pointing at the right face of the cubemap
@@ -27,13 +27,14 @@
   for (uint32_t dir_idx = 0; dir_idx < DIR_COUNT; ++dir_idx)
   {
     float4x4 proj = perspective(TB_PI_2, 1.0, 0.001, 1.0f);
-    float4x4 view = look_forward((float3){0}, directions[dir_idx], ups[dir_idx]);
-    matrices[dir_idx] = mulmf44(proj, view);
-    
+    float4x4 view = look_forward((float3){0}, directions[dir_idx],
+ups[dir_idx]); matrices[dir_idx] = mulmf44(proj, view);
+
   }
   // Examine matrices with a print or debugger;
   // e.g. print(transpose_mf44(matrices[dir_idx]))
-  // Note that the transpose is only for display purposes when writing into HLSL.
+  // Note that the transpose is only for display purposes when writing into
+HLSL.
   // If you were to want to use these matrices at runtime you do not need
   // to transpose
 #undef DIR_COUNT
@@ -44,33 +45,15 @@
 */
 static const column_major float4x4 view_proj_lut[6] = {
     // X+
-    {1, 0, 0, 0,
-     0, 1, 0, 0,
-     0, 0, -1.001001, -0.00100100099,
-     0, 0, -1, 0},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1.001001, -0.00100100099, 0, 0, -1, 0},
     // X-
-    {-1, 0, 0, 0,
-     0, 1, 0, 0,
-     0, 0, 1.001001, -0.00100100099,
-     0, 0, 1, 0},
+    {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1.001001, -0.00100100099, 0, 0, 1, 0},
     // Y+
-    {0, 0, -1, 0,
-     1, 0, 0, 0,
-     0, 1.001001, 0, -0.00100100099,
-     0, 1, 0, 0},
+    {0, 0, -1, 0, 1, 0, 0, 0, 0, 1.001001, 0, -0.00100100099, 0, 1, 0, 0},
     // Y-
-    {0, 0, -1, 0,
-     -1, 0, 0, 0,
-     0, -1.001001, 0, -0.00100100099,
-     0, -1, 0, 0},
-     // Z+
-    {0, 0, -1, 0,
-     0, 1, 0, 0,
-     -1.001001, 0, 0, -0.00100100099,
-     -1, 0, 0, 0},
+    {0, 0, -1, 0, -1, 0, 0, 0, 0, -1.001001, 0, -0.00100100099, 0, -1, 0, 0},
+    // Z+
+    {0, 0, -1, 0, 0, 1, 0, 0, -1.001001, 0, 0, -0.00100100099, -1, 0, 0, 0},
     // Z-
-    {0, 0, 1, 0,
-     0, 1, 0, 0,
-     1.00010001, 0, 0, -0.00100100099,
-     1, 0, 0, 0},
+    {0, 0, 1, 0, 0, 1, 0, 0, 1.00010001, 0, 0, -0.00100100099, 1, 0, 0, 0},
 };

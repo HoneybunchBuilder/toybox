@@ -33,18 +33,28 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/TargetArch.cmake)
 target_architecture(arch)
 
 # Platform detection
+set(tb_windows 0)
+set(tb_macos 0)
+set(tb_linux 0)
+set(tb_android 0)
+set(tb_ios 0)
 if(WIN32)
   set(platform "windows")
+  set(tb_windows 1)
 elseif(APPLE)
   if(IOS)
     set(platform "ios")
+    set(tb_ios 1)
   else()
     set(platform "macos")
+    set(tb_macos 1)
   endif()
 elseif(ANDROID)
   set(platform "android")
+  set(tb_android 1)
 elseif(UNIX)
   set(platform "linux")
+  set(tb_linux 1)
 else()
   message(FATAL_ERROR "Unknown platform")
 endif()
@@ -62,14 +72,20 @@ else()
 message(FATAL_ERROR "Unknown host")
 endif()
 
+set(tb_x64 0)
+set(tb_arm64 0)
 if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "AMD64")
   set(host_arch "x64")
+  set(tb_x64 1)
 elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
   set(host_arch "x64")
+  set(tb_x64 1)
 elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
   set(host_arch "arm64")
+  set(tb_arm64 1)
 elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "aarch64")
   set(host_arch "arm64")
+  set(tb_arm64 1)
 else()
   message(FATAL_ERROR "Unknown host arch: ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 endif()
@@ -171,8 +187,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
+        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -193,8 +209,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
+        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -214,7 +230,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
+        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -257,7 +273,7 @@ function(cook_assets target_name out_assets_path)
     add_custom_command(
       OUTPUT ${packed_scene}
       COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-      COMMAND ${GLTFPACK} -cc -mi -kn -km -ke -tc -i ${scene} -o ${packed_scene}
+      COMMAND ${GLTFPACK} -cc -kn -km -ke -tc -i ${scene} -o ${packed_scene}
       MAIN_DEPENDENCY ${scene}
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
     )
@@ -357,9 +373,6 @@ add_library(toybox OBJECT ${lib_source})
 # We provide a cross platform blocks runtime so we can use this
 target_compile_options(toybox PUBLIC -fblocks)
 
-# We rely on gnu statement expressions
-target_compile_options(toybox PUBLIC -Wno-gnu-statement-expression)
-
 if(WIN32)
   # This really only matters for clang-cl
   # ${CMAKE_C_COMPILER_ID} being MSVC would fail the above check
@@ -376,8 +389,6 @@ if(WIN32)
   # We use anonymous structs 
   target_compile_options(toybox PUBLIC -Wno-gnu-anonymous-struct)
   target_compile_options(toybox PUBLIC -Wno-nested-anon-types)
-  # Flecs uses '$' in identifiers as part of a DSL so this gets in the way
-  target_compile_options(toybox PUBLIC -Wno-dollar-in-identifier-extension)
 
 elseif(ANDROID)
   if(CMAKE_C_COMPILER_ARCHITECTURE_ID MATCHES "arm")
@@ -407,7 +418,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 # Generate config header
 set(engine_config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-configure_file(source/config.h.in ${engine_config_include_dir}/tbengineconfig.h @ONLY)
+configure_file(source/config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
 
 target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${engine_config_include_dir}")
