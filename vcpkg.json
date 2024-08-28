@@ -45,7 +45,7 @@
   "overrides": [
     {
       "name": "cgltf",
-      "version": "1.13"
+      "version": "1.14"
     },
     {
       "name": "enkits",
@@ -74,7 +74,7 @@
     },
     {
       "name": "mimalloc",
-      "version": "2.1.2"
+      "version": "2.1.7"
     },
     {
       "name": "sdl3",
@@ -86,15 +86,15 @@
     },
     {
       "name": "tracy",
-      "version": "0.10.0"
+      "version": "0.11.0"
     },
     {
       "name": "volk",
-      "version": "1.3.275.0"
+      "version": "1.3.290.0"
     },
     {
       "name": "vulkan-memory-allocator",
-      "version": "3.0.1"
+      "version": "3.1.0"
     }
   ]
 }
