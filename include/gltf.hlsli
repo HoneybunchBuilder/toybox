@@ -130,22 +130,22 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 // by specific systems
 
 #define GLTF_MATERIAL_SET(b)                                                   \
-  [[vk::binding(b, 0)]] SamplerState material_sampler;                         \
-  [[vk::binding(b, 1)]] SamplerComparisonState shadow_sampler;                 \
-  [[vk::binding(b, 2)]] StructuredBuffer<TbGLTFMaterialData> gltf_data[];
+  [[vk::binding(0, b)]] SamplerState material_sampler;                         \
+  [[vk::binding(1, b)]] SamplerComparisonState shadow_sampler;                 \
+  [[vk::binding(2, b)]] StructuredBuffer<TbGLTFMaterialData> gltf_data[];
 
 #define GLTF_DRAW_SET(b)                                                       \
-  [[vk::binding(b, 0)]] StructuredBuffer<TbGLTFDrawData> draw_data;
+  [[vk::binding(0, b)]] StructuredBuffer<TbGLTFDrawData> draw_data;
 
 #define GLTF_VIEW_SET(b)                                                       \
-  [[vk::binding(b, 0)]] ConstantBuffer<TbCommonViewData> camera_data;          \
-  [[vk::binding(b, 1)]] TextureCube irradiance_map;                            \
-  [[vk::binding(b, 2)]] TextureCube prefiltered_map;                           \
-  [[vk::binding(b, 3)]] Texture2D brdf_lut;                                    \
-  [[vk::binding(b, 4)]] ConstantBuffer<TbCommonLightData> light_data;          \
-  [[vk::binding(b, 5)]] Texture2DArray shadow_map;                             \
-  [[vk::binding(b, 6)]] SamplerState filtered_env_sampler;                     \
-  [[vk::binding(b, 7)]] SamplerState brdf_sampler;
+  [[vk::binding(0, b)]] ConstantBuffer<TbCommonViewData> camera_data;          \
+  [[vk::binding(1, b)]] TextureCube irradiance_map;                            \
+  [[vk::binding(2, b)]] TextureCube prefiltered_map;                           \
+  [[vk::binding(3, b)]] Texture2D brdf_lut;                                    \
+  [[vk::binding(4, b)]] ConstantBuffer<TbCommonLightData> light_data;          \
+  [[vk::binding(5, b)]] Texture2DArray shadow_map;                             \
+  [[vk::binding(6, b)]] SamplerState filtered_env_sampler;                     \
+  [[vk::binding(7, b)]] SamplerState brdf_sampler;
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \

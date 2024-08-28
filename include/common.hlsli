@@ -101,16 +101,16 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables
-#define TB_TEXTURE_SET(b) [[vk::binding(b, 0)]] Texture2D gltf_textures[];
+#define TB_TEXTURE_SET(b) [[vk::binding(0, b)]] Texture2D gltf_textures[];
 #define TB_OBJECT_SET(b)                                                       \
-  [[vk::binding(b, 0)]] StructuredBuffer<TbCommonObjectData> object_data;
-#define TB_IDX_SET(b) [[vk::binding(b, 0)]] RWBuffer<int32_t> idx_buffers[];
-#define TB_POS_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> pos_buffers[];
-#define TB_NORM_SET(b) [[vk::binding(b, 0)]] RWBuffer<float4> norm_buffers[];
-#define TB_TAN_SET(b) [[vk::binding(b, 0)]] RWBuffer<float4> tan_buffers[];
-#define TB_UV0_SET(b) [[vk::binding(b, 0)]] RWBuffer<int2> uv0_buffers[];
-#define TB_JOINT_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> joint_buffers[];
-#define TB_WEIGHT_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> weight_buffers[];
+  [[vk::binding(0, b)]] StructuredBuffer<TbCommonObjectData> object_data;
+#define TB_IDX_SET(b) [[vk::binding(0, b)]] RWBuffer<int32_t> idx_buffers[];
+#define TB_POS_SET(b) [[vk::binding(0, b)]] RWBuffer<int4> pos_buffers[];
+#define TB_NORM_SET(b) [[vk::binding(0, b)]] RWBuffer<float4> norm_buffers[];
+#define TB_TAN_SET(b) [[vk::binding(0, b)]] RWBuffer<float4> tan_buffers[];
+#define TB_UV0_SET(b) [[vk::binding(0, b)]] RWBuffer<int2> uv0_buffers[];
+#define TB_JOINT_SET(b) [[vk::binding(0, b)]] RWBuffer<int4> joint_buffers[];
+#define TB_WEIGHT_SET(b) [[vk::binding(0, b)]] RWBuffer<int4> weight_buffers[];
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000

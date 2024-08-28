@@ -193,8 +193,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage vertex -entry vert -target spirv $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${vert_out_path} ${shader}
-        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage fragment -entry frag -target spirv $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${frag_out_path} ${shader}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage vertex -entry vert -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${vert_out_path} ${shader}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage fragment -entry frag -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${frag_out_path} ${shader}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )

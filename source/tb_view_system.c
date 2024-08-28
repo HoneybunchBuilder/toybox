@@ -69,9 +69,9 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
   {
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 9,
+        .bindingCount = 8,
         .pBindings =
-            (VkDescriptorSetLayoutBinding[9]){
+            (VkDescriptorSetLayoutBinding[8]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -113,18 +113,12 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                 {
                     .binding = 6,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 7,
-                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                     .pImmutableSamplers = &sys.filtered_env_sampler,
                 },
                 {
-                    .binding = 8,
+                    .binding = 7,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -141,9 +135,9 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
     VkDescriptorSetLayoutCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
-        .bindingCount = 9,
+        .bindingCount = 8,
         .pBindings =
-            (VkDescriptorSetLayoutBinding[9]){
+            (VkDescriptorSetLayoutBinding[8]){
                 {
                     .binding = 0,
                     .descriptorCount = 1,
@@ -185,18 +179,12 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                 {
                     .binding = 6,
                     .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                },
-                {
-                    .binding = 7,
-                    .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                     .pImmutableSamplers = &sys.filtered_env_sampler,
                 },
                 {
-                    .binding = 8,
+                    .binding = 7,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,

@@ -15,10 +15,12 @@ TB_UV0_SET(9)
 TB_JOINT_SET(10)
 TB_WEIGHT_SET(11)
 
+// PROBLEM: VkGraphicsPipelineCreateInfo thinks there is a vertex input here
+// when there is not
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;
-  [[KnownBuiltin("DrawIndex")]]
-  uint32_t draw_idx : POSITION0;
+  [KnownBuiltin("DrawIndex")]
+  uint32_t draw_idx;
 };
 
 struct Interpolators {
@@ -33,6 +35,7 @@ struct Interpolators {
   float3x3 tbn : TEXCOORD2;
 };
 
+[shader("vertex")]
 Interpolators vert(VertexIn i) {
   TbGLTFDrawData draw = tb_get_gltf_draw_data(i.draw_idx, draw_data);
   int32_t vert_perm = draw.perm;
@@ -81,6 +84,7 @@ Interpolators vert(VertexIn i) {
   return o;
 }
 
+[shader("fragment")]
 float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
   TbGLTFMaterialData gltf = tb_get_gltf_mat_data(i.mat_idx, gltf_data);
 

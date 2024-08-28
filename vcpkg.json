@@ -89,6 +89,10 @@
       "version": "3.0.0-087004f"
     },
     {
+      "name": "shader-slang",
+      "version": "2024.1.22"
+    },
+    {
       "name": "tracy",
       "version": "0.10.0"
     },

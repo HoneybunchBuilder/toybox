@@ -6,8 +6,8 @@
 #include "ocean.hlsli"
 #include "pbr.hlsli"
 
-OCEAN_SET(space0);
-GLTF_VIEW_SET(space1);
+OCEAN_SET(0);
+GLTF_VIEW_SET(1);
 
 struct VertexIn {
   int3 local_pos : SV_POSITION;

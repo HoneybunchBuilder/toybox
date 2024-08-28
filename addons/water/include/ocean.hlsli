@@ -25,14 +25,14 @@ _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
 
 #ifdef __HLSL_VERSION
 
-#define OCEAN_SET(space)                                                       \
-  ConstantBuffer<OceanData> ocean_data : register(b0, space);                  \
-  Texture2D depth_map : register(t1, space);                                   \
-  Texture2D color_map : register(t2, space);                                   \
-  SamplerState material_sampler : register(s3, space);                         \
-  SamplerComparisonState shadow_sampler : register(s4, space);                 \
+#define OCEAN_SET(b)                                                           \
+  [[vk::binding(b, 0)]] ConstantBuffer<OceanData> ocean_data;                  \
+  [[vk::binding(b, 1)]] Texture2D depth_map;                                   \
+  [[vk::binding(b, 2)]] Texture2D color_map;                                   \
+  [[vk::binding(b, 3)]] SamplerState material_sampler;                         \
+  [[vk::binding(b, 4)]] SamplerComparisonState shadow_sampler;                 \
   [[vk::push_constant]]                                                        \
-  ConstantBuffer<OceanPushConstants> consts : register(b5, space);
+  ConstantBuffer<OceanPushConstants> consts
 
 void gerstner_wave(TbOceanWave wave, float time, inout float3 pos,
                    inout float3 tangent, inout float3 binormal) {
