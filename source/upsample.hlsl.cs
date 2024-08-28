@@ -1,4 +1,4 @@
-#include "bloom.h"
+#include "tb_bloom.h"
 
 Texture2D input : register(t0, space0);
 RWTexture2D<float4> output : register(u1, space0);

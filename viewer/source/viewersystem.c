@@ -1,13 +1,13 @@
 #include "viewersystem.h"
 
-#include "coreuisystem.h"
-#include "profiling.h"
-#include "tbcommon.h"
-#include "tbimgui.h"
+#include "tb_common.h"
+#include "tb_coreui_system.h"
+#include "tb_imgui.h"
+#include "tb_profiling.h"
 #ifdef TB_COOKED
 #include "tb_viewer_assetmanifest.h"
 #endif
-#include "world.h"
+#include "tb_world.h"
 
 #include <flecs.h>
 

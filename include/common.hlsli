@@ -7,8 +7,8 @@
 #define _Static_assert static_assert
 #endif
 
-#include "pi.h"
-#include "simd.h"
+#include "tb_pi.h"
+#include "tb_simd.h"
 
 #define PUSH_CONSTANT_BYTES 128
 
@@ -103,7 +103,7 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 // that represent global loaded resource tables
 #define TB_TEXTURE_SET(b) [[vk::binding(b, 0)]] Texture2D gltf_textures[];
 #define TB_OBJECT_SET(b)                                                       \
-  [[vk::binding(b, 0)]] StructuredBuffer<TbCommonObjectData> object_data[];
+  [[vk::binding(b, 0)]] StructuredBuffer<TbCommonObjectData> object_data;
 #define TB_IDX_SET(b) [[vk::binding(b, 0)]] RWBuffer<int32_t> idx_buffers[];
 #define TB_POS_SET(b) [[vk::binding(b, 0)]] RWBuffer<int4> pos_buffers[];
 #define TB_NORM_SET(b) [[vk::binding(b, 0)]] RWBuffer<float4> norm_buffers[];
@@ -126,8 +126,8 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 #ifdef __HLSL_VERSION
 
 TbCommonObjectData
-tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffers[]) {
-  return buffers[NonUniformResourceIndex(obj)][0];
+tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffer) {
+  return buffer[NonUniformResourceIndex(obj)];
 }
 
 Texture2D tb_get_texture(int32_t tex, Texture2D textures[]) {

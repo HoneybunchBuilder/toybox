@@ -4,16 +4,16 @@
 
 #include <flecs.h>
 
-#include "allocator.h"
-#include "pi.h"
-#include "profiling.h"
-#include "settings.h"
-#include "shadercommon.h"
-#include "simd.h"
-#include "tbcommon.h"
-#include "tbengineconfig.h"
-#include "tbsdl.h"
-#include "world.h"
+#include "tb_allocator.h"
+#include "tb_common.h"
+#include "tb_engine_config.h"
+#include "tb_pi.h"
+#include "tb_profiling.h"
+#include "tb_sdl.h"
+#include "tb_settings.h"
+#include "tb_shader_common.h"
+#include "tb_simd.h"
+#include "tb_world.h"
 
 #include <SDL3/SDL_main.h>
 int32_t main(int32_t argc, char *argv[]) {
@@ -110,9 +110,6 @@ int32_t main(int32_t argc, char *argv[]) {
     TracyCZoneEnd(trcy_ctx);
   }
   return 0;
-
-  // This doesn't quite work yet
-  tb_clear_world(&world);
 
   // This will also close the window that was provded
   tb_destroy_world(&world);
