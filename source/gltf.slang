@@ -15,12 +15,20 @@ TB_UV0_SET(9)
 TB_JOINT_SET(10)
 TB_WEIGHT_SET(11)
 
-// PROBLEM: VkGraphicsPipelineCreateInfo thinks there is a vertex input here
-// when there is not
+// See https://github.com/shader-slang/slang/issues/4352
+uint32_t get_draw_index() {
+  return spirv_asm {
+        OpExtension "SPV_KHR_shader_draw_parameters";
+        OpCapability DrawParameters;
+        result:$$uint = OpLoad builtin(DrawIndex:uint);
+    };
+}
+
 struct VertexIn {
   int32_t vert_idx : SV_VertexID;
-  [KnownBuiltin("DrawIndex")]
-  uint32_t draw_idx;
+  // This doesn't work as expected. draw_idx gets marked as a vertex attribute
+  //[KnownBuiltin("DrawIndex")]
+  // uint32_t draw_idx : SV_DrawIndex;
 };
 
 struct Interpolators {
@@ -37,7 +45,8 @@ struct Interpolators {
 
 [shader("vertex")]
 Interpolators vert(VertexIn i) {
-  TbGLTFDrawData draw = tb_get_gltf_draw_data(i.draw_idx, draw_data);
+  uint32_t draw_idx = get_draw_index();
+  TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
   int32_t vert_perm = draw.perm;
   uint32_t obj_idx = draw.obj_idx;
   uint32_t mesh_idx = draw.mesh_idx;
