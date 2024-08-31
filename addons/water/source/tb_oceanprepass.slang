@@ -6,8 +6,8 @@ ConstantBuffer<TbOceanData> ocean_data;
 [[vk::push_constant]]
 ConstantBuffer<TbOceanPushConstants> consts;
 
-[[vk::binding(1, 0)]]
-ConstantBuffer<TbViewData> camera_data : register(b0, space1);
+[[vk::binding(0, 1)]]
+ConstantBuffer<TbViewData> camera_data;
 
 struct VertexIn {
   int3 local_pos : POSITION;

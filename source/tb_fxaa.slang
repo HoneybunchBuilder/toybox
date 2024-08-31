@@ -11,7 +11,7 @@ FXAA_SET(0)
 // Luminance is estimated only from the red and green channels
 float fxaa_luma(float3 rgb) { return rgb.g * (0.587 / 0.299) + rgb.r; }
 
-
+// This is a macro because otherwise the offset will not properly be marked as constant by the slang spirv compiler
 #define sample_offset(tex, uv, offset) tex.SampleLevel(in_sampler, uv, 0, offset).rgb
 
 float3 sample_lod0(Texture2D tex, float2 uv) {
