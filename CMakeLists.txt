@@ -135,6 +135,8 @@ find_package(mysofa CONFIG REQUIRED)
 find_package(pffft CONFIG REQUIRED)
 find_package(flatbuffers CONFIG REQUIRED)
 find_package(steam-audio CONFIG REQUIRED)
+find_package(VulkanHeaders CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -169,6 +171,8 @@ list(APPEND library_list "meshoptimizer::meshoptimizer")
 list(APPEND library_list "unofficial::joltphysics::Jolt")
 list(APPEND library_list "enkiTS::enkiTS")
 list(APPEND library_list "steam-audio::phonon")
+list(APPEND library_list "Vulkan::Headers")
+list(APPEND library_list "GPUOpen::VulkanMemoryAllocator")
 
 set(engine_shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
 
