@@ -212,18 +212,48 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${vert_header}
         COMMAND xxd -i ${vert_out_path} ${vert_header}
-        COMMAND ${CMAKE_COMMAND} -E remove ${vert_out_path}
         MAIN_DEPENDENCY ${vert_out_path}
     )
     add_custom_command(
         OUTPUT ${frag_header}
         COMMAND xxd -i ${frag_out_path} ${frag_header}
-        COMMAND ${CMAKE_COMMAND} -E remove ${frag_out_path}
         MAIN_DEPENDENCY ${frag_out_path}
     )
 
     list(APPEND shader_headers ${vert_header} ${vert_out_path})
     list(APPEND shader_headers ${frag_header} ${frag_out_path})
+  endforeach()
+
+  file(GLOB slang_compute_shaders CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.slangc")
+  foreach(shader ${slang_compute_shaders})
+    get_filename_component(filename ${shader} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+    # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(comp_out_path "${filename}_comp")
+    set(out_paths "${comp_out_path};")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${SLANG} -DTB_SHADER=1 -lang slang -profile sm_6_5 -stage compute -entry comp -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${comp_out_path} ${shader}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+
+    set(comp_header "${shader_out_path}/${filename}_comp.h")
+
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
+    add_custom_command(
+        OUTPUT ${comp_header}
+        COMMAND xxd -i ${comp_out_path} ${comp_header}
+        MAIN_DEPENDENCY ${comp_out_path}
+    )
+
+    list(APPEND shader_headers ${comp_header} ${comp_out_path})
   endforeach()
 
   file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
@@ -401,7 +431,7 @@ function(cook_assets target_name out_assets_path)
     string(APPEND SCENE_LIST "${idx},")
   endforeach()
 
-  configure_file(${toybox_source_dir}/source/assetmanifest.h.in ${generated_manifest})
+  configure_file(${toybox_source_dir}/source/tb_assetmanifest.h.in ${generated_manifest})
   add_custom_target(${target_name}_asset_manifest DEPENDS ${generated_manifest})
 
   add_dependencies(${target_name} ${target_name}_scenes ${target_name}_textures ${target_name}_audio ${target_name}_asset_manifest)
@@ -469,7 +499,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 # Generate config header
 set(engine_config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-configure_file(source/config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
+configure_file(source/tb_config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
 
 target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${engine_config_include_dir}")
@@ -600,7 +630,7 @@ function(tb_add_app target_name source)
 
   # Find config header
   set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-  configure_file(${CMAKE_CURRENT_LIST_DIR}/source/config.h.in ${config_include_dir}/config.h @ONLY)
+  configure_file(${CMAKE_CURRENT_LIST_DIR}/source/tb_config.h.in ${config_include_dir}/tb_config.h @ONLY)
 
   cook_shaders(${target_name}_shader_sources ${target_name}_shader_headers)
   if(out_shader_headers)

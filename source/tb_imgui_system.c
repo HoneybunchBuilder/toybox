@@ -3,18 +3,18 @@
 // Ignore some warnings for the generated headers
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "imgui_frag.h"
-#include "imgui_vert.h"
+#include "tb_imgui_frag.h"
+#include "tb_imgui_vert.h"
 #pragma clang diagnostic pop
 
 #include "tb_common.h"
 #include "tb_imgui.h"
+#include "tb_imgui.slangh"
 #include "tb_input_system.h"
 #include "tb_profiling.h"
 #include "tb_render_pipeline_system.h"
 #include "tb_render_system.h"
 #include "tb_render_target_system.h"
-#include "tb_shader_common.h"
 #include "tb_shader_system.h"
 #include "tb_task_scheduler.h"
 #include "tb_vk_dbg.h"
@@ -47,6 +47,7 @@ typedef struct TbImGuiPipelineArgs {
 } TbImGuiPipelineArgs;
 
 VkPipeline create_imgui_pipeline(const TbImGuiPipelineArgs *args) {
+  TB_TRACY_SCOPE("Create Imgui Pipeline");
   tb_auto rnd_sys = args->rnd_sys;
   tb_auto ui_target_format = args->ui_target_format;
   tb_auto pipe_layout = args->pipe_layout;
@@ -59,12 +60,12 @@ VkPipeline create_imgui_pipeline(const TbImGuiPipelineArgs *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(imgui_vert);
-    create_info.pCode = (const uint32_t *)imgui_vert;
+    create_info.codeSize = sizeof(tb_imgui_vert);
+    create_info.pCode = (const uint32_t *)tb_imgui_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Vert", &vert_mod);
 
-    create_info.codeSize = sizeof(imgui_frag);
-    create_info.pCode = (const uint32_t *)imgui_frag;
+    create_info.codeSize = sizeof(tb_imgui_frag);
+    create_info.pCode = (const uint32_t *)tb_imgui_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "ImGui Frag", &frag_mod);
   }
 
@@ -74,13 +75,13 @@ VkPipeline create_imgui_pipeline(const TbImGuiPipelineArgs *args) {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
           .stage = VK_SHADER_STAGE_VERTEX_BIT,
           .module = vert_mod,
-          .pName = "vert",
+          .pName = "main",
       },
       {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
           .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
           .module = frag_mod,
-          .pName = "frag",
+          .pName = "main",
       },
   };
   VkVertexInputBindingDescription vert_bindings[1] = {

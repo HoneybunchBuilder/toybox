@@ -3,7 +3,7 @@
 #include "tb_coreui_system.h"
 #include <flecs.h>
 
-#include "fxaa.hlsli"
+#include "tb_fxaa.slangh"
 
 #define TB_SETTINGS_SYS_PRIO (TB_COREUI_SYS_PRIO + 1)
 

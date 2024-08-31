@@ -1,0 +1,23 @@
+#include "tb_common.slangh"
+
+[[vk::binding(0, 0)]]
+Texture2D input;
+[[vk::binding(1, 0)]]
+RWTexture2D<float4> output;
+[[vk::binding(2, 0)]]
+SamplerState static_sampler;
+
+#define GROUP_SIZE 256
+
+[numthreads(GROUP_SIZE, 1, 1)]
+[shader("compute")]
+void comp(int3 group_thread_id: SV_GroupThreadID,
+          int3 dispatch_thread_id: SV_DispatchThreadID) {
+  float2 resolution;
+input.GetDimensions(resolution.x, resolution.y);
+float2 tex_offset = 1 / resolution;
+
+float2 uv = dispatch_thread_id.xy / resolution;
+float4 value = input.SampleLevel(static_sampler, uv, 0);
+output[dispatch_thread_id.xy] = value;
+}

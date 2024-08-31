@@ -3,34 +3,34 @@
 // Ignore some warnings for the generated headers
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "env_filter_frag.h"
-#include "env_filter_vert.h"
-#include "irradiance_frag.h"
-#include "irradiance_vert.h"
-#include "sky_cube_frag.h"
-#include "sky_cube_vert.h"
-#include "sky_frag.h"
-#include "sky_vert.h"
+#include "tb_env_filter_frag.h"
+#include "tb_env_filter_vert.h"
+#include "tb_irradiance_frag.h"
+#include "tb_irradiance_vert.h"
+#include "tb_sky_cube_frag.h"
+#include "tb_sky_cube_vert.h"
+#include "tb_sky_frag.h"
+#include "tb_sky_vert.h"
 #pragma clang diagnostic pop
 
-#include "common.hlsli"
-#include "json.h"
-#include "sky.slang.h"
-#include "skydome.h"
 #include "tb_camera_component.h"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_light_component.h"
 #include "tb_profiling.h"
 #include "tb_render_pipeline_system.h"
 #include "tb_render_system.h"
 #include "tb_render_target_system.h"
 #include "tb_shader_system.h"
+#include "tb_sky.slangh"
 #include "tb_sky_component.h"
+#include "tb_skydome.h"
 #include "tb_transform_component.h"
 #include "tb_view_system.h"
 #include "tb_world.h"
 
 #include <flecs.h>
+#include <json.h>
 #include <math.h>
 
 #define FILTERED_ENV_DIM 512
@@ -101,6 +101,7 @@ typedef struct TbEnvShaderArgs {
 } TbEnvShaderArgs;
 
 VkPipeline create_sky_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Sky Pipeline");
   tb_auto sky_args = (TbSkyShaderArgs *)args;
 
   tb_auto rnd_sys = sky_args->rnd_sys;
@@ -116,12 +117,12 @@ VkPipeline create_sky_pipeline(void *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(sky_vert);
-    create_info.pCode = (const uint32_t *)sky_vert;
+    create_info.codeSize = sizeof(tb_sky_vert);
+    create_info.pCode = (const uint32_t *)tb_sky_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "sky vert", &vert_mod);
 
-    create_info.codeSize = sizeof(sky_frag);
-    create_info.pCode = (const uint32_t *)sky_frag;
+    create_info.codeSize = sizeof(tb_sky_frag);
+    create_info.pCode = (const uint32_t *)tb_sky_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "sky frag", &frag_mod);
   }
 
@@ -236,6 +237,7 @@ VkPipeline create_sky_pipeline(void *args) {
 }
 
 VkPipeline create_env_capture_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Env Capture Pipeline");
   tb_auto env_args = (TbEnvShaderArgs *)args;
 
   tb_auto rnd_sys = env_args->rnd_sys;
@@ -250,12 +252,12 @@ VkPipeline create_env_capture_pipeline(void *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(sky_cube_vert);
-    create_info.pCode = (const uint32_t *)sky_cube_vert;
+    create_info.codeSize = sizeof(tb_sky_cube_vert);
+    create_info.pCode = (const uint32_t *)tb_sky_cube_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "env capture vert", &vert_mod);
 
-    create_info.codeSize = sizeof(sky_cube_frag);
-    create_info.pCode = (const uint32_t *)sky_cube_frag;
+    create_info.codeSize = sizeof(tb_sky_cube_frag);
+    create_info.pCode = (const uint32_t *)tb_sky_cube_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "env capture frag", &frag_mod);
   }
 
@@ -373,6 +375,7 @@ VkPipeline create_env_capture_pipeline(void *args) {
 }
 
 VkPipeline create_irradiance_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Irradiance Pipeline");
   tb_auto env_args = (TbEnvShaderArgs *)args;
 
   tb_auto rnd_sys = env_args->rnd_sys;
@@ -387,12 +390,12 @@ VkPipeline create_irradiance_pipeline(void *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(irradiance_vert);
-    create_info.pCode = (const uint32_t *)irradiance_vert;
+    create_info.codeSize = sizeof(tb_irradiance_vert);
+    create_info.pCode = (const uint32_t *)tb_irradiance_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance vert", &vert_mod);
 
-    create_info.codeSize = sizeof(irradiance_frag);
-    create_info.pCode = (const uint32_t *)irradiance_frag;
+    create_info.codeSize = sizeof(tb_irradiance_frag);
+    create_info.pCode = (const uint32_t *)tb_irradiance_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Irradiance frag", &frag_mod);
   }
 
@@ -415,13 +418,13 @@ VkPipeline create_irradiance_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -510,6 +513,7 @@ VkPipeline create_irradiance_pipeline(void *args) {
 }
 
 VkPipeline create_prefilter_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Prefilter Pipeline");
   tb_auto env_args = (TbEnvShaderArgs *)args;
 
   tb_auto rnd_sys = env_args->rnd_sys;
@@ -524,12 +528,12 @@ VkPipeline create_prefilter_pipeline(void *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(env_filter_vert);
-    create_info.pCode = (const uint32_t *)env_filter_vert;
+    create_info.codeSize = sizeof(tb_env_filter_vert);
+    create_info.pCode = (const uint32_t *)tb_env_filter_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter vert", &vert_mod);
 
-    create_info.codeSize = sizeof(env_filter_frag);
-    create_info.pCode = (const uint32_t *)env_filter_frag;
+    create_info.codeSize = sizeof(tb_env_filter_frag);
+    create_info.pCode = (const uint32_t *)tb_env_filter_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Env Filter frag", &frag_mod);
   }
 
@@ -552,13 +556,13 @@ VkPipeline create_prefilter_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =

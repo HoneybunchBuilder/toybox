@@ -1,0 +1,9 @@
+#pragma once
+
+#include "tb_common.slangh"
+
+TB_GPU_STRUCT_DECL(TbPrimitivePushConstants, {
+  float3 position;
+  float3 scale;
+  float4 color;
+});

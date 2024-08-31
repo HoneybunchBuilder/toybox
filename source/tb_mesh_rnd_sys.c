@@ -1,10 +1,10 @@
 #include "tb_mesh_rnd_sys.h"
 
 #include "cgltf.h"
-#include "common.hlsli"
-#include "gltf.hlsli"
 #include "tb_camera_component.h"
+#include "tb_common.slangh"
 #include "tb_gltf.h"
+#include "tb_gltf.slangh"
 #include "tb_hash.h"
 #include "tb_light_component.h"
 #include "tb_material_system.h"
@@ -28,10 +28,10 @@
 // Ignore some warnings for the generated headers
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "gltf_frag.h"
-#include "gltf_vert.h"
-#include "opaque_prepass_frag.h"
-#include "opaque_prepass_vert.h"
+#include "tb_gltf_frag.h"
+#include "tb_gltf_vert.h"
+#include "tb_opaque_prepass_frag.h"
+#include "tb_opaque_prepass_vert.h"
 #pragma clang diagnostic pop
 
 ECS_COMPONENT_DECLARE(TbMeshSystem);
@@ -59,6 +59,7 @@ typedef struct TbMeshShaderArgs {
 } TbMeshShaderArgs;
 
 VkPipeline create_prepass_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Prepass Pipeline");
   tb_auto pipe_args = (const TbMeshShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto depth_format = pipe_args->depth_format;
@@ -71,13 +72,13 @@ VkPipeline create_prepass_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(opaque_prepass_vert);
-    create_info.pCode = (const uint32_t *)opaque_prepass_vert;
+    create_info.codeSize = sizeof(tb_opaque_prepass_vert);
+    create_info.pCode = (const uint32_t *)tb_opaque_prepass_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Vert",
                          &vert_mod);
 
-    create_info.codeSize = sizeof(opaque_prepass_frag);
-    create_info.pCode = (const uint32_t *)opaque_prepass_frag;
+    create_info.codeSize = sizeof(tb_opaque_prepass_frag);
+    create_info.pCode = (const uint32_t *)tb_opaque_prepass_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag",
                          &frag_mod);
   }
@@ -103,13 +104,13 @@ VkPipeline create_prepass_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -192,6 +193,7 @@ VkPipeline create_prepass_pipeline(void *args) {
 }
 
 VkPipeline create_opaque_mesh_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Opaque Mesh Pipeline");
   tb_auto pipe_args = (const TbMeshShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto depth_format = pipe_args->depth_format;
@@ -204,16 +206,16 @@ VkPipeline create_opaque_mesh_pipeline(void *args) {
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(gltf_vert),
-        .pCode = (const uint32_t *)gltf_vert,
+        .codeSize = sizeof(tb_gltf_vert),
+        .pCode = (const uint32_t *)tb_gltf_vert,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
   }
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(gltf_frag),
-        .pCode = (const uint32_t *)gltf_frag,
+        .codeSize = sizeof(tb_gltf_frag),
+        .pCode = (const uint32_t *)tb_gltf_frag,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
   }
@@ -328,6 +330,7 @@ VkPipeline create_opaque_mesh_pipeline(void *args) {
 }
 
 VkPipeline create_transparent_mesh_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Transparent Mesh Pipeline");
   tb_auto pipe_args = (const TbMeshShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto depth_format = pipe_args->depth_format;
@@ -340,16 +343,16 @@ VkPipeline create_transparent_mesh_pipeline(void *args) {
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(gltf_vert),
-        .pCode = (const uint32_t *)gltf_vert,
+        .codeSize = sizeof(tb_gltf_vert),
+        .pCode = (const uint32_t *)tb_gltf_vert,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Vert", &vert_mod);
   }
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(gltf_frag),
-        .pCode = (const uint32_t *)gltf_frag,
+        .codeSize = sizeof(tb_gltf_frag),
+        .pCode = (const uint32_t *)tb_gltf_frag,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag", &frag_mod);
   }

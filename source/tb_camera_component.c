@@ -1,8 +1,8 @@
 #include "tb_camera_component.h"
 
-#include "common.hlsli"
 #include "tb_camera_system.h"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_gltf.h"
 #include "tb_render_system.h"
 #include "tb_render_thread.h"

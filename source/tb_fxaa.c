@@ -13,8 +13,8 @@ ECS_COMPONENT_DECLARE(TbFXAASystem);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "fxaa_frag.h"
-#include "fxaa_vert.h"
+#include "tb_fxaa_frag.h"
+#include "tb_fxaa_vert.h"
 #pragma clang diagnostic pop
 
 void tb_register_fxaa_sys(TbWorld *world);
@@ -137,6 +137,7 @@ typedef struct TbFXAAPipelineArgs {
 } TbFXAAPipelineArgs;
 
 VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
+  TB_TRACY_SCOPE("Create FXAA Shader");
   tb_auto rnd_sys = args->rnd_sys;
   tb_auto pipe_layout = args->pipe_layout;
 
@@ -144,8 +145,8 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(fxaa_vert),
-        .pCode = (const uint32_t *)fxaa_vert,
+        .codeSize = sizeof(tb_fxaa_vert),
+        .pCode = (const uint32_t *)tb_fxaa_vert,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Vert", &vert_mod);
   }
@@ -153,8 +154,8 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sizeof(fxaa_frag),
-        .pCode = (const uint32_t *)fxaa_frag,
+        .codeSize = sizeof(tb_fxaa_frag),
+        .pCode = (const uint32_t *)tb_fxaa_frag,
     };
     tb_rnd_create_shader(rnd_sys, &create_info, "FXAA Frag", &frag_mod);
   }
@@ -177,13 +178,13 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =

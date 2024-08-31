@@ -1,8 +1,8 @@
 #include "tb_camera_system.h"
 
-#include "common.hlsli"
 #include "tb_camera_component.h"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_profiling.h"
 #include "tb_render_system.h"
 #include "tb_render_target_system.h"
@@ -37,7 +37,7 @@ void camera_update_tick(ecs_iter_t *it) {
     float3 forward = tb_mulf33f3(tb_f44tof33(cam_world), TB_FORWARD);
 
     // Eval transform heirarchy
-    TbCommonViewData view_data = {.view_pos = pos};
+    TbViewData view_data = {.view_pos = pos};
 
     tb_auto view = tb_look_forward(pos, forward, TB_UP);
 

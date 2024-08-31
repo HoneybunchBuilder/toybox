@@ -7,7 +7,6 @@
 #include "tb_log.h"
 #include "tb_profiling.h"
 #include "tb_settings.h"
-#include "tb_shader_common.h"
 #include "tb_simd.h"
 
 // Manually definine preprocessor macros to reduce windows header includes

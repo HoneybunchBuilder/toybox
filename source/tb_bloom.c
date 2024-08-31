@@ -7,8 +7,8 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "downsample_comp.h"
-#include "upsample_comp.h"
+#include "tb_downsample_comp.h"
+#include "tb_upsample_comp.h"
 #pragma clang diagnostic pop
 
 typedef struct TbBloomShaderArgs {
@@ -97,7 +97,7 @@ VkResult create_downsample_pipe_layout(TbRenderSystem *rnd_sys,
 }
 
 VkPipeline create_downsample_pipeline(void *args) {
-  TracyCZoneN(ctx, "Compile Downsample Shader", true);
+  TB_TRACY_SCOPE("Compile Downsample Shader");
   tb_auto shader_args = (TbBloomShaderArgs *)args;
   tb_auto rnd_sys = shader_args->rnd_sys;
   tb_auto layout = shader_args->layout;
@@ -107,8 +107,8 @@ VkPipeline create_downsample_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(downsample_comp);
-    create_info.pCode = (const uint32_t *)downsample_comp;
+    create_info.codeSize = sizeof(tb_downsample_comp);
+    create_info.pCode = (const uint32_t *)tb_downsample_comp;
     tb_rnd_create_shader(rnd_sys, &create_info, "Downsample Comp",
                          &downsample_comp_mod);
   }
@@ -120,7 +120,7 @@ VkPipeline create_downsample_pipeline(void *args) {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = downsample_comp_mod,
-              .pName = "comp",
+              .pName = "main",
           },
       .layout = layout,
   };
@@ -129,13 +129,12 @@ VkPipeline create_downsample_pipeline(void *args) {
                                   "Downsample Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, downsample_comp_mod);
-  TracyCZoneEnd(ctx);
   return pipeline;
 }
 
 void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                      uint32_t batch_count, const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Upsample Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPE("Upsample Record");
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Upsample", 3, true);
   cmd_begin_label(buffer, "Upsample", (float4){0.0f, 0.5f, 0.0f, 1.0f});
 
@@ -157,7 +156,6 @@ void record_upsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 VkResult create_upsample_set_layout(TbRenderSystem *rnd_sys, VkSampler sampler,
@@ -212,7 +210,7 @@ VkResult create_upsample_pipe_layout(TbRenderSystem *rnd_sys,
 }
 
 VkPipeline create_upsample_pipeline(void *args) {
-  TracyCZoneN(ctx, "Compile Upsample Shader", true);
+  TB_TRACY_SCOPE("Compile Upsample Shader");
   tb_auto shader_args = (TbBloomShaderArgs *)args;
   tb_auto rnd_sys = shader_args->rnd_sys;
   tb_auto layout = shader_args->layout;
@@ -222,8 +220,8 @@ VkPipeline create_upsample_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(upsample_comp);
-    create_info.pCode = (const uint32_t *)upsample_comp;
+    create_info.codeSize = sizeof(tb_upsample_comp);
+    create_info.pCode = (const uint32_t *)tb_upsample_comp;
     tb_rnd_create_shader(rnd_sys, &create_info, "Upsample Comp",
                          &upsample_comp_mod);
   }
@@ -235,7 +233,7 @@ VkPipeline create_upsample_pipeline(void *args) {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = upsample_comp_mod,
-              .pName = "comp",
+              .pName = "main",
           },
       .layout = layout,
   };
@@ -244,7 +242,6 @@ VkPipeline create_upsample_pipeline(void *args) {
                                   &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, upsample_comp_mod);
-  TracyCZoneEnd(ctx);
   return pipeline;
 }
 

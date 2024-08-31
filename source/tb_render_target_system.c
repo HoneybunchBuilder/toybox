@@ -1,8 +1,8 @@
 #include "tb_render_target_system.h"
 
-#include "common.hlsli"
 #include "tb_bloom.h"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_render_system.h"
 #include "tb_world.h"
 

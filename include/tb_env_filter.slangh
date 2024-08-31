@@ -1,0 +1,8 @@
+#pragma once
+
+#include "tb_common.slangh"
+
+TB_GPU_STRUCT_DECL(TbEnvFilterConstants, {
+  float roughness;
+  uint32_t sample_count;
+});

@@ -1,7 +1,7 @@
 #include "tb_render_object_system.h"
 
-#include "common.hlsli"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_mesh_component.h"
 #include "tb_profiling.h"
 #include "tb_render_system.h"

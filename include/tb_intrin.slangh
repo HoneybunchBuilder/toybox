@@ -1,0 +1,10 @@
+#pragma once
+
+// See https://github.com/shader-slang/slang/issues/4352
+uint32_t tb_get_draw_index() {
+  return spirv_asm {
+        OpExtension "SPV_KHR_shader_draw_parameters";
+        OpCapability DrawParameters;
+        result:$$uint = OpLoad builtin(DrawIndex:uint);
+    };
+}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.hlsli"
+#include "tb_common.slangh"
 
 #define TB_BLOOM_MIPS 5
 

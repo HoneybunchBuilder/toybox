@@ -1,12 +1,14 @@
 #pragma once
 
-#include "common.hlsli"
 #include "tb_allocator.h"
+#include "tb_common.slangh"
 #include "tb_descriptor_buffer.h"
 #include "tb_dynarray.h"
+#include "tb_lighting.slangh"
 #include "tb_render_common.h"
 #include "tb_render_pipeline_system.h"
 #include "tb_texture_system.h"
+#include "tb_view.slangh"
 
 #include <flecs.h>
 
@@ -33,7 +35,7 @@ typedef struct TbViewSystemFrameState {
 
 typedef struct TbView {
   TbRenderTargetId target;
-  TbCommonViewData view_data;
+  TbViewData view_data;
   TbCommonLightData light_data;
   TbFrustum frustum;
   TbDescriptorBuffer desc_buffer;
@@ -61,7 +63,7 @@ TbViewId tb_view_system_create_view(TbViewSystem *self);
 void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,
                                     TbRenderTargetId target);
 void tb_view_system_set_view_data(TbViewSystem *self, TbViewId view,
-                                  const TbCommonViewData *data);
+                                  const TbViewData *data);
 void tb_view_system_set_light_data(TbViewSystem *self, TbViewId view,
                                    const TbCommonLightData *data);
 void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
