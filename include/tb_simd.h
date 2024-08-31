@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#ifdef __HLSL_VERSION
+#ifdef TB_SHADER
 #define TB_GPU_STRUCT
 #else
 #define TB_GPU_STRUCT __attribute__((aligned(16))) __attribute__((packed))
@@ -29,7 +29,7 @@ extern "C" {
 #endif
 
 // Do nothing if this is a shader
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 
 #include <float.h>
 #include <stdbool.h>

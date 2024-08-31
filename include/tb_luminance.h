@@ -6,7 +6,7 @@ typedef struct TB_GPU_STRUCT TbLuminancePushConstants {
   float4 params;
 } TbLuminancePushConstants;
 
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 _Static_assert(sizeof(TbLuminancePushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 

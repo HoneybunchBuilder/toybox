@@ -18,12 +18,12 @@ typedef struct OceanPushConstants {
 } OceanPushConstants;
 
 // If not in a shader, make a quick static assert check
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 _Static_assert(sizeof(OceanPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 #endif
 
-#ifdef __HLSL_VERSION
+#ifdef TB_SHADER
 
 #define OCEAN_SET(b)                                                           \
   [[vk::binding(b, 0)]] ConstantBuffer<OceanData> ocean_data;                  \

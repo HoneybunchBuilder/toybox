@@ -4,7 +4,7 @@
 
 #define TB_BLOOM_MIPS 5
 
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 
 #include "tb_render_common.h"
 

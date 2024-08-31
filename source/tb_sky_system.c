@@ -15,7 +15,7 @@
 
 #include "common.hlsli"
 #include "json.h"
-#include "sky.hlsli"
+#include "sky.slang.h"
 #include "skydome.h"
 #include "tb_camera_component.h"
 #include "tb_common.h"
@@ -144,13 +144,13 @@ VkPipeline create_sky_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -278,13 +278,13 @@ VkPipeline create_env_capture_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =

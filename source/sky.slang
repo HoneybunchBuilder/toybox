@@ -1,17 +1,17 @@
 // Adapted from: https://github.com/shff/opengl_sky
 #include "common.hlsli"
-#include "sky_common.hlsli"
+#include "sky.slang.h"
 
 #include "tb_simd.h"
 
-ConstantBuffer<TbSkyData> sky_data
-    : register(b0, space0); // Fragment Stage Only
+[[vk::binding(0, 0)]]
+ConstantBuffer<TbSkyData> sky_data;
 
 [[vk::push_constant]]
-ConstantBuffer<TbSkyPushConstants> consts : register(b1, space0);
+ConstantBuffer<TbSkyPushConstants> consts;
 
 struct VertexIn {
-  float3 local_pos : SV_POSITION;
+  float3 local_pos : POSITION;
 };
 
 struct Interpolators {

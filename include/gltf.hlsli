@@ -112,7 +112,7 @@ typedef struct TB_GPU_STRUCT TbGLTFDrawData {
 
 #define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
-#if defined(__HLSL_VERSION) && !defined(TB_SHADER)
+#if defined(TB_SHADER) && !defined(TB_SHADER)
 #define TB_SHADER 1
 #endif
 

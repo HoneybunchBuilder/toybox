@@ -1,3 +1,5 @@
+#pragma once
+
 // Based on "A Practical Analytic Model for Daylight" aka The Preetham Model,
 // the de facto standard analytic skydome model
 // http://www.cs.utah.edu/~shirley/papers/sunsky/sunsky.pdf
@@ -8,9 +10,18 @@
 // Three.js integration by zz85: http://twitter.com/blurspline /
 // https://github.com/zz85 / http://threejs.org/examples/webgl_shaders_sky.html
 
-#pragma once
+struct TbSkyData {
+  float time;
+  float cirrus;
+  float cumulus;
+  float3 sun_dir;
+};
 
-#include "sky.hlsli"
+#ifndef TB_SHADER
+typedef struct TbSkyData TbSkyData;
+#endif
+
+#ifdef TB_SHADER
 
 float mod289(float x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 float4 mod289(float4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -173,3 +184,5 @@ float3 sky(float time, float cirrus, float cumulus, float3 sun_dir,
 
   return color;
 }
+
+#endif

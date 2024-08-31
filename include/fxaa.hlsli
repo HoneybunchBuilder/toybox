@@ -19,8 +19,7 @@ typedef struct TbFXAAPushConstants {
   float search_steps;
   float search_accel;
   float search_threshold;
-}
-TbFXAAPushConstants;
+} TbFXAAPushConstants;
 
 #define FXAA_SET(space)                                                        \
   Texture2D input : register(t0, space);                                       \
@@ -29,7 +28,7 @@ TbFXAAPushConstants;
   ConstantBuffer<TbFXAAPushConstants> consts : register(b2, space);
 
 // If not in a shader, make a quick static assert check
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 _Static_assert(sizeof(TbFXAAPushConstants) <= PUSH_CONSTANT_BYTES,
                "Push constant structure exceeds max size");
 #endif

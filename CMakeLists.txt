@@ -238,8 +238,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -260,8 +260,8 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
@@ -281,7 +281,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )

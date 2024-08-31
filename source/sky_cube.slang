@@ -1,12 +1,12 @@
 #include "common.hlsli"
 #include "cube_view_lut.hlsli"
-#include "sky_common.hlsli"
+#include "sky.slang.h"
 
-ConstantBuffer<TbSkyData> sky_data : register(b0, space0); // Fragment Stage Only
+[[vk::binding(0, 0)]]
+ConstantBuffer<TbSkyData> sky_data;
 
 struct VertexIn {
-  float3 local_pos : SV_POSITION;
-  uint view_idx : SV_ViewID;
+  float3 local_pos : POSITION;
 };
 
 struct Interpolators {
@@ -14,8 +14,8 @@ struct Interpolators {
   float3 view_pos : TEXCOORD0;
 };
 
-Interpolators vert(VertexIn i) {
-  float4x4 vp = view_proj_lut[i.view_idx];
+Interpolators vert(VertexIn i, uint32_t view_idx: SV_ViewID) {
+  float4x4 vp = view_proj_lut[view_idx];
 
   Interpolators o;
   o.view_pos = i.local_pos;

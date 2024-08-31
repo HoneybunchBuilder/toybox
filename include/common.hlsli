@@ -123,7 +123,7 @@ typedef struct TB_GPU_STRUCT TbCommonObjectData {
 #define TB_INPUT_PERM_COUNT 6
 
 // If a shader, provide some helper functions
-#ifdef __HLSL_VERSION
+#ifdef TB_SHADER
 
 TbCommonObjectData
 tb_get_obj_data(int32_t obj, StructuredBuffer<TbCommonObjectData> buffer) {
