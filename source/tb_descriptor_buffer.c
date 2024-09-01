@@ -63,6 +63,9 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
                                      VkDescriptorSetLayout layout,
                                      const char *name, uint32_t capacity,
                                      TbDescriptorBuffer *out_buf) {
+#if FINAL
+  (void)name;
+#endif
   const tb_auto alignment =
       rnd_sys->render_thread->desc_buf_props.descriptorBufferOffsetAlignment;
 
