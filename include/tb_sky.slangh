@@ -18,7 +18,10 @@ _Static_assert(sizeof(TbSkyPushConstants) <= TB_PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 #endif
 
-TB_GPU_STRUCT_DECL(TbSkyData, {
+// HACK
+// If we pack this it won't work with the ocean
+// Unintuitive and shitty
+TB_GPU_STRUCT_DECL_NOPACK(TbSkyData, {
   float time;
   float cirrus;
   float cumulus;

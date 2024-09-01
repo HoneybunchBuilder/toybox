@@ -257,7 +257,7 @@ void view_update_tick(ecs_iter_t *it) {
     TB_DYN_ARR_FOREACH(sys->views, view_idx) {
       const TbView *view = &TB_DYN_ARR_AT(sys->views, view_idx);
       const TbViewData *view_data = &view->view_data;
-      const TbCommonLightData *light_data = &view->light_data;
+      const TbLightData *light_data = &view->light_data;
 
       tb_auto tmp_addr = tb_rnd_get_gpu_tmp_addr(rnd_sys);
 
@@ -266,7 +266,7 @@ void view_update_tick(ecs_iter_t *it) {
       tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbViewData), 0x40,
                                     view_data, &view_offset);
       uint64_t light_offset = 0;
-      tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonLightData), 0x40,
+      tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbLightData), 0x40,
                                     light_data, &light_offset);
 
       TB_DYN_ARR_OF(TbDescriptor) descriptors = {0};
@@ -336,7 +336,7 @@ void view_update_tick(ecs_iter_t *it) {
                   .pUniformBuffer = &(VkDescriptorAddressInfoEXT){
                       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
                       .address = tmp_addr + light_offset,
-                      .range = sizeof(TbCommonLightData),
+                      .range = sizeof(TbLightData),
                   }}}));
 
       // Write all descriptors to buffer
@@ -418,7 +418,7 @@ void view_update_tick(ecs_iter_t *it) {
   TB_DYN_ARR_FOREACH(sys->views, view_idx) {
     const TbView *view = &TB_DYN_ARR_AT(sys->views, view_idx);
     const TbViewData *view_data = &view->view_data;
-    const TbCommonLightData *light_data = &view->light_data;
+    const TbLightData *light_data = &view->light_data;
 
     // Write view data into the tmp buffer we know will wind up on the GPU
     uint64_t view_offset = 0;
@@ -426,8 +426,8 @@ void view_update_tick(ecs_iter_t *it) {
                                         view_data, &view_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
     uint64_t light_offset = 0;
-    err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbCommonLightData),
-                                        0x40, light_data, &light_offset);
+    err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbLightData), 0x40,
+                                        light_data, &light_offset);
     TB_VK_CHECK(err, "Failed to make tmp host buffer allocation for view");
 
     uint32_t buffer_idx = view_idx * buf_count;
@@ -445,7 +445,7 @@ void view_update_tick(ecs_iter_t *it) {
     buffer_info[buffer_idx + 1] = (VkDescriptorBufferInfo){
         .buffer = tmp_gpu_buffer,
         .offset = light_offset,
-        .range = sizeof(TbCommonLightData),
+        .range = sizeof(TbLightData),
     };
 
     image_info[image_idx + 0] = (VkDescriptorImageInfo){
@@ -599,7 +599,7 @@ void tb_view_system_set_view_data(TbViewSystem *self, TbViewId view,
 }
 
 void tb_view_system_set_light_data(TbViewSystem *self, TbViewId view,
-                                   const TbCommonLightData *data) {
+                                   const TbLightData *data) {
   if (view >= TB_DYN_ARR_SIZE(self->views)) {
     TB_CHECK(false, "TbView Id out of range");
   }

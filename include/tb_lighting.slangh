@@ -2,7 +2,7 @@
 
 #include "tb_pbr.slangh"
 
-TB_GPU_STRUCT_DECL(TbCommonLightData,{
+TB_GPU_STRUCT_DECL_NOPACK(TbLightData,{
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
@@ -20,7 +20,7 @@ struct TbView {
 };
 
 struct Light {
-  TbCommonLightData light;
+  TbLightData light;
   Texture2DArray shadow_map;
   SamplerComparisonState shadow_sampler;
 };

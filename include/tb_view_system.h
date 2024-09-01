@@ -36,7 +36,7 @@ typedef struct TbViewSystemFrameState {
 typedef struct TbView {
   TbRenderTargetId target;
   TbViewData view_data;
-  TbCommonLightData light_data;
+  TbLightData light_data;
   TbFrustum frustum;
   TbDescriptorBuffer desc_buffer;
 } TbView;
@@ -65,7 +65,7 @@ void tb_view_system_set_view_target(TbViewSystem *self, TbViewId view,
 void tb_view_system_set_view_data(TbViewSystem *self, TbViewId view,
                                   const TbViewData *data);
 void tb_view_system_set_light_data(TbViewSystem *self, TbViewId view,
-                                   const TbCommonLightData *data);
+                                   const TbLightData *data);
 void tb_view_system_set_view_frustum(TbViewSystem *self, TbViewId view,
                                      const TbFrustum *frust);
 VkDescriptorSet tb_view_system_get_descriptor(TbViewSystem *self,

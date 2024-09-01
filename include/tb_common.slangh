@@ -16,18 +16,19 @@
 
 #ifdef TB_SHADER
 #define _TB_GPU_STRUCT_START struct
-#else
-#define _TB_GPU_STRUCT_START typedef struct TB_GPU_STRUCT
-#endif
-
-#ifdef TB_SHADER
+#define _TB_GPU_STRUCT_START_NOPACK struct
 #define _TB_GPU_STRUCT_END(name)
 #else
+#define _TB_GPU_STRUCT_START typedef struct TB_GPU_STRUCT
+#define _TB_GPU_STRUCT_START_NOPACK typedef struct
 #define _TB_GPU_STRUCT_END(name) name
 #endif
 
 #define TB_GPU_STRUCT_DECL(name, body)                                         \
   _TB_GPU_STRUCT_START name body _TB_GPU_STRUCT_END(name)
+
+#define TB_GPU_STRUCT_DECL_NOPACK(name, body)                                   \
+  _TB_GPU_STRUCT_START_NOPACK name body _TB_GPU_STRUCT_END(name)
 
 TB_GPU_STRUCT_DECL(TbCommonObjectData, {float4x4 m;});
 

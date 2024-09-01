@@ -2,7 +2,7 @@
 
 #include "tb_common.slangh"
 
-TB_GPU_STRUCT_DECL(TbViewData, {
+TB_GPU_STRUCT_DECL_NOPACK(TbViewData, {
   float4x4 v;
   float4x4 p;
   float4x4 vp;

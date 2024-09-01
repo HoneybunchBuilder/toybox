@@ -94,7 +94,7 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   [[vk::binding(1, b)]] TextureCube irradiance_map;                            \
   [[vk::binding(2, b)]] TextureCube prefiltered_map;                           \
   [[vk::binding(3, b)]] Texture2D brdf_lut;                                    \
-  [[vk::binding(4, b)]] ConstantBuffer<TbCommonLightData> light_data;          \
+  [[vk::binding(4, b)]] ConstantBuffer<TbLightData> light_data;          \
   [[vk::binding(5, b)]] Texture2DArray shadow_map;                             \
   [[vk::binding(6, b)]] SamplerState filtered_env_sampler;                     \
   [[vk::binding(7, b)]] SamplerState brdf_sampler;
