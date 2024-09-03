@@ -12,11 +12,9 @@
       "generator": "Ninja Multi-Config",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "environment": {
+        "VCPKG_KEEP_ENV_VARS": "VCPKG_ROOT",
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets/"
-      },
-      "inherits": [
-        "VCPKG_ROOT"
-      ]
+      }
     },
     {
       "name": "llvm",
