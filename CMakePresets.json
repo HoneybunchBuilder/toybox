@@ -10,9 +10,11 @@
       "name": "ninja",
       "hidden": true,
       "generator": "Ninja Multi-Config",
-      "toolchainFile": "$penv{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "environment": {
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets/"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$penv{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
