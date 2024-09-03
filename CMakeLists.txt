@@ -149,7 +149,6 @@ endif()
 # but on linux a dxc on the default path will probably have spirv codegen
 # so *shrug*
 set(CMAKE_FIND_ROOT_PATH "$ENV{VULKAN_SDK}/${VULKAN_BIN_PATH};${CMAKE_FIND_ROOT_PATH}")
-find_program(DXC dxc REQUIRED)
 find_program(GLTFPACK gltfpack
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
   REQUIRED)
@@ -256,6 +255,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
     list(APPEND shader_headers ${comp_header} ${comp_out_path})
   endforeach()
 
+  #[[
   file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
   foreach(shader ${shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -276,7 +276,9 @@ function(cook_shaders out_shader_sources out_shader_headers)
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${shader_files})
+  ]]#
 
+  #[[
   file(GLOB mesh_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.m")
   foreach(shader ${mesh_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -298,7 +300,9 @@ function(cook_shaders out_shader_sources out_shader_headers)
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${mesh_shader_files})
+  ]]#
 
+  #[[
   file(GLOB compute_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.cs")
   foreach(shader ${compute_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -318,6 +322,7 @@ function(cook_shaders out_shader_sources out_shader_headers)
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${compute_shader_files})
+  ]]#
 
   set("${out_shader_sources}" "${shader_sources}" PARENT_SCOPE)
   set("${out_shader_headers}" "${shader_headers}" PARENT_SCOPE)
