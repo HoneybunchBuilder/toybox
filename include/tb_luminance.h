@@ -1,13 +1,8 @@
 #pragma once
 
-#include "common.hlsli"
+#include "tb_luminance.slangh"
 
-typedef struct TB_GPU_STRUCT TbLuminancePushConstants {
-  float4 params;
-} TbLuminancePushConstants;
-
-#ifndef __HLSL_VERSION
-_Static_assert(sizeof(TbLuminancePushConstants) <= PUSH_CONSTANT_BYTES,
+_Static_assert(sizeof(TbLuminancePushConstants) <= TB_PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 
 #include "tb_render_common.h"
@@ -54,4 +49,3 @@ void tb_create_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                             TbLumAvgRenderWork *work);
 void tb_destroy_lum_avg_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
                              TbLumAvgRenderWork *work);
-#endif

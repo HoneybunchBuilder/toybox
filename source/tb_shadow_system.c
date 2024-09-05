@@ -21,8 +21,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 // NOLINTBEGIN
-#include "depth_frag.h"
-#include "depth_vert.h"
+#include "tb_depth_frag.h"
+#include "tb_depth_vert.h"
 // NOLINTEND
 #pragma clang diagnostic pop
 
@@ -47,6 +47,7 @@ TB_REGISTER_SYS(tb, shadow, TB_SYSTEM_HIGH)
 VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                                 VkPipelineLayout pipe_layout,
                                 VkPipeline *pipeline) {
+  TB_TRACY_SCOPE("Create Shadow Pipeline");
   VkResult err = VK_SUCCESS;
 
   VkShaderModule vert_mod = VK_NULL_HANDLE;
@@ -56,13 +57,13 @@ VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(depth_vert);
-    create_info.pCode = (const uint32_t *)depth_vert;
+    create_info.codeSize = sizeof(tb_depth_vert);
+    create_info.pCode = (const uint32_t *)tb_depth_vert;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Shadow Vert", &vert_mod);
     TB_VK_CHECK_RET(err, "Failed to load shadow vert shader module", err);
 
-    create_info.codeSize = sizeof(depth_frag);
-    create_info.pCode = (const uint32_t *)depth_frag;
+    create_info.codeSize = sizeof(tb_depth_frag);
+    create_info.pCode = (const uint32_t *)tb_depth_frag;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Shadow Frag", &frag_mod);
     TB_VK_CHECK_RET(err, "Failed to load shadow frag shader module", err);
   }
@@ -84,13 +85,13 @@ VkResult create_shadow_pipeline(TbRenderSystem *rnd_sys, VkFormat depth_format,
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -285,7 +286,7 @@ void shadow_update_tick(ecs_iter_t *it) {
 
         TbTransform transform = trans->transform;
 
-        TbCommonViewData data = {
+        TbViewData data = {
             .view_pos = transform.position,
         };
 

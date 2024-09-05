@@ -1,0 +1,13 @@
+#pragma once
+
+#include "tb_common.slangh"
+
+TB_GPU_STRUCT_DECL_NOPACK(TbViewData, {
+  float4x4 v;
+  float4x4 p;
+  float4x4 vp;
+  float4x4 inv_vp;
+  float4x4 inv_proj;
+  float3 view_pos;
+  float4 proj_params;
+});

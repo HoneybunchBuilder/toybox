@@ -1,10 +1,10 @@
 #pragma once
 
 #include "SDL3/SDL_stdinc.h"
-#include "gltf.hlsli"
 #include "tb_allocator.h"
 #include "tb_common.h"
 #include "tb_dynarray.h"
+#include "tb_gltf.slangh"
 #include "tb_mesh_component.h"
 #include "tb_render_common.h"
 #include "tb_render_system.h"

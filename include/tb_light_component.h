@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common.hlsli"
+#include "tb_common.slangh"
 #include "tb_render_target_system.h"
 #include "tb_simd.h"
 

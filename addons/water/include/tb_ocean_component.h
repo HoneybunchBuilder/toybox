@@ -2,7 +2,7 @@
 
 #include "tb_simd.h"
 
-#include "ocean.hlsli" // Must include tb_simd.h before shader includes
+#include "tb_ocean.slangh"
 
 #include <flecs.h>
 

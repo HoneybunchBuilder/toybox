@@ -1,5 +1,5 @@
-#include "common.hlsli"
 #include "tb_common.h"
+#include "tb_common.slangh"
 #include "tb_coreui_system.h"
 #include "tb_imgui.h"
 #include "tb_light_component.h"

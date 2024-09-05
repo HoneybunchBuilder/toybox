@@ -10,9 +10,11 @@
       "name": "ninja",
       "hidden": true,
       "generator": "Ninja Multi-Config",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "environment": {
         "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets/"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$penv{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {
@@ -27,7 +29,7 @@
       "hidden": true,
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "arm64-android",
-        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$penv{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
         "ANDROID_PLATFORM": "android-31",
         "ANDROID_ABI": "arm64-v8a"
       },

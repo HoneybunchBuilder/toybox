@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#ifdef __HLSL_VERSION
+#ifdef TB_SHADER
 #define TB_GPU_STRUCT
 #else
 #define TB_GPU_STRUCT __attribute__((aligned(16))) __attribute__((packed))
@@ -18,16 +18,18 @@ extern "C" {
   they are not
 */
 
+#ifndef TB_SHADER
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
 #pragma clang diagnostic ignored "-Wnested-anon-types"
+#endif
 
 #ifndef TB_USE_INVERSE_DEPTH
 // #define TB_USE_INVERSE_DEPTH 1
 #endif
 
 // Do nothing if this is a shader
-#ifndef __HLSL_VERSION
+#ifndef TB_SHADER
 
 #include <float.h>
 #include <stdbool.h>
@@ -295,7 +297,9 @@ float3 tb_clampf3(float3 v, float3 min, float3 max);
 
 #endif
 
+#ifndef TB_SHADER
 #pragma clang diagnostic pop
+#endif
 
 #ifdef __cplusplus
 }

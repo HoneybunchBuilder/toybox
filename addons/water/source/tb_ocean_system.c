@@ -1,6 +1,5 @@
 #include "tb_ocean_system.h"
 
-#include "ocean.hlsli"
 #include "tb_assets.h"
 #include "tb_audio_system.h"
 #include "tb_camera_component.h"
@@ -9,6 +8,7 @@
 #include "tb_light_component.h"
 #include "tb_mesh_rnd_sys.h"
 #include "tb_mesh_system.h"
+#include "tb_ocean.slangh"
 #include "tb_ocean_component.h"
 #include "tb_profiling.h"
 #include "tb_rand.h"
@@ -28,16 +28,16 @@
 // Ignore some warnings for the generated headers
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "ocean_frag.h"
-#include "ocean_vert.h"
-#include "oceanprepass_frag.h"
-#include "oceanprepass_vert.h"
+#include "tb_ocean_frag.h"
+#include "tb_ocean_vert.h"
+#include "tb_oceanprepass_frag.h"
+#include "tb_oceanprepass_vert.h"
 #pragma clang diagnostic pop
 
 typedef struct OceanDrawBatch {
   VkDescriptorSet view_set;
   VkDescriptorSet ocean_set;
-  OceanPushConstants consts;
+  TbOceanPushConstants consts;
   VkBuffer inst_buffer;
   uint32_t inst_offset;
   uint32_t inst_count;
@@ -114,7 +114,7 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
                             1, &ocean_batch->view_set, 0, NULL);
     vkCmdPushConstants(buffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(OceanPushConstants), &ocean_batch->consts);
+                       sizeof(TbOceanPushConstants), &ocean_batch->consts);
 
     vkCmdBindIndexBuffer(buffer, geom_buffer, 0, ocean_batch->index_type);
     vkCmdBindVertexBuffers(
@@ -160,6 +160,7 @@ typedef struct TbOceanPipelineArgs {
 } TbOceanPipelineArgs;
 
 VkPipeline create_ocean_prepass_shader(const TbOceanPipelineArgs *args) {
+  TB_TRACY_SCOPE("Create Ocean Prepass Pipeline");
   VkResult err = VK_SUCCESS;
 
   tb_auto rnd_sys = args->rnd_sys;
@@ -174,14 +175,14 @@ VkPipeline create_ocean_prepass_shader(const TbOceanPipelineArgs *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(oceanprepass_vert);
-    create_info.pCode = (const uint32_t *)oceanprepass_vert;
+    create_info.codeSize = sizeof(tb_oceanprepass_vert);
+    create_info.pCode = (const uint32_t *)tb_oceanprepass_vert;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepass Vert",
                                &vert_mod);
     TB_VK_CHECK(err, "Failed to load ocean vert shader module");
 
-    create_info.codeSize = sizeof(oceanprepass_frag);
-    create_info.pCode = (const uint32_t *)oceanprepass_frag;
+    create_info.codeSize = sizeof(tb_oceanprepass_frag);
+    create_info.pCode = (const uint32_t *)tb_oceanprepass_frag;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Prepss Frag",
                                &frag_mod);
     TB_VK_CHECK(err, "Failed to load ocean frag shader module");
@@ -204,13 +205,13 @@ VkPipeline create_ocean_prepass_shader(const TbOceanPipelineArgs *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -295,7 +296,8 @@ VkPipeline create_ocean_prepass_shader(const TbOceanPipelineArgs *args) {
   return pipeline;
 }
 
-VkPipeline create_ocean_pass_shader(const TbOceanPipelineArgs *args) {
+VkPipeline create_ocean_shader(const TbOceanPipelineArgs *args) {
+  TB_TRACY_SCOPE("Create Ocean Pipeline");
   VkResult err = VK_SUCCESS;
 
   tb_auto rnd_sys = args->rnd_sys;
@@ -311,13 +313,13 @@ VkPipeline create_ocean_pass_shader(const TbOceanPipelineArgs *args) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
 
-    create_info.codeSize = sizeof(ocean_vert);
-    create_info.pCode = (const uint32_t *)ocean_vert;
+    create_info.codeSize = sizeof(tb_ocean_vert);
+    create_info.pCode = (const uint32_t *)tb_ocean_vert;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Vert", &vert_mod);
     TB_VK_CHECK(err, "Failed to load ocean vert shader module");
 
-    create_info.codeSize = sizeof(ocean_frag);
-    create_info.pCode = (const uint32_t *)ocean_frag;
+    create_info.codeSize = sizeof(tb_ocean_frag);
+    create_info.pCode = (const uint32_t *)tb_ocean_frag;
     err = tb_rnd_create_shader(rnd_sys, &create_info, "Ocean Frag", &frag_mod);
     TB_VK_CHECK(err, "Failed to load ocean frag shader module");
   }
@@ -341,13 +343,13 @@ VkPipeline create_ocean_pass_shader(const TbOceanPipelineArgs *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -649,7 +651,7 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
         .pPushConstantRanges =
             (VkPushConstantRange[1]){
                 {
-                    .size = sizeof(OceanPushConstants),
+                    .size = sizeof(TbOceanPushConstants),
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
                 },
             },
@@ -704,7 +706,7 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
           .pipe_layout = sys->pipe_layout,
       };
       sys->ocean_pass_shader =
-          tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_pass_shader,
+          tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_shader,
                          (void *)&args, sizeof(TbOceanPipelineArgs));
       sys->ocean_prepass_shader =
           tb_shader_load(ecs, (TbShaderCompileFn)&create_ocean_prepass_shader,
@@ -954,7 +956,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
           const uint32_t wave_count =
               SDL_max(ocean_comp->wave_count, TB_WAVE_MAX);
 
-          OceanData data = {
+          TbOceanData data = {
               .time_waves = tb_f4(time, wave_count, 0, 0),
           };
           SDL_memcpy(data.wave, ocean_comp->waves,
@@ -963,8 +965,8 @@ void ocean_draw_tick(ecs_iter_t *it) {
           // Write ocean data into the tmp buffer we know will wind up on the
           // GPU
           uint64_t offset = 0;
-          err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(OceanData), 0x40,
-                                              &data, &offset);
+          err = tb_rnd_sys_copy_to_tmp_buffer(rnd_sys, sizeof(TbOceanData),
+                                              0x40, &data, &offset);
           TB_VK_CHECK(err,
                       "Failed to make tmp host buffer allocation for ocean");
 
@@ -977,7 +979,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
           buffer_info[oc_idx] = (VkDescriptorBufferInfo){
               .buffer = tmp_gpu_buffer,
               .offset = offset,
-              .range = sizeof(OceanData),
+              .range = sizeof(TbOceanData),
           };
 
           VkImageView depth_view = tb_render_target_get_view(
@@ -1030,7 +1032,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
 
       // Draw the ocean
       {
-        OceanPushConstants ocean_consts = {
+        TbOceanPushConstants ocean_consts = {
             .m = tb_transform_to_matrix(&sys->ocean_transform)};
 
         // Max camera * ocean * tile draw batches are required

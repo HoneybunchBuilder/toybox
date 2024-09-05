@@ -34,7 +34,7 @@ void light_update_tick(ecs_iter_t *it) {
         float3 dir = -tb_transform_get_forward(&transform->transform);
 
         // Send lighting data to the camera's view
-        TbCommonLightData light_data = {
+        TbLightData light_data = {
             .color = light->color,
             .light_dir = dir,
             .cascade_splits = light->cascade_splits,

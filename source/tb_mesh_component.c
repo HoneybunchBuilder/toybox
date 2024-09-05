@@ -2,9 +2,9 @@
 
 #include "tb_simd.h"
 
-#include "common.hlsli"
 #include "json.h"
 #include "tb_assets.h"
+#include "tb_common.slangh"
 #include "tb_gltf.h"
 #include "tb_material_system.h"
 #include "tb_mesh_rnd_sys.h"

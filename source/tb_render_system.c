@@ -199,7 +199,7 @@ void destroy_render_system(TbRenderSystem *self) {
       err = vkGetPipelineCacheData(device, self->pipeline_cache, &cache_size,
                                    cache);
       if (err == VK_SUCCESS) {
-        SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb");
+        SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb+");
         if (cache_file != NULL) {
           SDL_RWwrite(cache_file, cache, cache_size);
           SDL_RWclose(cache_file);

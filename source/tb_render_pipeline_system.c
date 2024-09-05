@@ -4,7 +4,6 @@
 #include "tb_profiling.h"
 #include "tb_render_system.h"
 #include "tb_render_target_system.h"
-#include "tb_shader_common.h"
 #include "tb_shader_system.h"
 #include "tb_texture_system.h"
 #include "tb_view_system.h"
@@ -14,15 +13,15 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "brightness_frag.h"
-#include "brightness_vert.h"
-#include "colorcopy_frag.h"
-#include "colorcopy_vert.h"
-#include "copy_comp.h"
-#include "depthcopy_frag.h"
-#include "depthcopy_vert.h"
-#include "tonemap_frag.h"
-#include "tonemap_vert.h"
+#include "tb_brightness_frag.h"
+#include "tb_brightness_vert.h"
+#include "tb_colorcopy_frag.h"
+#include "tb_colorcopy_vert.h"
+#include "tb_copy_comp.h"
+#include "tb_depthcopy_frag.h"
+#include "tb_depthcopy_vert.h"
+#include "tb_tonemap_frag.h"
+#include "tb_tonemap_vert.h"
 #pragma clang diagnostic pop
 
 #define BLUR_BATCH_COUNT (TB_BLOOM_MIPS - 1)
@@ -130,7 +129,8 @@ typedef struct TbPipeShaderArgs {
   VkPipelineLayout pipe_layout;
 } TbPipeShaderArgs;
 
-VkPipeline create_depth_pipeline(void *args) {
+VkPipeline create_depth_copy_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Depth Copy Pipeline");
   tb_auto pipe_args = (const TbPipeShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto depth_format = pipe_args->format;
@@ -143,13 +143,13 @@ VkPipeline create_depth_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(depthcopy_vert);
-    create_info.pCode = (const uint32_t *)depthcopy_vert;
+    create_info.codeSize = sizeof(tb_depthcopy_vert);
+    create_info.pCode = (const uint32_t *)tb_depthcopy_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Vert",
                          &depth_vert_mod);
 
-    create_info.codeSize = sizeof(depthcopy_frag);
-    create_info.pCode = (const uint32_t *)depthcopy_frag;
+    create_info.codeSize = sizeof(tb_depthcopy_frag);
+    create_info.pCode = (const uint32_t *)tb_depthcopy_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Depth Copy Frag",
                          &depth_frag_mod);
   }
@@ -169,13 +169,13 @@ VkPipeline create_depth_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = depth_vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = depth_frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -247,6 +247,7 @@ VkPipeline create_depth_pipeline(void *args) {
 }
 
 VkPipeline create_color_copy_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Color Copy Pipeline");
   tb_auto pipe_args = (const TbPipeShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto color_format = pipe_args->format;
@@ -259,13 +260,13 @@ VkPipeline create_color_copy_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(colorcopy_vert);
-    create_info.pCode = (const uint32_t *)colorcopy_vert;
+    create_info.codeSize = sizeof(tb_colorcopy_vert);
+    create_info.pCode = (const uint32_t *)tb_colorcopy_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Vert",
                          &color_vert_mod);
 
-    create_info.codeSize = sizeof(colorcopy_frag);
-    create_info.pCode = (const uint32_t *)colorcopy_frag;
+    create_info.codeSize = sizeof(tb_colorcopy_frag);
+    create_info.pCode = (const uint32_t *)tb_colorcopy_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Color Copy Frag",
                          &color_frag_mod);
   }
@@ -285,13 +286,13 @@ VkPipeline create_color_copy_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = color_vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = color_frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -363,6 +364,7 @@ VkPipeline create_color_copy_pipeline(void *args) {
 }
 
 VkPipeline create_comp_copy_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Compute Copy Pipeline");
   tb_auto pipe_args = (const TbPipeShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto layout = pipe_args->pipe_layout;
@@ -372,8 +374,8 @@ VkPipeline create_comp_copy_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(copy_comp);
-    create_info.pCode = (const uint32_t *)copy_comp;
+    create_info.codeSize = sizeof(tb_copy_comp);
+    create_info.pCode = (const uint32_t *)tb_copy_comp;
     tb_rnd_create_shader(rnd_sys, &create_info, "Copy Comp", &copy_comp_mod);
   }
 
@@ -384,7 +386,7 @@ VkPipeline create_comp_copy_pipeline(void *args) {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = copy_comp_mod,
-              .pName = "comp",
+              .pName = "main",
           },
       .layout = layout,
   };
@@ -398,6 +400,7 @@ VkPipeline create_comp_copy_pipeline(void *args) {
 }
 
 VkPipeline create_brightness_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Brightness Pipeline");
   tb_auto pipe_args = (const TbPipeShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto color_format = pipe_args->format;
@@ -409,13 +412,13 @@ VkPipeline create_brightness_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(brightness_vert);
-    create_info.pCode = (const uint32_t *)brightness_vert;
+    create_info.codeSize = sizeof(tb_brightness_vert);
+    create_info.pCode = (const uint32_t *)tb_brightness_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Vert",
                          &brightness_vert_mod);
 
-    create_info.codeSize = sizeof(brightness_frag);
-    create_info.pCode = (const uint32_t *)brightness_frag;
+    create_info.codeSize = sizeof(tb_brightness_frag);
+    create_info.pCode = (const uint32_t *)tb_brightness_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Brightness Frag",
                          &brightness_frag_mod);
   }
@@ -435,13 +438,13 @@ VkPipeline create_brightness_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = brightness_vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = brightness_frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -513,6 +516,7 @@ VkPipeline create_brightness_pipeline(void *args) {
 }
 
 VkPipeline create_tonemapping_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Tonemapping Pipeline");
   tb_auto pipe_args = (const TbPipeShaderArgs *)args;
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto swap_target_format = pipe_args->format;
@@ -524,13 +528,13 @@ VkPipeline create_tonemapping_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(tonemap_vert);
-    create_info.pCode = (const uint32_t *)tonemap_vert;
+    create_info.codeSize = sizeof(tb_tonemap_vert);
+    create_info.pCode = (const uint32_t *)tb_tonemap_vert;
     tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Vert",
                          &tonemap_vert_mod);
 
-    create_info.codeSize = sizeof(tonemap_frag);
-    create_info.pCode = (const uint32_t *)tonemap_frag;
+    create_info.codeSize = sizeof(tb_tonemap_frag);
+    create_info.pCode = (const uint32_t *)tb_tonemap_frag;
     tb_rnd_create_shader(rnd_sys, &create_info, "Tonemapping Frag",
                          &tonemap_frag_mod);
   }
@@ -550,13 +554,13 @@ VkPipeline create_tonemapping_pipeline(void *args) {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_VERTEX_BIT,
                   .module = tonemap_vert_mod,
-                  .pName = "vert",
+                  .pName = "main",
               },
               {
                   .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                   .module = tonemap_frag_mod,
-                  .pName = "frag",
+                  .pName = "main",
               },
           },
       .pVertexInputState =
@@ -2405,7 +2409,7 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                 tb_render_target_get_format(sys.rt_sys, depth_info.attachment),
             .pipe_layout = sys.copy_pipe_layout,
         };
-        sys.depth_copy_shader = tb_shader_load(ecs, create_depth_pipeline,
+        sys.depth_copy_shader = tb_shader_load(ecs, create_depth_copy_pipeline,
                                                &args, sizeof(TbPipeShaderArgs));
       }
 

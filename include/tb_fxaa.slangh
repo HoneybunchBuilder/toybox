@@ -1,0 +1,40 @@
+#pragma once
+
+#include "tb_common.slangh"
+
+#define TB_FXAA_SUBPIXEL_OFF 0
+#define TB_FXAA_SUBPIXEL_ON 1
+#define TB_FXAA_SUBPIXEL_FASTER 2
+
+TB_GPU_STRUCT_DECL(TbFXAAPushConstants, {
+  int32_t on;
+  float edge_threshold_min;
+  float edge_threshold;
+
+  int32_t subpixel;
+  float subpixel_trim;
+  float subpixel_trim_scale;
+  float subpixel_cap;
+
+  float search_steps;
+  float search_accel;
+  float search_threshold;
+});
+
+
+#ifdef TB_SHADER
+
+#define FXAA_SET(b)                                                        \
+  [[vk::binding(0, b)]]\
+  Texture2D input;   \
+  [[vk::binding(1, b)]]\
+  SamplerState in_sampler;\
+  [[vk::binding(2, b)]]\
+  [[vk::push_constant]]                                                        \
+  ConstantBuffer<TbFXAAPushConstants> consts;
+
+#else
+// If not in a shader, make a quick static assert check
+_Static_assert(sizeof(TbFXAAPushConstants) <= TB_PUSH_CONSTANT_BYTES,
+               "Push constant structure exceeds max size");
+#endif

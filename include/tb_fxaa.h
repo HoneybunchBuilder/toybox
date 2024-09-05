@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fxaa.hlsli"
+#include "tb_fxaa.slangh"
 #include "tb_render_common.h"
 #include "tb_render_pipeline_system.h"
 

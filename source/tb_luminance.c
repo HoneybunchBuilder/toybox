@@ -8,8 +8,8 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
-#include "lumavg_comp.h"
-#include "lumhist_comp.h"
+#include "tb_lumavg_comp.h"
+#include "tb_lumhist_comp.h"
 #pragma clang diagnostic pop
 
 typedef struct TbLumShaderArgs {
@@ -111,7 +111,7 @@ void create_lum_gather_pipe_layout(TbRenderSystem *rnd_sys,
 }
 
 VkPipeline create_lum_gather_pipeline(void *args) {
-  TracyCZoneN(ctx, "Compile Lum Avg Shader", true);
+  TB_TRACY_SCOPE("Compile Lum Avg Shader");
   tb_auto shader_args = (TbLumShaderArgs *)args;
   tb_auto rnd_sys = shader_args->rnd_sys;
   tb_auto layout = shader_args->layout;
@@ -121,8 +121,8 @@ VkPipeline create_lum_gather_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(lumhist_comp);
-    create_info.pCode = (const uint32_t *)lumhist_comp;
+    create_info.codeSize = sizeof(tb_lumhist_comp);
+    create_info.pCode = (const uint32_t *)tb_lumhist_comp;
     tb_rnd_create_shader(rnd_sys, &create_info, "Luminance Histogram Comp",
                          &comp_mod);
   }
@@ -134,7 +134,7 @@ VkPipeline create_lum_gather_pipeline(void *args) {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = comp_mod,
-              .pName = "comp",
+              .pName = "main",
           },
       .layout = layout,
   };
@@ -143,7 +143,6 @@ VkPipeline create_lum_gather_pipeline(void *args) {
                                   "Luminance Histogram Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, comp_mod);
-  TracyCZoneEnd(ctx);
   return pipeline;
 }
 
@@ -229,7 +228,7 @@ void create_lum_avg_set_layout(TbRenderSystem *rnd_sys,
 }
 
 VkPipeline create_lum_avg_pipeline(void *args) {
-  TracyCZoneN(ctx, "Compile Lum Avg Shader", true);
+  TB_TRACY_SCOPE("Compile Lum Avg Shader");
   tb_auto shader_args = (TbLumShaderArgs *)args;
   tb_auto rnd_sys = shader_args->rnd_sys;
   tb_auto layout = shader_args->layout;
@@ -239,8 +238,8 @@ VkPipeline create_lum_avg_pipeline(void *args) {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
     };
-    create_info.codeSize = sizeof(lumavg_comp);
-    create_info.pCode = (const uint32_t *)lumavg_comp;
+    create_info.codeSize = sizeof(tb_lumavg_comp);
+    create_info.pCode = (const uint32_t *)tb_lumavg_comp;
     tb_rnd_create_shader(rnd_sys, &create_info, "Luminance Average Comp",
                          &comp_mod);
   }
@@ -252,7 +251,7 @@ VkPipeline create_lum_avg_pipeline(void *args) {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = comp_mod,
-              .pName = "comp",
+              .pName = "main",
           },
       .layout = layout,
   };
@@ -261,7 +260,6 @@ VkPipeline create_lum_avg_pipeline(void *args) {
                                   "Luminance Average Pipeline", &pipeline);
 
   tb_rnd_destroy_shader(rnd_sys, comp_mod);
-  TracyCZoneEnd(ctx);
   return pipeline;
 }
 

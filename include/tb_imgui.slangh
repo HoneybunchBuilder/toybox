@@ -1,0 +1,12 @@
+#pragma once
+
+#include "tb_common.slangh"
+
+TB_GPU_STRUCT_DECL(TbImGuiPushConstants, {
+  float2 scale;
+  float2 translation;
+});
+#ifndef TB_SHADER
+_Static_assert(sizeof(TbImGuiPushConstants) <= TB_PUSH_CONSTANT_BYTES,
+               "Too Many Push Constants");
+#endif

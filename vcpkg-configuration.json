@@ -3,7 +3,7 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "db19a19ba88b8e750ffe3642dc0f80821260083d"
+    "baseline": "91d888703f251c13111c1b889be1f350c4ceb7ab"
   },
   "registries": [
     {
@@ -30,20 +30,11 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "e0a6a4cb96848a2e6d52346f2bca8218d6581149",
-      "packages": [
-        "enkits"
-      ],
-      "reference": "enkits"
-    },
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "7c791c2450528ecbf64fdfa5acb36f8a887f6980",
+      "baseline": "8117f911398fffebdd3048dc0cbae8e6de41060f",
       "packages": [
         "ktx"
       ],
-      "reference": "ktx"
+      "reference": "ktx-fix"
     }
   ]
 }

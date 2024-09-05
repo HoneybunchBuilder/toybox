@@ -23,7 +23,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Configure
-      run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
+      run: cmake --preset ${{matrix.toolsets.preset}} -DCOOK_ASSETS=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 
     - name: Build Debug
       run: cmake --build --preset debug-${{matrix.toolsets.preset}}

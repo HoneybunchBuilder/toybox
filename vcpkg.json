@@ -11,6 +11,10 @@
     "json-c",
     "ktx",
     {
+      "name": "shader-slang",
+      "host": true
+    },
+    {
       "name": "ktx",
       "host": true,
       "features": [
@@ -48,6 +52,10 @@
       "version": "1.14"
     },
     {
+      "name": "flecs",
+      "version": "3.2.11"
+    },
+    {
       "name": "enkits",
       "version": "1.11",
       "port-version": 3
@@ -66,11 +74,12 @@
     },
     {
       "name": "ktx",
-      "version": "4.3.2"
+      "version": "4.3.2",
+      "port-version": 1
     },
     {
       "name": "meshoptimizer",
-      "version": "0.20"
+      "version": "0.21"
     },
     {
       "name": "mimalloc",
@@ -85,8 +94,12 @@
       "version": "3.0.0-087004f"
     },
     {
+      "name": "shader-slang",
+      "version": "2024.10"
+    },
+    {
       "name": "tracy",
-      "version": "0.11.0"
+      "version": "0.11.1"
     },
     {
       "name": "volk",

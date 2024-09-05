@@ -11,7 +11,6 @@
 #include "tb_profiling.h"
 #include "tb_sdl.h"
 #include "tb_settings.h"
-#include "tb_shader_common.h"
 #include "tb_simd.h"
 #include "tb_world.h"
 

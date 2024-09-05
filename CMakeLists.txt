@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
@@ -149,9 +149,12 @@ endif()
 # but on linux a dxc on the default path will probably have spirv codegen
 # so *shrug*
 set(CMAKE_FIND_ROOT_PATH "$ENV{VULKAN_SDK}/${VULKAN_BIN_PATH};${CMAKE_FIND_ROOT_PATH}")
-find_program(DXC dxc REQUIRED)
 find_program(GLTFPACK gltfpack
   PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/meshoptimizer
+  REQUIRED)
+
+find_program(SLANG slangc 
+  PATHS ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${host_triple}/tools/shader-slang
   REQUIRED)
 
 # The list of all external targets to link
@@ -179,6 +182,80 @@ function(cook_shaders out_shader_sources out_shader_headers)
   set(shader_include_dir "${CMAKE_CURRENT_LIST_DIR}/include")
   file(GLOB shader_includes CONFIGURE_DEPENDS "${shader_include_dir}/*.hlsli" "${shader_include_dir}/*.h")
 
+  file(GLOB slang_shaders CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.slang")
+  foreach(shader ${slang_shaders})
+    get_filename_component(filename ${shader} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+    # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(vert_out_path "${filename}_vert")
+    set(frag_out_path "${filename}_frag")
+    set(out_paths "${vert_out_path};${frag_out_path}")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage vertex -entry vert -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${vert_out_path} ${shader}
+        COMMAND ${SLANG} -DTB_SHADER=1 -profile sm_6_5 -stage fragment -entry frag -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${frag_out_path} ${shader}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+
+    set(vert_header "${shader_out_path}/${filename}_vert.h")
+    set(frag_header "${shader_out_path}/${filename}_frag.h")
+
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
+    add_custom_command(
+        OUTPUT ${vert_header}
+        COMMAND xxd -i ${vert_out_path} ${vert_header}
+        MAIN_DEPENDENCY ${vert_out_path}
+    )
+    add_custom_command(
+        OUTPUT ${frag_header}
+        COMMAND xxd -i ${frag_out_path} ${frag_header}
+        MAIN_DEPENDENCY ${frag_out_path}
+    )
+
+    list(APPEND shader_headers ${vert_header} ${vert_out_path})
+    list(APPEND shader_headers ${frag_header} ${frag_out_path})
+  endforeach()
+
+  file(GLOB slang_compute_shaders CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.slangc")
+  foreach(shader ${slang_compute_shaders})
+    get_filename_component(filename ${shader} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+    # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(comp_out_path "${filename}_comp")
+    set(out_paths "${comp_out_path};")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${SLANG} -DTB_SHADER=1 -lang slang -profile sm_6_5 -stage compute -entry comp -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${comp_out_path} ${shader}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+
+    set(comp_header "${shader_out_path}/${filename}_comp.h")
+
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
+    add_custom_command(
+        OUTPUT ${comp_header}
+        COMMAND xxd -i ${comp_out_path} ${comp_header}
+        MAIN_DEPENDENCY ${comp_out_path}
+    )
+
+    list(APPEND shader_headers ${comp_header} ${comp_out_path})
+  endforeach()
+
+  #[[
   file(GLOB shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl")
   foreach(shader ${shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -191,15 +268,17 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T vs_6_5 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${vert_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-Zi> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${shader_files})
+  ]]#
 
+  #[[
   file(GLOB mesh_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.m")
   foreach(shader ${mesh_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -213,15 +292,17 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
-        COMMAND ${DXC} -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ms_6_5 -E mesh -Vn ${filename}_mesh $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${mesh_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T ps_6_5 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${frag_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${mesh_shader_files})
+  ]]#
 
+  #[[
   file(GLOB compute_shader_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.hlsl.cs")
   foreach(shader ${compute_shader_files})
     get_filename_component(filename ${shader} NAME_WLE)
@@ -234,13 +315,14 @@ function(cook_shaders out_shader_sources out_shader_headers)
     add_custom_command(
         OUTPUT ${out_paths}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-        COMMAND ${DXC} -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
+        COMMAND ${DXC} -DTB_SHADER=1 -T cs_6_5 -E comp -Vn ${filename}_comp $<$<CONFIG:Debug>:-O0> -I ${shader_include_dir} -I ${engine_shader_include_dir} $<$<NOT:$<CONFIG:Release>>:-Zi> $<$<NOT:$<CONFIG:Release>>:-Qembed_debug> -enable-16bit-types -fspv-target-env=vulkan1.3 -spirv ${shader} -Fh ${comp_out_path}
         MAIN_DEPENDENCY ${shader}
         DEPENDS ${shader_includes}
     )
     list(APPEND shader_headers ${out_paths})
   endforeach()
   list(APPEND shader_sources ${compute_shader_files})
+  ]]#
 
   set("${out_shader_sources}" "${shader_sources}" PARENT_SCOPE)
   set("${out_shader_headers}" "${shader_headers}" PARENT_SCOPE)
@@ -354,7 +436,7 @@ function(cook_assets target_name out_assets_path)
     string(APPEND SCENE_LIST "${idx},")
   endforeach()
 
-  configure_file(${toybox_source_dir}/source/assetmanifest.h.in ${generated_manifest})
+  configure_file(${toybox_source_dir}/source/tb_assetmanifest.h.in ${generated_manifest})
   add_custom_target(${target_name}_asset_manifest DEPENDS ${generated_manifest})
 
   add_dependencies(${target_name} ${target_name}_scenes ${target_name}_textures ${target_name}_audio ${target_name}_asset_manifest)
@@ -422,7 +504,7 @@ execute_process(COMMAND git log -1 --format=%h
 
 # Generate config header
 set(engine_config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-configure_file(source/config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
+configure_file(source/tb_config.h.in ${engine_config_include_dir}/tb_engine_config.h @ONLY)
 
 target_include_directories(toybox PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 target_include_directories(toybox PUBLIC "source/" "${CGLTF_INCLUDE_DIRS}" "${engine_config_include_dir}")
@@ -450,7 +532,7 @@ target_compile_options(toybox PUBLIC
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
 )
 
-target_compile_features(toybox PUBLIC c_std_11)
+target_compile_features(toybox PUBLIC c_std_23)
 target_compile_features(toybox PUBLIC cxx_std_20)
 
 # Cook engine shaders
@@ -553,7 +635,7 @@ function(tb_add_app target_name source)
 
   # Find config header
   set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
-  configure_file(${CMAKE_CURRENT_LIST_DIR}/source/config.h.in ${config_include_dir}/config.h @ONLY)
+  configure_file(${CMAKE_CURRENT_LIST_DIR}/source/tb_config.h.in ${config_include_dir}/tb_config.h @ONLY)
 
   cook_shaders(${target_name}_shader_sources ${target_name}_shader_headers)
   if(out_shader_headers)
