@@ -52,6 +52,10 @@
       "version": "1.14"
     },
     {
+      "name": "flecs",
+      "version": "3.2.11"
+    },
+    {
       "name": "enkits",
       "version": "1.11",
       "port-version": 3
@@ -74,7 +78,7 @@
     },
     {
       "name": "meshoptimizer",
-      "version": "0.20"
+      "version": "0.21"
     },
     {
       "name": "mimalloc",
@@ -94,7 +98,7 @@
     },
     {
       "name": "tracy",
-      "version": "0.11.0"
+      "version": "0.11.1"
     },
     {
       "name": "volk",
