@@ -24,26 +24,37 @@ cmake --build --preset release-x64-windows-ninja-llvm
 ### Pre-requisites
 
 #### All Platforms
-Make sure to have the following available on your path:
+Make sure to have the following available on your PATH:
 * ninja
-* cmake 3.20+
-* clang (17 is used by CI. Some older versions of clang don't support `_Float16`)
-* dxc [via the Vulkan SDK](https://vulkan.lunarg.com/)
-* vcpkg - latest version from git; more details below
+* cmake (version 3.20+)
+* clang (CI uses between versions 18-20; Anything after 17 should work)
+* git
+* xxd (version 2023-10-05+ has been tested)
+
+You also need (but not on your PATH)
+* vcpkg (latest version from git)
 
 You will also need the following environment variables defined:
 * `VCPKG_ROOT` - should point to your local vcpkg install
+
+vcpkg will fetch a number of dependencies. See `vcpkg.json` for a complete list.
+
+Notes:
+ * You can install `xxd` on Windows via `scoop` by installing the `git` package. Git Bash should include `xxd`
+ * Shaders are [slang](https://shader-slang.com/) and thus are compiled by `slangc` which is retrieved by vcpkg
+ * Tracy could be built locally by the `gui-tools` target but for now just install `tracy` from your package manager if you want to do profiling
+ * Jolt physics comes with a viewer which can also be built from vcpkg. When more integration with Jolt is implemented this will probably be the way to access this tool.
 
 #### Windows - Works
 To use LLVM you will need the VS2022 build tools, a Windows 10/11 Kit install and LLVM for Windows installed.
 
 #### Linux - Should Work
-For DXC to work properly you may need libncurses5 installed. You can install that on:
+Any working clang toolchain should be able to build the project for any linux with only minimal build tools. 
 
-Ubuntu with: `sudo apt install -y libncurses5`
+First time vcpkg may complain if you have missing dependencies. Not listing them all here yet since it's different per distro and it changes as dependencies update
 
 #### macOS - Blocked
-You should only need the XCode developer command line tools installed and the MoltenVK Vulkan SDK (primarily for `dxc`).
+You should only need the XCode developer command line tools installed and the MoltenVK Vulkan SDK if you want Validation Layers.
 
 Toybox currently requires Vulkan 1.3 and MoltenVK only supports 1.2 so while macOS is compiled by CI it is not expected to actually run.
 
@@ -52,10 +63,12 @@ Toybox can be built with the Android SDK and NDK but the ability to produce an a
 
 If you still feel like being brave:
 
+You will need Java 11+
+
 You will need the following installed from the android sdkmanager:
 * `build-tools;31.0.0` (anything 30+ works; try latest)
-* `ndk;26.2.11394342` (Older versions may fail to compile mimalloc)
-* `platform-tools;31.0.3` (Newer should work too)
+* `ndk;26.2.11394342` (Older versions may fail to compile mimalloc & newer versions will fail to compile SDL3)
+* `platform-tools` (Latest version should be fine)
 * `platforms;android-31` (Hard requirement from SDL3)
 
 The CMake scripts rely on these env vars being set properly. Through Android Studio or your own environment.
