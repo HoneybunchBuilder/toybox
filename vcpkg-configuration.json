@@ -26,6 +26,15 @@
         "flatbuffers"
       ],
       "reference": "steam-audio"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "8117f911398fffebdd3048dc0cbae8e6de41060f",
+      "packages": [
+        "ktx"
+      ],
+      "reference": "ktx-fix"
     }
   ]
 }
