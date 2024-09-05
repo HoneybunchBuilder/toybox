@@ -1,6 +1,6 @@
-#include "tb_lighting.slangh"
 #include "tb_gltf.slangh"
 #include "tb_intrin.slangh"
+#include "tb_lighting.slangh"
 
 GLTF_VIEW_SET(0)
 GLTF_MATERIAL_SET(1)

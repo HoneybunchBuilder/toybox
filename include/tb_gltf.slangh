@@ -25,7 +25,7 @@ TB_GPU_STRUCT_DECL(TextureTransform, {
   float2 scale;
 });
 
-TB_GPU_STRUCT_DECL(PBRMetallicRoughness,{
+TB_GPU_STRUCT_DECL(PBRMetallicRoughness, {
   float4 base_color_factor;
   float4 metal_rough_factors;
 });
@@ -35,7 +35,7 @@ TB_GPU_STRUCT_DECL(PBRSpecularGlossiness, {
   float4 spec_gloss_factors;
 });
 
-TB_GPU_STRUCT_DECL(TbGLTFMaterialData,{
+TB_GPU_STRUCT_DECL(TbGLTFMaterialData, {
   TextureTransform tex_transform;
   PBRMetallicRoughness pbr_metallic_roughness;
   PBRSpecularGlossiness pbr_specular_glossiness;
@@ -64,10 +64,6 @@ TB_GPU_STRUCT_DECL(TbGLTFDrawData, {
 
 #define ALPHA_CUTOFF(m) m.sheen_alpha.w
 
-#if defined(TB_SHADER) && !defined(TB_SHADER)
-#define TB_SHADER 1
-#endif
-
 // If a shader, provide some helper functions and macros
 #if defined(TB_SHADER)
 float2 uv_transform(int2 quant_uv, TextureTransform trans) {
@@ -82,22 +78,34 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
 // by specific systems
 
 #define GLTF_MATERIAL_SET(b)                                                   \
-  [[vk::binding(0, b)]] SamplerState material_sampler;                         \
-  [[vk::binding(1, b)]] SamplerComparisonState shadow_sampler;                 \
-  [[vk::binding(2, b)]] StructuredBuffer<TbGLTFMaterialData> gltf_data[];
+  [[vk::binding(0, b)]]                                                        \
+  SamplerState material_sampler;                                               \
+  [[vk::binding(1, b)]]                                                        \
+  SamplerComparisonState shadow_sampler;                                       \
+  [[vk::binding(2, b)]]                                                        \
+  StructuredBuffer<TbGLTFMaterialData> gltf_data[];
 
 #define GLTF_DRAW_SET(b)                                                       \
-  [[vk::binding(0, b)]] StructuredBuffer<TbGLTFDrawData> draw_data;
+  [[vk::binding(0, b)]]                                                        \
+  StructuredBuffer<TbGLTFDrawData> draw_data;
 
 #define GLTF_VIEW_SET(b)                                                       \
-  [[vk::binding(0, b)]] ConstantBuffer<TbViewData> camera_data;          \
-  [[vk::binding(1, b)]] TextureCube irradiance_map;                            \
-  [[vk::binding(2, b)]] TextureCube prefiltered_map;                           \
-  [[vk::binding(3, b)]] Texture2D brdf_lut;                                    \
-  [[vk::binding(4, b)]] ConstantBuffer<TbLightData> light_data;          \
-  [[vk::binding(5, b)]] Texture2DArray shadow_map;                             \
-  [[vk::binding(6, b)]] SamplerState filtered_env_sampler;                     \
-  [[vk::binding(7, b)]] SamplerState brdf_sampler;
+  [[vk::binding(0, b)]]                                                        \
+  ConstantBuffer<TbViewData> camera_data;                                      \
+  [[vk::binding(1, b)]]                                                        \
+  TextureCube irradiance_map;                                                  \
+  [[vk::binding(2, b)]]                                                        \
+  TextureCube prefiltered_map;                                                 \
+  [[vk::binding(3, b)]]                                                        \
+  Texture2D brdf_lut;                                                          \
+  [[vk::binding(4, b)]]                                                        \
+  ConstantBuffer<TbLightData> light_data;                                      \
+  [[vk::binding(5, b)]]                                                        \
+  Texture2DArray shadow_map;                                                   \
+  [[vk::binding(6, b)]]                                                        \
+  SamplerState filtered_env_sampler;                                           \
+  [[vk::binding(7, b)]]                                                        \
+  SamplerState brdf_sampler;
 
 #define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
   {                                                                            \

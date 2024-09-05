@@ -21,15 +21,14 @@ TB_GPU_STRUCT_DECL(TbFXAAPushConstants, {
   float search_threshold;
 });
 
-
 #ifdef TB_SHADER
 
-#define FXAA_SET(b)                                                        \
-  [[vk::binding(0, b)]]\
-  Texture2D input;   \
-  [[vk::binding(1, b)]]\
-  SamplerState in_sampler;\
-  [[vk::binding(2, b)]]\
+#define FXAA_SET(b)                                                            \
+  [[vk::binding(0, b)]]                                                        \
+  Texture2D input;                                                             \
+  [[vk::binding(1, b)]]                                                        \
+  SamplerState in_sampler;                                                     \
+  [[vk::binding(2, b)]]                                                        \
   [[vk::push_constant]]                                                        \
   ConstantBuffer<TbFXAAPushConstants> consts;
 

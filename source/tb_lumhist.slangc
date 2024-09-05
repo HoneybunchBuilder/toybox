@@ -18,14 +18,12 @@ SamplerState static_sampler;
 [[vk::push_constant]]
 ConstantBuffer<TbLuminancePushConstants> consts;
 
-groupshared uint histogram_shared[GROUP_SIZE] ;
+groupshared uint histogram_shared[GROUP_SIZE];
 
 // Histogram bin lookup based on color and luminance range
-uint color_to_hist(float3 color, float min_log_lum, float inv_log_lum_range)
-{
+uint color_to_hist(float3 color, float min_log_lum, float inv_log_lum_range) {
   float lum = dot(color, RGB_TO_LUM); // convert RGB to Luminance
-  if (lum < EPSILON)
-  {
+  if (lum < EPSILON) {
     return 0; // avoid taking log of 0
   }
 
@@ -42,25 +40,24 @@ void comp(int group_idx: SV_GroupIndex,
           int3 dispatch_thread_id: SV_DispatchThreadID) {
   const float4 params = consts.params;
 
-// Init and wait for all threads in the group to reach this point
-histogram_shared[group_idx] = 0;
-GroupMemoryBarrierWithGroupSync();
+  // Init and wait for all threads in the group to reach this point
+  histogram_shared[group_idx] = 0;
+  GroupMemoryBarrierWithGroupSync();
 
-float2 dimensions = params.zw;
+  float2 dimensions = params.zw;
 
-// Ignore any threads that map outside the image
-if (dispatch_thread_id.x < dimensions.x &&
-    dispatch_thread_id.y < dimensions.y)
-{
-  float2 uv = dispatch_thread_id.xy / dimensions;
+  // Ignore any threads that map outside the image
+  if (dispatch_thread_id.x < dimensions.x &&
+      dispatch_thread_id.y < dimensions.y) {
+    float2 uv = dispatch_thread_id.xy / dimensions;
 
-  float3 color = input.SampleLevel(static_sampler, uv, 0).rgb;
-  uint idx = color_to_hist(color, params.x, params.y);
-  InterlockedAdd(histogram_shared[idx], 1);
-}
+    float3 color = input.SampleLevel(static_sampler, uv, 0).rgb;
+    uint idx = color_to_hist(color, params.x, params.y);
+    InterlockedAdd(histogram_shared[idx], 1);
+  }
 
-GroupMemoryBarrierWithGroupSync();
+  GroupMemoryBarrierWithGroupSync();
 
-// Contention here should be low
-InterlockedAdd(output[group_idx], histogram_shared[group_idx]);
+  // Contention here should be low
+  InterlockedAdd(output[group_idx], histogram_shared[group_idx]);
 }

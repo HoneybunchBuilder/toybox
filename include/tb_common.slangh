@@ -27,10 +27,10 @@
 #define TB_GPU_STRUCT_DECL(name, body)                                         \
   _TB_GPU_STRUCT_START name body _TB_GPU_STRUCT_END(name)
 
-#define TB_GPU_STRUCT_DECL_NOPACK(name, body)                                   \
+#define TB_GPU_STRUCT_DECL_NOPACK(name, body)                                  \
   _TB_GPU_STRUCT_START_NOPACK name body _TB_GPU_STRUCT_END(name)
 
-TB_GPU_STRUCT_DECL(TbCommonObjectData, {float4x4 m;});
+TB_GPU_STRUCT_DECL(TbCommonObjectData, { float4x4 m; });
 
 // Common input layout info and permutation settings
 #define TB_INPUT_PERM_NONE 0x00000000

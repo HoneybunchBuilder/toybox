@@ -2,7 +2,7 @@
 
 #include "tb_pbr.slangh"
 
-TB_GPU_STRUCT_DECL_NOPACK(TbLightData,{
+TB_GPU_STRUCT_DECL_NOPACK(TbLightData, {
   float3 color;
   float3 light_dir;
   float4 cascade_splits;
@@ -293,9 +293,10 @@ float shadow_visibility(Light l, Surface s) {
     }
   }
 
-  const float3 cascade_colors[TB_CASCADE_COUNT] = {
-      float3(1.0f, 0.0, 0.0f), float3(0.0f, 1.0f, 0.0f),
-      float3(0.0f, 0.0f, 1.0f), float3(1.0f, 1.0f, 0.0f)};
+  const float3 cascade_colors[TB_CASCADE_COUNT] = { float3(1.0f, 0.0, 0.0f),
+                                                    float3(0.0f, 1.0f, 0.0f),
+                                                    float3(0.0f, 0.0f, 1.0f),
+                                                    float3(1.0f, 1.0f, 0.0f) };
 
   // return cascade_colors[cascade_idx];
 

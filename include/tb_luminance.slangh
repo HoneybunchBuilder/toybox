@@ -2,6 +2,4 @@
 
 #include "tb_common.slangh"
 
-TB_GPU_STRUCT_DECL(TbLuminancePushConstants, {
-  float4 params;
-});
+TB_GPU_STRUCT_DECL(TbLuminancePushConstants, { float4 params; });

@@ -1,5 +1,5 @@
-#include "tb_cube_view_lut.slangh"
 #include "tb_common.slangh"
+#include "tb_cube_view_lut.slangh"
 #include "tb_pbr.slangh"
 
 [[vk::binding(0, 0)]]
