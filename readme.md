@@ -69,7 +69,7 @@ You will need the following installed from the android sdkmanager:
 * `build-tools;31.0.0` (anything 30+ works; try latest)
 * `ndk;26.2.11394342` (Older versions may fail to compile mimalloc & newer versions will fail to compile SDL3)
 * `platform-tools` (Latest version should be fine)
-* `platforms;android-31` (Hard requirement from SDL3)
+* `platforms;android-33` (Hard requirement from SDL3)
 
 The CMake scripts rely on these env vars being set properly. Through Android Studio or your own environment.
 * `ANDROID_NDK_HOME`
