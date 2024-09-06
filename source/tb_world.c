@@ -138,7 +138,7 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   TracyCZoneEnd(ctx);
 }
 
-#ifndef FINAL
+#ifndef TB_FINAL
 int32_t tb_check_info_mode(int32_t argc, char *const *argv) {
   static const char *info_mode_str = "--info";
   for (int32_t i = 0; i < argc; ++i) {
@@ -218,7 +218,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   }
 
 // Run optional info mode in non-final builds only
-#ifndef FINAL
+#ifndef TB_FINAL
   if (tb_check_info_mode(desc->argc, desc->argv) > 0) {
     tb_write_info(world);
     TracyCZoneEnd(ctx);
@@ -252,7 +252,7 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
     TracyCZoneEnd(ctx);
   }
 
-#ifndef FINAL
+#ifndef TB_FINAL
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
   ecs_singleton_set(ecs, EcsRest, {0});

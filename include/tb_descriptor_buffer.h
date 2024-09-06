@@ -14,7 +14,7 @@ typedef struct TbDescriptorBuffer {
   TbBuffer buffer;
   TbHostBuffer host;
   uint8_t *data_ptr;
-#ifndef FINAL
+#ifndef TB_FINAL
   const char *name;
 #endif
 } TbDescriptorBuffer;

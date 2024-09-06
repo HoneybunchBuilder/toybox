@@ -3,7 +3,7 @@
 #include "tb_allocator.h"
 #include "tb_render_common.h"
 
-#if !defined(FINAL) && !defined(__ANDROID__)
+#if !defined(TB_FINAL) && !defined(__ANDROID__)
 #define VALIDATION
 #endif
 
