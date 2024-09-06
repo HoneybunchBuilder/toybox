@@ -27,9 +27,8 @@ float2 axis_deadzone(float2 axis, float deadzone) {
 }
 
 void input_update_tick(ecs_iter_t *it) {
-  TbInputSystem *self = ecs_field(it, TbInputSystem, 1);
-  TracyCZoneN(ctx, "Input System Tick", true);
-  TracyCZoneColor(ctx, TracyCategoryColorInput);
+  TB_TRACY_SCOPEC("Input System Tick", TracyCategoryColorInput);
+  tb_auto self = ecs_field(it, TbInputSystem, 1);
 
   self->mouse.axis = (float2){0}; // Must always clear axes
   self->mouse.wheel = (float2){0};
@@ -49,14 +48,12 @@ void input_update_tick(ecs_iter_t *it) {
   self->event_count = event_index;
 
   for (uint32_t event_idx = 0; event_idx < self->event_count; ++event_idx) {
-    SDL_Event event = self->events[event_idx];
+    tb_auto event = self->events[event_idx];
     // Translate keyboard events into input events that we care about
     {
       if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
         bool value = event.type == SDL_EVENT_KEY_DOWN;
-
-        const SDL_Keysym *keysym = &event.key.keysym;
-        SDL_Scancode scancode = keysym->scancode;
+        tb_auto scancode = event.key.scancode;
 
         if (scancode == SDL_SCANCODE_W) {
           self->keyboard.key_W = value;
@@ -72,7 +69,7 @@ void input_update_tick(ecs_iter_t *it) {
       }
 
       if (event.type == SDL_EVENT_MOUSE_MOTION) {
-        const SDL_MouseMotionEvent *mouse_motion = &event.motion;
+        tb_auto mouse_motion = &event.motion;
         self->mouse.axis = (float2){
             (float)mouse_motion->xrel / 5,
             (float)mouse_motion->yrel / 5,
@@ -165,12 +162,10 @@ void input_update_tick(ecs_iter_t *it) {
       ctl_state->buttons |= TB_BUTTON_B;
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_input_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Input Sys", true);
+  TB_TRACY_SCOPE("Register Input Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbInputSystem);
 
@@ -180,11 +175,8 @@ void tb_register_input_sys(TbWorld *world) {
                         .window = world->window,
                     });
   ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem(TbInputSystem));
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_input_sys(TbWorld *world) {
-  ecs_world_t *ecs = world->ecs;
-
-  ecs_singleton_remove(ecs, TbInputSystem);
+  ecs_singleton_remove(world->ecs, TbInputSystem);
 }

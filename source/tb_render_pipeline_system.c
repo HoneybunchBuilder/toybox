@@ -3192,7 +3192,7 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
 
     // Let the render thread know we're done handling the resize on the
     // main thread
-    SDL_PostSemaphore(rnd_sys->render_thread->resized);
+    SDL_SignalSemaphore(rnd_sys->render_thread->resized);
 
     // Reset back to frame 0
     rnd_sys->frame_idx = 0;

@@ -153,7 +153,7 @@ void tb_register_log_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLogSystem);
 
-  SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+  SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
 
   tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
@@ -167,7 +167,7 @@ void tb_register_log_sys(TbWorld *world) {
   TB_DYN_ARR_RESET(sys->messages, tb_global_alloc, 1024);
   ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem(TbLogSystem));
 
-  SDL_LogSetOutputFunction(tb_log_hook,
+  SDL_SetLogOutputFunction(tb_log_hook,
                            ecs_singleton_get_mut(ecs, TbLogSystem));
   TracyCZoneEnd(ctx);
 }

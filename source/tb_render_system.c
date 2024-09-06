@@ -156,14 +156,14 @@ TbRenderSystem create_render_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
       void *data = NULL;
 
       // If an existing pipeline cache exists, load it
-      SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "rb");
+      tb_auto cache_file = SDL_IOFromFile("./pipeline.cache", "rb");
       if (cache_file != NULL) {
-        data_size = (size_t)SDL_RWsize(cache_file);
+        data_size = (size_t)SDL_GetIOSize(cache_file);
 
         data = tb_alloc(sys.tmp_alloc, data_size);
 
-        SDL_RWread(cache_file, data, data_size);
-        SDL_RWclose(cache_file);
+        SDL_ReadIO(cache_file, data, data_size);
+        SDL_CloseIO(cache_file);
       }
       VkPipelineCacheCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
@@ -199,10 +199,10 @@ void destroy_render_system(TbRenderSystem *self) {
       err = vkGetPipelineCacheData(device, self->pipeline_cache, &cache_size,
                                    cache);
       if (err == VK_SUCCESS) {
-        SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb+");
+        SDL_IOStream *cache_file = SDL_IOFromFile("./pipeline.cache", "wb+");
         if (cache_file != NULL) {
-          SDL_RWwrite(cache_file, cache, cache_size);
-          SDL_RWclose(cache_file);
+          SDL_WriteIO(cache_file, cache, cache_size);
+          SDL_CloseIO(cache_file);
         }
       }
     }
@@ -243,7 +243,7 @@ void destroy_render_system(TbRenderSystem *self) {
 }
 
 void render_frame_begin(ecs_iter_t *it) {
-  TbRenderSystem *sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto sys = ecs_field(it, TbRenderSystem, 1);
 
   TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
                true);

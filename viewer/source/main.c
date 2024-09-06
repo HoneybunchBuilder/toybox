@@ -50,7 +50,7 @@ int32_t main(int32_t argc, char *argv[]) {
       return -1;
     }
 
-    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+    SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
   }
 
   const char *app_name = "Toybox Viewer";

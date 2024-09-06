@@ -36,7 +36,7 @@ bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
 void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
   TB_TRACY_SCOPE("Signal Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
-  SDL_PostSemaphore(thread->frame_states[frame_idx].wait_sem);
+  SDL_SignalSemaphore(thread->frame_states[frame_idx].wait_sem);
 }
 
 void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
@@ -1712,7 +1712,7 @@ int32_t render_thread(void *data) {
                   -1);
   TracyCSetThreadName("Render Thread");
 
-  SDL_PostSemaphore(thread->initialized);
+  SDL_SignalSemaphore(thread->initialized);
 
   // Main thread loop
   while (true) {
@@ -1731,7 +1731,7 @@ int32_t render_thread(void *data) {
 
       // Signal frame done before resetting frame_idx
       TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
-      SDL_PostSemaphore(frame_state->signal_sem);
+      SDL_SignalSemaphore(frame_state->signal_sem);
 
       thread->frame_count = 0;
       thread->frame_idx = 0;
@@ -1759,7 +1759,7 @@ int32_t render_thread(void *data) {
       tick_render_thread(thread, frame_state);
 
       // Signal frame done
-      SDL_PostSemaphore(frame_state->signal_sem);
+      SDL_SignalSemaphore(frame_state->signal_sem);
 
       // Increment frame count when done
       thread->frame_count++;

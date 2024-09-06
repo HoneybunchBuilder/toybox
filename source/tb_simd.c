@@ -1,9 +1,9 @@
 #include "tb_simd.h"
 
+#include <SDL3/SDL_assert.h>
 #include <SDL3/SDL_stdinc.h>
 
 #define _USE_MATH_DEFINES
-#include <SDL_assert.h>
 #include <math.h>
 
 #include <stdbool.h>

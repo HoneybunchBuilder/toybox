@@ -40,8 +40,8 @@ void destroy_audio_system(TbAudioSystem *self) {
 }
 
 void tb_register_audio_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Audio Sys", true);
-  ecs_world_t *ecs = world->ecs;
+  TB_TRACY_SCOPE("Register Audio Sys");
+  tb_auto ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbAudioSystem);
 
@@ -55,16 +55,16 @@ void tb_register_audio_sys(TbWorld *world) {
       .freq = MIX_DEFAULT_FREQUENCY,
   };
 
-  ret = Mix_OpenAudio(0, &audio_spec);
-  TB_CHECK(ret == 0, "Failed to open default audio device");
+  bool ok = Mix_OpenAudio(0, &audio_spec);
+  TB_CHECK(ok, "Failed to open default audio device");
 
-  ret =
+  ok =
       Mix_QuerySpec(&audio_spec.freq, &audio_spec.format, &audio_spec.channels);
-  TB_CHECK(ret == 1, "Failed to query audio device");
+  TB_CHECK(ok, "Failed to query audio device");
 
   // Set the number of audio tracks to 8 for starters
-  ret = Mix_AllocateChannels(8);
-  TB_CHECK(ret != 0, "Failed to allocate tracks for audio device");
+  int32_t channels = Mix_AllocateChannels(8);
+  TB_CHECK(channels != 0, "Failed to allocate tracks for audio device");
 
   TbAudioSystem sys = {
       .gp_alloc = world->gp_alloc,
@@ -78,7 +78,6 @@ void tb_register_audio_sys(TbWorld *world) {
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbAudioSystem), TbAudioSystem, &sys);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_audio_sys(TbWorld *world) {
