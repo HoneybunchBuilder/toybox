@@ -34,32 +34,22 @@ bool tb_start_render_thread(TbRenderThreadDescriptor *desc,
 }
 
 void tb_signal_render(TbRenderThread *thread, uint32_t frame_idx) {
+  TB_TRACY_SCOPE("Signal Render Thread");
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_PostSemaphore(thread->frame_states[frame_idx].wait_sem);
-  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-  //              "+++Signaled render thread frame %d+++", frame_idx);
 }
 
 void tb_wait_render(TbRenderThread *thread, uint32_t frame_idx) {
-  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-  //              "~~~Waiting for GPU to frame %d~~~", frame_idx);
   TB_CHECK(frame_idx < TB_MAX_FRAME_STATES, "Invalid frame index");
   SDL_WaitSemaphore(thread->frame_states[frame_idx].signal_sem);
-  TracyCZoneNC(gpu_ctx, "Wait for GPU", TracyCategoryColorWait, true);
+  TB_TRACY_SCOPEC("Wait for GPU", TracyCategoryColorWait);
   vkWaitForFences(thread->device, 1, &thread->frame_states[frame_idx].fence,
                   VK_TRUE, SDL_MAX_UINT64);
-  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
-  //              "---Done waiting for GPU on frame %d---", frame_idx);
-  TracyCZoneEnd(gpu_ctx);
 }
 
 void tb_wait_thread_initialized(TbRenderThread *thread) {
-  TracyCZoneNC(ctx, "Wait Render Thread Initialize", TracyCategoryColorWait,
-               true);
-  // TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD, "%s",
-  //              "Waiting for render thread to initialize");
+  TB_TRACY_SCOPEC("Wait Render Thread Initialize", TracyCategoryColorWait);
   SDL_WaitSemaphore(thread->initialized);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_stop_render_thread(TbRenderThread *thread) {
@@ -98,7 +88,7 @@ void tb_destroy_render_thread(TbRenderThread *thread) {
   tb_free(gp_alloc, thread->queue_props);
 
   // Destroy debug messenger
-#ifdef VALIDATION
+#ifdef TB_VK_VALIDATION
   vkDestroyDebugUtilsMessengerEXT(thread->instance,
                                   thread->debug_utils_messenger, vk_alloc);
 #endif
@@ -120,7 +110,7 @@ void tb_destroy_render_thread(TbRenderThread *thread) {
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
 
-#ifdef VALIDATION
+#ifdef TB_VK_VALIDATION
 static bool check_layer(const char *check_name, uint32_t layer_count,
                         VkLayerProperties *layers) {
   bool found = false;
@@ -166,7 +156,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
 bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                    VkInstance *instance) {
-  TracyCZoneN(ctx, "Initialize Instance", true);
+  TB_TRACY_SCOPE("Initialize Instance");
   VkResult err = VK_SUCCESS;
 
   // Create vulkan instance
@@ -188,7 +178,7 @@ bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                                                  instance_layers);
         TB_CHECK_RETURN(err == VK_SUCCESS,
                         "Failed to enumerate instance layer properties", false);
-#ifdef VALIDATION
+#ifdef TB_VK_VALIDATION
         {
           const char *validation_layer_name = "VK_LAYER_KHRONOS_validation";
 
@@ -215,7 +205,7 @@ bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
     }
 
 // Add debug ext
-#ifdef VALIDATION
+#ifdef TB_VK_VALIDATION
     {
       SDL_assert(ext_count + 1 < MAX_EXT_COUNT);
       ext_names[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
@@ -230,65 +220,64 @@ bool init_instance(TbAllocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
     }
 #endif
 
-    VkApplicationInfo app_info = {0};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Toybox";
-    app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    app_info.pEngineName = "Toybox";
-    app_info.engineVersion =
-        VK_MAKE_VERSION(TB_ENGINE_VERSION_MAJOR, TB_ENGINE_VERSION_MINOR,
-                        TB_ENGINE_VERSION_PATCH);
-    app_info.apiVersion = VK_API_VERSION_1_3;
+    // TODO: Eventually we need a way for an application to report its name
+    // and version here. For the sake of driver bug hunting in the future
+    VkApplicationInfo app_info = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "Toybox",
+        .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
+        .pEngineName = "Toybox",
+        .engineVersion =
+            VK_MAKE_VERSION(TB_ENGINE_VERSION_MAJOR, TB_ENGINE_VERSION_MINOR,
+                            TB_ENGINE_VERSION_PATCH),
+        .apiVersion = VK_API_VERSION_1_3,
+    };
 
-    VkInstanceCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    VkInstanceCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
     // Only use this portability bit when necessary. Some older system
     // header versions of vulkan may not support it.
 #if defined(VK_USE_PLATFORM_MACOS_MVK) && (VK_HEADER_VERSION >= 216)
-    create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+        .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
 #endif
-    create_info.pApplicationInfo = &app_info;
-    create_info.enabledLayerCount = layer_count;
-    create_info.ppEnabledLayerNames = layer_names;
-    create_info.enabledExtensionCount = ext_count;
-    create_info.ppEnabledExtensionNames = ext_names;
-
+        .pApplicationInfo = &app_info,
+        .enabledLayerCount = layer_count,
+        .ppEnabledLayerNames = layer_names,
+        .enabledExtensionCount = ext_count,
+        .ppEnabledExtensionNames = ext_names,
+    };
     err = vkCreateInstance(&create_info, vk_alloc, instance);
-    TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create vulkan instance",
-                    false);
+    TB_VK_CHECK_RET(err, "Failed to create vulkan instance", false);
   }
 
   volkLoadInstance(*instance);
-
-  TracyCZoneEnd(ctx);
   return true;
 }
 
 bool init_debug_messenger(VkInstance instance,
                           const VkAllocationCallbacks *vk_alloc,
                           VkDebugUtilsMessengerEXT *debug) {
-  TracyCZoneN(ctx, "Initialize Debug Messenger", true);
+  TB_TRACY_SCOPE("Initialize Debug Messenger");
   // Load debug callback
-#ifdef VALIDATION
-  VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
-  ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-  ext_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-  ext_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                         VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-  ext_info.pfnUserCallback = vk_debug_callback;
+#ifdef TB_VK_VALIDATION
+  VkDebugUtilsMessengerCreateInfoEXT ext_info = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .pfnUserCallback = vk_debug_callback,
+  };
   VkResult err =
       vkCreateDebugUtilsMessengerEXT(instance, &ext_info, vk_alloc, debug);
-  TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to create debug utils messenger",
-                  false);
+  TB_VK_CHECK_RET(err, "Failed to create debug utils messenger", false);
 #else
   (void)instance;
   (void)vk_alloc;
   (void)debug;
 #endif
-  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -310,7 +299,7 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
                        VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        TbAllocator gp_alloc, TbFrameState *states) {
-  TracyCZoneN(ctx, "Initialize Frame States", true);
+  TB_TRACY_SCOPE("Initialize Frame States");
   TB_CHECK_RETURN(states, "Invalid states", false);
   VkResult err = VK_SUCCESS;
 
@@ -452,7 +441,6 @@ bool init_frame_states(VkPhysicalDevice gpu, VkDevice device,
     }
   }
 
-  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -507,7 +495,7 @@ bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
               VkQueueFamilyProperties **queue_props,
               VkPhysicalDeviceFeatures *gpu_features,
               VkPhysicalDeviceMemoryProperties *gpu_mem_props) {
-  TracyCZoneN(ctx, "Initialize GPU", true);
+  TB_TRACY_SCOPE("Initialize GPU");
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   TB_CHECK_RETURN(err == VK_SUCCESS, "Failed to enumerate gpu count", false);
@@ -588,8 +576,6 @@ bool init_gpu(VkInstance instance, TbAllocator gp_alloc, TbAllocator tmp_alloc,
   VkFormatProperties props = {0};
   vkGetPhysicalDeviceFormatProperties(*gpu, VK_FORMAT_R16G16B16A16_SINT,
                                       &props);
-
-  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -693,6 +679,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
                  uint32_t present_queue_family_index, TbAllocator tmp_alloc,
                  const VkAllocationCallbacks *vk_alloc,
                  TbRenderExtensionSupport *ext_support, VkDevice *device) {
+  TB_TRACY_SCOPE("Initialize Vulkan Device");
   VkResult err = VK_SUCCESS;
 
   uint32_t device_ext_count = 0;
@@ -896,6 +883,7 @@ bool init_queues(VkDevice device, uint32_t graphics_queue_family_index,
 
 bool init_vma(VkInstance instance, VkPhysicalDevice gpu, VkDevice device,
               const VkAllocationCallbacks *vk_alloc, VmaAllocator *vma_alloc) {
+  TB_TRACY_SCOPE("Initializing VMA");
   VmaVulkanFunctions volk_functions = {
       .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
       .vkGetPhysicalDeviceMemoryProperties =
@@ -1103,26 +1091,24 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
 }
 
 bool init_render_thread(TbRenderThread *thread) {
-  TracyCZoneNC(ctx, "Render Thread Init", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Render Thread Init", TracyCategoryColorRendering);
   TB_CHECK_RETURN(thread, "Invalid render thread", false);
   TB_CHECK_RETURN(thread->window, "Render thread given no window", false);
 
   // Create renderer allocators
   {
-    TracyCZoneN(ctx, "Initialize Render Thread Allocators", true);
+    TB_TRACY_SCOPE("Initialize Render Thread Allocators");
     const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
     tb_create_arena_alloc("Render Arena", &thread->render_arena,
                           arena_alloc_size);
 
     tb_create_gen_alloc(&thread->gp_alloc, "Render Std Alloc");
-    TracyCZoneEnd(ctx);
   }
 
   tb_auto fn = (PFN_vkGetInstanceProcAddr)SDL_Vulkan_GetVkGetInstanceProcAddr();
   {
-    TracyCZoneN(ctx, "Initialize Volk", true);
+    TB_TRACY_SCOPE("Initialize Volk");
     volkInitializeCustom(fn);
-    TracyCZoneEnd(ctx);
   }
 
   // Create vulkan allocator
@@ -1186,8 +1172,6 @@ bool init_render_thread(TbRenderThread *thread) {
                         thread->graphics_queue_family_index, thread->vma_alloc,
                         vk_alloc, gp_alloc, thread->frame_states),
       "Failed to init frame states", false);
-
-  TracyCZoneEnd(ctx);
   return true;
 }
 
@@ -1274,8 +1258,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
   // Ensure the frame state we're about to use isn't being handled by the GPU
   {
-    TracyCZoneN(fence_ctx, "Wait for GPU", true);
-    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
+    TB_TRACY_SCOPEC("Wait for GPU", TracyCategoryColorWait);
     VkResult res = VK_TIMEOUT;
     while (res != VK_SUCCESS) {
       if (res == VK_TIMEOUT) {
@@ -1286,14 +1269,12 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       }
     }
 
-    TracyCZoneEnd(fence_ctx);
-
     vkResetFences(device, 1, &fence);
   }
 
   // Acquire Image
   {
-    TracyCZoneN(acquire_ctx, "Acquired Next TbSwapchain Image", true);
+    TB_TRACY_SCOPE("Acquired Next TbSwapchain Image");
     do {
       uint32_t idx = 0xFFFFFFFF;
       err = vkAcquireNextImageKHR(device, thread->swapchain.swapchain,
@@ -1318,23 +1299,18 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         SDL_assert(err == VK_SUCCESS);
       }
     } while (err != VK_SUCCESS);
-    TracyCZoneEnd(acquire_ctx);
   }
 
   // Reset Pool
   {
-    TracyCZoneN(pool_ctx, "Reset Pool", true);
-    TracyCZoneColor(pool_ctx, TracyCategoryColorRendering);
-
+    TB_TRACY_SCOPEC("Reset Pool", TracyCategoryColorRendering);
     vkResetCommandPool(device, state->command_pool, 0);
-
-    TracyCZoneEnd(pool_ctx);
   }
 
   // Write descriptor set updates at the top of the frame here
 
   {
-    TracyCZoneN(desc_ctx, "Update Descriptors", true);
+    TB_TRACY_SCOPEC("Update Descriptors", TracyCategoryColorRendering);
     TB_DYN_ARR_OF(VkWriteDescriptorSet) writes = {0};
     // We HAVE to use the gp alloc here. The size of the set_write_queue is
     // unknown so we will have to resize the array
@@ -1350,13 +1326,10 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
     // Must clean up array
     TB_DYN_ARR_DESTROY(writes);
-    TracyCZoneEnd(desc_ctx);
   }
 
-  // Draw
   {
-    TracyCZoneN(draw_ctx, "Draw", true);
-    TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+    TB_TRACY_SCOPEC("Record Draw", TracyCategoryColorRendering);
 
     TracyCGPUContext *gpu_ctx = (TracyCGPUContext *)state->tracy_gpu_context;
 
@@ -1372,7 +1345,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
     // Upload
     {
       {
-        TracyCZoneN(up_ctx, "Record Upload", true);
+        TB_TRACY_SCOPE("Record Upload");
         TracyCVkNamedZone(gpu_ctx, upload_scope, start_buffer, "Upload", 1,
                           true);
         // Upload all buffer requests
@@ -1430,12 +1403,11 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         }
 
         TracyCVkZoneEnd(upload_scope);
-        TracyCZoneEnd(up_ctx);
       }
 
       // Transition swapchain image to color attachment output
       {
-        TracyCZoneN(swap_trans_e, "Transition swapchain to color output", true);
+        TB_TRACY_SCOPE("Transition swapchain to color output");
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (thread->frame_count >= TB_MAX_FRAME_STATES) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -1459,7 +1431,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
-        TracyCZoneEnd(swap_trans_e);
       }
     }
 
@@ -1471,8 +1442,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
     // Submit upload work
     {
-      TracyCZoneN(submit_ctx, "Submit Upload", true);
-      TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+      TB_TRACY_SCOPEC("Submit Upload", TracyCategoryColorRendering);
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -1500,14 +1470,12 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         TB_VK_CHECK(err, "Failed to submit upload work");
         queue_end_label(graphics_queue);
       }
-
-      TracyCZoneEnd(submit_ctx);
     }
 
     // Record registered passes
     VkSemaphore pre_final_sem = upload_complete_sem;
     if (TB_DYN_ARR_SIZE(state->pass_contexts) > 0) {
-      TracyCZoneN(pass_ctx, "Record Passes", true);
+      TB_TRACY_SCOPE("Record Passes");
       pre_final_sem = render_complete_sem;
       uint32_t last_pass_buffer_idx = 0xFFFFFFFF;
       TB_DYN_ARR_FOREACH(state->pass_contexts, pass_idx) {
@@ -1523,8 +1491,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
             // Submit pass work
             {
-              TracyCZoneN(submit_ctx, "Submit Passes", true);
-              TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+              TB_TRACY_SCOPE("Submit Passes");
 
               uint32_t wait_sem_count = 0;
               VkSemaphore wait_sems[16] = {0};
@@ -1551,8 +1518,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
                                     VK_NULL_HANDLE);
                 TB_VK_CHECK(err, "Failed to submit pass work");
               }
-
-              TracyCZoneEnd(submit_ctx);
             }
           }
 
@@ -1594,8 +1559,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 
       // Submit last pass work
       {
-        TracyCZoneN(submit_ctx, "Submit Passes", true);
-        TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+        TB_TRACY_SCOPE("Submit Passes");
 
         uint32_t wait_sem_count = 0;
         VkSemaphore wait_sems[16] = {0};
@@ -1617,11 +1581,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
           err = vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
           TB_VK_CHECK(err, "Failed to submit pass work");
         }
-
-        TracyCZoneEnd(submit_ctx);
       }
-
-      TracyCZoneEnd(pass_ctx);
     }
 
     // Record finalization work
@@ -1633,7 +1593,7 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
       TB_VK_CHECK(err, "Failed to begin command buffer");
       TracyCVkCollect(gpu_ctx, end_buffer);
 
-      TracyCZoneN(swap_trans_e, "Transition swapchain to presentable", true);
+      TB_TRACY_SCOPE("Transition swapchain to presentable");
       VkImageMemoryBarrier barrier = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
           .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -1652,14 +1612,11 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
           VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
 
       vkEndCommandBuffer(end_buffer);
-
-      TracyCZoneEnd(swap_trans_e);
     }
 
     // Submit finalization work
     {
-      TracyCZoneN(submit_ctx, "Submit Ending", true);
-      TracyCZoneColor(submit_ctx, TracyCategoryColorRendering);
+      TB_TRACY_SCOPEC("Submit Ending", TracyCategoryColorRendering);
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -1687,17 +1644,12 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
         TB_VK_CHECK(err, "Failed to submit ending work");
         queue_end_label(graphics_queue);
       }
-
-      TracyCZoneEnd(submit_ctx);
     }
-
-    TracyCZoneEnd(draw_ctx);
   }
 
   // Present
   {
-    TracyCZoneN(present_ctx, "Present", true);
-    TracyCZoneColor(present_ctx, TracyCategoryColorRendering);
+    TB_TRACY_SCOPEC("Present", TracyCategoryColorRendering);
 
     VkSemaphore wait_sem = frame_complete_sem;
     if (thread->present_queue_family_index !=
@@ -1744,7 +1696,6 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
     } else {
       SDL_assert(err == VK_SUCCESS);
     }
-    TracyCZoneEnd(present_ctx);
 
     TracyCFrameMark;
   }
@@ -1755,9 +1706,8 @@ void tick_render_thread(TbRenderThread *thread, TbFrameState *state) {
 }
 
 int32_t render_thread(void *data) {
-  TbRenderThread *thread = (TbRenderThread *)data;
+  tb_auto thread = (TbRenderThread *)data;
 
-  // Init
   TB_CHECK_RETURN(init_render_thread(thread), "Failed to init render thread",
                   -1);
   TracyCSetThreadName("Render Thread");
@@ -1766,24 +1716,17 @@ int32_t render_thread(void *data) {
 
   // Main thread loop
   while (true) {
-    TracyCZone(ctx, true);
-    {
-      char frame_name[100] = {0};
-      SDL_snprintf(frame_name, 100, "Render Frame %d", thread->frame_idx);
-      TracyCZoneName(ctx, frame_name, SDL_strlen(frame_name));
-    }
-    TracyCZoneColor(ctx, TracyCategoryColorRendering);
+    TB_TRACY_SCOPEC("Render Frame", TracyCategoryColorRendering);
 
     // If we got a stop signal, stop
     if (thread->stop_signal > 0) {
-      TracyCZoneEnd(ctx);
       break;
     }
 
     // If the swapchain was resized, wait for the main thread to report that
     // it's all done handling the resize
     if (thread->swapchain_resize_signal) {
-      TracyCZoneNC(resize_ctx, "Resize", TracyCategoryColorWait, true);
+      TB_TRACY_SCOPEC("Resize", TracyCategoryColorWait);
       SDL_WaitSemaphore(thread->resized);
 
       // Signal frame done before resetting frame_idx
@@ -1803,19 +1746,13 @@ int32_t render_thread(void *data) {
       }
 
       thread->swapchain_resize_signal = 0;
-      TracyCZoneEnd(resize_ctx);
     } else {
       {
+        TB_TRACY_SCOPEC("Wait for Main Thread", TracyCategoryColorWait);
         // Wait for signal from main thread that there's a frame ready to
         // process
         TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
-
-        TracyCZoneN(wait_ctx, "Wait for Main Thread", true);
-        TracyCZoneColor(wait_ctx, TracyCategoryColorWait);
-
         SDL_WaitSemaphore(frame_state->wait_sem);
-
-        TracyCZoneEnd(wait_ctx);
       }
 
       TbFrameState *frame_state = &thread->frame_states[thread->frame_idx];
@@ -1828,8 +1765,6 @@ int32_t render_thread(void *data) {
       thread->frame_count++;
       thread->frame_idx = thread->frame_count % TB_MAX_FRAME_STATES;
     }
-
-    TracyCZoneEnd(ctx);
   }
 
   // Frame states must be destroyed on this thread

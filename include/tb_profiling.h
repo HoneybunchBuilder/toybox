@@ -79,6 +79,15 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
           &TracyConcat(__tracy_source_location, TracyLine), TRACY_CALLSTACK,   \
           true);
 
+#define TB_TRACY_SCOPEC(name, color)                                           \
+  static const struct ___tracy_source_location_data TracyConcat(               \
+      __tracy_source_location, TracyLine) = {name, __func__, TracyFile,        \
+                                             (uint32_t)TracyLine, color};      \
+  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx ctx##__COUNTER__ = \
+      ___tracy_emit_zone_begin_callstack(                                      \
+          &TracyConcat(__tracy_source_location, TracyLine), TRACY_CALLSTACK,   \
+          true);
+
 #ifdef __cplusplus
 }
 #endif
@@ -105,6 +114,7 @@ typedef struct TracyCGPUScope TracyCGPUScope;
 #define TracyCVkCollect(...)
 
 #define TB_TRACY_SCOPE(...)
+#define TB_TRACY_SCOPEC(...)
 
 #endif
 

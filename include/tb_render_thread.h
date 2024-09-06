@@ -4,7 +4,7 @@
 #include "tb_render_common.h"
 
 #if !defined(TB_FINAL) && !defined(__ANDROID__)
-#define VALIDATION
+#define TB_VK_VALIDATION
 #endif
 
 typedef struct SDL_Window SDL_Window;
