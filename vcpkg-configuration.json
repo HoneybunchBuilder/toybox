@@ -9,7 +9,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "476bf37620bc08b07d0fcb0fcff798afaf53075e",
+      "baseline": "656c2b649d1d4fdf6e17d8bbabcd31158a783a55",
       "packages": [
         "sdl3",
         "sdl3-mixer"
