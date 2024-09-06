@@ -399,7 +399,7 @@ TbVisualLoggingSystem create_visual_logging_system(
 void destroy_visual_logging_system(ecs_world_t *ecs,
                                    TbVisualLoggingSystem *self) {
   (void)ecs;
-#ifndef FINAL
+#ifndef TB_FINAL
   tb_rnd_destroy_pipe_layout(self->rnd_sys, self->pipe_layout);
   tb_shader_destroy(ecs, self->shader);
 
@@ -410,7 +410,7 @@ void destroy_visual_logging_system(ecs_world_t *ecs,
 
 void vlog_draw_tick(ecs_iter_t *it) {
   (void)it;
-#ifndef FINAL
+#ifndef TB_FINAL
   TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
 
   TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
@@ -484,7 +484,7 @@ void vlog_draw_tick(ecs_iter_t *it) {
 
 void vlog_ui_tick(ecs_iter_t *it) {
   (void)it;
-#ifndef FINAL
+#ifndef TB_FINAL
   TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
 
   TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
@@ -625,21 +625,21 @@ VLogShape *vlog_acquire_frame_shape(TbVisualLoggingSystem *vlog,
 
 void tb_vlog_begin_recording(TbVisualLoggingSystem *vlog) {
   (void)vlog;
-#ifndef FINAL
+#ifndef TB_FINAL
   TB_CHECK(vlog->recording == false, "Visual Logger is already recording");
   vlog->recording = true;
 #endif
 }
 void tb_vlog_end_recording(TbVisualLoggingSystem *vlog) {
   (void)vlog;
-#ifndef FINAL
+#ifndef TB_FINAL
   TB_CHECK(vlog->recording == true, "Visual Logger is not recording");
   vlog->recording = false;
 #endif
 }
 void tb_vlog_clear(TbVisualLoggingSystem *vlog) {
   (void)vlog;
-#ifndef FINAL
+#ifndef TB_FINAL
   TB_DYN_ARR_CLEAR(vlog->frames);
 #endif
 }
@@ -650,7 +650,7 @@ void tb_vlog_line(TbVisualLoggingSystem *vlog, float3 start, float3 end,
   (void)start;
   (void)end;
   (void)color;
-#ifndef FINAL
+#ifndef TB_FINAL
   if (!vlog->recording) {
     return;
   }
@@ -672,7 +672,7 @@ void tb_vlog_location(TbVisualLoggingSystem *vlog, float3 position,
   (void)position;
   (void)radius;
   (void)color;
-#ifndef FINAL
+#ifndef TB_FINAL
   if (!vlog->recording) {
     return;
   }

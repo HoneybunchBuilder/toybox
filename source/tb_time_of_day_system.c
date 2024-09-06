@@ -123,7 +123,7 @@ void time_of_day_tick(ecs_iter_t *it) {
   TracyCZoneEnd(ctx);
 }
 
-#ifndef FINAL
+#ifndef TB_FINAL
 typedef struct TbTimeOfDayContext {
   bool *coreui;
 } TbTimeOfDayContext;
@@ -169,7 +169,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, time_of_day_tick,
              EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
              [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
-#ifndef FINAL
+#ifndef TB_FINAL
   tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
 
   ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayContext);
@@ -183,7 +183,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
 }
 void tb_unregister_time_of_day_sys(TbWorld *world) {
   (void)world;
-#ifndef FINAL
+#ifndef TB_FINAL
   ecs_singleton_remove(world->ecs, TbTimeOfDayContext);
 #endif
 }

@@ -47,8 +47,6 @@ void destroy_coreui_system(TbCoreUISystem *self) {
 void coreui_show_about(bool *open) {
   if (igBegin("About Toybox", open, 0)) {
     igText("Version: %s", TB_ENGINE_VERSION);
-    igText("Platform: %s", TB_PLATFORM);
-    igText("Arch: %s", TB_ARCH);
     igText("Git Hash: %s", GIT_COMMIT_HASH);
     igEnd();
   }

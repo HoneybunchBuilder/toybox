@@ -27,7 +27,7 @@ VkResult tb_resize_desc_buffer(TbRenderSystem *rnd_sys, uint32_t capacity,
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };
     const char *buf_name = "";
-#ifndef FINAL
+#ifndef TB_FINAL
     buf_name = out_buf->name;
 #endif
     err = tb_rnd_sys_create_gpu_buffer(rnd_sys, &create_info, buf_name,
@@ -63,7 +63,7 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
                                      VkDescriptorSetLayout layout,
                                      const char *name, uint32_t capacity,
                                      TbDescriptorBuffer *out_buf) {
-#if FINAL
+#if TB_FINAL
   (void)name;
 #endif
   const tb_auto alignment =
@@ -80,7 +80,7 @@ VkResult tb_create_descriptor_buffer(TbRenderSystem *rnd_sys,
       .layout_size = layout_size,
   };
 
-#ifndef FINAL
+#ifndef TB_FINAL
   const uint32_t name_len = SDL_strlen(name) + 1;
   char *buf_name = tb_alloc_nm_tp(rnd_sys->gp_alloc, name_len, char);
   SDL_strlcpy(buf_name, name, name_len);

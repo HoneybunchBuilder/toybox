@@ -2,7 +2,7 @@
 
 #include "tb_vk.h"
 
-#ifndef FINAL
+#ifndef TB_FINAL
 
 void queue_begin_label(VkQueue queue, const char *label, float4 color) {
   if (vkQueueBeginDebugUtilsLabelEXT) {

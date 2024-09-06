@@ -4,7 +4,7 @@
 #include "tb_sdl.h"
 #include "tb_simd.h"
 
-#ifndef FINAL
+#ifndef TB_FINAL
 typedef struct VkQueue_T *VkQueue;
 typedef struct VkCommandBuffer_T *VkCommandBuffer;
 typedef struct VkDevice_T *VkDevice;

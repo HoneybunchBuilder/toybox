@@ -8,7 +8,7 @@ enum {
   TB_LOG_CATEGORY_CUSTOM,
 };
 
-#ifdef FINAL
+#ifdef TB_FINAL
 #define TB_LOG_VERBOSE(category, fmt, ...)
 #define TB_LOG_INFO(category, fmt, ...)
 #define TB_LOG_DEBUG(category, fmt, ...)
