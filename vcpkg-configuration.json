@@ -30,11 +30,11 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "8117f911398fffebdd3048dc0cbae8e6de41060f",
+      "baseline": "e80398f621532d3f3b46f59918d1b00d2ff38250",
       "packages": [
         "ktx"
       ],
-      "reference": "ktx-fix"
+      "reference": "ktx"
     }
   ]
 }
