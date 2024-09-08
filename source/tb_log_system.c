@@ -77,19 +77,22 @@ void log_ui_tick(ecs_iter_t *it) {
   tb_auto cat_to_str = ^const char *(int32_t cat) {
     // These are the built-in categories for SDL
     if (cat >= SDL_LOG_CATEGORY_APPLICATION &&
-        cat < SDL_LOG_CATEGORY_RESERVED1) {
-      static const char *sdl_cat_strings[] = {
-          "Application", "Error", "Assert", "System", "Error", "Critical",
+        cat < SDL_LOG_CATEGORY_RESERVED2) {
+      static const char *sdl_cat_strings[SDL_LOG_CATEGORY_RESERVED2] = {
+          "Application", "Error",  "Assert", "System", "Audio",
+          "Video",       "Render", "Input",  "Test",   "GPU",
       };
       return sdl_cat_strings[cat];
       // These are our custom categories for toybox
     } else if (cat >= TB_LOG_CATEGORY_RENDER_THREAD &&
                cat < TB_LOG_CATEGORY_CUSTOM) {
-      static const char *tb_cat_strings[] = {
-          "RenderThread",
-      };
+      static const char *tb_cat_strings[TB_LOG_CATEGORY_CUSTOM -
+                                        TB_LOG_CATEGORY_RENDER_THREAD] = {
+          "RenderThread", "SpatialAudio"};
       int32_t idx = (cat - TB_LOG_CATEGORY_RENDER_THREAD);
-      return tb_cat_strings[idx];
+      if (idx >= 0) {
+        return tb_cat_strings[idx];
+      }
     }
     // Theoretically the application could want custom log categories
     // Figure out a way to facilitate that. Maybe a user-provided block?
