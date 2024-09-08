@@ -39,7 +39,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "6ae2418ad774f481cf23a2b8587ed34bc41a4e79",
+      "baseline": "695d8c7ea68a7c5e159fc164e2675b169347aaaa",
       "packages": [
         "shader-slang"
       ],
