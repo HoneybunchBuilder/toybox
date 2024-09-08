@@ -9,7 +9,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "79b201d7aab082f74fe780c7901eebc164e53ed7",
+      "baseline": "656c2b649d1d4fdf6e17d8bbabcd31158a783a55",
       "packages": [
         "sdl3",
         "sdl3-mixer"
@@ -30,11 +30,20 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "8117f911398fffebdd3048dc0cbae8e6de41060f",
+      "baseline": "e80398f621532d3f3b46f59918d1b00d2ff38250",
       "packages": [
         "ktx"
       ],
-      "reference": "ktx-fix"
+      "reference": "ktx"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "fc0ee4f460a594381d9c030064256a087e391fea",
+      "packages": [
+        "shader-slang"
+      ],
+      "reference": "slang"
     }
   ]
 }

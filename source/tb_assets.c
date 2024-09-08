@@ -10,10 +10,10 @@ sdl_read_glb(const struct cgltf_memory_options *memory_options,
              cgltf_size *size, void **data) {
   (void)memory_options;
   (void)path;
-  tb_auto file = (SDL_RWops *)file_options->user_data;
-  tb_auto file_size = (cgltf_size)SDL_RWsize(file);
+  tb_auto file = (SDL_IOStream *)file_options->user_data;
+  tb_auto file_size = (cgltf_size)SDL_GetIOSize(file);
 
-  *data = tb_rw_mmap(file, file_size);
+  *data = tb_io_mmap(file, file_size);
   *size = file_size;
 
   return cgltf_result_success;
@@ -24,11 +24,11 @@ static void sdl_release_glb(const struct cgltf_memory_options *memory_options,
                             void *data) {
   (void)memory_options;
 
-  tb_auto file = (SDL_RWops *)file_options->user_data;
-  tb_auto file_size = (cgltf_size)SDL_RWsize(file);
-  tb_rw_munmap(data, file_size);
+  tb_auto file = (SDL_IOStream *)file_options->user_data;
+  tb_auto file_size = (cgltf_size)SDL_GetIOSize(file);
+  tb_io_munmap(data, file_size);
 
-  bool ok = SDL_RWclose(file) == 0;
+  bool ok = SDL_CloseIO(file) == 0;
   TB_CHECK(ok, "Failed to close glb file.");
 }
 
@@ -46,7 +46,7 @@ char *tb_resolve_asset_path(TbAllocator tmp_alloc, const char *source_name) {
 cgltf_data *tb_read_glb(TbAllocator gp_alloc, const char *path) {
   cgltf_data *data = NULL;
 
-  SDL_RWops *glb_file = SDL_RWFromFile(path, "rb");
+  SDL_IOStream *glb_file = SDL_IOFromFile(path, "rb");
   TB_CHECK_RETURN(glb_file, "Failed to open glb.", NULL);
 
   cgltf_options options = {.type = cgltf_file_type_glb,

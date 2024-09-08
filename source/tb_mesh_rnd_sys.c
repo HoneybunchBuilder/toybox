@@ -49,7 +49,7 @@ typedef struct TbMesh {
 } TbMesh;
 
 // Helper macro to auto-register system
-TB_REGISTER_SYS(tb, mesh, TB_MESH_SYS_PRIO)
+TB_REGISTER_SYS(tb, mesh, TB_MESH_RND_SYS_PRIO)
 
 typedef struct TbMeshShaderArgs {
   TbRenderSystem *rnd_sys;

@@ -93,7 +93,6 @@ void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
 void tb_munmap(void *addr, size_t length) {
   (void)length;
   UnmapViewOfFile(addr);
-  /* ruh-ro, we leaked handle from CreateFileMapping() ... */
 }
 
 #undef DWORD_HI

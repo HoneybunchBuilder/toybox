@@ -15,39 +15,39 @@ extern "C" {
 #define TB_QUEUE_OF(type)                                                      \
   struct {                                                                     \
     TB_DYN_ARR_OF(type) storage;                                               \
-    SDL_Mutex *mutex;                                                          \
+    SDL_RWLock *lock;                                                          \
   }
 
 #define TB_QUEUE_RESET(queue, allocator, cap)                                  \
   {                                                                            \
     TB_DYN_ARR_RESET((queue).storage, (allocator), (cap));                     \
-    if ((queue).mutex == NULL) {                                               \
-      (queue).mutex = SDL_CreateMutex();                                       \
+    if ((queue).lock == NULL) {                                                \
+      (queue).lock = SDL_CreateRWLock();                                       \
     }                                                                          \
   }
 
 #define TB_QUEUE_DESTROY(queue)                                                \
   {                                                                            \
     TB_DYN_ARR_DESTROY((queue).storage);                                       \
-    SDL_DestroyMutex((queue).mutex);                                           \
+    SDL_DestroyRWLock((queue).lock);                                           \
   }
 
 #define TB_QUEUE_PUSH(queue, element)                                          \
-  if (SDL_TryLockMutex((queue).mutex) == 0) {                                  \
+  if (SDL_TryLockRWLockForWriting((queue).lock)) {                             \
     TB_DYN_ARR_APPEND((queue).storage, element);                               \
-    SDL_UnlockMutex((queue).mutex);                                            \
+    SDL_UnlockRWLock((queue).lock);                                            \
   }
 
 #define TB_QUEUE_PUSH_PTR(queue, element)                                      \
-  if (SDL_TryLockMutex((queue)->mutex) == 0) {                                 \
+  if (SDL_TryLockRWLockForWriting((queue)->lock)) {                            \
     TB_DYN_ARR_APPEND((queue)->storage, element);                              \
-    SDL_UnlockMutex((queue)->mutex);                                           \
+    SDL_UnlockRWLock((queue)->lock);                                           \
   }
 
 #define TB_QUEUE_POP(queue, out)                                               \
   ({                                                                           \
     bool ret = false;                                                          \
-    if (SDL_TryLockMutex((queue).mutex) == 0) {                                \
+    if (SDL_TryLockRWLockForWriting((queue).lock)) {                           \
       if (TB_DYN_ARR_SIZE((queue).storage) > 0) {                              \
         if (out) {                                                             \
           (*out) = *TB_DYN_ARR_BACKPTR((queue).storage);                       \
@@ -55,17 +55,17 @@ extern "C" {
         TB_DYN_ARR_POP((queue).storage);                                       \
         ret = true;                                                            \
       }                                                                        \
-      SDL_UnlockMutex((queue).mutex);                                          \
+      SDL_UnlockRWLock((queue).lock);                                          \
     }                                                                          \
     ret;                                                                       \
   })
 
 #define TB_QUEUE_CLEAR(queue)                                                  \
-  if (SDL_TryLockMutex((queue).mutex) == 0) {                                  \
+  if (SDL_TryLockRWLockForWriting((queue).lock)) {                             \
     while (TB_DYN_ARR_SIZE((queue).storage) > 0) {                             \
       TB_DYN_ARR_POP((queue).storage);                                         \
     }                                                                          \
-    SDL_UnlockMutex((queue).mutex);                                            \
+    SDL_UnlockRWLock((queue).lock);                                            \
   }
 
 #ifdef __cplusplus

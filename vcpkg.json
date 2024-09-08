@@ -38,8 +38,7 @@
       ]
     },
     {
-      "name": "sdl3-mixer",
-      "default-features": false
+      "name": "sdl3-mixer"
     },
     "steam-audio",
     "tracy",
@@ -75,7 +74,7 @@
     {
       "name": "ktx",
       "version": "4.3.2",
-      "port-version": 1
+      "port-version": 2
     },
     {
       "name": "meshoptimizer",
@@ -87,15 +86,15 @@
     },
     {
       "name": "sdl3",
-      "version": "3.0.0-534f753"
+      "version": "3.0.0-6e5bd58"
     },
     {
       "name": "sdl3-mixer",
-      "version": "3.0.0-087004f"
+      "version": "3.0.0-00d0684"
     },
     {
       "name": "shader-slang",
-      "version": "2024.10"
+      "version": "2024.11"
     },
     {
       "name": "tracy",

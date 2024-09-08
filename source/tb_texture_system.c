@@ -526,15 +526,15 @@ void tb_load_ktx_texture_task(const void *args) {
 
   ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
 
-  // We need to open this file with SDL_RWops because on a platform like
+  // We need to open this file with SDL_IOStream because on a platform like
   // android where the asset lives in package storage, this is the best way
   // to actually open the file you're looking for
-  SDL_RWops *tex_file = SDL_RWFromFile(path, "rb");
-  size_t tex_size = SDL_RWsize(tex_file);
+  SDL_IOStream *tex_file = SDL_IOFromFile(path, "rb");
+  size_t tex_size = SDL_GetIOSize(tex_file);
 
   uint8_t *tex_data = tb_alloc(tb_thread_alloc, tex_size);
-  SDL_RWread(tex_file, (void *)tex_data, tex_size);
-  SDL_RWclose(tex_file);
+  SDL_ReadIO(tex_file, (void *)tex_data, tex_size);
+  SDL_CloseIO(tex_file);
 
   ktx_error_code_e err =
       ktxTexture2_CreateFromMemory(tex_data, tex_size, flags, &ktx);
