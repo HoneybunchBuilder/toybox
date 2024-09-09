@@ -158,8 +158,8 @@ void time_of_day_ui_sys(ecs_iter_t *it) {
         tod->time_scale = -5.0f;
       }
     }
-    igEnd();
   }
+  igEnd();
 }
 #endif
 

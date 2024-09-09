@@ -19,11 +19,16 @@ void tb_create_dyn_desc_pool(TbRenderSystem *rnd_sys, const char *name,
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
         .maxSets = 1,
-        .poolSizeCount = 1,
+        .poolSizeCount = 2,
         .pPoolSizes =
-            (VkDescriptorPoolSize[1]){
+            (VkDescriptorPoolSize[2]){
                 {
                     .type = pool->type,
+                    .descriptorCount = pool->desc_cap,
+                },
+                // Required if we use any immutable samplers
+                {
+                    .type = VK_DESCRIPTOR_TYPE_SAMPLER,
                     .descriptorCount = pool->desc_cap,
                 },
             },
