@@ -35,6 +35,15 @@
         "ktx"
       ],
       "reference": "ktx"
+    },
+    {
+      "kind": "git",
+      "repository": "https://github.com/Honeybunch/vcpkg",
+      "baseline": "260082b37404f93c308ba5a9572ceca2bdd1cf1a",
+      "packages": [
+        "joltphysics"
+      ],
+      "reference": "jolt"
     }
   ]
 }
