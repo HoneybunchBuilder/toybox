@@ -3,7 +3,7 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "91d888703f251c13111c1b889be1f350c4ceb7ab"
+    "baseline": "b8a9371ae5a920b021132f443cc5658e82ac7551"
   },
   "registries": [
     {
@@ -19,7 +19,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "089da272881c803bb2683824e01e43f31545cc63",
+      "baseline": "164c159a8dfa46ad8c00fac44f6e9551e8b6ad23",
       "packages": [
         "steam-audio",
         "libmysofa",
@@ -35,15 +35,6 @@
         "ktx"
       ],
       "reference": "ktx"
-    },
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "fc0ee4f460a594381d9c030064256a087e391fea",
-      "packages": [
-        "shader-slang"
-      ],
-      "reference": "slang"
     }
   ]
 }
