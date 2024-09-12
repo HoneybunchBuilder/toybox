@@ -19,7 +19,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "844c95e022bc52139e46563dc6976d62f92312b0",
+      "baseline": "3dafc28dcf254aa5e7d901cb4b8b0dab406df89a",
       "packages": [
         "steam-audio",
         "libmysofa",
