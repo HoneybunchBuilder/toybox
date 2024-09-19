@@ -3,7 +3,7 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "b8a9371ae5a920b021132f443cc5658e82ac7551"
+    "baseline": "fc358711d78c5dcb8f240daea628ecfee60fb164"
   },
   "registries": [
     {
@@ -35,15 +35,6 @@
         "ktx"
       ],
       "reference": "ktx"
-    },
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "260082b37404f93c308ba5a9572ceca2bdd1cf1a",
-      "packages": [
-        "joltphysics"
-      ],
-      "reference": "jolt"
     }
   ]
 }
