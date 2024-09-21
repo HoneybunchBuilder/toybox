@@ -14,3 +14,5 @@ out/*
 
 CMakeUserPresets.json
 vcpkg_installed/*
+
+imgui.ini

@@ -61,6 +61,7 @@ class BuildOperator(bpy.types.Operator):
 
     def modal(self, context, event):
         if self.thread.is_alive():
+            self.report({"INFO"}, "Building...")
             return {"PASS_THROUGH"}
 
         self.report({"INFO"}, "Build Complete")

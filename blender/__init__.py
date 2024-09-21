@@ -1,5 +1,5 @@
-
 from . import auto_load
+
 bl_info = {
     "name": "toybox",
     "author": "Honeybunch",
@@ -8,7 +8,7 @@ bl_info = {
     "version": (0, 0, 1),
     "location": "",
     "warning": "",
-    "category": "Generic"
+    "category": "Generic",
 }
 
 

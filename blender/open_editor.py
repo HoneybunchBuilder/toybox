@@ -11,6 +11,5 @@ class OpenEditorOperator(bpy.types.Operator):
         abs_path = os.path.abspath(context.scene.toybox.project_path)
         editor = context.scene.toybox.editor
 
-        subprocess.Popen(editor + " .", cwd=abs_path,
-                         shell=True, env=os.environ.copy())
-        return {'FINISHED'}
+        subprocess.Popen(editor + " .", cwd=abs_path, shell=True, env=os.environ.copy())
+        return {"FINISHED"}
