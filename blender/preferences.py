@@ -14,7 +14,7 @@ class TbCheckEnvironment(bpy.types.Operator):
 
     def execute(self, context):
         res_str = "<NOT FOUND>"
-        if self.check_git() is 0:
+        if self.check_git() == 0:
             res_str = "OK"
 
         # Write updates to preferences structure
