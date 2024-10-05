@@ -607,7 +607,7 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >=
+    if (SDL_GetAtomicInt(&tb_parallel_tex_load_count) >=
         TbMaxParallelTextureLoads) {
       break;
     }
@@ -659,7 +659,7 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >
+    if (SDL_GetAtomicInt(&tb_parallel_tex_load_count) >
         TbMaxParallelTextureLoads) {
       break;
     }
@@ -711,7 +711,7 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(&tb_parallel_tex_load_count) >
+    if (SDL_GetAtomicInt(&tb_parallel_tex_load_count) >
         TbMaxParallelTextureLoads) {
       break;
     }
@@ -840,7 +840,7 @@ void tb_register_texture_sys(TbWorld *world) {
 
   TbTextureCtx ctx = {0};
 
-  SDL_AtomicSet(&tb_parallel_tex_load_count, 0);
+  SDL_SetAtomicInt(&tb_parallel_tex_load_count, 0);
 
   tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
 
