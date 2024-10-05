@@ -9,7 +9,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "44fe6ea17474f8cf8e65f9acd079d32e24e35d62",
+      "baseline": "c98c053c290d3011b048196bcb0da8a4718f1bf3",
       "packages": [
         "sdl3",
         "sdl3-mixer"
@@ -19,7 +19,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "9b094c3ac60ca7a198d2f4dca8d601a6472e5cc3",
+      "baseline": "c2cb12b3efa2b8b40be03d0603857f9af49ee80c",
       "packages": [
         "steam-audio",
         "libmysofa",
