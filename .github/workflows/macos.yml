@@ -41,7 +41,7 @@ jobs:
     - name: Build Release
       run: cmake --build --preset release-${{matrix.toolsets.preset}}
 
-      - name: Update Github Dependency Graph
+    - name: Update Github Dependency Graph
       run: vcpkg install --dry-run --x-wait-for-lock
 
   notify:
