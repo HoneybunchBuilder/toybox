@@ -43,7 +43,7 @@ jobs:
       run: cmake --build --preset release-${{matrix.toolsets.preset}}
 
     - name: Update Github Dependency Graph
-      run: ${{env.VCPKG_ROOT}}/vcpkg.exe install --dry-run
+      run: vcpkg.exe install --dry-run
 
   notify:
     needs: build
