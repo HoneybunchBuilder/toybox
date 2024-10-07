@@ -3170,10 +3170,11 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
 }
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
-  TbRenderPipelineSystem *rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
-  TbRenderSystem *rnd_sys = rp_sys->rnd_sys;
+  TB_TRACY_SCOPEC("Check Swapchain Resize", TracyCategoryColorRendering);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
+  tb_auto rnd_sys = rp_sys->rnd_sys;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
-    TracyCZoneN(resize_ctx, "Resize", true);
+    TB_TRACY_SCOPEC("Resize", TracyCategoryColorRendering);
 
     for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
       tb_auto frame_state = &rnd_sys->render_thread->frame_states[frame_idx];
@@ -3196,8 +3197,6 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
 
     // Reset back to frame 0
     rnd_sys->frame_idx = 0;
-
-    TracyCZoneEnd(resize_ctx);
   }
 }
 
