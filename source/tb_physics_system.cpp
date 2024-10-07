@@ -436,6 +436,7 @@ void tb_register_physics_sys(TbWorld *world) {
 
   JPH::Factory::sInstance = new JPH::Factory();
 
+  JPH::RegisterDefaultAllocator();
   JPH::RegisterTypes();
 
   // Use C api because TbTaskScheduler is a pointer to an incomplete type

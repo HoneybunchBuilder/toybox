@@ -3,13 +3,13 @@
   "default-registry": {
     "kind": "git",
     "repository": "https://github.com/Microsoft/vcpkg",
-    "baseline": "91d888703f251c13111c1b889be1f350c4ceb7ab"
+    "baseline": "fc358711d78c5dcb8f240daea628ecfee60fb164"
   },
   "registries": [
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "656c2b649d1d4fdf6e17d8bbabcd31158a783a55",
+      "baseline": "0cda500936e7f0565571e1ca5bb12971e03f170b",
       "packages": [
         "sdl3",
         "sdl3-mixer"
@@ -19,7 +19,7 @@
     {
       "kind": "git",
       "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "089da272881c803bb2683824e01e43f31545cc63",
+      "baseline": "c2cb12b3efa2b8b40be03d0603857f9af49ee80c",
       "packages": [
         "steam-audio",
         "libmysofa",
@@ -35,15 +35,6 @@
         "ktx"
       ],
       "reference": "ktx"
-    },
-    {
-      "kind": "git",
-      "repository": "https://github.com/Honeybunch/vcpkg",
-      "baseline": "fc0ee4f460a594381d9c030064256a087e391fea",
-      "packages": [
-        "shader-slang"
-      ],
-      "reference": "slang"
     }
   ]
 }

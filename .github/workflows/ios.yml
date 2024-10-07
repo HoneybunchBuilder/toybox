@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Config to allow vcpkg to write dependency graph to the repo
+permissions:
+  contents: write
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VCPKG_FEATURE_FLAGS: dependencygraph
+
 jobs:
 
   build:
@@ -35,4 +42,7 @@ jobs:
 
     - name: Build Release
       run: cmake --build --preset release-${{matrix.toolsets.preset}}
+
+    - name: Update Github Dependency Graph
+      run: vcpkg install --dry-run --x-wait-for-lock
 

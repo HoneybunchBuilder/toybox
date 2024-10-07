@@ -176,7 +176,7 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(&tb_parallel_mat_load_count) >
+    if (SDL_GetAtomicInt(&tb_parallel_mat_load_count) >
         TbMaxParallelMaterialLoads) {
       break;
     }
@@ -356,7 +356,7 @@ void tb_register_material_sys(TbWorld *world) {
 
   TbMaterialCtx ctx = {0};
 
-  SDL_AtomicSet(&tb_parallel_mat_load_count, 0);
+  SDL_SetAtomicInt(&tb_parallel_mat_load_count, 0);
 
   // Create immutable sampler for materials
   {

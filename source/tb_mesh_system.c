@@ -475,7 +475,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
       }
       (*queue_counter)++;
 
-      if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+      if (SDL_GetAtomicInt(counter) > TbMaxParallelMeshLoads) {
         saturated = true;
         break;
       }
@@ -654,7 +654,7 @@ void tb_queue_gltf_submesh_loads(ecs_iter_t *it) {
         break;
       }
       (*queue_counter)++;
-      if (SDL_AtomicGet(counter) > TbMaxParallelMeshLoads) {
+      if (SDL_GetAtomicInt(counter) > TbMaxParallelMeshLoads) {
         saturated = true;
         break;
       }
@@ -962,12 +962,12 @@ void tb_register_mesh2_sys(TbWorld *world) {
 
   {
     TbMeshQueueCounter queue_count = {0};
-    SDL_AtomicSet(&queue_count, 0);
+    SDL_SetAtomicInt(&queue_count, 0);
     ecs_singleton_set_ptr(ecs, TbMeshQueueCounter, &queue_count);
   }
   {
     TbSubMeshQueueCounter queue_count = {0};
-    SDL_AtomicSet(&queue_count, 0);
+    SDL_SetAtomicInt(&queue_count, 0);
     ecs_singleton_set_ptr(ecs, TbSubMeshQueueCounter, &queue_count);
   }
 
