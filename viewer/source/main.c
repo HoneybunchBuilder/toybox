@@ -93,7 +93,7 @@ int32_t main(int32_t argc, char *argv[]) {
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before
     // ticking
-    TbViewerSystem *viewer = ecs_singleton_get_mut(world.ecs, TbViewerSystem);
+    TbViewerSystem *viewer = ecs_singleton_ensure(world.ecs, TbViewerSystem);
     if (viewer) {
       // Order matters; we can get both signals at once
       if (viewer->unload_scene_signal) {

@@ -17,7 +17,7 @@ bool tb_load_camera_comp(ecs_world_t *ecs, ecs_entity_t ent,
   (void)source_path;
   (void)data;
   (void)json;
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
 
   if (node->camera->type == cgltf_camera_type_perspective) {
     ecs_singleton_modified(ecs, TbViewSystem);

@@ -94,7 +94,7 @@ void tb_register_spatial_audio_sys(TbWorld *world) {
 }
 
 void tb_unregister_spatial_audio_sys(TbWorld *world) {
-  tb_auto sys = ecs_singleton_get_mut(world->ecs, TbSpatialAudioSystem);
+  tb_auto sys = ecs_singleton_ensure(world->ecs, TbSpatialAudioSystem);
   iplHRTFRelease(&sys->hrtf);
   iplContextRelease(&sys->ctx);
   *sys = (TbSpatialAudioSystem){0};

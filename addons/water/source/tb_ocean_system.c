@@ -1109,7 +1109,7 @@ void ocean_on_start(ecs_iter_t *it) {
   tb_auto aud_sys = ecs_field(it, TbAudioSystem, 7);
 
   tb_auto world = ecs_singleton_get(ecs, TbWorldRef)->world;
-  tb_auto ocean_sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
+  tb_auto ocean_sys = ecs_singleton_ensure(ecs, TbOceanSystem);
 
   init_ocean_system(ecs, ocean_sys, world->gp_alloc, world->tmp_alloc, rnd_sys,
                     rp_sys, mesh_sys, view_sys, rt_sys, vlog, aud_sys);
@@ -1154,16 +1154,16 @@ void tb_register_ocean_sys(TbWorld *world) {
        .callback = ocean_on_start,
        .no_readonly = true});
 
-  ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem(TbOceanSystem),
+  ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem($),
              TbOceanComponent);
-  ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem(TbOceanSystem),
+  ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem($),
              TbCameraComponent);
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_ocean_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  TbOceanSystem *sys = ecs_singleton_get_mut(ecs, TbOceanSystem);
+  TbOceanSystem *sys = ecs_singleton_ensure(ecs, TbOceanSystem);
   ecs_query_fini(sys->ocean_query);
   destroy_ocean_system(sys);
 

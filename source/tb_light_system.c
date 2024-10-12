@@ -14,7 +14,7 @@ void light_update_tick(ecs_iter_t *it) {
   ecs_world_t *ecs = it->world;
 
   const TbLightSystem *light_sys = ecs_singleton_get(ecs, TbLightSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  TbViewSystem *view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
   TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 1);
 
   for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
@@ -73,7 +73,7 @@ void tb_register_light_sys(TbWorld *world) {
 void tb_unregister_light_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbLightSystem *sys = ecs_singleton_get_mut(ecs, TbLightSystem);
+  TbLightSystem *sys = ecs_singleton_ensure(ecs, TbLightSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_singleton_remove(ecs, TbLightSystem);
 }

@@ -67,7 +67,7 @@ void tick_settings_ui(ecs_iter_t *it) {
 
   if (settings->coreui && *settings->coreui) {
     if (igBegin("Settings", settings->coreui, 0)) {
-      tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
+      tb_auto fxaa = ecs_singleton_ensure(ecs, TbFXAASystem);
 
       if (igCombo_Str_arr("FXAA", &settings->fxaa_option, tb_fxaa_items, 5,
                           5)) {
@@ -118,10 +118,10 @@ void tb_register_settings_sys(TbWorld *world) {
   // HACK: This puts a soft dependency on initialization order.
   // Assuming this function will be called after the fxaa system is already
   // registered
-  tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
+  tb_auto fxaa = ecs_singleton_ensure(ecs, TbFXAASystem);
   fxaa->settings = settings.fxaa;
 
-  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
   settings.coreui = tb_coreui_register_menu(coreui, "Settings");
 
   // Sets a singleton based on the value at a pointer

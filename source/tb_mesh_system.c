@@ -490,7 +490,7 @@ void tb_queue_gltf_mesh_loads(ecs_iter_t *it) {
           .common =
               {
                   .ecs = ecs,
-                  .rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem),
+                  .rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem),
                   .mesh = ent,
                   .enki = enki,
                   .loaded_task = loaded_task,
@@ -855,25 +855,24 @@ void tb_register_mesh2_sys(TbWorld *world) {
       EcsOnLoad, [out] TbPerFrameMeshQueueCounter(TbPerFrameMeshQueueCounter),
       [out] TbPerFrameSubmeshQueueCounter(TbPerFrameSubmeshQueueCounter));
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_mesh_loads,
-             EcsPostLoad, [in] TbMeshCtx(TbMeshCtx),
-             [inout] TbTaskScheduler(TbTaskScheduler),
-             [inout] TbMeshQueueCounter(TbMeshQueueCounter),
-             [inout] TbPerFrameMeshQueueCounter(TbPerFrameMeshQueueCounter));
   ECS_SYSTEM(
-      ecs, tb_queue_gltf_submesh_loads, EcsPostLoad, [in] TbMeshCtx(TbMeshCtx),
-      [inout] TbTaskScheduler(TbTaskScheduler),
+      ecs, tb_queue_gltf_mesh_loads,
+      EcsPostLoad, [in] TbMeshCtx($), [inout] TbTaskScheduler(TbTaskScheduler),
+      [inout] TbMeshQueueCounter(TbMeshQueueCounter),
+      [inout] TbPerFrameMeshQueueCounter(TbPerFrameMeshQueueCounter));
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_submesh_loads,
+      EcsPostLoad, [in] TbMeshCtx($), [inout] TbTaskScheduler(TbTaskScheduler),
       [inout] TbSubMeshQueueCounter(TbSubMeshQueueCounter),
       [inout] TbPerFrameSubmeshQueueCounter(TbPerFrameSubmeshQueueCounter));
 
   // System that ticks as we ensure mesh descriptors are written
-  ECS_SYSTEM(
-      ecs, tb_finalize_meshes, EcsPostUpdate, [in] TbMeshCtx(TbMeshCtx),
-      [in] TbRenderSystem(TbRenderSystem), [in] TbMeshData, [in] TbMeshLoaded,
-      !TbDescriptorReady);
+  ECS_SYSTEM(ecs, tb_finalize_meshes, EcsPostUpdate, [in] TbMeshCtx($),
+             [in] TbRenderSystem($), [in] TbMeshData, [in] TbMeshLoaded,
+             !TbDescriptorReady);
   // When all meshes are loaded we start making them available to shaders
-  ECS_SYSTEM(ecs, tb_update_mesh_pool, EcsPreStore, [in] TbMeshCtx(TbMeshCtx),
-             [in] TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, tb_update_mesh_pool,
+             EcsPreStore, [in] TbMeshCtx($), [in] TbRenderSystem($));
 
   ECS_SYSTEM(ecs, tb_check_submesh_readiness,
              EcsPreStore, [in] TbSubMesh2Data, [in] TbSubMeshParsed);
@@ -881,7 +880,7 @@ void tb_register_mesh2_sys(TbWorld *world) {
       ecs, tb_check_mesh_readiness,
       EcsPreStore, [in] TbMeshData, [in] TbMeshParsed, [in] TbDescriptorReady);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   TbMeshCtx ctx = {
       .mesh_load_query =
@@ -977,8 +976,8 @@ void tb_register_mesh2_sys(TbWorld *world) {
 
 void tb_unregister_mesh2_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
 
   ecs_query_fini(ctx->mesh_load_query);
   ecs_query_fini(ctx->submesh_load_query);
@@ -1005,58 +1004,58 @@ TB_REGISTER_SYS(tb, mesh2, TB_MESH_SYS_PRIO)
 // Public API
 
 VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return ctx->set_layout;
 }
 
 VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->idx_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->pos_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->norm_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->tan_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_uv0_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->uv0_desc_pool);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_idx_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->idx_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_pos_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->pos_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_norm_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->norm_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_tan_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->tan_desc_buf);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mesh_sys_get_uv0_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMeshCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return tb_desc_buff_get_binding(&ctx->uv0_desc_buf);
 }
 

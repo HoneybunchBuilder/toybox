@@ -22,7 +22,7 @@ void camera_update_tick(ecs_iter_t *it) {
 
   tb_auto ecs = it->world;
 
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
   ecs_singleton_modified(ecs, TbViewSystem);
 
   tb_auto cameras = ecs_field(it, TbCameraComponent, 1);

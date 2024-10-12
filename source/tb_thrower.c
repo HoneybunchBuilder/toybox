@@ -62,7 +62,7 @@ TB_REGISTER_COMP(tb, thrower)
 void trigger_input(ecs_iter_t *it) {
   tb_auto ecs = it->world;
 
-  tb_auto in_sys = ecs_singleton_get_mut(ecs, TbInputSystem);
+  tb_auto in_sys = ecs_singleton_ensure(ecs, TbInputSystem);
 
   if (in_sys->keyboard.key_space == 0) {
     return;
@@ -86,7 +86,7 @@ void trigger_throwers_sys(ecs_iter_t *it) {
   tb_auto ecs = it->world;
   (void)ecs;
 
-  // tb_auto phys_sys = ecs_singleton_get_mut(ecs, TbPhysicsSystem);
+  // tb_auto phys_sys = ecs_singleton_ensure(ecs, TbPhysicsSystem);
   // tb_auto throwers = ecs_field(it, TbThrower, 1);
   // tb_auto dirs = ecs_field(it, TbThrowDir, 2);
   // tb_auto forces = ecs_field(it, TbThrowForce, 3);

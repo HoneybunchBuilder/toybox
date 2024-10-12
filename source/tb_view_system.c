@@ -537,22 +537,22 @@ void tb_register_view_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   tb_auto sys =
       create_view_system(world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
-  ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem(TbViewSystem));
+  ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem($));
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   destroy_view_system(sys, rnd_sys);
   ecs_singleton_remove(ecs, TbViewSystem);
 }
@@ -636,7 +636,7 @@ const TbView *tb_get_view(TbViewSystem *self, TbViewId view) {
 }
 
 VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbViewSystem);
 #if TB_USE_DESC_BUFFER == 1
   return ctx->set_layout2;
 #else
@@ -646,7 +646,7 @@ VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs) {
 
 VkDescriptorBufferBindingInfoEXT tb_view_sys_get_table_addr(ecs_world_t *ecs,
                                                             TbViewId view) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbViewSystem);
   tb_auto addr = ctx->desc_buffer.buffer.address;
   tb_auto set_size = ctx->desc_buffer.layout_size;
   // An address of 0 indicates an error

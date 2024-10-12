@@ -174,7 +174,7 @@ void tb_register_input_sys(TbWorld *world) {
                         .tmp_alloc = world->tmp_alloc,
                         .window = world->window,
                     });
-  ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem(TbInputSystem));
+  ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem($));
 }
 
 void tb_unregister_input_sys(TbWorld *world) {

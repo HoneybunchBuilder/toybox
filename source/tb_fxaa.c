@@ -66,9 +66,9 @@ void tick_fxaa_draw(ecs_iter_t *it) {
     return;
   }
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   // Descriptor set writes
   {
@@ -261,8 +261,8 @@ void tb_register_fxaa_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbFXAASystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
 
   TbFXAASystem sys = {0};
   // Create Set Layout
@@ -324,12 +324,12 @@ void tb_register_fxaa_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
 
-  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem(TbFXAASystem));
+  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem($));
 
   // Create Pipeline afterwards because we depend on the FXAA system being
   // in the ecs already before we can call tb_shader_load
   {
-    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbFXAASystem);
+    tb_auto sys_ptr = ecs_singleton_ensure(ecs, TbFXAASystem);
     TbFXAAPipelineArgs args = {rnd_sys, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
@@ -341,8 +341,8 @@ void tb_register_fxaa_sys(TbWorld *world) {
 void tb_unregister_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbFXAASystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbFXAASystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   tb_rnd_destroy_set_layout(rnd_sys, sys->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
   tb_shader_destroy(ecs, sys->shader);

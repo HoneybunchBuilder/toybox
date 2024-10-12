@@ -72,13 +72,13 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
 }
 
 VkDescriptorSet tb_render_object_sys_get_set(ecs_world_t *ecs) {
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbRenderObjectSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 VkDescriptorSetLayout tb_render_object_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbRenderObjectSystem);
   return ctx->set_layout;
 }
 
@@ -91,7 +91,7 @@ tb_render_object_sys_get_table_addr(ecs_world_t *ecs) {
 }
 
 void tb_mark_as_render_object(ecs_world_t *ecs, ecs_entity_t ent) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbRenderObjectSystem);
   uint32_t idx = 0;
   bool ok = tb_pull_index(&ctx->free_list, &idx);
   TB_CHECK(ok, "Failed to retrieve index from free list");
@@ -167,7 +167,7 @@ void tb_register_render_object_sys(TbWorld *world) {
                           },
                   });
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   tb_auto sys =
       create_render_object_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
 
@@ -219,8 +219,8 @@ void tb_register_render_object_sys(TbWorld *world) {
 
 void tb_unregister_render_object_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbRenderObjectSystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbRenderObjectSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
   tb_destroy_free_list(&ctx->free_list);

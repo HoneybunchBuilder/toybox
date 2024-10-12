@@ -107,7 +107,7 @@ int32_t tb_sys_cmp(const void *a, const void *b) {
 void tb_register_system(const char *name, int32_t priority,
                         TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn) {
-  TracyCZoneN(ctx, "Register System", true);
+  TB_TRACY_SCOPE("Register System");
   int32_t index = s_sys_reg.count;
   int32_t next_count = ++s_sys_reg.count;
   size_t entry_size = next_count * sizeof(TbSystemEntry);
@@ -121,7 +121,6 @@ void tb_register_system(const char *name, int32_t priority,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
-  TracyCZoneEnd(ctx);
 }
 
 static TbComponentRegistry s_comp_reg = {0};
@@ -129,7 +128,7 @@ static TbComponentRegistry s_comp_reg = {0};
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
                            TbLoadComponentFn load_fn,
                            TbReadyComponentFn ready_fn) {
-  TracyCZoneN(ctx, "Register Component", true);
+  TB_TRACY_SCOPE("Register Component");
   int32_t index = s_comp_reg.count;
   int32_t next_count = ++s_comp_reg.count;
   size_t entry_size = next_count * sizeof(TbComponentEntry);
@@ -143,7 +142,6 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
-  TracyCZoneEnd(ctx);
 }
 
 #ifndef TB_FINAL
@@ -338,15 +336,12 @@ bool tb_tick_world(TbWorld *world, float delta_seconds) {
 
   world->time += (double)delta_seconds;
 
-  // Run pinned tasks first
-  tb_run_pinned_tasks(ecs);
-
   // Tick with flecs
   if (!ecs_progress(ecs, delta_seconds)) {
     return false;
   }
-  // Manually check flecs for quit event
 
+  // Manually check flecs for quit event
   tb_auto in_sys = ecs_singleton_get(ecs, TbInputSystem);
   if (in_sys) {
     for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {

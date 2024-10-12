@@ -335,24 +335,22 @@ void tb_register_material_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbMaterialLoaded);
   ECS_TAG_DEFINE(ecs, TbMaterialUploaded);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPostLoad,
-             TbTaskScheduler(TbTaskScheduler), TbMaterialCtx(TbMaterialCtx),
-             [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_mat_loads, EcsPostLoad,
+      TbTaskScheduler(TbTaskScheduler),
+      TbMaterialCtx($), [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
 
-  ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate,
-             TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx),
-             [in] TbMaterialData, [in] TbMaterialUsage, [in] TbMaterialLoaded,
-             !TbMaterialUploaded);
+  ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate, TbRenderSystem($),
+             TbMaterialCtx($), [in] TbMaterialData, [in] TbMaterialUsage,
+             [in] TbMaterialLoaded, !TbMaterialUploaded);
 
   ECS_SYSTEM(ecs, tb_finalize_materials,
-             EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem), [in] TbMaterialData,
-             [in] TbMaterialUploaded, !TbDescriptorReady);
+             EcsPostUpdate, [in] TbMaterialCtx($), [in] TbRenderSystem($),
+             [in] TbMaterialData, [in] TbMaterialUploaded, !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_material_pool,
-             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem));
+             EcsPreStore, [in] TbMaterialCtx($), [in] TbRenderSystem($));
 
   TbMaterialCtx ctx = {0};
 
@@ -448,8 +446,8 @@ void tb_register_material_sys(TbWorld *world) {
 
 void tb_unregister_material_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -473,8 +471,8 @@ TB_REGISTER_SYS(tb, material, TB_MAT_SYS_PRIO)
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
                            TbMaterialUsage usage, TbMaterialDomain domain,
                            void *default_data, size_t size) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   // Copy data onto the global allocator so it can be safely freed
   // from a thread
@@ -522,18 +520,18 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 }
 
 VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
   return ctx->set_layout;
 }
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
 }
 

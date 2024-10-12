@@ -176,7 +176,8 @@ void tb_parse_scene_task(const void *args) {
 TbScene tb_create_scene(ecs_world_t *ecs, const char *scene_path) {
   TB_TRACY_SCOPE("Create Scene");
   // If an entity already exists with this name it is either loading or loaded
-  TbScene scene = ecs_lookup(ecs, scene_path);
+  // Need to use specific lookup function to not treat "." as a separator
+  TbScene scene = ecs_lookup_path_w_sep(ecs, 0, scene_path, ",", NULL, true);
   if (scene != 0) {
     return scene;
   }
@@ -196,8 +197,8 @@ TbScene tb_create_scene(ecs_world_t *ecs, const char *scene_path) {
   TbPinnedTask parsed_task =
       tb_create_pinned_task(enki, tb_scene_parsed, NULL, 0);
 
+  ecs_set(ecs, scene, TbEntityTaskQueue, {0});
   tb_auto entity_queue = ecs_get_mut(ecs, scene, TbEntityTaskQueue);
-  *entity_queue = (TbEntityTaskQueue){0};
   TB_QUEUE_RESET(*entity_queue, tb_global_alloc, 8192);
 
   // Launch a task to open the scene, parse it, and load relevant children

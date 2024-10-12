@@ -338,10 +338,8 @@ void tb_register_render_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbRenderSystem), TbRenderSystem, &sys);
 
-  ECS_SYSTEM(ecs, render_frame_begin, EcsPreUpdate,
-             TbRenderSystem(TbRenderSystem));
-  ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame,
-             TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, render_frame_begin, EcsPreUpdate, TbRenderSystem($));
+  ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, TbRenderSystem($));
 
   TracyCZoneEnd(ctx);
 }
@@ -349,7 +347,7 @@ void tb_register_render_sys(TbWorld *world) {
 void tb_unregister_render_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbRenderSystem *sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  TbRenderSystem *sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   destroy_render_system(sys);
   ecs_singleton_remove(ecs, TbRenderSystem);
 }

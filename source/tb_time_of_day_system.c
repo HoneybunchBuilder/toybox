@@ -170,7 +170,7 @@ void tb_register_time_of_day_sys(TbWorld *world) {
              EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
              [inout] TbDirectionalLightComponent, [inout] TbTransformComponent);
 #ifndef TB_FINAL
-  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
 
   ECS_COMPONENT_DEFINE(ecs, TbTimeOfDayContext);
   ecs_singleton_set(ecs, TbTimeOfDayContext,

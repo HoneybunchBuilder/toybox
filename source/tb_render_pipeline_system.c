@@ -3207,9 +3207,9 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbRenderPipelineSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
 
   TbRenderPipelineSystem sys = create_render_pipeline_system(
       world->ecs, world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys, view_sys);
@@ -3218,17 +3218,17 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
               &sys);
 
   ECS_SYSTEM(ecs, rp_check_swapchain_resize, EcsPreFrame,
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
+             TbRenderPipelineSystem($));
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
+             TbRenderPipelineSystem($));
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_pipeline_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
   destroy_render_pipeline_system(ecs, sys);
   ecs_singleton_remove(ecs, TbRenderPipelineSystem);
 }

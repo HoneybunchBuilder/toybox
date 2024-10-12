@@ -23,8 +23,6 @@ extern ECS_COMPONENT_DECLARE(TbTaskScheduler);
 
 typedef struct TbAsyncTaskArgs TbAsyncTaskArgs;
 
-void tb_run_pinned_tasks(ecs_world_t *ecs);
-
 // Create a task that runs a given function on any available thread.
 // Args will be copied to a thread-safe heap
 // Task must be launched to begin execution

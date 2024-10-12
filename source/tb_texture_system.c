@@ -602,7 +602,7 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
   tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 3);
   tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
-  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
+  tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -654,7 +654,7 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
   tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 3);
   tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
-  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
+  tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -706,7 +706,7 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
   tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 3);
   tb_auto usages = ecs_field(it, TbTextureUsage, 4);
 
-  tb_auto tex_ctx = ecs_singleton_get_mut(it->world, TbTextureCtx);
+  tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
@@ -820,29 +820,30 @@ void tb_register_texture_sys(TbWorld *world) {
 
   ECS_TAG_DEFINE(ecs, TbTextureLoaded);
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_tex_loads, EcsPostLoad,
-             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
-  ECS_SYSTEM(ecs, tb_queue_ktx_tex_loads, EcsPostLoad,
-             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
-  ECS_SYSTEM(ecs, tb_queue_raw_tex_loads, EcsPostLoad,
-             TbTaskScheduler(TbTaskScheduler), TbRenderSystem(TbRenderSystem),
-             [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_tex_loads, EcsPostLoad,
+      TbTaskScheduler(TbTaskScheduler),
+      TbRenderSystem($), [in] TbTextureGLTFLoadRequest, [in] TbTextureUsage);
+  ECS_SYSTEM(
+      ecs, tb_queue_ktx_tex_loads, EcsPostLoad,
+      TbTaskScheduler(TbTaskScheduler),
+      TbRenderSystem($), [in] TbTextureKTXLoadRequest, [in] TbTextureUsage);
+  ECS_SYSTEM(
+      ecs, tb_queue_raw_tex_loads, EcsPostLoad,
+      TbTaskScheduler(TbTaskScheduler),
+      TbRenderSystem($), [in] TbTextureRawLoadRequest, [in] TbTextureUsage);
 
-  ECS_SYSTEM(ecs, tb_finalize_textures,
-             EcsPostUpdate, [in] TbTextureCtx(TbTextureCtx),
-             [in] TbRenderSystem(TbRenderSystem), [in] TbTextureImage,
-             [in] TbTextureLoaded, !TbDescriptorReady);
+  ECS_SYSTEM(ecs, tb_finalize_textures, EcsPostUpdate, [in] TbTextureCtx($),
+             [in] TbRenderSystem($), [in] TbTextureImage, [in] TbTextureLoaded,
+             !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_texture_pool,
-             EcsPreStore, [in] TbTextureCtx(TbTextureCtx),
-             [in] TbRenderSystem(TbRenderSystem));
+             EcsPreStore, [in] TbTextureCtx($), [in] TbRenderSystem($));
 
   TbTextureCtx ctx = {0};
 
   SDL_SetAtomicInt(&tb_parallel_tex_load_count, 0);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   // Create descriptor set layout
   {
@@ -929,8 +930,8 @@ void tb_register_texture_sys(TbWorld *world) {
 
 void tb_unregister_texture_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbTextureCtx);
 
   tb_destroy_descriptor_buffer(rnd_sys, &ctx->desc_buffer);
 
@@ -950,19 +951,19 @@ TB_REGISTER_SYS(tb, texture, TB_TEX_SYS_PRIO)
 // Public API
 
 VkDescriptorSetLayout tb_tex_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbTextureCtx);
   return ctx->set_layout;
 }
 
 VkDescriptorSet tb_tex_sys_get_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbTextureCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 // Returns the binding info of the texture system's descriptor buffer
 VkDescriptorBufferBindingInfoEXT tb_tex_sys_get_table_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbTextureCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbTextureCtx);
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
 }
 

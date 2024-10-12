@@ -13,7 +13,7 @@ void noclip_update_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
 
-  TbInputSystem *input = ecs_singleton_get_mut(ecs, TbInputSystem);
+  TbInputSystem *input = ecs_singleton_ensure(ecs, TbInputSystem);
 
   TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 1);
   TbNoClipComponent *noclips = ecs_field(it, TbNoClipComponent, 2);

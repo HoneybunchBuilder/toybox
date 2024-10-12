@@ -864,9 +864,9 @@ void tb_register_imgui_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbImGuiSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
   TbImGuiSystem sys =
@@ -888,24 +888,22 @@ void tb_register_imgui_sys(TbWorld *world) {
     VkFormat ui_target_format =
         tb_render_target_get_format(rt_sys, ui_info.attachment);
 
-    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+    tb_auto sys_ptr = ecs_singleton_ensure(ecs, TbImGuiSystem);
     TbImGuiPipelineArgs args = {rnd_sys, ui_target_format, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_imgui_pipeline, &args,
                        sizeof(TbImGuiPipelineArgs));
   }
 
-  ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem(TbImGuiSystem),
-             TbInputSystem(TbInputSystem),
-             TbRenderTargetSystem(TbRenderTargetSystem),
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
+  ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem($),
+             TbInputSystem($), TbRenderTargetSystem($),
+             TbRenderPipelineSystem($));
 
-  ECS_SYSTEM(ecs, imgui_descriptor_sys, EcsPreStore,
-             TbImGuiSystem(TbImGuiSystem), TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, imgui_descriptor_sys, EcsPreStore, TbImGuiSystem($),
+             TbRenderSystem($));
 
-  ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem(TbImGuiSystem),
-             TbRenderSystem(TbRenderSystem),
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
+  ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem($),
+             TbRenderSystem($), TbRenderPipelineSystem($));
 
   TracyCZoneEnd(ctx);
 }
@@ -913,8 +911,8 @@ void tb_register_imgui_sys(TbWorld *world) {
 void tb_unregister_imgui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto ig_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ig_sys = ecs_singleton_ensure(ecs, TbImGuiSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   tb_shader_destroy(ecs, ig_sys->shader);
 

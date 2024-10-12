@@ -64,7 +64,7 @@ void tb_register_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbViewerSystem);
 
-  TbCoreUISystem *coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  TbCoreUISystem *coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
 
   TbViewerSystem sys = {
       .viewer_menu = tb_coreui_register_menu(coreui, "Viewer"),
@@ -73,15 +73,14 @@ void tb_register_viewer_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewerSystem), TbViewerSystem, &sys);
 
-  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate,
-             TbViewerSystem(TbViewerSystem));
+  ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate, TbViewerSystem($));
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_viewer_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbViewerSystem);
-  TbViewerSystem *sys = ecs_singleton_get_mut(ecs, TbViewerSystem);
+  TbViewerSystem *sys = ecs_singleton_ensure(ecs, TbViewerSystem);
   *sys = (TbViewerSystem){0};
   ecs_singleton_remove(ecs, TbViewerSystem);
 }

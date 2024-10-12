@@ -83,7 +83,7 @@ void tb_register_audio_sys(TbWorld *world) {
 void tb_unregister_audio_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbAudioSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbAudioSystem);
   destroy_audio_system(sys);
 }
 

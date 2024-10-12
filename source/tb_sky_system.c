@@ -1100,14 +1100,14 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
   ecs_world_t *ecs = it->world;
 
-  TbWorld *world = ecs_singleton_get_mut(ecs, TbWorldRef)->world;
+  TbWorld *world = ecs_singleton_ensure(ecs, TbWorldRef)->world;
 
-  tb_auto sky_sys = ecs_singleton_get_mut(ecs, TbSkySystem);
+  tb_auto sky_sys = ecs_singleton_ensure(ecs, TbSkySystem);
   ecs_singleton_modified(ecs, TbSkySystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   ecs_singleton_modified(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
   ecs_singleton_modified(ecs, TbRenderPipelineSystem);
 
   // Early out if any shaders aren't compiled yet
@@ -1422,10 +1422,10 @@ void tb_register_sky_sys(TbWorld *world) {
   ECS_COMPONENT_DEFINE(ecs, TbSkySystem);
   ECS_TAG_DEFINE(ecs, TbSkyRenderDirty);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
 
   TbSkySystem sys = create_sky_system(ecs, world->gp_alloc, world->tmp_alloc,
                                       rnd_sys, rp_sys, rt_sys, view_sys);
@@ -1446,7 +1446,7 @@ void tb_register_sky_sys(TbWorld *world) {
 void tb_unregister_sky_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbSkySystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbSkySystem);
   ecs_query_fini(sys->camera_query);
   destroy_sky_system(ecs, sys);
   ecs_singleton_remove(ecs, TbSkySystem);

@@ -94,21 +94,20 @@ void tb_register_core_ui_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbCoreUISystem);
 
-  TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+  TbImGuiSystem *imgui_sys = ecs_singleton_ensure(ecs, TbImGuiSystem);
   TbCoreUISystem sys =
       create_coreui_system(world->gp_alloc, world->tmp_alloc, imgui_sys);
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbCoreUISystem), TbCoreUISystem, &sys);
 
-  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate,
-             TbCoreUISystem(TbCoreUISystem));
+  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate, TbCoreUISystem($));
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_core_ui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  TbCoreUISystem *sys = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  TbCoreUISystem *sys = ecs_singleton_ensure(ecs, TbCoreUISystem);
   *sys = (TbCoreUISystem){0};
   ecs_singleton_remove(ecs, TbCoreUISystem);
 }

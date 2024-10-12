@@ -171,11 +171,10 @@ void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
   enkiAddPinnedTaskArgs(enki, task, task_args);
 }
 
-void tb_run_pinned_tasks(ecs_world_t *ecs) {
-  TracyCZoneNC(ctx, "Run Pinned Tasks", TracyCategoryColorCore, true);
-  tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
+void tb_run_pinned_tasks(ecs_iter_t *it) {
+  TB_TRACY_SCOPEC("Run Pinned Tasks", TracyCategoryColorCore)
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
   enkiRunPinnedTasks(enki);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_wait_task(TbTaskScheduler enki, enkiTaskSet *task) {
@@ -195,17 +194,31 @@ void tb_wait_pinned_task(TbTaskScheduler enki, enkiPinnedTask *task) {
 }
 
 void tb_register_task_scheduler_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Task Scheduler Sys", true);
+  TB_TRACY_SCOPE("Register Task Scheduler Sys");
   ECS_COMPONENT_DEFINE(world->ecs, TbTask);
   ECS_COMPONENT_DEFINE(world->ecs, TbPinnedTask);
   ECS_COMPONENT_DEFINE(world->ecs, TbTaskScheduler);
 
+  tb_auto ecs = world->ecs;
   tb_auto enki = enkiNewTaskScheduler();
   enkiInitTaskScheduler(enki);
 
-  ecs_singleton_set(world->ecs, TbTaskScheduler, {enki});
+  ecs_singleton_set(ecs, TbTaskScheduler, {enki});
 
-  TracyCZoneEnd(ctx);
+  // tb_run_pinned_tasks must be no_readonly because it can enqueue load
+  // requests
+  ecs_system(
+      ecs, {
+               .entity = ecs_entity(ecs, {.name = "tb_run_pinned_tasks",
+                                          .add = {ecs_dependson(EcsPreFrame)}}),
+               .query.filter.terms =
+                   {
+                       {.id = ecs_id(TbTaskScheduler),
+                        .src.id = ecs_id(TbTaskScheduler)},
+                   },
+               .callback = tb_run_pinned_tasks,
+               .no_readonly = true,
+           });
 }
 
 void tb_unregister_task_scheduler_sys(TbWorld *world) {

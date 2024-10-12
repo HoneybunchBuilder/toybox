@@ -558,11 +558,11 @@ void tb_register_visual_logging_sys(TbWorld *world) {
 
   ECS_COMPONENT_DEFINE(ecs, TbVisualLoggingSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto mesh_sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
-  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto mesh_sys = ecs_singleton_ensure(ecs, TbMeshSystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
 
   tb_auto sys =
       create_visual_logging_system(ecs, world->gp_alloc, world->tmp_alloc,
@@ -570,18 +570,16 @@ void tb_register_visual_logging_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbVisualLoggingSystem), TbVisualLoggingSystem, &sys);
 
-  ECS_SYSTEM(ecs, vlog_draw_tick, EcsPostUpdate,
-             TbVisualLoggingSystem(TbVisualLoggingSystem), TbCameraComponent);
-  ECS_SYSTEM(ecs, vlog_ui_tick, EcsOnUpdate,
-             TbVisualLoggingSystem(TbVisualLoggingSystem));
+  ECS_SYSTEM(ecs, vlog_draw_tick, EcsPostUpdate, TbVisualLoggingSystem($),
+             TbCameraComponent);
+  ECS_SYSTEM(ecs, vlog_ui_tick, EcsOnUpdate, TbVisualLoggingSystem($));
 
   TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_visual_logging_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  TbVisualLoggingSystem *sys =
-      ecs_singleton_get_mut(ecs, TbVisualLoggingSystem);
+  TbVisualLoggingSystem *sys = ecs_singleton_ensure(ecs, TbVisualLoggingSystem);
   destroy_visual_logging_system(ecs, sys);
   ecs_singleton_remove(ecs, TbVisualLoggingSystem);
 }

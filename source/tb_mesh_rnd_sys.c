@@ -834,12 +834,10 @@ void mesh_draw_tick(ecs_iter_t *it) {
   TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
-
   tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
 
   // If any shaders aren't ready just bail
   if (!tb_is_shader_ready(ecs, mesh_sys->opaque_shader) ||
@@ -1293,9 +1291,9 @@ void tb_register_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
 
   tb_auto sys = create_mesh_system_internal(
       ecs, world->gp_alloc, world->tmp_alloc, rnd_sys, view_sys, rp_sys);
@@ -1314,7 +1312,7 @@ void tb_register_mesh_sys(TbWorld *world) {
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbMeshSystem, &sys);
 
-  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem(TbMeshSystem));
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem($));
 
   TracyCZoneEnd(ctx);
 }
@@ -1322,7 +1320,7 @@ void tb_register_mesh_sys(TbWorld *world) {
 void tb_unregister_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbMeshSystem *sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  TbMeshSystem *sys = ecs_singleton_ensure(ecs, TbMeshSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_query_fini(sys->mesh_query);
   ecs_query_fini(sys->camera_query);
