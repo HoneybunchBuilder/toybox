@@ -58,10 +58,9 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
 }
 
 void log_ui_tick(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Log System UI Tick", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
-  TbWorld *world = ecs_singleton_ensure(it->world, TbWorldRef)->world;
-  tb_auto sys = ecs_field(it, TbLogSystem, 1);
+  TB_TRACY_SCOPEC("Log System UI Tick", TracyCategoryColorUI);
+  tb_auto world = ecs_singleton_ensure(it->world, TbWorldRef)->world;
+  tb_auto sys = ecs_field(it, TbLogSystem, 0);
 
   tb_log_time = world->time;
   const int32_t log_cols = 4;
@@ -147,19 +146,16 @@ void log_ui_tick(ecs_iter_t *it) {
       igEnd();
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_log_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Log Sys", true);
+  TB_TRACY_SCOPE("Register Log Sys");
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLogSystem);
 
   SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
 
   tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
-
   tb_auto sys = ecs_singleton_ensure(ecs, TbLogSystem);
   *sys = (TbLogSystem){
       .ui = tb_coreui_register_menu(coreui, "Log"),
@@ -171,7 +167,6 @@ void tb_register_log_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem($));
 
   SDL_SetLogOutputFunction(tb_log_hook, ecs_singleton_ensure(ecs, TbLogSystem));
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_log_sys(TbWorld *world) {

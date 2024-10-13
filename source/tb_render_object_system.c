@@ -110,8 +110,8 @@ void tb_render_object_mark_dirty(ecs_world_t *ecs, ecs_entity_t ent) {
 
 void tb_update_ro_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Render Object Pool");
-  tb_auto ctx = ecs_field(it, TbRenderObjectSystem, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto ctx = ecs_field(it, TbRenderObjectSystem, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
 
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->desc_pool);
 }
@@ -120,8 +120,8 @@ void tb_upload_transforms(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Upload Render Object Buffer");
   tb_auto ecs = it->world;
 
-  tb_auto ctx = ecs_field(it, TbRenderObjectSystem, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto ctx = ecs_field(it, TbRenderObjectSystem, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
 
   uint32_t dirty_count = 0;
   ecs_iter_t dirty_it = ecs_query_iter(ecs, ctx->dirty_query);
@@ -140,7 +140,7 @@ void tb_upload_transforms(ecs_iter_t *it) {
   tb_rnd_sys_update_gpu_buffer(rnd_sys, &ctx->trans_buffer.gpu,
                                &ctx->trans_buffer.host, (void **)&write_ptr);
   while (ecs_query_next(&dirty_it)) {
-    tb_auto render_objects = ecs_field(&dirty_it, TbRenderObject, 1);
+    tb_auto render_objects = ecs_field(&dirty_it, TbRenderObject, 0);
     for (int32_t i = 0; i < dirty_it.count; ++i) {
       tb_auto dst_idx = render_objects[i].index;
       write_ptr[dst_idx].m =
@@ -172,11 +172,16 @@ void tb_register_render_object_sys(TbWorld *world) {
       create_render_object_system(world->gp_alloc, world->tmp_alloc, rnd_sys);
 
   sys.dirty_query = ecs_query(
-      ecs, {.filter.terms = {
-                {.id = ecs_id(TbRenderObject), .inout = EcsIn},
-                {.id = ecs_id(TbTransformComponent), .inout = EcsInOutNone},
-                {.id = ecs_id(TbRenderObjectDirty), .inout = EcsInOutNone},
-            }});
+      ecs,
+      {
+          .terms =
+              {
+                  {.id = ecs_id(TbRenderObject), .inout = EcsIn},
+                  {.id = ecs_id(TbTransformComponent), .inout = EcsInOutNone},
+                  {.id = ecs_id(TbRenderObjectDirty), .inout = EcsInOutNone},
+              },
+          .cache_kind = EcsQueryCacheAuto,
+      });
 
   VkBufferCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,

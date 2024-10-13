@@ -56,38 +56,30 @@ ECS_COMPONENT_DECLARE(TbPhaseTracker);
 #endif
 
 void *ecs_malloc(ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_malloc", TracyCategoryColorMemory);
   void *ptr = mi_malloc(size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 void ecs_free(void *ptr) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_free", TracyCategoryColorMemory);
   TracyCFreeN(ptr, "ECS");
   mi_free(ptr);
-  TracyCZoneEnd(ctx);
 }
 
 void *ecs_calloc(ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_calloc", TracyCategoryColorMemory);
   void *ptr = mi_calloc(1, size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 void *ecs_realloc(void *original, ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_realloc", TracyCategoryColorMemory);
   TracyCFreeN(original, "ECS");
   void *ptr = mi_realloc(original, size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
@@ -288,11 +280,11 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
     ecs_set(world->ecs, phases[i], TbPhaseTracker, {phase_names[i], {0}});
     // Create a system per phase that matches specifically the phase entity that
     // we have attached a TbPhaseTracker component to
-    ecs_system(
-        ecs, {
-                 .entity = ecs_entity(ecs, {.add = {ecs_dependson(phases[i])}}),
-                 .callback = tb_phase_begin,
-             });
+    ecs_system(ecs, {
+                        .entity = ecs_entity(
+                            ecs, {.add = ecs_ids(ecs_dependson(phases[i]))}),
+                        .callback = tb_phase_begin,
+                    });
   }
 #endif
 
@@ -314,17 +306,17 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
   ecs_singleton_set(ecs, EcsRest, {0});
-  ECS_IMPORT(ecs, FlecsMonitor);
+  ECS_IMPORT(ecs, FlecsStats);
 #endif
 
 #ifdef TRACY_ENABLE
   // Run a system at the bottom of each phase to track ending
   for (uint32_t i = 0; i < phase_count; ++i) {
-    ecs_system(
-        ecs, {
-                 .entity = ecs_entity(ecs, {.add = {ecs_dependson(phases[i])}}),
-                 .callback = tb_phase_end,
-             });
+    ecs_system(ecs, {
+                        .entity = ecs_entity(
+                            ecs, {.add = ecs_ids(ecs_dependson(phases[i]))}),
+                        .callback = tb_phase_end,
+                    });
   }
 #endif
   return true;

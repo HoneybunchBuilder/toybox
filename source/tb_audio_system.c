@@ -88,37 +88,31 @@ void tb_unregister_audio_sys(TbWorld *world) {
 }
 
 TbMusicId tb_audio_system_load_music(TbAudioSystem *self, const char *path) {
-  TracyCZoneN(ctx, "Audio System Load Music", true);
-  TracyCZoneColor(ctx, TracyCategoryColorAudio);
+  TB_TRACY_SCOPEC("Audio System Load Music", TracyCategoryColorAudio);
 
   Mix_Music *music = Mix_LoadMUS(path);
   TB_CHECK_RETURN(music, "Failed to load music", 0xFFFFFFFF);
   TbMusicId id = (TbMusicId)TB_DYN_ARR_SIZE(self->music);
   TbMusic m = {1, music}; // Assume that by loading the music we take a ref
   TB_DYN_ARR_APPEND(self->music, m);
-
-  TracyCZoneEnd(ctx);
   return id;
 }
 
 TbSoundEffectId tb_audio_system_load_effect(TbAudioSystem *self,
                                             const char *path) {
-  TracyCZoneN(ctx, "Audio System Load Effect", true);
-  TracyCZoneColor(ctx, TracyCategoryColorAudio);
+  TB_TRACY_SCOPEC("Audio System Load Effect", TracyCategoryColorAudio);
 
   Mix_Chunk *chunk = Mix_LoadWAV(path);
   TB_CHECK_RETURN(chunk, "Failed to load effect", 0xFFFFFFFF);
-  TbSoundEffectId id = (TbSoundEffectId)TB_DYN_ARR_SIZE(self->sfx);
+  tb_auto id = (TbSoundEffectId)TB_DYN_ARR_SIZE(self->sfx);
   TbSoundEffect c = {1,
                      chunk}; // Assume that by loading the chunk we take a ref
   TB_DYN_ARR_APPEND(self->sfx, c);
-
-  TracyCZoneEnd(ctx);
   return id;
 }
 
 void tb_audio_system_release_music_ref(TbAudioSystem *self, TbMusicId id) {
-  TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
+  tb_auto music = &TB_DYN_ARR_AT(self->music, id);
   TB_CHECK(
       music->ref_count > 0,
       "Trying to release reference to music that has no reference holders");
@@ -130,7 +124,7 @@ void tb_audio_system_release_music_ref(TbAudioSystem *self, TbMusicId id) {
 
 void tb_audio_system_release_effect_ref(TbAudioSystem *self,
                                         TbSoundEffectId id) {
-  TbSoundEffect *effect = &TB_DYN_ARR_AT(self->sfx, id);
+  tb_auto effect = &TB_DYN_ARR_AT(self->sfx, id);
   TB_CHECK(
       effect->ref_count > 0,
       "Trying to release reference to effect that has no reference holders");
@@ -141,26 +135,19 @@ void tb_audio_system_release_effect_ref(TbAudioSystem *self,
 }
 
 void tb_audio_play_music(TbAudioSystem *self, TbMusicId id) {
-  TracyCZoneN(ctx, "Audio System Play Music", true);
-  TracyCZoneColor(ctx, TracyCategoryColorAudio);
+  TB_TRACY_SCOPEC("Audio System Play Music", TracyCategoryColorAudio);
 
-  TbMusic *music = &TB_DYN_ARR_AT(self->music, id);
+  tb_auto music = &TB_DYN_ARR_AT(self->music, id);
   TB_CHECK(music->ref_count > 0,
            "Trying to play music that has no reference holders");
   Mix_PlayMusic(music->music, SDL_MAX_SINT32);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_audio_play_effect(TbAudioSystem *self, TbSoundEffectId id) {
-  TracyCZoneN(ctx, "Audio System Play Effect", true);
-  TracyCZoneColor(ctx, TracyCategoryColorAudio);
+  TB_TRACY_SCOPEC("Audio System Play Effect", TracyCategoryColorAudio);
 
-  TbSoundEffect *effect = &TB_DYN_ARR_AT(self->sfx, id);
+  tb_auto effect = &TB_DYN_ARR_AT(self->sfx, id);
   TB_CHECK(effect->ref_count > 0,
            "Trying to play effect that has no reference holders");
-
   Mix_PlayChannel(-1, effect->chunk, 0);
-
-  TracyCZoneEnd(ctx);
 }

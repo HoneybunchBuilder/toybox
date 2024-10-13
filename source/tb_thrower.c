@@ -68,7 +68,7 @@ void trigger_input(ecs_iter_t *it) {
     return;
   }
 
-  tb_auto transforms = ecs_field(it, TbTransformComponent, 1);
+  tb_auto transforms = ecs_field(it, TbTransformComponent, 0);
 
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto ent = it->entities[i];
@@ -87,9 +87,9 @@ void trigger_throwers_sys(ecs_iter_t *it) {
   (void)ecs;
 
   // tb_auto phys_sys = ecs_singleton_ensure(ecs, TbPhysicsSystem);
-  // tb_auto throwers = ecs_field(it, TbThrower, 1);
-  // tb_auto dirs = ecs_field(it, TbThrowDir, 2);
-  // tb_auto forces = ecs_field(it, TbThrowForce, 3);
+  // tb_auto throwers = ecs_field(it, TbThrower, 0);
+  // tb_auto dirs = ecs_field(it, TbThrowDir, 1);
+  // tb_auto forces = ecs_field(it, TbThrowForce, 2);
 }
 
 void tb_register_thrower_sys(TbWorld *world) {

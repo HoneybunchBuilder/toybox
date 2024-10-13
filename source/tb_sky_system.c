@@ -687,7 +687,7 @@ void record_sky_common(VkCommandBuffer buffer, uint32_t batch_count,
 
 void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                 uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Sky Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Sky Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Sky", 3, true);
   cmd_begin_label(buffer, "Sky", (float4){0.8f, 0.8f, 0.0f, 1.0f});
 
@@ -695,7 +695,6 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 /*
@@ -708,7 +707,7 @@ void record_sky(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
-  TracyCZoneNC(ctx, "Env Capture Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Env Capture Record", TracyCategoryColorRendering);
   // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Capture", 3, true);
   cmd_begin_label(buffer, "Env Capture", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -718,13 +717,12 @@ void record_env_capture(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   // TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
-  TracyCZoneNC(ctx, "Irradiance Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Irradiance Record", TracyCategoryColorRendering);
   // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Irradiance", 3, true);
   cmd_begin_label(buffer, "Irradiance", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -758,13 +756,12 @@ void record_irradiance(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   // TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
-  TracyCZoneNC(ctx, "Env Filter Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Env Filter Record", TracyCategoryColorRendering);
   // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Env Filter", 3, true);
   cmd_begin_label(buffer, "Env Filter", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -801,7 +798,6 @@ void record_env_filter(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   // TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 TbSkySystem create_sky_system(ecs_world_t *ecs, TbAllocator gp_alloc,
@@ -1097,7 +1093,7 @@ void destroy_sky_system(ecs_world_t *ecs, TbSkySystem *self) {
 }
 
 void tb_sky_draw_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Sky Draw", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Sky Draw", TracyCategoryColorCore);
   ecs_world_t *ecs = it->world;
 
   TbWorld *world = ecs_singleton_ensure(ecs, TbWorldRef)->world;
@@ -1115,7 +1111,6 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
       !tb_is_shader_ready(ecs, sky_sys->env_shader) ||
       !tb_is_shader_ready(ecs, sky_sys->irradiance_shader) ||
       !tb_is_shader_ready(ecs, sky_sys->prefilter_shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -1128,8 +1123,8 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
 #endif
 
   // Write descriptor sets for each sky
-  tb_auto skys = ecs_field(it, TbSkyComponent, 1);
-  tb_auto trans = ecs_field(it, TbTransformComponent, 2);
+  tb_auto skys = ecs_field(it, TbSkyComponent, 0);
+  tb_auto trans = ecs_field(it, TbTransformComponent, 1);
   for (int32_t sky_idx = 0; sky_idx < it->count; ++sky_idx) {
     tb_auto sky = &skys[sky_idx];
     tb_auto transform = &trans[sky_idx];
@@ -1253,8 +1248,8 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
 
   ecs_iter_t cam_it = ecs_query_iter(ecs, sky_sys->camera_query);
   while (ecs_query_next(&cam_it)) {
-    tb_auto cameras = ecs_field(&cam_it, TbCameraComponent, 1);
-    tb_auto transforms = ecs_field(&cam_it, TbTransformComponent, 2);
+    tb_auto cameras = ecs_field(&cam_it, TbCameraComponent, 0);
+    tb_auto transforms = ecs_field(&cam_it, TbTransformComponent, 1);
     for (int32_t cam_idx = 0; cam_idx < cam_it.count; ++cam_idx) {
       tb_auto camera = &cameras[cam_idx];
       tb_auto transform = &transforms[cam_idx];
@@ -1412,11 +1407,10 @@ void tb_sky_draw_tick(ecs_iter_t *it) {
       }
     }
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_sky_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Sky Sys", true);
+  TB_TRACY_SCOPE("Register Sky Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbSkySystem);
@@ -1429,18 +1423,21 @@ void tb_register_sky_sys(TbWorld *world) {
 
   TbSkySystem sys = create_sky_system(ecs, world->gp_alloc, world->tmp_alloc,
                                       rnd_sys, rp_sys, rt_sys, view_sys);
-  sys.camera_query = ecs_query(ecs, {.filter.terms = {
-                                         {.id = ecs_id(TbCameraComponent)},
-                                         {.id = ecs_id(TbTransformComponent)},
-                                     }});
+  sys.camera_query =
+      ecs_query(ecs, {
+                         .terms =
+                             {
+                                 {.id = ecs_id(TbCameraComponent)},
+                                 {.id = ecs_id(TbTransformComponent)},
+                             },
+                         .cache_kind = EcsQueryCacheAuto,
+                     });
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbSkySystem), TbSkySystem, &sys);
 
   ECS_SYSTEM(ecs, tb_sky_draw_tick,
              EcsOnStore, [inout] TbSkyComponent, [in] TbTransformComponent);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_sky_sys(TbWorld *world) {

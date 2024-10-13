@@ -87,8 +87,7 @@ int32_t main(int32_t argc, char *argv[]) {
 
   while (running) {
     TracyCFrameMarkStart("Simulation Frame");
-    TracyCZoneN(trcy_ctx, "Simulation Frame", true);
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+    TB_TRACY_SCOPEC("Simulation Frame", TracyCategoryColorCore);
 
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before
@@ -118,7 +117,6 @@ int32_t main(int32_t argc, char *argv[]) {
     // Tick the world
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false; // NOLINT
-      TracyCZoneEnd(trcy_ctx);
       TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
@@ -126,7 +124,6 @@ int32_t main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     arena = tb_reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Simulation Frame");
   }
   return 0;

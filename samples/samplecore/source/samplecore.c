@@ -88,8 +88,7 @@ int32_t main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   while (running) {
-    TracyCZoneN(trcy_ctx, "Simulation Frame", true);
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+    TB_TRACY_SCOPEC("Simulation Frame", TracyCategoryColorCore);
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter() - start_time;
@@ -100,14 +99,11 @@ int32_t main(int32_t argc, char *argv[]) {
 
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false; // NOLINT
-      TracyCZoneEnd(trcy_ctx);
       break;
     }
 
     // Reset the arena allocator
     arena = tb_reset_arena(arena, true); // Just allow it to grow for now
-
-    TracyCZoneEnd(trcy_ctx);
   }
   return 0;
 

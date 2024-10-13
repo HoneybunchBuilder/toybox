@@ -540,7 +540,7 @@ void destroy_render_target_system(TbRenderTargetSystem *self) {
 }
 
 void tb_register_render_target_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Render Target Sys", true);
+  TB_TRACY_SCOPE("Register Render Target Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderTargetSystem);
 
@@ -548,8 +548,6 @@ void tb_register_render_target_sys(TbWorld *world) {
   tb_auto sys =
       create_render_target_system(rnd_sys, world->gp_alloc, world->tmp_alloc);
   ecs_singleton_set_ptr(ecs, TbRenderTargetSystem, &sys);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_target_sys(TbWorld *world) {

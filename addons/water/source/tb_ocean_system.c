@@ -128,7 +128,7 @@ void ocean_record(VkCommandBuffer buffer, uint32_t batch_count,
 
 void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                           uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Ocean Prepass Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Ocean Prepass Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean Prepass", 2, true);
   cmd_begin_label(buffer, "Ocean Prepass", tb_f4(0.0f, 0.4f, 0.4f, 1.0f));
 
@@ -136,12 +136,11 @@ void ocean_prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Ocean Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Ocean Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Ocean", 2, true);
   cmd_begin_label(buffer, "Ocean", tb_f4(0.0f, 0.8f, 0.8f, 1.0f));
 
@@ -149,7 +148,6 @@ void ocean_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbOceanPipelineArgs {
@@ -750,10 +748,10 @@ void destroy_ocean_system(TbOceanSystem *self) {
 }
 
 void ocean_audio_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Ocean Audio System", TracyCategoryColorAudio, true);
+  TB_TRACY_SCOPE("Ocean Audio System");
 
-  tb_auto sys = ecs_field(it, TbOceanSystem, 1);
-  tb_auto components = ecs_field(it, TbOceanComponent, 2);
+  tb_auto sys = ecs_field(it, TbOceanSystem, 0);
+  tb_auto components = ecs_field(it, TbOceanComponent, 1);
 
   if (it->count > 0) {
     (void)components;
@@ -765,28 +763,24 @@ void ocean_audio_tick(ecs_iter_t *it) {
       tb_audio_play_effect(sys->audio_system, sys->wave_sounds[idx]);
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void ocean_draw_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Ocean Draw System", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Ocean Draw System", TracyCategoryColorRendering);
   ecs_world_t *ecs = it->world;
 
   double time = ecs_singleton_get(it->world, TbWorldRef)->world->time;
-  tb_auto sys = ecs_field(it, TbOceanSystem, 1);
-  tb_auto cameras = ecs_field(it, TbCameraComponent, 2);
+  tb_auto sys = ecs_field(it, TbOceanSystem, 0);
+  tb_auto cameras = ecs_field(it, TbCameraComponent, 1);
 
   // If shaders aren't ready just bail
   if (!tb_is_shader_ready(ecs, sys->ocean_pass_shader) ||
       !tb_is_shader_ready(ecs, sys->ocean_prepass_shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
   // If mesh isn't loaded just bail
   if (!tb_is_mesh_ready(ecs, sys->ocean_patch_mesh2)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -908,8 +902,7 @@ void ocean_draw_tick(ecs_iter_t *it) {
       if (ocean_count == 0) {
         continue;
       }
-      const TbOceanComponent *oceans =
-          ecs_field(&ocean_it, TbOceanComponent, 1);
+      tb_auto oceans = ecs_field(&ocean_it, TbOceanComponent, 0);
 
       // Allocate and write all ocean descriptor sets
       {
@@ -1092,21 +1085,19 @@ void ocean_draw_tick(ecs_iter_t *it) {
       }
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void ocean_on_start(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Ocean On Start Sys", true);
+  TB_TRACY_SCOPE("Ocean On Start Sys");
   tb_auto ecs = it->world;
 
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
-  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 2);
-  tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 3);
-  tb_auto view_sys = ecs_field(it, TbViewSystem, 4);
-  tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 5);
-  tb_auto vlog = ecs_field(it, TbVisualLoggingSystem, 6);
-  tb_auto aud_sys = ecs_field(it, TbAudioSystem, 7);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 0);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
+  tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 2);
+  tb_auto view_sys = ecs_field(it, TbViewSystem, 3);
+  tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 4);
+  tb_auto vlog = ecs_field(it, TbVisualLoggingSystem, 5);
+  tb_auto aud_sys = ecs_field(it, TbAudioSystem, 6);
 
   tb_auto world = ecs_singleton_get(ecs, TbWorldRef)->world;
   tb_auto ocean_sys = ecs_singleton_ensure(ecs, TbOceanSystem);
@@ -1115,30 +1106,32 @@ void ocean_on_start(ecs_iter_t *it) {
                     rp_sys, mesh_sys, view_sys, rt_sys, vlog, aud_sys);
 
   ecs_singleton_modified(ecs, TbOceanSystem);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_ocean_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Ocean Sys", true);
+  TB_TRACY_SCOPE("Register Ocean Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbOceanSystem);
 
   // Query must be initialized outside of ecs progress
   TbOceanSystem sys = {
-      .ocean_query = ecs_query(ecs, {.filter.terms =
-                                         {
-                                             {.id = ecs_id(TbOceanComponent)},
-                                         }}),
+      .ocean_query = ecs_query(ecs,
+                               {
+                                   .terms =
+                                       {
+                                           {.id = ecs_id(TbOceanComponent)},
+                                       },
+                                   .cache_kind = EcsQueryCacheAuto,
+                               }),
   };
   ecs_singleton_set_ptr(ecs, TbOceanSystem, &sys);
 
-  // ocean_on_start must be no_readonly because it enqueues a mesh load request
+  // ocean_on_start must be immediate because it enqueues a mesh load request
   ecs_system(
       ecs,
-      {.entity = ecs_entity(
-           ecs, {.name = "ocean_on_start", .add = {ecs_dependson(EcsOnStart)}}),
-       .query.filter.terms =
+      {.entity = ecs_entity(ecs, {.name = "ocean_on_start",
+                                  .add = ecs_ids(ecs_dependson(EcsOnStart))}),
+       .query.terms =
            {
                {.id = ecs_id(TbRenderSystem), .src.id = ecs_id(TbRenderSystem)},
                {.id = ecs_id(TbRenderPipelineSystem),
@@ -1152,13 +1145,12 @@ void tb_register_ocean_sys(TbWorld *world) {
                {.id = ecs_id(TbAudioSystem), .src.id = ecs_id(TbAudioSystem)},
            },
        .callback = ocean_on_start,
-       .no_readonly = true});
+       .immediate = true});
 
   ECS_SYSTEM(ecs, ocean_audio_tick, EcsOnUpdate, TbOceanSystem($),
              TbOceanComponent);
   ECS_SYSTEM(ecs, ocean_draw_tick, EcsOnStore, TbOceanSystem($),
              TbCameraComponent);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_ocean_sys(TbWorld *world) {

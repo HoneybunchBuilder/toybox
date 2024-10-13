@@ -99,11 +99,11 @@ float3 lookup_sun_color(float norm) {
 }
 
 void time_of_day_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "TimeOfDay System", TracyCategoryColorCore, true);
-  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 1);
-  tb_auto skys = ecs_field(it, TbSkyComponent, 2);
-  tb_auto lights = ecs_field(it, TbDirectionalLightComponent, 3);
-  tb_auto transforms = ecs_field(it, TbTransformComponent, 4);
+  TB_TRACY_SCOPEC("TimeOfDay System", TracyCategoryColorCore);
+  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 0);
+  tb_auto skys = ecs_field(it, TbSkyComponent, 1);
+  tb_auto lights = ecs_field(it, TbDirectionalLightComponent, 2);
+  tb_auto transforms = ecs_field(it, TbTransformComponent, 3);
 
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto tod = &tods[i];
@@ -120,7 +120,6 @@ void time_of_day_tick(ecs_iter_t *it) {
         tb_angle_axis_to_quat((float4){-1.0f, 0.0f, 0.0f, tod->time});
     light->color = lookup_sun_color(time_norm);
   }
-  TracyCZoneEnd(ctx);
 }
 
 #ifndef TB_FINAL
@@ -130,8 +129,8 @@ typedef struct TbTimeOfDayContext {
 ECS_COMPONENT_DECLARE(TbTimeOfDayContext);
 
 void time_of_day_ui_sys(ecs_iter_t *it) {
-  tb_auto tod_ctx = ecs_field(it, TbTimeOfDayContext, 1);
-  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 2);
+  tb_auto tod_ctx = ecs_field(it, TbTimeOfDayContext, 0);
+  tb_auto tods = ecs_field(it, TbTimeOfDayComponent, 1);
 
   if (tod_ctx == NULL || tod_ctx->coreui == NULL) {
     return;
@@ -164,7 +163,7 @@ void time_of_day_ui_sys(ecs_iter_t *it) {
 #endif
 
 void tb_register_time_of_day_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Time of Day Sys", true);
+  TB_TRACY_SCOPE("Register Time of Day Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_SYSTEM(ecs, time_of_day_tick,
              EcsOnUpdate, [inout] TbTimeOfDayComponent, [inout] TbSkyComponent,
@@ -179,7 +178,6 @@ void tb_register_time_of_day_sys(TbWorld *world) {
              EcsOnUpdate, [inout] TbTimeOfDayContext(TbTimeOfDayContext),
              [inout] TbTimeOfDayComponent);
 #endif
-  TracyCZoneEnd(ctx);
 }
 void tb_unregister_time_of_day_sys(TbWorld *world) {
   (void)world;

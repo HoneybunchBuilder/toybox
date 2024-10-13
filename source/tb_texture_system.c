@@ -597,10 +597,10 @@ void tb_queue_gltf_tex_loads(ecs_iter_t *it) {
 
   tb_auto ecs = it->world;
 
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto reqs = ecs_field(it, TbTextureGLTFLoadRequest, 2);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 3);
 
   tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
@@ -649,10 +649,10 @@ void tb_queue_ktx_tex_loads(ecs_iter_t *it) {
 
   tb_auto ecs = it->world;
 
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto reqs = ecs_field(it, TbTextureKTXLoadRequest, 2);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 3);
 
   tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
@@ -701,10 +701,10 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
 
   tb_auto ecs = it->world;
 
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbTextureUsage, 4);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto reqs = ecs_field(it, TbTextureRawLoadRequest, 2);
+  tb_auto usages = ecs_field(it, TbTextureUsage, 3);
 
   tb_auto tex_ctx = ecs_singleton_ensure(it->world, TbTextureCtx);
 
@@ -752,9 +752,9 @@ void tb_queue_raw_tex_loads(ecs_iter_t *it) {
 void tb_finalize_textures(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Finalize Textures");
 
-  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto textures = ecs_field(it, TbTextureImage, 3);
+  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto textures = ecs_field(it, TbTextureImage, 2);
 
   if (tex_ctx->owned_tex_count == 0 || it->count == 0) {
     return;
@@ -799,8 +799,8 @@ void tb_finalize_textures(ecs_iter_t *it) {
 void tb_update_texture_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Texture Pool");
 
-  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto tex_ctx = ecs_field(it, TbTextureCtx, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
 
   // Tick the pool in case any new textures require us to expand the pool
   tb_tick_dyn_desc_pool(rnd_sys, &tex_ctx->desc_pool);
@@ -986,7 +986,7 @@ TbTexture tb_tex_sys_load_raw_tex(ecs_world_t *ecs, const char *name,
   }
 
   // Create a texture entity
-  tex_ent = ecs_new_entity(ecs, 0);
+  tex_ent = ecs_new(ecs);
   ecs_set_name(ecs, tex_ent, name);
 
   // It is a child of the texture system context singleton
@@ -1034,7 +1034,7 @@ TbTexture tb_tex_sys_load_mat_tex(ecs_world_t *ecs, const cgltf_data *data,
   TB_CHECK_RETURN(data, "Expected Data", 0);
 
   // Create a texture entity
-  tex_ent = ecs_new_entity(ecs, 0);
+  tex_ent = ecs_new(ecs);
   ecs_set_name(ecs, tex_ent, image_name);
 
   // Need to copy strings for task safety
@@ -1063,7 +1063,7 @@ TbTexture tb_tex_sys_load_ktx_tex(ecs_world_t *ecs, const char *path,
   }
 
   // Create a texture entity
-  tex_ent = ecs_new_entity(ecs, 0);
+  tex_ent = ecs_new(ecs);
   ecs_set_name(ecs, tex_ent, name);
 
   // It is a child of the texture system context singleton

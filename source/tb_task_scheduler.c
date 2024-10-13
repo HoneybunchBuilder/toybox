@@ -62,44 +62,38 @@ void tb_task_exec(const TbAsyncTaskArgs *args) {
 
 void tb_async_task_exec(uint32_t start, uint32_t end, uint32_t threadnum,
                         void *args) {
-  TracyCZoneN(ctx, "Async Task", true);
+  TB_TRACY_SCOPE("Async Task");
   (void)start;
   (void)end;
   (void)threadnum;
   tb_auto task_args = (TbAsyncTaskArgs *)args;
   tb_task_exec(task_args);
   tb_ts_free(task_args);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_pinned_task_exec(void *args) {
-  TracyCZoneN(ctx, "Pinned Task", true);
+  TB_TRACY_SCOPE("Pinned Task");
   tb_auto task_args = (TbAsyncTaskArgs *)args;
   tb_task_exec(task_args);
   tb_ts_free(task_args);
-  TracyCZoneEnd(ctx);
 }
 
 TbTask tb_create_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
                       size_t args_size) {
-  TracyCZoneN(ctx, "Create Async Task", true);
+  TB_TRACY_SCOPE("Create Async Task");
   tb_auto task = enkiCreateTaskSet(enki, tb_async_task_exec);
 
   // Arguments need to be on the correct mimalloc heap so we copy them
   tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsTaskSet(task, task_args);
-
-  TracyCZoneEnd(ctx);
   return task;
 }
 
 TbTask tb_create_task2(TbTaskScheduler enki, TbAsyncFn2 fn, void *args) {
-  TracyCZoneN(ctx, "Create Async Task2", true);
+  TB_TRACY_SCOPE("Create Async Task2");
 
   tb_auto task = enkiCreateTaskSet(enki, fn);
   enkiSetArgsTaskSet(task, args);
-
-  TracyCZoneEnd(ctx);
   return task;
 }
 
@@ -139,14 +133,12 @@ TbTask tb_async_task(TbTaskScheduler enki, TbAsyncFn fn, void *args,
 
 TbPinnedTask tb_create_pinned_task(TbTaskScheduler enki, TbAsyncFn fn,
                                    void *args, size_t args_size) {
-  TracyCZoneN(ctx, "Create Pinned Task", true);
+  TB_TRACY_SCOPE("Create Pinned Task");
   tb_auto task = enkiCreatePinnedTask(enki, tb_pinned_task_exec, 0);
 
   // Arguments need to be on the correct mimalloc heap so we copy them
   tb_auto task_args = tb_alloc_task_args(fn, args, args_size);
   enkiSetArgsPinnedTask(task, task_args);
-
-  TracyCZoneEnd(ctx);
   return task;
 }
 
@@ -173,23 +165,21 @@ void tb_launch_pinned_task_args(enkiTaskScheduler *enki, enkiPinnedTask *task,
 
 void tb_run_pinned_tasks(ecs_iter_t *it) {
   TB_TRACY_SCOPEC("Run Pinned Tasks", TracyCategoryColorCore)
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 0);
   enkiRunPinnedTasks(enki);
 }
 
 void tb_wait_task(TbTaskScheduler enki, enkiTaskSet *task) {
   if (!enkiIsTaskSetComplete(enki, task)) {
-    TracyCZoneNC(ctx, "Wait for Task", TracyCategoryColorWait, true);
+    TB_TRACY_SCOPEC("Wait for Task", TracyCategoryColorWait);
     enkiWaitForTaskSet(enki, task);
-    TracyCZoneEnd(ctx);
   }
 }
 
 void tb_wait_pinned_task(TbTaskScheduler enki, enkiPinnedTask *task) {
   if (!enkiIsPinnedTaskComplete(enki, task)) {
-    TracyCZoneNC(ctx, "Wait for Pinned Task", TracyCategoryColorWait, true);
+    TB_TRACY_SCOPEC("Wait for Pinned Task", TracyCategoryColorWait);
     enkiWaitForPinnedTask(enki, task);
-    TracyCZoneEnd(ctx);
   }
 }
 
@@ -205,20 +195,20 @@ void tb_register_task_scheduler_sys(TbWorld *world) {
 
   ecs_singleton_set(ecs, TbTaskScheduler, {enki});
 
-  // tb_run_pinned_tasks must be no_readonly because it can enqueue load
+  // tb_run_pinned_tasks must be immediate because it can enqueue load
   // requests
-  ecs_system(
-      ecs, {
-               .entity = ecs_entity(ecs, {.name = "tb_run_pinned_tasks",
-                                          .add = {ecs_dependson(EcsPreFrame)}}),
-               .query.filter.terms =
-                   {
-                       {.id = ecs_id(TbTaskScheduler),
-                        .src.id = ecs_id(TbTaskScheduler)},
-                   },
-               .callback = tb_run_pinned_tasks,
-               .no_readonly = true,
-           });
+  ecs_system(ecs, {
+                      .entity = ecs_entity(
+                          ecs, {.name = "tb_run_pinned_tasks",
+                                .add = ecs_ids(ecs_dependson(EcsPreFrame))}),
+                      .query.terms =
+                          {
+                              {.id = ecs_id(TbTaskScheduler),
+                               .src.id = ecs_id(TbTaskScheduler)},
+                          },
+                      .callback = tb_run_pinned_tasks,
+                      .immediate = true,
+                  });
 }
 
 void tb_unregister_task_scheduler_sys(TbWorld *world) {

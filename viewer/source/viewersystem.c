@@ -14,10 +14,9 @@
 ECS_COMPONENT_DECLARE(TbViewerSystem);
 
 void viewer_update_tick(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Viewer System Tick", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
+  TB_TRACY_SCOPEC("Viewer System Tick", TracyCategoryColorUI);
 
-  TbViewerSystem *sys = ecs_field(it, TbViewerSystem, 1);
+  tb_auto sys = ecs_field(it, TbViewerSystem, 0);
 
   if (sys->viewer_menu && *sys->viewer_menu) {
     if (igBegin("Viewer", sys->viewer_menu, 0)) {
@@ -55,16 +54,14 @@ void viewer_update_tick(ecs_iter_t *it) {
     }
     igEnd();
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_viewer_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Viewer Sys", true);
+  TB_TRACY_SCOPE("Register Viewer Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbViewerSystem);
 
-  TbCoreUISystem *coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
 
   TbViewerSystem sys = {
       .viewer_menu = tb_coreui_register_menu(coreui, "Viewer"),
@@ -74,7 +71,6 @@ void tb_register_viewer_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbViewerSystem), TbViewerSystem, &sys);
 
   ECS_SYSTEM(ecs, viewer_update_tick, EcsOnUpdate, TbViewerSystem($));
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_viewer_sys(TbWorld *world) {

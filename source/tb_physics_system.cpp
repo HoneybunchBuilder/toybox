@@ -402,7 +402,7 @@ void physics_update_tick(flecs::iter it) {
   // TODO: Only do this for rigidbodies with transforms marked movable
   {
     flecs::query<TbRigidbodyComponent, TbTransformComponent> query(
-        ecs, phys_sys->rigidbody_query);
+        *phys_sys->rigidbody_query);
     query.each([&](flecs::entity e, const TbRigidbodyComponent &rigidbody,
                    TbTransformComponent &trans) {
       (void)e;
@@ -443,15 +443,17 @@ void tb_register_physics_sys(TbWorld *world) {
   auto enki = *ecs_singleton_get(world->ecs, TbTaskScheduler);
   static constexpr int32_t phys_thread_count = 4;
 
+  auto query = ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
+                   .cache_kind(flecs::QueryCacheAuto)
+                   .build();
+
   TbPhysicsSystem sys = {
       .gp_alloc = world->gp_alloc,
       .tmp_alloc = world->tmp_alloc,
       .jolt_phys = new JPH::PhysicsSystem(),
       .jolt_tmp_alloc = new JPH::TempAllocatorImpl(10 * 1024 * 1024),
       .jolt_job_sys = new TbJobSystem(enki, world->gp_alloc, phys_thread_count),
-      .rigidbody_query =
-          ecs.query_builder<TbRigidbodyComponent, TbTransformComponent>()
-              .build(),
+      .rigidbody_query = new flecs::query_base(query),
       .bpl_interface = new BPLayerInterfaceImpl(),
       .obp_filter = new ObjectVsBroadPhaseLayerFilterImpl(),
       .olp_filter = new ObjectLayerPairFilterImpl(),
@@ -463,7 +465,7 @@ void tb_register_physics_sys(TbWorld *world) {
 
   ecs.set<TbPhysicsSystem>(sys);
 
-  ecs.system("PhysicsUpdate").kind(EcsPostUpdate).iter(physics_update_tick);
+  ecs.system("PhysicsUpdate").kind(EcsPostUpdate).run(physics_update_tick);
 }
 
 void tb_unregister_physics_sys(TbWorld *world) {

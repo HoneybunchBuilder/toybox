@@ -243,7 +243,7 @@ void destroy_render_system(TbRenderSystem *self) {
 }
 
 void render_frame_begin(ecs_iter_t *it) {
-  tb_auto sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto sys = ecs_field(it, TbRenderSystem, 0);
 
   TracyCZoneNC(wait_ctx, "Wait for Render Thread", TracyCategoryColorWait,
                true);
@@ -255,7 +255,7 @@ void render_frame_begin(ecs_iter_t *it) {
   // Manually zero out the previous frame's draw batches here
   // It's cleaner to do it here than dedicate a whole system to this
   // operation on tick
-  TbFrameState *state = &sys->render_thread->frame_states[sys->frame_idx];
+  tb_auto state = &sys->render_thread->frame_states[sys->frame_idx];
 
   TB_DYN_ARR_FOREACH(state->draw_contexts, i) {
     TB_DYN_ARR_AT(state->draw_contexts, i).batch_count = 0;
@@ -266,17 +266,12 @@ void render_frame_begin(ecs_iter_t *it) {
 }
 
 void render_frame_end(ecs_iter_t *it) {
-  TbRenderSystem *sys = ecs_field(it, TbRenderSystem, 1);
-  TracyCZoneN(tick_ctx, "Render System Tick", true);
-  TracyCZoneColor(tick_ctx, TracyCategoryColorRendering);
+  tb_auto sys = ecs_field(it, TbRenderSystem, 0);
+  TB_TRACY_SCOPEC("Render System Tick", TracyCategoryColorRendering);
 
   {
-    TracyCZoneN(ctx, "Render System Tick", true);
-    TracyCZoneColor(ctx, TracyCategoryColorRendering);
-
-    TbRenderSystemFrameState *state = &sys->frame_states[sys->frame_idx];
-    TbFrameState *thread_state =
-        &sys->render_thread->frame_states[sys->frame_idx];
+    tb_auto state = &sys->frame_states[sys->frame_idx];
+    tb_auto thread_state = &sys->render_thread->frame_states[sys->frame_idx];
 
     // Copy this frame state's temp buffer to the gpu
     if (state->tmp_host_buffer.info.size > 0) {
@@ -314,22 +309,18 @@ void render_frame_end(ecs_iter_t *it) {
     // Reset temp pool, the contents will still be intact for the render thread
     // but it will be reset for the next time this frame is processed
     {
-      TbRenderSystemFrameState *state = &sys->frame_states[sys->frame_idx];
+      tb_auto state = &sys->frame_states[sys->frame_idx];
       state->tmp_host_buffer.info.size = 0;
     }
-
-    TracyCZoneEnd(ctx);
   }
 
   // Signal the render thread to start rendering this frame
   tb_signal_render(sys->render_thread, sys->frame_idx);
   sys->frame_idx = (sys->frame_idx + 1) % TB_MAX_FRAME_STATES;
-
-  TracyCZoneEnd(tick_ctx);
 }
 
 void tb_register_render_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Render Sys", true);
+  TB_TRACY_SCOPE("Register Render Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbRenderSystem);
   ECS_TAG_DEFINE(ecs, TbDescriptorReady);
@@ -340,23 +331,19 @@ void tb_register_render_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, render_frame_begin, EcsPreUpdate, TbRenderSystem($));
   ECS_SYSTEM(ecs, render_frame_end, EcsPostFrame, TbRenderSystem($));
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-
-  TbRenderSystem *sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   destroy_render_system(sys);
   ecs_singleton_remove(ecs, TbRenderSystem);
 }
 
 VkResult alloc_tmp_buffer(TbRenderSystem *self, uint64_t size,
                           uint32_t alignment, TbHostBuffer *buffer) {
-  TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
-  TbFrameState *thread_state =
-      &self->render_thread->frame_states[self->frame_idx];
+  tb_auto state = &self->frame_states[self->frame_idx];
+  tb_auto thread_state = &self->render_thread->frame_states[self->frame_idx];
 
   void *ptr = NULL;
 

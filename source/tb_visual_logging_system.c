@@ -78,7 +78,7 @@ TB_REGISTER_SYS(tb, visual_logging, TB_VLOG_SYS_PRIO)
 void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                       uint32_t batch_count, const TbDrawBatch *batches) {
   (void)gpu_ctx;
-  TracyCZoneNC(ctx, "Visual Logger Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Visual Logger Record", TracyCategoryColorRendering);
   // TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Visual Logger", 3, true);
 
   for (uint32_t batch_idx = 0; batch_idx < batch_count; ++batch_idx) {
@@ -87,7 +87,7 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     if (batch->draw_count == 0) {
       continue;
     }
-    TracyCZoneNC(batch_ctx, "VLog Batch", TracyCategoryColorRendering, true);
+    TB_TRACY_SCOPEC("VLog Batch", TracyCategoryColorRendering);
     // TracyCVkNamedZone(gpu_ctx, batch_scope, buffer, "VLog Batch", 4, true);
     cmd_begin_label(buffer, "VLog Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
@@ -129,11 +129,8 @@ void vlog_draw_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
     cmd_end_label(buffer);
     // TracyCVkZoneEnd(batch_scope);
-    TracyCZoneEnd(batch_ctx);
   }
-
   // TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbPrimPipeArgs {
@@ -411,20 +408,18 @@ void destroy_visual_logging_system(ecs_world_t *ecs,
 void vlog_draw_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef TB_FINAL
-  TracyCZoneNC(ctx, "Visual Logging System Draw", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Visual Logging System Draw", TracyCategoryColorCore);
 
-  TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
-  const TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 2);
+  tb_auto sys = ecs_field(it, TbVisualLoggingSystem, 0);
+  tb_auto cameras = ecs_field(it, TbCameraComponent, 1);
 
   // Require shader to be loaded
   if (!tb_is_shader_ready(it->world, sys->shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
   // Requires meshes to be loaded
   if (!tb_is_mesh_ready(it->world, sys->sphere_mesh2)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -477,17 +472,15 @@ void vlog_draw_tick(ecs_iter_t *it) {
       tb_render_pipeline_issue_draw_batch(sys->rp_sys, sys->draw_ctx, 1, batch);
     }
   }
-
-  TracyCZoneEnd(ctx);
 #endif
 }
 
 void vlog_ui_tick(ecs_iter_t *it) {
   (void)it;
 #ifndef TB_FINAL
-  TracyCZoneNC(ctx, "Visual Logging System UI", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Visual Logging System UI", TracyCategoryColorCore);
 
-  TbVisualLoggingSystem *sys = ecs_field(it, TbVisualLoggingSystem, 1);
+  tb_auto sys = ecs_field(it, TbVisualLoggingSystem, 0);
 
   uint32_t frame_count = TB_DYN_ARR_SIZE(sys->frames);
   uint32_t frame_cap = sys->frames.capacity;
@@ -547,13 +540,11 @@ void vlog_ui_tick(ecs_iter_t *it) {
     // If recording, insert a new frame
     TB_DYN_ARR_APPEND(sys->frames, (TbVLogFrame){0});
   }
-
-  TracyCZoneEnd(ctx);
 #endif
 }
 
 void tb_register_visual_logging_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Vlog Sys", true);
+  TB_TRACY_SCOPE("Register Vlog Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbVisualLoggingSystem);
@@ -573,8 +564,6 @@ void tb_register_visual_logging_sys(TbWorld *world) {
   ECS_SYSTEM(ecs, vlog_draw_tick, EcsPostUpdate, TbVisualLoggingSystem($),
              TbCameraComponent);
   ECS_SYSTEM(ecs, vlog_ui_tick, EcsOnUpdate, TbVisualLoggingSystem($));
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_visual_logging_sys(TbWorld *world) {

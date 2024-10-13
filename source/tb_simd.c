@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 
+#include "tb_common.h"
 #include "tb_gltf.h"
 #include "tb_pi.h"
 #include "tb_profiling.h"
@@ -204,8 +205,7 @@ float4x4 tb_mulf44f44(float4x4 x, float4x4 y) {
 }
 
 float4x4 tb_invf44(float4x4 m) {
-  TracyCZoneN(ctx, "inv_mf44", true);
-  TracyCZoneColor(ctx, TracyCategoryColorMath);
+  TB_TRACY_SCOPEC("inv_mf44", TracyCategoryColorMath);
 
   float coef00 = m.col2.z * m.col3.w - m.col3.z * m.col2.w;
   float coef02 = m.col1.z * m.col3.w - m.col3.z * m.col1.w;
@@ -260,8 +260,6 @@ float4x4 tb_invf44(float4x4 m) {
       inv.col2 * OneOverDeterminant,
       inv.col3 * OneOverDeterminant,
   };
-
-  TracyCZoneEnd(ctx);
 
   return out;
 }
@@ -542,9 +540,8 @@ TbTransform tb_transform_combine(const TbTransform *x, const TbTransform *y) {
 }
 
 float4x4 tb_transform_to_matrix(const TbTransform *t) {
-  TracyCZoneN(ctx, "transform_to_matrix", true);
-  TracyCZoneColor(ctx, TracyCategoryColorMath);
-  SDL_assert(t);
+  TB_TRACY_SCOPEC("transform_to_matrix", TracyCategoryColorMath);
+  TB_CHECK(t, "Invalid transform");
 
   // Position matrix
   float4x4 p = {
@@ -567,12 +564,11 @@ float4x4 tb_transform_to_matrix(const TbTransform *t) {
 
   // Transformation matrix = p * r * s
   float4x4 m = tb_mulf44f44(tb_mulf44f44(p, r), s);
-  TracyCZoneEnd(ctx);
   return m;
 }
 
 TbTransform tb_transform_from_node(const cgltf_node *node) {
-  SDL_assert(node);
+  TB_CHECK(node, "Invalid node");
   return (TbTransform){
       .position = tb_f3(node->translation[0], node->translation[1],
                         node->translation[2]),

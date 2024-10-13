@@ -33,7 +33,7 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   if (batch_count != 1) {
     return;
   }
-  TracyCZoneNC(ctx, "FXAA Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("FXAA Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "FXAA", 3, true);
   cmd_begin_label(buffer, "FXAA", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -52,17 +52,15 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void tick_fxaa_draw(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "FXAA Draw Tick", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("FXAA Draw Tick", TracyCategoryColorRendering);
   tb_auto ecs = it->world;
 
-  tb_auto self = ecs_field(it, TbFXAASystem, 1);
+  tb_auto self = ecs_field(it, TbFXAASystem, 0);
 
   if (!tb_is_shader_ready(ecs, self->shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -127,8 +125,6 @@ void tick_fxaa_draw(ecs_iter_t *it) {
     };
     tb_render_pipeline_issue_draw_batch(rp_sys, self->draw_ctx, 1, &batch);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbFXAAPipelineArgs {
@@ -256,7 +252,7 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
 }
 
 void tb_register_fxaa_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register FXAA Sys", true);
+  TB_TRACY_SCOPE("Register FXAA Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbFXAASystem);
@@ -335,7 +331,6 @@ void tb_register_fxaa_sys(TbWorld *world) {
         tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
                        sizeof(TbFXAAPipelineArgs));
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_fxaa_sys(TbWorld *world) {

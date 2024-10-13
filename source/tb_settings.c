@@ -62,8 +62,9 @@ static const char *tb_fxaa_items[] = {
 };
 
 void tick_settings_ui(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Tick Settings UI");
   tb_auto ecs = it->world;
-  tb_auto settings = ecs_field(it, TbSettings, 1);
+  tb_auto settings = ecs_field(it, TbSettings, 0);
 
   if (settings->coreui && *settings->coreui) {
     if (igBegin("Settings", settings->coreui, 0)) {
@@ -105,7 +106,7 @@ void tick_settings_ui(ecs_iter_t *it) {
 }
 
 void tb_register_settings_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Settings Sys", true);
+  TB_TRACY_SCOPE("Register Settings Sys");
   tb_auto ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbSettings);
@@ -128,8 +129,6 @@ void tb_register_settings_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);
 
   ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_settings_sys(TbWorld *world) {

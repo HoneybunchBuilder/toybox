@@ -86,7 +86,7 @@ void sort_passes_recursive(PassNode *node, uint32_t *pass_order,
 }
 
 void sort_pass_graph(TbRenderPipelineSystem *self) {
-  TracyCZoneN(ctx, "Sort Pass Graph", true);
+  TB_TRACY_SCOPE("Sort Pass Graph");
   // Build a graph of pass nodes to determine ordering
   const uint32_t pass_count = TB_DYN_ARR_SIZE(self->render_passes);
   PassNode *nodes = tb_alloc_nm_tp(self->tmp_alloc, pass_count, PassNode);
@@ -119,8 +119,6 @@ void sort_pass_graph(TbRenderPipelineSystem *self) {
   // A pre-order traversal of the graph should get us a reasonable pass order
   uint32_t pass_idx = 0;
   sort_passes_recursive(&nodes[0], self->pass_order, &pass_idx);
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbPipeShaderArgs {
@@ -638,7 +636,7 @@ void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     return;
   }
 
-  TracyCZoneNC(ctx, "Depth Copy Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Depth Copy Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Depth Copy", 3, true);
   cmd_begin_label(buffer, "Depth Copy", (float4){0.8f, 0.0f, 0.4f, 1.0f});
 
@@ -647,7 +645,6 @@ void record_depth_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -657,7 +654,7 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     return;
   }
 
-  TracyCZoneNC(ctx, "Color Copy Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Color Copy Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Color Copy", 3, true);
   cmd_begin_label(buffer, "Color Copy", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -666,12 +663,11 @@ void record_color_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                       uint32_t batch_count, const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Compute Copy Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Compute Copy Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Compute Copy", 3, true);
   cmd_begin_label(buffer, "Compute Copy", (float4){0.4f, 0.0f, 0.0f, 1.0f});
 
@@ -694,7 +690,6 @@ void record_comp_copy(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -704,7 +699,7 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     return;
   }
 
-  TracyCZoneNC(ctx, "Brightness Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Brightness Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Brightness", 3, true);
   cmd_begin_label(buffer, "Brightness", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
@@ -713,12 +708,11 @@ void record_brightness(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Bloom Blur Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Bloom Blur Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Bloom Blur", 3, true);
   cmd_begin_label(buffer, "Bloom Blur", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
@@ -741,7 +735,6 @@ void record_bloom_blur(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -751,7 +744,7 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     return;
   }
 
-  TracyCZoneNC(ctx, "Tonemapping Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Tonemapping Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Tonemapping", 3, true);
   cmd_begin_label(buffer, "Tonemapping", (float4){0.8f, 0.4f, 0.0f, 1.0f});
 
@@ -760,16 +753,15 @@ void record_tonemapping(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
                    TbRenderPassId id, uint32_t *command_buffers,
                    uint32_t command_buffer_count) {
-  TracyCZoneN(ctx, "Register Pass", true);
-  TbRenderPass *pass = &TB_DYN_ARR_AT(self->render_passes, id);
+  TB_TRACY_SCOPE("Register Pass");
+  tb_auto pass = &TB_DYN_ARR_AT(self->render_passes, id);
   for (uint32_t frame_idx = 0; frame_idx < TB_MAX_FRAME_STATES; ++frame_idx) {
-    TbFrameState *state = &thread->frame_states[frame_idx];
+    tb_auto state = &thread->frame_states[frame_idx];
 
     state->pass_command_buffer_count = command_buffer_count;
     {
@@ -797,7 +789,7 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
         self->rt_sys, pass->attachments[0].layer, pass->attachments[0].mip,
         target_id);
 
-    TbPassContext pass_context = (TbPassContext){
+    tb_auto pass_context = (TbPassContext){
         .id = id,
         .command_buffer_index = command_buffers[id],
         .attachment_count = pass->attach_count,
@@ -817,8 +809,8 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
     // Construct barriers
     for (uint32_t trans_idx = 0; trans_idx < pass->transition_count;
          ++trans_idx) {
-      const PassTransition *transition = &pass->transitions[trans_idx];
-      TbImageTransition *barrier = &pass_context.barriers[trans_idx];
+      tb_auto transition = &pass->transitions[trans_idx];
+      tb_auto barrier = &pass_context.barriers[trans_idx];
       *barrier = transition->barrier;
       barrier->barrier.image = tb_render_target_get_image(
           self->rt_sys, frame_idx, transition->render_target);
@@ -826,7 +818,6 @@ void register_pass(TbRenderPipelineSystem *self, TbRenderThread *thread,
 
     TB_DYN_ARR_APPEND(state->pass_contexts, pass_context);
   }
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbAttachmentInfo {
@@ -984,7 +975,7 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
 
   // Create some default passes
   {
-    TracyCZoneN(ctx, "Create Default Passes", true);
+    TB_TRACY_SCOPE("Create Default Passes");
     // Look up the render targets we know will be needed
     const TbRenderTargetId env_cube = rt_sys->env_cube;
     const TbRenderTargetId irradiance_map = rt_sys->irradiance_map;
@@ -2169,8 +2160,6 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
       TB_CHECK(id != InvalidRenderPassId, "Failed to create ui pass");
       sys.ui_pass = id;
     }
-
-    TracyCZoneEnd(ctx);
   }
 
   // Calculate pass order
@@ -2184,7 +2173,7 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
   // Every time we return to the top of the pipeline, we want to keep track
   // so we can use a different command buffer.
   {
-    TracyCZoneN(ctx, "Register Passes", true);
+    TB_TRACY_SCOPE("Register Passes");
     uint32_t command_buffer_count = 0; // Treated as an index while builiding
     // Worst case each pass needs its own command buffer
     uint32_t *command_buffer_indices =
@@ -2210,7 +2199,6 @@ create_render_pipeline_system(ecs_world_t *ecs, TbAllocator gp_alloc,
                       command_buffer_indices, command_buffer_count);
       }
     }
-    TracyCZoneEnd(ctx);
   }
 
   // Construct additional objects for handling draws that this system is
@@ -2964,11 +2952,9 @@ void tick_upsample_desc_pool(TbRenderPipelineSystem *self) {
 }
 
 void tick_render_pipeline_sys(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Render Pipeline System Tick", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("Render Pipeline System Tick", TracyCategoryColorRendering);
 
-  tb_auto self = ecs_field(it, TbRenderPipelineSystem, 1);
-
+  tb_auto self = ecs_field(it, TbRenderPipelineSystem, 0);
   tb_auto brdf_tex = tb_get_brdf_tex(it->world);
 
   // A few passes will be driven from here because an external system
@@ -3165,13 +3151,11 @@ void tick_render_pipeline_sys(ecs_iter_t *it) {
       tb_render_pipeline_issue_draw_batch(self, self->tonemap_ctx, 1, &batch);
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void rp_check_swapchain_resize(ecs_iter_t *it) {
   TB_TRACY_SCOPEC("Check Swapchain Resize", TracyCategoryColorRendering);
-  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 1);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 0);
   tb_auto rnd_sys = rp_sys->rnd_sys;
   if (rnd_sys->render_thread->swapchain_resize_signal) {
     TB_TRACY_SCOPEC("Resize", TracyCategoryColorRendering);
@@ -3201,8 +3185,7 @@ void rp_check_swapchain_resize(ecs_iter_t *it) {
 }
 
 void tb_register_render_pipeline_sys(TbWorld *world) {
-  TracyCZoneNC(ctx, "Register Render Pipeline Sys", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("Register Render Pipeline Sys", TracyCategoryColorRendering);
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbRenderPipelineSystem);
@@ -3222,7 +3205,6 @@ void tb_register_render_pipeline_sys(TbWorld *world) {
 
   ECS_SYSTEM(ecs, tick_render_pipeline_sys, EcsPostUpdate,
              TbRenderPipelineSystem($));
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_render_pipeline_sys(TbWorld *world) {
