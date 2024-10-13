@@ -97,7 +97,7 @@
       "hidden": true,
       "inherits": "self-host",
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-linux"
+        "VCPKG_TARGET_TRIPLET": "x64-linux-llvm"
       }
     },
     {
