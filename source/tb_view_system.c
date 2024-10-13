@@ -221,21 +221,19 @@ void destroy_view_system(TbViewSystem *self, TbRenderSystem *rnd_sys) {
 }
 
 void view_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "TbView System Tick", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("TbView System Tick", TracyCategoryColorRendering);
 
   // The view system requires that the texture system's BRDF texture be ready
   tb_auto brdf_tex = tb_get_brdf_tex(it->world);
   if (!tb_is_texture_ready(it->world, brdf_tex)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
-  tb_auto sys = ecs_field(it, TbViewSystem, 1);
+  tb_auto sys = ecs_field(it, TbViewSystem, 0);
 
   const uint32_t view_count = TB_DYN_ARR_SIZE(sys->views);
 
   if (view_count == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
@@ -527,32 +525,29 @@ void view_update_tick(ecs_iter_t *it) {
   }
   tb_rnd_update_descriptors(rnd_sys, view_count * write_count, writes);
 #endif
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_view_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register View Sys", true);
+  TB_TRACY_SCOPE("Register View Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbViewSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   tb_auto sys =
       create_view_system(world->gp_alloc, world->tmp_alloc, rnd_sys, rt_sys);
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbViewSystem), TbViewSystem, &sys);
 
-  ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem(TbViewSystem));
-  TracyCZoneEnd(ctx);
+  ECS_SYSTEM(ecs, view_update_tick, EcsOnStore, TbViewSystem($));
 }
 
 void tb_unregister_view_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   destroy_view_system(sys, rnd_sys);
   ecs_singleton_remove(ecs, TbViewSystem);
 }
@@ -636,7 +631,7 @@ const TbView *tb_get_view(TbViewSystem *self, TbViewId view) {
 }
 
 VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbViewSystem);
 #if TB_USE_DESC_BUFFER == 1
   return ctx->set_layout2;
 #else
@@ -646,7 +641,7 @@ VkDescriptorSetLayout tb_view_sys_get_set_layout(ecs_world_t *ecs) {
 
 VkDescriptorBufferBindingInfoEXT tb_view_sys_get_table_addr(ecs_world_t *ecs,
                                                             TbViewId view) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbViewSystem);
   tb_auto addr = ctx->desc_buffer.buffer.address;
   tb_auto set_size = ctx->desc_buffer.layout_size;
   // An address of 0 indicates an error

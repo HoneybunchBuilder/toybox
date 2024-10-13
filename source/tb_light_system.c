@@ -1,6 +1,7 @@
 #include "tb_light_system.h"
 
 #include "tb_camera_component.h"
+#include "tb_common.h"
 #include "tb_gltf.h"
 #include "tb_profiling.h"
 #include "tb_transform_component.h"
@@ -10,22 +11,20 @@
 ECS_COMPONENT_DECLARE(TbLightSystem);
 
 void light_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Light System", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Light System", TracyCategoryColorCore);
   ecs_world_t *ecs = it->world;
 
-  const TbLightSystem *light_sys = ecs_singleton_get(ecs, TbLightSystem);
-  TbViewSystem *view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  TbCameraComponent *cameras = ecs_field(it, TbCameraComponent, 1);
+  tb_auto light_sys = ecs_singleton_get(ecs, TbLightSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto cameras = ecs_field(it, TbCameraComponent, 0);
 
   for (int32_t cam_idx = 0; cam_idx < it->count; ++cam_idx) {
-    TbCameraComponent *camera = &cameras[cam_idx];
+    tb_auto camera = &cameras[cam_idx];
 
     ecs_iter_t light_it = ecs_query_iter(ecs, light_sys->dir_light_query);
     while (ecs_iter_next(&light_it)) {
-      TbDirectionalLightComponent *lights =
-          ecs_field(&light_it, TbDirectionalLightComponent, 1);
-      TbTransformComponent *transforms =
-          ecs_field(&light_it, TbTransformComponent, 2);
+      tb_auto lights = ecs_field(&light_it, TbDirectionalLightComponent, 0);
+      tb_auto transforms = ecs_field(&light_it, TbTransformComponent, 1);
 
       for (int32_t light_idx = 0; light_idx < light_it.count; ++light_idx) {
         TbDirectionalLightComponent *light = &lights[light_idx];
@@ -48,17 +47,16 @@ void light_update_tick(ecs_iter_t *it) {
       }
     }
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_light_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Light Sys", true);
+  TB_TRACY_SCOPE("Register Light Sys");
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLightSystem);
 
   TbLightSystem sys = {
       .dir_light_query =
-          ecs_query(ecs, {.filter.terms = {
+          ecs_query(ecs, {.terms = {
                               {.id = ecs_id(TbDirectionalLightComponent)},
                               {.id = ecs_id(TbTransformComponent)},
                           }})};
@@ -67,13 +65,12 @@ void tb_register_light_sys(TbWorld *world) {
   ecs_set_ptr(ecs, ecs_id(TbLightSystem), TbLightSystem, &sys);
 
   ECS_SYSTEM(ecs, light_update_tick, EcsPreStore, [in] TbCameraComponent);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_light_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbLightSystem *sys = ecs_singleton_get_mut(ecs, TbLightSystem);
+  TbLightSystem *sys = ecs_singleton_ensure(ecs, TbLightSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_singleton_remove(ecs, TbLightSystem);
 }

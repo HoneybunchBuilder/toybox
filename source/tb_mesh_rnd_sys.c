@@ -470,7 +470,7 @@ VkPipeline create_transparent_mesh_pipeline(void *args) {
 
 void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                     uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Opaque Prepass", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Opaque Prepass", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Prepass", 3, true);
   cmd_begin_label(buffer, "Opaque Prepass", (float4){0.0f, 0.0f, 1.0f, 1.0f});
 
@@ -482,7 +482,7 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
 
-    TracyCZoneNC(batch_ctx, "Record Mesh", TracyCategoryColorRendering, true);
+    TB_TRACY_SCOPEC("Record Mesh", TracyCategoryColorRendering);
     cmd_begin_label(buffer, "Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -518,20 +518,16 @@ void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
       tb_auto draw = &((const TbIndirectDraw *)batch->draws)[draw_idx];
-      TracyCZoneNC(draw_ctx, "Record Indirect Draw",
-                   TracyCategoryColorRendering, true);
+      TB_TRACY_SCOPEC("Record Indirect Draw", TracyCategoryColorRendering);
       vkCmdDrawIndirect(buffer, draw->buffer, draw->offset, draw->draw_count,
                         draw->stride);
-      TracyCZoneEnd(draw_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCZoneEnd(batch_ctx);
   }
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
@@ -545,7 +541,7 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
       continue;
     }
 
-    TracyCZoneNC(batch_ctx, "Record Mesh", TracyCategoryColorRendering, true);
+    TB_TRACY_SCOPEC("Record Mesh", TracyCategoryColorRendering);
     cmd_begin_label(buffer, "Mesh Batch", (float4){0.0f, 0.0f, 0.8f, 1.0f});
 
     VkPipelineLayout layout = batch->layout;
@@ -585,34 +581,29 @@ void mesh_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 #endif
 
     for (uint32_t draw_idx = 0; draw_idx < batch->draw_count; ++draw_idx) {
-      TracyCZoneNC(draw_ctx, "Record Indirect Draw",
-                   TracyCategoryColorRendering, true);
+      TB_TRACY_SCOPEC("Record Indirect Draw", TracyCategoryColorRendering);
       tb_auto draw = &((const TbIndirectDraw *)batch->draws)[draw_idx];
       vkCmdDrawIndirect(buffer, draw->buffer, draw->offset, draw->draw_count,
                         draw->stride);
-      TracyCZoneEnd(draw_ctx);
     }
 
     cmd_end_label(buffer);
-    TracyCZoneEnd(batch_ctx);
   }
 }
 
 void opaque_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                         uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Opaque Mesh Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Opaque Mesh Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Opaque Meshes", 3, true);
   cmd_begin_label(buffer, "Opaque Meshes", (float4){0.0f, 0.0f, 1.0f, 1.0f});
   mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                              uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "Transparent Mesh Record", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("Transparent Mesh Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Transparent Meshes", 3,
                     true);
   cmd_begin_label(buffer, "Transparent Meshes",
@@ -620,7 +611,6 @@ void transparent_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   mesh_record_common(gpu_ctx, buffer, batch_count, batches);
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
@@ -831,44 +821,39 @@ void destroy_mesh_system(ecs_world_t *ecs, TbMeshSystem *self) {
 }
 
 void mesh_draw_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Mesh Draw Tick", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Mesh Draw Tick", TracyCategoryColorRendering);
   ecs_world_t *ecs = it->world;
 
-  ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
-
-  tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 1);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto mesh_sys = ecs_field(it, TbMeshSystem, 0);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
 
   // If any shaders aren't ready just bail
   if (!tb_is_shader_ready(ecs, mesh_sys->opaque_shader) ||
       !tb_is_shader_ready(ecs, mesh_sys->transparent_shader) ||
       !tb_is_shader_ready(ecs, mesh_sys->prepass_shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
   // For each camera
   tb_auto camera_it = ecs_query_iter(ecs, mesh_sys->camera_query);
   while (ecs_query_next(&camera_it)) {
-    tb_auto cameras = ecs_field(&camera_it, TbCameraComponent, 1);
+    tb_auto cameras = ecs_field(&camera_it, TbCameraComponent, 0);
     for (int32_t cam_idx = 0; cam_idx < camera_it.count; ++cam_idx) {
-      TracyCZoneN(cam_ctx, "Camera", 1);
+      TB_TRACY_SCOPE("Camera");
       tb_auto camera = &cameras[cam_idx];
       tb_auto view_id = camera->view_id;
 #if TB_USE_DESC_BUFFER == 1
       tb_auto view_addr = tb_view_sys_get_table_addr(ecs, view_id);
       // Skip camera if view set isn't ready
       if (view_addr.address == VK_NULL_HANDLE) {
-        TracyCZoneEnd(cam_ctx);
         continue;
       }
 #else
       tb_auto view_set = tb_view_system_get_descriptor(view_sys, view_id);
       // Skip camera if view set isn't ready
       if (view_set == VK_NULL_HANDLE) {
-        TracyCZoneEnd(cam_ctx);
         continue;
       }
 #endif
@@ -878,12 +863,12 @@ void mesh_draw_tick(ecs_iter_t *it) {
 
       // Run query to determine how many meshes so we can pre-allocate space for
       // batches
-      TracyCZoneN(count_ctx, "Count Meshes", true);
+      TB_TRACY_SCOPE("Count Meshes");
       tb_auto mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
       uint32_t opaque_draw_count = 0;
       uint32_t trans_draw_count = 0;
       while (ecs_query_next(&mesh_it)) {
-        tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 0);
         for (tb_auto mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
           TbMesh2 mesh = meshes[mesh_idx].mesh2;
 
@@ -924,11 +909,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
         }
       }
       mesh_it = ecs_query_iter(ecs, mesh_sys->mesh_query);
-      TracyCZoneEnd(count_ctx);
-
       const uint32_t max_draw_count = opaque_draw_count + trans_draw_count;
       if (max_draw_count == 0) {
-        TracyCZoneEnd(cam_ctx);
         continue;
       }
 
@@ -1017,65 +999,66 @@ void mesh_draw_tick(ecs_iter_t *it) {
       }
 #endif
 
-      TracyCZoneN(ctx2, "Iterate Meshes", true);
-      while (ecs_query_next(&mesh_it)) {
-        tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 1);
-        tb_auto render_objects = ecs_field(&mesh_it, TbRenderObject, 2);
-        for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
-          tb_auto mesh = meshes[mesh_idx].mesh2;
-          tb_auto ro = render_objects[mesh_idx];
+      {
+        TB_TRACY_SCOPE("Iterate Meshes");
+        while (ecs_query_next(&mesh_it)) {
+          tb_auto meshes = ecs_field(&mesh_it, TbMeshComponent, 0);
+          tb_auto render_objects = ecs_field(&mesh_it, TbRenderObject, 1);
+          for (int32_t mesh_idx = 0; mesh_idx < mesh_it.count; ++mesh_idx) {
+            tb_auto mesh = meshes[mesh_idx].mesh2;
+            tb_auto ro = render_objects[mesh_idx];
 
-          if (!tb_is_mesh_ready(it->world, mesh)) {
-            continue;
-          }
+            if (!tb_is_mesh_ready(it->world, mesh)) {
+              continue;
+            }
 
-          tb_auto mesh_desc_idx = *ecs_get(it->world, mesh, TbMeshIndex);
+            tb_auto mesh_desc_idx = *ecs_get(it->world, mesh, TbMeshIndex);
 
-          tb_auto submesh_itr = ecs_children(it->world, mesh);
-          while (ecs_children_next(&submesh_itr)) {
-            for (int32_t sm_i = 0; sm_i < submesh_itr.count; ++sm_i) {
-              TbSubMesh2 sm_ent = submesh_itr.entities[sm_i];
-              if (!ecs_has(it->world, sm_ent, TbSubMesh2Data)) {
-                TB_CHECK(false,
-                         "Submesh entity unexpectedly lacked submesh data");
-                continue;
+            tb_auto submesh_itr = ecs_children(it->world, mesh);
+            while (ecs_children_next(&submesh_itr)) {
+              for (int32_t sm_i = 0; sm_i < submesh_itr.count; ++sm_i) {
+                TbSubMesh2 sm_ent = submesh_itr.entities[sm_i];
+                if (!ecs_has(it->world, sm_ent, TbSubMesh2Data)) {
+                  TB_CHECK(false,
+                           "Submesh entity unexpectedly lacked submesh data");
+                  continue;
+                }
+                tb_auto sm = ecs_get(it->world, sm_ent, TbSubMesh2Data);
+                // Material must be loaded and ready
+                if (!tb_is_material_ready(ecs, sm->material)) {
+                  continue;
+                }
+
+                // Deduce whether to write to opaque or transparent data
+                tb_auto draw_cmds = opaque_draw_cmds;
+                tb_auto draw_count = &opaque_cmd_count;
+                tb_auto draw_data = opaque_draw_data;
+                if (tb_is_mat_transparent(ecs, sm->material)) {
+                  draw_cmds = trans_draw_cmds;
+                  draw_count = &trans_cmd_count;
+                  draw_data = trans_draw_data;
+                }
+
+                // Write a command and a piece of draw data into the buffers
+                tb_auto draw_idx = *draw_count;
+                draw_cmds[draw_idx] = (VkDrawIndirectCommand){
+                    .vertexCount = sm->index_count,
+                    .instanceCount = 1,
+                };
+                draw_data[draw_idx] = (TbGLTFDrawData){
+                    .perm = sm->vertex_perm,
+                    .obj_idx = ro.index,
+                    .mesh_idx = mesh_desc_idx,
+                    .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
+                    .index_offset = sm->index_offset,
+                    .vertex_offset = sm->vertex_offset,
+                };
+                (*draw_count) += 1;
               }
-              tb_auto sm = ecs_get(it->world, sm_ent, TbSubMesh2Data);
-              // Material must be loaded and ready
-              if (!tb_is_material_ready(ecs, sm->material)) {
-                continue;
-              }
-
-              // Deduce whether to write to opaque or transparent data
-              tb_auto draw_cmds = opaque_draw_cmds;
-              tb_auto draw_count = &opaque_cmd_count;
-              tb_auto draw_data = opaque_draw_data;
-              if (tb_is_mat_transparent(ecs, sm->material)) {
-                draw_cmds = trans_draw_cmds;
-                draw_count = &trans_cmd_count;
-                draw_data = trans_draw_data;
-              }
-
-              // Write a command and a piece of draw data into the buffers
-              tb_auto draw_idx = *draw_count;
-              draw_cmds[draw_idx] = (VkDrawIndirectCommand){
-                  .vertexCount = sm->index_count,
-                  .instanceCount = 1,
-              };
-              draw_data[draw_idx] = (TbGLTFDrawData){
-                  .perm = sm->vertex_perm,
-                  .obj_idx = ro.index,
-                  .mesh_idx = mesh_desc_idx,
-                  .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
-                  .index_offset = sm->index_offset,
-                  .vertex_offset = sm->vertex_offset,
-              };
-              (*draw_count) += 1;
             }
           }
         }
       }
-      TracyCZoneEnd(ctx2);
 
 #if TB_USE_DESC_BUFFER == 1
       VkDescriptorBufferBindingInfoEXT opaque_draw_addr =
@@ -1263,7 +1246,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
 #endif
 
       {
-        TracyCZoneN(ctx2, "Submit Batches", true);
+        TB_TRACY_SCOPE("Submit Batches");
         if (opaque_data_size > 0) {
           TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx2;
           tb_render_pipeline_issue_draw_batch(rp_sys, prepass_ctx2, 1,
@@ -1278,51 +1261,57 @@ void mesh_draw_tick(ecs_iter_t *it) {
           tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2, 1,
                                               &trans_batch);
         }
-        TracyCZoneEnd(ctx2);
       }
-
-      TracyCZoneEnd(cam_ctx);
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_mesh_sys(TbWorld *world) {
-  TracyCZoneNC(ctx, "Register Mesh Sys", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Register Mesh Sys", TracyCategoryColorRendering);
   ecs_world_t *ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbMeshSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
 
   tb_auto sys = create_mesh_system_internal(
       ecs, world->gp_alloc, world->tmp_alloc, rnd_sys, view_sys, rp_sys);
-  sys.camera_query = ecs_query(ecs, {.filter.terms = {
-                                         {.id = ecs_id(TbCameraComponent)},
-                                     }});
-  sys.mesh_query = ecs_query(ecs, {.filter.terms = {
-                                       {.id = ecs_id(TbMeshComponent)},
-                                       {.id = ecs_id(TbRenderObject)},
-                                   }});
+  sys.camera_query =
+      ecs_query(ecs, {
+                         .terms =
+                             {
+                                 {.id = ecs_id(TbCameraComponent)},
+                             },
+                         .cache_kind = EcsQueryCacheAuto,
+                     });
+  sys.mesh_query = ecs_query(ecs, {
+                                      .terms =
+                                          {
+                                              {.id = ecs_id(TbMeshComponent)},
+                                              {.id = ecs_id(TbRenderObject)},
+                                          },
+                                      .cache_kind = EcsQueryCacheAuto,
+                                  });
   sys.dir_light_query =
-      ecs_query(ecs, {.filter.terms = {
-                          {.id = ecs_id(TbDirectionalLightComponent)},
-                      }});
+      ecs_query(ecs, {
+                         .terms =
+                             {
+                                 {.id = ecs_id(TbDirectionalLightComponent)},
+                             },
+                         .cache_kind = EcsQueryCacheAuto,
+                     });
 
   // Sets a singleton by ptr
   ecs_set_ptr(ecs, ecs_id(TbMeshSystem), TbMeshSystem, &sys);
 
-  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem(TbMeshSystem));
-
-  TracyCZoneEnd(ctx);
+  ECS_SYSTEM(ecs, mesh_draw_tick, EcsOnStore, TbMeshSystem($));
 }
 
 void tb_unregister_mesh_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  TbMeshSystem *sys = ecs_singleton_get_mut(ecs, TbMeshSystem);
+  TbMeshSystem *sys = ecs_singleton_ensure(ecs, TbMeshSystem);
   ecs_query_fini(sys->dir_light_query);
   ecs_query_fini(sys->mesh_query);
   ecs_query_fini(sys->camera_query);

@@ -43,8 +43,7 @@ int32_t main(int32_t argc, char *argv[]) {
   {
     // This hint must be set before init for xbox controllers to work
     SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
-    tb_auto init_flags =
-        SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC;
+    tb_auto init_flags = SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC;
     if (!SDL_Init(init_flags)) {
       TB_LOG_ERROR(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL: %s",
                    SDL_GetError());
@@ -89,8 +88,7 @@ int32_t main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   while (running) {
-    TracyCZoneN(trcy_ctx, "Simulation Frame", true);
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+    TB_TRACY_SCOPEC("Simulation Frame", TracyCategoryColorCore);
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter() - start_time;
@@ -101,14 +99,11 @@ int32_t main(int32_t argc, char *argv[]) {
 
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false; // NOLINT
-      TracyCZoneEnd(trcy_ctx);
       break;
     }
 
     // Reset the arena allocator
     arena = tb_reset_arena(arena, true); // Just allow it to grow for now
-
-    TracyCZoneEnd(trcy_ctx);
   }
   return 0;
 

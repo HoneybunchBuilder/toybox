@@ -16,7 +16,7 @@ typedef struct TbShaderCompleteArgs {
 } TbShaderCompleteArgs;
 
 void tb_shader_complete_task(const void *args) {
-  TracyCZoneN(ctx, "Shader Complete Task", true);
+  TB_TRACY_SCOPE("Shader Complete Task");
 
   tb_auto complete_args = (TbShaderCompleteArgs *)args;
 
@@ -24,8 +24,6 @@ void tb_shader_complete_task(const void *args) {
   tb_auto ent = complete_args->ent;
   ecs_set(ecs, ent, TbPipeline, {complete_args->pipeline});
   ecs_add_id(ecs, ent, TbShaderCompiled);
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbShaderCompileTaskArgs {
@@ -38,7 +36,7 @@ typedef struct TbShaderCompileTaskArgs {
 } TbShaderCompileTaskArgs;
 
 void tb_shader_compile_task(const void *args) {
-  TracyCZoneN(ctx, "Shader Compile Task", true);
+  TB_TRACY_SCOPE("Shader Compile Task");
 
   tb_auto task_args = (TbShaderCompileTaskArgs *)args;
   VkPipeline pipe = task_args->compile_fn(task_args->compile_args);
@@ -52,16 +50,15 @@ void tb_shader_compile_task(const void *args) {
 
   // We're only responsible for the compile args
   tb_free(tb_global_alloc, task_args->compile_args);
-  TracyCZoneEnd(ctx);
 }
 
 TbShader tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
                         void *args, size_t args_size) {
-  TracyCZoneN(ctx, "Create Shader Load task", true);
+  TB_TRACY_SCOPE("Create Shader Load Task");
 
   tb_auto enki = *ecs_singleton_get(ecs, TbTaskScheduler);
 
-  TbShader ent = ecs_new_entity(ecs, 0);
+  TbShader ent = ecs_new(ecs);
   ecs_set(ecs, ent, TbPipeline, {0});
 
   // Need to make a copy of the args into a thread-safe pool
@@ -83,8 +80,6 @@ TbShader tb_shader_load(ecs_world_t *ecs, TbShaderCompileFn compile_fn,
                                sizeof(TbShaderCompileTaskArgs));
 
   ecs_set(ecs, ent, TbTask, {task});
-
-  TracyCZoneEnd(ctx);
   return ent;
 }
 
@@ -127,10 +122,9 @@ VkPipeline tb_shader_get_pipeline(ecs_world_t *ecs, TbShader ent) {
 }
 
 void tb_register_shader_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Shader Sys", true);
+  TB_TRACY_SCOPE("Register Shader Sys");
   ECS_COMPONENT_DEFINE(world->ecs, TbPipeline);
   ECS_TAG_DEFINE(world->ecs, TbShaderCompiled);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_shader_sys(TbWorld *world) { (void)world; }

@@ -10,13 +10,13 @@
 #include <flecs.h>
 
 void noclip_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Noclip Update System", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Noclip Update System", TracyCategoryColorCore);
   ecs_world_t *ecs = it->world;
 
-  TbInputSystem *input = ecs_singleton_get_mut(ecs, TbInputSystem);
+  tb_auto input = ecs_singleton_ensure(ecs, TbInputSystem);
 
-  TbTransformComponent *transforms = ecs_field(it, TbTransformComponent, 1);
-  TbNoClipComponent *noclips = ecs_field(it, TbNoClipComponent, 2);
+  tb_auto transforms = ecs_field(it, TbTransformComponent, 0);
+  tb_auto noclips = ecs_field(it, TbNoClipComponent, 1);
 
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto transform = &transforms[i];
@@ -91,16 +91,12 @@ void noclip_update_tick(ecs_iter_t *it) {
     tb_rotate(&transform->transform, angular_velocity);
     tb_transform_mark_dirty(it->world, entity);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_noclip_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Noclip Sys", true);
-  ecs_world_t *ecs = world->ecs;
-
-  ECS_SYSTEM(ecs, noclip_update_tick,
+  TB_TRACY_SCOPE("Register Noclip Sys");
+  ECS_SYSTEM(world->ecs, noclip_update_tick,
              EcsOnUpdate, [out] TbTransformComponent, [out] TbNoClipComponent);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_noclip_sys(TbWorld *world) { (void)world; }

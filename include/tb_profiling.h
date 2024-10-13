@@ -37,6 +37,12 @@ typedef struct TracyCGPUScope TracyCGPUScope;
 extern "C" {
 #endif
 
+// Classic macro expansion hack to append __COUNTER__ to a variable name
+// Necessary for creating unique symbols for each scope
+#define TB_CAT2(x, y) x##y
+#define TB_CAT(x, y) TB_CAT2(x, y)
+#define TB_COUNTER(x) TB_CAT(x, __COUNTER__)
+
 // A cleanup function used by TB_TRACY_SCOPE
 void tb_tracy_zone_end(TracyCZoneCtx *ctx);
 
@@ -74,7 +80,7 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
   static const struct ___tracy_source_location_data TracyConcat(               \
       __tracy_source_location, TracyLine) = {name, __func__, TracyFile,        \
                                              (uint32_t)TracyLine, 0};          \
-  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx ctx##__COUNTER__ = \
+  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx TB_COUNTER(ctx) =  \
       ___tracy_emit_zone_begin_callstack(                                      \
           &TracyConcat(__tracy_source_location, TracyLine), TRACY_CALLSTACK,   \
           true);
@@ -83,7 +89,7 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
   static const struct ___tracy_source_location_data TracyConcat(               \
       __tracy_source_location, TracyLine) = {name, __func__, TracyFile,        \
                                              (uint32_t)TracyLine, color};      \
-  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx ctx##__COUNTER__ = \
+  __attribute__((cleanup(tb_tracy_zone_end))) TracyCZoneCtx TB_COUNTER(ctx) =  \
       ___tracy_emit_zone_begin_callstack(                                      \
           &TracyConcat(__tracy_source_location, TracyLine), TRACY_CALLSTACK,   \
           true);

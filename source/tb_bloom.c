@@ -18,7 +18,7 @@ typedef struct TbBloomShaderArgs {
 
 void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Downsample Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("Downsample Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Downsample", 3, true);
   cmd_begin_label(buffer, "Downsample", (float4){0.0f, 0.5f, 0.0f, 1.0f});
 
@@ -41,7 +41,6 @@ void record_downsample(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 VkResult create_downsample_set_layout(TbRenderSystem *rnd_sys,

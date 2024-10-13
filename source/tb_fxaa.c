@@ -33,7 +33,7 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
   if (batch_count != 1) {
     return;
   }
-  TracyCZoneNC(ctx, "FXAA Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("FXAA Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "FXAA", 3, true);
   cmd_begin_label(buffer, "FXAA", (float4){0.4f, 0.0f, 0.8f, 1.0f});
 
@@ -52,23 +52,21 @@ void record_fxaa(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void tick_fxaa_draw(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "FXAA Draw Tick", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("FXAA Draw Tick", TracyCategoryColorRendering);
   tb_auto ecs = it->world;
 
-  tb_auto self = ecs_field(it, TbFXAASystem, 1);
+  tb_auto self = ecs_field(it, TbFXAASystem, 0);
 
   if (!tb_is_shader_ready(ecs, self->shader)) {
-    TracyCZoneEnd(ctx);
     return;
   }
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   // Descriptor set writes
   {
@@ -127,8 +125,6 @@ void tick_fxaa_draw(ecs_iter_t *it) {
     };
     tb_render_pipeline_issue_draw_batch(rp_sys, self->draw_ctx, 1, &batch);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 typedef struct TbFXAAPipelineArgs {
@@ -256,13 +252,13 @@ VkPipeline create_fxaa_shader(const TbFXAAPipelineArgs *args) {
 }
 
 void tb_register_fxaa_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register FXAA Sys", true);
+  TB_TRACY_SCOPE("Register FXAA Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbFXAASystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
 
   TbFXAASystem sys = {0};
   // Create Set Layout
@@ -324,25 +320,24 @@ void tb_register_fxaa_sys(TbWorld *world) {
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbFXAASystem), TbFXAASystem, &sys);
 
-  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem(TbFXAASystem));
+  ECS_SYSTEM(ecs, tick_fxaa_draw, EcsOnStore, TbFXAASystem($));
 
   // Create Pipeline afterwards because we depend on the FXAA system being
   // in the ecs already before we can call tb_shader_load
   {
-    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbFXAASystem);
+    tb_auto sys_ptr = ecs_singleton_ensure(ecs, TbFXAASystem);
     TbFXAAPipelineArgs args = {rnd_sys, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_fxaa_shader, &args,
                        sizeof(TbFXAAPipelineArgs));
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_fxaa_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbFXAASystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbFXAASystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   tb_rnd_destroy_set_layout(rnd_sys, sys->set_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
   tb_shader_destroy(ecs, sys->shader);

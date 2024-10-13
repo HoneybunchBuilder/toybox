@@ -62,12 +62,13 @@ static const char *tb_fxaa_items[] = {
 };
 
 void tick_settings_ui(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Tick Settings UI");
   tb_auto ecs = it->world;
-  tb_auto settings = ecs_field(it, TbSettings, 1);
+  tb_auto settings = ecs_field(it, TbSettings, 0);
 
   if (settings->coreui && *settings->coreui) {
     if (igBegin("Settings", settings->coreui, 0)) {
-      tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
+      tb_auto fxaa = ecs_singleton_ensure(ecs, TbFXAASystem);
 
       if (igCombo_Str_arr("FXAA", &settings->fxaa_option, tb_fxaa_items, 5,
                           5)) {
@@ -105,7 +106,7 @@ void tick_settings_ui(ecs_iter_t *it) {
 }
 
 void tb_register_settings_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Settings Sys", true);
+  TB_TRACY_SCOPE("Register Settings Sys");
   tb_auto ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbSettings);
@@ -118,18 +119,16 @@ void tb_register_settings_sys(TbWorld *world) {
   // HACK: This puts a soft dependency on initialization order.
   // Assuming this function will be called after the fxaa system is already
   // registered
-  tb_auto fxaa = ecs_singleton_get_mut(ecs, TbFXAASystem);
+  tb_auto fxaa = ecs_singleton_ensure(ecs, TbFXAASystem);
   fxaa->settings = settings.fxaa;
 
-  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
   settings.coreui = tb_coreui_register_menu(coreui, "Settings");
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbSettings), TbSettings, &settings);
 
   ECS_SYSTEM(ecs, tick_settings_ui, EcsOnUpdate, TbSettings(TbSettings));
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_settings_sys(TbWorld *world) {

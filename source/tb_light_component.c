@@ -17,7 +17,7 @@ bool tb_load_light_comp(ecs_world_t *ecs, ecs_entity_t ent,
   (void)data;
   (void)json;
 
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
   tb_auto light = node->light;
 
   if (light->type == cgltf_light_type_directional) {
