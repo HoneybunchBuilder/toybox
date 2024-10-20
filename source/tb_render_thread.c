@@ -776,6 +776,7 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
       .pNext = &vk_rob2_features,
       .meshShader = VK_TRUE,
+      .multiviewMeshShader = VK_TRUE,
   };
 
   VkPhysicalDeviceVulkan13Features vk_13_features = {
