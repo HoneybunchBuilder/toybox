@@ -1,0 +1,64 @@
+#include "tb_common.slangh"
+#include "tb_gltf.slangh"
+#include "tb_intrin.slangh"
+
+GLTF_VIEW_SET(0);
+GLTF_DRAW_SET(1);
+TB_MESHLET_SET(2);
+TB_OBJECT_SET(3);
+TB_IDX_SET(4)
+TB_POS_SET(5);
+
+// TODO: Can we drive these from specialization constants?
+#define NUM_THREADS_X 96
+#define NUM_THREADS_Y 1
+#define NUM_THREADS_Z 1
+
+#define MAX_NUM_VERTS 252
+#define MAX_NUM_PRIMS (MAX_NUM_VERTS / 3)
+
+struct VertexOut {
+  float4 clip_pos : SV_POSITION;
+};
+
+[outputtopology("triangle")]
+[numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)] 
+void mesh(
+    uint32_t gtid :SV_GroupThreadID, 
+    uint32_t gid : SV_GroupIndex,
+    out vertices VertexOut verts[MAX_NUM_VERTS],
+    out indices uint3 triangles[MAX_NUM_PRIMS]) {
+  uint32_t draw_idx = tb_get_draw_index();
+  TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
+
+  uint32_t obj_idx = draw.obj_idx;
+  uint32_t mesh_idx = draw.mesh_idx;
+  uint32_t meshlet_idx = draw.meshlet_idx + gid;
+
+  TbMeshlet meshlet = tb_get_meshlet(meshlets, meshlet_idx);
+  TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
+
+  // Set number of outputs
+  SetMeshOutputCounts(meshlet.vert_count, meshlet.prim_count);
+
+  if (gtid < meshlet.vert_count) {
+    uint32_t local_idx = gtid + meshlet.vert_offset;
+    uint32_t vert_idx = local_idx + draw.index_offset;
+    uint32_t idx = tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
+
+    int3 local_pos =
+        tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
+    float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
+    float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
+
+    VertexOut vert = {};
+    vert.clip_pos = clip_pos;
+    verts[gtid] = vert;
+  }
+
+  if (gtid < meshlet.prim_count) {
+    triangles[gid] = tb_get_meshlet_primitive(prim_indices, meshlet, gtid);
+  }
+}
+
+void frag(VertexOut vert) {}

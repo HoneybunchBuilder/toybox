@@ -58,7 +58,7 @@ TB_GPU_STRUCT_DECL(TbGLTFDrawData, {
   uint32_t mat_idx;
   uint32_t index_offset;
   uint32_t vertex_offset;
-  uint32_t pad0;
+  uint32_t meshlet_idx;
   uint32_t pad1;
 });
 

@@ -42,11 +42,23 @@ TB_GPU_STRUCT_DECL(TbCommonObjectData, { float4x4 m; });
 #define TB_INPUT_PERM_WEIGHT 0x00000020
 #define TB_INPUT_PERM_COUNT 6
 
+TB_GPU_STRUCT_DECL(TbMeshlet, {
+  uint32_t vert_count;
+  uint32_t vert_offset;
+  uint32_t prim_count;
+  uint32_t prim_offset;
+});
+
 // If a shader, provide some helper functions
 #ifdef TB_SHADER
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables
+#define TB_MESHLET_SET(b)                                                      \
+  [[vk::binding(0, b)]]                                                        \
+  StructuredBuffer<TbMeshlet> meshlets;                                        \
+  [[vk::binding(1, b)]]                                                        \
+  StructuredBuffer<uint32_t> prim_indices;
 #define TB_TEXTURE_SET(b)                                                      \
   [[vk::binding(0, b)]]                                                        \
   Texture2D gltf_textures[];
@@ -118,6 +130,21 @@ int2 tb_vert_get_uv0(int32_t perm, int32_t index, int32_t mesh,
     return buffers[mesh][index];
   }
   return 0;
+}
+
+uint3 tb_unpack_primitive(uint primitive) {
+  // Unpacks a 10 bits per index triangle from a 32-bit uint.
+  return uint3(primitive & 0x3FF, (primitive >> 10) & 0x3FF,
+               (primitive >> 20) & 0x3FF);
+}
+
+TbMeshlet tb_get_meshlet(StructuredBuffer<TbMeshlet> meshlets, uint32_t index) {
+  return meshlets[index];
+}
+
+uint3 tb_get_meshlet_primitive(StructuredBuffer<uint32_t> indices, TbMeshlet m,
+                               uint32_t index) {
+  return tb_unpack_primitive(indices[m.prim_offset + index]);
 }
 
 float4 aa_to_quat(float4 aa) {
