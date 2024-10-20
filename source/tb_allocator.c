@@ -10,55 +10,45 @@
 
 static void *global_alloc(void *user_data, size_t size) {
   (void)user_data;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Global Alloc", TracyCategoryColorMemory);
   void *ptr = mi_calloc(1, size);
   TracyCAllocN(ptr, size, "Global Alloc");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *global_alloc_aligned(void *user_data, size_t size,
                                   size_t alignment) {
   (void)user_data;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Global Alloc Aligned", TracyCategoryColorMemory);
   void *ptr = mi_calloc_aligned(1, size, alignment);
   TracyCAllocN(ptr, size, "Global Alloc");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *global_realloc(void *user_data, void *original, size_t size) {
   (void)user_data;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Global Realloc", TracyCategoryColorMemory);
   TracyCFreeN(original, "Global Alloc");
   void *ptr = mi_recalloc(original, 1, size);
   TracyCAllocN(ptr, size, "Global Alloc");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *global_realloc_aligned(void *user_data, void *original,
                                     size_t size, size_t alignment) {
   (void)user_data;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Global Realloc Aligned", TracyCategoryColorMemory);
   TracyCFreeN(original, "Global Alloc");
   void *ptr = mi_recalloc_aligned(original, 1, size, alignment);
   TracyCAllocN(ptr, size, "Global Alloc");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void global_free(void *user_data, void *ptr) {
   (void)user_data;
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Global Free", TracyCategoryColorMemory);
   TracyCFreeN(ptr, "Global Alloc");
   mi_free(ptr);
-  TracyCZoneEnd(ctx);
 }
 
 TbAllocator tb_global_alloc = {
@@ -73,68 +63,46 @@ _Thread_local mi_heap_t *thread_heap = NULL;
 
 static void *thread_alloc(void *user_data, size_t size) {
   (void)user_data;
-  // TracyCZone(ctx, true);
-  // TracyCZoneColor(ctx, TracyCategoryColorMemory);
   if (thread_heap == NULL) {
     thread_heap = mi_heap_new();
   }
   void *ptr = mi_heap_malloc(thread_heap, size);
-  // TracyCAllocN(ptr, size, "Thread Alloc");
-  // TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *thread_alloc_aligned(void *user_data, size_t size,
                                   size_t alignment) {
   (void)user_data;
-  // TracyCZone(ctx, true);
-  // TracyCZoneColor(ctx, TracyCategoryColorMemory);
   if (thread_heap == NULL) {
     thread_heap = mi_heap_new();
   }
   void *ptr = mi_heap_calloc_aligned(thread_heap, 1, size, alignment);
-  // TracyCAllocN(ptr, size, "Thread Alloc");
-  // TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *thread_realloc(void *user_data, void *original, size_t size) {
   (void)user_data;
-  // TracyCZone(ctx, true);
-  // TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  // TracyCFreeN(original, "Thread Alloc");
   if (thread_heap == NULL) {
     thread_heap = mi_heap_new();
   }
   void *ptr = mi_heap_recalloc(thread_heap, original, 1, size);
-  // TracyCAllocN(ptr, size, "Thread Alloc");
-  // TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *thread_realloc_aligned(void *user_data, void *original,
                                     size_t size, size_t alignment) {
   (void)user_data;
-  // TracyCZone(ctx, true);
-  // TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  // TracyCFreeN(original, "Thread Alloc");
   if (thread_heap == NULL) {
     thread_heap = mi_heap_new();
   }
   void *ptr =
       mi_heap_recalloc_aligned(thread_heap, original, 1, size, alignment);
-  // TracyCAllocN(ptr, size, "Thread Alloc");
-  // TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void thread_free(void *user_data, void *ptr) {
   (void)user_data;
-  // TracyCZone(ctx, true);
-  // TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  // TracyCFreeN(ptr, "Thread Alloc");
   mi_free(ptr);
-  // TracyCZoneEnd(ctx);
 }
 
 _Thread_local TbAllocator tb_thread_alloc = {
@@ -146,8 +114,7 @@ _Thread_local TbAllocator tb_thread_alloc = {
 };
 
 static void *arena_alloc(void *user_data, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Arena Alloc", TracyCategoryColorMemory);
   TbArenaAllocator *arena = (TbArenaAllocator *)user_data;
   size_t cur_size = arena->size;
   if (cur_size + size >= arena->max_size) {
@@ -168,7 +135,6 @@ static void *arena_alloc(void *user_data, size_t size) {
   SDL_assert((intptr_t)ptr % 16 == 0);
 
   arena->size += (size + padding);
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
@@ -229,8 +195,7 @@ void tb_create_arena_alloc(const char *name, TbArenaAllocator *a,
 }
 
 TbArenaAllocator tb_reset_arena(TbArenaAllocator a, bool allow_grow) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Reset Arena", TracyCategoryColorMemory);
   if (allow_grow && a.grow) {
     a.max_size *= 2;
 
@@ -243,7 +208,6 @@ TbArenaAllocator tb_reset_arena(TbArenaAllocator a, bool allow_grow) {
   a.size = 0;
 
   assert(a.data);
-  TracyCZoneEnd(ctx);
   return a;
 }
 
@@ -254,58 +218,48 @@ void tb_destroy_arena_alloc(TbArenaAllocator a) {
 }
 
 static void *standard_alloc(void *user_data, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Standard Alloc", TracyCategoryColorMemory);
   TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   void *ptr = mi_heap_recalloc(alloc->heap, NULL, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *standard_alloc_aligned(void *user_data, size_t size,
                                     size_t alignment) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Standard Alloc Aligned", TracyCategoryColorMemory);
   TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   void *ptr = mi_heap_calloc_aligned(alloc->heap, 1, size, alignment);
   TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *standard_realloc(void *user_data, void *original, size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Standard Realloc", TracyCategoryColorMemory);
   TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr = mi_heap_recalloc(alloc->heap, original, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *standard_realloc_aligned(void *user_data, void *original,
                                       size_t size, size_t alignment) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Standard Realloc Aligned", TracyCategoryColorMemory);
   TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr =
       mi_heap_recalloc_aligned(alloc->heap, original, 1, size, alignment);
   TracyCAllocN(ptr, size, alloc->name);
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void standard_free(void *user_data, void *ptr) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("Standard Free", TracyCategoryColorMemory);
   TbGeneralAllocator *alloc = (TbGeneralAllocator *)user_data;
   (void)alloc;
   TracyCFreeN(ptr, alloc->name);
   mi_free(ptr);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_create_gen_alloc(TbGeneralAllocator *a, const char *name) {

@@ -168,15 +168,15 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
 
   tb_auto ecs = it->world;
 
-  tb_auto enki = *ecs_field(it, TbTaskScheduler, 1);
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
-  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 3);
-  tb_auto usages = ecs_field(it, TbMaterialUsage, 4);
+  tb_auto enki = *ecs_field(it, TbTaskScheduler, 0);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
+  tb_auto reqs = ecs_field(it, TbMaterialGLTFLoadRequest, 2);
+  tb_auto usages = ecs_field(it, TbMaterialUsage, 3);
 
   // TODO: Time slice the time spent creating tasks
   // Iterate texture load tasks
   for (int32_t i = 0; i < it->count; ++i) {
-    if (SDL_AtomicGet(&tb_parallel_mat_load_count) >
+    if (SDL_GetAtomicInt(&tb_parallel_mat_load_count) >
         TbMaxParallelMaterialLoads) {
       break;
     }
@@ -219,11 +219,12 @@ void tb_queue_gltf_mat_loads(ecs_iter_t *it) {
 
 void tb_upload_gltf_mats(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Material Uploads");
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 2);
 
-  tb_auto materials = ecs_field(it, TbMaterialData, 3);
-  tb_auto usages = ecs_field(it, TbMaterialUsage, 4);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 0);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
+  tb_auto materials = ecs_field(it, TbMaterialData, 2);
+  tb_auto usages = ecs_field(it, TbMaterialUsage, 3);
+
   for (int32_t i = 0; i < it->count; ++i) {
     if (i >= TbMaxMaterialUploadsPerFrame) {
       break;
@@ -267,9 +268,9 @@ void tb_upload_gltf_mats(ecs_iter_t *it) {
 void tb_finalize_materials(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Finalize Materials");
 
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto materials = ecs_field(it, TbMaterialData, 3);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto materials = ecs_field(it, TbMaterialData, 2);
 
   if (mat_ctx->owned_mat_count == 0 || it->count == 0) {
     return;
@@ -315,8 +316,8 @@ void tb_finalize_materials(ecs_iter_t *it) {
 
 void tb_update_material_pool(ecs_iter_t *it) {
   TB_TRACY_SCOPE("Update Material Pool");
-  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto mat_ctx = ecs_field(it, TbMaterialCtx, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
   // Tick the pool in case any new materials require us to expand the pool
   tb_tick_dyn_desc_pool(rnd_sys, &mat_ctx->desc_pool);
 }
@@ -335,28 +336,26 @@ void tb_register_material_sys(TbWorld *world) {
   ECS_TAG_DEFINE(ecs, TbMaterialLoaded);
   ECS_TAG_DEFINE(ecs, TbMaterialUploaded);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
-  ECS_SYSTEM(ecs, tb_queue_gltf_mat_loads, EcsPostLoad,
-             TbTaskScheduler(TbTaskScheduler), TbMaterialCtx(TbMaterialCtx),
-             [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
+  ECS_SYSTEM(
+      ecs, tb_queue_gltf_mat_loads, EcsPostLoad,
+      TbTaskScheduler(TbTaskScheduler),
+      TbMaterialCtx($), [in] TbMaterialGLTFLoadRequest, [in] TbMaterialUsage);
 
-  ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate,
-             TbRenderSystem(TbRenderSystem), TbMaterialCtx(TbMaterialCtx),
-             [in] TbMaterialData, [in] TbMaterialUsage, [in] TbMaterialLoaded,
-             !TbMaterialUploaded);
+  ECS_SYSTEM(ecs, tb_upload_gltf_mats, EcsPreUpdate, TbRenderSystem($),
+             TbMaterialCtx($), [in] TbMaterialData, [in] TbMaterialUsage,
+             [in] TbMaterialLoaded, !TbMaterialUploaded);
 
   ECS_SYSTEM(ecs, tb_finalize_materials,
-             EcsPostUpdate, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem), [in] TbMaterialData,
-             [in] TbMaterialUploaded, !TbDescriptorReady);
+             EcsPostUpdate, [in] TbMaterialCtx($), [in] TbRenderSystem($),
+             [in] TbMaterialData, [in] TbMaterialUploaded, !TbDescriptorReady);
   ECS_SYSTEM(ecs, tb_update_material_pool,
-             EcsPreStore, [in] TbMaterialCtx(TbMaterialCtx),
-             [in] TbRenderSystem(TbRenderSystem));
+             EcsPreStore, [in] TbMaterialCtx($), [in] TbRenderSystem($));
 
   TbMaterialCtx ctx = {0};
 
-  SDL_AtomicSet(&tb_parallel_mat_load_count, 0);
+  SDL_SetAtomicInt(&tb_parallel_mat_load_count, 0);
 
   // Create immutable sampler for materials
   {
@@ -448,8 +447,8 @@ void tb_register_material_sys(TbWorld *world) {
 
 void tb_unregister_material_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
 
   tb_rnd_destroy_set_layout(rnd_sys, ctx->set_layout);
 
@@ -473,15 +472,15 @@ TB_REGISTER_SYS(tb, material, TB_MAT_SYS_PRIO)
 bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
                            TbMaterialUsage usage, TbMaterialDomain domain,
                            void *default_data, size_t size) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   // Copy data onto the global allocator so it can be safely freed
   // from a thread
   uint8_t *data_copy = tb_alloc_nm_tp(tb_global_alloc, size, uint8_t);
   SDL_memcpy(data_copy, default_data, size);
 
-  TbMaterial default_mat = ecs_new_entity(ecs, 0);
+  TbMaterial default_mat = ecs_new(ecs);
   ecs_set(ecs, default_mat, TbMaterialUsage, {usage});
   ecs_add(ecs, default_mat, TbMaterialLoaded);
 
@@ -522,18 +521,18 @@ bool tb_register_mat_usage(ecs_world_t *ecs, const char *domain_name,
 }
 
 VkDescriptorSetLayout tb_mat_sys_get_set_layout(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
   return ctx->set_layout;
 }
 
 VkDescriptorSet tb_mat_sys_get_set(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->desc_pool);
 }
 
 VkDescriptorBufferBindingInfoEXT tb_mat_sys_get_table_addr(ecs_world_t *ecs) {
-  tb_auto ctx = ecs_singleton_get_mut(ecs, TbMaterialCtx);
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMaterialCtx);
   return tb_desc_buff_get_binding(&ctx->desc_buffer);
 }
 
@@ -542,7 +541,7 @@ TbMaterial tb_mat_sys_load_gltf_mat(ecs_world_t *ecs, const cgltf_data *data,
   /*
     If we are in a deferred ecs state (in the middle of the execution of a
   system) we would not be able to determine if a material entity already
-exists or not. So the calling system *must* be no_readonly and we will have to
+exists or not. So the calling system *must* be immediate and we will have to
   manually check if we need to stop suspending commands.
   Otherwise a system that attempts to add the same material twice will not be
   looking at the correct version of the ECS state when trying to determine if
@@ -567,7 +566,7 @@ an entity for a material already exists
   }
 
   // Create a material entity
-  mat_ent = ecs_new_entity(ecs, 0);
+  mat_ent = ecs_new(ecs);
   ecs_set_name(ecs, mat_ent, name);
 
   // It is a child of the texture system context singleton

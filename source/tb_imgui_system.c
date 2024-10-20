@@ -195,7 +195,7 @@ VkPipeline create_imgui_pipeline(const TbImGuiPipelineArgs *args) {
 
 void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                        uint32_t batch_count, const TbDrawBatch *batches) {
-  TracyCZoneNC(ctx, "ImGui Record", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("ImGui Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "ImGui", 3, true);
   cmd_begin_label(buffer, "ImGui", (float4){0.8f, 0.0f, 0.8f, 1.0f});
 
@@ -232,7 +232,6 @@ void imgui_pass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 VkResult ui_context_init(TbRenderSystem *rnd_sys, ImFontAtlas *atlas,
@@ -516,13 +515,12 @@ void destroy_imgui_system(TbImGuiSystem *self, TbRenderSystem *rnd_sys) {
 }
 
 void imgui_input_sys(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "ImGui Input System", TracyCategoryColorUI, true);
+  TB_TRACY_SCOPEC("ImGui Input System", TracyCategoryColorUI);
 
-  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
-
-  tb_auto input_sys = ecs_field(it, TbInputSystem, 2);
-  tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 3);
-  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 4);
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 0);
+  tb_auto input_sys = ecs_field(it, TbInputSystem, 1);
+  tb_auto rt_sys = ecs_field(it, TbRenderTargetSystem, 2);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 3);
 
   if (ig_sys->context_count == 0 || it->delta_time == 0) {
     return;
@@ -579,16 +577,13 @@ void imgui_input_sys(ecs_iter_t *it) {
         (float)target_ext.height,
     };
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void imgui_descriptor_sys(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "ImGui Descritor System", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("ImGui Descritor System", TracyCategoryColorRendering);
 
-  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
 
   if (ig_sys->context_count == 0 || it->delta_time == 0) {
     return;
@@ -651,19 +646,16 @@ void imgui_descriptor_sys(ecs_iter_t *it) {
     };
   }
   tb_rnd_update_descriptors(rnd_sys, ig_sys->context_count, writes);
-
-  TracyCZoneEnd(ctx);
 }
 
 void imgui_draw_sys(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "ImGui Draw System", TracyCategoryColorRendering, true);
+  TB_TRACY_SCOPEC("ImGui Draw System", TracyCategoryColorRendering);
 
-  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 1);
-  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 2);
-  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 3);
+  tb_auto ig_sys = ecs_field(it, TbImGuiSystem, 0);
+  tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
+  tb_auto rp_sys = ecs_field(it, TbRenderPipelineSystem, 2);
 
   if (ig_sys->context_count == 0 || it->delta_time == 0) {
-    TracyCZoneEnd(ctx);
     return;
   }
   const uint32_t ctx_count = ig_sys->context_count;
@@ -687,8 +679,6 @@ void imgui_draw_sys(ecs_iter_t *it) {
         igSetCurrentContext(ui_ctx->context);
         igRender();
       }
-
-      TracyCZoneEnd(ctx);
       return;
     }
   }
@@ -742,7 +732,6 @@ void imgui_draw_sys(ecs_iter_t *it) {
         if (tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, imgui_size, 0x40,
                                            &tmp_offset,
                                            &tmp_ptr) != VK_SUCCESS) {
-          TracyCZoneEnd(ctx);
           return;
         }
         const uint32_t imgui_draw_count = draw_data->CmdListsCount;
@@ -854,19 +843,17 @@ void imgui_draw_sys(ecs_iter_t *it) {
     tb_render_pipeline_issue_draw_batch(rp_sys, ig_sys->imgui_draw_ctx,
                                         batch_count, batches);
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_imgui_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register ImGUI Sys", true);
+  TB_TRACY_SCOPE("Register ImGUI Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbImGuiSystem);
 
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
-  tb_auto rp_sys = ecs_singleton_get_mut(ecs, TbRenderPipelineSystem);
-  tb_auto rt_sys = ecs_singleton_get_mut(ecs, TbRenderTargetSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  tb_auto rp_sys = ecs_singleton_ensure(ecs, TbRenderPipelineSystem);
+  tb_auto rt_sys = ecs_singleton_ensure(ecs, TbRenderTargetSystem);
 
   // HACK: This sucks. Do we even care about custom atlases anymore?
   TbImGuiSystem sys =
@@ -888,33 +875,29 @@ void tb_register_imgui_sys(TbWorld *world) {
     VkFormat ui_target_format =
         tb_render_target_get_format(rt_sys, ui_info.attachment);
 
-    tb_auto sys_ptr = ecs_singleton_get_mut(ecs, TbImGuiSystem);
+    tb_auto sys_ptr = ecs_singleton_ensure(ecs, TbImGuiSystem);
     TbImGuiPipelineArgs args = {rnd_sys, ui_target_format, sys.pipe_layout};
     sys_ptr->shader =
         tb_shader_load(ecs, (TbShaderCompileFn)&create_imgui_pipeline, &args,
                        sizeof(TbImGuiPipelineArgs));
   }
 
-  ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem(TbImGuiSystem),
-             TbInputSystem(TbInputSystem),
-             TbRenderTargetSystem(TbRenderTargetSystem),
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
+  ECS_SYSTEM(ecs, imgui_input_sys, EcsOnLoad, TbImGuiSystem($),
+             TbInputSystem($), TbRenderTargetSystem($),
+             TbRenderPipelineSystem($));
 
-  ECS_SYSTEM(ecs, imgui_descriptor_sys, EcsPreStore,
-             TbImGuiSystem(TbImGuiSystem), TbRenderSystem(TbRenderSystem));
+  ECS_SYSTEM(ecs, imgui_descriptor_sys, EcsPreStore, TbImGuiSystem($),
+             TbRenderSystem($));
 
-  ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem(TbImGuiSystem),
-             TbRenderSystem(TbRenderSystem),
-             TbRenderPipelineSystem(TbRenderPipelineSystem));
-
-  TracyCZoneEnd(ctx);
+  ECS_SYSTEM(ecs, imgui_draw_sys, EcsOnStore, TbImGuiSystem($),
+             TbRenderSystem($), TbRenderPipelineSystem($));
 }
 
 void tb_unregister_imgui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
 
-  tb_auto ig_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
-  tb_auto rnd_sys = ecs_singleton_get_mut(ecs, TbRenderSystem);
+  tb_auto ig_sys = ecs_singleton_ensure(ecs, TbImGuiSystem);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
 
   tb_shader_destroy(ecs, ig_sys->shader);
 

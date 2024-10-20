@@ -53,8 +53,8 @@ void coreui_show_about(bool *open) {
 }
 
 void coreui_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Core UI System Tick", TracyCategoryColorUI, true);
-  TbCoreUISystem *sys = ecs_field(it, TbCoreUISystem, 1);
+  TB_TRACY_SCOPEC("Core UI System Tick", TracyCategoryColorUI);
+  TbCoreUISystem *sys = ecs_field(it, TbCoreUISystem, 0);
 
   if (sys->imgui->context_count > 0) {
     const TbUIContext *ui_ctx = &sys->imgui->contexts[0];
@@ -79,36 +79,32 @@ void coreui_update_tick(ecs_iter_t *it) {
       igShowMetricsWindow(sys->metrics);
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void destroy_core_ui_sys(ecs_iter_t *it) {
-  TbCoreUISystem *sys = ecs_field(it, TbCoreUISystem, 1);
+  tb_auto sys = ecs_field(it, TbCoreUISystem, 0);
   destroy_coreui_system(sys);
 }
 
 void tb_register_core_ui_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Core UI Sys", true);
+  TB_TRACY_SCOPE("Register Core UI Sys");
   ecs_world_t *ecs = world->ecs;
 
   ECS_COMPONENT_DEFINE(ecs, TbCoreUISystem);
 
-  TbImGuiSystem *imgui_sys = ecs_singleton_get_mut(ecs, TbImGuiSystem);
-  TbCoreUISystem sys =
+  tb_auto imgui_sys = ecs_singleton_ensure(ecs, TbImGuiSystem);
+  tb_auto sys =
       create_coreui_system(world->gp_alloc, world->tmp_alloc, imgui_sys);
 
   // Sets a singleton based on the value at a pointer
   ecs_set_ptr(ecs, ecs_id(TbCoreUISystem), TbCoreUISystem, &sys);
 
-  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate,
-             TbCoreUISystem(TbCoreUISystem));
-  TracyCZoneEnd(ctx);
+  ECS_SYSTEM(ecs, coreui_update_tick, EcsOnUpdate, TbCoreUISystem($));
 }
 
 void tb_unregister_core_ui_sys(TbWorld *world) {
   ecs_world_t *ecs = world->ecs;
-  TbCoreUISystem *sys = ecs_singleton_get_mut(ecs, TbCoreUISystem);
+  TbCoreUISystem *sys = ecs_singleton_ensure(ecs, TbCoreUISystem);
   *sys = (TbCoreUISystem){0};
   ecs_singleton_remove(ecs, TbCoreUISystem);
 }

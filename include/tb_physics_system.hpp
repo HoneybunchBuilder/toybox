@@ -4,17 +4,17 @@
 #include "tb_physics_system.h"
 #include "tb_rigidbody_component.h"
 
+#include <memory>
+
 namespace JPH {
 class PhysicsSystem;
 class TempAllocator;
 class JobSystem;
 } // namespace JPH
 
-struct ecs_query_t;
 namespace flecs {
-typedef ecs_query_t query_t;
+struct query_base;
 } // namespace flecs
-
 class ObjectLayerPairFilterImpl;
 class BPLayerInterfaceImpl;
 class ObjectVsBroadPhaseLayerFilterImpl;
@@ -29,7 +29,7 @@ struct TbPhysicsSystem {
   JPH::TempAllocator *jolt_tmp_alloc;
   TbJobSystem *jolt_job_sys;
 
-  flecs::query_t *rigidbody_query;
+  flecs::query_base *rigidbody_query;
 
   BPLayerInterfaceImpl *bpl_interface;
   ObjectVsBroadPhaseLayerFilterImpl *obp_filter;

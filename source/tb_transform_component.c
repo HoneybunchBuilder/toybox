@@ -11,8 +11,7 @@ ECS_TAG_DECLARE(TbTransformDirty);
 ECS_COMPONENT_DECLARE(TbTransformComponent);
 
 float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity) {
-  TracyCZoneNC(ctx, "TbTransform Get World Matrix", TracyCategoryColorCore,
-               true);
+  TB_TRACY_SCOPEC("Transform Get World Matrix", TracyCategoryColorCore);
   tb_auto comp = ecs_get_mut(ecs, entity, TbTransformComponent);
   if (ecs_has(ecs, entity, TbTransformDirty)) {
     comp->world_matrix = tb_transform_to_matrix(&comp->transform);
@@ -31,15 +30,12 @@ float4x4 tb_transform_get_world_matrix(ecs_world_t *ecs, ecs_entity_t entity) {
     ecs_remove(ecs, entity, TbTransformDirty);
     ecs_modified(ecs, entity, TbTransformComponent);
   }
-
-  TracyCZoneEnd(ctx);
   return comp->world_matrix;
 }
 
 TbTransform tb_transform_get_world_trans(ecs_world_t *ecs,
                                          ecs_entity_t entity) {
-  TracyCZoneNC(ctx, "TbTransform Get World TbTransform", TracyCategoryColorCore,
-               true);
+  TB_TRACY_SCOPEC("Transform Get World TbTransform", TracyCategoryColorCore);
 
   tb_auto comp = ecs_get(ecs, entity, TbTransformComponent);
   tb_auto world = comp->transform;
@@ -53,13 +49,11 @@ TbTransform tb_transform_get_world_trans(ecs_world_t *ecs,
     world = tb_transform_combine(&world, &parent_comp->transform);
     parent = ecs_get_parent(ecs, parent);
   }
-
-  TracyCZoneEnd(ctx);
   return world;
 }
 
 void tb_transform_mark_dirty(ecs_world_t *ecs, ecs_entity_t entity) {
-  TracyCZoneNC(ctx, "TbTransform Set Dirty", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("TbTransform Set Dirty", TracyCategoryColorCore);
   ecs_add(ecs, entity, TbTransformDirty);
   tb_auto child_it = ecs_children(ecs, entity);
   while (ecs_children_next(&child_it)) {
@@ -71,7 +65,6 @@ void tb_transform_mark_dirty(ecs_world_t *ecs, ecs_entity_t entity) {
   // needs to be updated
   tb_render_object_mark_dirty(ecs, entity);
   ecs_modified(ecs, entity, TbTransformComponent);
-  TracyCZoneEnd(ctx);
 }
 
 void tb_transform_update(ecs_world_t *ecs, ecs_entity_t entity,

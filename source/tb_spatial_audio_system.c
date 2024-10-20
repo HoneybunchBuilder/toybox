@@ -47,7 +47,7 @@ void tb_spatial_audio_log(IPLLogLevel level, const char *message) {
 }
 
 void tb_register_spatial_audio_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Spatial Audio Sys", true);
+  TB_TRACY_SCOPEC("Register Spatial Audio Sys", TracyCategoryColorAudio);
 
   ECS_COMPONENT_DEFINE(world->ecs, TbSpatialAudioSystem);
 
@@ -89,12 +89,10 @@ void tb_register_spatial_audio_sys(TbWorld *world) {
   */
 
   ecs_singleton_set_ptr(world->ecs, TbSpatialAudioSystem, &sys);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_spatial_audio_sys(TbWorld *world) {
-  tb_auto sys = ecs_singleton_get_mut(world->ecs, TbSpatialAudioSystem);
+  tb_auto sys = ecs_singleton_ensure(world->ecs, TbSpatialAudioSystem);
   iplHRTFRelease(&sys->hrtf);
   iplContextRelease(&sys->ctx);
   *sys = (TbSpatialAudioSystem){0};

@@ -166,12 +166,15 @@ void update_tp_movement(flecs::world &ecs, float delta_time,
   }
 }
 
-void tp_movement_update_tick(flecs::iter &it,
-                             TbThirdPersonMovementComponent *move) {
+void tp_movement_update_tick(flecs::iter &it) {
   auto ecs = it.world();
   const auto &input_sys = *ecs.get<TbInputSystem>();
-  for (auto i : it) {
-    update_tp_movement(ecs, it.delta_time(), input_sys, move[i], it.entity(i));
+  while (it.next()) {
+    auto move = it.field<TbThirdPersonMovementComponent>(0);
+    for (auto i : it) {
+      update_tp_movement(ecs, it.delta_time(), input_sys, move[i],
+                         it.entity(i));
+    }
   }
 }
 
@@ -182,7 +185,7 @@ void tb_register_third_person_sys(TbWorld *world) {
 
   ecs.system<TbThirdPersonMovementComponent>("ThirdPersonMovementSystem")
       .kind(EcsOnUpdate)
-      .iter(tp_movement_update_tick);
+      .run(tp_movement_update_tick);
 }
 
 void tb_unregister_third_person_sys(TbWorld *world) { (void)world; }

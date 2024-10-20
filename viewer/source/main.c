@@ -43,8 +43,7 @@ int32_t main(int32_t argc, char *argv[]) {
   {
     // This hint must be set before init for xbox controllers to work
     SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
-    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMEPAD |
-                           SDL_INIT_HAPTIC);
+    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC);
     if (res != 0) {
       SDL_TriggerBreakpoint();
       return -1;
@@ -88,13 +87,12 @@ int32_t main(int32_t argc, char *argv[]) {
 
   while (running) {
     TracyCFrameMarkStart("Simulation Frame");
-    TracyCZoneN(trcy_ctx, "Simulation Frame", true);
-    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
+    TB_TRACY_SCOPEC("Simulation Frame", TracyCategoryColorCore);
 
     // Before we tick the world go check the ViewerSystem and see if the user
     // requested that we change scene. In which case we perform a load before
     // ticking
-    TbViewerSystem *viewer = ecs_singleton_get_mut(world.ecs, TbViewerSystem);
+    TbViewerSystem *viewer = ecs_singleton_ensure(world.ecs, TbViewerSystem);
     if (viewer) {
       // Order matters; we can get both signals at once
       if (viewer->unload_scene_signal) {
@@ -119,7 +117,6 @@ int32_t main(int32_t argc, char *argv[]) {
     // Tick the world
     if (!tb_tick_world(&world, delta_time_seconds)) {
       running = false; // NOLINT
-      TracyCZoneEnd(trcy_ctx);
       TracyCFrameMarkEnd("Simulation Frame");
       break;
     }
@@ -127,7 +124,6 @@ int32_t main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     arena = tb_reset_arena(arena, true); // Just allow it to grow for now
 
-    TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Simulation Frame");
   }
   return 0;
