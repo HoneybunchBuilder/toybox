@@ -101,6 +101,11 @@ typedef struct TbMeshSystem {
   TbShader transparent_shader;
   TbShader prepass_shader;
 
+  // Next-gen mesh shaders
+  VkDescriptorSetLayout meshlet_set_layout;
+  VkPipelineLayout prepass_mesh_layout;
+  TbShader prepass_mesh_shader;
+
   // Re-used by shadows
   TbDrawBatch *opaque_batch;
 

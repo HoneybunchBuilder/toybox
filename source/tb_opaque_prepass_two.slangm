@@ -1,13 +1,14 @@
-#include "tb_common.slangh"
 #include "tb_gltf.slangh"
 #include "tb_intrin.slangh"
 
-GLTF_VIEW_SET(0);
+[[vk::binding(0, 0)]]
+ConstantBuffer<TbViewData> camera_data;
 GLTF_DRAW_SET(1);
 TB_MESHLET_SET(2);
 TB_OBJECT_SET(3);
-TB_IDX_SET(4)
+TB_IDX_SET(4);
 TB_POS_SET(5);
+TB_NORM_SET(6);
 
 // TODO: Can we drive these from specialization constants?
 #define NUM_THREADS_X 96
@@ -19,6 +20,7 @@ TB_POS_SET(5);
 
 struct VertexOut {
   float4 clip_pos : SV_POSITION;
+  float3 normal : NORMAL0;
 };
 
 [outputtopology("triangle")]
@@ -29,7 +31,7 @@ void mesh(
     out vertices VertexOut verts[MAX_NUM_VERTS],
     out indices uint3 triangles[MAX_NUM_PRIMS]) {
   uint32_t draw_idx = tb_get_draw_index();
-  TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
+  TbGLTFDrawData draw = draw_data[draw_idx];
 
   uint32_t obj_idx = draw.obj_idx;
   uint32_t mesh_idx = draw.mesh_idx;
@@ -51,8 +53,12 @@ void mesh(
     float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
     float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
 
+    float3 normal = tb_vert_get_normal(draw.perm, idx, mesh_idx, norm_buffers);
+    float3x3 orientation = (float3x3)obj_data.m;
+
     VertexOut vert = {};
     vert.clip_pos = clip_pos;
+    vert.normal = mul(orientation, normal); // convert to world-space normal
     verts[gtid] = vert;
   }
 
@@ -61,4 +67,7 @@ void mesh(
   }
 }
 
-void frag(VertexOut vert) {}
+float4 frag(VertexOut vert) : SV_TARGET {
+  float3 N = normalize(vert.normal) * 0.5 + 0.5; // Convert to UNORM
+  return float4(N, 1);
+}

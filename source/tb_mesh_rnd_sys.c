@@ -31,6 +31,8 @@
 #include "tb_gltf_frag.h"
 #include "tb_gltf_vert.h"
 #include "tb_opaque_prepass_frag.h"
+#include "tb_opaque_prepass_two_frag.h"
+#include "tb_opaque_prepass_two_mesh.h"
 #include "tb_opaque_prepass_vert.h"
 #pragma clang diagnostic pop
 
@@ -57,6 +59,140 @@ typedef struct TbMeshShaderArgs {
   VkFormat color_format;
   VkPipelineLayout pipe_layout;
 } TbMeshShaderArgs;
+
+VkPipeline create_prepass_mesh_pipeline(void *args) {
+  TB_TRACY_SCOPE("Create Prepass Mesh Shader Pipeline");
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
+  VkShaderModule mesh_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    };
+    create_info.codeSize = sizeof(tb_opaque_prepass_two_mesh);
+    create_info.pCode = (const uint32_t *)tb_opaque_prepass_two_mesh;
+    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Mesh",
+                         &mesh_mod);
+
+    create_info.codeSize = sizeof(tb_opaque_prepass_two_frag);
+    create_info.pCode = (const uint32_t *)tb_opaque_prepass_two_frag;
+    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag (Mesh)",
+                         &frag_mod);
+  }
+
+  VkFormat color_format = VK_FORMAT_R8G8B8A8_UNORM;
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
+                  .module = mesh_mod,
+                  .pName = "main",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "main",
+              },
+          },
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = &(VkViewport){0, 600.0f, 800.0f, -600.0f, 0, 1},
+              .scissorCount = 1,
+              .pScissors = &(VkRect2D){{0, 0}, {800, 600}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE, // We cull in the shader
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
+                  .blendEnable = VK_FALSE,
+                  .colorWriteMask =
+                      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+              }},
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS,
+#endif
+              .maxDepthBounds = 1.0f,
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates =
+                  (VkDynamicState[2]){
+                      VK_DYNAMIC_STATE_VIEWPORT,
+                      VK_DYNAMIC_STATE_SCISSOR,
+                  },
+          },
+      .layout = pipe_layout,
+  };
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Opaque Prepass Mesh Shader Pipeline",
+                                   &pipeline);
+
+  tb_rnd_destroy_shader(rnd_sys, mesh_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
+}
 
 VkPipeline create_prepass_pipeline(void *args) {
   TB_TRACY_SCOPE("Create Prepass Pipeline");
@@ -651,6 +787,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                       .descriptorCount = 1,
                       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                    VK_SHADER_STAGE_MESH_BIT_EXT |
                                     VK_SHADER_STAGE_FRAGMENT_BIT,
                   },
               },
@@ -662,7 +799,6 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
 
     // Create prepass pipeline layout
     {
-
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = 6,
@@ -684,15 +820,74 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
 
     // Create prepass pipeline
     {
-      VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-
       TbMeshShaderArgs args = {
           .rnd_sys = rnd_sys,
-          .depth_format = depth_format,
+          .depth_format = VK_FORMAT_D32_SFLOAT,
           .pipe_layout = sys.prepass_layout,
       };
       sys.prepass_shader = tb_shader_load(ecs, create_prepass_pipeline, &args,
                                           sizeof(TbMeshShaderArgs));
+    }
+
+    // Create meshlet descriptor set layout
+    {
+      VkDescriptorSetLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+          .bindingCount = 2,
+          .pBindings =
+              (VkDescriptorSetLayoutBinding[2]){
+                  {
+                      .binding = 0,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
+                  },
+                  {
+                      .binding = 1,
+                      .descriptorCount = 1,
+                      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                      .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
+                  },
+              },
+      };
+      err = tb_rnd_create_set_layout(rnd_sys, &create_info, "Meshlet Layout",
+                                     &sys.meshlet_set_layout);
+      TB_VK_CHECK(err, "Failed to create meshlet set layout");
+    }
+
+    // Create prepass mesh shaders pipeline layout
+    {
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = 7,
+          .pSetLayouts =
+              (VkDescriptorSetLayout[7]){
+                  tb_view_sys_get_set_layout(ecs),
+                  sys.draw_set_layout,
+                  sys.meshlet_set_layout,
+                  tb_render_object_sys_get_set_layout(ecs),
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+              },
+      };
+      err = tb_rnd_create_pipeline_layout(
+          rnd_sys, &create_info,
+          "Opaque Depth Normal Prepass Mesh Shader Layout",
+          &sys.prepass_mesh_layout);
+      TB_VK_CHECK(err,
+                  "Failed to create opaque prepass mesh shader set layout");
+    }
+
+    // Create prepass mesh shader pipeline
+    {
+      TbMeshShaderArgs args = {
+          .rnd_sys = rnd_sys,
+          .depth_format = VK_FORMAT_D32_SFLOAT,
+          .pipe_layout = sys.prepass_mesh_layout,
+      };
+      sys.prepass_mesh_shader = tb_shader_load(
+          ecs, create_prepass_mesh_pipeline, &args, sizeof(TbMeshShaderArgs));
     }
 
     // Create pipeline layouts
@@ -803,8 +998,11 @@ void destroy_mesh_system(ecs_world_t *ecs, TbMeshSystem *self) {
   tb_shader_destroy(ecs, self->opaque_shader);
   tb_shader_destroy(ecs, self->transparent_shader);
   tb_shader_destroy(ecs, self->prepass_shader);
+  tb_shader_destroy(ecs, self->prepass_mesh_shader);
+
   tb_rnd_destroy_pipe_layout(rnd_sys, self->pipe_layout);
   tb_rnd_destroy_pipe_layout(rnd_sys, self->prepass_layout);
+  tb_rnd_destroy_pipe_layout(rnd_sys, self->prepass_mesh_layout);
 
   tb_destroy_descriptor_buffer(rnd_sys, &self->opaque_draw_descs);
   tb_destroy_descriptor_buffer(rnd_sys, &self->trans_draw_descs);
@@ -832,7 +1030,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
   // If any shaders aren't ready just bail
   if (!tb_is_shader_ready(ecs, mesh_sys->opaque_shader) ||
       !tb_is_shader_ready(ecs, mesh_sys->transparent_shader) ||
-      !tb_is_shader_ready(ecs, mesh_sys->prepass_shader)) {
+      !tb_is_shader_ready(ecs, mesh_sys->prepass_shader) ||
+      !tb_is_shader_ready(ecs, mesh_sys->prepass_mesh_shader)) {
     return;
   }
 

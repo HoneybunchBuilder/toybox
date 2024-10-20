@@ -424,7 +424,8 @@ void tb_register_material_sys(TbWorld *world) {
                 {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
                  &ctx.shadow_sampler},
                 {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, TB_DESC_POOL_CAP,
-                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+                 VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT |
+                     VK_SHADER_STAGE_MESH_BIT_EXT,
                  NULL},
             },
     };

@@ -919,7 +919,8 @@ void tb_register_mesh2_sys(TbWorld *world) {
                     .binding = 0,
                     .descriptorCount = TB_DESC_POOL_CAP,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT,
                 },
             },
     };
