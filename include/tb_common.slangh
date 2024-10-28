@@ -43,10 +43,10 @@ TB_GPU_STRUCT_DECL(TbCommonObjectData, { float4x4 m; });
 #define TB_INPUT_PERM_COUNT 6
 
 TB_GPU_STRUCT_DECL(TbMeshlet, {
-  uint32_t vert_count;
   uint32_t vert_offset;
-  uint32_t prim_count;
   uint32_t prim_offset;
+  uint32_t vert_count;
+  uint32_t prim_count;
 });
 
 // If a shader, provide some helper functions

@@ -144,8 +144,12 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
   // Determine how big this mesh is
   uint64_t index_size = 0;
+  uint64_t meshlets_size = 0;
   uint64_t geom_size = 0;
   uint64_t attr_size_per_type[cgltf_attribute_type_max_enum] = {0};
+  uint32_t max_meshlet_verts = 0;
+  uint32_t max_meshlet_tris = 0;
+  tb_get_cluster_sizing(&max_meshlet_verts, &max_meshlet_tris);
   {
     tb_auto stride = gltf_mesh->primitives[0].indices->stride;
     // Determine mesh index type
@@ -169,8 +173,12 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           tb_calc_aligned_size(indices->count, indices->stride, 16);
 
       index_size += idx_size;
-      vertex_count = prim->attributes[0].data->count;
 
+      uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
+          indices->count, max_meshlet_verts, max_meshlet_tris);
+      meshlets_size += (max_prim_meshlets * sizeof(TbMeshlet));
+
+      vertex_count = prim->attributes[0].data->count;
       for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
            ++attr_idx) {
         // Only care about certain attributes at the moment
@@ -196,12 +204,12 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
       }
     }
 
-    geom_size = index_size + vertex_size;
+    geom_size = index_size + meshlets_size + vertex_size;
   }
 
   uint64_t attr_offset_per_type[cgltf_attribute_type_max_enum] = {0};
   {
-    uint64_t offset = index_size;
+    uint64_t offset = index_size + meshlets_size;
     for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
       tb_auto attr_size = attr_size_per_type[i];
       if (attr_size > 0) {
@@ -245,6 +253,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
   // Read the cgltf mesh into the driver owned memory
   {
     uint64_t idx_offset = 0;
+    uint64_t meshlet_offset = index_size;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
@@ -281,6 +290,59 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
         SDL_memcpy(dst, src, src_size); // NOLINT
         idx_offset += padded_size;
+      }
+
+      // Generate Meshlets
+      {
+        uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
+            prim_idx_count, max_meshlet_verts, max_meshlet_tris);
+
+        // meshopt_Meshlet and TbMeshlet have the same layout but are not
+        // literally the same type
+        TB_DYN_ARR_OF(struct meshopt_Meshlet) meshlets = {0};
+        TB_DYN_ARR_OF(uint32_t) meshlet_verts = {0};
+        TB_DYN_ARR_OF(uint8_t) meshlet_tris = {0};
+
+        TB_DYN_ARR_RESET(meshlets, tb_thread_alloc, max_prim_meshlets);
+        TB_DYN_ARR_RESET(meshlet_verts, tb_thread_alloc,
+                         max_prim_meshlets * max_meshlet_verts);
+        TB_DYN_ARR_RESET(meshlet_tris, tb_thread_alloc,
+                         max_prim_meshlets * max_meshlet_tris * 3);
+        TB_DYN_ARR_RESIZE(meshlets, max_prim_meshlets);
+        TB_DYN_ARR_RESIZE(meshlet_verts, max_prim_meshlets * max_meshlet_verts);
+        TB_DYN_ARR_RESIZE(meshlet_tris,
+                          max_prim_meshlets * max_meshlet_tris * 3);
+
+        // Assuming that mesh data is already vertex cache optimized
+        // since meshopt compressed the mesh in the first place
+        uint64_t meshlet_count = meshopt_buildMeshletsScan(
+            meshlets.data, meshlet_verts.data, meshlet_tris.data, indices_data,
+            prim_idx_count, prim_vert_count, max_meshlet_verts,
+            max_meshlet_tris);
+
+        // Done with these indices
+        tb_free(tb_thread_alloc, indices_data);
+
+        for (uint64_t i = 0; i < meshlet_count; ++i) {
+          tb_auto meshlet = TB_DYN_ARR_AT(meshlets, i);
+          meshopt_optimizeMeshlet(&meshlet_verts.data[meshlet.vertex_offset],
+                                  &meshlet_tris.data[meshlet.triangle_offset],
+                                  meshlet.triangle_count, meshlet.vertex_count);
+        }
+
+        // Copy to meshlets region of geometry buffer
+        const uint64_t meshlet_buffer_size = sizeof(TbMeshlet) * meshlet_count;
+
+        void *src = meshlets.data;
+        void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
+        SDL_memcpy(dst, src, meshlet_buffer_size);
+
+        meshlet_offset += max_prim_meshlets * sizeof(TbMeshlet);
+
+        // Clean up arrays
+        TB_DYN_ARR_DESTROY(meshlets);
+        TB_DYN_ARR_DESTROY(meshlet_verts);
+        TB_DYN_ARR_DESTROY(meshlet_tris);
       }
 
       // Determine the order of attributes
@@ -330,51 +392,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         void *src = ((uint8_t *)view->data) + accessor->offset;
         void *dst = ((uint8_t *)(ptr)) + vtx_offset;
         SDL_memcpy(dst, src, src_size); // NOLINT
-      }
-
-      // Generate Meshlets
-      {
-        uint32_t max_verts = 0;
-        uint32_t max_tris = 0;
-        tb_get_cluster_sizing(&max_verts, &max_tris);
-        uint64_t max_meshlets =
-            meshopt_buildMeshletsBound(prim_idx_count, max_verts, max_tris);
-
-        TB_DYN_ARR_OF(struct meshopt_Meshlet) meshlets = {0};
-        TB_DYN_ARR_OF(uint32_t) meshlet_verts = {0};
-        TB_DYN_ARR_OF(uint8_t) meshlet_tris = {0};
-
-        TB_DYN_ARR_RESET(meshlets, tb_thread_alloc, max_meshlets);
-        TB_DYN_ARR_RESET(meshlet_verts, tb_thread_alloc,
-                         max_meshlets * max_verts);
-        TB_DYN_ARR_RESET(meshlet_tris, tb_thread_alloc,
-                         max_meshlets * max_tris * 3);
-        TB_DYN_ARR_RESIZE(meshlets, max_meshlets);
-        TB_DYN_ARR_RESIZE(meshlet_verts, max_meshlets * max_verts);
-        TB_DYN_ARR_RESIZE(meshlet_tris, max_meshlets * max_tris * 3);
-
-        // Assuming that mesh data is already vertex cache optimized
-        // since meshopt compressed the mesh in the first place
-        uint64_t meshlet_count = meshopt_buildMeshletsScan(
-            meshlets.data, meshlet_verts.data, meshlet_tris.data, indices_data,
-            prim_idx_count, prim_vert_count, max_verts, max_tris);
-
-        // Done with these indices
-        tb_free(tb_thread_alloc, indices_data);
-
-        for (uint64_t i = 0; i < meshlet_count; ++i) {
-          tb_auto meshlet = TB_DYN_ARR_AT(meshlets, i);
-          meshopt_optimizeMeshlet(&meshlet_verts.data[meshlet.vertex_offset],
-                                  &meshlet_tris.data[meshlet.triangle_offset],
-                                  meshlet.triangle_count, meshlet.vertex_count);
-        }
-
-        // TODO: Upload to GPU
-
-        // Clean up arrays
-        TB_DYN_ARR_DESTROY(meshlets);
-        TB_DYN_ARR_DESTROY(meshlet_verts);
-        TB_DYN_ARR_DESTROY(meshlet_tris);
       }
 
       vertex_count += prim->attributes[0].data->count;
