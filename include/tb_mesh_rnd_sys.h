@@ -51,6 +51,14 @@ typedef struct TbIndirectDraw {
   uint32_t stride;
 } TbIndirectDraw;
 
+typedef struct TbIndirectMeshDraw {
+  VkBuffer buffer;
+  uint64_t offset;
+  uint32_t draw_count;
+  uint32_t stride;
+  // TODO: fill out
+} TbIndirectMeshDraw;
+
 typedef struct TbPrimitiveBatch {
 #if TB_USE_DESC_BUFFER == 1
   VkDescriptorBufferBindingInfoEXT view_addr;
@@ -89,11 +97,12 @@ typedef struct TbMeshSystem {
   ecs_query_t *mesh_query;
   ecs_query_t *dir_light_query;
 
-  TbDrawContextId prepass_draw_ctx2;
-  TbDrawContextId opaque_draw_ctx2;
-  TbDrawContextId transparent_draw_ctx2;
+  TbDrawContextId prepass_draw_ctx;
+  TbDrawContextId opaque_draw_ctx;
+  TbDrawContextId transparent_draw_ctx;
 
   VkDescriptorSetLayout draw_set_layout;
+  // Old shader prims
   VkPipelineLayout pipe_layout;
   VkPipelineLayout prepass_layout;
 
@@ -103,7 +112,11 @@ typedef struct TbMeshSystem {
 
   // Next-gen mesh shaders
   VkDescriptorSetLayout meshlet_set_layout;
+  VkPipelineLayout mesh_pipe_layout;
   VkPipelineLayout prepass_mesh_layout;
+
+  TbShader opaque_mesh_shader;
+  TbShader transparent_mesh_shader;
   TbShader prepass_mesh_shader;
 
   // Re-used by shadows
@@ -121,6 +134,7 @@ extern ECS_COMPONENT_DECLARE(TbMeshSystem);
 void tb_register_mesh_sys(TbWorld *world);
 void tb_unregister_mesh_sys(TbWorld *world);
 
+VkDescriptorSet tb_mesh_system_get_meshlet_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_tan_set(TbMeshSystem *self);

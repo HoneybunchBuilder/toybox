@@ -29,6 +29,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 #include "tb_gltf_frag.h"
+#include "tb_gltf_two_frag.h"
+#include "tb_gltf_two_mesh.h"
 #include "tb_gltf_vert.h"
 #include "tb_opaque_prepass_frag.h"
 #include "tb_opaque_prepass_two_frag.h"
@@ -66,9 +68,9 @@ VkPipeline create_prepass_mesh_pipeline(void *args) {
   tb_auto rnd_sys = pipe_args->rnd_sys;
   tb_auto depth_format = pipe_args->depth_format;
   tb_auto pipe_layout = pipe_args->pipe_layout;
+
   VkShaderModule mesh_mod = VK_NULL_HANDLE;
   VkShaderModule frag_mod = VK_NULL_HANDLE;
-
   {
     VkShaderModuleCreateInfo create_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -80,7 +82,7 @@ VkPipeline create_prepass_mesh_pipeline(void *args) {
 
     create_info.codeSize = sizeof(tb_opaque_prepass_two_frag);
     create_info.pCode = (const uint32_t *)tb_opaque_prepass_two_frag;
-    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag (Mesh)",
+    tb_rnd_create_shader(rnd_sys, &create_info, "Opaque Prepass Frag2",
                          &frag_mod);
   }
 
@@ -604,6 +606,283 @@ VkPipeline create_transparent_mesh_pipeline(void *args) {
   return pipeline;
 }
 
+// For next gen mesh shaders
+VkPipeline create_opaque_mesh_pipeline2(void *args) {
+  TB_TRACY_SCOPE("Create Opaque Mesh Shader Pipeline");
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto color_format = pipe_args->color_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
+
+  // Load Shader Modules
+  VkShaderModule mesh_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(tb_gltf_two_mesh),
+        .pCode = (const uint32_t *)tb_gltf_two_mesh,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Mesh", &mesh_mod);
+  }
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(tb_gltf_two_frag),
+        .pCode = (const uint32_t *)tb_gltf_two_frag,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag2", &frag_mod);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
+                  .module = mesh_mod,
+                  .pName = "main",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "main",
+              }},
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = (VkViewport[1]){{0, 600.0f, 800.0f, -600.0f, 0, 1}},
+              .scissorCount = 1,
+              .pScissors = (VkRect2D[1]){{{0, 0}, {800, 600}}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+#endif
+              .maxDepthBounds = 1.0f,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments =
+                  (VkPipelineColorBlendAttachmentState[1]){
+                      {
+                          .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                            VK_COLOR_COMPONENT_G_BIT |
+                                            VK_COLOR_COMPONENT_B_BIT |
+                                            VK_COLOR_COMPONENT_A_BIT,
+                      },
+                  },
+          },
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+
+  // Create pipeline
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(rnd_sys, 1, &create_info,
+                                   "Opaque Mesh Shader Pipeline", &pipeline);
+
+  // Can destroy shader moduless
+  tb_rnd_destroy_shader(rnd_sys, mesh_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
+}
+
+VkPipeline create_transparent_mesh_pipeline2(void *args) {
+  TB_TRACY_SCOPE("Create Transparent Mesh Shader Pipeline");
+  tb_auto pipe_args = (const TbMeshShaderArgs *)args;
+  tb_auto rnd_sys = pipe_args->rnd_sys;
+  tb_auto depth_format = pipe_args->depth_format;
+  tb_auto color_format = pipe_args->color_format;
+  tb_auto pipe_layout = pipe_args->pipe_layout;
+
+  // Load Shader Modules
+  VkShaderModule mesh_mod = VK_NULL_HANDLE;
+  VkShaderModule frag_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(tb_gltf_two_mesh),
+        .pCode = (const uint32_t *)tb_gltf_two_mesh,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Mesh", &mesh_mod);
+  }
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(tb_gltf_two_frag),
+        .pCode = (const uint32_t *)tb_gltf_two_frag,
+    };
+    tb_rnd_create_shader(rnd_sys, &create_info, "GLTF Frag2", &frag_mod);
+  }
+
+  VkGraphicsPipelineCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+      .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
+      .pNext =
+          &(VkPipelineRenderingCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+              .colorAttachmentCount = 1,
+              .pColorAttachmentFormats = (VkFormat[1]){color_format},
+              .depthAttachmentFormat = depth_format,
+          },
+      .stageCount = 2,
+      .pStages =
+          (VkPipelineShaderStageCreateInfo[2]){
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
+                  .module = mesh_mod,
+                  .pName = "main",
+              },
+              {
+                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  .module = frag_mod,
+                  .pName = "main",
+              }},
+      .pVertexInputState =
+          &(VkPipelineVertexInputStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+          },
+      .pInputAssemblyState =
+          &(VkPipelineInputAssemblyStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+              .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+          },
+      .pViewportState =
+          &(VkPipelineViewportStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+              .viewportCount = 1,
+              .pViewports = (VkViewport[1]){{0, 600.0f, 800.0f, -600.0f, 0, 1}},
+              .scissorCount = 1,
+              .pScissors = (VkRect2D[1]){{{0, 0}, {800, 600}}},
+          },
+      .pRasterizationState =
+          &(VkPipelineRasterizationStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+              .polygonMode = VK_POLYGON_MODE_FILL,
+              .cullMode = VK_CULL_MODE_NONE,
+              .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+              .lineWidth = 1.0f,
+          },
+      .pMultisampleState =
+          &(VkPipelineMultisampleStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+              .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+          },
+      .pDepthStencilState =
+          &(VkPipelineDepthStencilStateCreateInfo){
+              .sType =
+                  VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+              .depthTestEnable = VK_TRUE,
+              .depthWriteEnable = VK_TRUE,
+#ifdef TB_USE_INVERSE_DEPTH
+              .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+#else
+              .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+#endif
+              .maxDepthBounds = 1.0f,
+          },
+      .pColorBlendState =
+          &(VkPipelineColorBlendStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+              .attachmentCount = 1,
+              .pAttachments = (VkPipelineColorBlendAttachmentState[1]){{
+                  .blendEnable = VK_TRUE,
+                  .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                  .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                  .colorBlendOp = VK_BLEND_OP_ADD,
+                  .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                  .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                  .alphaBlendOp = VK_BLEND_OP_ADD,
+                  .colorWriteMask =
+                      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+              }}},
+      .pDynamicState =
+          &(VkPipelineDynamicStateCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+              .dynamicStateCount = 2,
+              .pDynamicStates = (VkDynamicState[2]){VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR},
+          },
+      .layout = pipe_layout,
+  };
+
+  // Create pipeline
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  tb_rnd_create_graphics_pipelines(
+      rnd_sys, 1, &create_info, "Transparent Mesh Shader Pipeline", &pipeline);
+
+  // Can destroy shader moduless
+  tb_rnd_destroy_shader(rnd_sys, mesh_mod);
+  tb_rnd_destroy_shader(rnd_sys, frag_mod);
+
+  return pipeline;
+}
+
 void prepass_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                     uint32_t batch_count, const TbDrawBatch *batches) {
   TB_TRACY_SCOPEC("Opaque Prepass", TracyCategoryColorRendering);
@@ -916,6 +1195,34 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                                     "GLTF Pipeline Layout", &sys.pipe_layout);
     }
 
+    // Create mesh shader pipeline layouts
+    {
+      const uint32_t layout_count = 13;
+      VkPipelineLayoutCreateInfo create_info = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+          .setLayoutCount = layout_count,
+          .pSetLayouts =
+              (VkDescriptorSetLayout[layout_count]){
+                  tb_view_sys_get_set_layout(ecs),
+                  tb_mat_sys_get_set_layout(ecs),
+                  sys.draw_set_layout,
+                  sys.meshlet_set_layout,
+                  tb_render_object_sys_get_set_layout(ecs),
+                  tb_tex_sys_get_set_layout(ecs),
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+                  mesh_set_layout,
+              },
+      };
+      tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
+                                    "GLTF Mesh Shader Pipeline Layout",
+                                    &sys.mesh_pipe_layout);
+    }
+
     // Create opaque and transparent pipelines
     {
       uint32_t attach_count = 0;
@@ -957,6 +1264,16 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
       sys.transparent_shader =
           tb_shader_load(ecs, create_transparent_mesh_pipeline, &args,
                          sizeof(TbMeshShaderArgs));
+
+      TbMeshShaderArgs mesh_args = args;
+      mesh_args.pipe_layout = sys.mesh_pipe_layout;
+
+      sys.opaque_mesh_shader =
+          tb_shader_load(ecs, create_opaque_mesh_pipeline2, &mesh_args,
+                         sizeof(TbMeshShaderArgs));
+      sys.transparent_mesh_shader =
+          tb_shader_load(ecs, create_transparent_mesh_pipeline2, &mesh_args,
+                         sizeof(TbMeshShaderArgs));
     }
   }
 
@@ -971,19 +1288,19 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
 #endif
 
   // Register drawing with the pipelines
-  sys.prepass_draw_ctx2 = tb_render_pipeline_register_draw_context(
+  sys.prepass_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
                   .batch_size = sizeof(TbPrimitiveBatch),
                   .draw_fn = prepass_record,
                   .pass_id = prepass_id,
               });
-  sys.opaque_draw_ctx2 = tb_render_pipeline_register_draw_context(
+  sys.opaque_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
                   .batch_size = sizeof(TbPrimitiveBatch),
                   .draw_fn = opaque_pass_record,
                   .pass_id = opaque_pass_id,
               });
-  sys.transparent_draw_ctx2 = tb_render_pipeline_register_draw_context(
+  sys.transparent_draw_ctx = tb_render_pipeline_register_draw_context(
       rp_sys, &(TbDrawContextDescriptor){
                   .batch_size = sizeof(TbPrimitiveBatch),
                   .draw_fn = transparent_pass_record,
@@ -1447,16 +1764,16 @@ void mesh_draw_tick(ecs_iter_t *it) {
       {
         TB_TRACY_SCOPE("Submit Batches");
         if (opaque_data_size > 0) {
-          TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx2;
+          TbDrawContextId prepass_ctx2 = mesh_sys->prepass_draw_ctx;
           tb_render_pipeline_issue_draw_batch(rp_sys, prepass_ctx2, 1,
                                               &prepass_batch);
 
-          TbDrawContextId opaque_ctx2 = mesh_sys->opaque_draw_ctx2;
+          TbDrawContextId opaque_ctx2 = mesh_sys->opaque_draw_ctx;
           tb_render_pipeline_issue_draw_batch(rp_sys, opaque_ctx2, 1,
                                               mesh_sys->opaque_batch);
         }
         if (trans_data_size > 0) {
-          TbDrawContextId trans_ctx2 = mesh_sys->transparent_draw_ctx2;
+          TbDrawContextId trans_ctx2 = mesh_sys->transparent_draw_ctx;
           tb_render_pipeline_issue_draw_batch(rp_sys, trans_ctx2, 1,
                                               &trans_batch);
         }

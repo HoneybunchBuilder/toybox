@@ -2,12 +2,12 @@
 #include "tb_gltf.slangh"
 #include "tb_intrin.slangh"
 
-GLTF_VIEW_SET(0);
-GLTF_DRAW_SET(1);
-TB_MESHLET_SET(2);
-TB_OBJECT_SET(3);
+GLTF_VIEW_SET(0)
+GLTF_DRAW_SET(1)
+TB_MESHLET_SET(2)
+TB_OBJECT_SET(3)
 TB_IDX_SET(4)
-TB_POS_SET(5);
+TB_POS_SET(5)
 
 // TODO: Can we drive these from specialization constants?
 #define NUM_THREADS_X 96
@@ -21,6 +21,7 @@ struct VertexOut {
   float4 clip_pos : SV_POSITION;
 };
 
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
 void mesh(
@@ -61,4 +62,5 @@ void mesh(
   }
 }
 
+[shader("fragment")]
 void frag(VertexOut vert) {}

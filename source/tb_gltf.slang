@@ -141,7 +141,7 @@ float4 frag(Interpolators i, bool front_face: SV_IsFrontFace) : SV_TARGET {
       metallic *= mr_sample.b;
     }
 
-    GLTF_OPAQUE_LIGHTING(out_color, base_color, N, V, R, screen_uv, metallic,
+    GLTF_OPAQUE_LIGHTING(i, out_color, base_color, N, V, R, screen_uv, metallic,
                          roughness);
   }
 

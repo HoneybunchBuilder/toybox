@@ -23,6 +23,7 @@ struct VertexOut {
   float3 normal : NORMAL0;
 };
 
+[shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
 void mesh(
@@ -58,7 +59,7 @@ void mesh(
 
     VertexOut vert = {};
     vert.clip_pos = clip_pos;
-    vert.normal = mul(orientation, normal); // convert to world-space normal
+    vert.normal = mul(orientation, normal); // convert to world-space
     verts[gtid] = vert;
   }
 
@@ -67,6 +68,7 @@ void mesh(
   }
 }
 
+[shader("fragment")]
 float4 frag(VertexOut vert) : SV_TARGET {
   float3 N = normalize(vert.normal) * 0.5 + 0.5; // Convert to UNORM
   return float4(N, 1);

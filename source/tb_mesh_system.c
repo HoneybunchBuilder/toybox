@@ -369,6 +369,8 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                                   meshlet.triangle_count, meshlet.vertex_count);
         }
 
+        // TODO: Upload to GPU
+
         // Clean up arrays
         TB_DYN_ARR_DESTROY(meshlets);
         TB_DYN_ARR_DESTROY(meshlet_verts);
