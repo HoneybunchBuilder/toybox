@@ -51,19 +51,12 @@ typedef struct TbIndirectDraw {
   uint32_t stride;
 } TbIndirectDraw;
 
-typedef struct TbIndirectMeshDraw {
-  VkBuffer buffer;
-  uint64_t offset;
-  uint32_t draw_count;
-  uint32_t stride;
-  // TODO: fill out
-} TbIndirectMeshDraw;
-
 typedef struct TbPrimitiveBatch {
 #if TB_USE_DESC_BUFFER == 1
   VkDescriptorBufferBindingInfoEXT view_addr;
   VkDescriptorBufferBindingInfoEXT mat_addr;
   VkDescriptorBufferBindingInfoEXT draw_addr;
+  VkDescriptorBufferBindingInfoEXT meshlet_addr;
   VkDescriptorBufferBindingInfoEXT obj_addr;
   VkDescriptorBufferBindingInfoEXT tex_addr;
   VkDescriptorBufferBindingInfoEXT idx_addr;
@@ -75,6 +68,7 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorSet view_set;
   VkDescriptorSet mat_set;
   VkDescriptorSet draw_set;
+  VkDescriptorSet meshlet_set;
   VkDescriptorSet obj_set;
   VkDescriptorSet tex_set;
   VkDescriptorSet idx_set;
@@ -111,7 +105,6 @@ typedef struct TbMeshSystem {
   TbShader prepass_shader;
 
   // Next-gen mesh shaders
-  VkDescriptorSetLayout meshlet_set_layout;
   VkPipelineLayout mesh_pipe_layout;
   VkPipelineLayout prepass_mesh_layout;
 
@@ -122,8 +115,15 @@ typedef struct TbMeshSystem {
   // Re-used by shadows
   TbDrawBatch *opaque_batch;
 
-  TB_DYN_ARR_OF(TbMesh) meshes;
-  // For per draw data
+  TB_DYN_ARR_OF(VkDrawMeshTasksIndirectCommandEXT) indirect_opaque_draws;
+  TB_DYN_ARR_OF(VkDrawMeshTasksIndirectCommandEXT) indirect_trans_draws;
+  TB_DYN_ARR_OF(TbGLTFDrawData) opaque_draw_data;
+  TB_DYN_ARR_OF(TbGLTFDrawData) trans_draw_data;
+
+  // Filled out in one phase and submitted in another
+  TbIndirectDraw opaque_draw;
+  TbIndirectDraw trans_draw;
+
   TbFrameDescriptorPoolList draw_pools;
 
   TbDescriptorBuffer opaque_draw_descs;

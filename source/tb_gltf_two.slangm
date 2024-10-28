@@ -97,7 +97,7 @@ void mesh(
   }
 
   if (gtid < meshlet.prim_count) {
-    triangles[gid] = tb_get_meshlet_primitive(prim_indices, meshlet, gtid);
+    triangles[gid] = tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
   }
 }
 

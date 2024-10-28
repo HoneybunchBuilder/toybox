@@ -35,9 +35,10 @@ ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 
 typedef struct TbMeshCtx {
   uint32_t owned_mesh_count;
+  VkDescriptorSetLayout meshlet_set_layout;
+  TbDynDescPool meshlet_desc_pool;
   VkDescriptorSetLayout set_layout;
   TbDynDescPool idx_desc_pool;
-  TbDynDescPool meshlet_desc_pool;
   TbDynDescPool pos_desc_pool;
   TbDynDescPool norm_desc_pool;
   TbDynDescPool tan_desc_pool;
@@ -47,6 +48,7 @@ typedef struct TbMeshCtx {
   ecs_query_t *submesh_load_query;
 
   TbDescriptorBuffer idx_desc_buf;
+  TbDescriptorBuffer meshlet_desc_buf;
   TbDescriptorBuffer pos_desc_buf;
   TbDescriptorBuffer norm_desc_buf;
   TbDescriptorBuffer tan_desc_buf;
@@ -62,6 +64,8 @@ typedef struct TbMeshData {
   VkDescriptorAddressInfoEXT index_addr;
   VkDescriptorAddressInfoEXT attribute_addr[TB_INPUT_PERM_COUNT];
 #else
+  uint64_t meshlet_offset;
+  uint32_t meshlet_count;
   VkBufferView index_view;
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 #endif
@@ -256,6 +260,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
     uint64_t meshlet_offset = index_size;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
+    uint32_t prim_meshlet_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
          ++prim_idx) {
       tb_auto prim = &gltf_mesh->primitives[prim_idx];
@@ -329,6 +334,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                                   &meshlet_tris.data[meshlet.triangle_offset],
                                   meshlet.triangle_count, meshlet.vertex_count);
         }
+        prim_meshlet_count += meshlet_count;
 
         // Copy to meshlets region of geometry buffer
         const uint64_t meshlet_buffer_size = sizeof(TbMeshlet) * meshlet_count;
@@ -396,6 +402,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
       vertex_count += prim->attributes[0].data->count;
     }
+
+    data.meshlet_offset = index_size;
+    data.meshlet_count = prim_meshlet_count;
 
     // Construct one write per primitive
     {
@@ -777,11 +786,13 @@ void tb_write_mesh_attr_desc(ecs_world_t *ecs, TbMeshCtx *ctx,
 
   const uint32_t write_count = TB_DYN_ARR_SIZE(writes);
   if (write_count > 0) {
-    tb_auto indices = tb_alloc_nm_tp(tmp_alloc, write_count, uint32_t);
+    uint32_t *indices = NULL;
+
     TbDynDescPool *pool = NULL;
     switch (attr_idx) {
     case 0:
       pool = &ctx->idx_desc_pool;
+      indices = tb_alloc_nm_tp(tmp_alloc, write_count, uint32_t);
       break;
     case 1:
       pool = &ctx->pos_desc_pool;
@@ -835,6 +846,27 @@ void tb_finalize_meshes(ecs_iter_t *it) {
     tb_write_mesh_attr_desc(it->world, ctx, it->count, it->entities, meshes,
                             rnd_sys->tmp_alloc, rnd_tmp_alloc, i);
   }
+
+  // Write meshlet descriptor
+  {
+    TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
+    TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, it->count);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+      tb_auto mesh = &meshes[i];
+      TbDynDescWrite write = {
+          .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .desc.buffer = {
+              .buffer = mesh->gpu_buffer.buffer,
+              .offset = mesh->meshlet_offset,
+              .range = mesh->meshlet_count * sizeof(TbMeshlet),
+          }};
+      TB_DYN_ARR_APPEND(writes, write);
+    }
+
+    tb_write_dyn_desc_pool(&ctx->meshlet_desc_pool, TB_DYN_ARR_SIZE(writes),
+                           writes.data, NULL);
+  }
 }
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
@@ -844,6 +876,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
   tb_auto rnd_sys = ecs_field(it, TbRenderSystem, 1);
 
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->idx_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->meshlet_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->pos_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->norm_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->tan_desc_pool);
@@ -1007,9 +1040,43 @@ void tb_register_mesh2_sys(TbWorld *world) {
                              &ctx.set_layout);
   }
 
+  // Create meshlet descriptor set layout
+  {
+    const VkDescriptorBindingFlags flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    VkDescriptorSetLayoutCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+#if TB_USE_DESC_BUFFER == 1
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+#endif
+        .pNext =
+            &(VkDescriptorSetLayoutBindingFlagsCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+                .bindingCount = 1,
+                .pBindingFlags = (VkDescriptorBindingFlags[1]){flags},
+            },
+        .bindingCount = 1,
+        .pBindings =
+            (VkDescriptorSetLayoutBinding[1]){
+                {
+                    .binding = 0,
+                    .descriptorCount = TB_DESC_POOL_CAP,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
+                },
+            },
+    };
+    tb_rnd_create_set_layout(rnd_sys, &create_info, "Meshlet Set Layout",
+                             &ctx.meshlet_set_layout);
+  }
+
 #if TB_USE_DESC_BUFFER == 1
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Idx Descriptors",
                               4, &ctx.idx_desc_buf);
+  tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Meshlet Descriptors", 4,
+                              &ctx.meshlet_desc_buf);
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Pos Descriptors",
                               4, &ctx.pos_desc_buf);
   tb_create_descriptor_buffer(rnd_sys, ctx.set_layout, "Mesh Norm Descriptors",
@@ -1020,6 +1087,9 @@ void tb_register_mesh2_sys(TbWorld *world) {
                               4, &ctx.uv0_desc_buf);
 #else
   static const uint32_t desc_cap = TB_DESC_POOL_CAP;
+  tb_create_dyn_desc_pool(
+      rnd_sys, "Meshlet Descriptors", ctx.meshlet_set_layout,
+      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, desc_cap, &ctx.meshlet_desc_pool, 0);
   tb_create_dyn_desc_pool(rnd_sys, "Mesh Index Descriptors", ctx.set_layout,
                           VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.idx_desc_pool, 0);
@@ -1083,15 +1153,25 @@ TB_REGISTER_SYS(tb, mesh2, TB_MESH_SYS_PRIO)
 
 // Public API
 
-VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs) {
+VkDescriptorSetLayout tb_mesh_sys_get_attr_set_layout(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   return ctx->set_layout;
+}
+
+VkDescriptorSetLayout tb_mesh_sys_get_meshlet_set_layout(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  return ctx->meshlet_set_layout;
 }
 
 VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->idx_desc_pool);
+}
+VkDescriptorSet tb_mesh_sys_get_meshlet_set(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->meshlet_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);

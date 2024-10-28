@@ -56,9 +56,7 @@ TB_GPU_STRUCT_DECL(TbMeshlet, {
 // that represent global loaded resource tables
 #define TB_MESHLET_SET(b)                                                      \
   [[vk::binding(0, b)]]                                                        \
-  StructuredBuffer<TbMeshlet> meshlets;                                        \
-  [[vk::binding(1, b)]]                                                        \
-  StructuredBuffer<uint32_t> prim_indices;
+  StructuredBuffer<TbMeshlet> meshlets;
 #define TB_TEXTURE_SET(b)                                                      \
   [[vk::binding(0, b)]]                                                        \
   Texture2D gltf_textures[];
@@ -142,7 +140,7 @@ TbMeshlet tb_get_meshlet(StructuredBuffer<TbMeshlet> meshlets, uint32_t index) {
   return meshlets[index];
 }
 
-uint3 tb_get_meshlet_primitive(StructuredBuffer<uint32_t> indices, TbMeshlet m,
+uint3 tb_get_meshlet_primitive(RWBuffer<int32_t> indices, TbMeshlet m,
                                uint32_t index) {
   return tb_unpack_primitive(indices[m.prim_offset + index]);
 }
