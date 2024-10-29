@@ -58,10 +58,9 @@ void tb_log_hook(void *userdata, int32_t category, SDL_LogPriority priority,
 }
 
 void log_ui_tick(ecs_iter_t *it) {
-  TracyCZoneN(ctx, "Log System UI Tick", true);
-  TracyCZoneColor(ctx, TracyCategoryColorUI);
-  TbWorld *world = ecs_singleton_get_mut(it->world, TbWorldRef)->world;
-  tb_auto sys = ecs_field(it, TbLogSystem, 1);
+  TB_TRACY_SCOPEC("Log System UI Tick", TracyCategoryColorUI);
+  tb_auto world = ecs_singleton_ensure(it->world, TbWorldRef)->world;
+  tb_auto sys = ecs_field(it, TbLogSystem, 0);
 
   tb_log_time = world->time;
   const int32_t log_cols = 4;
@@ -77,19 +76,22 @@ void log_ui_tick(ecs_iter_t *it) {
   tb_auto cat_to_str = ^const char *(int32_t cat) {
     // These are the built-in categories for SDL
     if (cat >= SDL_LOG_CATEGORY_APPLICATION &&
-        cat < SDL_LOG_CATEGORY_RESERVED1) {
-      static const char *sdl_cat_strings[] = {
-          "Application", "Error", "Assert", "System", "Error", "Critical",
+        cat < SDL_LOG_CATEGORY_RESERVED2) {
+      static const char *sdl_cat_strings[SDL_LOG_CATEGORY_RESERVED2] = {
+          "Application", "Error",  "Assert", "System", "Audio",
+          "Video",       "Render", "Input",  "Test",   "GPU",
       };
       return sdl_cat_strings[cat];
       // These are our custom categories for toybox
     } else if (cat >= TB_LOG_CATEGORY_RENDER_THREAD &&
                cat < TB_LOG_CATEGORY_CUSTOM) {
-      static const char *tb_cat_strings[] = {
-          "RenderThread",
-      };
+      static const char *tb_cat_strings[TB_LOG_CATEGORY_CUSTOM -
+                                        TB_LOG_CATEGORY_RENDER_THREAD] = {
+          "RenderThread", "SpatialAudio"};
       int32_t idx = (cat - TB_LOG_CATEGORY_RENDER_THREAD);
-      return tb_cat_strings[idx];
+      if (idx >= 0) {
+        return tb_cat_strings[idx];
+      }
     }
     // Theoretically the application could want custom log categories
     // Figure out a way to facilitate that. Maybe a user-provided block?
@@ -144,20 +146,17 @@ void log_ui_tick(ecs_iter_t *it) {
       igEnd();
     }
   }
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_log_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Log Sys", true);
+  TB_TRACY_SCOPE("Register Log Sys");
   tb_auto ecs = world->ecs;
   ECS_COMPONENT_DEFINE(ecs, TbLogSystem);
 
   SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
 
-  tb_auto coreui = ecs_singleton_get_mut(ecs, TbCoreUISystem);
-
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbLogSystem);
+  tb_auto coreui = ecs_singleton_ensure(ecs, TbCoreUISystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbLogSystem);
   *sys = (TbLogSystem){
       .ui = tb_coreui_register_menu(coreui, "Log"),
       .enabled = true,
@@ -165,16 +164,14 @@ void tb_register_log_sys(TbWorld *world) {
   };
 
   TB_DYN_ARR_RESET(sys->messages, tb_global_alloc, 1024);
-  ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem(TbLogSystem));
+  ECS_SYSTEM(ecs, log_ui_tick, EcsPostUpdate, TbLogSystem($));
 
-  SDL_SetLogOutputFunction(tb_log_hook,
-                           ecs_singleton_get_mut(ecs, TbLogSystem));
-  TracyCZoneEnd(ctx);
+  SDL_SetLogOutputFunction(tb_log_hook, ecs_singleton_ensure(ecs, TbLogSystem));
 }
 
 void tb_unregister_log_sys(TbWorld *world) {
   tb_auto ecs = world->ecs;
-  tb_auto sys = ecs_singleton_get_mut(ecs, TbLogSystem);
+  tb_auto sys = ecs_singleton_ensure(ecs, TbLogSystem);
 
   TB_DYN_ARR_FOREACH(sys->messages, i) {
     tb_auto message = TB_DYN_ARR_AT(sys->messages, i);

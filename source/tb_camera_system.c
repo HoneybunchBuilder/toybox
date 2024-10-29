@@ -18,14 +18,14 @@ void tb_unregister_camera_sys(TbWorld *world);
 TB_REGISTER_SYS(tb, camera, TB_CAMERA_SYS_PRIO)
 
 void camera_update_tick(ecs_iter_t *it) {
-  TracyCZoneNC(ctx, "Camera Update System", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("Camera Update System", TracyCategoryColorCore);
 
   tb_auto ecs = it->world;
 
-  tb_auto view_sys = ecs_singleton_get_mut(ecs, TbViewSystem);
+  tb_auto view_sys = ecs_singleton_ensure(ecs, TbViewSystem);
   ecs_singleton_modified(ecs, TbViewSystem);
 
-  tb_auto cameras = ecs_field(it, TbCameraComponent, 1);
+  tb_auto cameras = ecs_field(it, TbCameraComponent, 0);
 
   for (int32_t i = 0; i < it->count; ++i) {
     tb_auto entity = it->entities[i];
@@ -69,17 +69,12 @@ void camera_update_tick(ecs_iter_t *it) {
     tb_view_system_set_view_data(view_sys, camera->view_id, &view_data);
     tb_view_system_set_view_frustum(view_sys, camera->view_id, &frustum);
   }
-  TracyCZoneEnd(ctx);
 }
 
 void tb_register_camera_sys(TbWorld *world) {
-  TracyCZoneN(ctx, "Register Camera Sys", true);
-  ecs_world_t *ecs = world->ecs;
-
-  ECS_SYSTEM(ecs, camera_update_tick, EcsPostUpdate, TbCameraComponent,
+  TB_TRACY_SCOPE("Register Camera Sys");
+  ECS_SYSTEM(world->ecs, camera_update_tick, EcsPostUpdate, TbCameraComponent,
              TbTransformComponent);
-
-  TracyCZoneEnd(ctx);
 }
 
 void tb_unregister_camera_sys(TbWorld *world) { (void)world; }

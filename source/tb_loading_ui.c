@@ -20,6 +20,7 @@ extern ECS_COMPONENT_DECLARE(TbSceneEntParseCounter);
 extern ECS_COMPONENT_DECLARE(TbSceneEntReadyCounter);
 
 void tb_load_ui_tick(ecs_iter_t *it) {
+  TB_TRACY_SCOPE("Load UI Tick");
   tb_auto ecs = it->world;
 
   if (igBegin("Loading", NULL, 0)) {
@@ -56,13 +57,13 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       uint64_t mesh_count = 0;
       uint64_t ready_mesh_count = 0;
       tb_auto mesh_filter =
-          ecs_filter(ecs, {
-                              .terms = {{.id = ecs_id(TbMeshComponent)}},
-                          });
-      tb_auto mesh_it = ecs_filter_iter(ecs, mesh_filter);
+          ecs_query(ecs, {
+                             .terms = {{.id = ecs_id(TbMeshComponent)}},
+                         });
+      tb_auto mesh_it = ecs_query_iter(ecs, mesh_filter);
       while (ecs_iter_next(&mesh_it)) {
         mesh_count += mesh_it.count;
-        tb_auto mesh_comps = ecs_field(&mesh_it, TbMeshComponent, 1);
+        tb_auto mesh_comps = ecs_field(&mesh_it, TbMeshComponent, 0);
         for (int32_t i = 0; i < mesh_it.count; ++i) {
           if (tb_is_mesh_ready(ecs, mesh_comps[i].mesh2)) {
             ready_mesh_count++;
@@ -72,7 +73,7 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       total_counter += mesh_count;
       counter += ready_mesh_count;
       igText("Meshes %d/%d", ready_mesh_count, mesh_count);
-      ecs_filter_fini(mesh_filter);
+      ecs_query_fini(mesh_filter);
     }
 
     // Check Material State
@@ -80,10 +81,10 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       uint64_t mat_count = 0;
       uint64_t ready_mat_count = 0;
       tb_auto mat_filter =
-          ecs_filter(ecs, {
-                              .terms = {{.id = ecs_id(TbMaterialComponent)}},
-                          });
-      tb_auto mat_it = ecs_filter_iter(ecs, mat_filter);
+          ecs_query(ecs, {
+                             .terms = {{.id = ecs_id(TbMaterialComponent)}},
+                         });
+      tb_auto mat_it = ecs_query_iter(ecs, mat_filter);
       while (ecs_iter_next(&mat_it)) {
         mat_count += mat_it.count;
         for (int32_t i = 0; i < mat_it.count; ++i) {
@@ -95,7 +96,7 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       total_counter += mat_count;
       counter += ready_mat_count;
       igText("Materials %d/%d", ready_mat_count, mat_count);
-      ecs_filter_fini(mat_filter);
+      ecs_query_fini(mat_filter);
     }
 
     // Check Texture State
@@ -103,10 +104,10 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       uint64_t tex_count = 0;
       uint64_t ready_tex_count = 0;
       tb_auto tex_filter =
-          ecs_filter(ecs, {
-                              .terms = {{.id = ecs_id(TbTextureComponent)}},
-                          });
-      tb_auto tex_it = ecs_filter_iter(ecs, tex_filter);
+          ecs_query(ecs, {
+                             .terms = {{.id = ecs_id(TbTextureComponent)}},
+                         });
+      tb_auto tex_it = ecs_query_iter(ecs, tex_filter);
       while (ecs_iter_next(&tex_it)) {
         tex_count += tex_it.count;
         for (int32_t i = 0; i < tex_it.count; ++i) {
@@ -118,7 +119,7 @@ void tb_load_ui_tick(ecs_iter_t *it) {
       total_counter += tex_count;
       counter += ready_tex_count;
       igText("Textures %d/%d", ready_tex_count, tex_count);
-      ecs_filter_fini(tex_filter);
+      ecs_query_fini(tex_filter);
     }
 
     if (total_counter > 0) {

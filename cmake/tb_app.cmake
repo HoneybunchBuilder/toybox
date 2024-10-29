@@ -48,6 +48,10 @@ function(tb_options target_name)
   # We provide a cross platform blocks runtime so we can use this
   target_compile_options(${target_name} PRIVATE -fblocks)
 
+  # Jolt doesn't like rtti or exceptions and neither do we
+  target_compile_options(${target_name} PRIVATE -fno-rtti)
+  target_compile_options(${target_name} PRIVATE -fno-exceptions)
+
   # Platform specifics
   if(WIN32)
     # This really only matters for clang-cl

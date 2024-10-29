@@ -28,7 +28,7 @@ float2 axis_deadzone(float2 axis, float deadzone) {
 
 void input_update_tick(ecs_iter_t *it) {
   TB_TRACY_SCOPEC("Input System Tick", TracyCategoryColorInput);
-  tb_auto self = ecs_field(it, TbInputSystem, 1);
+  tb_auto self = ecs_field(it, TbInputSystem, 0);
 
   self->mouse.axis = (float2){0}; // Must always clear axes
   self->mouse.wheel = (float2){0};
@@ -174,7 +174,7 @@ void tb_register_input_sys(TbWorld *world) {
                         .tmp_alloc = world->tmp_alloc,
                         .window = world->window,
                     });
-  ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem(TbInputSystem));
+  ECS_SYSTEM(ecs, input_update_tick, EcsOnLoad, TbInputSystem($));
 }
 
 void tb_unregister_input_sys(TbWorld *world) {

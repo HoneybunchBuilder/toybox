@@ -42,8 +42,7 @@ void record_lum_common(VkCommandBuffer buffer, uint32_t batch_count,
 void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                              uint32_t batch_count,
                              const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Luminance Gather Record", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("Luminance Gather Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Luminance Gather", 3, true);
   cmd_begin_label(buffer, "Luminance Gather", (float4){0.4f, 0.0f, 0.0f, 1.0f});
 
@@ -51,7 +50,6 @@ void record_luminance_gather(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void create_lum_gather_set_layout(TbRenderSystem *rnd_sys, VkSampler sampler,
@@ -189,8 +187,7 @@ void tb_destroy_lum_hist_work(ecs_world_t *ecs, TbRenderSystem *rnd_sys,
 void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
                               uint32_t batch_count,
                               const TbDispatchBatch *batches) {
-  TracyCZoneNC(ctx, "Luminance Average Record", TracyCategoryColorRendering,
-               true);
+  TB_TRACY_SCOPEC("Luminance Average Record", TracyCategoryColorRendering);
   TracyCVkNamedZone(gpu_ctx, frame_scope, buffer, "Luminance Average", 3, true);
   cmd_begin_label(buffer, "Luminance Average",
                   (float4){0.4f, 0.0f, 0.0f, 1.0f});
@@ -199,7 +196,6 @@ void record_luminance_average(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
 
   cmd_end_label(buffer);
   TracyCVkZoneEnd(frame_scope);
-  TracyCZoneEnd(ctx);
 }
 
 void create_lum_avg_set_layout(TbRenderSystem *rnd_sys,

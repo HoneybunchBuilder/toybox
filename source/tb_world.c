@@ -47,39 +47,39 @@ typedef struct TbComponentRegistry {
 
 ECS_COMPONENT_DECLARE(TbWorldRef);
 
+#ifdef TRACY_ENABLE
+typedef struct TbPhaseTracker {
+  const char *name;
+  TracyCZoneCtx zone;
+} TbPhaseTracker;
+ECS_COMPONENT_DECLARE(TbPhaseTracker);
+#endif
+
 void *ecs_malloc(ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_malloc", TracyCategoryColorMemory);
   void *ptr = mi_malloc(size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 void ecs_free(void *ptr) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_free", TracyCategoryColorMemory);
   TracyCFreeN(ptr, "ECS");
   mi_free(ptr);
-  TracyCZoneEnd(ctx);
 }
 
 void *ecs_calloc(ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_calloc", TracyCategoryColorMemory);
   void *ptr = mi_calloc(1, size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 void *ecs_realloc(void *original, ecs_size_t size) {
-  TracyCZone(ctx, true);
-  TracyCZoneColor(ctx, TracyCategoryColorMemory);
+  TB_TRACY_SCOPEC("ecs_realloc", TracyCategoryColorMemory);
   TracyCFreeN(original, "ECS");
   void *ptr = mi_realloc(original, size);
   TracyCAllocN(ptr, size, "ECS");
-  TracyCZoneEnd(ctx);
   return ptr;
 }
 
@@ -99,7 +99,7 @@ int32_t tb_sys_cmp(const void *a, const void *b) {
 void tb_register_system(const char *name, int32_t priority,
                         TbCreateSystemFn create_fn,
                         TbDestroySystemFn destroy_fn) {
-  TracyCZoneN(ctx, "Register System", true);
+  TB_TRACY_SCOPE("Register System");
   int32_t index = s_sys_reg.count;
   int32_t next_count = ++s_sys_reg.count;
   size_t entry_size = next_count * sizeof(TbSystemEntry);
@@ -113,7 +113,6 @@ void tb_register_system(const char *name, int32_t priority,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
-  TracyCZoneEnd(ctx);
 }
 
 static TbComponentRegistry s_comp_reg = {0};
@@ -121,7 +120,7 @@ static TbComponentRegistry s_comp_reg = {0};
 void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
                            TbLoadComponentFn load_fn,
                            TbReadyComponentFn ready_fn) {
-  TracyCZoneN(ctx, "Register Component", true);
+  TB_TRACY_SCOPE("Register Component");
   int32_t index = s_comp_reg.count;
   int32_t next_count = ++s_comp_reg.count;
   size_t entry_size = next_count * sizeof(TbComponentEntry);
@@ -135,7 +134,6 @@ void tb_register_component(const char *name, TbRegisterComponentFn reg_fn,
   entry->name = mi_malloc(name_len);
   SDL_memset(entry->name, 0, name_len);
   SDL_strlcpy(entry->name, name, name_len);
-  TracyCZoneEnd(ctx);
 }
 
 #ifndef TB_FINAL
@@ -179,8 +177,31 @@ void tb_write_info(TbWorld *world) {
 }
 #endif
 
+#ifdef TRACY_ENABLE
+void tb_phase_begin(ecs_iter_t *it) {
+  // Find the phase that this system depends on
+  tb_auto phase = ecs_get_target(it->world, it->system, EcsDependsOn, 0);
+  if (ecs_has(it->world, phase, TbPhaseTracker)) {
+    tb_auto tracker = ecs_get_mut(it->world, phase, TbPhaseTracker);
+    TracyCZone(ctx, true);
+    TracyCZoneName(ctx, tracker->name, SDL_strlen(tracker->name));
+    TracyCZoneColor(ctx, TracyCategoryColorCore);
+    tracker->zone = ctx;
+  }
+}
+
+void tb_phase_end(ecs_iter_t *it) {
+  // Find the phase that this system depends on
+  tb_auto phase = ecs_get_target(it->world, it->system, EcsDependsOn, 0);
+  if (ecs_has(it->world, phase, TbPhaseTracker)) {
+    tb_auto tracker = ecs_get(it->world, phase, TbPhaseTracker);
+    TracyCZoneEnd(tracker->zone);
+  }
+}
+#endif
+
 bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
-  TracyCZoneN(ctx, "Create World", true);
+  TB_TRACY_SCOPE("Create World");
   TbAllocator gp_alloc = desc->gp_alloc;
 
   tb_auto ecs = ecs_init();
@@ -203,6 +224,10 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 
   {
     ECS_COMPONENT_DEFINE(ecs, TbWorldRef);
+#ifdef TRACY_ENABLE
+    ECS_COMPONENT_DEFINE(ecs, TbPhaseTracker);
+#endif
+
     TbWorldRef ref = {world};
     ecs_singleton_set_ptr(ecs, TbWorldRef, &ref);
   }
@@ -221,7 +246,6 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 #ifndef TB_FINAL
   if (tb_check_info_mode(desc->argc, desc->argv) > 0) {
     tb_write_info(world);
-    TracyCZoneEnd(ctx);
     return false; // Do not continue
   }
 #endif
@@ -237,9 +261,36 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
 
   world->render_thread = render_thread;
 
+#ifdef TRACY_ENABLE
+  char const *const phase_names[] = {"OnStart",    "PreFrame",   "OnLoad",
+                                     "PostLoad",   "PreUpdate",  "OnUpdate",
+                                     "OnValidate", "PostUpdate", "PreStore",
+                                     "OnStore",    "PostFrame"};
+  const ecs_entity_t phases[] = {EcsOnStart,    EcsPreFrame,   EcsOnLoad,
+                                 EcsPostLoad,   EcsPreUpdate,  EcsOnUpdate,
+                                 EcsOnValidate, EcsPostUpdate, EcsPreStore,
+                                 EcsOnStore,    EcsPostFrame};
+  const tb_auto phase_count = sizeof(phases) / sizeof(ecs_entity_t);
+  const tb_auto name_count = sizeof(phase_names) / sizeof(const char *);
+  static_assert(phase_count == name_count);
+  (void)name_count;
+
+  // Run a system at the top of each phase to track beginning
+  for (uint32_t i = 0; i < phase_count; ++i) {
+    ecs_set(world->ecs, phases[i], TbPhaseTracker, {phase_names[i], {0}});
+    // Create a system per phase that matches specifically the phase entity that
+    // we have attached a TbPhaseTracker component to
+    ecs_system(ecs, {
+                        .entity = ecs_entity(
+                            ecs, {.add = ecs_ids(ecs_dependson(phases[i]))}),
+                        .callback = tb_phase_begin,
+                    });
+  }
+#endif
+
   // Create all registered systems after sorting by priority
   {
-    TracyCZoneNC(ctx, "Create Systems", TracyCategoryColorCore, true);
+    TB_TRACY_SCOPEC("Create Systems", TracyCategoryColorCore)
     const int32_t count = s_sys_reg.count;
     SDL_qsort(s_sys_reg.entries, count, sizeof(TbSystemEntry), tb_sys_cmp);
 
@@ -249,45 +300,48 @@ bool tb_create_world(const TbWorldDesc *desc, TbWorld *world) {
         fn(world);
       }
     }
-    TracyCZoneEnd(ctx);
   }
 
 #ifndef TB_FINAL
   // By setting this singleton we allow the application to connect to the
   // flecs explorer
   ecs_singleton_set(ecs, EcsRest, {0});
-  ECS_IMPORT(ecs, FlecsMonitor);
+  ECS_IMPORT(ecs, FlecsStats);
 #endif
 
-  TracyCZoneEnd(ctx);
+#ifdef TRACY_ENABLE
+  // Run a system at the bottom of each phase to track ending
+  for (uint32_t i = 0; i < phase_count; ++i) {
+    ecs_system(ecs, {
+                        .entity = ecs_entity(
+                            ecs, {.add = ecs_ids(ecs_dependson(phases[i]))}),
+                        .callback = tb_phase_end,
+                    });
+  }
+#endif
   return true;
 }
 
 bool tb_tick_world(TbWorld *world, float delta_seconds) {
-  TracyCZoneNC(ctx, "World Tick", TracyCategoryColorCore, true);
+  TB_TRACY_SCOPEC("World Tick", TracyCategoryColorCore)
   ecs_world_t *ecs = world->ecs;
 
   world->time += (double)delta_seconds;
-
-  // Run pinned tasks first
-  tb_run_pinned_tasks(ecs);
 
   // Tick with flecs
   if (!ecs_progress(ecs, delta_seconds)) {
     return false;
   }
-  // Manually check flecs for quit event
 
+  // Manually check flecs for quit event
   tb_auto in_sys = ecs_singleton_get(ecs, TbInputSystem);
   if (in_sys) {
     for (uint32_t event_idx = 0; event_idx < in_sys->event_count; ++event_idx) {
       if (in_sys->events[event_idx].type == SDL_EVENT_QUIT) {
-        TracyCZoneEnd(ctx);
         return false;
       }
     }
   }
-  TracyCZoneEnd(ctx);
   return true;
 }
 
