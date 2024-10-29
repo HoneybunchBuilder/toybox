@@ -40,7 +40,7 @@ You will also need the following environment variables defined:
 vcpkg will fetch a number of dependencies. See `vcpkg.json` for a complete list.
 
 Notes:
- * You can install `xxd` on Windows via `scoop` by installing the `git` package. Git Bash should include `xxd`
+ * You can install `xxd` on Windows via `scoop` by installing the `vim` package. Other packages like `busybox` provide an unsupported version of `xxd`
  * Shaders are [slang](https://shader-slang.com/) and thus are compiled by `slangc` which is retrieved by vcpkg
  * Tracy could be built locally by the `gui-tools` target but for now just install `tracy` from your package manager if you want to do profiling
  * Jolt physics comes with a viewer which can also be built from vcpkg. When more integration with Jolt is implemented this will probably be the way to access this tool.
