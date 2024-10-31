@@ -1441,6 +1441,11 @@ void mesh_sort_new(ecs_iter_t *it) {
       continue;
     }
 
+    if (ecs_has(ecs, mesh, TbMeshInGPUScene)) {
+      // SDL_assert(false);
+      continue;
+    }
+
     tb_auto mesh_desc_idx = *ecs_get(ecs, mesh, TbMeshIndex);
 
     // Don't make any mutations until we can guarantee that the mesh is ready
