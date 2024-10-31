@@ -39,20 +39,18 @@ struct VertexOut {
 [shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
-void mesh(
-    uint32_t gtid :SV_GroupThreadID, 
-    uint32_t gid : SV_GroupIndex,
-    out vertices VertexOut verts[MAX_NUM_VERTS],
-    out indices uint3 triangles[MAX_NUM_PRIMS]) {
+void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
+          out vertices VertexOut verts[MAX_NUM_VERTS],
+          out indices uint3 triangles[MAX_NUM_PRIMS]) {
   uint32_t draw_idx = tb_get_draw_index();
   TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
   int32_t vert_perm = draw.perm;
   uint32_t obj_idx = draw.obj_idx;
   uint32_t mesh_idx = draw.mesh_idx;
-  uint32_t meshlet_idx = draw.meshlet_idx + gid;
+  uint32_t meshlet_idx = draw.meshlet_offset + gid;
   uint32_t mat_idx = draw.mat_idx;
 
-  TbMeshlet meshlet = tb_get_meshlet(meshlets, meshlet_idx);
+  TbMeshlet meshlet = tb_get_meshlet(meshlets[mesh_idx], meshlet_idx);
   TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
   TbGLTFMaterialData gltf = tb_get_gltf_mat_data(mat_idx, gltf_data);
   int32_t mat_perm = gltf.perm;
@@ -63,7 +61,8 @@ void mesh(
   if (gtid < meshlet.vert_count) {
     uint32_t local_idx = gtid + meshlet.vert_offset;
     uint32_t vert_idx = local_idx + draw.index_offset;
-    uint32_t idx = tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
+    uint32_t idx =
+        tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
 
     int3 local_pos =
         tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
@@ -80,7 +79,8 @@ void mesh(
     vert.world_pos = world_pos.xyz;
     vert.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
     if ((vert_perm & TB_INPUT_PERM_NORMAL) > 0) {
-      vert.normal = normalize(mul(orientation, normal)); // convert to world-space
+      vert.normal =
+          normalize(mul(orientation, normal)); // convert to world-space
     }
     if ((vert_perm & TB_INPUT_PERM_TANGENT) > 0) {
       vert.tangent = normalize(mul(orientation, tangent.xyz));
@@ -88,8 +88,9 @@ void mesh(
     }
     if ((mat_perm & GLTF_PERM_NORMAL_MAP) > 0) {
       // Construct TBN
-      vert.tbn = transpose(float3x3(normalize(vert.tangent), normalize(vert.binormal),
-                                normalize(vert.normal)));
+      vert.tbn =
+          transpose(float3x3(normalize(vert.tangent), normalize(vert.binormal),
+                             normalize(vert.normal)));
     }
     vert.uv = uv_transform(uv0, gltf.tex_transform);
     vert.mat_idx = mat_idx;
@@ -97,7 +98,8 @@ void mesh(
   }
 
   if (gtid < meshlet.prim_count) {
-    triangles[gid] = tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
+    triangles[gid] =
+        tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
   }
 }
 
@@ -157,8 +159,8 @@ float4 frag(VertexOut vert, bool front_face: SV_IsFrontFace) : SV_TARGET {
       metallic *= mr_sample.b;
     }
 
-    GLTF_OPAQUE_LIGHTING(vert, out_color, base_color, N, V, R, screen_uv, metallic,
-                         roughness);
+    GLTF_OPAQUE_LIGHTING(vert, out_color, base_color, N, V, R, screen_uv,
+                         metallic, roughness);
   }
 
   return out_color;

@@ -64,9 +64,8 @@ typedef struct TbMeshData {
   VkDescriptorAddressInfoEXT index_addr;
   VkDescriptorAddressInfoEXT attribute_addr[TB_INPUT_PERM_COUNT];
 #else
-  uint64_t meshlet_offset;
-  uint32_t meshlet_count;
   VkBufferView index_view;
+  VkBufferView meshlet_view;
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 #endif
 } TbMeshData;
@@ -260,7 +259,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
     uint64_t meshlet_offset = index_size;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
-    uint32_t prim_meshlet_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
          ++prim_idx) {
       tb_auto prim = &gltf_mesh->primitives[prim_idx];
@@ -334,7 +332,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                                   &meshlet_tris.data[meshlet.triangle_offset],
                                   meshlet.triangle_count, meshlet.vertex_count);
         }
-        prim_meshlet_count += meshlet_count;
 
         // Copy to meshlets region of geometry buffer
         const uint64_t meshlet_buffer_size = sizeof(TbMeshlet) * meshlet_count;
@@ -403,9 +400,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
       vertex_count += prim->attributes[0].data->count;
     }
 
-    data.meshlet_offset = index_size;
-    data.meshlet_count = prim_meshlet_count;
-
     // Construct one write per primitive
     {
       static const VkFormat
@@ -445,6 +439,19 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Index View",
                                   &data.index_view);
 #endif
+      }
+
+      // Create one buffer view for meshlets
+      {
+        VkBufferViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = data.gpu_buffer.buffer,
+            .offset = meshlet_offset,
+            .range = meshlets_size,
+            .format = VK_FORMAT_R32G32B32A32_UINT,
+        };
+        tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Meshlet View",
+                                  &data.meshlet_view);
       }
 
 #if TB_USE_DESC_BUFFER == 1
@@ -620,8 +627,9 @@ void tb_load_submeshes_task(const void *args) {
   TbAABB mesh_aabb = tb_aabb_init();
 
   // Meshes are uploaded so now we just need to setup submeshes
-  uint32_t index_offset = 0;
-  uint32_t vertex_offset = 0;
+  uint64_t index_offset = 0;
+  uint64_t meshlet_offset = 0;
+  uint64_t vertex_offset = 0;
   for (cgltf_size i = 0; i < gltf_mesh->primitives_count; ++i) {
     tb_auto prim = &gltf_mesh->primitives[i];
 
@@ -682,6 +690,66 @@ void tb_load_submeshes_task(const void *args) {
         }
       }
       submesh_data.vertex_perm = vertex_attributes;
+    }
+
+    // Annoying but to know how many meshlets a primitive uses, we need to
+    // construct the meshlets
+    {
+      uint32_t max_meshlet_verts = 0;
+      uint32_t max_meshlet_tris = 0;
+      tb_get_cluster_sizing(&max_meshlet_verts, &max_meshlet_tris);
+
+      uint64_t prim_vert_count = prim->attributes[0].data->count;
+      uint64_t prim_idx_count = prim->indices->count;
+
+      uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
+          prim_idx_count, max_meshlet_verts, max_meshlet_tris);
+
+      TB_DYN_ARR_OF(struct meshopt_Meshlet) meshlets = {0};
+      TB_DYN_ARR_OF(uint32_t) meshlet_verts = {0};
+      TB_DYN_ARR_OF(uint8_t) meshlet_tris = {0};
+
+      TB_DYN_ARR_RESET(meshlets, tb_thread_alloc, max_prim_meshlets);
+      TB_DYN_ARR_RESET(meshlet_verts, tb_thread_alloc,
+                       max_prim_meshlets * max_meshlet_verts);
+      TB_DYN_ARR_RESET(meshlet_tris, tb_thread_alloc,
+                       max_prim_meshlets * max_meshlet_tris * 3);
+      TB_DYN_ARR_RESIZE(meshlets, max_prim_meshlets);
+      TB_DYN_ARR_RESIZE(meshlet_verts, max_prim_meshlets * max_meshlet_verts);
+      TB_DYN_ARR_RESIZE(meshlet_tris, max_prim_meshlets * max_meshlet_tris * 3);
+
+      // We have to read the data so make sure the buffer is decompressed
+      cgltf_result res = tb_decompress_buffer_view(tb_thread_alloc,
+                                                   prim->indices->buffer_view);
+      TB_CHECK(res == cgltf_result_success, "Failed to decode buffer view");
+
+      void *src =
+          ((uint8_t *)prim->indices->buffer_view->data) + prim->indices->offset;
+
+      // Must convert to 32-bit indices no matter what
+      tb_auto indices_data =
+          tb_alloc_nm_tp(tb_thread_alloc, prim_idx_count, uint32_t);
+      for (uint32_t i = 0; i < prim_idx_count; ++i) {
+        if (prim->indices->stride == 2) {
+          indices_data[i] = ((uint16_t *)src)[i];
+        } else {
+          indices_data[i] = ((uint32_t *)src)[i];
+        }
+      }
+
+      // All for this
+      submesh_data.meshlet_offset = meshlet_offset;
+      submesh_data.meshlet_count = meshopt_buildMeshletsScan(
+          meshlets.data, meshlet_verts.data, meshlet_tris.data, indices_data,
+          prim_idx_count, prim_vert_count, max_meshlet_verts, max_meshlet_tris);
+
+      meshlet_offset += max_prim_meshlets;
+
+      tb_free(tb_thread_alloc, indices_data);
+
+      TB_DYN_ARR_DESTROY(meshlets);
+      TB_DYN_ARR_DESTROY(meshlet_verts);
+      TB_DYN_ARR_DESTROY(meshlet_tris);
     }
 
     // Read AABB from gltf
@@ -855,12 +923,9 @@ void tb_finalize_meshes(ecs_iter_t *it) {
     for (int32_t i = 0; i < it->count; ++i) {
       tb_auto mesh = &meshes[i];
       TbDynDescWrite write = {
-          .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-          .desc.buffer = {
-              .buffer = mesh->gpu_buffer.buffer,
-              .offset = mesh->meshlet_offset,
-              .range = mesh->meshlet_count * sizeof(TbMeshlet),
-          }};
+          .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+          .desc.texel_buffer = mesh->meshlet_view,
+      };
       TB_DYN_ARR_APPEND(writes, write);
     }
 
@@ -1063,7 +1128,7 @@ void tb_register_mesh2_sys(TbWorld *world) {
                 {
                     .binding = 0,
                     .descriptorCount = TB_DESC_POOL_CAP,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT,
                 },
             },
@@ -1087,9 +1152,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
                               4, &ctx.uv0_desc_buf);
 #else
   static const uint32_t desc_cap = TB_DESC_POOL_CAP;
-  tb_create_dyn_desc_pool(
-      rnd_sys, "Meshlet Descriptors", ctx.meshlet_set_layout,
-      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, desc_cap, &ctx.meshlet_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, "Meshlet Descriptors",
+                          ctx.meshlet_set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
+                          &ctx.meshlet_desc_pool, 0);
   tb_create_dyn_desc_pool(rnd_sys, "Mesh Index Descriptors", ctx.set_layout,
                           VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.idx_desc_pool, 0);

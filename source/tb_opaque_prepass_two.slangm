@@ -26,19 +26,17 @@ struct VertexOut {
 [shader("mesh")]
 [outputtopology("triangle")]
 [numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
-void mesh(
-    uint32_t gtid :SV_GroupThreadID, 
-    uint32_t gid : SV_GroupIndex,
-    out vertices VertexOut verts[MAX_NUM_VERTS],
-    out indices uint3 triangles[MAX_NUM_PRIMS]) {
+void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
+          out vertices VertexOut verts[MAX_NUM_VERTS],
+          out indices uint3 triangles[MAX_NUM_PRIMS]) {
   uint32_t draw_idx = tb_get_draw_index();
   TbGLTFDrawData draw = draw_data[draw_idx];
 
   uint32_t obj_idx = draw.obj_idx;
   uint32_t mesh_idx = draw.mesh_idx;
-  uint32_t meshlet_idx = draw.meshlet_idx + gid;
+  uint32_t meshlet_idx = draw.meshlet_offset + gid;
 
-  TbMeshlet meshlet = tb_get_meshlet(meshlets, meshlet_idx);
+  TbMeshlet meshlet = tb_get_meshlet(meshlets[mesh_idx], meshlet_idx);
   TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
 
   // Set number of outputs
@@ -47,7 +45,8 @@ void mesh(
   if (gtid < meshlet.vert_count) {
     uint32_t local_idx = gtid + meshlet.vert_offset;
     uint32_t vert_idx = local_idx + draw.index_offset;
-    uint32_t idx = tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
+    uint32_t idx =
+        tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
 
     int3 local_pos =
         tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
@@ -64,7 +63,8 @@ void mesh(
   }
 
   if (gtid < meshlet.prim_count) {
-    triangles[gid] = tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
+    triangles[gid] =
+        tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
   }
 }
 

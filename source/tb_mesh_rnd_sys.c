@@ -1481,7 +1481,7 @@ void mesh_sort_new(ecs_iter_t *it) {
         tb_auto sm = ecs_get(ecs, sm_ent, TbSubMesh2Data);
 
         VkDrawMeshTasksIndirectCommandEXT indirect_draw = {
-            .groupCountX = 1,
+            .groupCountX = sm->meshlet_count,
             .groupCountY = 1,
             .groupCountZ = 1,
         };
@@ -1491,6 +1491,7 @@ void mesh_sort_new(ecs_iter_t *it) {
             .mesh_idx = mesh_desc_idx,
             .mat_idx = *ecs_get(ecs, sm->material, TbMaterialComponent),
             .index_offset = sm->index_offset,
+            .meshlet_offset = sm->meshlet_offset,
             .vertex_offset = sm->vertex_offset,
         };
 
