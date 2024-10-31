@@ -1496,11 +1496,11 @@ void mesh_sort_new(ecs_iter_t *it) {
         };
 
         if (tb_is_mat_transparent(ecs, sm->material)) {
-          TB_DYN_ARR_APPEND(mesh_sys->indirect_opaque_draws, indirect_draw);
-          TB_DYN_ARR_APPEND(mesh_sys->opaque_draw_data, draw_data);
-        } else {
           TB_DYN_ARR_APPEND(mesh_sys->indirect_trans_draws, indirect_draw);
           TB_DYN_ARR_APPEND(mesh_sys->trans_draw_data, draw_data);
+        } else {
+          TB_DYN_ARR_APPEND(mesh_sys->indirect_opaque_draws, indirect_draw);
+          TB_DYN_ARR_APPEND(mesh_sys->opaque_draw_data, draw_data);
         }
       }
     }
@@ -1853,8 +1853,8 @@ void mesh_draw_tick(ecs_iter_t *it) {
       tb_auto prepass_batch = *mesh_sys->opaque_batch;
       {
         prepass_batch.pipeline =
-            tb_shader_get_pipeline(ecs, mesh_sys->prepass_shader);
-        prepass_batch.layout = mesh_sys->prepass_layout;
+            tb_shader_get_pipeline(ecs, mesh_sys->prepass_mesh_shader);
+        prepass_batch.layout = mesh_sys->prepass_mesh_layout;
       }
 
       {

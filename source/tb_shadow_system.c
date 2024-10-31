@@ -702,7 +702,7 @@ void tb_register_shadow_sys(TbWorld *world) {
               },
       };
       err = tb_rnd_create_pipeline_layout(rnd_sys, &create_info,
-                                          "Shadow Pipeline Layout",
+                                          "Shadow Mesh Pipeline Layout",
                                           &sys.mesh_pipe_layout);
       TB_VK_CHECK(err, "Failed to create shadow pipeline layout");
     }
@@ -743,6 +743,8 @@ void tb_unregister_shadow_sys(TbWorld *world) {
 
   tb_rnd_destroy_pipeline(rnd_sys, sys->pipeline);
   tb_rnd_destroy_pipe_layout(rnd_sys, sys->pipe_layout);
+  tb_rnd_destroy_pipeline(rnd_sys, sys->mesh_pipeline);
+  tb_rnd_destroy_pipe_layout(rnd_sys, sys->mesh_pipe_layout);
 
   ecs_query_fini(sys->dir_light_query);
   *sys = (TbShadowSystem){0};
