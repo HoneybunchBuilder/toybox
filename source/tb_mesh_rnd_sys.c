@@ -1522,8 +1522,12 @@ void mesh_construct_draws(ecs_iter_t *it) {
 
   const uint64_t opaque_draw_count =
       TB_DYN_ARR_SIZE(mesh_sys->indirect_opaque_draws);
+  TB_CHECK(opaque_draw_count == TB_DYN_ARR_SIZE(mesh_sys->opaque_draw_data),
+           "Expected these arrays to be the same size");
   const uint64_t trans_draw_count =
       TB_DYN_ARR_SIZE(mesh_sys->indirect_trans_draws);
+  TB_CHECK(trans_draw_count == TB_DYN_ARR_SIZE(mesh_sys->trans_draw_data),
+           "Expected these arrays to be the same size");
 
   // Allocate indirect draw buffers
   VkDrawMeshTasksIndirectCommandEXT *opaque_draw_cmds = NULL;
@@ -1557,26 +1561,26 @@ void mesh_construct_draws(ecs_iter_t *it) {
   tb_rnd_sys_copy_to_tmp_buffer2(rnd_sys, trans_data_size, 0x40,
                                  &trans_data_offset, (void **)&trans_draw_data);
 
-  // Write draw data to the draw buffers
+  // Write cmd buffers
   SDL_memcpy(opaque_draw_cmds, mesh_sys->indirect_opaque_draws.data,
              sizeof(VkDrawMeshTasksIndirectCommandEXT) * opaque_draw_count);
   SDL_memcpy(trans_draw_cmds, mesh_sys->indirect_trans_draws.data,
              sizeof(VkDrawMeshTasksIndirectCommandEXT) * trans_draw_count);
 
+  // Write draw data buffers
   SDL_memcpy(opaque_draw_data, mesh_sys->opaque_draw_data.data,
              opaque_data_size);
-  SDL_memcpy(trans_draw_data, mesh_sys->indirect_trans_draws.data,
-             trans_data_size);
+  SDL_memcpy(trans_draw_data, mesh_sys->trans_draw_data.data, trans_data_size);
 
   mesh_sys->opaque_draw = (TbIndirectDraw){
       .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
-      .offset = opaque_data_offset,
+      .offset = opaque_cmds_offset,
       .draw_count = opaque_draw_count,
       .stride = sizeof(VkDrawMeshTasksIndirectCommandEXT),
   };
   mesh_sys->trans_draw = (TbIndirectDraw){
       .buffer = tb_rnd_get_gpu_tmp_buffer(rnd_sys),
-      .offset = trans_data_offset,
+      .offset = trans_cmds_offset,
       .draw_count = trans_draw_count,
       .stride = sizeof(VkDrawMeshTasksIndirectCommandEXT),
   };
