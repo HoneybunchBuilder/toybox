@@ -542,6 +542,7 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
         sys->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4, 16);
 
     uint64_t meshlets_size = 0;
+    uint64_t triangles_size = 0;
     uint32_t max_meshlet_verts = 0;
     uint32_t max_meshlet_tris = 0;
     tb_get_cluster_sizing(&max_meshlet_verts, &max_meshlet_tris);
@@ -551,8 +552,10 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
       uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
           prim->indices->count, max_meshlet_verts, max_meshlet_tris);
       meshlets_size += max_prim_meshlets * sizeof(TbMeshlet);
+      triangles_size +=
+          max_prim_meshlets * max_meshlet_tris * sizeof(TbPackedTriangle);
     }
-    sys->ocean_pos_offset = index_size + meshlets_size;
+    sys->ocean_pos_offset = index_size + meshlets_size + triangles_size;
 
     sys->ocean_patch_mesh2 =
         tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "ocean", 0);

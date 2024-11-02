@@ -69,6 +69,7 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorSet mat_set;
   VkDescriptorSet draw_set;
   VkDescriptorSet meshlet_set;
+  VkDescriptorSet tri_set;
   VkDescriptorSet obj_set;
   VkDescriptorSet tex_set;
   VkDescriptorSet idx_set;

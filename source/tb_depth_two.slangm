@@ -5,9 +5,10 @@
 GLTF_VIEW_SET(0)
 GLTF_DRAW_SET(1)
 TB_MESHLET_SET(2)
-TB_OBJECT_SET(3)
-TB_IDX_SET(4)
-TB_POS_SET(5)
+TB_MESHLET_TRI_SET(3)
+TB_OBJECT_SET(4)
+TB_IDX_SET(5)
+TB_POS_SET(6)
 
 // TODO: Can we drive these from specialization constants?
 #define NUM_THREADS_X 96
@@ -58,7 +59,7 @@ void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
 
   if (gtid < meshlet.prim_count) {
     triangles[gid] =
-        tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
+        tb_get_meshlet_primitive(meshlet_prims[mesh_idx], meshlet, gtid);
   }
 }
 

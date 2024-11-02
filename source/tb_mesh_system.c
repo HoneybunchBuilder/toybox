@@ -37,6 +37,7 @@ typedef struct TbMeshCtx {
   uint32_t owned_mesh_count;
   VkDescriptorSetLayout meshlet_set_layout;
   TbDynDescPool meshlet_desc_pool;
+  TbDynDescPool triangles_desc_pool;
   VkDescriptorSetLayout set_layout;
   TbDynDescPool idx_desc_pool;
   TbDynDescPool pos_desc_pool;
@@ -66,6 +67,7 @@ typedef struct TbMeshData {
 #else
   VkBufferView index_view;
   VkBufferView meshlet_view;
+  VkBufferView tris_view;
   VkBufferView attr_views[TB_INPUT_PERM_COUNT];
 #endif
 } TbMeshData;
@@ -148,6 +150,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
   // Determine how big this mesh is
   uint64_t index_size = 0;
   uint64_t meshlets_size = 0;
+  uint64_t tris_size = 0;
   uint64_t geom_size = 0;
   uint64_t attr_size_per_type[cgltf_attribute_type_max_enum] = {0};
   uint32_t max_meshlet_verts = 0;
@@ -180,6 +183,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
       uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
           indices->count, max_meshlet_verts, max_meshlet_tris);
       meshlets_size += (max_prim_meshlets * sizeof(TbMeshlet));
+      tris_size += max_prim_meshlets * max_meshlet_tris * sizeof(uint32_t);
 
       vertex_count = prim->attributes[0].data->count;
       for (cgltf_size attr_idx = 0; attr_idx < prim->attributes_count;
@@ -207,12 +211,12 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
       }
     }
 
-    geom_size = index_size + meshlets_size + vertex_size;
+    geom_size = index_size + meshlets_size + tris_size + vertex_size;
   }
 
   uint64_t attr_offset_per_type[cgltf_attribute_type_max_enum] = {0};
   {
-    uint64_t offset = index_size + meshlets_size;
+    uint64_t offset = index_size + meshlets_size + tris_size;
     for (uint32_t i = 0; i < cgltf_attribute_type_max_enum; ++i) {
       tb_auto attr_size = attr_size_per_type[i];
       if (attr_size > 0) {
@@ -257,6 +261,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
   {
     uint64_t idx_offset = 0;
     uint64_t meshlet_offset = index_size;
+    uint64_t tris_offset = index_size + meshlets_size;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
@@ -334,15 +339,46 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         }
 
         // Copy to meshlets region of geometry buffer
-        const uint64_t meshlet_buffer_size = sizeof(TbMeshlet) * meshlet_count;
+        {
+          const uint64_t meshlet_buffer_size =
+              sizeof(TbMeshlet) * meshlet_count;
 
-        void *src = meshlets.data;
-        void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
-        SDL_memcpy(dst, src, meshlet_buffer_size);
+          void *src = meshlets.data;
+          void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
+          SDL_memcpy(dst, src, meshlet_buffer_size);
 
-        meshlet_offset += max_prim_meshlets * sizeof(TbMeshlet);
+          meshlet_offset += max_prim_meshlets * sizeof(TbMeshlet);
+        }
+
+        // Pack triangle data
+        tb_auto tri_count = TB_DYN_ARR_SIZE(meshlet_tris) / 3;
+        tb_auto packed_tris =
+            tb_alloc_nm_tp(tb_thread_alloc, tri_count, TbPackedTriangle);
+        uint32_t tri_idx = 0;
+        for (uint32_t i = 0; i < tri_count; i += 3) {
+          packed_tris[tri_idx] = (TbPackedTriangle){
+              meshlet_tris.data[i + 0],
+              meshlet_tris.data[i + 1],
+              meshlet_tris.data[i + 2],
+          };
+          tri_idx++;
+        }
+
+        // Copy to triangles region of geometry buffer
+        {
+          const uint64_t tris_buffer_size =
+              sizeof(TbPackedTriangle) * tri_count;
+
+          void *src = packed_tris;
+          void *dst = ((uint8_t *)(ptr)) + tris_offset;
+          SDL_memcpy(dst, src, tris_buffer_size);
+
+          tris_offset +=
+              meshlet_count * max_meshlet_tris * sizeof(TbPackedTriangle);
+        }
 
         // Clean up arrays
+        tb_free(tb_thread_alloc, packed_tris);
         TB_DYN_ARR_DESTROY(meshlets);
         TB_DYN_ARR_DESTROY(meshlet_verts);
         TB_DYN_ARR_DESTROY(meshlet_tris);
@@ -415,9 +451,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
 
       // Create one buffer view for indices
       {
-        VkFormat idx_format = VK_FORMAT_R16_UINT;
+        VkFormat idx_format = VK_FORMAT_R16_SINT;
         if (data.idx_type == VK_INDEX_TYPE_UINT32) {
-          idx_format = VK_FORMAT_R32_UINT;
+          idx_format = VK_FORMAT_R32_SINT;
         }
         TB_CHECK(index_size, "Unexpected index size of 0");
 
@@ -446,12 +482,24 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         VkBufferViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
             .buffer = data.gpu_buffer.buffer,
-            .offset = meshlet_offset,
+            .offset = index_size,
             .range = meshlets_size,
             .format = VK_FORMAT_R32G32B32A32_UINT,
         };
         tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Meshlet View",
                                   &data.meshlet_view);
+      }
+      // Create one buffer view for meshlet triangle primitives
+      {
+        VkBufferViewCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = data.gpu_buffer.buffer,
+            .offset = meshlets_size,
+            .range = tris_size,
+            .format = VK_FORMAT_R32_UINT,
+        };
+        tb_rnd_create_buffer_view(rnd_sys, &create_info, "Mesh Triangles View",
+                                  &data.tris_view);
       }
 
 #if TB_USE_DESC_BUFFER == 1
@@ -932,6 +980,24 @@ void tb_finalize_meshes(ecs_iter_t *it) {
     tb_write_dyn_desc_pool(&ctx->meshlet_desc_pool, TB_DYN_ARR_SIZE(writes),
                            writes.data, NULL);
   }
+
+  // Write triangle descriptor
+  {
+    TB_DYN_ARR_OF(TbDynDescWrite) writes = {0};
+    TB_DYN_ARR_RESET(writes, rnd_tmp_alloc, it->count);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+      tb_auto mesh = &meshes[i];
+      TbDynDescWrite write = {
+          .type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+          .desc.texel_buffer = mesh->tris_view,
+      };
+      TB_DYN_ARR_APPEND(writes, write);
+    }
+
+    tb_write_dyn_desc_pool(&ctx->triangles_desc_pool, TB_DYN_ARR_SIZE(writes),
+                           writes.data, NULL);
+  }
 }
 
 void tb_update_mesh_pool(ecs_iter_t *it) {
@@ -942,6 +1008,7 @@ void tb_update_mesh_pool(ecs_iter_t *it) {
 
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->idx_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->meshlet_desc_pool);
+  tb_tick_dyn_desc_pool(rnd_sys, &ctx->triangles_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->pos_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->norm_desc_pool);
   tb_tick_dyn_desc_pool(rnd_sys, &ctx->tan_desc_pool);
@@ -1156,6 +1223,10 @@ void tb_register_mesh2_sys(TbWorld *world) {
                           ctx.meshlet_set_layout,
                           VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.meshlet_desc_pool, 0);
+  tb_create_dyn_desc_pool(rnd_sys, "Meshlet Triangles Descriptors",
+                          ctx.meshlet_set_layout,
+                          VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
+                          &ctx.triangles_desc_pool, 0);
   tb_create_dyn_desc_pool(rnd_sys, "Mesh Index Descriptors", ctx.set_layout,
                           VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, desc_cap,
                           &ctx.idx_desc_pool, 0);
@@ -1238,6 +1309,11 @@ VkDescriptorSet tb_mesh_sys_get_meshlet_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
   tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
   return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->meshlet_desc_pool);
+}
+VkDescriptorSet tb_mesh_sys_get_triangles_set(ecs_world_t *ecs) {
+  tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);
+  tb_auto rnd_sys = ecs_singleton_ensure(ecs, TbRenderSystem);
+  return tb_dyn_desc_pool_get_set(rnd_sys, &ctx->triangles_desc_pool);
 }
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs) {
   tb_auto ctx = ecs_singleton_ensure(ecs, TbMeshCtx);

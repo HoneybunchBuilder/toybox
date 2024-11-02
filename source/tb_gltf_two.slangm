@@ -6,15 +6,16 @@ GLTF_VIEW_SET(0)
 GLTF_MATERIAL_SET(1)
 GLTF_DRAW_SET(2)
 TB_MESHLET_SET(3)
-TB_OBJECT_SET(4)
-TB_TEXTURE_SET(5)
-TB_IDX_SET(6)
-TB_POS_SET(7)
-TB_NORM_SET(8)
-TB_TAN_SET(9)
-TB_UV0_SET(10)
-TB_JOINT_SET(11)
-TB_WEIGHT_SET(12)
+TB_MESHLET_TRI_SET(4)
+TB_OBJECT_SET(5)
+TB_TEXTURE_SET(6)
+TB_IDX_SET(7)
+TB_POS_SET(8)
+TB_NORM_SET(9)
+TB_TAN_SET(10)
+TB_UV0_SET(11)
+TB_JOINT_SET(12)
+TB_WEIGHT_SET(13)
 
 // TODO: Can we drive these from specialization constants?
 #define NUM_THREADS_X 96
@@ -99,13 +100,13 @@ void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
 
   if (gtid < meshlet.prim_count) {
     triangles[gid] =
-        tb_get_meshlet_primitive(idx_buffers[mesh_idx], meshlet, gtid);
+        tb_get_meshlet_primitive(meshlet_prims[mesh_idx], meshlet, gtid);
   }
 }
 
 [shader("fragment")]
 float4 frag(VertexOut vert, bool front_face: SV_IsFrontFace) : SV_TARGET {
-  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(vert.mat_idx, gltf_data);
+  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(0, gltf_data);
 
   float4 base_color = 1;
 
