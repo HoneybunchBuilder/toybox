@@ -44,10 +44,9 @@ void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
   SetMeshOutputCounts(meshlet.vert_count, meshlet.prim_count);
 
   if (gtid < meshlet.vert_count) {
-    uint32_t local_idx = gtid + meshlet.vert_offset;
-    uint32_t vert_idx = local_idx + draw.index_offset;
+    uint32_t local_idx = gtid + meshlet.vert_offset + draw.index_offset;
     uint32_t idx =
-        tb_get_idx(vert_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
+        tb_get_idx(local_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
 
     int3 local_pos =
         tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
@@ -64,7 +63,7 @@ void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
   }
 
   if (gtid < meshlet.prim_count) {
-    triangles[gid] =
+    triangles[gtid] =
         tb_get_meshlet_primitive(meshlet_prims[mesh_idx], meshlet, gtid);
   }
 }

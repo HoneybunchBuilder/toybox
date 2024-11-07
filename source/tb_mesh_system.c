@@ -494,7 +494,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         VkBufferViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
             .buffer = data.gpu_buffer.buffer,
-            .offset = meshlets_size,
+            .offset = index_size + meshlets_size,
             .range = tris_size,
             .format = VK_FORMAT_R32_UINT,
         };
