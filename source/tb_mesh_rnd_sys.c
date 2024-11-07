@@ -969,12 +969,12 @@ void prepass_meshlet_record(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t set_count = 8;
+    const uint32_t set_count = 9;
 
     VkDescriptorSet sets[set_count] = {
         prim_batch->view_set, prim_batch->draw_set, prim_batch->meshlet_set,
-        prim_batch->tri_set,  prim_batch->obj_set,  prim_batch->idx_set,
-        prim_batch->pos_set,  prim_batch->norm_set};
+        prim_batch->tri_set,  prim_batch->vert_set, prim_batch->obj_set,
+        prim_batch->idx_set,  prim_batch->pos_set,  prim_batch->norm_set};
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             set_count, sets, 0, NULL);
 
@@ -1076,13 +1076,14 @@ void meshlet_record_common(TracyCGPUContext *gpu_ctx, VkCommandBuffer buffer,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t set_count = 12;
+    const uint32_t set_count = 13;
 
     const VkDescriptorSet sets[set_count] = {
-        prim_batch->view_set,    prim_batch->mat_set, prim_batch->draw_set,
-        prim_batch->meshlet_set, prim_batch->tri_set, prim_batch->obj_set,
-        prim_batch->tex_set,     prim_batch->idx_set, prim_batch->pos_set,
-        prim_batch->norm_set,    prim_batch->tan_set, prim_batch->uv0_set,
+        prim_batch->view_set,    prim_batch->mat_set,  prim_batch->draw_set,
+        prim_batch->meshlet_set, prim_batch->tri_set,  prim_batch->vert_set,
+        prim_batch->obj_set,     prim_batch->tex_set,  prim_batch->idx_set,
+        prim_batch->pos_set,     prim_batch->norm_set, prim_batch->tan_set,
+        prim_batch->uv0_set,
     };
     vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                             set_count, sets, 0, NULL);
@@ -1236,11 +1237,12 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 8,
+          .setLayoutCount = 9,
           .pSetLayouts =
-              (VkDescriptorSetLayout[8]){
+              (VkDescriptorSetLayout[9]){
                   tb_view_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
+                  meshlet_set_layout,
                   meshlet_set_layout,
                   meshlet_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),
@@ -1296,7 +1298,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
 
     // Create mesh shader pipeline layouts
     {
-      const uint32_t layout_count = 14;
+      const uint32_t layout_count = 15;
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
           .setLayoutCount = layout_count,
@@ -1305,6 +1307,7 @@ TbMeshSystem create_mesh_system_internal(ecs_world_t *ecs, TbAllocator gp_alloc,
                   tb_view_sys_get_set_layout(ecs),
                   tb_mat_sys_get_set_layout(ecs),
                   sys.draw_set_layout,
+                  meshlet_set_layout,
                   meshlet_set_layout,
                   meshlet_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),
@@ -1757,6 +1760,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
       tb_auto idx_set = tb_mesh_sys_get_idx_set(ecs);
       tb_auto meshlet_set = tb_mesh_sys_get_meshlet_set(ecs);
       tb_auto tri_set = tb_mesh_sys_get_triangles_set(ecs);
+      tb_auto vert_set = tb_mesh_sys_get_vertices_set(ecs);
       tb_auto pos_set = tb_mesh_sys_get_pos_set(ecs);
       tb_auto norm_set = tb_mesh_sys_get_norm_set(ecs);
       tb_auto tan_set = tb_mesh_sys_get_tan_set(ecs);
@@ -1800,6 +1804,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
           .draw_set = opaque_draw_set,
           .meshlet_set = meshlet_set,
           .tri_set = tri_set,
+          .vert_set = vert_set,
           .obj_set = obj_set,
           .tex_set = tex_set,
           .idx_set = idx_set,
@@ -1848,6 +1853,7 @@ void mesh_draw_tick(ecs_iter_t *it) {
                   .draw_set = trans_draw_set,
                   .meshlet_set = meshlet_set,
                   .tri_set = tri_set,
+                  .vert_set = vert_set,
                   .obj_set = obj_set,
                   .tex_set = tex_set,
                   .idx_set = idx_set,

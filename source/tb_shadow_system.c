@@ -366,7 +366,7 @@ void shadow_meshlet_pass_record(TracyCGPUContext *gpu_ctx,
     vkCmdSetViewport(buffer, 0, 1, &batch->viewport);
     vkCmdSetScissor(buffer, 0, 1, &batch->scissor);
 
-    const uint32_t set_count = 7;
+    const uint32_t set_count = 8;
 #if TB_USE_DESC_BUFFER == 1
     {
       const VkDescriptorBufferBindingInfoEXT buffer_bindings[set_count] = {
@@ -384,8 +384,8 @@ void shadow_meshlet_pass_record(TracyCGPUContext *gpu_ctx,
     {
       VkDescriptorSet sets[set_count] = {
           prim_batch->view_set, prim_batch->draw_set, prim_batch->meshlet_set,
-          prim_batch->tri_set,  prim_batch->obj_set,  prim_batch->idx_set,
-          prim_batch->pos_set};
+          prim_batch->tri_set,  prim_batch->vert_set, prim_batch->obj_set,
+          prim_batch->idx_set,  prim_batch->pos_set};
       vkCmdBindDescriptorSets(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
                               0, set_count, sets, 0, NULL);
     }
@@ -691,11 +691,12 @@ void tb_register_shadow_sys(TbWorld *world) {
     {
       VkPipelineLayoutCreateInfo create_info = {
           .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .setLayoutCount = 7,
+          .setLayoutCount = 8,
           .pSetLayouts =
-              (VkDescriptorSetLayout[7]){
+              (VkDescriptorSetLayout[8]){
                   tb_view_sys_get_set_layout(ecs),
                   mesh_sys->draw_set_layout,
+                  meshlet_set_layout,
                   meshlet_set_layout,
                   meshlet_set_layout,
                   tb_render_object_sys_get_set_layout(ecs),

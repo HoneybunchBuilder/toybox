@@ -6,9 +6,10 @@ GLTF_VIEW_SET(0)
 GLTF_DRAW_SET(1)
 TB_MESHLET_SET(2)
 TB_MESHLET_TRI_SET(3)
-TB_OBJECT_SET(4)
-TB_IDX_SET(5)
-TB_POS_SET(6)
+TB_MESHLET_VERT_SET(4)
+TB_OBJECT_SET(5)
+TB_IDX_SET(6)
+TB_POS_SET(7)
 
 // TODO: Can we drive these from specialization constants?
 #define NUM_THREADS_X 96
@@ -42,9 +43,8 @@ void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupIndex,
   SetMeshOutputCounts(meshlet.vert_count, meshlet.prim_count);
 
   if (gtid < meshlet.vert_count) {
-    uint32_t local_idx = gtid + meshlet.vert_offset + draw.index_offset;
-    uint32_t idx =
-        tb_get_idx(local_idx, mesh_idx, idx_buffers) + draw.vertex_offset;
+    uint32_t idx = tb_get_meshlet_vertex(meshlet_verts[mesh_idx], meshlet, gtid + draw.index_offset) + draw.vertex_offset;
+
     int3 local_pos =
         tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
     float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;

@@ -42,6 +42,7 @@ VkDescriptorSetLayout tb_mesh_sys_get_meshlet_set_layout(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_meshlet_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_triangles_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_vertices_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);

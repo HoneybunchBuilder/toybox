@@ -543,6 +543,7 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
 
     uint64_t meshlets_size = 0;
     uint64_t triangles_size = 0;
+    uint64_t verts_size = 0;
     uint32_t max_meshlet_verts = 0;
     uint32_t max_meshlet_tris = 0;
     tb_get_cluster_sizing(&max_meshlet_verts, &max_meshlet_tris);
@@ -554,8 +555,10 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
       meshlets_size += max_prim_meshlets * sizeof(TbMeshlet);
       triangles_size +=
           max_prim_meshlets * max_meshlet_tris * sizeof(TbPackedTriangle);
+      verts_size += max_prim_meshlets * max_meshlet_verts * sizeof(uint32_t);
     }
-    sys->ocean_pos_offset = index_size + meshlets_size + triangles_size;
+    sys->ocean_pos_offset =
+        index_size + meshlets_size + triangles_size + verts_size;
 
     sys->ocean_patch_mesh2 =
         tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "ocean", 0);

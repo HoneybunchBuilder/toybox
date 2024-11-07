@@ -72,6 +72,9 @@ static_assert(sizeof(TbPackedTriangle) == sizeof(uint32_t), "TbPackedTriangle mu
 #define TB_MESHLET_TRI_SET(b)                                                  \
   [[vk::binding(0, b)]]                                                        \
   RWBuffer<uint32_t> meshlet_prims[];
+#define TB_MESHLET_VERT_SET(b)                                                 \
+  [[vk::binding(0, b)]]                                                        \
+  RWBuffer<uint32_t> meshlet_verts[];
 #define TB_TEXTURE_SET(b)                                                      \
   [[vk::binding(0, b)]]                                                        \
   Texture2D gltf_textures[];
@@ -154,6 +157,11 @@ uint3 tb_unpack_primitive(uint primitive) {
 TbMeshlet tb_get_meshlet(RWBuffer<uint4> meshlets, uint32_t index) {
   uint4 m = meshlets[index];
   return TbMeshlet(m.x, m.y, m.z, m.w);
+}
+
+uint32_t tb_get_meshlet_vertex(RWBuffer<uint32_t> verts, TbMeshlet m, 
+                               uint32_t index) {
+  return verts[m.vert_offset + index];
 }
 
 uint3 tb_get_meshlet_primitive(RWBuffer<uint32_t> tris, TbMeshlet m,
