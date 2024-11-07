@@ -347,7 +347,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
           SDL_memcpy(dst, src, meshlet_buffer_size);
 
-          meshlet_offset += max_prim_meshlets * sizeof(TbMeshlet);
+          meshlet_offset += meshlet_count * sizeof(TbMeshlet);
         }
 
         // Pack triangle data
@@ -373,7 +373,8 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           void *dst = ((uint8_t *)(ptr)) + tris_offset;
           SDL_memcpy(dst, src, tris_buffer_size);
 
-          tris_offset += meshlet_count * tri_count * sizeof(TbPackedTriangle);
+          tris_offset +=
+              meshlet_count * max_meshlet_tris * sizeof(TbPackedTriangle);
         }
 
         // Clean up arrays
@@ -790,7 +791,7 @@ void tb_load_submeshes_task(const void *args) {
           meshlets.data, meshlet_verts.data, meshlet_tris.data, indices_data,
           prim_idx_count, prim_vert_count, max_meshlet_verts, max_meshlet_tris);
 
-      meshlet_offset += max_prim_meshlets;
+      meshlet_offset += submesh_data.meshlet_count;
 
       tb_free(tb_thread_alloc, indices_data);
 
