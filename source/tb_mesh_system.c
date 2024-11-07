@@ -373,8 +373,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           void *dst = ((uint8_t *)(ptr)) + tris_offset;
           SDL_memcpy(dst, src, tris_buffer_size);
 
-          tris_offset +=
-              meshlet_count * max_meshlet_tris * sizeof(TbPackedTriangle);
+          tris_offset += meshlet_count * tri_count * sizeof(TbPackedTriangle);
         }
 
         // Clean up arrays

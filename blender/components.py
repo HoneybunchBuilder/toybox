@@ -47,7 +47,9 @@ def comp_update(self, context):
     prop_names = tb_comp_props[self.name]
     context.object[self.name] = {}
     for attr in [attr for attr in dir(self) if attr in prop_names]:
-        context.object[self.name][attr] = getattr(self, attr)
+        attr_val = getattr(self, attr)
+        comp = context.object[self.name]
+        comp[attr] = attr_val
     return
 
 

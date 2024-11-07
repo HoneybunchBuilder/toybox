@@ -43,8 +43,10 @@ int32_t main(int32_t argc, char *argv[]) {
   {
     // This hint must be set before init for xbox controllers to work
     SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
-    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC);
-    if (res != 0) {
+    tb_auto init_flags = SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC;
+    if (!SDL_Init(init_flags)) {
+      TB_LOG_ERROR(SDL_LOG_CATEGORY_APPLICATION, "Failed to init SDL: %s",
+                   SDL_GetError());
       SDL_TriggerBreakpoint();
       return -1;
     }
