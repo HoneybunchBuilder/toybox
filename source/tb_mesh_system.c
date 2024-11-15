@@ -265,9 +265,12 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
   // Read the cgltf mesh into the driver owned memory
   {
     uint64_t idx_offset = 0;
-    uint64_t meshlet_offset = index_size;
-    uint64_t tris_offset = index_size + meshlets_size;
-    uint64_t verts_offset = index_size + meshlets_size + tris_size;
+    const uint64_t meshlet_offset_start = index_size;
+    const uint64_t tris_offset_start = index_size + meshlets_size;
+    const uint64_t verts_offset_start = index_size + meshlets_size + tris_size;
+    uint64_t meshlet_offset = meshlet_offset_start;
+    uint64_t tris_offset = tris_offset_start;
+    uint64_t verts_offset = verts_offset_start;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
@@ -352,12 +355,19 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         {
           const uint64_t meshlet_buffer_size =
               sizeof(TbMeshlet) * meshlet_count;
+          uint64_t max_buffer_size = meshlet_count * sizeof(TbMeshlet);
+
+          TB_CHECK(meshlet_buffer_size <= max_buffer_size,
+                   "Meshlet buffer copy too large");
+          TB_CHECK(meshlet_offset + meshlet_buffer_size <=
+                       meshlet_offset_start + meshlets_size,
+                   "Meshlet buffer copy out of range");
 
           void *src = meshlets.data;
           void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
           SDL_memcpy(dst, src, meshlet_buffer_size);
 
-          meshlet_offset += meshlet_count * sizeof(TbMeshlet);
+          meshlet_offset += max_buffer_size;
         }
 
         // Pack triangle data
@@ -376,24 +386,38 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         // Copy to triangles region of geometry buffer
         {
           uint64_t tris_buffer_size = tri_count * sizeof(TbPackedTriangle);
+          uint64_t max_buffer_size =
+              meshlet_count * max_meshlet_tris * sizeof(TbPackedTriangle);
+
+          TB_CHECK(tris_buffer_size <= max_buffer_size,
+                   "Triangle buffer copy too large");
+          TB_CHECK(tris_offset + tris_buffer_size <=
+                       tris_offset_start + tris_size,
+                   "Triangle buffer copy out of range");
 
           void *src = packed_tris;
           void *dst = ((uint8_t *)(ptr)) + tris_offset;
           SDL_memcpy(dst, src, tris_buffer_size);
-
-          tris_offset +=
-              meshlet_count * max_meshlet_tris * sizeof(TbPackedTriangle);
+          tris_offset += max_buffer_size;
         }
 
         // Copy to meshlet verts region of geometry buffer
         {
           uint64_t verts_buffer_size = vert_count * sizeof(uint32_t);
+          uint64_t max_buffer_size =
+              meshlet_count * max_meshlet_verts * sizeof(uint32_t);
+
+          TB_CHECK(verts_buffer_size <= max_buffer_size,
+                   "VertIdx buffer copy too large");
+          TB_CHECK(verts_offset + verts_buffer_size <=
+                       verts_offset_start + verts_size,
+                   "VertIdx buffer copy out of range");
 
           void *src = meshlet_verts.data;
           void *dst = ((uint8_t *)(ptr)) + verts_offset;
           SDL_memcpy(dst, src, verts_buffer_size);
 
-          verts_offset += meshlet_count * max_meshlet_verts * sizeof(uint32_t);
+          verts_offset += max_buffer_size;
         }
 
         // Clean up arrays

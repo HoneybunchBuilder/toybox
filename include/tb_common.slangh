@@ -9,6 +9,7 @@
 
 #include "tb_pi.h"
 #include "tb_simd.h"
+#include "tb_meshlet.h"
 
 #define TB_PUSH_CONSTANT_BYTES 128
 

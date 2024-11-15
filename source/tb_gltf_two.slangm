@@ -19,12 +19,9 @@ TB_JOINT_SET(13)
 TB_WEIGHT_SET(14)
 
 // TODO: Can we drive these from specialization constants?
-#define NUM_THREADS_X 96
+#define NUM_THREADS_X TB_MESHLET_THREADS
 #define NUM_THREADS_Y 1
 #define NUM_THREADS_Z 1
-
-#define MAX_NUM_VERTS 252
-#define MAX_NUM_PRIMS (MAX_NUM_VERTS / 3)
 
 struct VertexOut {
   float4 clip_pos : SV_POSITION;
@@ -42,8 +39,8 @@ struct VertexOut {
 [outputtopology("triangle")]
 [numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
 void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupID,
-          out vertices VertexOut verts[MAX_NUM_VERTS],
-          out indices uint3 triangles[MAX_NUM_PRIMS]) {
+          out vertices VertexOut verts[TB_MESHLET_MAX_VERTICES],
+          out indices uint3 triangles[TB_MESHLET_MAX_TRIANGLES]) {
   uint32_t draw_idx = tb_get_draw_index();
   TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
   int32_t vert_perm = draw.perm;
