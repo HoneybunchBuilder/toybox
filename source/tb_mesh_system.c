@@ -351,25 +351,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
                                   meshlet.triangle_count, meshlet.vertex_count);
         }
 
-        // Copy to meshlets region of geometry buffer
-        {
-          const uint64_t meshlet_buffer_size =
-              sizeof(TbMeshlet) * meshlet_count;
-          uint64_t max_buffer_size = meshlet_count * sizeof(TbMeshlet);
-
-          TB_CHECK(meshlet_buffer_size <= max_buffer_size,
-                   "Meshlet buffer copy too large");
-          TB_CHECK(meshlet_offset + meshlet_buffer_size <=
-                       meshlet_offset_start + meshlets_size,
-                   "Meshlet buffer copy out of range");
-
-          void *src = meshlets.data;
-          void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
-          SDL_memcpy(dst, src, meshlet_buffer_size);
-
-          meshlet_offset += max_buffer_size;
-        }
-
         // Pack triangle data
         tb_auto packed_tris =
             tb_alloc_nm_tp(tb_thread_alloc, tri_count, TbPackedTriangle);
@@ -381,6 +362,30 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
               meshlet_tris.data[i + 2],
           };
           tri_idx++;
+        }
+
+        // Because meshlets are packed, primitive offsets are actually off by a
+        // factor of 3; they point to an offset of triangle indices when we need
+        // them to be an offset to triangles
+        for (uint64_t i = 0; i < meshlet_count; ++i) {
+          tb_auto meshlet = &TB_DYN_ARR_AT(meshlets, i);
+          meshlet->triangle_offset /= 3;
+        }
+
+        // Copy to meshlets region of geometry buffer
+        {
+          const uint64_t meshlet_buffer_size =
+              sizeof(TbMeshlet) * meshlet_count;
+
+          TB_CHECK(meshlet_offset + meshlet_buffer_size <=
+                       meshlet_offset_start + meshlets_size,
+                   "Meshlet buffer copy out of range");
+
+          void *src = meshlets.data;
+          void *dst = ((uint8_t *)(ptr)) + meshlet_offset;
+          SDL_memcpy(dst, src, meshlet_buffer_size);
+
+          meshlet_offset += meshlet_buffer_size;
         }
 
         // Copy to triangles region of geometry buffer
