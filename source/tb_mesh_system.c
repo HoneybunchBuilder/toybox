@@ -354,22 +354,32 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
         // Pack triangle data
         tb_auto packed_tris =
             tb_alloc_nm_tp(tb_thread_alloc, tri_count, TbPackedTriangle);
-        uint32_t tri_idx = 0;
-        for (uint32_t i = 0; i < tri_count * 3; i += 3) {
-          packed_tris[tri_idx] = (TbPackedTriangle){
-              meshlet_tris.data[i + 0],
-              meshlet_tris.data[i + 1],
-              meshlet_tris.data[i + 2],
-          };
-          tri_idx++;
+
+        uint32_t packed_tri_idx = 0;
+        for (uint64_t i = 0; i < meshlet_count; ++i) {
+          tb_auto meshlet = TB_DYN_ARR_AT(meshlets, i);
+          for (uint32_t tc = 0; tc < meshlet.triangle_count * 3; tc += 3) {
+            uint32_t tri_idx = meshlet.triangle_offset + tc;
+            packed_tris[packed_tri_idx] = (TbPackedTriangle){
+                meshlet_tris.data[tri_idx + 0],
+                meshlet_tris.data[tri_idx + 1],
+                meshlet_tris.data[tri_idx + 2],
+            };
+            packed_tri_idx++;
+          }
         }
 
         // Because meshlets are packed, primitive offsets are actually off by a
         // factor of 3; they point to an offset of triangle indices when we need
         // them to be an offset to triangles
-        for (uint64_t i = 0; i < meshlet_count; ++i) {
-          tb_auto meshlet = &TB_DYN_ARR_AT(meshlets, i);
-          meshlet->triangle_offset /= 3;
+        {
+          uint32_t tri_offset = 0;
+          for (uint64_t i = 0; i < meshlet_count; ++i) {
+            tb_auto meshlet = &TB_DYN_ARR_AT(meshlets, i);
+            meshlet->triangle_offset = tri_offset;
+            tri_offset += meshlet->triangle_count;
+          }
+          TB_CHECK(tri_offset == tri_count, "Unexpected");
         }
 
         // Copy to meshlets region of geometry buffer
