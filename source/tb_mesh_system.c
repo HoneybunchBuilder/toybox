@@ -273,6 +273,9 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
     uint64_t verts_offset = verts_offset_start;
     uint64_t vertex_count = 0;
     cgltf_size attr_count = 0;
+
+    uint32_t prim_tri_offset = 0;
+    uint32_t prim_vert_offset = 0;
     for (cgltf_size prim_idx = 0; prim_idx < gltf_mesh->primitives_count;
          ++prim_idx) {
       tb_auto prim = &gltf_mesh->primitives[prim_idx];
@@ -369,16 +372,28 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           }
         }
 
+        // Offset all meshlet vertices by the primitive
+        TB_DYN_ARR_FOREACH(meshlet_verts, i) {
+          TB_DYN_ARR_AT(meshlet_verts, i) += prim_vert_offset;
+        }
+
         // Because meshlets are packed, primitive offsets are actually off by a
         // factor of 3; they point to an offset of triangle indices when we need
         // them to be an offset to triangles
         {
           uint32_t tri_offset = 0;
+          uint32_t vert_offset = 0;
           for (uint64_t i = 0; i < meshlet_count; ++i) {
             tb_auto meshlet = &TB_DYN_ARR_AT(meshlets, i);
-            meshlet->triangle_offset = tri_offset;
+
+            // Also make sure to offset meshlet offsets by the primitive offset
+            meshlet->triangle_offset = prim_tri_offset + tri_offset;
+            meshlet->vertex_offset = prim_vert_offset + vert_offset;
             tri_offset += meshlet->triangle_count;
+            vert_offset += meshlet->vertex_count;
           }
+          prim_tri_offset += tri_offset;
+          prim_vert_offset += vert_offset;
           TB_CHECK(tri_offset == tri_count, "Unexpected");
         }
 
@@ -413,7 +428,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           void *src = packed_tris;
           void *dst = ((uint8_t *)(ptr)) + tris_offset;
           SDL_memcpy(dst, src, tris_buffer_size);
-          tris_offset += max_buffer_size;
+          tris_offset += tris_buffer_size;
         }
 
         // Copy to meshlet verts region of geometry buffer
@@ -432,7 +447,7 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           void *dst = ((uint8_t *)(ptr)) + verts_offset;
           SDL_memcpy(dst, src, verts_buffer_size);
 
-          verts_offset += max_buffer_size;
+          verts_offset += verts_buffer_size;
         }
 
         // Clean up arrays
