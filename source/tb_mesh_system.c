@@ -372,11 +372,6 @@ TbMeshData tb_load_gltf_mesh(TbRenderSystem *rnd_sys,
           }
         }
 
-        // Offset all meshlet vertices by the primitive
-        TB_DYN_ARR_FOREACH(meshlet_verts, i) {
-          TB_DYN_ARR_AT(meshlet_verts, i) += prim_vert_offset;
-        }
-
         // Because meshlets are packed, primitive offsets are actually off by a
         // factor of 3; they point to an offset of triangle indices when we need
         // them to be an offset to triangles
