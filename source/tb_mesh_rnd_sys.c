@@ -1446,8 +1446,8 @@ void mesh_sort_new(ecs_iter_t *it) {
       continue;
     }
 
-    if (ecs_has(ecs, mesh, TbMeshInGPUScene)) {
-      // SDL_assert(false);
+    if (ecs_has(ecs, it->entities[i], TbMeshInGPUScene)) {
+      TB_CHECK(false, "Should not happen");
       continue;
     }
 
@@ -1515,7 +1515,7 @@ void mesh_sort_new(ecs_iter_t *it) {
       }
     }
 
-    ecs_add(ecs, mesh, TbMeshInGPUScene);
+    ecs_add(ecs, it->entities[i], TbMeshInGPUScene);
   }
 }
 
@@ -1948,11 +1948,11 @@ void tb_register_mesh_sys(TbWorld *world) {
                                    .name = "mesh_sort_new",
                                    .add = ecs_ids(ecs_dependson(EcsPreUpdate)),
                                }),
-          .query.terms = {{.id = ecs_id(TbMeshSystem),
-                           .src.id = ecs_id(TbMeshSystem)},
-                          {.id = ecs_id(TbMeshComponent)},
-                          {.id = ecs_id(TbRenderObject)},
-                          {.id = ecs_id(TbMeshInGPUScene), .oper = EcsNot}},
+          .query.terms =
+              {{.id = ecs_id(TbMeshSystem), .src.id = ecs_id(TbMeshSystem)},
+               {.id = ecs_id(TbMeshComponent), .oper = EcsAnd, .inout = EcsIn},
+               {.id = ecs_id(TbRenderObject), .oper = EcsAnd, .inout = EcsIn},
+               {.id = TbMeshInGPUScene, .oper = EcsNot, .inout = EcsIn}},
           .callback = mesh_sort_new,
       });
 

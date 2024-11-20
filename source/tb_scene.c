@@ -585,7 +585,7 @@ void tb_register_scene_sys(TbWorld *world) {
                             {
                                 {.id = ecs_id(TbNode), .inout = EcsIn},
                                 {
-                                    .id = ecs_id(TbComponentsReady),
+                                    .id = TbComponentsReady,
                                     .oper = EcsNot,
                                     .inout = EcsIn,
                                 },
