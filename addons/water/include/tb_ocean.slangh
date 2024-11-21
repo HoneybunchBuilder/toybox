@@ -8,8 +8,12 @@
 typedef float4 TbOceanWave; // xy = dir, z = steep, w = wavelength
 
 TB_GPU_STRUCT_DECL_NOPACK(TbOceanData, {
-   float4 time_waves; // x = time, y = wave count
+  uint32_t mesh_idx; // Index of the ocean patch mesh in the mesh list
+  float4 time_waves; // x = time, y = wave count
   TbOceanWave wave[TB_WAVE_MAX];
+});
+TB_GPU_STRUCT_DECL_NOPACK(TbOceanDrawData, {
+  float4 instance_pos;
 });
 TB_GPU_STRUCT_DECL(TbOceanPushConstants, {
   float4x4 m;
@@ -37,6 +41,15 @@ _Static_assert(sizeof(TbOceanPushConstants) <= TB_PUSH_CONSTANT_BYTES,
   [[vk::push_constant]]                                                        \
   ConstantBuffer<TbOceanPushConstants> consts
 
+#define OCEAN_DRAW_SET(b)                                                       \
+  [[vk::binding(0, b)]]                                                        \
+  StructuredBuffer<TbOceanDrawData> draw_data;
+
+TbOceanDrawData tb_get_ocean_draw_data(int32_t draw,
+                                     StructuredBuffer<TbOceanDrawData> data) {
+  return data[draw];
+}
+  
 void gerstner_wave(TbOceanWave wave, float time, inout float3 pos,
                    inout float3 tangent, inout float3 binormal) {
   float steepness = wave.z;
