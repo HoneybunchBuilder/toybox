@@ -20,6 +20,10 @@
 #endif
 #endif
 
+// We don't use the problematic parts of VLAs, we just want const variables to
+// define array length
+#pragma clang diagnostic ignored "-Wgnu-folding-constant"
+
 // Flecs uses '$' in identifiers as part of a DSL so this gets in the way
 #pragma clang diagnostic ignored "-Wdollar-in-identifier-extension"
 

@@ -86,7 +86,8 @@ void tb_munmap(void *addr, size_t length) {
 
 void *tb_mmap(void *start, size_t length, int32_t prot, int32_t flags,
               void *file, size_t offset) {
-  void *ret = mmap(start, length, prot, flags, (intptr_t)file, offset);
+  int32_t file_descriptor = fileno(file);
+  void *ret = mmap(start, length, prot, flags, file_descriptor, offset);
 #ifndef FINAL
   if (ret == MAP_FAILED) {
     int32_t err = errno;
