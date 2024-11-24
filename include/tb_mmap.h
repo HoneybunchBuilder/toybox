@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "tb_engine_config.h"
+
 #if TB_WINDOWS == 1
 #define PROT_READ 0x1
 #define PROT_WRITE 0x2
@@ -20,9 +22,7 @@
 #define MAP_ANONYMOUS 0x20
 #define MAP_ANON MAP_ANONYMOUS
 #define MAP_FAILED ((void *)-1)
-#endif
-
-#if TB_WINDOWS == 0
+#else
 #include <sys/mman.h>
 #endif
 
