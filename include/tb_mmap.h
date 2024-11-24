@@ -5,7 +5,6 @@
 #include <stdlib.h>
 
 #if TB_WINDOWS == 1
-
 #define PROT_READ 0x1
 #define PROT_WRITE 0x2
 /* This flag is only available in WinXP+ */
@@ -21,7 +20,9 @@
 #define MAP_ANONYMOUS 0x20
 #define MAP_ANON MAP_ANONYMOUS
 #define MAP_FAILED ((void *)-1)
-#else
+#endif
+
+#if TB_WINDOWS == 0
 #include <sys/mman.h>
 #endif
 
