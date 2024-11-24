@@ -64,8 +64,6 @@ function(tb_options target_name)
 
     # Annoying warning in C++ when having to use flecs C macros
     target_compile_options(${target_name} PRIVATE -Wno-missing-field-initializers)
-    # Folding VLAs to constant arrays is desired
-    target_compile_options(${target_name} PRIVATE -Wno-gnu-folding-constant)
     # We use anonymous structs 
     target_compile_options(${target_name} PRIVATE -Wno-gnu-anonymous-struct)
     target_compile_options(${target_name} PRIVATE -Wno-nested-anon-types)
