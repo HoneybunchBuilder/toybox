@@ -1057,6 +1057,13 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
     }
   }
 
+  if (swapchain_extent.width > surf_caps.maxImageExtent.width) {
+    swapchain_extent.width = surf_caps.maxImageExtent.width;
+  }
+  if (swapchain_extent.height > surf_caps.maxImageExtent.height) {
+    swapchain_extent.height = surf_caps.maxImageExtent.height;
+  }
+
   VkSwapchainCreateInfoKHR create_info = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
       .surface = surface,

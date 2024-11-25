@@ -68,6 +68,8 @@ ECS_TAG_DECLARE(TbTextureLoaded);
 typedef struct KTX2IterData {
   VkBuffer buffer;
   VkImage image;
+  const char *buffer_name;
+  const char *image_name;
   TbBufferImageCopy *uploads;
   uint64_t offset;
 } KTX2IterData;
@@ -82,6 +84,8 @@ ktx_error_code_e iterate_ktx2_levels(int32_t mip_level, int32_t face,
   user_data->uploads[mip_level] = (TbBufferImageCopy){
       .src = user_data->buffer,
       .dst = user_data->image,
+      .src_name = user_data->buffer_name,
+      .dst_name = user_data->image_name,
       .region =
           {
               .bufferOffset = user_data->offset,
@@ -233,6 +237,8 @@ TbTextureImage tb_load_ktx_image(TbRenderSystem *rnd_sys, const char *name,
     KTX2IterData iter_data = {
         .buffer = texture.host_buffer.buffer,
         .image = texture.gpu_image.image,
+        .buffer_name = texture.host_buffer.info.pName,
+        .image_name = texture.gpu_image.info.pName,
         .offset = texture.host_buffer.offset,
         .uploads = uploads,
     };
@@ -364,6 +370,8 @@ TbTextureImage tb_load_raw_image(TbRenderSystem *rnd_sys, const char *name,
     uploads[0] = (TbBufferImageCopy){
         .src = texture.host_buffer.buffer,
         .dst = texture.gpu_image.image,
+        .src_name = texture.host_buffer.info.pName,
+        .dst_name = texture.gpu_image.info.pName,
         .region =
             {
                 .bufferOffset = texture.host_buffer.offset,

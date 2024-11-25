@@ -79,6 +79,8 @@ typedef struct TbBufferImageCopy {
   VkImage dst;
   VkBufferImageCopy region;
   VkImageSubresourceRange range;
+  const char *src_name;
+  const char *dst_name;
 } TbBufferImageCopy;
 
 typedef TB_QUEUE_OF(VkWriteDescriptorSet) TbSetWriteQueue;

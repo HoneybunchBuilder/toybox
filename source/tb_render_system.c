@@ -382,8 +382,10 @@ VkResult alloc_host_buffer(TbRenderSystem *self,
 
   VmaAllocationCreateInfo alloc_create_info = {
       .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
-               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+               VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+      .pUserData = (void *)name,
   };
   VkResult err =
       vmaCreateBuffer(vma_alloc, create_info, &alloc_create_info,
@@ -406,7 +408,9 @@ VkResult tb_rnd_sys_alloc_gpu_buffer(TbRenderSystem *self,
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
       .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-               VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT,
+               VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
+               VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+      .pUserData = (void *)name,
   };
 
   VkResult err =
@@ -434,7 +438,8 @@ VkResult tb_rnd_sys_alloc_gpu_image(TbRenderSystem *self,
   VmaAllocator vma_alloc = self->vma_alloc;
   VmaAllocationCreateInfo alloc_create_info = {
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-      .flags = vma_flags,
+      .flags = vma_flags | VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT,
+      .pUserData = (void *)name,
   };
   VkResult err = vmaCreateImage(vma_alloc, create_info, &alloc_create_info,
                                 &image->image, &image->alloc, &image->info);
@@ -645,6 +650,8 @@ VkResult tb_rnd_sys_create_gpu_image_tmp(TbRenderSystem *self, const void *data,
   TbBufferImageCopy copy = {
       .src = buffer,
       .dst = image->image,
+      .src_name = "GpuTMP",
+      .dst_name = (const char *)image->info.pName,
       .region =
           {
               .bufferOffset = offset,
@@ -864,8 +871,12 @@ void tb_rnd_upload_buffers(TbRenderSystem *self, TbBufferCopy *uploads,
 void tb_rnd_upload_buffer_to_image(TbRenderSystem *self,
                                    TbBufferImageCopy *uploads,
                                    uint32_t upload_count) {
+
   TbRenderSystemFrameState *state = &self->frame_states[self->frame_idx];
   for (uint32_t i = 0; i < upload_count; ++i) {
+    TB_LOG_DEBUG(TB_LOG_CATEGORY_RENDER_THREAD,
+                 "Scheduling buffer [%s] to image [%s] upload for frame %d",
+                 uploads[i].src_name, uploads[i].dst_name, self->frame_idx);
     TB_QUEUE_PUSH(state->buf_img_copy_queue, uploads[i])
   }
 }
