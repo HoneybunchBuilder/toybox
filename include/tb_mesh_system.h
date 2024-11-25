@@ -28,16 +28,21 @@ typedef ecs_entity_t TbMaterial;
 typedef struct TbSubMesh2Data {
   uint32_t index_count;
   uint64_t index_offset;
-  uint64_t vertex_offset;
+  uint32_t meshlet_count;
+  uint64_t meshlet_offset;
   uint32_t vertex_count;
+  uint64_t vertex_offset;
   uint32_t vertex_perm;
   TbMaterial material;
 } TbSubMesh2Data;
 extern ECS_COMPONENT_DECLARE(TbSubMesh2Data);
 
-VkDescriptorSetLayout tb_mesh_sys_get_set_layout(ecs_world_t *ecs);
-
+VkDescriptorSetLayout tb_mesh_sys_get_attr_set_layout(ecs_world_t *ecs);
+VkDescriptorSetLayout tb_mesh_sys_get_meshlet_set_layout(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_idx_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_meshlet_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_triangles_set(ecs_world_t *ecs);
+VkDescriptorSet tb_mesh_sys_get_vertices_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_pos_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_norm_set(ecs_world_t *ecs);
 VkDescriptorSet tb_mesh_sys_get_tan_set(ecs_world_t *ecs);

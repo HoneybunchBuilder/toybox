@@ -1,0 +1,162 @@
+#include "tb_gltf.slangh"
+#include "tb_lighting.slangh"
+
+GLTF_VIEW_SET(0)
+GLTF_MATERIAL_SET(1)
+GLTF_DRAW_SET(2)
+TB_MESHLET_SET(3)
+TB_MESHLET_TRI_SET(4)
+TB_MESHLET_VERT_SET(5)
+TB_OBJECT_SET(6)
+TB_TEXTURE_SET(7)
+TB_IDX_SET(8)
+TB_POS_SET(9)
+TB_NORM_SET(10)
+TB_TAN_SET(11)
+TB_UV0_SET(12)
+TB_JOINT_SET(13)
+TB_WEIGHT_SET(14)
+
+// TODO: Can we drive these from specialization constants?
+#define NUM_THREADS_X TB_MESHLET_THREADS
+#define NUM_THREADS_Y 1
+#define NUM_THREADS_Z 1
+
+struct VertexOut {
+  float4 clip_pos : SV_POSITION;
+  float3 world_pos : POSITION0;
+  float3 view_pos : POSITION1;
+  float3 normal : NORMAL0;
+  float3 tangent : TANGENT0;
+  float3 binormal : BINORMAL0;
+  float2 uv : TEXCOORD0;
+  uint32_t mat_idx : TEXCOORD1;
+  float3x3 tbn : TEXCOORD2;
+};
+
+[shader("mesh")]
+[outputtopology("triangle")]
+[numthreads(NUM_THREADS_X, NUM_THREADS_Y, NUM_THREADS_Z)]
+void mesh(uint32_t gtid: SV_GroupThreadID, uint32_t gid: SV_GroupID,
+          out vertices VertexOut verts[TB_MESHLET_MAX_VERTICES],
+          out indices uint3 triangles[TB_MESHLET_MAX_TRIANGLES]) {
+  uint32_t draw_idx = tb_get_draw_index();
+  TbGLTFDrawData draw = tb_get_gltf_draw_data(draw_idx, draw_data);
+  int32_t vert_perm = draw.perm;
+  uint32_t obj_idx = draw.obj_idx;
+  uint32_t mesh_idx = draw.mesh_idx;
+  uint32_t meshlet_idx = draw.meshlet_offset + gid;
+  uint32_t mat_idx = draw.mat_idx;
+
+  TbMeshlet meshlet = tb_get_meshlet(meshlets[mesh_idx], meshlet_idx);
+  TbCommonObjectData obj_data = tb_get_obj_data(obj_idx, object_data);
+  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(mat_idx, gltf_data);
+  int32_t mat_perm = gltf.perm;
+
+  // Set number of outputs
+  SetMeshOutputCounts(meshlet.vert_count, meshlet.prim_count);
+
+  if (gtid < meshlet.vert_count) {
+    uint32_t idx = tb_get_meshlet_vertex(meshlet_verts[mesh_idx], meshlet, gtid) + draw.vertex_offset;
+
+    int3 local_pos =
+        tb_vert_get_local_pos(draw.perm, idx, mesh_idx, pos_buffers);
+    float3 world_pos = mul(obj_data.m, float4(local_pos, 1)).xyz;
+    float4 clip_pos = mul(camera_data.vp, float4(world_pos, 1.0));
+
+    float3 normal = tb_vert_get_normal(draw.perm, idx, mesh_idx, norm_buffers);
+    float4 tangent = tb_vert_get_tangent(vert_perm, idx, mesh_idx, tan_buffers);
+    int2 uv0 = tb_vert_get_uv0(vert_perm, idx, mesh_idx, uv0_buffers);
+    float3x3 orientation = (float3x3)obj_data.m;
+
+    VertexOut vert = {};
+    vert.clip_pos = clip_pos;
+    vert.world_pos = world_pos.xyz;
+    vert.view_pos = mul(camera_data.v, float4(world_pos, 1.0)).xyz;
+    if ((vert_perm & TB_INPUT_PERM_NORMAL) > 0) {
+      vert.normal =
+          normalize(mul(orientation, normal)); // convert to world-space
+    }
+    if ((vert_perm & TB_INPUT_PERM_TANGENT) > 0) {
+      vert.tangent = normalize(mul(orientation, tangent.xyz));
+      vert.binormal = normalize(cross(vert.tangent, vert.normal) * tangent.w);
+    }
+    if ((mat_perm & GLTF_PERM_NORMAL_MAP) > 0) {
+      // Construct TBN
+      vert.tbn =
+          transpose(float3x3(normalize(vert.tangent), normalize(vert.binormal),
+                             normalize(vert.normal)));
+    }
+    vert.uv = uv_transform(uv0, gltf.tex_transform);
+    vert.mat_idx = mat_idx;
+    verts[gtid] = vert;
+  }
+
+  if (gtid < meshlet.prim_count) {
+    triangles[gtid] =
+        tb_get_meshlet_primitive(meshlet_prims[mesh_idx], meshlet, gtid);
+  }
+}
+
+[shader("fragment")]
+float4 frag(VertexOut vert, bool front_face: SV_IsFrontFace) : SV_TARGET {
+  TbGLTFMaterialData gltf = tb_get_gltf_mat_data(vert.mat_idx, gltf_data);
+
+  float4 base_color = 1;
+
+  // World-space normal
+  float3 N = normalize(vert.normal);
+  if ((gltf.perm & GLTF_PERM_NORMAL_MAP) > 0) {
+    // Convert from tangent space to world space
+    float3 tangent_space_normal = tb_get_texture(gltf.normal_idx, gltf_textures)
+                                      .Sample(material_sampler, vert.uv)
+                                      .xyz;
+    tangent_space_normal = tangent_space_normal * 2 - 1; // Must unpack normal
+    N = normalize(mul(vert.tbn, tangent_space_normal));
+  }
+  if ((gltf.perm & GLTF_PERM_DOUBLE_SIDED) == 0) {
+    if (!front_face) {
+      discard;
+    }
+  }
+  N = front_face ? N : -N;
+
+  float3 V = normalize(camera_data.view_pos - vert.world_pos);
+  float3 R = reflect(-V, N);
+  float2 screen_uv = (vert.clip_pos.xy / vert.clip_pos.w) * 0.5 + 0.5;
+
+  float4 out_color = 0;
+  if ((gltf.perm & GLTF_PERM_PBR_METALLIC_ROUGHNESS) > 0) {
+    PBRMetallicRoughness mr = gltf.pbr_metallic_roughness;
+    float metallic = mr.metal_rough_factors[0];
+    float roughness = mr.metal_rough_factors[1];
+
+    // TODO: Handle alpha masking
+    {
+      base_color = mr.base_color_factor;
+      if ((gltf.perm & GLTF_PERM_BASE_COLOR_MAP) > 0) {
+        base_color *= tb_get_texture(gltf.color_idx, gltf_textures)
+                          .Sample(material_sampler, vert.uv);
+      }
+      if ((gltf.perm & GLTF_PERM_ALPHA_CLIP) > 0) {
+        if (base_color.a < ALPHA_CUTOFF(gltf)) {
+          discard;
+        }
+      }
+    }
+
+    if ((gltf.perm & GLTF_PERM_PBR_METAL_ROUGH_TEX) > 0) {
+      // The red channel of this texture *may* store occlusion.
+      // TODO: Check the perm for occlusion
+      float4 mr_sample = tb_get_texture(gltf.pbr_idx, gltf_textures)
+                             .Sample(material_sampler, vert.uv);
+      roughness *= mr_sample.g;
+      metallic *= mr_sample.b;
+    }
+
+    GLTF_OPAQUE_LIGHTING(vert, out_color, base_color, N, V, R, screen_uv,
+                         metallic, roughness);
+  }
+
+  return out_color;
+}

@@ -8,6 +8,7 @@
 #include "tb_light_component.h"
 #include "tb_mesh_rnd_sys.h"
 #include "tb_mesh_system.h"
+#include "tb_meshlet.h"
 #include "tb_ocean.slangh"
 #include "tb_ocean_component.h"
 #include "tb_profiling.h"
@@ -539,7 +540,25 @@ void init_ocean_system(ecs_world_t *ecs, TbOceanSystem *sys,
     uint64_t index_size = tb_calc_aligned_size(
         sys->ocean_index_count,
         sys->ocean_index_type == VK_INDEX_TYPE_UINT16 ? 2 : 4, 16);
-    sys->ocean_pos_offset = index_size;
+
+    uint64_t meshlets_size = 0;
+    uint64_t triangles_size = 0;
+    uint64_t verts_size = 0;
+    uint32_t max_meshlet_verts = 0;
+    uint32_t max_meshlet_tris = 0;
+    tb_get_cluster_sizing(&max_meshlet_verts, &max_meshlet_tris);
+    for (cgltf_size prim_idx = 0; prim_idx < ocean_mesh->primitives_count;
+         ++prim_idx) {
+      tb_auto prim = &ocean_mesh->primitives[prim_idx];
+      uint64_t max_prim_meshlets = meshopt_buildMeshletsBound(
+          prim->indices->count, max_meshlet_verts, max_meshlet_tris);
+      meshlets_size += max_prim_meshlets * sizeof(TbMeshlet);
+      triangles_size +=
+          max_prim_meshlets * max_meshlet_tris * sizeof(TbPackedTriangle);
+      verts_size += max_prim_meshlets * max_meshlet_verts * sizeof(uint32_t);
+    }
+    sys->ocean_pos_offset =
+        index_size + meshlets_size + triangles_size + verts_size;
 
     sys->ocean_patch_mesh2 =
         tb_mesh_sys_load_gltf_mesh(ecs, data, asset_path, "ocean", 0);

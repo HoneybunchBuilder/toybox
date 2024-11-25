@@ -57,8 +57,8 @@ TB_GPU_STRUCT_DECL(TbGLTFDrawData, {
   uint32_t mesh_idx;
   uint32_t mat_idx;
   uint32_t index_offset;
+  uint32_t meshlet_offset;
   uint32_t vertex_offset;
-  uint32_t pad0;
   uint32_t pad1;
 });
 
@@ -107,34 +107,34 @@ float2 uv_transform(int2 quant_uv, TextureTransform trans) {
   [[vk::binding(7, b)]]                                                        \
   SamplerState brdf_sampler;
 
-#define GLTF_OPAQUE_LIGHTING(out, color, normal, view, refl, s_uv, met, rough) \
-  {                                                                            \
-    TbView v;                                                                  \
-    v.irradiance_map = irradiance_map;                                         \
-    v.prefiltered_map = prefiltered_map;                                       \
-    v.brdf_lut = brdf_lut;                                                     \
-    v.filtered_env_sampler = filtered_env_sampler;                             \
-    v.brdf_sampler = brdf_sampler;                                             \
-                                                                               \
-    Light l;                                                                   \
-    l.light = light_data;                                                      \
-    l.shadow_map = shadow_map;                                                 \
-    l.shadow_sampler = shadow_sampler;                                         \
-                                                                               \
-    Surface s;                                                                 \
-    s.base_color = color;                                                      \
-    s.view_pos = i.view_pos;                                                   \
-    s.world_pos = i.world_pos;                                                 \
-    s.screen_uv = s_uv;                                                        \
-    s.metallic = met;                                                          \
-    s.roughness = rough;                                                       \
-    s.N = normal;                                                              \
-    s.V = view;                                                                \
-    s.R = refl;                                                                \
-    s.emissives = gltf.emissives;                                              \
-                                                                               \
-    out.rgb = pbr_lighting_common(v, l, s);                                    \
-    out.a = color.a;                                                           \
+#define GLTF_OPAQUE_LIGHTING(vert, out, color, normal, view, refl, s_uv, met, rough) \
+  {                                                                                  \
+    TbView v;                                                                        \
+    v.irradiance_map = irradiance_map;                                               \
+    v.prefiltered_map = prefiltered_map;                                             \
+    v.brdf_lut = brdf_lut;                                                           \
+    v.filtered_env_sampler = filtered_env_sampler;                                   \
+    v.brdf_sampler = brdf_sampler;                                                   \
+                                                                                     \
+    Light l;                                                                         \
+    l.light = light_data;                                                            \
+    l.shadow_map = shadow_map;                                                       \
+    l.shadow_sampler = shadow_sampler;                                               \
+                                                                                     \
+    Surface s;                                                                       \
+    s.base_color = color;                                                            \
+    s.view_pos = vert.view_pos;                                                      \
+    s.world_pos = vert.world_pos;                                                    \
+    s.screen_uv = s_uv;                                                              \
+    s.metallic = met;                                                                \
+    s.roughness = rough;                                                             \
+    s.N = normal;                                                                    \
+    s.V = view;                                                                      \
+    s.R = refl;                                                                      \
+    s.emissives = gltf.emissives;                                                    \
+                                                                                     \
+    out.rgb = pbr_lighting_common(v, l, s);                                          \
+    out.a = color.a;                                                                 \
   }
 
 TbGLTFDrawData tb_get_gltf_draw_data(int32_t draw,

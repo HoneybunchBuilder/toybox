@@ -735,9 +735,9 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
     required_device_ext((const char **)&device_ext_names, &device_ext_count,
                         props, prop_count, VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 
-// Mesh Shader support
-// required_device_ext((const char **)&device_ext_names, &device_ext_count,
-//                    props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
+    // Mesh Shader support
+    required_device_ext((const char **)&device_ext_names, &device_ext_count,
+                        props, prop_count, VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
 // We want to use descriptor buffers
 #if TB_USE_DESC_BUFFER == 1
@@ -772,9 +772,16 @@ bool init_device(VkPhysicalDevice gpu, uint32_t graphics_queue_family_index,
       .nullDescriptor = VK_TRUE,
   };
 
+  VkPhysicalDeviceMeshShaderFeaturesEXT vk_mesh_shader_features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+      .pNext = &vk_rob2_features,
+      .meshShader = VK_TRUE,
+      .multiviewMeshShader = VK_TRUE,
+  };
+
   VkPhysicalDeviceVulkan13Features vk_13_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .pNext = &vk_rob2_features,
+      .pNext = &vk_mesh_shader_features,
       .dynamicRendering = VK_TRUE,
       .shaderDemoteToHelperInvocation = VK_TRUE,
       .maintenance4 = VK_TRUE,
@@ -1048,6 +1055,13 @@ bool init_swapchain(SDL_Window *window, VkDevice device, VkPhysicalDevice gpu,
       composite_alpha = composite_alpha_flags[i];
       break;
     }
+  }
+
+  if (swapchain_extent.width > surf_caps.maxImageExtent.width) {
+    swapchain_extent.width = surf_caps.maxImageExtent.width;
+  }
+  if (swapchain_extent.height > surf_caps.maxImageExtent.height) {
+    swapchain_extent.height = surf_caps.maxImageExtent.height;
   }
 
   VkSwapchainCreateInfoKHR create_info = {

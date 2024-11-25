@@ -53,6 +53,7 @@ TbRenderObjectSystem create_render_object_system(TbAllocator gp_alloc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT |
                                   VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
         },
