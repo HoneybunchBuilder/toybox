@@ -1,0 +1,4 @@
+file(GLOB_RECURSE {app_name}_source CONFIGURE_DEPENDS \"source/*.c\")
+
+tb_add_app({namespace}_{app_name} \"${{{app_name}_source}}\")
+{addons}

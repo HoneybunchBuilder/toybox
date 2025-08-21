@@ -1,5 +1,6 @@
 [Bb]uild*/*
 [Ii]nstall/*
+__pycache__
 out/*
 
 *.blend1
@@ -13,3 +14,5 @@ out/*
 
 CMakeUserPresets.json
 vcpkg_installed/*
+
+imgui.ini

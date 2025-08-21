@@ -83,6 +83,47 @@ function(tb_cook_shaders out_shader_sources out_shader_headers)
     list(APPEND shader_headers ${comp_header} ${comp_out_path})
   endforeach()
 
+  file(GLOB slang_mesh_shaders CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/source/*.slangm")
+  foreach(shader ${slang_mesh_shaders})
+    get_filename_component(filename ${shader} NAME_WLE)
+    set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+   # Outputting short names for shader spv modules because due to xxd nonsense
+    # the name of the variable in the C header will be based on this file name
+    set(mesh_out_path "${filename}_mesh")
+    set(frag_out_path "${filename}_frag")
+    set(out_paths "${mesh_out_path};${frag_out_path}")
+
+    add_custom_command(
+        OUTPUT ${out_paths}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+        COMMAND ${SLANG} -DTB_SHADER=1 -lang slang -profile sm_6_5 -stage mesh -entry mesh -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${mesh_out_path} ${shader}
+        COMMAND ${SLANG} -DTB_SHADER=1 -lang slang -profile sm_6_5 -stage fragment -entry frag -target spirv $<$<CONFIG:Debug>:-O0> $<$<NOT:$<CONFIG:Release>>:-g> -I ${shader_include_dir} -I ${engine_shader_include_dir} -o ${frag_out_path} ${shader}
+        MAIN_DEPENDENCY ${shader}
+        DEPENDS ${shader_includes}
+    )
+
+    set(mesh_header "${shader_out_path}/${filename}_mesh.h")
+    set(frag_header "${shader_out_path}/${filename}_frag.h")
+
+    # Use xxd to convert spv binary files to C headers that can be included
+    # Renaming shenanigans to work around old xxd versions not supporting the 
+    # '-n' flag to rename the C variable
+    add_custom_command(
+        OUTPUT ${mesh_header}
+        COMMAND xxd -i ${mesh_out_path} ${mesh_header}
+        MAIN_DEPENDENCY ${mesh_out_path}
+    )
+    add_custom_command(
+        OUTPUT ${frag_header}
+        COMMAND xxd -i ${frag_out_path} ${frag_header}
+        MAIN_DEPENDENCY ${frag_out_path}
+    )
+
+    list(APPEND shader_headers ${mesh_header} ${mesh_out_path})
+    list(APPEND shader_headers ${frag_header} ${frag_out_path})
+  endforeach()
+
   set("${out_shader_sources}" "${shader_sources}" PARENT_SCOPE)
   set("${out_shader_headers}" "${shader_headers}" PARENT_SCOPE)
 endfunction()

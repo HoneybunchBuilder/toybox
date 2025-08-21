@@ -56,6 +56,7 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorBufferBindingInfoEXT view_addr;
   VkDescriptorBufferBindingInfoEXT mat_addr;
   VkDescriptorBufferBindingInfoEXT draw_addr;
+  VkDescriptorBufferBindingInfoEXT meshlet_addr;
   VkDescriptorBufferBindingInfoEXT obj_addr;
   VkDescriptorBufferBindingInfoEXT tex_addr;
   VkDescriptorBufferBindingInfoEXT idx_addr;
@@ -67,6 +68,9 @@ typedef struct TbPrimitiveBatch {
   VkDescriptorSet view_set;
   VkDescriptorSet mat_set;
   VkDescriptorSet draw_set;
+  VkDescriptorSet meshlet_set;
+  VkDescriptorSet tri_set;
+  VkDescriptorSet vert_set;
   VkDescriptorSet obj_set;
   VkDescriptorSet tex_set;
   VkDescriptorSet idx_set;
@@ -89,11 +93,12 @@ typedef struct TbMeshSystem {
   ecs_query_t *mesh_query;
   ecs_query_t *dir_light_query;
 
-  TbDrawContextId prepass_draw_ctx2;
-  TbDrawContextId opaque_draw_ctx2;
-  TbDrawContextId transparent_draw_ctx2;
+  TbDrawContextId prepass_draw_ctx;
+  TbDrawContextId opaque_draw_ctx;
+  TbDrawContextId transparent_draw_ctx;
 
   VkDescriptorSetLayout draw_set_layout;
+  // Old shader prims
   VkPipelineLayout pipe_layout;
   VkPipelineLayout prepass_layout;
 
@@ -101,11 +106,26 @@ typedef struct TbMeshSystem {
   TbShader transparent_shader;
   TbShader prepass_shader;
 
+  // Next-gen mesh shaders
+  VkPipelineLayout mesh_pipe_layout;
+  VkPipelineLayout prepass_mesh_layout;
+
+  TbShader opaque_mesh_shader;
+  TbShader transparent_mesh_shader;
+  TbShader prepass_mesh_shader;
+
   // Re-used by shadows
   TbDrawBatch *opaque_batch;
 
-  TB_DYN_ARR_OF(TbMesh) meshes;
-  // For per draw data
+  TB_DYN_ARR_OF(VkDrawMeshTasksIndirectCommandEXT) indirect_opaque_draws;
+  TB_DYN_ARR_OF(VkDrawMeshTasksIndirectCommandEXT) indirect_trans_draws;
+  TB_DYN_ARR_OF(TbGLTFDrawData) opaque_draw_data;
+  TB_DYN_ARR_OF(TbGLTFDrawData) trans_draw_data;
+
+  // Filled out in one phase and submitted in another
+  TbIndirectDraw opaque_draw;
+  TbIndirectDraw trans_draw;
+
   TbFrameDescriptorPoolList draw_pools;
 
   TbDescriptorBuffer opaque_draw_descs;
@@ -116,6 +136,7 @@ extern ECS_COMPONENT_DECLARE(TbMeshSystem);
 void tb_register_mesh_sys(TbWorld *world);
 void tb_unregister_mesh_sys(TbWorld *world);
 
+VkDescriptorSet tb_mesh_system_get_meshlet_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_pos_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_norm_set(TbMeshSystem *self);
 VkDescriptorSet tb_mesh_system_get_tan_set(TbMeshSystem *self);

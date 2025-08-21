@@ -87,11 +87,11 @@
     },
     {
       "name": "sdl3",
-      "version": "3.1.6-preview"
+      "version": "3.2.20"
     },
     {
       "name": "sdl3-mixer",
-      "version": "3.0.0-e32ba24"
+      "version": "3.0.0-f9566f4"
     },
     {
       "name": "shader-slang",

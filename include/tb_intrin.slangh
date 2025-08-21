@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef TB_SHADER
+
 // See https://github.com/shader-slang/slang/issues/4352
 uint32_t tb_get_draw_index() {
   return spirv_asm {
@@ -8,3 +10,5 @@ uint32_t tb_get_draw_index() {
         result:$$uint = OpLoad builtin(DrawIndex:uint);
     };
 }
+
+#endif

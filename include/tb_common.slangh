@@ -9,6 +9,8 @@
 
 #include "tb_pi.h"
 #include "tb_simd.h"
+#include "tb_meshlet.h"
+#include "tb_intrin.slangh"
 
 #define TB_PUSH_CONSTANT_BYTES 128
 
@@ -42,11 +44,39 @@ TB_GPU_STRUCT_DECL(TbCommonObjectData, { float4x4 m; });
 #define TB_INPUT_PERM_WEIGHT 0x00000020
 #define TB_INPUT_PERM_COUNT 6
 
+TB_GPU_STRUCT_DECL(TbMeshlet, {
+  uint32_t vert_offset;
+  uint32_t prim_offset;
+  uint32_t vert_count;
+  uint32_t prim_count;
+});
+
+// Three triangle indices local to a meshlet that are packed into a single 32-bit structure
+// We actually only need 8 bytes per index (since they're between 0-254)
+#ifndef TB_SHADER
+typedef struct TbPackedTriangle {
+  uint32_t i0 : 10;
+  uint32_t i1 : 10;
+  uint32_t i2 : 10;
+  uint32_t spare : 2;
+} TbPackedTriangle;
+static_assert(sizeof(TbPackedTriangle) == sizeof(uint32_t), "TbPackedTriangle must fit in 32 bits");
+#endif
+
 // If a shader, provide some helper functions
 #ifdef TB_SHADER
 
 // Macros for declaring access to common toybox descriptor sets
 // that represent global loaded resource tables
+#define TB_MESHLET_SET(b)                                                      \
+  [[vk::binding(0, b)]]                                                        \
+  RWBuffer<uint4> meshlets[];
+#define TB_MESHLET_TRI_SET(b)                                                  \
+  [[vk::binding(0, b)]]                                                        \
+  RWBuffer<uint32_t> meshlet_prims[];
+#define TB_MESHLET_VERT_SET(b)                                                 \
+  [[vk::binding(0, b)]]                                                        \
+  RWBuffer<uint32_t> meshlet_verts[];
 #define TB_TEXTURE_SET(b)                                                      \
   [[vk::binding(0, b)]]                                                        \
   Texture2D gltf_textures[];
@@ -118,6 +148,27 @@ int2 tb_vert_get_uv0(int32_t perm, int32_t index, int32_t mesh,
     return buffers[mesh][index];
   }
   return 0;
+}
+
+uint3 tb_unpack_primitive(uint primitive) {
+  // Unpacks a 10 bits per index triangle from a 32-bit uint.
+  return uint3(primitive & 0x3FF, (primitive >> 10) & 0x3FF,
+               (primitive >> 20) & 0x3FF);
+}
+
+TbMeshlet tb_get_meshlet(RWBuffer<uint4> meshlets, uint32_t index) {
+  uint4 m = meshlets[index];
+  return TbMeshlet(m.x, m.y, m.z, m.w);
+}
+
+uint32_t tb_get_meshlet_vertex(RWBuffer<uint32_t> verts, TbMeshlet m, 
+                               uint32_t index) {
+  return verts[m.vert_offset + index];
+}
+
+uint3 tb_get_meshlet_primitive(RWBuffer<uint32_t> tris, TbMeshlet m,
+                               uint32_t index) {
+  return tb_unpack_primitive(tris[m.prim_offset + index]);
 }
 
 float4 aa_to_quat(float4 aa) {

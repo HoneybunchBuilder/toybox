@@ -77,6 +77,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT |
                                   VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
                 {
@@ -102,6 +103,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT |
                                   VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
                 {
@@ -143,6 +145,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT |
                                   VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
                 {
@@ -168,6 +171,7 @@ TbViewSystem create_view_system(TbAllocator gp_alloc, TbAllocator tmp_alloc,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_MESH_BIT_EXT |
                                   VK_SHADER_STAGE_FRAGMENT_BIT,
                 },
                 {
